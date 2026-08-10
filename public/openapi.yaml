@@ -159,6 +159,38 @@ paths:
                 properties:
                   resource: { $ref: "#/components/schemas/Resource" }
         "409": { description: Idempotency key was used with a different request }
+  /resources/batch:
+    patch:
+      tags: [Resources]
+      summary: Apply shared fields and additional tags to multiple inventory items atomically
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { type: string, format: uuid }
+                changes:
+                  type: object
+                  properties:
+                    type: { type: string, enum: [place, person, vehicle, tool, project, clothing, furniture, object, other] }
+                    status: { type: string, enum: [available, in-use, maintenance, archived] }
+                    location: { type: [string, "null"], maxLength: 240 }
+                    priority: { type: integer, minimum: 1, maximum: 5 }
+                addTags:
+                  type: array
+                  maxItems: 40
+                  items: { type: string, minLength: 1, maxLength: 60 }
+      responses:
+        "200": { description: Selected inventory items updated }
+        "404": { description: At least one selected inventory item no longer exists }
+        "422": { description: Invalid or empty batch update }
   /resources/{id}:
     parameters:
       - { $ref: "#/components/parameters/ResourceId" }
@@ -1399,6 +1431,10 @@ components:
         gpsLatitude: { type: [number, "null"], minimum: -90, maximum: 90 }
         gpsLongitude: { type: [number, "null"], minimum: -180, maximum: 180 }
         gpsAltitude: { type: [number, "null"] }
+        mapFeatures:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/ResourceMapFeature" }
         notes: { type: string }
     ResourcePatch:
       type: object
@@ -1426,7 +1462,34 @@ components:
         gpsLatitude: { type: [number, "null"], minimum: -90, maximum: 90 }
         gpsLongitude: { type: [number, "null"], minimum: -180, maximum: 180 }
         gpsAltitude: { type: [number, "null"] }
+        mapFeatures:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/ResourceMapFeature" }
         notes: { type: string }
+    ResourceMapFeature:
+      type: object
+      required: [id, type, layer, description, coordinates]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 80 }
+        type: { type: string, enum: [point, polygon] }
+        layer: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 5000 }
+        coordinates:
+          description: A [longitude, latitude] pair for points or a closed ring of pairs for polygons.
+          oneOf:
+            - type: array
+              minItems: 2
+              maxItems: 2
+              items: { type: number }
+            - type: array
+              minItems: 4
+              maxItems: 500
+              items:
+                type: array
+                minItems: 2
+                maxItems: 2
+                items: { type: number }
     Resource:
       allOf:
         - { $ref: "#/components/schemas/ResourceInput" }

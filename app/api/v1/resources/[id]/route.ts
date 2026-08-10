@@ -2,6 +2,7 @@ import { requireIdentity } from "@/lib/api-auth";
 import { deleteResource, getResource, updateResource } from "@/lib/resources";
 import { deleteStoredMedia } from "@/lib/storage";
 import { resourcePatchSchema } from "@/lib/validators";
+import { positionFromMapFeatures } from "@/lib/map-features";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -48,7 +49,13 @@ export async function PATCH(request: Request, context: Context) {
   }
 
   try {
-    const resource = await updateResource(id, parsed.data);
+    const values = {
+      ...parsed.data,
+      ...(parsed.data.mapFeatures !== undefined
+        ? positionFromMapFeatures(parsed.data.mapFeatures)
+        : {}),
+    };
+    const resource = await updateResource(id, values);
     if (!resource) return Response.json({ error: "Not found" }, { status: 404 });
     return Response.json({ resource });
   } catch (error) {

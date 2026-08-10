@@ -225,6 +225,42 @@ export async function updateResource(
   return getResource(updated.id);
 }
 
+export async function updateResourcesBatch(options: {
+  ids: string[];
+  changes: Partial<Pick<NewResource, "type" | "status" | "location" | "priority">>;
+  addTags: string[];
+}) {
+  const ids = Array.from(new Set(options.ids));
+  return db.transaction(async (transaction) => {
+    const rows = await transaction
+      .select({ id: resources.id, tags: resources.tags })
+      .from(resources)
+      .where(inArray(resources.id, ids))
+      .orderBy(asc(resources.id))
+      .for("update");
+
+    if (rows.length !== ids.length) {
+      throw new Error("BATCH_RESOURCE_NOT_FOUND");
+    }
+
+    const normalizedTags = options.addTags.map((tag) => tag.toLowerCase());
+    for (const row of rows) {
+      await transaction
+        .update(resources)
+        .set({
+          ...options.changes,
+          ...(normalizedTags.length
+            ? { tags: Array.from(new Set([...row.tags, ...normalizedTags])) }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(resources.id, row.id));
+    }
+
+    return { updated: rows.length, ids: rows.map((row) => row.id) };
+  });
+}
+
 export async function deleteResource(id: string) {
   const resource = await getResource(id);
   if (!resource) return null;
