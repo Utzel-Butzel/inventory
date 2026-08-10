@@ -847,28 +847,47 @@ components:
           items: { type: string, maxLength: 180 }
     AssemblyBuild:
       type: object
-      required: [id, resourceId, quantity, occurredAt, components]
+      required: [id, assemblyResourceId, quantity, occurredAt, createdAt, components, outputUnits]
       properties:
         id: { type: string, format: uuid }
-        resourceId: { type: string, format: uuid }
+        assemblyResourceId: { type: string, format: uuid }
         quantity: { type: integer, minimum: 1 }
         occurredAt: { type: string, format: date-time }
         location: { type: [string, "null"] }
         note: { type: string }
         createdBy: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
         components:
           type: array
           items:
             type: object
-            required: [componentName, quantityPerAssembly, quantityConsumed]
+            required: [resourceId, name, sku, quantityPerAssembly, quantityConsumed, componentUnits, stockMovementIds, outputUnitIds]
             properties:
-              componentResourceId: { type: [string, "null"], format: uuid }
-              componentName: { type: string }
-              componentSku: { type: [string, "null"] }
+              resourceId: { type: [string, "null"], format: uuid }
+              name: { type: string }
+              sku: { type: [string, "null"] }
               quantityPerAssembly: { type: integer, minimum: 1 }
               quantityConsumed: { type: integer, minimum: 1 }
-              componentUnitId: { type: [string, "null"], format: uuid }
-              outputUnitId: { type: [string, "null"], format: uuid }
+              componentUnits:
+                type: array
+                items:
+                  type: object
+                  required: [id, code, location, status, outputUnitId]
+                  properties:
+                    id: { type: string, format: uuid }
+                    code: { type: string }
+                    location: { type: [string, "null"] }
+                    status: { type: string }
+                    outputUnitId: { type: [string, "null"], format: uuid }
+              stockMovementIds:
+                type: array
+                items: { type: string, format: uuid }
+              outputUnitIds:
+                type: array
+                items: { type: string, format: uuid }
+        outputUnits:
+          type: array
+          items: { $ref: "#/components/schemas/StockUnit" }
     PurchaseOrderLineInput:
       type: object
       required: [resourceId, orderedQuantity]
