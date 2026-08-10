@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f7f9;
+  --foreground: #17191c;
+  --surface: #ffffff;
+  --surface-subtle: #f9fafb;
+  --surface-muted: #f0f2f4;
+  --border: #e4e7eb;
+  --border-strong: #d6dae0;
+  --muted: #69707d;
+  --muted-strong: #4c535e;
+  --brand: #635bff;
+  --brand-strong: #5147f5;
+  --brand-soft: #eeedff;
+  --success: #138a5b;
+  --success-soft: #e9f8f1;
+  --warning: #b85f00;
+  --warning-soft: #fff3e5;
+  --danger: #c83d4d;
+  --font-inventory-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-inventory-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --shadow-sm: 0 1px 2px rgb(18 24 40 / 0.04), 0 1px 3px rgb(18 24 40 / 0.03);
+  --shadow-md: 0 12px 30px rgb(18 24 40 / 0.07), 0 2px 8px rgb(18 24 40 / 0.04);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inventory-sans);
+  --font-mono: var(--font-inventory-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inventory-sans);
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+::selection {
+  background: #d9d6ff;
+  color: #25205e;
+}
+
+:focus-visible {
+  outline: 3px solid rgb(99 91 255 / 0.2);
+  outline-offset: 2px;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.animation-delay-1 {
+  animation-delay: 70ms;
+}
+
+.animation-delay-2 {
+  animation-delay: 140ms;
+}
+
+.subtle-grid {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.055) 1px, transparent 1px);
+  background-size: 38px 38px;
+}
+
+.scrollbar-thin {
+  scrollbar-color: #cbd0d8 transparent;
+  scrollbar-width: thin;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

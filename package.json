@@ -1,0 +1,50 @@
+{
+  "name": "inventory",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --ignore-pattern .next",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:seed": "node scripts/seed.mjs",
+    "auth:hash": "node scripts/hash-password.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^1.42.0",
+    "@scalar/api-reference-react": "0.9.61",
+    "bcryptjs": "^3.0.2",
+    "browser-image-compression": "^2.0.2",
+    "drizzle-orm": "^0.45.2",
+    "exifreader": "^4.24.3",
+    "jsqr": "^1.4.0",
+    "lucide-react": "^0.468.0",
+    "next": "16.1.6",
+    "next-auth": "^5.0.0-beta.30",
+    "openai": "^7.4.0",
+    "postgres": "^3.4.7",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "sharp": "^0.34.5",
+    "yaml": "^2.9.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
+    "@types/node": "^22.19.19",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "16.1.6",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3"
+  }
+}

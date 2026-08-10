@@ -1,0 +1,87 @@
+services:
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: inventory
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD to a strong database password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory -d inventory"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - inventory_postgres:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://inventory:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD to a strong database password}@db:5432/inventory
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    init: true
+    expose:
+      - "3000"
+    environment:
+      DATABASE_URL: postgresql://inventory:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD to a strong database password}@db:5432/inventory
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET to at least 32 random characters}
+      AUTH_URL: ${AUTH_URL:?Set AUTH_URL to the public HTTPS URL}
+      AUTH_TRUST_HOST: "true"
+      SIMPLE_AUTH_EMAIL: ${SIMPLE_AUTH_EMAIL:-admin@inventory.local}
+      SIMPLE_AUTH_NAME: ${SIMPLE_AUTH_NAME:-Inventory admin}
+      SIMPLE_AUTH_PASSWORD_HASH: ${SIMPLE_AUTH_PASSWORD_HASH:-}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-}
+      BOOTSTRAP_ADMIN_PASSWORD_HASH: ${BOOTSTRAP_ADMIN_PASSWORD_HASH:-}
+      NATIVE_TOKEN_TTL_DAYS: ${NATIVE_TOKEN_TTL_DAYS:-30}
+      AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID:-}
+      AUTH0_CLIENT_SECRET: ${AUTH0_CLIENT_SECRET:-}
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN:-}
+      AUTH0_ISSUER_BASE_URL: ${AUTH0_ISSUER_BASE_URL:-}
+      AUTH0_DEFAULT_ROLE: ${AUTH0_DEFAULT_ROLE:-editor}
+      AUTH0_ROLE_CLAIM: ${AUTH0_ROLE_CLAIM:-}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+      STORAGE_LOCAL_PATH: /app/data/uploads
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
+      OPENINARY_BASE_URL: ${OPENINARY_BASE_URL:-}
+      OPENINARY_API_KEY: ${OPENINARY_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_VISION_MODEL: ${OPENAI_VISION_MODEL:-gpt-4.1-mini}
+      OPENAI_COUNT_MODEL: ${OPENAI_COUNT_MODEL:-}
+      AI_OUTPUT_LANGUAGE: ${AI_OUTPUT_LANGUAGE:-English}
+      AI_RATE_LIMIT_PER_MINUTE: ${AI_RATE_LIMIT_PER_MINUTE:-10}
+      IMAGE_EDIT_PROVIDER: ${IMAGE_EDIT_PROVIDER:-openai}
+      OPENAI_IMAGE_EDIT_MODEL: ${OPENAI_IMAGE_EDIT_MODEL:-gpt-image-1}
+      GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-}
+      GOOGLE_IMAGE_EDIT_MODEL: ${GOOGLE_IMAGE_EDIT_MODEL:-gemini-2.5-flash-image}
+      AI_IMAGE_RATE_LIMIT_PER_HOUR: ${AI_IMAGE_RATE_LIMIT_PER_HOUR:-12}
+    volumes:
+      - inventory_uploads:/app/data/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  inventory_postgres:
+    name: ${POSTGRES_VOLUME_NAME:-inventory_postgres}
+  inventory_uploads:
+    name: ${UPLOADS_VOLUME_NAME:-inventory_uploads}
