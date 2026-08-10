@@ -19,6 +19,41 @@ const nullableText = (max: number) =>
     .nullable()
     .transform((value) => value || null);
 
+const mapCoordinateSchema = z.tuple([
+  z.number().min(-180).max(180),
+  z.number().min(-90).max(90),
+]);
+
+const mapFeatureBase = {
+  id: z.string().trim().min(1).max(80),
+  layer: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(5_000),
+};
+
+export const resourceMapFeatureSchema = z.discriminatedUnion("type", [
+  z.object({
+    ...mapFeatureBase,
+    type: z.literal("point"),
+    coordinates: mapCoordinateSchema,
+  }),
+  z.object({
+    ...mapFeatureBase,
+    type: z.literal("polygon"),
+    coordinates: z
+      .array(mapCoordinateSchema)
+      .min(4)
+      .max(500)
+      .refine(
+        (coordinates) => {
+          const first = coordinates[0];
+          const last = coordinates.at(-1);
+          return Boolean(first && last && first[0] === last[0] && first[1] === last[1]);
+        },
+        "Polygon rings must be closed.",
+      ),
+  }),
+]);
+
 const resourceShape = {
   name: z.string().trim().min(1).max(240),
   description: z.string().trim().max(20_000),
@@ -44,6 +79,7 @@ const resourceShape = {
   gpsLatitude: z.coerce.number().min(-90).max(90).nullable(),
   gpsLongitude: z.coerce.number().min(-180).max(180).nullable(),
   gpsAltitude: z.coerce.number().min(-12_000).max(100_000).nullable(),
+  mapFeatures: z.array(resourceMapFeatureSchema).max(100),
   notes: z.string().trim().max(20_000),
 };
 
@@ -65,6 +101,7 @@ export const resourceInputSchema = z.object({
   gpsLatitude: resourceShape.gpsLatitude.optional(),
   gpsLongitude: resourceShape.gpsLongitude.optional(),
   gpsAltitude: resourceShape.gpsAltitude.optional(),
+  mapFeatures: resourceShape.mapFeatures.optional().default([]),
   notes: resourceShape.notes.optional().default(""),
 });
 
@@ -72,6 +109,24 @@ export const resourceInputSchema = z.object({
 // on resourceInputSchema would otherwise materialize defaults (including
 // quantity: 1) for fields the client did not send.
 export const resourcePatchSchema = z.object(resourceShape).partial();
+
+export const resourceBatchPatchSchema = z
+  .object({
+    ids: z.array(z.string().uuid()).min(1).max(100),
+    changes: z
+      .object({
+        type: resourceShape.type.optional(),
+        status: resourceShape.status.optional(),
+        location: resourceShape.location.optional(),
+        priority: resourceShape.priority.optional(),
+      })
+      .default({}),
+    addTags: z.array(z.string().trim().min(1).max(60)).max(40).default([]),
+  })
+  .refine(
+    ({ changes, addTags }) => Object.keys(changes).length > 0 || addTags.length > 0,
+    "Choose at least one batch change.",
+  );
 
 export const tokenInputSchema = z.object({
   name: z.string().trim().min(1).max(120),

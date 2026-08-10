@@ -110,6 +110,20 @@ export type AiMetadata = {
   generatedFields?: string[];
 };
 
+export type ResourceMapCoordinate = [number, number];
+
+type ResourceMapFeatureBase = {
+  id: string;
+  layer: string;
+  description: string;
+};
+
+export type ResourceMapFeature = ResourceMapFeatureBase &
+  (
+    | { type: "point"; coordinates: ResourceMapCoordinate }
+    | { type: "polygon"; coordinates: ResourceMapCoordinate[] }
+  );
+
 export const resources = pgTable(
   "resources",
   {
@@ -137,6 +151,10 @@ export const resources = pgTable(
     gpsLatitude: doublePrecision("gps_latitude"),
     gpsLongitude: doublePrecision("gps_longitude"),
     gpsAltitude: doublePrecision("gps_altitude"),
+    mapFeatures: jsonb("map_features")
+      .$type<ResourceMapFeature[]>()
+      .notNull()
+      .default([]),
     notes: text("notes").notNull().default(""),
     aiMetadata: jsonb("ai_metadata").$type<AiMetadata>(),
     createdBy: varchar("created_by", { length: 320 }),

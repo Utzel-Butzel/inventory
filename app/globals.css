@@ -1,4 +1,16 @@
+@import "maplibre-gl/dist/maplibre-gl.css";
 @import "tailwindcss";
+
+.maplibregl-map {
+  font-family: var(--font-inventory-sans);
+}
+
+.maplibregl-ctrl-group {
+  border: 1px solid rgb(226 232 240 / 0.9);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 0.12);
+  overflow: hidden;
+}
 
 :root {
   --background: #f6f7f9;

@@ -9,10 +9,13 @@ bearer-token API.
 ## Included
 
 - Responsive dashboard, searchable grid/table inventory, and item editor
+- Interactive street/satellite map with point and polygon editing, draggable
+  geometry handles, layers, keyboard shortcuts, map selection, and multi-item
+  quick edits
 - Tools, objects, furniture, vehicles, places, people, clothing, projects, and
   custom “other” records
 - Quantities, status, SKU, serial number, value, categories, tags, location,
-  notes, GPS, priority, and ordered media
+  notes, GPS, GeoJSON-compatible map features, priority, and ordered media
 - Bulk and serialized stock tracking with immutable dated movement history
 - Bills of materials for assembled items with atomic component consumption
 - Purchase orders, incoming quantities, and partial goods receipts
@@ -50,6 +53,11 @@ npm run dev
 
 Then open [http://localhost:3000](http://localhost:3000). Change the values in
 `.env.local` before using the app outside a local development machine.
+
+The map defaults to OpenFreeMap streets and Esri satellite imagery, so it needs
+no Mapbox token. Point `NEXT_PUBLIC_MAP_STYLE_URL` and
+`NEXT_PUBLIC_SATELLITE_TILE_URL` at your own compatible tile services when the
+deployment must keep map traffic on infrastructure you control.
 
 On an empty database, the first local administrator can be bootstrapped with:
 

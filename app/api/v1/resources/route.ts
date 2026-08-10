@@ -11,6 +11,7 @@ import {
   idempotencyResponseHeaders,
   readIdempotencyKey,
 } from "@/lib/idempotency";
+import { positionFromMapFeatures } from "@/lib/map-features";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,9 @@ export async function POST(request: Request) {
   try {
     const values = {
       ...parsed.data,
+      ...(parsed.data.mapFeatures.length
+        ? positionFromMapFeatures(parsed.data.mapFeatures)
+        : {}),
       createdBy: authorization.identity.subject,
     };
     if (idempotency.key) {

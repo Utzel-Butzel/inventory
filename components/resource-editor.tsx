@@ -636,8 +636,17 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="mb-4 flex items-center gap-2"><MapPin size={16} className="text-emerald-700" /><h2 className="text-sm font-semibold text-slate-950">Position</h2></div>
-            <label className={labelClass}>Latitude<input type="number" step="any" value={form.gpsLatitude} onChange={(event) => setField("gpsLatitude", event.target.value)} placeholder="51.0504" className={inputClass} /></label>
-            <label className={`${labelClass} mt-3`}>Longitude<input type="number" step="any" value={form.gpsLongitude} onChange={(event) => setField("gpsLongitude", event.target.value)} placeholder="13.7373" className={inputClass} /></label>
+            {!isNew && resourceId ? (
+              <Link href={`/map?resource=${resourceId}`} className="mb-4 flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-xs font-semibold text-violet-800 transition hover:bg-violet-100">
+                <span className="inline-flex items-center gap-2"><MapPin size={14} />Edit point or outline on map</span>
+                <ChevronRight size={14} />
+              </Link>
+            ) : (
+              <p className="mb-3 text-[11px] leading-4 text-slate-400">Save the item first to draw its point or outline in the map editor.</p>
+            )}
+            {resource?.mapFeatures.length ? <p className="mb-3 text-[11px] leading-4 text-violet-700">Coordinates are derived from the saved map geometry. Edit them on the map to keep both views in sync.</p> : null}
+            <label className={labelClass}>Latitude<input type="number" step="any" value={form.gpsLatitude} onChange={(event) => setField("gpsLatitude", event.target.value)} placeholder="51.0504" disabled={Boolean(resource?.mapFeatures.length)} className={inputClass} /></label>
+            <label className={`${labelClass} mt-3`}>Longitude<input type="number" step="any" value={form.gpsLongitude} onChange={(event) => setField("gpsLongitude", event.target.value)} placeholder="13.7373" disabled={Boolean(resource?.mapFeatures.length)} className={inputClass} /></label>
             <label className={`${labelClass} mt-3`}>Altitude <span className="font-normal text-slate-400">· metres</span><input type="number" step="any" value={form.gpsAltitude} onChange={(event) => setField("gpsAltitude", event.target.value)} className={inputClass} /></label>
             {mapHref ? <a href={mapHref} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-900">Open on map <ChevronRight size={13} /></a> : <p className="mt-3 text-[11px] leading-4 text-slate-400">GPS can be read from image metadata, or entered manually.</p>}
           </section>
