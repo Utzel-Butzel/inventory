@@ -237,7 +237,8 @@ available stock to `in-use` and linked to the concrete build and, when the outpu
 is serialized, to the finished unit in which they were installed. If any
 component is unavailable, the complete build is rolled back. Existing finished
 stock is never consumed retroactively when a bill of materials is added or
-changed.
+changed. Build requests are idempotent, so retrying after a timeout cannot
+consume the same components twice.
 
 ### Purchase orders and incoming stock
 
@@ -247,7 +248,9 @@ not increase available stock. A full or partial goods receipt creates the dated
 positive stock movement (or serialized units), reduces the open quantity, and
 updates the order status atomically. Reorder suggestions take already ordered
 quantities into account while low-stock warnings continue to reflect what is
-actually available.
+actually available. Purchase-order creation and goods receipts are idempotent;
+the web interface keeps the same operation key when an unchanged request is
+retried, preventing duplicate orders or receipts after a network interruption.
 
 ### Configurable QR scan workflows
 

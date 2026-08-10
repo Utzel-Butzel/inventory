@@ -9,24 +9,27 @@ struct CaptureView: View {
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var shutterFlash = false
     @State private var codeScanning = false
+    @State private var controlsExpanded = false
+    @GestureState private var drawerDragOffset: CGFloat = 0
 
     let onSubmit: (IntakeSubmission) -> Void
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 18) {
+            GeometryReader { geometry in
+                let drawerHeight = min(
+                    max(geometry.size.height * 0.66, 320),
+                    min(geometry.size.height, 610)
+                )
+
+                ZStack(alignment: .bottom) {
                     cameraPanel
-                    photoTray
-                    intakeOptions
-                    submitButton
+                    captureDrawer(height: drawerHeight)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.black)
             }
-            .background(InventoryTheme.canvas)
-            .navigationTitle("Schnell erfassen")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 camera.scanningEnabled = false
                 camera.onCode = { code in
@@ -71,6 +74,7 @@ struct CaptureView: View {
     private var cameraPanel: some View {
         ZStack {
             CameraPreview(camera: camera)
+                .ignoresSafeArea(.container, edges: .horizontal)
             Color.white.opacity(shutterFlash ? 0.72 : 0)
 
             LinearGradient(
@@ -95,8 +99,7 @@ struct CaptureView: View {
                         .background(.black.opacity(0.36), in: Capsule())
                     Spacer()
                     Button {
-                        codeScanning.toggle()
-                        camera.scanningEnabled = codeScanning
+                        toggleCodeScanning()
                     } label: {
                         Image(systemName: codeScanning ? "qrcode.viewfinder" : "barcode.viewfinder")
                             .frame(width: 42, height: 42)
@@ -115,44 +118,55 @@ struct CaptureView: View {
 
                 Spacer()
 
-                HStack(alignment: .center) {
-                    PhotosPicker(
-                        selection: $pickerItems,
-                        maxSelectionCount: CaptureViewModel.maximumPhotos - model.photos.count,
-                        matching: .images
-                    ) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.title3)
-                            .frame(width: 52, height: 52)
-                            .background(.black.opacity(0.36), in: Circle())
-                    }
-                    .foregroundStyle(.white)
+                if !controlsExpanded {
+                    HStack(alignment: .center) {
+                        PhotosPicker(
+                            selection: $pickerItems,
+                            maxSelectionCount: CaptureViewModel.maximumPhotos - model.photos.count,
+                            matching: .images
+                        ) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.title3)
+                                .frame(width: 52, height: 52)
+                                .background(.black.opacity(0.36), in: Circle())
+                        }
+                        .foregroundStyle(.white)
+                        .disabled(model.photos.count >= CaptureViewModel.maximumPhotos)
 
-                    Spacer()
+                        Spacer()
 
-                    Button {
-                        camera.capturePhoto()
-                    } label: {
-                        ZStack {
-                            Circle().fill(.white).frame(width: 74, height: 74)
-                            Circle().stroke(.white.opacity(0.55), lineWidth: 3).frame(width: 86, height: 86)
-                            if model.processingCount > 0 {
-                                ProgressView().tint(InventoryTheme.ink)
+                        Button {
+                            camera.capturePhoto()
+                        } label: {
+                            ZStack {
+                                Circle().fill(.white).frame(width: 74, height: 74)
+                                Circle()
+                                    .stroke(.white.opacity(0.55), lineWidth: 3)
+                                    .frame(width: 86, height: 86)
+                                if model.processingCount > 0 {
+                                    ProgressView().tint(InventoryTheme.ink)
+                                }
                             }
                         }
+                        .disabled(
+                            camera.state != .ready
+                                || model.photos.count >= CaptureViewModel.maximumPhotos
+                        )
+
+                        Spacer()
+
+                        Text("\(model.photos.count)/\(CaptureViewModel.maximumPhotos)")
+                            .font(.callout.monospacedDigit().weight(.semibold))
+                            .frame(width: 52, height: 52)
+                            .background(.black.opacity(0.36), in: Circle())
+                            .foregroundStyle(.white)
                     }
-                    .disabled(camera.state != .ready || model.photos.count >= CaptureViewModel.maximumPhotos)
-
-                    Spacer()
-
-                    Text("\(model.photos.count)/\(CaptureViewModel.maximumPhotos)")
-                        .font(.callout.monospacedDigit().weight(.semibold))
-                        .frame(width: 52, height: 52)
-                        .background(.black.opacity(0.36), in: Circle())
-                        .foregroundStyle(.white)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, collapsedDrawerHeight + 20)
 
             if camera.state == .denied {
                 permissionOverlay
@@ -160,12 +174,115 @@ struct CaptureView: View {
                 unavailableOverlay(message)
             }
         }
-        .frame(height: 430)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(.white.opacity(0.16), lineWidth: 1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func captureDrawer(height: CGFloat) -> some View {
+        let restingOffset = controlsExpanded ? 0 : height - collapsedDrawerHeight
+        let maximumOffset = height - collapsedDrawerHeight
+        let currentOffset = min(max(restingOffset + drawerDragOffset, 0), maximumOffset)
+
+        return VStack(spacing: 0) {
+            drawerHeader
+            Divider().opacity(controlsExpanded ? 1 : 0)
+
+            ScrollView {
+                VStack(spacing: 16) {
+                    photoTray
+                    intakeOptions
+                    submitButton
+                }
+                .padding(16)
+                .padding(.bottom, 24)
+            }
+            .scrollDismissesKeyboard(.interactively)
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: height, alignment: .top)
+        .background(.regularMaterial)
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 28,
+                topTrailingRadius: 28,
+                style: .continuous
+            )
+        )
+        .overlay(alignment: .top) {
+            UnevenRoundedRectangle(
+                topLeadingRadius: 28,
+                topTrailingRadius: 28,
+                style: .continuous
+            )
+            .stroke(.white.opacity(0.45), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.24), radius: 18, y: -5)
+        .offset(y: currentOffset)
+        .animation(.interactiveSpring(response: 0.34, dampingFraction: 0.86), value: controlsExpanded)
+    }
+
+    private var drawerHeader: some View {
+        Button {
+            withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.86)) {
+                setControlsExpanded(!controlsExpanded)
+            }
+        } label: {
+            VStack(spacing: 8) {
+                Capsule()
+                    .fill(.secondary.opacity(0.45))
+                    .frame(width: 38, height: 5)
+
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Details & Upload")
+                            .font(.headline)
+                        Text(controlsExpanded ? "Nach unten ziehen zum Schließen" : "Nach oben ziehen zum Öffnen")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Label("\(model.photos.count)", systemImage: "photo.stack.fill")
+                        .font(.subheadline.monospacedDigit().weight(.semibold))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(InventoryTheme.lime.opacity(0.72), in: Capsule())
+
+                    Image(systemName: controlsExpanded ? "chevron.down" : "chevron.up")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            .frame(height: collapsedDrawerHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .gesture(drawerDragGesture)
+        .accessibilityHint(controlsExpanded ? "Klappt die Details ein" : "Klappt die Details auf")
+    }
+
+    private var drawerDragGesture: some Gesture {
+        DragGesture(minimumDistance: 5)
+            .updating($drawerDragOffset) { value, offset, _ in
+                offset = value.translation.height
+            }
+            .onEnded { value in
+                let projectedDistance = value.predictedEndTranslation.height
+                let shouldExpand: Bool
+                if projectedDistance < -45 {
+                    shouldExpand = true
+                } else if projectedDistance > 45 {
+                    shouldExpand = false
+                } else {
+                    shouldExpand = controlsExpanded
+                }
+
+                withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.86)) {
+                    setControlsExpanded(shouldExpand)
+                }
+            }
     }
 
     @ViewBuilder
@@ -243,8 +360,7 @@ struct CaptureView: View {
                     .font(.caption.weight(.semibold))
                     Spacer()
                     Button(codeScanning ? "Abbrechen" : "Scannen") {
-                        codeScanning.toggle()
-                        camera.scanningEnabled = codeScanning
+                        toggleCodeScanning()
                     }
                     .font(.caption.weight(.semibold))
                 }
@@ -273,7 +389,10 @@ struct CaptureView: View {
         Button {
             let submission = model.makeSubmission()
             onSubmit(submission)
-            withAnimation { model.resetAfterSubmitting() }
+            withAnimation {
+                model.resetAfterSubmitting()
+                controlsExpanded = false
+            }
         } label: {
             HStack {
                 Image(systemName: "arrow.up.circle.fill")
@@ -330,6 +449,27 @@ struct CaptureView: View {
         case .ready: "Bereit"
         case .denied: "Gesperrt"
         case .unavailable: "Nicht verfügbar"
+        }
+    }
+
+    private var collapsedDrawerHeight: CGFloat { 82 }
+
+    private func setControlsExpanded(_ expanded: Bool) {
+        controlsExpanded = expanded
+        if expanded, codeScanning {
+            codeScanning = false
+            camera.scanningEnabled = false
+        }
+    }
+
+    private func toggleCodeScanning() {
+        let nextValue = !codeScanning
+        codeScanning = nextValue
+        camera.scanningEnabled = nextValue
+        if nextValue {
+            withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.86)) {
+                controlsExpanded = false
+            }
         }
     }
 

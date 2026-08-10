@@ -28,6 +28,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -201,9 +202,11 @@ function SectionHeading({
 export function AssemblyManager({
   resourceId,
   mode = "full",
+  onStockChanged,
 }: {
   resourceId: string;
   mode?: AssemblyMode;
+  onStockChanged?: () => void;
 }) {
   const bomEndpoint = `/api/v1/resources/${resourceId}/bom`;
   const buildsEndpoint = `/api/v1/resources/${resourceId}/stock/builds`;
@@ -236,6 +239,7 @@ export function AssemblyManager({
   const [componentUnitIds, setComponentUnitIds] = useState<
     Record<string, string[]>
   >({});
+  const buildRequestRef = useRef<{ key: string; fingerprint: string } | null>(null);
 
   const loadBom = useCallback(
     async (quiet = false) => {
@@ -513,24 +517,32 @@ export function AssemblyManager({
     setError(null);
     setNotice(null);
     try {
+      const requestBody = {
+        quantity: buildQuantity,
+        occurredAt,
+        location: buildForm.location.trim() || undefined,
+        note: buildForm.note.trim() || undefined,
+        componentUnitIds,
+        outputUnitCodes:
+          bom.resource.trackingMode === "serialized" && outputCodes.length
+            ? outputCodes
+            : undefined,
+      };
+      const fingerprint = JSON.stringify(requestBody);
+      const request =
+        buildRequestRef.current?.fingerprint === fingerprint
+          ? buildRequestRef.current
+          : { key: crypto.randomUUID(), fingerprint };
+      buildRequestRef.current = request;
       await fetchJson(buildsEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
+          "Idempotency-Key": request.key,
         },
-        body: JSON.stringify({
-          quantity: buildQuantity,
-          occurredAt,
-          location: buildForm.location.trim() || undefined,
-          note: buildForm.note.trim() || undefined,
-          componentUnitIds,
-          outputUnitCodes:
-            bom.resource.trackingMode === "serialized" && outputCodes.length
-              ? outputCodes
-              : undefined,
-        }),
+        body: fingerprint,
       });
+      buildRequestRef.current = null;
       setBuildForm({
         quantity: "1",
         occurredAt: localDateTime(),
@@ -539,6 +551,7 @@ export function AssemblyManager({
         outputUnitCodes: "",
       });
       await Promise.all([loadBom(true), loadBuilds(true)]);
+      onStockChanged?.();
       setNotice(
         `${buildQuantity} ${bom.resource.name}${buildQuantity === 1 ? "" : "s"} built successfully.`,
       );

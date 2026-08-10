@@ -264,6 +264,12 @@ export const purchaseOrders = pgTable(
       .defaultNow(),
     expectedAt: timestamp("expected_at", { withTimezone: true }),
     note: text("note").notNull().default(""),
+    idempotencyKey: uuid("idempotency_key"),
+    requestHash: varchar("request_hash", { length: 64 }),
+    response: jsonb("response")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     createdBy: varchar("created_by", { length: 320 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -273,6 +279,9 @@ export const purchaseOrders = pgTable(
       .defaultNow(),
   },
   (table) => [
+    uniqueIndex("purchase_orders_idempotency_key_unique").on(
+      table.idempotencyKey,
+    ),
     index("purchase_orders_status_idx").on(table.status),
     index("purchase_orders_expected_at_idx").on(table.expectedAt),
     check(
@@ -513,7 +522,7 @@ export const assemblyBuildComponents = pgTable(
       .references(() => assemblyBuilds.id, { onDelete: "cascade" }),
     componentResourceId: uuid("component_resource_id").references(
       () => resources.id,
-      { onDelete: "set null" },
+      { onDelete: "restrict" },
     ),
     componentName: varchar("component_name", { length: 240 }).notNull(),
     componentSku: varchar("component_sku", { length: 80 }),
@@ -521,7 +530,7 @@ export const assemblyBuildComponents = pgTable(
     quantityConsumed: integer("quantity_consumed").notNull(),
     componentUnitId: uuid("component_unit_id").references(
       () => stockUnits.id,
-      { onDelete: "set null" },
+      { onDelete: "restrict" },
     ),
     outputUnitId: uuid("output_unit_id").references(() => stockUnits.id, {
       onDelete: "set null",

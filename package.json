@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "node scripts/seed.mjs",
+    "smoke:assemblies-orders": "node scripts/smoke-assemblies-orders.mjs",
     "auth:hash": "node scripts/hash-password.mjs"
   },
   "dependencies": {

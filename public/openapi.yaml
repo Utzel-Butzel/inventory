@@ -441,14 +441,18 @@ paths:
                   items: { $ref: "#/components/schemas/BomComponentInput" }
       responses:
         "200": { description: Bill of materials replaced }
-        "409": { description: Self-reference, circular dependency, or referenced-resource conflict }
-        "422": { description: Invalid component list }
+        "409": { description: Circular dependency or concurrent referenced-resource conflict }
+        "422": { description: Invalid, duplicate, missing, or self-referencing component list }
   /resources/{id}/stock/builds:
     parameters:
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Manufacturing]
       summary: List completed assembly builds for an item
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
       responses:
         "200":
           description: Completed builds with immutable component snapshots
@@ -463,7 +467,7 @@ paths:
       tags: [Manufacturing]
       summary: Atomically consume components and create finished stock
       parameters:
-        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
       requestBody:
         required: true
         content:
@@ -555,6 +559,9 @@ paths:
         - name: status
           in: query
           schema: { type: string, enum: [draft, ordered, partially-received, received, cancelled] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
       responses:
         "200":
           description: Purchase orders
@@ -568,15 +575,19 @@ paths:
     post:
       tags: [Purchasing]
       summary: Create a draft or ordered purchase order
+      parameters:
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/PurchaseOrderInput" }
       responses:
+        "200": { description: Replayed the original purchase-order response }
         "201": { description: Purchase order created }
-        "409": { description: Duplicate resource line or referenced-resource conflict }
-        "422": { description: Invalid purchase order }
+        "400": { description: Missing or invalid Idempotency-Key }
+        "409": { description: Idempotency conflict or supported open-order total exceeded }
+        "422": { description: Invalid purchase order, duplicate line, or missing inventory item }
   /purchase-orders/{orderId}:
     parameters:
       - name: orderId
@@ -630,7 +641,7 @@ paths:
       tags: [Purchasing]
       summary: Receive all or part of an ordered line into physical stock
       parameters:
-        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
       requestBody:
         required: true
         content:
@@ -768,6 +779,12 @@ components:
       required: false
       description: UUID identifying one queue operation; safe to reuse for retries.
       schema: { type: string, format: uuid }
+    RequiredIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID identifying this atomic operation; reuse it only to retry the exact same request.
+      schema: { type: string, format: uuid }
     ResourceId:
       name: id
       in: path
@@ -813,7 +830,15 @@ components:
             sku: { type: [string, "null"] }
             availableQuantity: { type: integer, minimum: 0 }
             trackingMode: { type: string, enum: [bulk, serialized] }
-            availableUnits: { type: array, items: { $ref: "#/components/schemas/StockUnit" } }
+            availableUnits:
+              type: array
+              items:
+                type: object
+                required: [id, code, location]
+                properties:
+                  id: { type: string, format: uuid }
+                  code: { type: string }
+                  location: { type: [string, "null"] }
     BomDetail:
       type: object
       required: [resource, components, buildableQuantity]

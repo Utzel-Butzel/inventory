@@ -33,6 +33,7 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.22), value: state.isConfigured)
+        .background(KeyboardDismissalView())
     }
 
     private var activeJobCount: Int {

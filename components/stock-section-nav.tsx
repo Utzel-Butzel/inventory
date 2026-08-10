@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Boxes, QrCode, Workflow } from "lucide-react";
+import { Boxes, QrCode, ShoppingCart, Workflow } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/components/ui";
 
 const stockSections = [
   { href: "/stock", label: "Overview", icon: Boxes },
+  { href: "/stock/orders", label: "Orders", icon: ShoppingCart },
   { href: "/stock/scan", label: "Scan", icon: QrCode },
   { href: "/stock/workflows", label: "Workflows", icon: Workflow },
 ] as const;
@@ -20,7 +21,7 @@ export function StockSectionNav() {
       aria-label="Stock sections"
       className="mb-6 overflow-x-auto rounded-2xl border border-[#e4e7eb] bg-white p-1.5 shadow-[var(--shadow-sm)]"
     >
-      <div className="grid min-w-[390px] grid-cols-3 gap-1">
+      <div className="grid min-w-[500px] grid-cols-4 gap-1">
         {stockSections.map((section) => {
           const active =
             section.href === "/stock"

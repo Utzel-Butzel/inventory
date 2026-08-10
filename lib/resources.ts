@@ -18,7 +18,6 @@ import {
   bomLines,
   media,
   purchaseOrderLines,
-  purchaseReceipts,
   resourceCreationRequests,
   resources,
   stockMovements,
@@ -29,6 +28,7 @@ import {
   type ResourceRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import { BOM_WRITE_LOCK_ID } from "@/lib/inventory-locks";
 
 export type ResourceWithMedia = ResourceRecord & {
   media: MediaRecord[];
@@ -336,13 +336,13 @@ export async function mergeResources(
   actor?: string,
 ) {
   if (keepId === duplicateId) throw new Error("Choose two different items.");
-  const [keep, duplicate] = await Promise.all([
-    getResource(keepId),
-    getResource(duplicateId),
-  ]);
-  if (!keep || !duplicate) return null;
+  const merged = await db.transaction(async (transaction) => {
+    // Serialize every BOM graph rewrite, including merges. Otherwise a merge
+    // could race a recipe update or collapse an indirect path into a cycle.
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(${BOM_WRITE_LOCK_ID})`,
+    );
 
-  await db.transaction(async (transaction) => {
     const lockedResources = await transaction
       .select()
       .from(resources)
@@ -352,17 +352,91 @@ export async function mergeResources(
     const lockedKeep = lockedResources.find((item) => item.id === keepId);
     const lockedDuplicate = lockedResources.find((item) => item.id === duplicateId);
     if (!lockedKeep || !lockedDuplicate) {
-      throw new Error("One of the inventory items no longer exists.");
+      return false;
     }
 
-    const highestPosition = keep.media.reduce(
+    const bomEdges = await transaction
+      .select({
+        parent: bomLines.assemblyResourceId,
+        child: bomLines.componentResourceId,
+      })
+      .from(bomLines);
+    const adjacency = new Map<string, Set<string>>();
+    for (const edge of bomEdges) {
+      const parent = edge.parent === duplicateId ? keepId : edge.parent;
+      const child = edge.child === duplicateId ? keepId : edge.child;
+      // A direct relationship between the aliases disappears when they become
+      // one item. Every other self-edge indicates an unsafe indirect collapse.
+      if (parent === child) continue;
+      const children = adjacency.get(parent) ?? new Set<string>();
+      children.add(child);
+      adjacency.set(parent, children);
+    }
+    const visiting = new Set<string>();
+    const visited = new Set<string>();
+    const containsCycle = (resourceId: string): boolean => {
+      if (visiting.has(resourceId)) return true;
+      if (visited.has(resourceId)) return false;
+      visiting.add(resourceId);
+      for (const componentId of adjacency.get(resourceId) ?? []) {
+        if (containsCycle(componentId)) return true;
+      }
+      visiting.delete(resourceId);
+      visited.add(resourceId);
+      return false;
+    };
+    if (Array.from(adjacency.keys()).some(containsCycle)) {
+      throw new Error(
+        "These items cannot be merged because that would create a circular bill of materials.",
+      );
+    }
+
+    const [historicalBuild] = await transaction
+      .select({ id: assemblyBuilds.id })
+      .from(assemblyBuilds)
+      .where(eq(assemblyBuilds.assemblyResourceId, duplicateId))
+      .limit(1);
+    const [historicalComponent] = await transaction
+      .select({ id: assemblyBuildComponents.id })
+      .from(assemblyBuildComponents)
+      .where(eq(assemblyBuildComponents.componentResourceId, duplicateId))
+      .limit(1);
+    if (historicalBuild || historicalComponent) {
+      throw new Error(
+        "These items cannot be merged because the duplicate is part of completed assembly build history. Archive it instead so the audit trail stays immutable.",
+      );
+    }
+
+    const [receivedOrderLine] = await transaction
+      .select({ id: purchaseOrderLines.id })
+      .from(purchaseOrderLines)
+      .where(
+        and(
+          eq(purchaseOrderLines.resourceId, duplicateId),
+          sql`${purchaseOrderLines.receivedQuantity} > 0`,
+        ),
+      )
+      .limit(1);
+    if (receivedOrderLine) {
+      throw new Error(
+        "These items cannot be merged because the duplicate has received purchase-order history. Archive it instead so receipt retries and audit records stay immutable.",
+      );
+    }
+
+    const mediaRows = await transaction
+      .select()
+      .from(media)
+      .where(inArray(media.resourceId, [keepId, duplicateId]));
+    const keepMedia = mediaRows.filter((item) => item.resourceId === keepId);
+    const duplicateMedia = mediaRows.filter((item) => item.resourceId === duplicateId);
+    const highestPosition = keepMedia.reduce(
       (highest, item) => Math.max(highest, item.position),
       -1,
     );
-    for (const [index, item] of duplicate.media.entries()) {
+    for (const [index, item] of duplicateMedia.entries()) {
       await transaction
         .update(media)
-        .set({ resourceId: keep.id, position: highestPosition + index + 1 })
+        .set({ resourceId: keepId, position: highestPosition + index + 1 })
         .where(eq(media.id, item.id));
     }
 
@@ -436,15 +510,6 @@ export async function mergeResources(
       }
     }
 
-    await transaction
-      .update(assemblyBuilds)
-      .set({ assemblyResourceId: keepId })
-      .where(eq(assemblyBuilds.assemblyResourceId, duplicateId));
-    await transaction
-      .update(assemblyBuildComponents)
-      .set({ componentResourceId: keepId })
-      .where(eq(assemblyBuildComponents.componentResourceId, duplicateId));
-
     const duplicateOrderLines = await transaction
       .select()
       .from(purchaseOrderLines)
@@ -461,10 +526,6 @@ export async function mergeResources(
         )
         .limit(1);
       if (collision) {
-        await transaction
-          .update(purchaseReceipts)
-          .set({ purchaseOrderLineId: collision.id })
-          .where(eq(purchaseReceipts.purchaseOrderLineId, line.id));
         await transaction
           .update(purchaseOrderLines)
           .set({
@@ -631,33 +692,36 @@ export async function mergeResources(
     await transaction
       .update(resources)
       .set({
-        description: keep.description || duplicate.description,
+        description: lockedKeep.description || lockedDuplicate.description,
         quantity: combinedQuantity,
-        location: keep.location || duplicate.location,
-        serialNumber: keep.serialNumber || duplicate.serialNumber,
-        valueCents: keep.valueCents ?? duplicate.valueCents,
-        tags: Array.from(new Set([...keep.tags, ...duplicate.tags])),
-        categories: [...keep.categories, ...duplicate.categories].filter(
+        location: lockedKeep.location || lockedDuplicate.location,
+        serialNumber: lockedKeep.serialNumber || lockedDuplicate.serialNumber,
+        valueCents: lockedKeep.valueCents ?? lockedDuplicate.valueCents,
+        tags: Array.from(new Set([...lockedKeep.tags, ...lockedDuplicate.tags])),
+        categories: [...lockedKeep.categories, ...lockedDuplicate.categories].filter(
           (category, index, all) =>
             all.findIndex((candidate) => candidate.name === category.name) ===
             index,
         ),
         updatedAt: now,
       })
-      .where(eq(resources.id, keep.id));
+      .where(eq(resources.id, keepId));
     await transaction.insert(stockMovements).values({
-      resourceId: keep.id,
-      delta: lockedDuplicate.quantity,
+      resourceId: keepId,
+      // The duplicate ledger is repointed above, so its deltas already explain
+      // the transferred quantity. This row is an audit marker, not another receipt.
+      delta: 0,
       balanceAfter: combinedQuantity,
       type: "merge",
-      reason: `Merged stock from ${duplicate.name}`,
-      note: `Source inventory ID: ${duplicate.id}`,
-      location: keep.location || duplicate.location,
+      reason: `Merged stock from ${lockedDuplicate.name}`,
+      note: `Source inventory ID: ${duplicateId}`,
+      location: lockedKeep.location || lockedDuplicate.location,
       occurredAt: now,
       createdBy: actor ?? null,
     });
-    await transaction.delete(resources).where(eq(resources.id, duplicate.id));
+    await transaction.delete(resources).where(eq(resources.id, duplicateId));
+    return true;
   });
 
-  return getResource(keep.id);
+  return merged ? getResource(keepId) : null;
 }

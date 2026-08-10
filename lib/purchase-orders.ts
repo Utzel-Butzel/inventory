@@ -6,6 +6,7 @@ import {
   desc,
   eq,
   inArray,
+  sql,
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
@@ -95,6 +96,12 @@ export function purchaseOrderHttpError(error: unknown, fallback: string) {
     return {
       status: 409 as const,
       message: "That Idempotency-Key was already used for another purchase receipt.",
+    };
+  }
+  if (message.includes("purchase_orders_idempotency_key_unique")) {
+    return {
+      status: 409 as const,
+      message: "That Idempotency-Key was already used for another purchase order.",
     };
   }
   return { status: 500 as const, message: fallback };
@@ -212,9 +219,14 @@ const deriveStatus = (
   return current === "draft" ? "draft" : "ordered";
 };
 
-async function loadOrderLines(orderIds: string[]) {
+type PurchaseOrderReader = Pick<typeof db, "select">;
+
+async function loadOrderLines(
+  orderIds: string[],
+  database: PurchaseOrderReader = db,
+) {
   if (!orderIds.length) return [];
-  return db
+  return database
     .select({
       id: purchaseOrderLines.id,
       purchaseOrderId: purchaseOrderLines.purchaseOrderId,
@@ -223,13 +235,17 @@ async function loadOrderLines(orderIds: string[]) {
       resourceSku: resources.sku,
       orderedQuantity: purchaseOrderLines.orderedQuantity,
       receivedQuantity: purchaseOrderLines.receivedQuantity,
-      expectedAt: purchaseOrderLines.expectedAt,
+      expectedAt: sql<Date | null>`coalesce(${purchaseOrderLines.expectedAt}, ${purchaseOrders.expectedAt})`,
       note: purchaseOrderLines.note,
       trackingMode: stockSettings.trackingMode,
       createdAt: purchaseOrderLines.createdAt,
       updatedAt: purchaseOrderLines.updatedAt,
     })
     .from(purchaseOrderLines)
+    .innerJoin(
+      purchaseOrders,
+      eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+    )
     .innerJoin(resources, eq(resources.id, purchaseOrderLines.resourceId))
     .leftJoin(stockSettings, eq(stockSettings.resourceId, resources.id))
     .where(inArray(purchaseOrderLines.purchaseOrderId, orderIds))
@@ -239,47 +255,55 @@ async function loadOrderLines(orderIds: string[]) {
 export async function listPurchaseOrders(
   options: { status?: PurchaseOrderStatus; limit?: number } = {},
 ) {
-  const limit = Math.min(100, Math.max(1, options.limit ?? 100));
-  const orders = options.status
-    ? await db
-        .select()
-        .from(purchaseOrders)
-        .where(eq(purchaseOrders.status, options.status))
-        .orderBy(desc(purchaseOrders.orderedAt), desc(purchaseOrders.createdAt))
-        .limit(limit)
-    : await db
-        .select()
-        .from(purchaseOrders)
-        .orderBy(desc(purchaseOrders.orderedAt), desc(purchaseOrders.createdAt))
-        .limit(limit);
-  const lineRows = await loadOrderLines(orders.map((order) => order.id));
-  const linesByOrder = new Map<string, OrderLineDtoInput[]>();
-  for (const line of lineRows) {
-    const rows = linesByOrder.get(line.purchaseOrderId) ?? [];
-    rows.push(line);
-    linesByOrder.set(line.purchaseOrderId, rows);
-  }
-  return {
-    orders: orders.map((order) =>
-      orderDto(order, linesByOrder.get(order.id) ?? []),
-    ),
-  };
+  return db.transaction(async (transaction) => {
+    const limit = Math.min(100, Math.max(1, options.limit ?? 100));
+    const orders = options.status
+      ? await transaction
+          .select()
+          .from(purchaseOrders)
+          .where(eq(purchaseOrders.status, options.status))
+          .orderBy(desc(purchaseOrders.orderedAt), desc(purchaseOrders.createdAt))
+          .limit(limit)
+      : await transaction
+          .select()
+          .from(purchaseOrders)
+          .orderBy(desc(purchaseOrders.orderedAt), desc(purchaseOrders.createdAt))
+          .limit(limit);
+    const lineRows = await loadOrderLines(
+      orders.map((order) => order.id),
+      transaction,
+    );
+    const linesByOrder = new Map<string, OrderLineDtoInput[]>();
+    for (const line of lineRows) {
+      const rows = linesByOrder.get(line.purchaseOrderId) ?? [];
+      rows.push(line);
+      linesByOrder.set(line.purchaseOrderId, rows);
+    }
+    return {
+      orders: orders.map((order) =>
+        orderDto(order, linesByOrder.get(order.id) ?? []),
+      ),
+    };
+  }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
 export async function getPurchaseOrder(id: string) {
-  const [order] = await db
-    .select()
-    .from(purchaseOrders)
-    .where(eq(purchaseOrders.id, id))
-    .limit(1);
-  if (!order) return null;
-  const lineRows = await loadOrderLines([id]);
-  return orderDto(order, lineRows);
+  return db.transaction(async (transaction) => {
+    const [order] = await transaction
+      .select()
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.id, id))
+      .limit(1);
+    if (!order) return null;
+    const lineRows = await loadOrderLines([id], transaction);
+    return orderDto(order, lineRows);
+  }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
 export async function createPurchaseOrder(
   input: PurchaseOrderCreateInput,
   actor: string,
+  idempotency: IdempotencyInput,
 ) {
   if (!input.lines.length) {
     throw new PurchaseOrderOperationError(
@@ -295,54 +319,172 @@ export async function createPurchaseOrder(
     );
   }
 
-  const orderId = await db.transaction(async (transaction) => {
-    const existingResources = await transaction
-      .select({ id: resources.id })
-      .from(resources)
-      .where(inArray(resources.id, [...resourceIds].sort()))
-      .orderBy(asc(resources.id));
-    if (existingResources.length !== resourceIds.length) {
+  const validateReplay = (existing: PurchaseOrderRecord) => {
+    if (
+      existing.createdBy !== actor ||
+      existing.requestHash !== idempotency.requestHash
+    ) {
       throw new PurchaseOrderOperationError(
-        "One or more purchase order items no longer exist.",
-        422,
+        "That Idempotency-Key was already used by another actor or payload.",
+        409,
       );
     }
+    const storedOrder = existing.response.order;
+    if (!storedOrder || typeof storedOrder !== "object" || Array.isArray(storedOrder)) {
+      throw new PurchaseOrderOperationError(
+        "The original purchase-order response is unavailable.",
+        409,
+      );
+    }
+    return { response: existing.response, replayed: true } as const;
+  };
 
-    const [order] = await transaction
-      .insert(purchaseOrders)
-      .values({
-        reference: input.reference || null,
-        supplier: input.supplier ?? "",
-        status: input.status ?? "ordered",
-        orderedAt: input.orderedAt ?? new Date(),
-        expectedAt: input.expectedAt ?? null,
-        note: input.note ?? "",
-        createdBy: actor,
-      })
-      .returning({ id: purchaseOrders.id });
-    await transaction.insert(purchaseOrderLines).values(
-      input.lines.map((line) => ({
-        purchaseOrderId: order.id,
-        resourceId: line.resourceId,
-        orderedQuantity: line.orderedQuantity,
-        expectedAt:
-          line.expectedAt === undefined
-            ? input.expectedAt ?? null
-            : line.expectedAt,
-        note: line.note ?? "",
-      })),
-    );
-    return order.id;
-  });
+  const [existing] = await db
+    .select()
+    .from(purchaseOrders)
+    .where(eq(purchaseOrders.idempotencyKey, idempotency.key))
+    .limit(1);
+  if (existing) return validateReplay(existing);
 
-  const order = await getPurchaseOrder(orderId);
-  if (!order) {
-    throw new PurchaseOrderOperationError(
-      "The purchase order could not be loaded after creation.",
-      409,
-    );
+  try {
+    return await db.transaction(async (transaction) => {
+      const existingResources = await transaction
+        .select({ id: resources.id, name: resources.name, sku: resources.sku })
+        .from(resources)
+        .where(inArray(resources.id, [...resourceIds].sort()))
+        .orderBy(asc(resources.id))
+        .for("update");
+      if (existingResources.length !== resourceIds.length) {
+        throw new PurchaseOrderOperationError(
+          "One or more purchase order items no longer exist.",
+          422,
+        );
+      }
+
+      // Requests sharing a resource serialize on the row locks above. Recheck
+      // the key so a retry waiting on the first request returns its response.
+      const [replayAfterLock] = await transaction
+        .select()
+        .from(purchaseOrders)
+        .where(eq(purchaseOrders.idempotencyKey, idempotency.key))
+        .limit(1);
+      if (replayAfterLock) return validateReplay(replayAfterLock);
+
+      const settingsRows = await transaction
+        .select({
+          resourceId: stockSettings.resourceId,
+          trackingMode: stockSettings.trackingMode,
+        })
+        .from(stockSettings)
+        .where(inArray(stockSettings.resourceId, resourceIds));
+      const committedRows = await transaction
+        .select({
+          resourceId: purchaseOrderLines.resourceId,
+          quantity: sql<string>`coalesce(sum((${purchaseOrderLines.orderedQuantity} - ${purchaseOrderLines.receivedQuantity})::bigint), 0)`,
+        })
+        .from(purchaseOrderLines)
+        .innerJoin(
+          purchaseOrders,
+          eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+        )
+        .where(
+          and(
+            inArray(purchaseOrderLines.resourceId, resourceIds),
+            inArray(purchaseOrders.status, [
+              "draft",
+              "ordered",
+              "partially-received",
+            ]),
+          ),
+        )
+        .groupBy(purchaseOrderLines.resourceId);
+      const committedByResource = new Map(
+        committedRows.map((row) => [row.resourceId, Number(row.quantity)]),
+      );
+      for (const line of input.lines) {
+        if (
+          (committedByResource.get(line.resourceId) ?? 0) +
+            line.orderedQuantity >
+          MAX_STOCK_QUANTITY
+        ) {
+          const resourceName = existingResources.find(
+            (resource) => resource.id === line.resourceId,
+          )?.name;
+          throw new PurchaseOrderOperationError(
+            `Open and draft orders for ${resourceName ?? "this item"} would exceed the supported total of ${MAX_STOCK_QUANTITY}.`,
+            409,
+          );
+        }
+      }
+      const trackingByResource = new Map(
+        settingsRows.map((row) => [row.resourceId, row.trackingMode]),
+      );
+      const resourceById = new Map(
+        existingResources.map((resource) => [resource.id, resource]),
+      );
+
+      const [order] = await transaction
+        .insert(purchaseOrders)
+        .values({
+          reference: input.reference || null,
+          supplier: input.supplier ?? "",
+          status: input.status ?? "ordered",
+          orderedAt: input.orderedAt ?? new Date(),
+          expectedAt: input.expectedAt ?? null,
+          note: input.note ?? "",
+          idempotencyKey: idempotency.key,
+          requestHash: idempotency.requestHash,
+          response: {},
+          createdBy: actor,
+        })
+        .returning();
+      const insertedLines = await transaction
+        .insert(purchaseOrderLines)
+        .values(
+          input.lines.map((line) => ({
+            purchaseOrderId: order.id,
+            resourceId: line.resourceId,
+            orderedQuantity: line.orderedQuantity,
+            // NULL means "inherit the order header date". Copying the current
+            // header value here would make later delivery-date changes invisible.
+            expectedAt: line.expectedAt ?? null,
+            note: line.note ?? "",
+          })),
+        )
+        .returning();
+      const rawLines: OrderLineDtoInput[] = insertedLines.map((line) => {
+        const resource = resourceById.get(line.resourceId);
+        if (!resource) {
+          throw new PurchaseOrderOperationError(
+            "A purchase-order item could not be reloaded.",
+            409,
+          );
+        }
+        return {
+          ...line,
+          resourceName: resource.name,
+          resourceSku: resource.sku,
+          expectedAt: line.expectedAt ?? order.expectedAt,
+          trackingMode: trackingByResource.get(line.resourceId) ?? "bulk",
+        };
+      });
+      const savedOrder = orderDto(order, rawLines);
+      const response = jsonRecord({ order: savedOrder });
+      await transaction
+        .update(purchaseOrders)
+        .set({ response })
+        .where(eq(purchaseOrders.id, order.id));
+      return { response, replayed: false } as const;
+    });
+  } catch (error) {
+    const [winner] = await db
+      .select()
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.idempotencyKey, idempotency.key))
+      .limit(1);
+    if (winner) return validateReplay(winner);
+    throw error;
   }
-  return order;
 }
 
 export async function updatePurchaseOrder(
@@ -368,6 +510,16 @@ export async function updatePurchaseOrder(
     if (order.status === "received" && patch.status !== undefined) {
       throw new PurchaseOrderOperationError(
         "A fully received purchase order cannot be reopened or cancelled without reversing its receipts.",
+        409,
+      );
+    }
+    if (
+      order.status === "cancelled" &&
+      patch.status !== undefined &&
+      patch.status !== "cancelled"
+    ) {
+      throw new PurchaseOrderOperationError(
+        "A cancelled purchase order cannot be reopened; create a new order instead.",
         409,
       );
     }

@@ -3,6 +3,11 @@ import { z } from "zod";
 import { purchaseOrderStatuses } from "@/db/schema";
 import { requireIdentity } from "@/lib/api-auth";
 import {
+  hashIdempotentPayload,
+  idempotencyResponseHeaders,
+  readIdempotencyKey,
+} from "@/lib/idempotency";
+import {
   createPurchaseOrder,
   listPurchaseOrders,
   purchaseOrderHttpError,
@@ -63,6 +68,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const authorization = await requireIdentity(request, "write");
   if (authorization.response) return authorization.response;
+  const idempotency = readIdempotencyKey(request);
+  if (idempotency.error) return idempotency.error;
+  if (!idempotency.key) {
+    return Response.json(
+      { error: "Idempotency-Key is required for a purchase order." },
+      { status: 400 },
+    );
+  }
 
   let payload: unknown;
   try {
@@ -79,7 +92,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const order = await createPurchaseOrder(
+    const result = await createPurchaseOrder(
       {
         ...parsed.data,
         orderedAt: parsed.data.orderedAt
@@ -102,8 +115,18 @@ export async function POST(request: Request) {
         })),
       },
       authorization.identity.subject,
+      {
+        key: idempotency.key,
+        requestHash: hashIdempotentPayload({
+          actor: authorization.identity.subject,
+          purchaseOrder: parsed.data,
+        }),
+      },
     );
-    return Response.json({ order }, { status: 201 });
+    return Response.json(result.response, {
+      status: result.replayed ? 200 : 201,
+      headers: idempotencyResponseHeaders(idempotency.key, result.replayed),
+    });
   } catch (error) {
     const failure = purchaseOrderHttpError(error, "Unable to create this purchase order.");
     return Response.json({ error: failure.message }, { status: failure.status });

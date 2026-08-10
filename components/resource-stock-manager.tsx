@@ -46,11 +46,13 @@ import {
   useState,
 } from "react";
 
-import { fetchJson } from "@/lib/client-types";
+import { AssemblyManager } from "@/components/assembly-manager";
 import {
   PhotoCountCapture,
   type PhotoCountResult,
 } from "@/components/photo-count-capture";
+import { PurchaseOrdersManager } from "@/components/purchase-orders-manager";
+import { fetchJson } from "@/lib/client-types";
 
 type TrackingMode = "bulk" | "serialized";
 type MovementType =
@@ -934,6 +936,19 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
               : "No stockout predicted"}
           </p>
         </div>
+      </section>
+
+      <section className="mb-5 grid items-start gap-5 2xl:grid-cols-2">
+        <AssemblyManager
+          resourceId={resourceId}
+          mode="build"
+          onStockChanged={() => void loadStock(true)}
+        />
+        <PurchaseOrdersManager
+          resourceId={resourceId}
+          compact
+          onStockChanged={() => void loadStock(true)}
+        />
       </section>
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_390px]">

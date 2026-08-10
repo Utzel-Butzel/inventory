@@ -211,9 +211,10 @@ const usageSince = (now: Date) =>
   new Date(now.getTime() - FORECAST_WINDOW_DAYS * 24 * 60 * 60 * 1_000);
 
 export async function getStockDetail(resourceId: string) {
+  return db.transaction(async (transaction) => {
   const now = new Date();
   const since = usageSince(now);
-  const [resource] = await db
+  const [resource] = await transaction
     .select({ id: resources.id, name: resources.name, quantity: resources.quantity })
     .from(resources)
     .where(eq(resources.id, resourceId))
@@ -228,23 +229,23 @@ export async function getStockDetail(resourceId: string) {
     incomingRows,
     installationRows,
   ] = await Promise.all([
-    db
+    transaction
       .select()
       .from(stockSettings)
       .where(eq(stockSettings.resourceId, resourceId))
       .limit(1),
-    db
+    transaction
       .select()
       .from(stockMovements)
       .where(eq(stockMovements.resourceId, resourceId))
       .orderBy(desc(stockMovements.occurredAt), desc(stockMovements.createdAt))
       .limit(100),
-    db
+    transaction
       .select()
       .from(stockUnits)
       .where(eq(stockUnits.resourceId, resourceId))
       .orderBy(asc(stockUnits.code)),
-    db
+    transaction
       .select({
         consumed: sql<number>`coalesce(sum(case when ${stockMovements.delta} < 0 then -${stockMovements.delta} else 0 end), 0)::float8`,
       })
@@ -256,7 +257,7 @@ export async function getStockDetail(resourceId: string) {
           lte(stockMovements.occurredAt, now),
         ),
       ),
-    db
+    transaction
       .select({
         lineId: purchaseOrderLines.id,
         orderId: purchaseOrders.id,
@@ -279,7 +280,7 @@ export async function getStockDetail(resourceId: string) {
         ),
       )
       .orderBy(asc(sql`coalesce(${purchaseOrderLines.expectedAt}, ${purchaseOrders.expectedAt})`)),
-    db
+    transaction
       .select({
         componentUnitId: assemblyBuildComponents.componentUnitId,
         outputUnitId: assemblyBuildComponents.outputUnitId,
@@ -314,13 +315,13 @@ export async function getStockDetail(resourceId: string) {
   );
   const [assemblyResourceRows, outputUnitRows] = await Promise.all([
     assemblyResourceIds.length
-      ? db
+      ? transaction
           .select({ id: resources.id, name: resources.name })
           .from(resources)
           .where(inArray(resources.id, assemblyResourceIds))
       : Promise.resolve([]),
     outputUnitIds.length
-      ? db
+      ? transaction
           .select({ id: stockUnits.id, code: stockUnits.code })
           .from(stockUnits)
           .where(inArray(stockUnits.id, outputUnitIds))
@@ -373,12 +374,14 @@ export async function getStockDetail(resourceId: string) {
         : {}),
     })),
   };
+  }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
 export async function getStockOverview() {
+  return db.transaction(async (transaction) => {
   const now = new Date();
   const since = usageSince(now);
-  const rows = await db
+  const rows = await transaction
     .select({
       resourceId: resources.id,
       name: resources.name,
@@ -397,7 +400,7 @@ export async function getStockOverview() {
   const ids = rows.map((row) => row.resourceId);
   const [usageRows, incomingRows] = ids.length
     ? await Promise.all([
-        db
+        transaction
         .select({
           resourceId: stockMovements.resourceId,
           consumed: sql<number>`coalesce(sum(case when ${stockMovements.delta} < 0 then -${stockMovements.delta} else 0 end), 0)::float8`,
@@ -411,10 +414,10 @@ export async function getStockOverview() {
           ),
         )
         .groupBy(stockMovements.resourceId),
-        db
+        transaction
           .select({
             resourceId: purchaseOrderLines.resourceId,
-            onOrder: sql<number>`coalesce(sum(${purchaseOrderLines.orderedQuantity} - ${purchaseOrderLines.receivedQuantity}), 0)::int`,
+            onOrder: sql<string>`coalesce(sum((${purchaseOrderLines.orderedQuantity} - ${purchaseOrderLines.receivedQuantity})::bigint), 0)`,
             nextExpectedAt: sql<Date | null>`min(coalesce(${purchaseOrderLines.expectedAt}, ${purchaseOrders.expectedAt}))`,
           })
           .from(purchaseOrderLines)
@@ -502,6 +505,7 @@ export async function getStockOverview() {
     },
     items,
   };
+  }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
 export async function listStockMovements(

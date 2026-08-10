@@ -41,7 +41,10 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Unable to merge items.";
     const stockConflict =
       message.includes("bulk units into serialized stock") ||
-      message.includes("no longer exists");
+      message.includes("no longer exists") ||
+      message.includes("circular bill of materials") ||
+      message.includes("assembly build history") ||
+      message.includes("purchase-order history");
     return Response.json(
       { error: message },
       { status: stockConflict ? 409 : 500 },

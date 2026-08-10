@@ -25,9 +25,9 @@ import {
   type StockUnitRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import { BOM_WRITE_LOCK_ID } from "@/lib/inventory-locks";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
-const BOM_WRITE_LOCK_ID = 4_847_868_373;
 
 export type BomComponentInput = {
   resourceId: string;
