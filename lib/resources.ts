@@ -16,10 +16,15 @@ import {
   assemblyBuildComponents,
   assemblyBuilds,
   bomLines,
+  inventoryAssignments,
+  inventoryCounts,
+  inventoryCyclePolicies,
   media,
   purchaseOrderLines,
   resourceCreationRequests,
+  resourceRelations,
   resources,
+  stockLocationBalances,
   stockMovements,
   stockSettings,
   stockUnits,
@@ -28,6 +33,7 @@ import {
   type ResourceRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import { validateCustomFieldValues } from "@/lib/custom-fields";
 import { BOM_WRITE_LOCK_ID } from "@/lib/inventory-locks";
 
 export type ResourceWithMedia = ResourceRecord & {
@@ -78,6 +84,7 @@ export async function listResources(options: {
         ilike(resources.sku, pattern),
         ilike(resources.location, pattern),
         sql`${resources.tags}::text ILIKE ${pattern}`,
+        sql`${resources.customFields}::text ILIKE ${pattern}`,
       ),
     );
   }
@@ -161,22 +168,27 @@ async function findResourceCreationRequest(idempotencyKey: string) {
   return existing ?? null;
 }
 
+export async function replayResourceCreation(options: {
+  idempotencyKey: string;
+  requestHash: string;
+}) {
+  const existing = await findResourceCreationRequest(options.idempotencyKey);
+  if (!existing) return null;
+  if (existing.requestHash !== options.requestHash) {
+    throw new IdempotencyConflictError();
+  }
+  return {
+    response: deserializeCreationResponse(existing.response),
+    replayed: true,
+  } as const;
+}
+
 export async function createResourceIdempotently(options: {
   values: NewResource;
   idempotencyKey: string;
   requestHash: string;
 }) {
-  const replay = async () => {
-    const existing = await findResourceCreationRequest(options.idempotencyKey);
-    if (!existing) return null;
-    if (existing.requestHash !== options.requestHash) {
-      throw new IdempotencyConflictError();
-    }
-    return {
-      response: deserializeCreationResponse(existing.response),
-      replayed: true,
-    } as const;
-  };
+  const replay = () => replayResourceCreation(options);
 
   const existing = await replay();
   if (existing) return existing;
@@ -223,6 +235,48 @@ export async function updateResource(
     .returning();
   if (!updated) return null;
   return getResource(updated.id);
+}
+
+export async function updateResourceWithCustomFieldValidation(options: {
+  id: string;
+  values: Partial<NewResource>;
+  validateCustomFields: boolean;
+  customFieldsProvided: boolean;
+}) {
+  const updated = await db.transaction(async (transaction) => {
+    const [current] = await transaction
+      .select()
+      .from(resources)
+      .where(eq(resources.id, options.id))
+      .limit(1)
+      .for("update");
+    if (!current) return null;
+
+    let values = options.values;
+    if (options.validateCustomFields) {
+      const customFields = await validateCustomFieldValues({
+        entityType: "inventory",
+        target: {
+          type: values.type ?? current.type,
+          categories: values.categories ?? current.categories,
+        },
+        values: values.customFields ?? current.customFields,
+        currentValues: current.customFields,
+        enforceRequired: options.customFieldsProvided,
+        executor: transaction,
+      });
+      values = { ...values, customFields };
+    }
+
+    const [saved] = await transaction
+      .update(resources)
+      .set({ ...values, updatedAt: new Date() })
+      .where(eq(resources.id, options.id))
+      .returning();
+    return saved ?? null;
+  });
+
+  return updated ? getResource(updated.id) : null;
 }
 
 export async function updateResourcesBatch(options: {
@@ -389,6 +443,73 @@ export async function mergeResources(
     const lockedDuplicate = lockedResources.find((item) => item.id === duplicateId);
     if (!lockedKeep || !lockedDuplicate) {
       return false;
+    }
+
+    const [
+      structuredRelation,
+      locationBalance,
+      inventoryCount,
+      cyclePolicy,
+      assignment,
+      locatedUnit,
+    ] = await Promise.all([
+      transaction
+        .select({ id: resourceRelations.id })
+        .from(resourceRelations)
+        .where(
+          or(
+            eq(resourceRelations.sourceResourceId, duplicateId),
+            eq(resourceRelations.targetResourceId, duplicateId),
+          ),
+        )
+        .limit(1),
+      transaction
+        .select({ id: stockLocationBalances.id })
+        .from(stockLocationBalances)
+        .where(
+          or(
+            eq(stockLocationBalances.resourceId, duplicateId),
+            eq(stockLocationBalances.locationResourceId, duplicateId),
+          ),
+        )
+        .limit(1),
+      transaction
+        .select({ id: inventoryCounts.id })
+        .from(inventoryCounts)
+        .where(eq(inventoryCounts.resourceId, duplicateId))
+        .limit(1),
+      transaction
+        .select({ resourceId: inventoryCyclePolicies.resourceId })
+        .from(inventoryCyclePolicies)
+        .where(eq(inventoryCyclePolicies.resourceId, duplicateId))
+        .limit(1),
+      transaction
+        .select({ id: inventoryAssignments.id })
+        .from(inventoryAssignments)
+        .where(
+          or(
+            eq(inventoryAssignments.resourceId, duplicateId),
+            eq(inventoryAssignments.assigneeResourceId, duplicateId),
+          ),
+        )
+        .limit(1),
+      transaction
+        .select({ id: stockUnits.id })
+        .from(stockUnits)
+        .where(eq(stockUnits.locationResourceId, duplicateId))
+        .limit(1),
+    ]);
+    if (
+      structuredRelation.length ||
+      locationBalance.length ||
+      inventoryCount.length ||
+      cyclePolicy.length ||
+      assignment.length ||
+      locatedUnit.length
+    ) {
+      throw new Error(
+        "These items cannot be merged while the duplicate participates in locations, relationships, counts, cycles, or assignments. Move or archive those records first so their audit history stays intact.",
+      );
     }
 
     const bomEdges = await transaction
@@ -624,6 +745,7 @@ export async function mergeResources(
           resourceId: resource.id,
           unitId: unit.id,
           delta: 0,
+          quantity: 1,
           balanceAfter: resource.quantity,
           type: "serialization-opening",
           reason: "Bulk stock converted during inventory merge",
@@ -739,6 +861,10 @@ export async function mergeResources(
             all.findIndex((candidate) => candidate.name === category.name) ===
             index,
         ),
+        customFields: {
+          ...lockedDuplicate.customFields,
+          ...lockedKeep.customFields,
+        },
         updatedAt: now,
       })
       .where(eq(resources.id, keepId));
@@ -747,6 +873,7 @@ export async function mergeResources(
       // The duplicate ledger is repointed above, so its deltas already explain
       // the transferred quantity. This row is an audit marker, not another receipt.
       delta: 0,
+      quantity: 0,
       balanceAfter: combinedQuantity,
       type: "merge",
       reason: `Merged stock from ${lockedDuplicate.name}`,

@@ -47,12 +47,23 @@ import {
 } from "react";
 
 import { AssemblyManager } from "@/components/assembly-manager";
+import { InventoryCycleManager } from "@/components/inventory-cycle-manager";
+import {
+  CustomFieldInputs,
+  CustomFieldValueSummary,
+} from "@/components/custom-field-inputs";
 import {
   PhotoCountCapture,
   type PhotoCountResult,
 } from "@/components/photo-count-capture";
 import { PurchaseOrdersManager } from "@/components/purchase-orders-manager";
+import { StockLocationsManager } from "@/components/stock-locations-manager";
 import { fetchJson } from "@/lib/client-types";
+import {
+  isCustomFieldDefinitionApplicable,
+  type CustomFieldDefinition,
+  type CustomFieldValues,
+} from "@/lib/custom-field-contract";
 
 type TrackingMode = "bulk" | "serialized";
 type MovementType =
@@ -108,6 +119,8 @@ type StockUnit = {
   code: string;
   status: UnitStatus;
   location: string | null;
+  locationResourceId: string | null;
+  customFields: CustomFieldValues;
   metadata: Record<string, unknown>;
   acquiredAt: string | null;
   lastMovedAt: string | null;
@@ -124,7 +137,13 @@ type StockUnit = {
 };
 
 type StockData = {
-  resource: { id: string; name: string; quantity: number };
+  resource: {
+    id: string;
+    name: string;
+    quantity: number;
+    type: string;
+    categories: Array<{ name: string; color?: string }>;
+  };
   config: StockConfig;
   forecast: StockForecast;
   procurement: {
@@ -173,6 +192,8 @@ type UnitCreateForm = {
   count: string;
   codes: string;
   location: string;
+  locationResourceId: string;
+  customFields: CustomFieldValues;
   metadata: string;
   acquiredAt: string;
 };
@@ -180,6 +201,8 @@ type UnitCreateForm = {
 type UnitEditForm = {
   status: UnitStatus;
   location: string;
+  locationResourceId: string;
+  customFields: CustomFieldValues;
   metadata: string;
   occurredAt: string;
   reason: string;
@@ -194,6 +217,15 @@ type MovementPayload = {
   location?: string;
   occurredAt?: string;
 };
+
+type CustomFieldsApiResponse = { definitions: CustomFieldDefinition[] };
+type StockLocationOption = {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+};
+type StockLocationsApiResponse = { availableLocations: StockLocationOption[] };
 
 const inputClass =
   "mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
@@ -262,6 +294,8 @@ const defaultUnitCreateForm = (): UnitCreateForm => ({
   count: "1",
   codes: "",
   location: "",
+  locationResourceId: "",
+  customFields: {},
   metadata: "{}",
   acquiredAt: localDateTime(),
 });
@@ -283,6 +317,17 @@ function parseMetadata(value: string) {
     throw new Error("Metadata must be a JSON object, for example {\"color\": \"blue\"}.");
   }
   return parsed as Record<string, unknown>;
+}
+
+function customFieldValuesEqual(left: CustomFieldValues, right: CustomFieldValues) {
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every(
+    (key, index) =>
+      key === rightKeys[index] &&
+      JSON.stringify(left[key]) === JSON.stringify(right[key]),
+  );
 }
 
 function toIso(value: string) {
@@ -322,7 +367,11 @@ function normalizeStock(payload: StockApiResponse): StockData {
   const source = payload.stock ?? payload.data ?? payload;
   if (!source.resource) throw new Error("The stock response is missing its resource.");
   return {
-    resource: source.resource,
+    resource: {
+      ...source.resource,
+      type: source.resource.type ?? "other",
+      categories: source.resource.categories ?? [],
+    },
     config: source.config ?? {
       trackingMode: "bulk",
       minimumStock: 0,
@@ -344,7 +393,11 @@ function normalizeStock(payload: StockApiResponse): StockData {
       openLines: [],
     },
     movements: source.movements ?? [],
-    units: source.units ?? [],
+    units: (source.units ?? []).map((unit) => ({
+      ...unit,
+      customFields: unit.customFields ?? {},
+      metadata: unit.metadata ?? {},
+    })),
   };
 }
 
@@ -375,9 +428,21 @@ function SectionHeading({
   );
 }
 
-export function ResourceStockManager({ resourceId }: { resourceId: string }) {
+export function ResourceStockManager({
+  resourceId,
+  canEdit = false,
+}: {
+  resourceId: string;
+  canEdit?: boolean;
+}) {
   const endpoint = `/api/v1/resources/${resourceId}/stock`;
+  const customFieldsEndpoint = "/api/v1/custom-fields?entityType=stock_unit";
   const [stock, setStock] = useState<StockData | null>(null);
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState<
+    CustomFieldDefinition[]
+  >([]);
+  const [customFieldError, setCustomFieldError] = useState<string | null>(null);
+  const [availableLocations, setAvailableLocations] = useState<StockLocationOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -409,13 +474,41 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
       if (quiet) setRefreshing(true);
       else setLoading(true);
       setError(null);
+      setCustomFieldError(null);
       try {
-        const payload = await fetchJson<StockApiResponse>(endpoint, {
-          cache: "no-store",
-        });
+        const [payload, definitionsResult, locationsResult] = await Promise.all([
+          fetchJson<StockApiResponse>(endpoint, { cache: "no-store" }),
+          fetchJson<CustomFieldsApiResponse>(customFieldsEndpoint, {
+            cache: "no-store",
+          }).then(
+            (value) => ({ value, error: null }),
+            (definitionError: unknown) => ({
+              value: null,
+              error:
+                definitionError instanceof Error
+                  ? definitionError.message
+                  : "Unable to load custom field definitions.",
+            }),
+          ),
+          fetchJson<StockLocationsApiResponse>(`${endpoint}/locations`, {
+            cache: "no-store",
+          }).catch(() => null),
+        ]);
         const normalized = normalizeStock(payload);
         setStock(normalized);
         setConfigForm(toConfigForm(normalized.config));
+        if (definitionsResult.value) {
+          setCustomFieldDefinitions(definitionsResult.value.definitions);
+        } else {
+          setCustomFieldError(definitionsResult.error);
+        }
+        if (locationsResult) {
+          setAvailableLocations(
+            locationsResult.availableLocations.filter(
+              (location) => location.id !== resourceId && location.status !== "archived",
+            ),
+          );
+        }
       } catch (loadError) {
         setError(
           loadError instanceof Error ? loadError.message : "Unable to load stock data.",
@@ -425,7 +518,7 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
         setRefreshing(false);
       }
     },
-    [endpoint],
+    [customFieldsEndpoint, endpoint, resourceId],
   );
 
   useEffect(() => {
@@ -436,6 +529,18 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
   const unitName = stock?.config.unitName || "unit";
   const onOrder = stock?.procurement.onOrder ?? 0;
   const movementTypes = direction === "in" ? incomingTypes : outgoingTypes;
+  const applicableCustomFields = useMemo(
+    () =>
+      stock
+        ? customFieldDefinitions.filter((definition) =>
+            isCustomFieldDefinitionApplicable(definition, {
+              type: stock.resource.type,
+              categories: stock.resource.categories,
+            }),
+          )
+        : [],
+    [customFieldDefinitions, stock],
+  );
 
   const filteredMovements = useMemo(() => {
     const movements = stock?.movements ?? [];
@@ -651,6 +756,8 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
         body: JSON.stringify({
           ...identifierPayload,
           location: unitCreateForm.location.trim() || undefined,
+          locationResourceId: unitCreateForm.locationResourceId || null,
+          customFields: unitCreateForm.customFields,
           metadata,
           acquiredAt,
         }),
@@ -672,6 +779,8 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
     setUnitEditForm({
       status: unit.status,
       location: unit.location ?? "",
+      locationResourceId: unit.locationResourceId ?? "",
+      customFields: unit.customFields ?? {},
       metadata: JSON.stringify(unit.metadata ?? {}, null, 2),
       occurredAt: localDateTime(),
       reason: "",
@@ -691,6 +800,9 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
         throw new Error("Choose a valid movement date.");
       }
       const unit = stock.units.find((candidate) => candidate.id === editingUnitId);
+      const customFieldsChanged = unit
+        ? !customFieldValuesEqual(unit.customFields, unitEditForm.customFields)
+        : true;
       const leavingAvailable =
         unit?.status === "available" && unitEditForm.status !== "available";
       if (
@@ -709,6 +821,10 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
         body: JSON.stringify({
           status: unitEditForm.status,
           location: unitEditForm.location.trim() || null,
+          locationResourceId: unitEditForm.locationResourceId || null,
+          ...(customFieldsChanged
+            ? { customFields: unitEditForm.customFields }
+            : {}),
           metadata,
           occurredAt,
           reason: unitEditForm.reason.trim() || undefined,
@@ -936,6 +1052,21 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
               : "No stockout predicted"}
           </p>
         </div>
+      </section>
+
+      <section className="mb-5 grid items-start gap-5 2xl:grid-cols-2">
+        <StockLocationsManager
+          resourceId={resourceId}
+          canEdit={canEdit}
+          unitName={unitName}
+          onStockChanged={() => void loadStock(true)}
+        />
+        <InventoryCycleManager
+          resourceId={resourceId}
+          canEdit={canEdit}
+          unitName={unitName}
+          onStockChanged={() => void loadStock(true)}
+        />
       </section>
 
       <section className="mb-5 grid items-start gap-5 2xl:grid-cols-2">
@@ -1594,7 +1725,27 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
                   </label>
                 )}
                 <label className={labelClass}>
-                  Initial location <span className="font-normal text-slate-400">· optional</span>
+                  Inventory location <span className="font-normal text-slate-400">· optional</span>
+                  <select
+                    value={unitCreateForm.locationResourceId}
+                    onChange={(event) =>
+                      setUnitCreateForm((current) => ({
+                        ...current,
+                        locationResourceId: event.target.value,
+                      }))
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">Not assigned</option>
+                    {availableLocations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name} · {location.type}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={labelClass}>
+                  Location note <span className="font-normal text-slate-400">· optional</span>
                   <input
                     value={unitCreateForm.location}
                     maxLength={240}
@@ -1604,7 +1755,7 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
                         location: event.target.value,
                       }))
                     }
-                    placeholder="Workshop · Cabinet 2"
+                    placeholder="Cabinet 2 · top shelf"
                     className={inputClass}
                   />
                 </label>
@@ -1622,8 +1773,35 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
                     className={inputClass}
                   />
                 </label>
+                {applicableCustomFields.length ? (
+                  <div className="rounded-xl border border-violet-100 bg-white p-3.5">
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold text-slate-800">Custom fields</p>
+                      <p className="mt-0.5 text-[10px] leading-4 text-slate-400">
+                        These values are shared by every unit created in this batch.
+                      </p>
+                    </div>
+                    <CustomFieldInputs
+                      definitions={applicableCustomFields}
+                      values={unitCreateForm.customFields}
+                      onChange={(customFields) =>
+                        setUnitCreateForm((current) => ({
+                          ...current,
+                          customFields,
+                        }))
+                      }
+                      disabled={creatingUnits}
+                      className="sm:grid-cols-1"
+                    />
+                  </div>
+                ) : customFieldError ? (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] leading-4 text-amber-800">
+                    Custom fields are temporarily unavailable. Reload before registering units
+                    when this workspace uses required custom fields.
+                  </p>
+                ) : null}
                 <label className={labelClass}>
-                  Shared metadata <span className="font-normal text-slate-400">· JSON</span>
+                  Advanced metadata <span className="font-normal text-slate-400">· JSON</span>
                   <textarea
                     rows={4}
                     value={unitCreateForm.metadata}
@@ -1641,7 +1819,7 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
 
               <button
                 type="submit"
-                disabled={creatingUnits}
+                disabled={creatingUnits || Boolean(customFieldError)}
                 className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:opacity-50"
               >
                 {creatingUnits ? (
@@ -1699,6 +1877,12 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
                                     : ""}
                                 </Link>
                               ) : null}
+                              <CustomFieldValueSummary
+                                definitions={applicableCustomFields}
+                                values={unit.customFields}
+                                limit={4}
+                                className="mt-2"
+                              />
                               {Object.keys(unit.metadata ?? {}).length ? (
                                 <div className="mt-2 flex flex-wrap gap-1.5">
                                   {Object.entries(unit.metadata)
@@ -1756,7 +1940,8 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
                             <div className="mb-3 flex items-start gap-2 rounded-lg bg-white/80 px-3 py-2 text-[10px] leading-4 text-slate-500">
                               <Info className="mt-0.5 size-3 shrink-0 text-violet-600" aria-hidden="true" />
                               Moving between Available and any other status automatically creates
-                              a dated ±1 stock movement. Location or metadata edits create a zero-value audit entry.
+                              a dated ±1 stock movement. Location, custom field, or metadata edits
+                              create a zero-value audit entry.
                             </div>
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                               <label className={labelClass}>
@@ -1780,7 +1965,31 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
                                 </select>
                               </label>
                               <label className={labelClass}>
-                                Location
+                                Inventory location
+                                <select
+                                  value={unitEditForm.locationResourceId}
+                                  onChange={(event) =>
+                                    setUnitEditForm((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            locationResourceId: event.target.value,
+                                          }
+                                        : current,
+                                    )
+                                  }
+                                  className={inputClass}
+                                >
+                                  <option value="">Not assigned</option>
+                                  {availableLocations.map((location) => (
+                                    <option key={location.id} value={location.id}>
+                                      {location.name} · {location.type}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className={labelClass}>
+                                Location note
                                 <input
                                   value={unitEditForm.location}
                                   onChange={(event) =>
@@ -1830,8 +2039,32 @@ export function ResourceStockManager({ resourceId }: { resourceId: string }) {
                                   className={inputClass}
                                 />
                               </label>
+                              {applicableCustomFields.length ? (
+                                <div className="rounded-xl border border-violet-100 bg-white p-3.5 sm:col-span-2 lg:col-span-3">
+                                  <div className="mb-3">
+                                    <p className="text-xs font-semibold text-slate-800">
+                                      Custom fields
+                                    </p>
+                                    <p className="mt-0.5 text-[10px] leading-4 text-slate-400">
+                                      Structured details configured for this inventory type or
+                                      category.
+                                    </p>
+                                  </div>
+                                  <CustomFieldInputs
+                                    definitions={applicableCustomFields}
+                                    values={unitEditForm.customFields}
+                                    onChange={(customFields) =>
+                                      setUnitEditForm((current) =>
+                                        current ? { ...current, customFields } : current,
+                                      )
+                                    }
+                                    disabled={savingUnit}
+                                  />
+                                </div>
+                              ) : null}
                               <label className={`${labelClass} sm:col-span-2 lg:col-span-3`}>
-                                Metadata <span className="font-normal text-slate-400">· JSON</span>
+                                Advanced metadata{" "}
+                                <span className="font-normal text-slate-400">· JSON</span>
                                 <textarea
                                   rows={4}
                                   value={unitEditForm.metadata}

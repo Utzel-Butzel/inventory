@@ -6,17 +6,31 @@ management, traceable stock control, camera-first batch capture, AI image
 analysis, AI cover generation, duplicate merging, location views, and a scoped
 bearer-token API.
 
+Open Inventory is released under the [MIT License](LICENSE).
+
 ## Included
 
 - Responsive dashboard, searchable grid/table inventory, and item editor
 - Interactive street/satellite map with point and polygon editing, draggable
   geometry handles, layers, keyboard shortcuts, map selection, and multi-item
   quick edits
-- Tools, objects, furniture, vehicles, places, people, clothing, projects, and
-  custom “other” records
+- Built-in tools, objects, furniture, vehicles, places, people, clothing, and
+  project types, plus administrator-defined inventory types
 - Quantities, status, SKU, serial number, value, categories, tags, location,
   notes, GPS, GeoJSON-compatible map features, priority, and ordered media
-- Bulk and serialized stock tracking with immutable dated movement history
+- Directed, configurable relationships between inventory items, including
+  manual containment and automatic point-in-polygon placement on the map
+- Typed custom fields for inventory items and serialized stock units, scoped by
+  inventory type and category
+- Bulk and serialized stock tracking with immutable dated movement history,
+  per-inventory-location balances, and auditable location transfers
+- Per-item inventory cycles, due-count queues, location-aware counts, and stock
+  reconciliation
+- Checkout, assignment, and reservation workflows for bulk stock and serialized
+  units, with users, inventory items, or free-text recipients
+- UTF-8 CSV import and export with row-level validation and idempotent retries
+- Browser-generated QR and Code 128 labels for Brother 62 mm rolls and
+  102 × 152 mm media
 - Bills of materials for assembled items with atomic component consumption
 - Purchase orders, incoming quantities, and partial goods receipts
 - Minimum levels, reorder quantities, lead times, consumption rates, and
@@ -232,6 +246,63 @@ and recommends replenishment before the lead-time window is exhausted.
 Balances cannot go below zero. Historical entries are append-only; corrections
 are made with a new dated adjustment so the original event remains traceable.
 
+### Inventory structure, locations, and counts
+
+Administrators can define inventory types such as room, cabinet, machine, or
+device under **Settings → Inventory types**. Types have stable API keys and can
+be configured to contain other inventory. Directed relationship types describe
+how records belong together. Containment can be assigned manually, while map
+points and polygons automatically create spatial containment when an item lies
+inside a container polygon. Manual placement takes precedence and containment
+cycles are rejected.
+
+Any inventory record whose type can contain items can also serve as a structured
+stock location. Bulk movements may receive into, issue from, or transfer stock
+between those locations without losing the global audit trail. Serialized units
+carry their location directly. The stock UI keeps the global quantity and the
+per-location breakdown visible without requiring every item to use locations.
+
+Each item can opt into a recurring inventory cycle from 1 to 3,650 days. The due
+queue highlights counts that need attention; recording a bulk count reconciles
+the total or one selected location and appends both a count record and a stock
+movement. Serialized inventory is reviewed through its individual units; after
+any unit statuses are corrected, the matching review completes the same cycle
+without replacing unit-level traceability with a bulk adjustment.
+
+### Assignments and reservations
+
+Bulk quantities and serialized units can be checked out, assigned, or reserved
+for a workspace user, another inventory item, or a free-text recipient. Active
+allocations reduce available stock and are represented in the immutable stock
+ledger. Returning or cancelling an allocation restores its quantity and, for a
+serialized unit, its available status. Mutation requests are idempotent so a
+network retry cannot allocate or return the same stock twice.
+
+### Custom fields
+
+Administrators configure custom fields under **Settings → Custom fields** for
+inventory items or individually tracked stock units. A definition has a stable
+API key, display label, description, placeholder, position, and optional
+required flag. Supported field types are single-line text, long text, number,
+yes/no, date, date and time, select, multi-select, email address, and URL.
+Number fields can define minimum, maximum, and step values; select fields carry
+their own stored values, display labels, and optional colours.
+
+Definitions can target inventory types, categories, or both. An empty target
+list is a wildcard. When both lists are populated, an item must match one type
+and at least one category. Stock-unit fields use the type and categories of the
+unit's parent inventory item, so one configuration can describe every physical
+unit in the same class of inventory.
+
+Values are stored in the `customFields` object on inventory records and stock
+units, separately from the stock unit's legacy integration `metadata`. The API
+validates values against the active definitions that apply to the item. Editing
+a definition increments its revision; update requests include the last observed
+revision so concurrent edits cannot silently overwrite each other. Deleting one
+archives the definition instead of erasing it or its previously stored values;
+archived definitions are hidden from normal forms and can still be requested
+through the API.
+
 ### Assemblies and bills of materials
 
 Any inventory item can define a bill of materials. The item record describes the
@@ -283,6 +354,22 @@ all succeed together or all roll back, and retrying the same request does not
 create a second movement. The confirmation is bound to the workflow revision
 and the resource/unit versions shown in the preview; a concurrent change
 forces the operator to resolve and review the scan again.
+
+## CSV exchange and label printing
+
+The inventory screen exports the complete workspace as UTF-8 CSV and imports up
+to 1,000 rows or 5 MB per request. Import validates each row independently,
+never overwrites an existing SKU, reports row-level failures, and requires an
+idempotency key so retrying the same file does not duplicate records. Tags,
+categories, custom fields, related-resource IDs, and map features use JSON
+inside their CSV cells.
+
+The **Labels** screen creates scannable inventory links as QR codes together
+with SKU or resource identifiers as Code 128 barcodes. Print layouts are
+included for Brother 62 × 35 mm and 62 × 50 mm continuous-roll labels and for
+102 × 152 mm large-format media. Printing uses the browser's system print
+dialog, so a Wi-Fi Brother printer must first be available to the operating
+system with the matching media selected and page scaling disabled.
 
 ## File storage
 
@@ -396,6 +483,20 @@ curl -X POST "http://localhost:3000/api/v1/resources/RESOURCE_ID/stock/units" \
   -H "Content-Type: application/json" \
   --data '{"count":3,"location":"Assembly room","metadata":{"material":"PETG","revision":"C"}}'
 ```
+
+Read the active custom-field definitions with a token that has the `read`
+scope:
+
+```bash
+curl "http://localhost:3000/api/v1/custom-fields?entityType=inventory" \
+  -H "Authorization: Bearer inv_your_token"
+```
+
+Definition writes (`POST /api/v1/custom-fields` and `PATCH` or `DELETE` on
+`/api/v1/custom-fields/{id}`) require an authenticated administrator browser
+session and do not accept API tokens. Inventory and stock-unit create/update
+requests carry configured values in `customFields`, keyed by each definition's
+stable key. For example: `{"customFields":{"colour":"yellow","voltage":18}}`.
 
 Upload media after creation:
 

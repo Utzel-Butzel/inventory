@@ -1,6 +1,6 @@
 import Foundation
 
-public enum InventoryResourceType: String, Codable, CaseIterable, Sendable {
+public enum InventoryResourceType: RawRepresentable, Codable, CaseIterable, Hashable, Sendable {
     case place
     case person
     case vehicle
@@ -10,6 +10,72 @@ public enum InventoryResourceType: String, Codable, CaseIterable, Sendable {
     case furniture
     case object
     case other
+    case custom(String)
+
+    public typealias RawValue = String
+
+    /// Types bundled with the app. Server-defined types are represented by
+    /// ``custom(_:)`` and deliberately do not become static picker options.
+    public static let allCases: [InventoryResourceType] = [
+        .place,
+        .person,
+        .vehicle,
+        .tool,
+        .project,
+        .clothing,
+        .furniture,
+        .object,
+        .other,
+    ]
+
+    public init?(rawValue: String) {
+        self.init(preserving: rawValue)
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .place: "place"
+        case .person: "person"
+        case .vehicle: "vehicle"
+        case .tool: "tool"
+        case .project: "project"
+        case .clothing: "clothing"
+        case .furniture: "furniture"
+        case .object: "object"
+        case .other: "other"
+        case .custom(let value): value
+        }
+    }
+
+    public var isBuiltIn: Bool {
+        if case .custom = self { return false }
+        return true
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(preserving: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    private init(preserving rawValue: String) {
+        switch rawValue {
+        case "place": self = .place
+        case "person": self = .person
+        case "vehicle": self = .vehicle
+        case "tool": self = .tool
+        case "project": self = .project
+        case "clothing": self = .clothing
+        case "furniture": self = .furniture
+        case "object": self = .object
+        case "other": self = .other
+        default: self = .custom(rawValue)
+        }
+    }
 }
 
 public enum InventoryResourceStatus: String, Codable, CaseIterable, Sendable {

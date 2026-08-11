@@ -4,6 +4,7 @@ import {
   createResourceIdempotently,
   IdempotencyConflictError,
   listResources,
+  replayResourceCreation,
 } from "@/lib/resources";
 import { requireIdentity } from "@/lib/api-auth";
 import {
@@ -12,6 +13,15 @@ import {
   readIdempotencyKey,
 } from "@/lib/idempotency";
 import { positionFromMapFeatures } from "@/lib/map-features";
+import {
+  customFieldHttpError,
+  validateCustomFieldValues,
+} from "@/lib/custom-fields";
+import {
+  assertActiveInventoryType,
+  inventoryStructureHttpError,
+  synchronizeSpatialContainment,
+} from "@/lib/inventory-structure";
 
 export const dynamic = "force-dynamic";
 
@@ -53,8 +63,33 @@ export async function POST(request: Request) {
   }
 
   try {
+    const requestHash = hashIdempotentPayload({
+      actor: authorization.identity.subject,
+      resource: parsed.data,
+    });
+    if (idempotency.key) {
+      const replay = await replayResourceCreation({
+        idempotencyKey: idempotency.key,
+        requestHash,
+      });
+      if (replay) {
+        return Response.json(replay.response, {
+          status: 200,
+          headers: idempotencyResponseHeaders(idempotency.key, true),
+        });
+      }
+    }
+
+    await assertActiveInventoryType(parsed.data.type);
+    const customFields = await validateCustomFieldValues({
+      entityType: "inventory",
+      target: { type: parsed.data.type, categories: parsed.data.categories },
+      values: parsed.data.customFields ?? {},
+      enforceRequired: parsed.data.customFields !== undefined,
+    });
     const values = {
       ...parsed.data,
+      customFields,
       ...(parsed.data.mapFeatures.length
         ? positionFromMapFeatures(parsed.data.mapFeatures)
         : {}),
@@ -64,11 +99,11 @@ export async function POST(request: Request) {
       const result = await createResourceIdempotently({
         values,
         idempotencyKey: idempotency.key,
-        requestHash: hashIdempotentPayload({
-          actor: authorization.identity.subject,
-          resource: parsed.data,
-        }),
+        requestHash,
       });
+      if (!result.replayed && parsed.data.mapFeatures.length) {
+        await synchronizeSpatialContainment(authorization.identity.subject);
+      }
       return Response.json(result.response, {
         status: result.replayed ? 200 : 201,
         headers: idempotencyResponseHeaders(
@@ -79,8 +114,30 @@ export async function POST(request: Request) {
     }
 
     const resource = await createResource(values);
+    if (parsed.data.mapFeatures.length) {
+      await synchronizeSpatialContainment(authorization.identity.subject);
+    }
     return Response.json({ resource }, { status: 201 });
   } catch (error) {
+    const structureFailure = inventoryStructureHttpError(error, "");
+    if (structureFailure.status !== 500) {
+      return Response.json(
+        { error: structureFailure.message },
+        { status: structureFailure.status },
+      );
+    }
+    const customFieldFailure = customFieldHttpError(error, "");
+    if (customFieldFailure.status !== 500) {
+      return Response.json(
+        {
+          error: customFieldFailure.message,
+          ...(customFieldFailure.details
+            ? { details: customFieldFailure.details }
+            : {}),
+        },
+        { status: customFieldFailure.status },
+      );
+    }
     if (error instanceof IdempotencyConflictError) {
       return Response.json({ error: error.message }, { status: 409 });
     }

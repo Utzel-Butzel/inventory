@@ -117,6 +117,7 @@ const unitDto = (row: StockUnitRecord) => ({
   status: row.status,
   location: row.location,
   metadata: row.metadata,
+  customFields: row.customFields,
   acquiredAt: row.acquiredAt.toISOString(),
   lastMovedAt: row.lastMovedAt.toISOString(),
   createdAt: row.createdAt.toISOString(),
@@ -745,6 +746,7 @@ export async function receivePurchaseOrderLine(
               unitId: unit.id,
               purchaseReceiptId: receipt.id,
               delta: 1,
+              quantity: 1,
               balanceAfter: resource.quantity + index + 1,
               type: "purchase-receipt",
               reason: order.reference
@@ -764,6 +766,7 @@ export async function receivePurchaseOrderLine(
             resourceId: resource.id,
             purchaseReceiptId: receipt.id,
             delta: input.quantity,
+            quantity: input.quantity,
             balanceAfter,
             type: "purchase-receipt",
             reason: order.reference

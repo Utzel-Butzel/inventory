@@ -313,5 +313,5 @@ export async function generateCoverImage(options: {
 }
 
 export function isResourceType(value: string): value is ResourceType {
-  return resourceTypes.includes(value as ResourceType);
+  return (resourceTypes as readonly string[]).includes(value);
 }

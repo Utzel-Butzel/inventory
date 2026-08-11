@@ -17,6 +17,7 @@ import {
   PackageOpen,
   Plus,
   Search,
+  ScanQrCode,
   Settings,
   Sparkles,
   Warehouse,
@@ -38,6 +39,7 @@ const navigation = [
   { label: "Stock", href: "/stock", icon: Warehouse },
   { label: "Locations", href: "/map", icon: MapPinned },
   { label: "Batch studio", href: "/batch", icon: Sparkles },
+  { label: "Labels", href: "/labels", icon: ScanQrCode },
   { label: "Duplicates", href: "/duplicates", icon: Files },
 ];
 
@@ -53,6 +55,7 @@ const pageNames: Record<string, string> = {
   stock: "Stock",
   map: "Locations",
   batch: "Batch studio",
+  labels: "Labels",
   duplicates: "Duplicates",
   settings: "Settings",
 };

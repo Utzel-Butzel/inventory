@@ -67,6 +67,16 @@ type StockPayload = {
   [key: string]: unknown;
 };
 
+type DueInventoryCount = {
+  resourceId: string;
+  name: string;
+  type: string;
+  quantity: number;
+  intervalDays: number;
+  nextDueAt: string;
+  lastCompletedAt: string | null;
+};
+
 const compactNumber = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 1,
 });
@@ -282,6 +292,7 @@ export function StockOverview() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<StockFilter>("all");
+  const [dueCounts, setDueCounts] = useState<DueInventoryCount[]>([]);
 
   const loadStock = useCallback(async (options?: { quiet?: boolean; signal?: AbortSignal }) => {
     if (options?.quiet) setRefreshing(true);
@@ -289,10 +300,16 @@ export function StockOverview() {
     setError(null);
 
     try {
-      const response = await fetch("/api/v1/stock", {
-        cache: "no-store",
-        signal: options?.signal,
-      });
+      const [response, dueResponse] = await Promise.all([
+        fetch("/api/v1/stock", {
+          cache: "no-store",
+          signal: options?.signal,
+        }),
+        fetch("/api/v1/inventory-counts/due", {
+          cache: "no-store",
+          signal: options?.signal,
+        }).catch(() => null),
+      ]);
       const payload = (await response.json().catch(() => null)) as StockPayload | null;
       if (!response.ok || !payload) throw new Error(getErrorMessage(payload));
       if (!Array.isArray(payload.items)) {
@@ -300,6 +317,14 @@ export function StockOverview() {
       }
       setItems(payload.items);
       setApiMetrics(normalizeMetrics(payload));
+      if (dueResponse?.ok) {
+        const duePayload = (await dueResponse.json().catch(() => null)) as
+          | { due?: DueInventoryCount[] }
+          | null;
+        setDueCounts(Array.isArray(duePayload?.due) ? duePayload.due : []);
+      } else {
+        setDueCounts([]);
+      }
     } catch (loadError) {
       if (loadError instanceof DOMException && loadError.name === "AbortError") return;
       setError(loadError instanceof Error ? loadError.message : "Stock data could not be loaded.");
@@ -540,6 +565,46 @@ export function StockOverview() {
                 {metrics.out ? "View out of stock" : "View low stock"}
                 <ArrowRight className="size-3.5" aria-hidden="true" />
               </Button>
+            </Card>
+          ) : null}
+
+          {dueCounts.length ? (
+            <Card className="overflow-hidden border-[#d8d4ff]">
+              <div className="flex items-center gap-3 border-b border-[#e8e6ff] bg-[#f8f7ff] px-4 py-3.5 sm:px-5">
+                <span className="grid size-9 place-items-center rounded-xl bg-[#eeedff] text-[#635bff]">
+                  <CalendarClock className="size-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-[#30343a]">
+                    {dueCounts.length} physical {dueCounts.length === 1 ? "count is" : "counts are"} due
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-[#777e89]">
+                    Open an item to reconcile its actual quantity.
+                  </p>
+                </div>
+              </div>
+              <div className="divide-y divide-[#eceef1]">
+                {dueCounts.slice(0, 8).map((item) => (
+                  <Link
+                    key={item.resourceId}
+                    href={`/inventory/${item.resourceId}/stock`}
+                    className="flex items-center gap-3 px-4 py-3 transition hover:bg-[#fafbfc] sm:px-5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-semibold text-[#34383e]">
+                        {item.name}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-[#9298a2]">
+                        Every {item.intervalDays} days · due {formatDate(item.nextDueAt) ?? "now"}
+                      </p>
+                    </div>
+                    <span className="text-[11px] font-semibold text-[#635bff]">
+                      Count {compactNumber.format(item.quantity)}
+                    </span>
+                    <ChevronRight className="size-4 text-[#a0a5ae]" aria-hidden="true" />
+                  </Link>
+                ))}
+              </div>
             </Card>
           ) : null}
 

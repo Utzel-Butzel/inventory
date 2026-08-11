@@ -3,6 +3,7 @@ import { z } from "zod";
 import { stockUnitStatuses } from "@/db/schema";
 import { requireIdentity } from "@/lib/api-auth";
 import { stockHttpError, updateStockUnit } from "@/lib/stock";
+import { customFieldValuesInputSchema } from "@/lib/validators";
 
 type Context = { params: Promise<{ id: string; unitId: string }> };
 
@@ -16,7 +17,9 @@ const unitPatchSchema = z
   .object({
     status: z.enum(stockUnitStatuses).optional(),
     location: z.string().trim().max(240).nullable().optional(),
+    locationResourceId: z.string().uuid().nullable().optional(),
     metadata: metadataSchema.optional(),
+    customFields: customFieldValuesInputSchema.optional(),
     occurredAt: z.string().datetime().optional(),
     reason: z.string().trim().max(240).nullable().optional(),
     note: z.string().trim().max(20_000).optional(),
@@ -26,8 +29,10 @@ const unitPatchSchema = z
     (value) =>
       value.status !== undefined ||
       value.location !== undefined ||
-      value.metadata !== undefined,
-    { message: "Update status, location, or metadata." },
+      value.locationResourceId !== undefined ||
+      value.metadata !== undefined ||
+      value.customFields !== undefined,
+    { message: "Update status, location, metadata, or custom fields." },
   );
 
 export const dynamic = "force-dynamic";

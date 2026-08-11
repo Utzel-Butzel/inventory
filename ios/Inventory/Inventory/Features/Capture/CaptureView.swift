@@ -192,7 +192,8 @@ struct CaptureView: View {
                     intakeOptions
                     submitButton
                 }
-                .padding(16)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
                 .padding(.bottom, 24)
             }
             .scrollDismissesKeyboard(.interactively)
@@ -207,14 +208,6 @@ struct CaptureView: View {
                 style: .continuous
             )
         )
-        .overlay(alignment: .top) {
-            UnevenRoundedRectangle(
-                topLeadingRadius: 28,
-                topTrailingRadius: 28,
-                style: .continuous
-            )
-            .stroke(.white.opacity(0.45), lineWidth: 1)
-        }
         .shadow(color: .black.opacity(0.24), radius: 18, y: -5)
         .offset(y: currentOffset)
         .animation(.interactiveSpring(response: 0.34, dampingFraction: 0.86), value: controlsExpanded)
@@ -226,27 +219,22 @@ struct CaptureView: View {
                 setControlsExpanded(!controlsExpanded)
             }
         } label: {
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Capsule()
                     .fill(.secondary.opacity(0.45))
                     .frame(width: 38, height: 5)
 
                 HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Details & Upload")
-                            .font(.headline)
-                        Text(controlsExpanded ? "Nach unten ziehen zum Schließen" : "Nach oben ziehen zum Öffnen")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text("Details")
+                        .font(.headline)
 
                     Spacer()
 
-                    Label("\(model.photos.count)", systemImage: "photo.stack.fill")
-                        .font(.subheadline.monospacedDigit().weight(.semibold))
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 7)
-                        .background(InventoryTheme.lime.opacity(0.72), in: Capsule())
+                    if !model.photos.isEmpty {
+                        Label("\(model.photos.count)", systemImage: "photo.stack")
+                            .font(.subheadline.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
 
                     Image(systemName: controlsExpanded ? "chevron.down" : "chevron.up")
                         .font(.subheadline.weight(.bold))
@@ -254,7 +242,7 @@ struct CaptureView: View {
                 }
             }
             .padding(.horizontal, 18)
-            .padding(.top, 8)
+            .padding(.top, 6)
             .frame(height: collapsedDrawerHeight)
             .contentShape(Rectangle())
         }
@@ -382,7 +370,6 @@ struct CaptureView: View {
                     .disabled(!model.autoAnalyze)
             }
         }
-        .inventoryCard()
     }
 
     private var submitButton: some View {
@@ -452,7 +439,7 @@ struct CaptureView: View {
         }
     }
 
-    private var collapsedDrawerHeight: CGFloat { 82 }
+    private var collapsedDrawerHeight: CGFloat { 64 }
 
     private func setControlsExpanded(_ expanded: Bool) {
         controlsExpanded = expanded
@@ -492,6 +479,7 @@ extension InventoryResourceType {
         case .furniture: "Möbel"
         case .object: "Gegenstand"
         case .other: "Sonstiges"
+        case .custom(let value): value
         }
     }
 
@@ -506,6 +494,7 @@ extension InventoryResourceType {
         case .furniture: "chair.lounge.fill"
         case .object: "shippingbox.fill"
         case .other: "archivebox.fill"
+        case .custom: "square.grid.2x2.fill"
         }
     }
 }

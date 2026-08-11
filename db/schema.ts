@@ -19,6 +19,14 @@ import type {
   ScanWorkflowFixedProperty,
   ScanWorkflowInputField,
 } from "@/lib/scan-workflow-contract";
+import {
+  customFieldResourceTypes,
+  type CustomFieldEntityType,
+  type CustomFieldOption,
+  type CustomFieldResourceType,
+  type CustomFieldType,
+  type CustomFieldValues,
+} from "@/lib/custom-field-contract";
 
 export const userRoles = ["admin", "editor", "viewer"] as const;
 export type UserRole = (typeof userRoles)[number];
@@ -61,19 +69,19 @@ export const users = pgTable(
   ],
 );
 
-export const resourceTypes = [
-  "place",
-  "person",
-  "vehicle",
-  "tool",
-  "project",
-  "clothing",
-  "furniture",
-  "object",
-  "other",
-] as const;
+export const resourceTypes = customFieldResourceTypes;
 
-export type ResourceType = (typeof resourceTypes)[number];
+export type BuiltinResourceType = (typeof resourceTypes)[number];
+export type ResourceType = string;
+
+export const relationOrigins = ["manual", "spatial"] as const;
+export type RelationOrigin = (typeof relationOrigins)[number];
+
+export const assignmentKinds = ["checkout", "assignment", "reservation"] as const;
+export type AssignmentKind = (typeof assignmentKinds)[number];
+
+export const assignmentStatuses = ["active", "returned", "cancelled"] as const;
+export type AssignmentStatus = (typeof assignmentStatuses)[number];
 
 export const stockTrackingModes = ["bulk", "serialized"] as const;
 export type StockTrackingMode = (typeof stockTrackingModes)[number];
@@ -124,16 +132,92 @@ export type ResourceMapFeature = ResourceMapFeatureBase &
     | { type: "polygon"; coordinates: ResourceMapCoordinate[] }
   );
 
+export const inventoryTypeDefinitions = pgTable(
+  "inventory_type_definitions",
+  {
+    key: varchar("key", { length: 64 }).primaryKey(),
+    label: varchar("label", { length: 120 }).notNull(),
+    description: text("description").notNull().default(""),
+    color: varchar("color", { length: 32 }).notNull().default("#635bff"),
+    icon: varchar("icon", { length: 80 }).notNull().default("box"),
+    canContain: boolean("can_contain").notNull().default(false),
+    spatialContainment: boolean("spatial_containment").notNull().default(false),
+    position: integer("position").notNull().default(0),
+    isSystem: boolean("is_system").notNull().default(false),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("inventory_type_definitions_active_position_idx").on(
+      table.archivedAt,
+      table.position,
+    ),
+    check(
+      "inventory_type_definitions_key_check",
+      sql`${table.key} ~ '^[a-z][a-z0-9_-]{0,63}$'`,
+    ),
+    check(
+      "inventory_type_definitions_position_nonnegative",
+      sql`${table.position} >= 0`,
+    ),
+  ],
+);
+
+export const relationTypeDefinitions = pgTable(
+  "relation_type_definitions",
+  {
+    key: varchar("key", { length: 64 }).primaryKey(),
+    label: varchar("label", { length: 120 }).notNull(),
+    inverseLabel: varchar("inverse_label", { length: 120 }).notNull(),
+    description: text("description").notNull().default(""),
+    allowManual: boolean("allow_manual").notNull().default(true),
+    spatial: boolean("spatial").notNull().default(false),
+    position: integer("position").notNull().default(0),
+    isSystem: boolean("is_system").notNull().default(false),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("relation_type_definitions_active_position_idx").on(
+      table.archivedAt,
+      table.position,
+    ),
+    check(
+      "relation_type_definitions_key_check",
+      sql`${table.key} ~ '^[a-z][a-z0-9_-]{0,63}$'`,
+    ),
+    check(
+      "relation_type_definitions_position_nonnegative",
+      sql`${table.position} >= 0`,
+    ),
+  ],
+);
+
 export const resources = pgTable(
   "resources",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 240 }).notNull(),
     description: text("description").notNull().default(""),
-    type: varchar("type", { length: 32 })
+    type: varchar("type", { length: 64 })
       .$type<ResourceType>()
       .notNull()
-      .default("object"),
+      .default("object")
+      .references(() => inventoryTypeDefinitions.key, { onDelete: "restrict", onUpdate: "cascade" }),
     status: varchar("status", { length: 32 }).notNull().default("available"),
     sku: varchar("sku", { length: 80 }),
     quantity: integer("quantity").notNull().default(1),
@@ -147,6 +231,10 @@ export const resources = pgTable(
       .$type<ResourceCategory[]>()
       .notNull()
       .default([]),
+    customFields: jsonb("custom_fields")
+      .$type<CustomFieldValues>()
+      .notNull()
+      .default({}),
     relatedResourceIds: uuid("related_resource_ids").array().notNull().default([]),
     gpsLatitude: doublePrecision("gps_latitude"),
     gpsLongitude: doublePrecision("gps_longitude"),
@@ -172,6 +260,154 @@ export const resources = pgTable(
     index("resources_status_idx").on(table.status),
     index("resources_updated_at_idx").on(table.updatedAt),
     check("resources_quantity_nonnegative", sql`${table.quantity} >= 0`),
+    check(
+      "resources_custom_fields_object",
+      sql`jsonb_typeof(${table.customFields}) = 'object'`,
+    ),
+  ],
+);
+
+export const resourceRelations = pgTable(
+  "resource_relations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    sourceResourceId: uuid("source_resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    targetResourceId: uuid("target_resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    relationTypeKey: varchar("relation_type_key", { length: 64 })
+      .notNull()
+      .references(() => relationTypeDefinitions.key, {
+        onDelete: "restrict",
+        onUpdate: "cascade",
+      }),
+    origin: varchar("origin", { length: 16 })
+      .$type<RelationOrigin>()
+      .notNull()
+      .default("manual"),
+    sourceFeatureId: varchar("source_feature_id", { length: 80 }),
+    targetFeatureId: varchar("target_feature_id", { length: 80 }),
+    createdBy: varchar("created_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("resource_relations_edge_unique").on(
+      table.sourceResourceId,
+      table.targetResourceId,
+      table.relationTypeKey,
+    ),
+    index("resource_relations_source_idx").on(
+      table.sourceResourceId,
+      table.relationTypeKey,
+    ),
+    index("resource_relations_target_idx").on(
+      table.targetResourceId,
+      table.relationTypeKey,
+    ),
+    check(
+      "resource_relations_distinct_resources",
+      sql`${table.sourceResourceId} <> ${table.targetResourceId}`,
+    ),
+    check(
+      "resource_relations_origin_check",
+      sql`${table.origin} in ('manual', 'spatial')`,
+    ),
+  ],
+);
+
+export const customFieldDefinitions = pgTable(
+  "custom_field_definitions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    entityType: varchar("entity_type", { length: 24 })
+      .$type<CustomFieldEntityType>()
+      .notNull(),
+    key: varchar("key", { length: 64 }).notNull(),
+    label: varchar("label", { length: 120 }).notNull(),
+    description: text("description").notNull().default(""),
+    placeholder: varchar("placeholder", { length: 240 }).notNull().default(""),
+    fieldType: varchar("field_type", { length: 24 })
+      .$type<CustomFieldType>()
+      .notNull(),
+    required: boolean("required").notNull().default(false),
+    minValue: doublePrecision("min_value"),
+    maxValue: doublePrecision("max_value"),
+    step: doublePrecision("step"),
+    resourceTypes: jsonb("resource_types")
+      .$type<CustomFieldResourceType[]>()
+      .notNull()
+      .default([]),
+    categories: jsonb("categories").$type<string[]>().notNull().default([]),
+    options: jsonb("options")
+      .$type<CustomFieldOption[]>()
+      .notNull()
+      .default([]),
+    position: integer("position").notNull().default(0),
+    revision: integer("revision").notNull().default(1),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("custom_field_definitions_entity_key_unique").on(
+      table.entityType,
+      table.key,
+    ),
+    index("custom_field_definitions_entity_active_position_idx").on(
+      table.entityType,
+      table.archivedAt,
+      table.position,
+    ),
+    check(
+      "custom_field_definitions_entity_type_check",
+      sql`${table.entityType} in ('inventory', 'stock_unit')`,
+    ),
+    check(
+      "custom_field_definitions_field_type_check",
+      sql`${table.fieldType} in ('text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'multi_select', 'email', 'url')`,
+    ),
+    check(
+      "custom_field_definitions_key_check",
+      sql`${table.key} ~ '^[a-z][a-z0-9_]{0,63}$'`,
+    ),
+    check(
+      "custom_field_definitions_resource_types_array",
+      sql`jsonb_typeof(${table.resourceTypes}) = 'array'`,
+    ),
+    check(
+      "custom_field_definitions_categories_array",
+      sql`jsonb_typeof(${table.categories}) = 'array'`,
+    ),
+    check(
+      "custom_field_definitions_options_array",
+      sql`jsonb_typeof(${table.options}) = 'array'`,
+    ),
+    check(
+      "custom_field_definitions_position_nonnegative",
+      sql`${table.position} >= 0`,
+    ),
+    check(
+      "custom_field_definitions_revision_positive",
+      sql`${table.revision} > 0`,
+    ),
+    check(
+      "custom_field_definitions_range_check",
+      sql`${table.minValue} is null or ${table.maxValue} is null or ${table.minValue} <= ${table.maxValue}`,
+    ),
+    check(
+      "custom_field_definitions_step_positive",
+      sql`${table.step} is null or ${table.step} > 0`,
+    ),
   ],
 );
 
@@ -434,6 +670,66 @@ export const stockSettings = pgTable(
   ],
 );
 
+export const stockLocationBalances = pgTable(
+  "stock_location_balances",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    locationResourceId: uuid("location_resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "restrict" }),
+    quantity: integer("quantity").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("stock_location_balances_resource_location_unique").on(
+      table.resourceId,
+      table.locationResourceId,
+    ),
+    index("stock_location_balances_location_idx").on(table.locationResourceId),
+    check(
+      "stock_location_balances_nonnegative",
+      sql`${table.quantity} >= 0`,
+    ),
+    check(
+      "stock_location_balances_distinct_resources",
+      sql`${table.resourceId} <> ${table.locationResourceId}`,
+    ),
+  ],
+);
+
+export const inventoryCyclePolicies = pgTable(
+  "inventory_cycle_policies",
+  {
+    resourceId: uuid("resource_id")
+      .primaryKey()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    intervalDays: integer("interval_days").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    nextDueAt: timestamp("next_due_at", { withTimezone: true }).notNull(),
+    lastCompletedAt: timestamp("last_completed_at", { withTimezone: true }),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inventory_cycle_policies_due_idx").on(table.enabled, table.nextDueAt),
+    check(
+      "inventory_cycle_policies_interval_check",
+      sql`${table.intervalDays} between 1 and 3650`,
+    ),
+  ],
+);
+
 export const stockUnits = pgTable(
   "stock_units",
   {
@@ -447,8 +743,16 @@ export const stockUnits = pgTable(
       .notNull()
       .default("available"),
     location: varchar("location", { length: 240 }),
+    locationResourceId: uuid("location_resource_id").references(
+      () => resources.id,
+      { onDelete: "set null" },
+    ),
     metadata: jsonb("metadata")
       .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    customFields: jsonb("custom_fields")
+      .$type<CustomFieldValues>()
       .notNull()
       .default({}),
     acquiredAt: timestamp("acquired_at", { withTimezone: true })
@@ -474,9 +778,14 @@ export const stockUnits = pgTable(
       table.resourceId,
       table.status,
     ),
+    index("stock_units_location_resource_idx").on(table.locationResourceId),
     check(
       "stock_units_status_check",
       sql`${table.status} in ('available', 'reserved', 'in-use', 'maintenance', 'consumed', 'lost', 'retired')`,
+    ),
+    check(
+      "stock_units_custom_fields_object",
+      sql`jsonb_typeof(${table.customFields}) = 'object'`,
     ),
   ],
 );
@@ -500,11 +809,22 @@ export const stockMovements = pgTable(
       { onDelete: "set null" },
     ),
     delta: integer("delta").notNull(),
+    quantity: integer("quantity").notNull().default(0),
     balanceAfter: integer("balance_after").notNull(),
+    fromLocationBalanceAfter: integer("from_location_balance_after"),
+    toLocationBalanceAfter: integer("to_location_balance_after"),
     type: varchar("type", { length: 48 }).notNull().default("adjustment"),
     reason: varchar("reason", { length: 240 }),
     note: text("note").notNull().default(""),
     location: varchar("location", { length: 240 }),
+    fromLocationResourceId: uuid("from_location_resource_id").references(
+      () => resources.id,
+      { onDelete: "set null" },
+    ),
+    toLocationResourceId: uuid("to_location_resource_id").references(
+      () => resources.id,
+      { onDelete: "set null" },
+    ),
     occurredAt: timestamp("occurred_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -524,9 +844,154 @@ export const stockMovements = pgTable(
     index("stock_movements_purchase_receipt_id_idx").on(
       table.purchaseReceiptId,
     ),
+    index("stock_movements_from_location_idx").on(table.fromLocationResourceId),
+    index("stock_movements_to_location_idx").on(table.toLocationResourceId),
     check(
       "stock_movements_balance_nonnegative",
       sql`${table.balanceAfter} >= 0`,
+    ),
+    check(
+      "stock_movements_quantity_nonnegative",
+      sql`${table.quantity} >= 0`,
+    ),
+    check(
+      "stock_movements_from_location_balance_nonnegative",
+      sql`${table.fromLocationBalanceAfter} is null or ${table.fromLocationBalanceAfter} >= 0`,
+    ),
+    check(
+      "stock_movements_to_location_balance_nonnegative",
+      sql`${table.toLocationBalanceAfter} is null or ${table.toLocationBalanceAfter} >= 0`,
+    ),
+  ],
+);
+
+export const inventoryCounts = pgTable(
+  "inventory_counts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "restrict" }),
+    locationResourceId: uuid("location_resource_id").references(
+      () => resources.id,
+      { onDelete: "set null" },
+    ),
+    expectedQuantity: integer("expected_quantity").notNull(),
+    countedQuantity: integer("counted_quantity").notNull(),
+    variance: integer("variance").notNull(),
+    countedAt: timestamp("counted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    note: text("note").notNull().default(""),
+    movementId: uuid("movement_id").references(() => stockMovements.id, {
+      onDelete: "set null",
+    }),
+    idempotencyKey: uuid("idempotency_key"),
+    createdBy: varchar("created_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("inventory_counts_idempotency_key_unique").on(
+      table.idempotencyKey,
+    ),
+    index("inventory_counts_resource_counted_idx").on(
+      table.resourceId,
+      table.countedAt,
+    ),
+    index("inventory_counts_location_idx").on(table.locationResourceId),
+    check(
+      "inventory_counts_expected_nonnegative",
+      sql`${table.expectedQuantity} >= 0`,
+    ),
+    check(
+      "inventory_counts_counted_nonnegative",
+      sql`${table.countedQuantity} >= 0`,
+    ),
+    check(
+      "inventory_counts_variance_consistent",
+      sql`${table.variance} = ${table.countedQuantity} - ${table.expectedQuantity}`,
+    ),
+  ],
+);
+
+export const inventoryAssignments = pgTable(
+  "inventory_assignments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "restrict" }),
+    stockUnitId: uuid("stock_unit_id").references(() => stockUnits.id, {
+      onDelete: "restrict",
+    }),
+    kind: varchar("kind", { length: 24 })
+      .$type<AssignmentKind>()
+      .notNull(),
+    status: varchar("status", { length: 24 })
+      .$type<AssignmentStatus>()
+      .notNull()
+      .default("active"),
+    quantity: integer("quantity").notNull().default(1),
+    assigneeUserId: uuid("assignee_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    assigneeResourceId: uuid("assignee_resource_id").references(
+      () => resources.id,
+      { onDelete: "set null" },
+    ),
+    assigneeLabel: varchar("assignee_label", { length: 240 }).notNull().default(""),
+    startsAt: timestamp("starts_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    note: text("note").notNull().default(""),
+    createdBy: varchar("created_by", { length: 320 }),
+    completedBy: varchar("completed_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inventory_assignments_resource_status_idx").on(
+      table.resourceId,
+      table.status,
+    ),
+    index("inventory_assignments_due_idx").on(table.status, table.dueAt),
+    index("inventory_assignments_stock_unit_idx").on(table.stockUnitId),
+    index("inventory_assignments_assignee_user_idx").on(table.assigneeUserId),
+    index("inventory_assignments_assignee_resource_idx").on(
+      table.assigneeResourceId,
+    ),
+    uniqueIndex("inventory_assignments_active_stock_unit_unique")
+      .on(table.stockUnitId)
+      .where(
+        sql`${table.stockUnitId} is not null and ${table.status} = 'active'`,
+      ),
+    check(
+      "inventory_assignments_kind_check",
+      sql`${table.kind} in ('checkout', 'assignment', 'reservation')`,
+    ),
+    check(
+      "inventory_assignments_status_check",
+      sql`${table.status} in ('active', 'returned', 'cancelled')`,
+    ),
+    check(
+      "inventory_assignments_quantity_positive",
+      sql`${table.quantity} > 0`,
+    ),
+    check(
+      "inventory_assignments_serialized_quantity_one",
+      sql`${table.stockUnitId} is null or ${table.quantity} = 1`,
+    ),
+    check(
+      "inventory_assignments_exactly_one_assignee",
+      sql`num_nonnulls(${table.assigneeUserId}, ${table.assigneeResourceId}, nullif(${table.assigneeLabel}, '')) = 1`,
     ),
   ],
 );
@@ -847,11 +1312,25 @@ export const apiTokens = pgTable(
 
 export type ResourceRecord = typeof resources.$inferSelect;
 export type NewResource = typeof resources.$inferInsert;
+export type CustomFieldDefinitionRecord =
+  typeof customFieldDefinitions.$inferSelect;
 export type MediaRecord = typeof media.$inferSelect;
 export type ApiTokenRecord = typeof apiTokens.$inferSelect;
 export type StockSettingsRecord = typeof stockSettings.$inferSelect;
 export type StockMovementRecord = typeof stockMovements.$inferSelect;
 export type StockUnitRecord = typeof stockUnits.$inferSelect;
+export type InventoryTypeDefinitionRecord =
+  typeof inventoryTypeDefinitions.$inferSelect;
+export type RelationTypeDefinitionRecord =
+  typeof relationTypeDefinitions.$inferSelect;
+export type ResourceRelationRecord = typeof resourceRelations.$inferSelect;
+export type StockLocationBalanceRecord =
+  typeof stockLocationBalances.$inferSelect;
+export type InventoryCyclePolicyRecord =
+  typeof inventoryCyclePolicies.$inferSelect;
+export type InventoryCountRecord = typeof inventoryCounts.$inferSelect;
+export type InventoryAssignmentRecord =
+  typeof inventoryAssignments.$inferSelect;
 export type BomLineRecord = typeof bomLines.$inferSelect;
 export type AssemblyBuildRecord = typeof assemblyBuilds.$inferSelect;
 export type AssemblyBuildComponentRecord =

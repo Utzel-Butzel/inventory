@@ -94,7 +94,7 @@ struct InventoryListView: View {
         HStack(spacing: 8) {
             Menu {
                 Button("Alle Typen") { typeFilter = nil }
-                ForEach(InventoryResourceType.allCases, id: \.self) { type in
+                ForEach(selectableTypeFilters, id: \.self) { type in
                     Button(type.localizedName) { typeFilter = type }
                 }
             } label: {
@@ -175,6 +175,12 @@ struct InventoryListView: View {
 
     private var searchKey: SearchKey {
         SearchKey(query: query, type: typeFilter, status: statusFilter)
+    }
+
+    private var selectableTypeFilters: [InventoryResourceType] {
+        let customTypes = Set(resources.map(\.type).filter { !$0.isBuiltIn })
+            .sorted { $0.rawValue.localizedCaseInsensitiveCompare($1.rawValue) == .orderedAscending }
+        return InventoryResourceType.allCases + customTypes
     }
 
     private func load(reset: Bool) async {

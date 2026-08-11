@@ -203,3 +203,207 @@ public struct StockMovementResponse: Codable, Equatable, Sendable {
     public let resource: StockResourceSnapshot
     public let movement: StockMovement
 }
+
+public enum StockTrackingMode: String, Codable, CaseIterable, Sendable {
+    case bulk
+    case serialized
+}
+
+public enum StockMovementType: String, Codable, CaseIterable, Sendable {
+    case receipt
+    case issue
+    case adjustment
+    case `return`
+    case waste
+    case transfer
+}
+
+public enum StockUnitStatus: String, Codable, CaseIterable, Sendable {
+    case available
+    case reserved
+    case inUse = "in-use"
+    case maintenance
+    case consumed
+    case lost
+    case retired
+}
+
+public struct StockConfig: Codable, Equatable, Sendable {
+    public let trackingMode: StockTrackingMode
+    public let minimumStock: Int
+    public let reorderQuantity: Int
+    public let leadTimeDays: Int
+    public let unitName: String
+}
+
+public struct StockForecast: Codable, Equatable, Sendable {
+    public let averageDailyUsage: Double
+    public let daysUntilStockout: Double?
+    public let predictedStockoutAt: Date?
+    public let isBelowMinimum: Bool
+    public let suggestedReorderQuantity: Int
+}
+
+public struct StockProcurementLine: Codable, Identifiable, Equatable, Sendable {
+    public let lineID: UUID
+    public let orderID: UUID
+    public let reference: String?
+    public let supplier: String
+    public let orderedQuantity: Int
+    public let receivedQuantity: Int
+    public let openQuantity: Int
+    public let expectedAt: Date?
+
+    public var id: UUID { lineID }
+
+    private enum CodingKeys: String, CodingKey {
+        case lineID = "lineId"
+        case orderID = "orderId"
+        case reference, supplier, orderedQuantity, receivedQuantity, openQuantity, expectedAt
+    }
+}
+
+public struct StockProcurement: Codable, Equatable, Sendable {
+    public let onOrder: Int
+    public let projectedQuantity: Int
+    public let nextExpectedAt: Date?
+    public let openLines: [StockProcurementLine]
+}
+
+public struct StockUnit: Codable, Identifiable, Equatable, Sendable {
+    public let id: UUID
+    public let code: String
+    public let status: StockUnitStatus
+    public let location: String?
+    public let acquiredAt: Date
+    public let lastMovedAt: Date
+    public let createdAt: Date
+    public let updatedAt: Date
+}
+
+public struct StockDetailResponse: Codable, Equatable, Sendable {
+    public let resource: StockResourceSnapshot
+    public let config: StockConfig
+    public let forecast: StockForecast
+    public let procurement: StockProcurement
+    public let movements: [StockMovement]
+    public let units: [StockUnit]
+}
+
+public struct StockConfigPatchRequest: Codable, Equatable, Sendable {
+    public let trackingMode: StockTrackingMode
+    public let minimumStock: Int
+    public let reorderQuantity: Int
+    public let leadTimeDays: Int
+    public let unitName: String
+
+    public init(
+        trackingMode: StockTrackingMode,
+        minimumStock: Int,
+        reorderQuantity: Int,
+        leadTimeDays: Int,
+        unitName: String
+    ) {
+        self.trackingMode = trackingMode
+        self.minimumStock = minimumStock
+        self.reorderQuantity = reorderQuantity
+        self.leadTimeDays = leadTimeDays
+        self.unitName = unitName
+    }
+}
+
+public struct StockConfigUpdateResponse: Codable, Equatable, Sendable {
+    public let config: StockConfig
+    public let unitsCreated: Int
+}
+
+public struct StockMovementRequest: Codable, Equatable, Sendable {
+    public let delta: Int
+    public let type: String
+    public let reason: String?
+    public let note: String?
+    public let location: String?
+    public let occurredAt: Date?
+
+    public init(
+        delta: Int,
+        type: String,
+        reason: String? = nil,
+        note: String? = nil,
+        location: String? = nil,
+        occurredAt: Date? = nil
+    ) {
+        self.delta = delta
+        self.type = type
+        self.reason = reason
+        self.note = note
+        self.location = location
+        self.occurredAt = occurredAt
+    }
+}
+
+public struct StockUnitCreateRequest: Codable, Equatable, Sendable {
+    public let count: Int?
+    public let codes: [String]?
+    public let location: String?
+    public let acquiredAt: Date?
+
+    public init(
+        count: Int? = nil,
+        codes: [String]? = nil,
+        location: String? = nil,
+        acquiredAt: Date? = nil
+    ) {
+        self.count = count
+        self.codes = codes
+        self.location = location
+        self.acquiredAt = acquiredAt
+    }
+}
+
+public struct StockUnitCreationResponse: Codable, Equatable, Sendable {
+    public let resource: StockResourceSnapshot
+    public let units: [StockUnit]
+    public let movements: [StockMovement]
+}
+
+public struct StockUnitPatchRequest: Encodable, Equatable, Sendable {
+    public let status: StockUnitStatus
+    public let location: String?
+    public let occurredAt: Date
+    public let reason: String?
+    public let note: String?
+
+    public init(
+        status: StockUnitStatus,
+        location: String?,
+        occurredAt: Date,
+        reason: String? = nil,
+        note: String? = nil
+    ) {
+        self.status = status
+        self.location = location
+        self.occurredAt = occurredAt
+        self.reason = reason
+        self.note = note
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status, location, occurredAt, reason, note
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(status, forKey: .status)
+        try container.encode(location, forKey: .location)
+        try container.encode(occurredAt, forKey: .occurredAt)
+        try container.encodeIfPresent(reason, forKey: .reason)
+        try container.encodeIfPresent(note, forKey: .note)
+    }
+}
+
+public struct StockUnitUpdateResponse: Codable, Equatable, Sendable {
+    public let resource: StockResourceSnapshot
+    public let unit: StockUnit
+    public let movement: StockMovement
+}

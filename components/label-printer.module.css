@@ -1,0 +1,334 @@
+.page {
+  margin: 0 auto;
+  width: 100%;
+  max-width: 1540px;
+  padding: 28px 24px 48px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.panel {
+  overflow: hidden;
+  border: 1px solid #e4e7eb;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(18 24 40 / 0.04);
+}
+
+.results {
+  max-height: 500px;
+  overflow-y: auto;
+  scrollbar-color: #cbd0d8 transparent;
+  scrollbar-width: thin;
+}
+
+.previewPanel {
+  min-width: 0;
+}
+
+.previewViewport {
+  min-height: 560px;
+  overflow: auto;
+  padding: 30px;
+  background-color: #eef0f3;
+  background-image:
+    linear-gradient(45deg, rgb(255 255 255 / 0.75) 25%, transparent 25%),
+    linear-gradient(-45deg, rgb(255 255 255 / 0.75) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgb(255 255 255 / 0.75) 75%),
+    linear-gradient(-45deg, transparent 75%, rgb(255 255 255 / 0.75) 75%);
+  background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+  background-size: 14px 14px;
+}
+
+.previewStack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.label {
+  position: relative;
+  display: grid;
+  flex: none;
+  overflow: hidden;
+  color: #000;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 0.16);
+  break-after: page;
+  page-break-after: always;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.label:last-child {
+  break-after: auto;
+  page-break-after: auto;
+}
+
+.roll62Compact {
+  width: 62mm;
+  height: 35mm;
+  grid-template-columns: 25mm minmax(0, 1fr);
+  gap: 1.6mm;
+  padding: 1.8mm;
+  page: brother-roll-62-compact;
+}
+
+.roll62Detailed {
+  width: 62mm;
+  height: 50mm;
+  grid-template-columns: 30mm minmax(0, 1fr);
+  gap: 2mm;
+  padding: 2mm;
+  page: brother-roll-62-detailed;
+}
+
+.large102 {
+  width: 102mm;
+  height: 152mm;
+  grid-template-rows: auto auto 1fr auto;
+  justify-items: center;
+  gap: 5mm;
+  padding: 8mm;
+  page: brother-large-102;
+}
+
+.qr {
+  width: 100%;
+  height: auto;
+  align-self: center;
+}
+
+.compactDetails,
+.detailedDetails {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.labelName {
+  display: -webkit-box;
+  overflow: hidden;
+  font-weight: 800;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+}
+
+.roll62Compact .labelName {
+  font-size: 3.3mm;
+  -webkit-line-clamp: 2;
+}
+
+.roll62Detailed .labelName {
+  font-size: 3.8mm;
+  -webkit-line-clamp: 3;
+}
+
+.large102 .labelName {
+  max-width: 82mm;
+  font-size: 8mm;
+  line-height: 1.08;
+  text-align: center;
+  -webkit-line-clamp: 3;
+}
+
+.codeLine {
+  overflow: hidden;
+  margin-top: 1.3mm;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-weight: 700;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roll62Compact .codeLine {
+  font-size: 2.2mm;
+}
+
+.roll62Detailed .codeLine {
+  font-size: 2.5mm;
+}
+
+.large102 .codeLine {
+  max-width: 82mm;
+  margin-top: 0;
+  font-size: 4mm;
+  text-align: center;
+}
+
+.barcode {
+  width: 100%;
+  height: 7mm;
+  margin-top: 1.3mm;
+}
+
+.roll62Compact .barcode {
+  height: 6mm;
+}
+
+.large102 .barcode {
+  width: 78mm;
+  height: 18mm;
+  margin-top: 0;
+}
+
+.url {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 1mm;
+  color: #111;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+}
+
+.roll62Compact .url {
+  font-size: 1.55mm;
+  -webkit-line-clamp: 2;
+}
+
+.roll62Detailed .url {
+  font-size: 1.75mm;
+  -webkit-line-clamp: 3;
+}
+
+.large102 .url {
+  max-width: 82mm;
+  margin-top: 0;
+  font-size: 2.8mm;
+  text-align: center;
+  -webkit-line-clamp: 3;
+}
+
+.largeQr {
+  width: 58mm;
+  height: 58mm;
+}
+
+.largeMeta {
+  display: flex;
+  max-width: 82mm;
+  flex-direction: column;
+  align-items: center;
+  gap: 2mm;
+}
+
+.location {
+  max-width: 82mm;
+  overflow: hidden;
+  font-size: 3.5mm;
+  line-height: 1.25;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@page brother-roll-62-compact {
+  size: 62mm 35mm;
+  margin: 0;
+}
+
+@page brother-roll-62-detailed {
+  size: 62mm 50mm;
+  margin: 0;
+}
+
+@page brother-large-102 {
+  size: 102mm 152mm;
+  margin: 0;
+}
+
+@media (max-width: 960px) {
+  .page {
+    padding: 20px 16px 36px;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .results {
+    max-height: 380px;
+  }
+
+  .previewViewport {
+    min-height: 420px;
+    padding: 20px;
+  }
+}
+
+@media print {
+  :global(html),
+  :global(body) {
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  :global(body aside),
+  :global(body header) {
+    display: none !important;
+  }
+
+  :global(body > div > div) {
+    padding-left: 0 !important;
+  }
+
+  .page {
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .page > :first-child,
+  .workspace > :first-child,
+  .previewPanel > :not(.previewViewport) {
+    display: none !important;
+  }
+
+  .workspace,
+  .previewPanel,
+  .previewViewport {
+    display: block;
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+  }
+
+  .printSurface {
+    position: static;
+    width: auto;
+    margin: 0;
+    padding: 0;
+  }
+
+  .previewStack {
+    display: block;
+  }
+
+  .label {
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+  }
+}

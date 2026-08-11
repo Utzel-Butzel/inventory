@@ -15,6 +15,7 @@ import {
   assemblyBuilds,
   bomLines,
   resources,
+  stockLocationBalances,
   stockMovements,
   stockSettings,
   stockUnits,
@@ -90,6 +91,7 @@ const unitDto = (row: StockUnitRecord) => ({
   status: row.status,
   location: row.location,
   metadata: row.metadata,
+  customFields: row.customFields,
   acquiredAt: row.acquiredAt.toISOString(),
   lastMovedAt: row.lastMovedAt.toISOString(),
   createdAt: row.createdAt.toISOString(),
@@ -561,6 +563,17 @@ export async function buildAssembly(
       const modeByResource = new Map(
         settingsRows.map((row) => [row.resourceId, row.trackingMode]),
       );
+      const locatedRows = await transaction
+        .select({
+          resourceId: stockLocationBalances.resourceId,
+          quantity: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
+        })
+        .from(stockLocationBalances)
+        .where(inArray(stockLocationBalances.resourceId, resourceIds))
+        .groupBy(stockLocationBalances.resourceId);
+      const locatedByResource = new Map(
+        locatedRows.map((row) => [row.resourceId, Number(row.quantity)]),
+      );
       const resourceById = new Map(lockedResources.map((row) => [row.id, row]));
       const assembly = resourceById.get(assemblyResourceId);
       if (!assembly) throw new AssemblyOperationError("Not found", 404);
@@ -610,6 +623,17 @@ export async function buildAssembly(
             `${line.name} needs ${required}, but only ${component?.quantity ?? 0} are available.`,
             409,
           );
+        }
+        if ((modeByResource.get(line.componentResourceId) ?? "bulk") === "bulk") {
+          const unassigned =
+            component.quantity -
+            (locatedByResource.get(line.componentResourceId) ?? 0);
+          if (unassigned < required) {
+            throw new AssemblyOperationError(
+              `${line.name} needs ${required} unassigned units, but only ${Math.max(0, unassigned)} are available. Move the required stock to “Unassigned” before building so location balances stay accurate.`,
+              409,
+            );
+          }
         }
         const selectedIds = input.componentUnitIds?.[line.componentResourceId];
         if (selectedIds && selectedIds.length !== required) {
@@ -751,11 +775,13 @@ export async function buildAssembly(
                 unitId: unit.id,
                 assemblyBuildId: build.id,
                 delta: -1,
+                quantity: 1,
                 balanceAfter: component.quantity - index - 1,
                 type: "assembly-consumption",
                 reason: `Installed in ${assembly.name}`,
                 note: input.note ?? "",
-                location: input.location ?? assembly.location,
+                location: unit.location ?? input.location ?? assembly.location,
+                fromLocationResourceId: unit.locationResourceId,
                 occurredAt,
                 createdBy: actor,
               })),
@@ -790,6 +816,7 @@ export async function buildAssembly(
               resourceId: line.componentResourceId,
               assemblyBuildId: build.id,
               delta: -required,
+              quantity: required,
               balanceAfter,
               type: "assembly-consumption",
               reason: `Used to build ${input.quantity} × ${assembly.name}`,
@@ -846,6 +873,7 @@ export async function buildAssembly(
               unitId: unit.id,
               assemblyBuildId: build.id,
               delta: 1,
+              quantity: 1,
               balanceAfter: assembly.quantity + index + 1,
               type: "assembly-output",
               reason: "Assembly completed",
@@ -864,6 +892,7 @@ export async function buildAssembly(
             resourceId: assemblyResourceId,
             assemblyBuildId: build.id,
             delta: input.quantity,
+            quantity: input.quantity,
             balanceAfter: assemblyBalanceAfter,
             type: "assembly-output",
             reason: "Assembly completed",

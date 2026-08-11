@@ -7,8 +7,10 @@ import {
   eq,
   gte,
   inArray,
+  isNull,
   lt,
   lte,
+  ne,
   sql,
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -16,11 +18,14 @@ import { randomUUID } from "node:crypto";
 import {
   assemblyBuildComponents,
   assemblyBuilds,
+  inventoryAssignments,
+  inventoryTypeDefinitions,
   purchaseOrderLines,
   purchaseOrders,
   resources,
   stockMovementRequests,
   stockMovements,
+  stockLocationBalances,
   stockSettings,
   stockUnits,
   type StockMovementRecord,
@@ -30,6 +35,11 @@ import {
   type StockUnitStatus,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import {
+  CustomFieldError,
+  validateCustomFieldValues,
+} from "@/lib/custom-fields";
+import type { CustomFieldValues } from "@/lib/custom-field-contract";
 
 const FORECAST_WINDOW_DAYS = 30;
 const MAX_SERIALIZATION_UNITS = 5_000;
@@ -53,10 +63,13 @@ export type StockForecast = {
 
 export type StockMovementInput = {
   delta: number;
+  quantity?: number;
   type: string;
   reason?: string | null;
   note?: string;
   location?: string | null;
+  fromLocationResourceId?: string | null;
+  toLocationResourceId?: string | null;
   occurredAt?: Date;
 };
 
@@ -65,14 +78,18 @@ export type StockUnitCreateInput = {
   code?: string;
   codes?: string[];
   location?: string | null;
+  locationResourceId?: string | null;
   metadata?: Record<string, unknown>;
+  customFields?: CustomFieldValues;
   acquiredAt?: Date;
 };
 
 export type StockUnitPatchInput = {
   status?: StockUnitStatus;
   location?: string | null;
+  locationResourceId?: string | null;
   metadata?: Record<string, unknown>;
+  customFields?: CustomFieldValues;
   occurredAt?: Date;
   reason?: string | null;
   note?: string;
@@ -89,6 +106,9 @@ export class StockOperationError extends Error {
 }
 
 export function stockHttpError(error: unknown, fallback: string) {
+  if (error instanceof CustomFieldError) {
+    return { status: error.status, message: error.message };
+  }
   if (error instanceof StockOperationError) {
     return { status: error.status, message: error.message };
   }
@@ -125,11 +145,16 @@ const movementDto = (row: StockMovementRecord) => ({
   id: row.id,
   resourceId: row.resourceId,
   delta: row.delta,
+  quantity: row.quantity,
   balanceAfter: row.balanceAfter,
+  fromLocationBalanceAfter: row.fromLocationBalanceAfter,
+  toLocationBalanceAfter: row.toLocationBalanceAfter,
   type: row.type,
   reason: row.reason,
   note: row.note,
   location: row.location,
+  fromLocationResourceId: row.fromLocationResourceId,
+  toLocationResourceId: row.toLocationResourceId,
   occurredAt: row.occurredAt.toISOString(),
   createdAt: row.createdAt.toISOString(),
   createdBy: row.createdBy,
@@ -144,7 +169,9 @@ const unitDto = (row: StockUnitRecord) => ({
   code: row.code,
   status: row.status,
   location: row.location,
+  locationResourceId: row.locationResourceId,
   metadata: row.metadata,
+  customFields: row.customFields,
   acquiredAt: row.acquiredAt.toISOString(),
   lastMovedAt: row.lastMovedAt.toISOString(),
   createdAt: row.createdAt.toISOString(),
@@ -156,6 +183,87 @@ const timestampDto = (value: Date | string | null | undefined) => {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
+
+async function changeLocationBalance(
+  transaction: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  resourceId: string,
+  locationResourceId: string,
+  delta: number,
+) {
+  const [current] = await transaction
+    .select()
+    .from(stockLocationBalances)
+    .where(
+      and(
+        eq(stockLocationBalances.resourceId, resourceId),
+        eq(stockLocationBalances.locationResourceId, locationResourceId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  const quantity = (current?.quantity ?? 0) + delta;
+  if (quantity < 0) {
+    throw new StockOperationError(
+      `This location only contains ${current?.quantity ?? 0}; the requested booking would make it negative.`,
+      409,
+    );
+  }
+  const now = new Date();
+  if (current) {
+    await transaction
+      .update(stockLocationBalances)
+      .set({ quantity, updatedAt: now })
+      .where(eq(stockLocationBalances.id, current.id));
+  } else if (quantity > 0) {
+    await transaction.insert(stockLocationBalances).values({
+      resourceId,
+      locationResourceId,
+      quantity,
+      updatedAt: now,
+    });
+  }
+  return quantity;
+}
+
+async function assertStockLocationResources(
+  transaction: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  resourceId: string,
+  locationResourceIds: Array<string | null | undefined>,
+) {
+  const requestedLocationIds = Array.from(
+    new Set(
+      locationResourceIds.filter((value): value is string => Boolean(value)),
+    ),
+  );
+  if (requestedLocationIds.includes(resourceId)) {
+    throw new StockOperationError(
+      "An inventory item cannot be its own stock location.",
+      422,
+    );
+  }
+  if (!requestedLocationIds.length) return;
+  const validLocations = await transaction
+    .select({ id: resources.id })
+    .from(resources)
+    .innerJoin(
+      inventoryTypeDefinitions,
+      eq(resources.type, inventoryTypeDefinitions.key),
+    )
+    .where(
+      and(
+        inArray(resources.id, requestedLocationIds),
+        ne(resources.status, "archived"),
+        eq(inventoryTypeDefinitions.canContain, true),
+        isNull(inventoryTypeDefinitions.archivedAt),
+      ),
+    );
+  if (validLocations.length !== requestedLocationIds.length) {
+    throw new StockOperationError(
+      "Choose active inventory items configured to contain stock.",
+      422,
+    );
+  }
+}
 
 const calculateForecast = (
   quantity: number,
@@ -215,7 +323,13 @@ export async function getStockDetail(resourceId: string) {
   const now = new Date();
   const since = usageSince(now);
   const [resource] = await transaction
-    .select({ id: resources.id, name: resources.name, quantity: resources.quantity })
+    .select({
+      id: resources.id,
+      name: resources.name,
+      quantity: resources.quantity,
+      type: resources.type,
+      categories: resources.categories,
+    })
     .from(resources)
     .where(eq(resources.id, resourceId))
     .limit(1);
@@ -593,6 +707,34 @@ export async function updateStockConfig(
             409,
           );
         }
+        const [activeAssignment] = await transaction
+          .select({ id: inventoryAssignments.id })
+          .from(inventoryAssignments)
+          .where(
+            and(
+              eq(inventoryAssignments.resourceId, resourceId),
+              eq(inventoryAssignments.status, "active"),
+            ),
+          )
+          .limit(1);
+        if (activeAssignment) {
+          throw new StockOperationError(
+            "Return or cancel active assignments and reservations before converting this item to serialized tracking.",
+            409,
+          );
+        }
+        const [{ located }] = await transaction
+          .select({
+            located: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
+          })
+          .from(stockLocationBalances)
+          .where(eq(stockLocationBalances.resourceId, resourceId));
+        if (Number(located ?? 0) > 0) {
+          throw new StockOperationError(
+            "Move all bulk stock to “Unassigned” before converting it to serialized tracking. You can then place each identified unit at its inventory location.",
+            409,
+          );
+        }
         if (resource.quantity > MAX_SERIALIZATION_UNITS) {
           throw new StockOperationError(
             `Converting this item would create ${resource.quantity} units. Reduce bulk stock to ${MAX_SERIALIZATION_UNITS} or fewer first.`,
@@ -624,6 +766,7 @@ export async function updateStockConfig(
               resourceId,
               unitId: unit.id,
               delta: 0,
+              quantity: 1,
               balanceAfter: resource.quantity,
               type: "serialization-opening",
               reason: "Bulk stock converted to an identified unit",
@@ -718,6 +861,81 @@ export async function bookStockMovement(
         );
       }
 
+      const movementQuantity = input.quantity ?? Math.abs(input.delta);
+      if (!Number.isInteger(movementQuantity) || movementQuantity < 0) {
+        throw new StockOperationError("Movement quantity must be a non-negative whole number.", 422);
+      }
+      const isTransfer =
+        input.type === "transfer" &&
+        (input.delta === 0 ||
+          Boolean(input.fromLocationResourceId) ||
+          Boolean(input.toLocationResourceId));
+      if (config.trackingMode === "serialized" && isTransfer) {
+        throw new StockOperationError(
+          "Move serialized stock by updating the location of each identified unit.",
+          409,
+        );
+      }
+      if (isTransfer) {
+        if (input.delta !== 0 || movementQuantity <= 0) {
+          throw new StockOperationError(
+            "A location transfer requires delta 0 and a positive quantity.",
+            422,
+          );
+        }
+        if (
+          !input.fromLocationResourceId &&
+          !input.toLocationResourceId
+        ) {
+          throw new StockOperationError(
+            "Choose a source or destination for the location transfer.",
+            422,
+          );
+        }
+        if (
+          input.fromLocationResourceId &&
+          input.fromLocationResourceId === input.toLocationResourceId
+        ) {
+          throw new StockOperationError(
+            "Source and destination must be different locations.",
+            422,
+          );
+        }
+      } else if (movementQuantity !== Math.abs(input.delta)) {
+        throw new StockOperationError(
+          "Movement quantity must match the absolute stock change.",
+          422,
+        );
+      }
+      if (!isTransfer) {
+        if (input.delta > 0 && input.fromLocationResourceId) {
+          throw new StockOperationError(
+            "Positive stock changes may only specify a destination location.",
+            422,
+          );
+        }
+        if (input.delta < 0 && input.toLocationResourceId) {
+          throw new StockOperationError(
+            "Negative stock changes may only specify a source location.",
+            422,
+          );
+        }
+        if (
+          input.delta === 0 &&
+          (input.fromLocationResourceId || input.toLocationResourceId)
+        ) {
+          throw new StockOperationError(
+            "Use a transfer to move stock between locations.",
+            422,
+          );
+        }
+      }
+
+      await assertStockLocationResources(transaction, resourceId, [
+        input.fromLocationResourceId,
+        input.toLocationResourceId,
+      ]);
+
       const balanceAfter = resource.quantity + input.delta;
       if (balanceAfter < 0) {
         throw new StockOperationError(
@@ -739,6 +957,46 @@ export async function bookStockMovement(
           .onConflictDoNothing();
       }
       const now = new Date();
+
+      let fromLocationBalanceAfter: number | null = null;
+      let toLocationBalanceAfter: number | null = null;
+      if (
+        !input.fromLocationResourceId &&
+        (isTransfer || input.delta < 0)
+      ) {
+        const [{ assigned }] = await transaction
+          .select({
+            assigned: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
+          })
+          .from(stockLocationBalances)
+          .where(eq(stockLocationBalances.resourceId, resourceId));
+        const unassigned = resource.quantity - Number(assigned ?? 0);
+        const removedFromUnassigned = isTransfer
+          ? movementQuantity
+          : Math.abs(input.delta);
+        if (unassigned < removedFromUnassigned) {
+          throw new StockOperationError(
+            `Only ${unassigned} unassigned units are available for this booking.`,
+            409,
+          );
+        }
+      }
+      if (input.fromLocationResourceId) {
+        fromLocationBalanceAfter = await changeLocationBalance(
+          transaction,
+          resourceId,
+          input.fromLocationResourceId,
+          isTransfer ? -movementQuantity : Math.min(0, input.delta),
+        );
+      }
+      if (input.toLocationResourceId) {
+        toLocationBalanceAfter = await changeLocationBalance(
+          transaction,
+          resourceId,
+          input.toLocationResourceId,
+          isTransfer ? movementQuantity : Math.max(0, input.delta),
+        );
+      }
       await transaction
         .update(resources)
         .set({ quantity: balanceAfter, updatedAt: now })
@@ -748,11 +1006,16 @@ export async function bookStockMovement(
         .values({
           resourceId,
           delta: input.delta,
+          quantity: movementQuantity,
           balanceAfter,
+          fromLocationBalanceAfter,
+          toLocationBalanceAfter,
           type: input.type,
           reason: input.reason ?? null,
           note: input.note ?? "",
           location: input.location ?? null,
+          fromLocationResourceId: input.fromLocationResourceId ?? null,
+          toLocationResourceId: input.toLocationResourceId ?? null,
           occurredAt: input.occurredAt ?? now,
           createdBy: actor,
         })
@@ -807,7 +1070,13 @@ export async function createStockUnits(
   try {
     return await db.transaction(async (transaction) => {
       const [resource] = await transaction
-        .select({ id: resources.id, name: resources.name, quantity: resources.quantity })
+        .select({
+          id: resources.id,
+          name: resources.name,
+          quantity: resources.quantity,
+          type: resources.type,
+          categories: resources.categories,
+        })
         .from(resources)
         .where(eq(resources.id, resourceId))
         .limit(1)
@@ -834,6 +1103,17 @@ export async function createStockUnits(
         throw new StockOperationError("Unit codes must be unique within the request.", 422);
       }
 
+      const customFields = await validateCustomFieldValues({
+        entityType: "stock_unit",
+        target: { type: resource.type, categories: resource.categories },
+        values: input.customFields ?? {},
+        enforceRequired: input.customFields !== undefined,
+        executor: transaction,
+      });
+      await assertStockLocationResources(transaction, resourceId, [
+        input.locationResourceId,
+      ]);
+
       const occurredAt = input.acquiredAt ?? new Date();
       const createdUnits = await transaction
         .insert(stockUnits)
@@ -843,7 +1123,9 @@ export async function createStockUnits(
             code,
             status: "available" as const,
             location: input.location ?? null,
+            locationResourceId: input.locationResourceId ?? null,
             metadata: input.metadata ?? {},
+            customFields,
             acquiredAt: occurredAt,
             lastMovedAt: occurredAt,
           })),
@@ -868,11 +1150,13 @@ export async function createStockUnits(
             resourceId,
             unitId: unit.id,
             delta: 1,
+            quantity: 1,
             balanceAfter: resource.quantity + index + 1,
             type: "unit-created",
             reason: "Serialized unit created",
             note: "",
             location: unit.location,
+            toLocationResourceId: unit.locationResourceId,
             occurredAt,
             createdBy: actor,
           })),
@@ -908,7 +1192,13 @@ export async function updateStockUnit(
 ) {
   return db.transaction(async (transaction) => {
     const [resource] = await transaction
-      .select({ id: resources.id, name: resources.name, quantity: resources.quantity })
+      .select({
+        id: resources.id,
+        name: resources.name,
+        quantity: resources.quantity,
+        type: resources.type,
+        categories: resources.categories,
+      })
       .from(resources)
       .where(eq(resources.id, resourceId))
       .limit(1)
@@ -935,7 +1225,41 @@ export async function updateStockUnit(
       .for("update");
     if (!unit) throw new StockOperationError("Unit not found", 404);
 
+    const customFields =
+      input.customFields === undefined
+        ? unit.customFields
+        : await validateCustomFieldValues({
+            entityType: "stock_unit",
+            target: { type: resource.type, categories: resource.categories },
+            values: input.customFields,
+            currentValues: unit.customFields,
+            executor: transaction,
+          });
+    const nextLocationResourceId =
+      input.locationResourceId === undefined
+        ? unit.locationResourceId
+        : input.locationResourceId;
+    await assertStockLocationResources(transaction, resourceId, [
+      nextLocationResourceId,
+    ]);
+
     if (input.status !== undefined && input.status !== unit.status) {
+      const [activeAssignment] = await transaction
+        .select({ id: inventoryAssignments.id })
+        .from(inventoryAssignments)
+        .where(
+          and(
+            eq(inventoryAssignments.stockUnitId, unit.id),
+            eq(inventoryAssignments.status, "active"),
+          ),
+        )
+        .limit(1);
+      if (activeAssignment) {
+        throw new StockOperationError(
+          "This unit has an active assignment or reservation. Return or cancel it from the item details instead.",
+          409,
+        );
+      }
       const [installation] = await transaction
         .select({ id: assemblyBuildComponents.id })
         .from(assemblyBuildComponents)
@@ -976,7 +1300,9 @@ export async function updateStockUnit(
       .set({
         status: nextStatus,
         location: nextLocation,
+        locationResourceId: nextLocationResourceId,
         metadata: input.metadata ?? unit.metadata,
+        customFields,
         lastMovedAt: occurredAt,
         updatedAt: now,
       })
@@ -987,12 +1313,15 @@ export async function updateStockUnit(
       .set({ quantity: balanceAfter, updatedAt: now })
       .where(eq(resources.id, resourceId));
     const statusChanged = unit.status !== nextStatus;
+    const structuredLocationChanged =
+      unit.locationResourceId !== nextLocationResourceId;
     const [movement] = await transaction
       .insert(stockMovements)
       .values({
         resourceId,
         unitId: unit.id,
         delta,
+        quantity: Math.max(Math.abs(delta), structuredLocationChanged ? 1 : 0),
         balanceAfter,
         type: statusChanged ? "unit-status" : "unit-update",
         reason:
@@ -1002,6 +1331,10 @@ export async function updateStockUnit(
             : "Unit details updated"),
         note: input.note ?? "",
         location: nextLocation,
+        fromLocationResourceId:
+          structuredLocationChanged ? unit.locationResourceId : null,
+        toLocationResourceId:
+          structuredLocationChanged ? nextLocationResourceId : null,
         occurredAt,
         createdBy: actor,
       })

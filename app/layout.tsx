@@ -11,34 +11,34 @@ export async function generateMetadata(): Promise<Metadata> {
   const fallback = process.env.AUTH_URL ?? "http://localhost:3000";
   const metadataBase = new URL(host ? `${protocol}://${host}` : fallback);
   const description =
-    "An AI-assisted inventory and stock workspace with traceable movements, serialized units, and replenishment forecasts.";
+    "AI-native inventory that turns a photo into a structured record and a clean product cover. MIT licensed, self-hosted, with a native iOS app in the repository.";
 
   return {
     metadataBase,
     title: {
-      default: "Inventory",
-      template: "%s · Inventory",
+      default: "Open Inventory",
+      template: "%s · Open Inventory",
     },
     description,
-    applicationName: "Inventory",
+    applicationName: "Open Inventory",
     openGraph: {
       type: "website",
-      title: "Inventory · Everything, findable.",
+      title: "Open Inventory — Take a photo. AI builds the record.",
       description,
       images: [
         {
-          url: "/og.png",
+          url: "/marketing/og-open-inventory-ai.png",
           width: 1200,
           height: 630,
-          alt: "Inventory — Everything, findable.",
+          alt: "Open Inventory — Take a photo. AI builds the record.",
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Inventory · Everything, findable.",
+      title: "Open Inventory — Take a photo. AI builds the record.",
       description,
-      images: ["/og.png"],
+      images: ["/marketing/og-open-inventory-ai.png"],
     },
   };
 }

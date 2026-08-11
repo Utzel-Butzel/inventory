@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowUp,
   Bot,
+  Braces,
   Check,
   ChevronRight,
   CircleDollarSign,
@@ -40,6 +41,12 @@ import { defaultCoverPrompt } from "@/lib/ai-prompts";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 import { prepareUpload, readImageGps } from "@/lib/client-media";
 import { AssemblyManager } from "@/components/assembly-manager";
+import { CustomFieldInputs } from "@/components/custom-field-inputs";
+import {
+  isCustomFieldDefinitionApplicable,
+  type CustomFieldDefinition,
+  type CustomFieldValues,
+} from "@/lib/custom-field-contract";
 
 type FormState = {
   name: string;
@@ -81,7 +88,7 @@ const emptyForm: FormState = {
   notes: "",
 };
 
-const types = [
+const fallbackTypes = [
   "tool",
   "object",
   "furniture",
@@ -92,6 +99,12 @@ const types = [
   "project",
   "other",
 ];
+
+type InventoryTypeOption = {
+  key: string;
+  label: string;
+  archivedAt: string | null;
+};
 
 const inputClass =
   "mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50 disabled:text-slate-400";
@@ -124,11 +137,31 @@ const mediaIcon = (kind: string) => {
   return Paperclip;
 };
 
+const customFieldDefinitionsFromResponse = (payload: unknown) => {
+  if (Array.isArray(payload)) return payload as CustomFieldDefinition[];
+  if (!payload || typeof payload !== "object") return [];
+  const candidate = (payload as { definitions?: unknown }).definitions;
+  return Array.isArray(candidate) ? (candidate as CustomFieldDefinition[]) : [];
+};
+
 export function ResourceEditor({ resourceId }: { resourceId?: string }) {
   const router = useRouter();
   const isNew = !resourceId;
   const [resource, setResource] = useState<ClientResource | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [inventoryTypes, setInventoryTypes] = useState<InventoryTypeOption[]>(
+    () => fallbackTypes.map((key) => ({
+      key,
+      label: key[0]!.toUpperCase() + key.slice(1),
+      archivedAt: null,
+    })),
+  );
+  const [customFields, setCustomFields] = useState<CustomFieldValues>({});
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState<
+    CustomFieldDefinition[] | null
+  >(null);
+  const [customFieldsLoading, setCustomFieldsLoading] = useState(true);
+  const [customFieldsError, setCustomFieldsError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(Boolean(resourceId));
@@ -150,6 +183,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
       );
       setResource(response.resource);
       setForm(toForm(response.resource));
+      setCustomFields(response.resource.customFields ?? {});
       setCoverPrompt(defaultCoverPrompt(response.resource.name));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load item.");
@@ -158,9 +192,56 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
     }
   }, [resourceId]);
 
+  const loadCustomFieldDefinitions = useCallback(async () => {
+    setCustomFieldsLoading(true);
+    setCustomFieldsError(null);
+    try {
+      const response = await fetchJson<unknown>(
+        "/api/v1/custom-fields?entityType=inventory",
+        { cache: "no-store" },
+      );
+      setCustomFieldDefinitions(
+        customFieldDefinitionsFromResponse(response).filter(
+          (definition) =>
+            definition.entityType === "inventory" && definition.archivedAt === null,
+        ),
+      );
+    } catch (loadError) {
+      setCustomFieldDefinitions(null);
+      setCustomFieldsError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to load custom field definitions.",
+      );
+    } finally {
+      setCustomFieldsLoading(false);
+    }
+  }, []);
+
+  const loadInventoryTypes = useCallback(async () => {
+    try {
+      const response = await fetchJson<{ types: InventoryTypeOption[] }>(
+        "/api/v1/inventory-types",
+        { cache: "no-store" },
+      );
+      if (response.types.length) setInventoryTypes(response.types);
+    } catch {
+      // Keep the built-in fallback so item editing remains available while
+      // settings are temporarily unavailable or before the migration runs.
+    }
+  }, []);
+
   useEffect(() => {
     void loadResource();
   }, [loadResource]);
+
+  useEffect(() => {
+    void loadCustomFieldDefinitions();
+  }, [loadCustomFieldDefinitions]);
+
+  useEffect(() => {
+    void loadInventoryTypes();
+  }, [loadInventoryTypes]);
 
   useEffect(() => {
     const urls = files.map((file) => URL.createObjectURL(file));
@@ -170,6 +251,36 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
 
   const setField = (field: keyof FormState, value: string) =>
     setForm((current) => ({ ...current, [field]: value }));
+
+  const categoryNames = useMemo(
+    () =>
+      form.categories
+        .split(",")
+        .map((category) => category.trim())
+        .filter(Boolean),
+    [form.categories],
+  );
+
+  const applicableCustomFieldDefinitions = useMemo(
+    () =>
+      (customFieldDefinitions ?? []).filter((definition) =>
+        isCustomFieldDefinitionApplicable(definition, {
+          type: form.type,
+          categories: categoryNames,
+        }),
+      ),
+    [categoryNames, customFieldDefinitions, form.type],
+  );
+
+  const payloadCustomFields = useMemo(() => {
+    if (customFieldDefinitions === null) return undefined;
+    const applicableKeys = new Set(
+      applicableCustomFieldDefinitions.map((definition) => definition.key),
+    );
+    return Object.fromEntries(
+      Object.entries(customFields).filter(([key]) => applicableKeys.has(key)),
+    ) as CustomFieldValues;
+  }, [applicableCustomFieldDefinitions, customFieldDefinitions, customFields]);
 
   const acceptFiles = async (incoming: File[]) => {
     setError(null);
@@ -233,6 +344,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
       .map((name) => name.trim())
       .filter(Boolean)
       .map((name) => ({ name })),
+    customFields: payloadCustomFields,
     gpsLatitude: form.gpsLatitude ? Number(form.gpsLatitude) : null,
     gpsLongitude: form.gpsLongitude ? Number(form.gpsLongitude) : null,
     gpsAltitude: form.gpsAltitude ? Number(form.gpsAltitude) : null,
@@ -261,6 +373,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
       );
       setResource(response.resource);
       setForm(toForm(response.resource));
+      setCustomFields(response.resource.customFields ?? {});
       setCoverPrompt(defaultCoverPrompt(response.resource.name));
       setNotice("AI analysis updated the title, description, tags and type.");
       return response.resource;
@@ -300,6 +413,19 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    const missingCustomField = applicableCustomFieldDefinitions.find((definition) => {
+      if (!definition.required) return false;
+      const value = customFields[definition.key];
+      return (
+        value === undefined ||
+        value === "" ||
+        (Array.isArray(value) && value.length === 0)
+      );
+    });
+    if (missingCustomField) {
+      setError(`Complete the required custom field “${missingCustomField.label}”.`);
+      return;
+    }
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -451,7 +577,12 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
           ) : null}
           <button
             type="submit"
-            disabled={saving || Boolean(aiAction)}
+            disabled={
+              saving ||
+              Boolean(aiAction) ||
+              customFieldsLoading ||
+              Boolean(customFieldsError)
+            }
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 disabled:cursor-wait disabled:opacity-60"
           >
             {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
@@ -493,7 +624,12 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
               <label className={labelClass}>
                 Type
                 <select value={form.type} onChange={(event) => setField("type", event.target.value)} className={inputClass}>
-                  {types.map((type) => <option key={type} value={type}>{type[0]!.toUpperCase() + type.slice(1)}</option>)}
+                  {!inventoryTypes.some((type) => type.key === form.type) ? (
+                    <option value={form.type}>{form.type}</option>
+                  ) : null}
+                  {inventoryTypes.map((type) => (
+                    <option key={type.key} value={type.key}>{type.label}</option>
+                  ))}
                 </select>
               </label>
               <label className={labelClass}>
@@ -521,6 +657,67 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
                 <input value={form.categories} onChange={(event) => setField("categories", event.target.value)} placeholder="Workshop, Production" className={inputClass} />
               </label>
             </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.025)] sm:p-6">
+            <div className="mb-5 flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-violet-50 text-violet-700">
+                  <Braces size={17} />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-950">Custom fields</h2>
+                  <p className="text-xs text-slate-400">
+                    Fields configured for this inventory type and its categories
+                  </p>
+                </div>
+              </div>
+              {!customFieldsLoading && !customFieldsError ? (
+                <span className="hidden rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-semibold text-violet-700 sm:inline-flex">
+                  {applicableCustomFieldDefinitions.length}{" "}
+                  {applicableCustomFieldDefinitions.length === 1 ? "field" : "fields"}
+                </span>
+              ) : null}
+            </div>
+
+            {customFieldsLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2" aria-label="Loading custom fields">
+                {Array.from({ length: 2 }, (_, index) => (
+                  <div key={index}>
+                    <div className="h-3 w-24 animate-pulse rounded bg-slate-200" />
+                    <div className="mt-2 h-11 animate-pulse rounded-xl bg-slate-100" />
+                  </div>
+                ))}
+              </div>
+            ) : customFieldsError ? (
+              <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+                <span>{customFieldsError}</span>
+                <button
+                  type="button"
+                  onClick={() => void loadCustomFieldDefinitions()}
+                  className="shrink-0 font-semibold underline underline-offset-2"
+                >
+                  Try again
+                </button>
+              </div>
+            ) : applicableCustomFieldDefinitions.length ? (
+              <CustomFieldInputs
+                definitions={applicableCustomFieldDefinitions}
+                values={customFields}
+                onChange={setCustomFields}
+              />
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-5 py-8 text-center">
+                <Braces className="mx-auto size-5 text-slate-300" aria-hidden="true" />
+                <p className="mt-2 text-xs font-semibold text-slate-600">
+                  No custom fields apply to this item
+                </p>
+                <p className="mx-auto mt-1 max-w-md text-[11px] leading-4 text-slate-400">
+                  Administrators can configure fields for {form.type} records or matching
+                  categories in Settings.
+                </p>
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.025)] sm:p-6">

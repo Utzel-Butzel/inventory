@@ -315,7 +315,9 @@ public final class APIClient: Sendable {
         delta: Int,
         type: String,
         reason: String? = nil,
+        note: String? = nil,
         location: String? = nil,
+        occurredAt: Date? = nil,
         idempotencyKey: UUID? = nil
     ) async throws -> StockMovementResponse {
         guard delta != 0 else {
@@ -334,10 +336,70 @@ public final class APIClient: Sendable {
                 delta: delta,
                 type: type,
                 reason: reason,
-                location: location
+                note: note,
+                location: location,
+                occurredAt: occurredAt
             )
         )
         setIdempotencyKey(idempotencyKey, on: &request)
+        return try await execute(request)
+    }
+
+    public func getStockDetail(resourceID: UUID) async throws -> StockDetailResponse {
+        let url = try makeAPIURL(path: [
+            "resources",
+            resourceID.uuidString.lowercased(),
+            "stock",
+        ])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func updateStockConfig(
+        resourceID: UUID,
+        request input: StockConfigPatchRequest
+    ) async throws -> StockConfigUpdateResponse {
+        let url = try makeAPIURL(path: [
+            "resources",
+            resourceID.uuidString.lowercased(),
+            "stock",
+            "config",
+        ])
+        let request = try await jsonRequest(url: url, method: "PATCH", body: input)
+        return try await execute(request)
+    }
+
+    public func createStockUnits(
+        resourceID: UUID,
+        request input: StockUnitCreateRequest
+    ) async throws -> StockUnitCreationResponse {
+        let count = input.count ?? input.codes?.count ?? 0
+        guard (1 ... 100).contains(count) else {
+            throw APIClientError.invalidRequest("Lege zwischen einer und 100 Einheiten an.")
+        }
+        let url = try makeAPIURL(path: [
+            "resources",
+            resourceID.uuidString.lowercased(),
+            "stock",
+            "units",
+        ])
+        let request = try await jsonRequest(url: url, method: "POST", body: input)
+        return try await execute(request)
+    }
+
+    public func updateStockUnit(
+        resourceID: UUID,
+        unitID: UUID,
+        request input: StockUnitPatchRequest
+    ) async throws -> StockUnitUpdateResponse {
+        let url = try makeAPIURL(path: [
+            "resources",
+            resourceID.uuidString.lowercased(),
+            "stock",
+            "units",
+            unitID.uuidString.lowercased(),
+        ])
+        let request = try await jsonRequest(url: url, method: "PATCH", body: input)
         return try await execute(request)
     }
 
@@ -760,11 +822,4 @@ private struct CoverRequest: Encodable, Sendable {
 
 private struct ServerErrorResponse: Decodable {
     let error: String?
-}
-
-private struct StockMovementRequest: Encodable, Sendable {
-    let delta: Int
-    let type: String
-    let reason: String?
-    let location: String?
 }

@@ -61,7 +61,9 @@ const emptyBatchForm: BatchForm = {
   addTags: "",
 };
 
-const resourceTypes = [
+type InventoryTypeOption = { key: string; label: string };
+
+const fallbackResourceTypes: InventoryTypeOption[] = [
   "tool",
   "object",
   "furniture",
@@ -71,7 +73,7 @@ const resourceTypes = [
   "person",
   "project",
   "other",
-];
+].map((key) => ({ key, label: key }));
 
 const inputClass =
   "h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:bg-slate-50 disabled:text-slate-400";
@@ -121,6 +123,22 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
   const [newLayer, setNewLayer] = useState("Location");
   const [batchForm, setBatchForm] = useState<BatchForm>(emptyBatchForm);
   const [applyLocation, setApplyLocation] = useState(false);
+  const [resourceTypes, setResourceTypes] = useState<InventoryTypeOption[]>(
+    fallbackResourceTypes,
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchJson<{ types: InventoryTypeOption[] }>("/api/v1/inventory-types", {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then((result) => setResourceTypes(result.types))
+      .catch(() => {
+        // The map remains usable with the built-in fallback types.
+      });
+    return () => controller.abort();
+  }, []);
 
   const featuresByResource = useMemo(
     () =>
@@ -545,7 +563,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                     <div className="mb-2 flex items-center gap-2"><MousePointer2 size={13} className="text-violet-600" /><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Quick edit · {selectedIds.length} selected</p></div>
                     <div className="grid grid-cols-2 gap-2">
                       <select value={batchForm.status} onChange={(event) => setBatchForm((current) => ({ ...current, status: event.target.value }))} className={inputClass} disabled={!canEdit}><option value="">Keep status</option><option value="available">Available</option><option value="in-use">In use</option><option value="maintenance">Maintenance</option><option value="archived">Archived</option></select>
-                      <select value={batchForm.type} onChange={(event) => setBatchForm((current) => ({ ...current, type: event.target.value }))} className={inputClass} disabled={!canEdit}><option value="">Keep type</option>{resourceTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select>
+                      <select value={batchForm.type} onChange={(event) => setBatchForm((current) => ({ ...current, type: event.target.value }))} className={inputClass} disabled={!canEdit}><option value="">Keep type</option>{resourceTypes.map((type) => <option key={type.key} value={type.key}>{type.label}</option>)}</select>
                       <select value={batchForm.priority} onChange={(event) => setBatchForm((current) => ({ ...current, priority: event.target.value }))} className={`${inputClass} col-span-2`} disabled={!canEdit}><option value="">Keep priority</option>{[1, 2, 3, 4, 5].map((priority) => <option key={priority} value={priority}>Priority {priority}</option>)}</select>
                       <input value={batchForm.addTags} onChange={(event) => setBatchForm((current) => ({ ...current, addTags: event.target.value }))} placeholder="Add tags…" className={`${inputClass} col-span-2`} disabled={!canEdit} />
                       <label className="col-span-2 flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[10px] font-semibold text-slate-600"><input type="checkbox" checked={applyLocation} onChange={(event) => setApplyLocation(event.target.checked)} disabled={!canEdit} className="accent-violet-600" /> Change location label</label>

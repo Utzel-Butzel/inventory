@@ -36,7 +36,7 @@ import {
 const MAX_PHOTOS = 12;
 const MAX_CAPTURE_EDGE = 1920;
 
-const RESOURCE_TYPES = [
+const FALLBACK_RESOURCE_TYPES = [
   { value: "object", label: "Object" },
   { value: "tool", label: "Tool" },
   { value: "furniture", label: "Furniture" },
@@ -48,7 +48,8 @@ const RESOURCE_TYPES = [
   { value: "other", label: "Other" },
 ] as const;
 
-type ResourceType = (typeof RESOURCE_TYPES)[number]["value"];
+type ResourceType = string;
+type InventoryTypeOption = { key: string; label: string };
 type CameraState = "idle" | "requesting" | "ready" | "error";
 type GeoState = "idle" | "requesting" | "ready" | "error";
 type JobState = "running" | "complete" | "warning" | "error";
@@ -159,6 +160,9 @@ export default function BatchCapturePage() {
   const [shutterFlash, setShutterFlash] = useState(false);
 
   const [resourceType, setResourceType] = useState<ResourceType>("object");
+  const [resourceTypes, setResourceTypes] = useState<InventoryTypeOption[]>(
+    FALLBACK_RESOURCE_TYPES.map(({ value, label }) => ({ key: value, label })),
+  );
   const [locationName, setLocationName] = useState("");
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
   const [geoState, setGeoState] = useState<GeoState>("idle");
@@ -166,6 +170,24 @@ export default function BatchCapturePage() {
   const [autoGenerateCover, setAutoGenerateCover] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<BatchJob[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/v1/inventory-types", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readError(response));
+        return response.json() as Promise<{ types: InventoryTypeOption[] }>;
+      })
+      .then(({ types }) => {
+        if (active && types.length) setResourceTypes(types);
+      })
+      .catch(() => {
+        // Keep the built-in fallback list when type configuration is unavailable.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const updatePhotos = useCallback(
     (updater: (current: CapturedPhoto[]) => CapturedPhoto[]) => {
@@ -922,8 +944,8 @@ export default function BatchCapturePage() {
                     }
                     className="h-12 w-full appearance-none rounded-2xl border border-[#dde0d7] bg-[#f8f9f5] px-4 pr-10 text-sm font-medium outline-none transition focus:border-[#635bff] focus:bg-white focus:ring-4 focus:ring-[#635bff]/10"
                   >
-                    {RESOURCE_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>
+                    {resourceTypes.map((type) => (
+                      <option key={type.key} value={type.key}>
                         {type.label}
                       </option>
                     ))}

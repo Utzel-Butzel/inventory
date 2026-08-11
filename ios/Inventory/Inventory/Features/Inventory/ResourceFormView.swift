@@ -72,7 +72,7 @@ struct ResourceFormView: View {
                 Section("Gegenstand") {
                     TextField("Name", text: $name)
                     Picker("Typ", selection: $type) {
-                        ForEach(InventoryResourceType.allCases, id: \.self) {
+                        ForEach(selectableTypes, id: \.self) {
                             Text($0.localizedName).tag($0)
                         }
                     }
@@ -191,6 +191,10 @@ struct ResourceFormView: View {
         ).sorted()
     }
 
+    private var selectableTypes: [InventoryResourceType] {
+        type.isBuiltIn ? InventoryResourceType.allCases : [type] + InventoryResourceType.allCases
+    }
+
     private func normalized(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -212,6 +216,15 @@ extension InventoryResourceStatus {
         case .inUse: "In Benutzung"
         case .maintenance: "Wartung"
         case .archived: "Archiviert"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .available: InventoryTheme.success
+        case .inUse: InventoryTheme.info
+        case .maintenance: InventoryTheme.warning
+        case .archived: .secondary
         }
     }
 }

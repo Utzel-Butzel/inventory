@@ -16,6 +16,7 @@ import {
   MapPin,
   PackageOpen,
   Plus,
+  Sheet,
   Search,
   Shirt,
   Sparkles,
@@ -25,23 +26,25 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { CsvImportExport } from "@/components/csv-import-export";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 
 type Pagination = { page: number; pageSize: number; total: number; pages: number };
 type View = "grid" | "table";
 
-const typeOptions = [
-  ["all", "All types"],
-  ["tool", "Tools"],
-  ["object", "Objects"],
-  ["furniture", "Furniture"],
-  ["vehicle", "Vehicles"],
-  ["place", "Places"],
-  ["clothing", "Clothing"],
-  ["person", "People"],
-  ["project", "Projects"],
-  ["other", "Other"],
-] as const;
+type InventoryTypeOption = { key: string; label: string };
+
+const fallbackTypeOptions: InventoryTypeOption[] = [
+  { key: "tool", label: "Tools" },
+  { key: "object", label: "Objects" },
+  { key: "furniture", label: "Furniture" },
+  { key: "vehicle", label: "Vehicles" },
+  { key: "place", label: "Places" },
+  { key: "clothing", label: "Clothing" },
+  { key: "person", label: "People" },
+  { key: "project", label: "Projects" },
+  { key: "other", label: "Other" },
+];
 
 const statusStyles: Record<string, string> = {
   available: "bg-emerald-50 text-emerald-700 ring-emerald-600/15",
@@ -72,7 +75,7 @@ const formatValue = (cents: number | null, currency: string) =>
       }).format(cents / 100);
 
 function ResourceVisual({ resource }: { resource: ClientResource }) {
-  const Icon = typeIcons[resource.type] ?? Box;
+  const Icon = typeIcons[resource.type as keyof typeof typeIcons] ?? Box;
   if (resource.cover?.url) {
     return (
       // Stored images use an authenticated same-origin route and cannot use next/image.
@@ -91,7 +94,7 @@ function ResourceVisual({ resource }: { resource: ClientResource }) {
   );
 }
 
-export function InventoryClient() {
+export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
   const [resources, setResources] = useState<ClientResource[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
@@ -107,6 +110,22 @@ export function InventoryClient() {
   const [view, setView] = useState<View>("grid");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inventoryTypes, setInventoryTypes] = useState<InventoryTypeOption[]>(
+    fallbackTypeOptions,
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchJson<{ types: InventoryTypeOption[] }>("/api/v1/inventory-types", {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then((result) => setInventoryTypes(result.types))
+      .catch(() => {
+        // Keep built-in fallbacks available if type metadata cannot be loaded.
+      });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -222,9 +241,10 @@ export function InventoryClient() {
               className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
               aria-label="Filter by type"
             >
-              {typeOptions.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
+              <option value="all">All types</option>
+              {inventoryTypes.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -284,6 +304,23 @@ export function InventoryClient() {
           </div>
         </div>
       </section>
+
+      <details className="group mb-5 rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-700 marker:content-none">
+          <Sheet size={16} className="text-emerald-700" aria-hidden="true" />
+          CSV import and export
+          <span className="ml-auto text-xs font-medium text-slate-400 group-open:hidden">
+            Open
+          </span>
+        </summary>
+        <div className="border-t border-slate-100 p-3">
+          <CsvImportExport
+            allowImport={canWrite}
+            inventoryTypeKeys={inventoryTypes.map((option) => option.key)}
+            onImported={() => void loadResources()}
+          />
+        </div>
+      </details>
 
       {error ? (
         <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -351,7 +388,7 @@ export function InventoryClient() {
               href={`/inventory/${resource.id}`}
               className="group overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.025)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_12px_35px_rgba(15,23,42,0.08)]"
             >
-              <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
+              <div className="relative aspect-square overflow-hidden bg-slate-100">
                 <ResourceVisual resource={resource} />
                 <span
                   className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}
@@ -403,7 +440,7 @@ export function InventoryClient() {
                 className="group grid gap-3 px-4 py-3 transition hover:bg-slate-50 lg:grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] lg:items-center lg:gap-4"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="h-12 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-100">
                     <ResourceVisual resource={resource} />
                   </div>
                   <div className="min-w-0">

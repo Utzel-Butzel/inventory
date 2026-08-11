@@ -1,4 +1,9 @@
 import { requireIdentity } from "@/lib/api-auth";
+import {
+  assertActiveInventoryType,
+  inventoryStructureHttpError,
+  synchronizeSpatialContainment,
+} from "@/lib/inventory-structure";
 import { updateResourcesBatch } from "@/lib/resources";
 import { resourceBatchPatchSchema } from "@/lib/validators";
 
@@ -24,9 +29,22 @@ export async function PATCH(request: Request) {
   }
 
   try {
+    if (parsed.data.changes.type) {
+      await assertActiveInventoryType(parsed.data.changes.type);
+    }
     const result = await updateResourcesBatch(parsed.data);
+    if (parsed.data.changes.type) {
+      await synchronizeSpatialContainment(authorization.identity.subject);
+    }
     return Response.json(result);
   } catch (error) {
+    const structureFailure = inventoryStructureHttpError(error, "");
+    if (structureFailure.status !== 500) {
+      return Response.json(
+        { error: structureFailure.message },
+        { status: structureFailure.status },
+      );
+    }
     if (error instanceof Error && error.message === "BATCH_RESOURCE_NOT_FOUND") {
       return Response.json(
         { error: "At least one selected inventory item no longer exists." },

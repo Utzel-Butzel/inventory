@@ -1,8 +1,11 @@
 openapi: 3.1.0
 info:
   title: Inventory API
-  version: 1.5.0
-  description: Scoped bearer-token API for inventory, stock ledgers, serialized units, media, visual counting, analysis, and data quality.
+  version: 1.7.0
+  description: Scoped API for configurable inventory structures, location-aware stock, cycle counts, assignments, CSV exchange, typed custom fields, media, AI, and data quality.
+  license:
+    name: MIT License
+    identifier: MIT
 servers:
   - url: /api/v1
 security:
@@ -12,8 +15,18 @@ tags:
     description: Native sign-in, token revocation, and scope discovery.
   - name: Resources
     description: Inventory item creation, lookup, retrieval, and lifecycle.
+  - name: Inventory structure
+    description: Configurable inventory types, relationship types, and directed resource relationships.
+  - name: Data exchange
+    description: Idempotent CSV import and complete CSV export.
+  - name: Custom fields
+    description: Typed field definitions for inventory items and serialized stock units.
   - name: Stock
     description: Stock health, configuration, movements, and serialized units.
+  - name: Inventory cycles
+    description: Recurring count policies, due-count queues, and stock reconciliation.
+  - name: Assignments
+    description: Checkout, assignment, reservation, return, and cancellation workflows.
   - name: Manufacturing
     description: Bills of materials and atomic assembly builds.
   - name: Purchasing
@@ -81,6 +94,311 @@ paths:
                     type: array
                     items: { type: string, enum: [read, write, ai] }
         "401": { description: Missing or invalid token }
+  /custom-fields:
+    get:
+      tags: [Custom fields]
+      summary: List custom-field definitions
+      description: Requires the read scope. Active definitions are returned by default, ordered by entity, position, and label.
+      parameters:
+        - name: entityType
+          in: query
+          description: Limit definitions to inventory items or serialized stock units.
+          schema: { type: string, enum: [inventory, stock_unit] }
+        - name: includeArchived
+          in: query
+          description: Include soft-deleted definitions.
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Matching custom-field definitions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [definitions]
+                properties:
+                  definitions:
+                    type: array
+                    items: { $ref: "#/components/schemas/CustomFieldDefinition" }
+        "401": { description: Missing or invalid session or bearer token }
+        "403": { description: Authenticated identity does not have the read scope }
+        "422": { description: Invalid query parameters }
+    post:
+      tags: [Custom fields]
+      summary: Create a custom-field definition
+      description: Requires an authenticated administrator session. Bearer tokens cannot create definitions. The key is generated from the label when omitted.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldDefinitionInput" }
+      responses:
+        "201":
+          description: Custom-field definition created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [definition]
+                properties:
+                  definition: { $ref: "#/components/schemas/CustomFieldDefinition" }
+        "401": { description: Missing or invalid administrator session }
+        "403": { description: A browser session with the admin role is required }
+        "409": { description: The generated or supplied key already exists in this entity scope }
+        "422": { description: Invalid custom-field definition }
+  /custom-fields/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/CustomFieldId" }
+    get:
+      tags: [Custom fields]
+      summary: Retrieve a custom-field definition
+      description: Requires the read scope and can return either an active or archived definition.
+      responses:
+        "200":
+          description: Custom-field definition
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [definition]
+                properties:
+                  definition: { $ref: "#/components/schemas/CustomFieldDefinition" }
+        "401": { description: Missing or invalid session or bearer token }
+        "403": { description: Authenticated identity does not have the read scope }
+        "404": { description: Custom-field definition not found }
+        "422": { description: Invalid definition id }
+    patch:
+      tags: [Custom fields]
+      summary: Update a custom-field definition
+      description: Requires an authenticated administrator session. Entity scope and key are immutable. Send the last observed revision to prevent overwriting a concurrent edit; a successful edit increments it.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldDefinitionPatch" }
+      responses:
+        "200":
+          description: Custom-field definition updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [definition]
+                properties:
+                  definition: { $ref: "#/components/schemas/CustomFieldDefinition" }
+        "401": { description: Missing or invalid administrator session }
+        "403": { description: A browser session with the admin role is required }
+        "404": { description: Custom-field definition not found }
+        "409":
+          description: Revision conflict; reload the definition before applying the update again
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, details]
+                properties:
+                  error: { type: string }
+                  details:
+                    type: object
+                    required: [currentRevision]
+                    properties:
+                      currentRevision: { type: integer, minimum: 1 }
+        "422": { description: Invalid or empty custom-field update }
+    delete:
+      tags: [Custom fields]
+      summary: Archive a custom-field definition
+      description: Requires an authenticated administrator session. Soft deletion increments the definition revision and preserves existing values stored under its key.
+      security:
+        - adminSession: []
+      responses:
+        "204": { description: Definition archived }
+        "401": { description: Missing or invalid administrator session }
+        "403": { description: A browser session with the admin role is required }
+        "404": { description: Custom-field definition not found }
+        "422": { description: Invalid definition id }
+  /inventory-types:
+    get:
+      tags: [Inventory structure]
+      summary: List configured inventory types
+      description: Requires the read scope. Active definitions are returned in configured display order. Administrators may include archived definitions.
+      parameters:
+        - name: includeArchived
+          in: query
+          description: Include archived definitions when authenticated as an administrator.
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Inventory type definitions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [types]
+                properties:
+                  types: { type: array, items: { $ref: "#/components/schemas/InventoryTypeDefinition" } }
+        "401": { description: Missing or invalid session or bearer token }
+        "403": { description: Authenticated identity does not have the read scope }
+    post:
+      tags: [Inventory structure]
+      summary: Create an inventory type
+      description: Requires an authenticated administrator browser session. Type keys are stable identifiers used by inventory records.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryTypeInput" }
+      responses:
+        "201":
+          description: Inventory type created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [type]
+                properties:
+                  type: { $ref: "#/components/schemas/InventoryTypeDefinition" }
+        "401": { description: Missing or invalid administrator session }
+        "403": { description: A browser session with the admin role is required }
+        "409": { description: The type key already exists }
+        "422": { description: Invalid inventory type definition }
+  /inventory-types/{key}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/InventoryTypeKey" }
+    patch:
+      tags: [Inventory structure]
+      summary: Update or restore an inventory type
+      description: Requires an authenticated administrator browser session. The stable type key is immutable.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryTypePatch" }
+      responses:
+        "200":
+          description: Inventory type updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [type]
+                properties:
+                  type: { $ref: "#/components/schemas/InventoryTypeDefinition" }
+        "401": { description: Missing or invalid administrator session }
+        "403": { description: A browser session with the admin role is required }
+        "404": { description: Inventory type not found }
+        "409": { description: The fallback type cannot be archived }
+        "422": { description: Invalid or empty inventory type update }
+    delete:
+      tags: [Inventory structure]
+      summary: Archive an inventory type
+      description: Requires an authenticated administrator browser session. Existing inventory records retain their type; the fallback type cannot be archived.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Inventory type archived
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [type]
+                properties:
+                  type: { $ref: "#/components/schemas/InventoryTypeDefinition" }
+        "401": { description: Missing or invalid administrator session }
+        "403": { description: A browser session with the admin role is required }
+        "404": { description: Inventory type not found }
+        "409": { description: The fallback type cannot be archived }
+        "422": { description: Invalid type key }
+  /relation-types:
+    get:
+      tags: [Inventory structure]
+      summary: List configured relationship types
+      description: Requires the read scope. Administrators may include archived definitions.
+      parameters:
+        - name: includeArchived
+          in: query
+          description: Include archived definitions when authenticated as an administrator.
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Relationship type definitions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [relationTypes]
+                properties:
+                  relationTypes: { type: array, items: { $ref: "#/components/schemas/RelationTypeDefinition" } }
+        "401": { description: Missing or invalid session or bearer token }
+        "403": { description: Authenticated identity does not have the read scope }
+    post:
+      tags: [Inventory structure]
+      summary: Create a relationship type
+      description: Requires an authenticated administrator browser session.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RelationTypeInput" }
+      responses:
+        "201":
+          description: Relationship type created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [relationType]
+                properties:
+                  relationType: { $ref: "#/components/schemas/RelationTypeDefinition" }
+        "401": { description: Missing or invalid administrator session }
+        "403": { description: A browser session with the admin role is required }
+        "409": { description: The relationship type key already exists }
+        "422": { description: Invalid relationship type definition }
+  /relation-types/{key}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/RelationTypeKey" }
+    patch:
+      tags: [Inventory structure]
+      summary: Update, archive, or restore a relationship type
+      description: Requires an authenticated administrator browser session. Built-in relationship types cannot be archived.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RelationTypePatch" }
+      responses:
+        "200":
+          description: Relationship type updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [relationType]
+                properties:
+                  relationType: { $ref: "#/components/schemas/RelationTypeDefinition" }
+        "401": { description: Missing or invalid administrator session }
+        "403": { description: A browser session with the admin role is required }
+        "404": { description: Relationship type not found }
+        "409": { description: A built-in relationship type cannot be archived }
+        "422": { description: Invalid or empty relationship type update }
   /ai/count:
     post:
       tags: [AI]
@@ -124,7 +442,7 @@ paths:
       summary: List inventory items
       parameters:
         - { name: q, in: query, schema: { type: string } }
-        - { name: type, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { $ref: "#/components/schemas/InventoryTypeKey" } }
         - { name: status, in: query, schema: { type: string } }
         - { name: page, in: query, schema: { type: integer, minimum: 1 } }
         - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
@@ -159,6 +477,63 @@ paths:
                 properties:
                   resource: { $ref: "#/components/schemas/Resource" }
         "409": { description: Idempotency key was used with a different request }
+  /resources/import:
+    post:
+      tags: [Data exchange]
+      summary: Import inventory items from UTF-8 CSV
+      description: Creates up to 1,000 items from a raw CSV body of at most 5 MB. Rows are validated independently, existing items are never overwritten, and structured fields may contain JSON. The same Idempotency-Key and identical file can be retried safely.
+      parameters:
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema:
+              type: string
+              format: binary
+              description: UTF-8 CSV with a required name header. See CsvImportResponse for row-level outcomes.
+          application/csv:
+            schema: { type: string, format: binary }
+          application/vnd.ms-excel:
+            schema: { type: string, format: binary }
+          text/plain:
+            schema: { type: string }
+      responses:
+        "200":
+          description: Every row replayed from an earlier identical import
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CsvImportResponse" }
+        "201":
+          description: Import completed without row errors and at least one row was created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CsvImportResponse" }
+        "207":
+          description: Import completed with one or more row-level errors
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CsvImportResponse" }
+        "400": { description: "Missing or invalid Idempotency-Key, malformed CSV, or invalid UTF-8" }
+        "413": { description: "File exceeds 5 MB or contains more than 1,000 data rows" }
+        "415": { description: Unsupported media type }
+        "422": { description: Missing rows or invalid CSV headers }
+  /resources/export:
+    get:
+      tags: [Data exchange]
+      summary: Export the complete inventory as UTF-8 CSV
+      description: Returns a BOM-prefixed CSV download containing up to 100,000 inventory records. Potential spreadsheet formulas are escaped.
+      responses:
+        "200":
+          description: Inventory CSV
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              description: Dated inventory CSV filename.
+          content:
+            text/csv:
+              schema: { type: string }
+        "413": { description: "The workspace contains more than 100,000 records" }
   /resources/batch:
     patch:
       tags: [Resources]
@@ -179,7 +554,7 @@ paths:
                 changes:
                   type: object
                   properties:
-                    type: { type: string, enum: [place, person, vehicle, tool, project, clothing, furniture, object, other] }
+                    type: { $ref: "#/components/schemas/InventoryTypeKey" }
                     status: { type: string, enum: [available, in-use, maintenance, archived] }
                     location: { type: [string, "null"], maxLength: 240 }
                     priority: { type: integer, minimum: 1, maximum: 5 }
@@ -224,6 +599,66 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
+  /resources/{id}/relations:
+    parameters:
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Inventory structure]
+      summary: List relationships touching an inventory item
+      description: Returns incoming and outgoing directed relationships with both endpoint summaries and the relationship definition.
+      responses:
+        "200":
+          description: Resource relationships
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [relations]
+                properties:
+                  relations: { type: array, items: { $ref: "#/components/schemas/ResourceRelation" } }
+        "422": { description: Invalid resource id }
+    post:
+      tags: [Inventory structure]
+      summary: Create or pin a manual relationship
+      description: One endpoint must match the resource id in the path. Containment relationships reject invalid parents, self-reference, and direct or indirect cycles. Creating an existing spatial relationship converts it to a manual relationship.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceRelationInput" }
+      responses:
+        "201":
+          description: Manual relationship created or pinned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [relation]
+                properties:
+                  relation: { $ref: "#/components/schemas/ResourceRelationRecord" }
+        "404": { description: One of the inventory items or the relationship type was not found }
+        "409": { description: The containment relationship would create a cycle }
+        "422": { description: Invalid relationship or a relationship type that disallows manual use }
+  /relations/{relationId}:
+    parameters:
+      - name: relationId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [Inventory structure]
+      summary: Remove a manual resource relationship
+      description: Spatially derived relationships cannot be deleted directly. After deletion, spatial containment is recalculated.
+      parameters:
+        - name: resourceId
+          in: query
+          required: true
+          description: One endpoint of the relationship, used to scope the deletion.
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Manual relationship removed }
+        "404": { description: Manual relationship not found }
+        "422": { description: Invalid relationship or resource id }
   /resources/lookup:
     get:
       tags: [Resources]
@@ -413,7 +848,7 @@ paths:
               schema: { $ref: "#/components/schemas/StockScanExecution" }
         "400": { description: Missing or invalid Idempotency-Key }
         "404": { description: Workflow or target unit not found }
-        "409": { description: Revision, stale resource or unit preview, idempotency, tracking-mode, or stock conflict }
+        "409": { description: "Revision, stale resource or unit preview, idempotency, tracking-mode, or stock conflict" }
         "422": { description: Invalid code or operator input }
   /resources/{id}/stock:
     parameters:
@@ -428,6 +863,183 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/StockDetail" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /resources/{id}/stock/locations:
+    parameters:
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Stock]
+      summary: Retrieve stock balances by structured inventory location
+      description: Bulk balances are derived from location-aware movements; serialized balances count available units at each location. The response also lists active inventory records whose types can contain stock.
+      responses:
+        "200":
+          description: Per-location stock breakdown and selectable locations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockLocationsResponse" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Invalid resource id }
+  /inventory-counts/due:
+    get:
+      tags: [Inventory cycles]
+      summary: List inventory cycles that are currently due
+      responses:
+        "200":
+          description: Due inventory counts ordered by due date
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [due]
+                properties:
+                  due: { type: array, items: { $ref: "#/components/schemas/DueInventoryCycle" } }
+  /resources/{id}/inventory-cycle:
+    parameters:
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Inventory cycles]
+      summary: Retrieve an item's inventory cycle and recent count history
+      responses:
+        "200":
+          description: Inventory cycle, nullable policy, and up to 25 recent counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cycle]
+                properties:
+                  cycle: { $ref: "#/components/schemas/InventoryCycle" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Invalid resource id }
+    put:
+      tags: [Inventory cycles]
+      summary: Create or replace an item's recurring count policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryCyclePolicyInput" }
+      responses:
+        "200":
+          description: Inventory cycle policy saved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [policy]
+                properties:
+                  policy: { $ref: "#/components/schemas/InventoryCyclePolicy" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Invalid resource id or count interval }
+  /resources/{id}/inventory-counts:
+    parameters:
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Inventory cycles]
+      summary: List an item's recent inventory counts
+      responses:
+        "200":
+          description: Up to 25 recent counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [counts]
+                properties:
+                  counts: { type: array, items: { $ref: "#/components/schemas/InventoryCountRecord" } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Invalid resource id }
+    post:
+      tags: [Inventory cycles]
+      summary: Record an inventory count or serialized-unit review
+      description: Bulk counts reconcile either the global balance or one structured location. Serialized items are reviewed through their individual units and may complete the cycle when the submitted whole-item count matches current serialized availability. Every completion appends an inventory-count movement and advances an existing cycle policy.
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryCountInput" }
+      responses:
+        "200":
+          description: Replayed an earlier count with the same Idempotency-Key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCountMutation" }
+        "201":
+          description: Count recorded and stock reconciled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCountMutation" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "Serialized count differs from current unit availability, conflicting idempotency key, or an invalid global count below assigned location stock" }
+        "422": { description: Invalid count or structured location }
+  /resources/{id}/assignments:
+    parameters:
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Assignments]
+      summary: List checkout, assignment, and reservation records for an item
+      responses:
+        "200":
+          description: Assignment history, current availability, and selectable serialized units
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryAssignmentList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Invalid resource id }
+    post:
+      tags: [Assignments]
+      summary: Check out, assign, or reserve inventory
+      description: Atomically creates an active allocation, reduces available stock, updates a serialized unit when selected, and appends a stock movement.
+      parameters:
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryAssignmentInput" }
+      responses:
+        "200":
+          description: Replayed the original assignment response
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryAssignmentMutation" }
+        "201":
+          description: Assignment created and stock allocated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryAssignmentMutation" }
+        "400": { description: Missing or invalid Idempotency-Key }
+        "404": { description: Inventory item or serialized unit not found }
+        "409": { description: "Insufficient stock, unavailable unit, or conflicting idempotency key" }
+        "422": { description: "Invalid recipient, quantity, dates, or tracking-mode combination" }
+  /assignments/{assignmentId}:
+    parameters:
+      - name: assignmentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Assignments]
+      summary: Return or cancel an active assignment
+      description: Atomically completes the assignment, restores stock when applicable, restores an assigned serialized unit to available, and appends a stock movement.
+      parameters:
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryAssignmentCompletion" }
+      responses:
+        "200":
+          description: Assignment completed or an identical completion replayed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryAssignmentMutation" }
+        "400": { description: Missing or invalid Idempotency-Key }
+        "404": { description: "Assignment, inventory item, or serialized unit not found" }
+        "409": { description: "Assignment already completed, stock overflow, or conflicting idempotency key" }
+        "422": { description: Invalid status or completion date }
   /resources/{id}/stock/config:
     parameters:
       - { $ref: "#/components/parameters/ResourceId" }
@@ -474,7 +1086,7 @@ paths:
       responses:
         "200": { description: Bill of materials replaced }
         "409": { description: Circular dependency or concurrent referenced-resource conflict }
-        "422": { description: Invalid, duplicate, missing, or self-referencing component list }
+        "422": { description: "Invalid, duplicate, missing, or self-referencing component list" }
   /resources/{id}/stock/builds:
     parameters:
       - { $ref: "#/components/parameters/ResourceId" }
@@ -509,7 +1121,7 @@ paths:
         "200": { description: Replayed the original assembly build }
         "201": { description: Components consumed and finished stock created atomically }
         "400": { description: Missing or invalid Idempotency-Key }
-        "409": { description: Component shortage, serialized-unit, or idempotency conflict }
+        "409": { description: "Component shortage, serialized-unit, or idempotency conflict" }
         "422": { description: Invalid build request }
   /resources/{id}/stock/movements:
     parameters:
@@ -517,6 +1129,14 @@ paths:
     get:
       tags: [Stock]
       summary: List the immutable dated stock ledger
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, default: 100 }
+        - name: before
+          in: query
+          description: Return movements that occurred before this timestamp.
+          schema: { type: string, format: date-time }
       responses:
         "200":
           description: Stock movements
@@ -529,7 +1149,7 @@ paths:
                   movements: { type: array, items: { $ref: "#/components/schemas/StockMovement" } }
     post:
       tags: [Stock]
-      summary: Book a positive or negative bulk stock movement
+      summary: Book a bulk stock change or structured location transfer
       parameters:
         - { $ref: "#/components/parameters/IdempotencyKey" }
       requestBody:
@@ -540,7 +1160,8 @@ paths:
       responses:
         "200": { description: Replayed the original stock movement response }
         "201": { description: Movement booked and balance updated }
-        "409": { description: Insufficient stock, serialized mode, or conflicting idempotency key }
+        "409": { description: "Insufficient stock, serialized mode, or conflicting idempotency key" }
+        "422": { description: "Invalid quantity, movement direction, or structured location transfer" }
   /resources/{id}/stock/units:
     parameters:
       - { $ref: "#/components/parameters/ResourceId" }
@@ -619,7 +1240,7 @@ paths:
         "201": { description: Purchase order created }
         "400": { description: Missing or invalid Idempotency-Key }
         "409": { description: Idempotency conflict or supported open-order total exceeded }
-        "422": { description: Invalid purchase order, duplicate line, or missing inventory item }
+        "422": { description: "Invalid purchase order, duplicate line, or missing inventory item" }
   /purchase-orders/{orderId}:
     parameters:
       - name: orderId
@@ -683,7 +1304,7 @@ paths:
         "200": { description: Replayed the original goods receipt }
         "201": { description: Receipt and physical stock movements created atomically }
         "400": { description: Missing or invalid Idempotency-Key }
-        "409": { description: Over-receipt, order-state, serialized-unit, or idempotency conflict }
+        "409": { description: "Over-receipt, order-state, serialized-unit, or idempotency conflict" }
   /resources/{id}/media:
     parameters:
       - { $ref: "#/components/parameters/ResourceId" }
@@ -804,6 +1425,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: inv_ token
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: authjs.session-token
+      description: Auth.js browser session cookie for an administrator; HTTPS deployments use the secure-prefixed cookie variant.
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
@@ -822,10 +1448,300 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    CustomFieldId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
   responses:
     NotFound:
       description: Resource not found
   schemas:
+    DefinitionKey:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: "^[a-z][a-z0-9_-]{0,63}$"
+    InventoryTypeKey:
+      allOf:
+        - { $ref: "#/components/schemas/DefinitionKey" }
+      description: Stable key of an administrator-configurable inventory type.
+    RelationTypeKey:
+      allOf:
+        - { $ref: "#/components/schemas/DefinitionKey" }
+      description: Stable key of an administrator-configurable directed relationship type.
+    InventoryTypeInput:
+      type: object
+      required: [key, label]
+      additionalProperties: false
+      properties:
+        key: { $ref: "#/components/schemas/InventoryTypeKey" }
+        label: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 5000, default: "" }
+        color: { type: string, minLength: 1, maxLength: 32, default: "#635bff" }
+        icon: { type: string, minLength: 1, maxLength: 80, default: box }
+        canContain: { type: boolean, default: false, description: Records of this type can be used as parents and structured stock locations. }
+        spatialContainment: { type: boolean, default: false, description: Automatically derive containment from map polygons. Requires canContain. }
+        position: { type: integer, minimum: 0, maximum: 100000, default: 0 }
+    InventoryTypePatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        label: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 5000 }
+        color: { type: string, minLength: 1, maxLength: 32 }
+        icon: { type: string, minLength: 1, maxLength: 80 }
+        canContain: { type: boolean }
+        spatialContainment: { type: boolean }
+        position: { type: integer, minimum: 0, maximum: 100000 }
+        archived: { type: boolean, description: Archive when true or restore when false. }
+    InventoryTypeDefinition:
+      type: object
+      required: [key, label, description, color, icon, canContain, spatialContainment, position, isSystem, createdBy, updatedBy, createdAt, updatedAt, archivedAt]
+      properties:
+        key: { $ref: "#/components/schemas/InventoryTypeKey" }
+        label: { type: string }
+        description: { type: string }
+        color: { type: string }
+        icon: { type: string }
+        canContain: { type: boolean }
+        spatialContainment: { type: boolean }
+        position: { type: integer, minimum: 0 }
+        isSystem: { type: boolean }
+        createdBy: { type: [string, "null"] }
+        updatedBy: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        archivedAt: { type: [string, "null"], format: date-time }
+    RelationTypeInput:
+      type: object
+      required: [key, label, inverseLabel]
+      additionalProperties: false
+      properties:
+        key: { $ref: "#/components/schemas/RelationTypeKey" }
+        label: { type: string, minLength: 1, maxLength: 120 }
+        inverseLabel: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 5000, default: "" }
+        allowManual: { type: boolean, default: true }
+        position: { type: integer, minimum: 0, maximum: 100000, default: 0 }
+    RelationTypePatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        label: { type: string, minLength: 1, maxLength: 120 }
+        inverseLabel: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 5000 }
+        allowManual: { type: boolean }
+        position: { type: integer, minimum: 0, maximum: 100000 }
+        archived: { type: boolean, description: Archive when true or restore when false. }
+    RelationTypeDefinition:
+      type: object
+      required: [key, label, inverseLabel, description, allowManual, spatial, position, isSystem, createdBy, updatedBy, createdAt, updatedAt, archivedAt]
+      properties:
+        key: { $ref: "#/components/schemas/RelationTypeKey" }
+        label: { type: string }
+        inverseLabel: { type: string }
+        description: { type: string }
+        allowManual: { type: boolean }
+        spatial: { type: boolean, description: Whether this built-in definition may be generated from geometry. }
+        position: { type: integer, minimum: 0 }
+        isSystem: { type: boolean }
+        createdBy: { type: [string, "null"] }
+        updatedBy: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        archivedAt: { type: [string, "null"], format: date-time }
+    ResourceReference:
+      type: object
+      required: [id, name, type, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/InventoryTypeKey" }
+        status: { type: string, enum: [available, in-use, maintenance, archived] }
+    ResourceRelationInput:
+      type: object
+      required: [sourceResourceId, targetResourceId, relationTypeKey]
+      additionalProperties: false
+      properties:
+        sourceResourceId: { type: string, format: uuid, description: Directed parent or subject endpoint. }
+        targetResourceId: { type: string, format: uuid, description: Directed child or object endpoint. }
+        relationTypeKey: { $ref: "#/components/schemas/RelationTypeKey" }
+    ResourceRelationRecord:
+      type: object
+      required: [id, sourceResourceId, targetResourceId, relationTypeKey, origin, sourceFeatureId, targetFeatureId, createdBy, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        sourceResourceId: { type: string, format: uuid }
+        targetResourceId: { type: string, format: uuid }
+        relationTypeKey: { $ref: "#/components/schemas/RelationTypeKey" }
+        origin: { type: string, enum: [manual, spatial] }
+        sourceFeatureId: { type: [string, "null"] }
+        targetFeatureId: { type: [string, "null"] }
+        createdBy: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+    ResourceRelation:
+      allOf:
+        - { $ref: "#/components/schemas/ResourceRelationRecord" }
+        - type: object
+          required: [source, target, relationType]
+          properties:
+            source:
+              oneOf:
+                - { $ref: "#/components/schemas/ResourceReference" }
+                - { type: "null" }
+            target:
+              oneOf:
+                - { $ref: "#/components/schemas/ResourceReference" }
+                - { type: "null" }
+            relationType:
+              oneOf:
+                - { $ref: "#/components/schemas/RelationTypeDefinition" }
+                - { type: "null" }
+    CustomFieldOption:
+      type: object
+      required: [value, label]
+      additionalProperties: false
+      properties:
+        value: { type: string, minLength: 1, maxLength: 120, description: Stable value stored in customFields. }
+        label: { type: string, minLength: 1, maxLength: 120 }
+        color: { type: string, minLength: 1, maxLength: 32 }
+    CustomFieldValues:
+      type: object
+      maxProperties: 100
+      description: Values keyed by stable custom-field definition keys. Types and required values are checked against active definitions applicable to the resource.
+      additionalProperties:
+        oneOf:
+          - { type: string, maxLength: 20000 }
+          - { type: number }
+          - { type: boolean }
+          - type: array
+            maxItems: 100
+            items: { type: string, maxLength: 120 }
+    CustomFieldDefinitionInput:
+      type: object
+      required: [entityType, label, fieldType]
+      additionalProperties: false
+      properties:
+        entityType:
+          type: string
+          enum: [inventory, stock_unit]
+          description: Whether values live on inventory resources or serialized stock units.
+        key:
+          type: string
+          pattern: "^[a-z][a-z0-9_]{0,63}$"
+          description: Stable API/storage identifier. Generated from label when omitted and immutable after creation.
+        label: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 5000, default: "" }
+        placeholder: { type: string, maxLength: 240, default: "" }
+        fieldType:
+          type: string
+          enum: [text, textarea, number, boolean, date, datetime, select, multi_select, email, url]
+        required: { type: boolean, default: false }
+        minValue:
+          type: [number, "null"]
+          default: null
+          description: Inclusive minimum for number fields; null for other field types.
+        maxValue:
+          type: [number, "null"]
+          default: null
+          description: Inclusive maximum for number fields; null for other field types.
+        step:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          default: null
+          description: Positive increment for number fields; null for other field types.
+        resourceTypes:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          description: Applicable inventory types. An empty array matches every type.
+          items: { $ref: "#/components/schemas/InventoryTypeKey" }
+          default: []
+        categories:
+          type: array
+          maxItems: 40
+          uniqueItems: true
+          description: Applicable category names, matched case-insensitively. An empty array matches every category; when resourceTypes is also set, both targets must match.
+          items: { type: string, minLength: 1, maxLength: 120 }
+          default: []
+        options:
+          type: array
+          maxItems: 100
+          description: Required and non-empty for select and multi_select fields; empty for every other field type.
+          items: { $ref: "#/components/schemas/CustomFieldOption" }
+          default: []
+        position: { type: integer, minimum: 0, maximum: 100000, default: 0 }
+    CustomFieldDefinitionPatch:
+      type: object
+      required: [revision]
+      minProperties: 2
+      additionalProperties: false
+      description: The last observed revision plus a non-empty subset of mutable definition fields. Entity type and key cannot be changed.
+      properties:
+        revision: { type: integer, minimum: 1 }
+        label: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 5000 }
+        placeholder: { type: string, maxLength: 240 }
+        fieldType: { type: string, enum: [text, textarea, number, boolean, date, datetime, select, multi_select, email, url] }
+        required: { type: boolean }
+        minValue: { type: [number, "null"] }
+        maxValue: { type: [number, "null"] }
+        step: { type: [number, "null"], exclusiveMinimum: 0 }
+        resourceTypes:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/InventoryTypeKey" }
+        categories:
+          type: array
+          maxItems: 40
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 120 }
+        options:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/CustomFieldOption" }
+        position: { type: integer, minimum: 0, maximum: 100000 }
+    CustomFieldDefinition:
+      type: object
+      required: [id, entityType, key, label, description, placeholder, fieldType, required, minValue, maxValue, step, resourceTypes, categories, options, position, revision, createdBy, updatedBy, createdAt, updatedAt, archivedAt]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        entityType: { type: string, enum: [inventory, stock_unit] }
+        key: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+        label: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 5000 }
+        placeholder: { type: string, maxLength: 240 }
+        fieldType: { type: string, enum: [text, textarea, number, boolean, date, datetime, select, multi_select, email, url] }
+        required: { type: boolean }
+        minValue: { type: [number, "null"] }
+        maxValue: { type: [number, "null"] }
+        step: { type: [number, "null"], exclusiveMinimum: 0 }
+        resourceTypes:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/InventoryTypeKey" }
+        categories:
+          type: array
+          maxItems: 40
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 120 }
+        options:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/CustomFieldOption" }
+        position: { type: integer, minimum: 0, maximum: 100000 }
+        revision: { type: integer, minimum: 1, description: Incremented by every update and soft deletion. }
+        createdBy: { type: [string, "null"], maxLength: 320 }
+        updatedBy: { type: [string, "null"], maxLength: 320 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        archivedAt: { type: [string, "null"], format: date-time }
     InventoryCount:
       type: object
       required: [count, confidence, detectedItem, isExact, explanation, warnings, model]
@@ -1037,6 +1953,41 @@ components:
         pageSize: { type: integer }
         total: { type: integer }
         pages: { type: integer }
+    CsvImportResponse:
+      type: object
+      required: [importId, summary, rows]
+      properties:
+        importId: { type: string, format: uuid, description: The request Idempotency-Key. }
+        summary:
+          type: object
+          required: [total, created, replayed, failed]
+          properties:
+            total: { type: integer, minimum: 1, maximum: 1000 }
+            created: { type: integer, minimum: 0 }
+            replayed: { type: integer, minimum: 0 }
+            failed: { type: integer, minimum: 0 }
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            type: object
+            required: [line, status]
+            properties:
+              line: { type: integer, minimum: 2, description: One-based source line where the CSV row begins. }
+              status: { type: string, enum: [created, replayed, error] }
+              resource:
+                type: object
+                description: Present for created and replayed rows.
+                required: [id, name, sku]
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
+                  sku: { type: [string, "null"] }
+              error: { type: string, description: Present for rows with status error. }
+              details:
+                type: array
+                items: { type: string }
     Media:
       type: object
       required: [id, resourceId, url, name, mimeType, kind, position, source]
@@ -1267,6 +2218,254 @@ components:
             - { type: object, additionalProperties: true }
             - { type: "null" }
         metadataAfter: { type: object, additionalProperties: true }
+    StockLocationResource:
+      type: object
+      required: [id, name, type, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/InventoryTypeKey" }
+        status: { type: string, enum: [available, in-use, maintenance, archived] }
+    StockLocationBalance:
+      type: object
+      required: [locationResourceId, name, type, quantity]
+      properties:
+        locationResourceId: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/InventoryTypeKey" }
+        quantity: { type: integer, minimum: 0 }
+    StockLocationBreakdown:
+      type: object
+      required: [resource, trackingMode, assignedQuantity, unassignedQuantity, locations]
+      properties:
+        resource:
+          type: object
+          required: [id, name, quantity, trackingMode]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            quantity: { type: integer, minimum: 0 }
+            trackingMode: { type: [string, "null"], enum: [bulk, serialized, null] }
+        trackingMode: { type: string, enum: [bulk, serialized] }
+        assignedQuantity: { type: integer, minimum: 0 }
+        unassignedQuantity: { type: integer, minimum: 0 }
+        locations:
+          type: array
+          items: { $ref: "#/components/schemas/StockLocationBalance" }
+    StockLocationsResponse:
+      type: object
+      required: [breakdown, availableLocations]
+      properties:
+        breakdown: { $ref: "#/components/schemas/StockLocationBreakdown" }
+        availableLocations:
+          type: array
+          items: { $ref: "#/components/schemas/StockLocationResource" }
+    InventoryCyclePolicyInput:
+      type: object
+      required: [intervalDays]
+      additionalProperties: false
+      properties:
+        intervalDays: { type: integer, minimum: 1, maximum: 3650 }
+        enabled: { type: boolean, default: true }
+    InventoryCyclePolicy:
+      type: object
+      required: [resourceId, intervalDays, enabled, nextDueAt, lastCompletedAt, createdBy, updatedBy, createdAt, updatedAt]
+      properties:
+        resourceId: { type: string, format: uuid }
+        intervalDays: { type: integer, minimum: 1, maximum: 3650 }
+        enabled: { type: boolean }
+        nextDueAt: { type: string, format: date-time }
+        lastCompletedAt: { type: [string, "null"], format: date-time }
+        createdBy: { type: [string, "null"] }
+        updatedBy: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    InventoryCountInput:
+      type: object
+      required: [countedQuantity]
+      additionalProperties: false
+      properties:
+        countedQuantity: { type: integer, minimum: 0, maximum: 2000000000, description: For serialized tracking this must match current availability after individual units have been reviewed or corrected. }
+        locationResourceId: { type: [string, "null"], format: uuid, description: Reconcile only this structured stock location when provided. }
+        countedAt: { type: string, format: date-time }
+        note: { type: string, maxLength: 20000 }
+    InventoryCountRecord:
+      type: object
+      required: [id, resourceId, locationResourceId, expectedQuantity, countedQuantity, variance, countedAt, note, movementId, idempotencyKey, createdBy, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        resourceId: { type: string, format: uuid }
+        locationResourceId: { type: [string, "null"], format: uuid }
+        expectedQuantity: { type: integer, minimum: 0 }
+        countedQuantity: { type: integer, minimum: 0 }
+        variance: { type: integer }
+        countedAt: { type: string, format: date-time }
+        note: { type: string }
+        movementId: { type: [string, "null"], format: uuid }
+        idempotencyKey: { type: [string, "null"], format: uuid }
+        createdBy: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+    InventoryCountMutation:
+      type: object
+      required: [count, replayed]
+      properties:
+        count: { $ref: "#/components/schemas/InventoryCountRecord" }
+        movementId: { type: string, format: uuid, description: Present when the count is newly recorded; replayed counts retain the movement id inside count. }
+        replayed: { type: boolean }
+    InventoryCycle:
+      type: object
+      required: [resource, policy, history]
+      properties:
+        resource:
+          type: object
+          required: [id, name, quantity, trackingMode]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            quantity: { type: integer, minimum: 0 }
+            trackingMode: { type: string, enum: [bulk, serialized] }
+        policy:
+          oneOf:
+            - { $ref: "#/components/schemas/InventoryCyclePolicy" }
+            - { type: "null" }
+        history:
+          type: array
+          maxItems: 25
+          items: { $ref: "#/components/schemas/InventoryCountRecord" }
+    DueInventoryCycle:
+      type: object
+      required: [resourceId, name, type, quantity, intervalDays, nextDueAt, lastCompletedAt]
+      properties:
+        resourceId: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/InventoryTypeKey" }
+        quantity: { type: integer, minimum: 0 }
+        intervalDays: { type: integer, minimum: 1, maximum: 3650 }
+        nextDueAt: { type: string, format: date-time }
+        lastCompletedAt: { type: [string, "null"], format: date-time }
+    InventoryAssignmentRecipientInput:
+      oneOf:
+        - type: object
+          required: [type, userId]
+          additionalProperties: false
+          properties:
+            type: { type: string, const: user }
+            userId: { type: string, format: uuid }
+        - type: object
+          required: [type, resourceId]
+          additionalProperties: false
+          properties:
+            type: { type: string, const: resource }
+            resourceId: { type: string, format: uuid }
+        - type: object
+          required: [type, label]
+          additionalProperties: false
+          properties:
+            type: { type: string, const: label }
+            label: { type: string, minLength: 1, maxLength: 240 }
+      discriminator:
+        propertyName: type
+    InventoryAssignmentInput:
+      type: object
+      required: [kind, recipient]
+      additionalProperties: false
+      properties:
+        kind: { type: string, enum: [checkout, assignment, reservation] }
+        quantity: { type: integer, minimum: 1, maximum: 2000000000, default: 1 }
+        stockUnitId: { type: [string, "null"], format: uuid, description: Required for serialized stock and omitted for bulk stock. }
+        recipient: { $ref: "#/components/schemas/InventoryAssignmentRecipientInput" }
+        startsAt: { type: string, format: date-time }
+        dueAt: { type: [string, "null"], format: date-time }
+        note: { type: string, maxLength: 20000 }
+    InventoryAssignmentCompletion:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [returned, cancelled] }
+        completedAt: { type: string, format: date-time }
+        note: { type: string, maxLength: 20000 }
+    InventoryAssignment:
+      type: object
+      required: [id, resourceId, stockUnitId, kind, status, quantity, assignee, stockUnit, startsAt, dueAt, completedAt, note, createdBy, completedBy, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        resourceId: { type: string, format: uuid }
+        stockUnitId: { type: [string, "null"], format: uuid }
+        kind: { type: string, enum: [checkout, assignment, reservation] }
+        status: { type: string, enum: [active, returned, cancelled] }
+        quantity: { type: integer, minimum: 1 }
+        assignee:
+          type: object
+          required: [type, id, label, detail]
+          properties:
+            type: { type: string, enum: [user, resource, label] }
+            id: { type: [string, "null"], format: uuid }
+            label: { type: string }
+            detail: { type: [string, "null"] }
+        stockUnit:
+          oneOf:
+            - type: object
+              required: [id, code, status]
+              properties:
+                id: { type: string, format: uuid }
+                code: { type: string }
+                status: { type: [string, "null"] }
+            - { type: "null" }
+        startsAt: { type: string, format: date-time }
+        dueAt: { type: [string, "null"], format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+        note: { type: string }
+        createdBy: { type: [string, "null"] }
+        completedBy: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    InventoryAssignmentMutation:
+      type: object
+      required: [assignment, resource, movement]
+      properties:
+        assignment: { $ref: "#/components/schemas/InventoryAssignment" }
+        resource:
+          type: object
+          required: [id, name, quantity]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            quantity: { type: integer, minimum: 0 }
+        movement: { $ref: "#/components/schemas/StockMovement" }
+    InventoryAssignmentList:
+      type: object
+      required: [resource, trackingMode, availability, availableUnits, assignments]
+      properties:
+        resource:
+          type: object
+          required: [id, name, quantity]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            quantity: { type: integer, minimum: 0 }
+        trackingMode: { type: string, enum: [bulk, serialized] }
+        availability:
+          type: object
+          required: [availableQuantity, activeQuantity]
+          properties:
+            availableQuantity: { type: integer, minimum: 0 }
+            activeQuantity: { type: integer, minimum: 0 }
+        availableUnits:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            required: [id, code, status, location]
+            properties:
+              id: { type: string, format: uuid }
+              code: { type: string }
+              status: { type: string, enum: [available] }
+              location: { type: [string, "null"] }
+        assignments:
+          type: array
+          maxItems: 200
+          items: { $ref: "#/components/schemas/InventoryAssignment" }
     StockConfigInput:
       type: object
       properties:
@@ -1292,16 +2491,20 @@ components:
     StockMovementInput:
       type: object
       required: [delta, type]
+      additionalProperties: false
       properties:
-        delta: { type: integer, minimum: -1000000, maximum: 1000000, description: Positive receipts and negative issues; zero is reserved for auditable metadata-only unit changes. }
+        delta: { type: integer, minimum: -2000000000, maximum: 2000000000, description: Positive receipts and negative issues. Structured transfers require zero because the global balance does not change. }
+        quantity: { type: integer, minimum: 0, maximum: 2000000000, description: Required and positive for a structured transfer; otherwise it must equal the absolute delta when provided. }
         type: { type: string, enum: [receipt, issue, adjustment, return, waste, transfer] }
         reason: { type: [string, "null"], maxLength: 240 }
         note: { type: string, maxLength: 20000 }
         location: { type: [string, "null"], maxLength: 240 }
+        fromLocationResourceId: { type: [string, "null"], format: uuid, description: Structured source location for an issue or transfer. }
+        toLocationResourceId: { type: [string, "null"], format: uuid, description: Structured destination location for a receipt or transfer. }
         occurredAt: { type: string, format: date-time }
     StockMovement:
       type: object
-      required: [id, resourceId, delta, balanceAfter, type, note, occurredAt, createdAt]
+      required: [id, resourceId, delta, quantity, balanceAfter, fromLocationBalanceAfter, toLocationBalanceAfter, type, note, location, fromLocationResourceId, toLocationResourceId, occurredAt, createdAt, createdBy]
       properties:
         id: { type: string, format: uuid }
         resourceId: { type: string, format: uuid }
@@ -1309,13 +2512,18 @@ components:
         assemblyBuildId: { type: [string, "null"], format: uuid }
         purchaseReceiptId: { type: [string, "null"], format: uuid }
         delta: { type: integer }
+        quantity: { type: integer, minimum: 0 }
         balanceAfter: { type: integer, minimum: 0 }
+        fromLocationBalanceAfter: { type: [integer, "null"], minimum: 0 }
+        toLocationBalanceAfter: { type: [integer, "null"], minimum: 0 }
         type:
           type: string
-          description: Includes client booking types plus system audit types such as opening_balance, serialization-opening, unit-created, unit-status, unit-update, and merge.
+          description: Includes client booking types plus system audit types such as opening_balance, inventory-count, assignment-checkout, assignment-return, unit-created, unit-status, and merge.
         reason: { type: [string, "null"] }
         note: { type: string }
         location: { type: [string, "null"] }
+        fromLocationResourceId: { type: [string, "null"], format: uuid }
+        toLocationResourceId: { type: [string, "null"], format: uuid }
         occurredAt: { type: string, format: date-time }
         createdAt: { type: string, format: date-time }
         createdBy: { type: [string, "null"] }
@@ -1326,14 +2534,18 @@ components:
         code: { type: string, maxLength: 180 }
         codes: { type: array, maxItems: 100, items: { type: string, maxLength: 180 } }
         location: { type: [string, "null"], maxLength: 240 }
+        locationResourceId: { type: [string, "null"], format: uuid }
         metadata: { type: object, additionalProperties: true }
+        customFields: { $ref: "#/components/schemas/CustomFieldValues" }
         acquiredAt: { type: string, format: date-time }
     StockUnitPatch:
       type: object
       properties:
         status: { type: string, enum: [available, reserved, in-use, maintenance, consumed, lost, retired] }
         location: { type: [string, "null"], maxLength: 240 }
+        locationResourceId: { type: [string, "null"], format: uuid }
         metadata: { type: object, additionalProperties: true }
+        customFields: { $ref: "#/components/schemas/CustomFieldValues" }
         occurredAt: { type: string, format: date-time }
         reason: { type: [string, "null"], maxLength: 240 }
         note: { type: string, maxLength: 20000 }
@@ -1341,7 +2553,7 @@ components:
       allOf:
         - { $ref: "#/components/schemas/StockUnitPatch" }
         - type: object
-          required: [id, resourceId, code, status, metadata, acquiredAt, lastMovedAt, createdAt, updatedAt]
+          required: [id, resourceId, code, status, location, locationResourceId, metadata, customFields, acquiredAt, lastMovedAt, createdAt, updatedAt]
           properties:
             id: { type: string, format: uuid }
             resourceId: { type: string, format: uuid }
@@ -1374,10 +2586,19 @@ components:
       properties:
         resource:
           type: object
-          required: [id, name, quantity]
+          required: [id, name, type, categories, quantity]
           properties:
             id: { type: string, format: uuid }
             name: { type: string }
+            type: { $ref: "#/components/schemas/InventoryTypeKey" }
+            categories:
+              type: array
+              items:
+                type: object
+                required: [name]
+                properties:
+                  name: { type: string }
+                  color: { type: string }
             quantity: { type: integer, minimum: 0 }
         config: { $ref: "#/components/schemas/StockConfig" }
         forecast: { $ref: "#/components/schemas/StockForecast" }
@@ -1410,7 +2631,7 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 240 }
         description: { type: string, maxLength: 20000 }
-        type: { type: string, enum: [place, person, vehicle, tool, project, clothing, furniture, object, other] }
+        type: { $ref: "#/components/schemas/InventoryTypeKey" }
         status: { type: string, enum: [available, in-use, maintenance, archived] }
         sku: { type: [string, "null"], maxLength: 80 }
         quantity: { type: integer, minimum: 0, description: Opening quantity; later changes use stock movements. }
@@ -1428,6 +2649,11 @@ components:
             properties:
               name: { type: string }
               color: { type: string }
+        relatedResourceIds:
+          type: array
+          maxItems: 100
+          items: { type: string, format: uuid }
+          description: Legacy undirected related-item ids. Prefer typed resource relationships for new integrations.
         gpsLatitude: { type: [number, "null"], minimum: -90, maximum: 90 }
         gpsLongitude: { type: [number, "null"], minimum: -180, maximum: 180 }
         gpsAltitude: { type: [number, "null"] }
@@ -1436,13 +2662,14 @@ components:
           maxItems: 100
           items: { $ref: "#/components/schemas/ResourceMapFeature" }
         notes: { type: string }
+        customFields: { $ref: "#/components/schemas/CustomFieldValues" }
     ResourcePatch:
       type: object
       description: Any subset of the writable resource fields.
       properties:
         name: { type: string, minLength: 1, maxLength: 240 }
         description: { type: string, maxLength: 20000 }
-        type: { type: string, enum: [place, person, vehicle, tool, project, clothing, furniture, object, other] }
+        type: { $ref: "#/components/schemas/InventoryTypeKey" }
         status: { type: string, enum: [available, in-use, maintenance, archived] }
         sku: { type: [string, "null"], maxLength: 80 }
         location: { type: [string, "null"] }
@@ -1459,6 +2686,11 @@ components:
             properties:
               name: { type: string }
               color: { type: string }
+        relatedResourceIds:
+          type: array
+          maxItems: 100
+          items: { type: string, format: uuid }
+          description: Legacy undirected related-item ids. Prefer typed resource relationships for new integrations.
         gpsLatitude: { type: [number, "null"], minimum: -90, maximum: 90 }
         gpsLongitude: { type: [number, "null"], minimum: -180, maximum: 180 }
         gpsAltitude: { type: [number, "null"] }
@@ -1467,6 +2699,7 @@ components:
           maxItems: 100
           items: { $ref: "#/components/schemas/ResourceMapFeature" }
         notes: { type: string }
+        customFields: { $ref: "#/components/schemas/CustomFieldValues" }
     ResourceMapFeature:
       type: object
       required: [id, type, layer, description, coordinates]
@@ -1494,7 +2727,7 @@ components:
       allOf:
         - { $ref: "#/components/schemas/ResourceInput" }
         - type: object
-          required: [id, createdAt, updatedAt, media]
+          required: [id, customFields, createdAt, updatedAt, media]
           properties:
             id: { type: string, format: uuid }
             createdAt: { type: string, format: date-time }

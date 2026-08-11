@@ -1,8 +1,18 @@
 import { requireIdentity } from "@/lib/api-auth";
-import { deleteResource, getResource, updateResource } from "@/lib/resources";
+import {
+  deleteResource,
+  getResource,
+  updateResourceWithCustomFieldValidation,
+} from "@/lib/resources";
 import { deleteStoredMedia } from "@/lib/storage";
 import { resourcePatchSchema } from "@/lib/validators";
 import { positionFromMapFeatures } from "@/lib/map-features";
+import { customFieldHttpError } from "@/lib/custom-fields";
+import {
+  assertActiveInventoryType,
+  inventoryStructureHttpError,
+  synchronizeSpatialContainment,
+} from "@/lib/inventory-structure";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -49,16 +59,50 @@ export async function PATCH(request: Request, context: Context) {
   }
 
   try {
+    if (parsed.data.type !== undefined) {
+      await assertActiveInventoryType(parsed.data.type);
+    }
+    const validateCustomFields =
+      parsed.data.customFields !== undefined ||
+      parsed.data.type !== undefined ||
+      parsed.data.categories !== undefined;
     const values = {
       ...parsed.data,
       ...(parsed.data.mapFeatures !== undefined
         ? positionFromMapFeatures(parsed.data.mapFeatures)
         : {}),
     };
-    const resource = await updateResource(id, values);
+    const resource = await updateResourceWithCustomFieldValidation({
+      id,
+      values,
+      validateCustomFields,
+      customFieldsProvided: parsed.data.customFields !== undefined,
+    });
     if (!resource) return Response.json({ error: "Not found" }, { status: 404 });
+    if (parsed.data.mapFeatures !== undefined || parsed.data.type !== undefined) {
+      await synchronizeSpatialContainment(authorization.identity.subject);
+    }
     return Response.json({ resource });
   } catch (error) {
+    const structureFailure = inventoryStructureHttpError(error, "");
+    if (structureFailure.status !== 500) {
+      return Response.json(
+        { error: structureFailure.message },
+        { status: structureFailure.status },
+      );
+    }
+    const customFieldFailure = customFieldHttpError(error, "");
+    if (customFieldFailure.status !== 500) {
+      return Response.json(
+        {
+          error: customFieldFailure.message,
+          ...(customFieldFailure.details
+            ? { details: customFieldFailure.details }
+            : {}),
+        },
+        { status: customFieldFailure.status },
+      );
+    }
     const message = error instanceof Error ? error.message : "Unable to update item.";
     const duplicateSku = message.includes("resources_sku_unique");
     return Response.json(

@@ -260,7 +260,7 @@ struct StockCountView: View {
                     systemImage: result.isExact ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
                 )
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(result.isExact ? .green : .orange)
+                .foregroundStyle(result.isExact ? InventoryTheme.success : InventoryTheme.warning)
             }
 
             HStack(spacing: 16) {
@@ -291,7 +291,7 @@ struct StockCountView: View {
                 }
                 .font(.caption.weight(.semibold))
                 ProgressView(value: min(max(result.confidence, 0), 1))
-                    .tint(result.isExact ? .green : .orange)
+                    .tint(result.isExact ? InventoryTheme.success : InventoryTheme.warning)
             }
 
             if !result.explanation.isEmpty {
@@ -302,7 +302,7 @@ struct StockCountView: View {
             ForEach(Array(result.warnings.enumerated()), id: \.offset) { _, warning in
                 Label(warning, systemImage: "exclamationmark.triangle")
                     .font(.footnote)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(InventoryTheme.warning)
             }
             Text("Prüfe und korrigiere die Zahl, bevor du den Bestand änderst.")
                 .font(.caption)
@@ -327,7 +327,7 @@ struct StockCountView: View {
                     systemImage: "exclamationmark.circle"
                 )
                 .font(.caption)
-                .foregroundStyle(.orange)
+                .foregroundStyle(InventoryTheme.warning)
             }
 
             HStack(spacing: 10) {

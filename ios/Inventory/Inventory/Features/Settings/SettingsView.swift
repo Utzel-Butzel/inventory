@@ -104,7 +104,7 @@ struct SettingsView: View {
                     systemImage: "exclamationmark.triangle.fill"
                 )
                 .font(.caption)
-                .foregroundStyle(.orange)
+                .foregroundStyle(InventoryTheme.warning)
             }
 
             Button {

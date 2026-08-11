@@ -14,6 +14,7 @@ struct ResourceDetailView: View {
     @State private var current: InventoryResource
     @State private var showEditor = false
     @State private var showStockCounter = false
+    @State private var showStockManagement = false
     @State private var booking = false
     @State private var confirmIssue = false
     @State private var pendingStockAction: PendingStockAction?
@@ -57,6 +58,12 @@ struct ResourceDetailView: View {
                 showStockCounter = false
             }
             .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showStockManagement, onDismiss: {
+            Task { await refresh() }
+        }) {
+            StockManagementView(resource: current)
+                .presentationDetents([.large])
         }
         .confirmationDialog(
             "Eine Einheit aus dem Bestand entnehmen?",
@@ -116,9 +123,10 @@ struct ResourceDetailView: View {
                 Spacer()
                 Text(current.status.localizedName)
                     .font(.caption.weight(.semibold))
+                    .foregroundStyle(current.status.tint)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(.green.opacity(0.1), in: Capsule())
+                    .background(current.status.tint.opacity(0.12), in: Capsule())
             }
             .font(.subheadline.weight(.medium))
 
@@ -163,6 +171,16 @@ struct ResourceDetailView: View {
                 .tint(InventoryTheme.ink)
                 .disabled(booking)
             }
+
+            Button {
+                showStockManagement = true
+            } label: {
+                Label("Bestand verwalten", systemImage: "slider.horizontal.3")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(InventoryTheme.ink)
+            .disabled(booking)
 
             Divider()
 

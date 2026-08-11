@@ -4,6 +4,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 
 import {
+  inventoryAssignments,
   resources,
   stockMovements,
   stockScanExecutions,
@@ -86,6 +87,7 @@ const unitDto = (row: StockUnitRecord) => ({
   status: row.status,
   location: row.location,
   metadata: row.metadata,
+  customFields: row.customFields,
   acquiredAt: row.acquiredAt.toISOString(),
   lastMovedAt: row.lastMovedAt.toISOString(),
   createdAt: row.createdAt.toISOString(),
@@ -710,6 +712,24 @@ export async function executeStockScan(
         )
         .limit(1)
         .for("update");
+      if (existingUnit) {
+        const [activeAssignment] = await transaction
+          .select({ id: inventoryAssignments.id })
+          .from(inventoryAssignments)
+          .where(
+            and(
+              eq(inventoryAssignments.stockUnitId, existingUnit.id),
+              eq(inventoryAssignments.status, "active"),
+            ),
+          )
+          .limit(1);
+        if (activeAssignment) {
+          throw new ScanWorkflowError(
+            "This unit has an active assignment or reservation. Return or cancel it before running a scan workflow.",
+            409,
+          );
+        }
+      }
       assertResolvedUnitGuard(input, existingUnit);
       if (!existingUnit && !workflow.createMissingUnit) {
         throw new ScanWorkflowError(
@@ -774,6 +794,7 @@ export async function executeStockScan(
           resourceId: resource.id,
           unitId: savedUnit.id,
           delta,
+          quantity: Math.abs(delta),
           balanceAfter,
           type: existingUnit
             ? statusChanged

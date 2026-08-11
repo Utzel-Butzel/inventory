@@ -22,7 +22,7 @@ private struct UploadJobsContent: View {
                             if let storageError = queue.storageError {
                                 Label(storageError, systemImage: "externaldrive.badge.exclamationmark")
                                     .font(.caption)
-                                    .foregroundStyle(.red)
+                                    .foregroundStyle(InventoryTheme.danger)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .inventoryCard()
                             }
@@ -145,11 +145,11 @@ private extension IntakeJobStage {
 
     var tint: Color {
         switch self {
-        case .complete: .green
-        case .warning: .orange
-        case .failed: .red
+        case .complete: InventoryTheme.success
+        case .warning: InventoryTheme.warning
+        case .failed: InventoryTheme.danger
         case .queued, .preparing: .secondary
-        default: .indigo
+        default: InventoryTheme.info
         }
     }
 }

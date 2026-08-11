@@ -3,6 +3,8 @@ import Link from "next/link";
 import { FileCode2 } from "lucide-react";
 
 import { ApiTokenManager } from "@/components/api-token-manager";
+import { CustomFieldManager } from "@/components/custom-field-manager";
+import { InventoryTypeManager } from "@/components/inventory-type-manager";
 import { UserManager } from "@/components/user-manager";
 import { getSessionIdentity } from "@/lib/api-auth";
 
@@ -39,6 +41,8 @@ export default async function SettingsPage() {
       </div>
 
       <div className="space-y-8">
+        {isAdmin ? <InventoryTypeManager /> : null}
+        {isAdmin ? <CustomFieldManager /> : null}
         {isAdmin ? <UserManager /> : null}
         <ApiTokenManager isAdmin={isAdmin} />
       </div>

@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { resourceTypes, userRoles } from "@/db/schema";
+import { userRoles } from "@/db/schema";
+import {
+  customFieldEntityTypes,
+  customFieldTypes,
+} from "@/lib/custom-field-contract";
 
 const passwordSchema = z
   .string()
@@ -18,6 +22,191 @@ const nullableText = (max: number) =>
     .max(max)
     .nullable()
     .transform((value) => value || null);
+
+const customFieldKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(
+    /^[a-z][a-z0-9_]*$/,
+    "Keys must start with a lowercase letter and contain only lowercase letters, numbers, and underscores.",
+  );
+
+export const inventoryTypeKeySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(
+    /^[a-z][a-z0-9_-]*$/,
+    "Resource type keys must start with a lowercase letter and contain only lowercase letters, numbers, underscores, and dashes.",
+  );
+
+const customFieldOptionSchema = z
+  .object({
+    value: z.string().trim().min(1).max(120),
+    label: z.string().trim().min(1).max(120),
+    color: z.string().trim().min(1).max(32).optional(),
+  })
+  .strict();
+
+const customFieldDefinitionShape = {
+  entityType: z.enum(customFieldEntityTypes),
+  key: customFieldKeySchema,
+  label: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(5_000),
+  placeholder: z.string().trim().max(240),
+  fieldType: z.enum(customFieldTypes),
+  required: z.boolean(),
+  minValue: z.number().finite().nullable(),
+  maxValue: z.number().finite().nullable(),
+  step: z.number().finite().positive().nullable(),
+  resourceTypes: z.array(inventoryTypeKeySchema).max(100),
+  categories: z.array(z.string().trim().min(1).max(120)).max(40),
+  options: z.array(customFieldOptionSchema).max(100),
+  position: z.number().int().min(0).max(100_000),
+};
+
+const validateCustomFieldDefinition = (
+  value: {
+    fieldType?: (typeof customFieldTypes)[number];
+    minValue?: number | null;
+    maxValue?: number | null;
+    step?: number | null;
+    resourceTypes?: string[];
+    categories?: string[];
+    options?: Array<{ value: string }>;
+  },
+  context: z.RefinementCtx,
+) => {
+  if (
+    value.minValue !== undefined &&
+    value.maxValue !== undefined &&
+    value.minValue !== null &&
+    value.maxValue !== null &&
+    value.minValue > value.maxValue
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["maxValue"],
+      message: "Maximum must be greater than or equal to minimum.",
+    });
+  }
+  if (value.resourceTypes && new Set(value.resourceTypes).size !== value.resourceTypes.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["resourceTypes"],
+      message: "Resource types must be unique.",
+    });
+  }
+  if (value.categories) {
+    const normalized = value.categories.map((category) => category.toLowerCase());
+    if (new Set(normalized).size !== normalized.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["categories"],
+        message: "Categories must be unique (case-insensitive).",
+      });
+    }
+  }
+  if (value.options) {
+    const optionValues = value.options.map((option) => option.value);
+    if (new Set(optionValues).size !== optionValues.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "Option values must be unique.",
+      });
+    }
+  }
+  if (value.fieldType) {
+    const selectable = value.fieldType === "select" || value.fieldType === "multi_select";
+    if (selectable && value.options && value.options.length === 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "Select fields require at least one option.",
+      });
+    }
+    if (!selectable && value.options && value.options.length > 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "Options are only supported by select fields.",
+      });
+    }
+    if (
+      value.fieldType !== "number" &&
+      [value.minValue, value.maxValue, value.step].some(
+        (entry) => entry !== undefined && entry !== null,
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["minValue"],
+        message: "Number limits are only supported by number fields.",
+      });
+    }
+  }
+};
+
+export const customFieldDefinitionCreateSchema = z
+  .object({
+    entityType: customFieldDefinitionShape.entityType,
+    key: customFieldDefinitionShape.key.optional(),
+    label: customFieldDefinitionShape.label,
+    description: customFieldDefinitionShape.description.optional().default(""),
+    placeholder: customFieldDefinitionShape.placeholder.optional().default(""),
+    fieldType: customFieldDefinitionShape.fieldType,
+    required: customFieldDefinitionShape.required.optional().default(false),
+    minValue: customFieldDefinitionShape.minValue.optional().default(null),
+    maxValue: customFieldDefinitionShape.maxValue.optional().default(null),
+    step: customFieldDefinitionShape.step.optional().default(null),
+    resourceTypes: customFieldDefinitionShape.resourceTypes.optional().default([]),
+    categories: customFieldDefinitionShape.categories.optional().default([]),
+    options: customFieldDefinitionShape.options.optional().default([]),
+    position: customFieldDefinitionShape.position.optional().default(0),
+  })
+  .strict()
+  .superRefine(validateCustomFieldDefinition);
+
+export const customFieldDefinitionPatchSchema = z
+  .object({
+    revision: z.number().int().min(1),
+    label: customFieldDefinitionShape.label.optional(),
+    description: customFieldDefinitionShape.description.optional(),
+    placeholder: customFieldDefinitionShape.placeholder.optional(),
+    fieldType: customFieldDefinitionShape.fieldType.optional(),
+    required: customFieldDefinitionShape.required.optional(),
+    minValue: customFieldDefinitionShape.minValue.optional(),
+    maxValue: customFieldDefinitionShape.maxValue.optional(),
+    step: customFieldDefinitionShape.step.optional(),
+    resourceTypes: customFieldDefinitionShape.resourceTypes.optional(),
+    categories: customFieldDefinitionShape.categories.optional(),
+    options: customFieldDefinitionShape.options.optional(),
+    position: customFieldDefinitionShape.position.optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).some((key) => key !== "revision"), {
+    message: "Provide at least one custom field change.",
+  });
+
+const customFieldScalarSchema = z.union([
+  z.string().max(20_000),
+  z.number().finite(),
+  z.boolean(),
+  z.array(z.string().max(120)).max(100),
+]);
+
+export const customFieldValuesInputSchema = z
+  .record(customFieldKeySchema, customFieldScalarSchema)
+  .refine((value) => Object.keys(value).length <= 100, {
+    message: "At most 100 custom field values are allowed.",
+  })
+  .refine((value) => JSON.stringify(value).length <= 50_000, {
+    message: "Custom field values must be 50 KB or smaller.",
+  });
 
 const mapCoordinateSchema = z.tuple([
   z.number().min(-180).max(180),
@@ -57,7 +246,7 @@ export const resourceMapFeatureSchema = z.discriminatedUnion("type", [
 const resourceShape = {
   name: z.string().trim().min(1).max(240),
   description: z.string().trim().max(20_000),
-  type: z.enum(resourceTypes),
+  type: inventoryTypeKeySchema,
   status: z.enum(["available", "in-use", "maintenance", "archived"]),
   sku: nullableText(80),
   quantity: z.coerce.number().int().min(0).max(1_000_000),
@@ -75,6 +264,7 @@ const resourceShape = {
       }),
     )
     .max(40),
+  customFields: customFieldValuesInputSchema,
   relatedResourceIds: z.array(z.string().uuid()).max(100),
   gpsLatitude: z.coerce.number().min(-90).max(90).nullable(),
   gpsLongitude: z.coerce.number().min(-180).max(180).nullable(),
@@ -97,6 +287,7 @@ export const resourceInputSchema = z.object({
   priority: resourceShape.priority.optional().default(3),
   tags: resourceShape.tags.optional().default([]),
   categories: resourceShape.categories.optional().default([]),
+  customFields: resourceShape.customFields.optional(),
   relatedResourceIds: resourceShape.relatedResourceIds.optional().default([]),
   gpsLatitude: resourceShape.gpsLatitude.optional(),
   gpsLongitude: resourceShape.gpsLongitude.optional(),
