@@ -30,6 +30,10 @@ services:
     build:
       context: .
       target: runner
+      args:
+        NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN: ${NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN:-}
+        NEXT_PUBLIC_MAP_STYLE_URL: ${NEXT_PUBLIC_MAP_STYLE_URL:-}
+        NEXT_PUBLIC_SATELLITE_TILE_URL: ${NEXT_PUBLIC_SATELLITE_TILE_URL:-}
     restart: unless-stopped
     init: true
     expose:

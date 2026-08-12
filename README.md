@@ -68,10 +68,10 @@ npm run dev
 Then open [http://localhost:3000](http://localhost:3000). Change the values in
 `.env.local` before using the app outside a local development machine.
 
-The map defaults to OpenFreeMap streets and Esri satellite imagery, so it needs
-no Mapbox token. Point `NEXT_PUBLIC_MAP_STYLE_URL` and
-`NEXT_PUBLIC_SATELLITE_TILE_URL` at your own compatible tile services when the
-deployment must keep map traffic on infrastructure you control.
+Set `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` to use Mapbox streets and satellite
+imagery. Without it, the map falls back to OpenFreeMap streets and Esri World
+Imagery. `NEXT_PUBLIC_MAP_STYLE_URL` and `NEXT_PUBLIC_SATELLITE_TILE_URL` can
+override those token-free fallback services.
 
 On an empty database, the first local administrator can be bootstrapped with:
 
