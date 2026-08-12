@@ -47,7 +47,7 @@ type DefinitionDraft = {
 
 const endpoint = "/api/v1/custom-fields";
 const inputClass =
-  "mt-1.5 h-10 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-[13px] text-[#30343a] outline-none transition placeholder:text-[#a1a6af] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#777e89]";
+  "mt-1.5 h-10 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-[13px] text-[#30343a] outline-none transition placeholder:text-[#5f6672] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#5f6672]";
 const textAreaClass = `${inputClass} h-auto min-h-20 resize-y py-2.5 leading-5`;
 const labelClass = "block text-[11px] font-semibold text-[#555c67]";
 
@@ -449,14 +449,14 @@ export function CustomFieldManager() {
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <span className="grid size-9 place-items-center rounded-xl bg-[#eeedff] text-[#635bff]">
+            <span className="grid size-9 place-items-center rounded-xl bg-[#eeedff] text-[#5147d9]">
               <Braces className="size-[18px]" aria-hidden="true" />
             </span>
             <div>
               <h2 id="custom-fields-heading" className="text-lg font-semibold tracking-[-0.02em] text-[#24272c]">
                 Custom fields
               </h2>
-              <p className="mt-0.5 text-[12px] text-[#747b86]">
+              <p className="mt-0.5 text-[12px] text-[#5f6672]">
                 Configure typed information by inventory type or category.
               </p>
             </div>
@@ -513,7 +513,7 @@ export function CustomFieldManager() {
                 "flex h-10 items-center justify-center gap-2 rounded-lg text-[12px] font-semibold transition",
                 entityType === tab.value
                   ? "bg-[#eeedff] text-[#5147d9] shadow-sm"
-                  : "text-[#6d7480] hover:bg-[#f5f6f8] hover:text-[#34383e]",
+                  : "text-[#5f6672] hover:bg-[#f5f6f8] hover:text-[#34383e]",
               )}
             >
               <Icon className="size-4" aria-hidden="true" /> {tab.label}
@@ -523,7 +523,7 @@ export function CustomFieldManager() {
       </div>
 
       {loading ? (
-        <Card className="grid min-h-72 place-items-center text-[#858c96]">
+        <Card className="grid min-h-72 place-items-center text-[#5f6672]">
           <div className="text-center">
             <LoaderCircle className="mx-auto size-5 animate-spin" aria-hidden="true" />
             <p className="mt-2 text-[12px]">Loading custom fields…</p>
@@ -533,7 +533,7 @@ export function CustomFieldManager() {
         <div className="grid items-start gap-4 xl:grid-cols-[290px_minmax(0,1fr)]">
           <Card className="overflow-hidden xl:sticky xl:top-[88px]">
             <div className="border-b border-[#e8eaed] px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#9298a2]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5f6672]">
                 {visibleDefinitions.length} {visibleDefinitions.length === 1 ? "field" : "fields"}
               </p>
             </div>
@@ -551,12 +551,12 @@ export function CustomFieldManager() {
                         : "bg-white hover:bg-[#fafbfc]",
                     )}
                   >
-                    <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg", draft.id === definition.id ? "bg-[#dedbff] text-[#5b52df]" : "bg-[#f0f2f4] text-[#7b828d]")}>
+                    <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg", draft.id === definition.id ? "bg-[#dedbff] text-[#5b52df]" : "bg-[#f0f2f4] text-[#5f6672]")}>
                       {definition.fieldType === "number" ? <Hash className="size-3.5" /> : <ListPlus className="size-3.5" />}
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-[12px] font-semibold text-[#34383e]">{definition.label}</span>
-                      <span className="mt-0.5 block truncate text-[10px] text-[#9298a2]">{definition.key} · {fieldTypeLabel(definition.fieldType)}</span>
+                      <span className="mt-0.5 block truncate text-[10px] text-[#5f6672]">{definition.key} · {fieldTypeLabel(definition.fieldType)}</span>
                     </span>
                   </button>
                 ))}
@@ -578,7 +578,7 @@ export function CustomFieldManager() {
                 <h3 className="text-sm font-semibold text-[#292c31]">
                   {draft.id ? `Edit ${draft.label}` : "Create custom field"}
                 </h3>
-                <p className="mt-1 text-[11px] leading-5 text-[#7c838e]">
+                <p className="mt-1 text-[11px] leading-5 text-[#5f6672]">
                   Keys are stable API identifiers. Labels and field settings can be changed later.
                 </p>
               </div>
@@ -609,7 +609,7 @@ export function CustomFieldManager() {
                   />
                 </label>
                 <label className={labelClass}>
-                  API key <span className="font-normal text-[#9298a2]">· generated when empty</span>
+                  API key <span className="font-normal text-[#5f6672]">· generated when empty</span>
                   <input
                     value={draft.key}
                     onChange={(event) => setDraft((current) => ({ ...current, key: event.target.value }))}
@@ -641,7 +641,7 @@ export function CustomFieldManager() {
                   />
                 </label>
                 <label className={`${labelClass} sm:col-span-2`}>
-                  Description <span className="font-normal text-[#9298a2]">· optional helper text</span>
+                  Description <span className="font-normal text-[#5f6672]">· optional helper text</span>
                   <textarea
                     rows={3}
                     value={draft.description}
@@ -652,7 +652,7 @@ export function CustomFieldManager() {
                   />
                 </label>
                 <label className={labelClass}>
-                  Placeholder <span className="font-normal text-[#9298a2]">· optional</span>
+                  Placeholder <span className="font-normal text-[#5f6672]">· optional</span>
                   <input
                     value={draft.placeholder}
                     onChange={(event) => setDraft((current) => ({ ...current, placeholder: event.target.value }))}
@@ -674,7 +674,7 @@ export function CustomFieldManager() {
 
               {draft.fieldType === "number" ? (
                 <div className="rounded-xl border border-[#e1e4e8] bg-[#fafbfc] p-4">
-                  <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.09em] text-[#858c96]">Number constraints</p>
+                  <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.09em] text-[#5f6672]">Number constraints</p>
                   <div className="grid gap-3 sm:grid-cols-3">
                     {(["minValue", "maxValue", "step"] as const).map((key) => (
                       <label key={key} className={labelClass}>
@@ -696,8 +696,8 @@ export function CustomFieldManager() {
                 <div className="rounded-xl border border-[#e1e4e8] bg-[#fafbfc] p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-[#858c96]">Options</p>
-                      <p className="mt-1 text-[10px] text-[#9298a2]">Labels are shown to people; values are stored in the API.</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-[#5f6672]">Options</p>
+                      <p className="mt-1 text-[10px] text-[#5f6672]">Labels are shown to people; values are stored in the API.</p>
                     </div>
                     <Button
                       variant="secondary"
@@ -741,15 +741,15 @@ export function CustomFieldManager() {
 
               <div className="rounded-xl border border-[#e1e4e8] bg-[#fafbfc] p-4">
                 <div className="mb-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-[#858c96]">Applies to</p>
-                  <p className="mt-1 text-[10px] leading-4 text-[#9298a2]">Leave both filters empty to show this field everywhere. When both are set, records must match both.</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-[#5f6672]">Applies to</p>
+                  <p className="mt-1 text-[10px] leading-4 text-[#5f6672]">Leave both filters empty to show this field everywhere. When both are set, records must match both.</p>
                 </div>
                 <span className={labelClass}>Inventory types</span>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setDraft((current) => ({ ...current, resourceTypes: [] }))}
-                    className={cn("h-8 rounded-lg border px-2.5 text-[10px] font-semibold transition", !draft.resourceTypes.length ? "border-[#cfcaff] bg-[#eeedff] text-[#554ddb]" : "border-[#dfe2e7] bg-white text-[#6d7480] hover:bg-[#f5f6f8]")}
+                    className={cn("h-8 rounded-lg border px-2.5 text-[10px] font-semibold transition", !draft.resourceTypes.length ? "border-[#cfcaff] bg-[#eeedff] text-[#554ddb]" : "border-[#dfe2e7] bg-white text-[#5f6672] hover:bg-[#f5f6f8]")}
                   >
                     All types
                   </button>
@@ -765,7 +765,7 @@ export function CustomFieldManager() {
                             ? current.resourceTypes.filter((value) => value !== option.value)
                             : [...current.resourceTypes, option.value],
                         }))}
-                        className={cn("h-8 rounded-lg border px-2.5 text-[10px] font-semibold transition", active ? "border-[#cfcaff] bg-[#eeedff] text-[#554ddb]" : "border-[#dfe2e7] bg-white text-[#6d7480] hover:bg-[#f5f6f8]")}
+                        className={cn("h-8 rounded-lg border px-2.5 text-[10px] font-semibold transition", active ? "border-[#cfcaff] bg-[#eeedff] text-[#554ddb]" : "border-[#dfe2e7] bg-white text-[#5f6672] hover:bg-[#f5f6f8]")}
                       >
                         {option.label}
                       </button>
@@ -774,7 +774,7 @@ export function CustomFieldManager() {
                 </div>
                 <label className={`${labelClass} mt-4`}>
                   Additional inventory type keys{" "}
-                  <span className="font-normal text-[#9298a2]">· comma separated, optional</span>
+                  <span className="font-normal text-[#5f6672]">· comma separated, optional</span>
                   <input
                     value={draft.resourceTypes
                       .filter((resourceType) => !availableResourceTypeKeys.has(resourceType))
@@ -796,7 +796,7 @@ export function CustomFieldManager() {
                   />
                 </label>
                 <label className={`${labelClass} mt-4`}>
-                  Categories <span className="font-normal text-[#9298a2]">· comma separated, optional</span>
+                  Categories <span className="font-normal text-[#5f6672]">· comma separated, optional</span>
                   <input
                     value={draft.categories}
                     onChange={(event) => setDraft((current) => ({ ...current, categories: event.target.value }))}
@@ -807,7 +807,7 @@ export function CustomFieldManager() {
               </div>
 
               <div className="flex flex-col-reverse gap-3 border-t border-[#eceef1] pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[10px] leading-4 text-[#9298a2]">
+                <p className="text-[10px] leading-4 text-[#5f6672]">
                   {draft.id ? "The API key remains unchanged when editing." : "Leave the key empty to generate it from the label."}
                 </p>
                 <Button type="submit" disabled={saving || deleting}>

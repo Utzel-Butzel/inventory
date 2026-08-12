@@ -5,6 +5,7 @@ import UIKit
 
 struct SpatialRoomSceneView: View {
     @EnvironmentObject private var state: AppState
+    @AppStorage("spatialRoomScene.didShowNavigationHint") private var didShowNavigationHint = false
     let scan: SpatialRoomScanSummary
 
     @State private var manifest: SpatialRoomSceneManifest?
@@ -42,16 +43,17 @@ struct SpatialRoomSceneView: View {
     }
 
     private func sceneContent(_ manifest: SpatialRoomSceneManifest) -> some View {
-        ZStack {
+        ZStack(alignment: .top) {
             RoomSceneViewport(
                 manifest: manifest,
                 selectedResourceID: $selectedResourceID,
                 cameraCommand: cameraCommand,
-                cameraCommandRevision: cameraCommandRevision
+                cameraCommandRevision: cameraCommandRevision,
+                onInteraction: dismissNavigationHint
             )
             .ignoresSafeArea(edges: .bottom)
 
-            VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
                     sceneBadge(
                         "Revision \(manifest.scan.revision)",
@@ -65,60 +67,92 @@ struct SpatialRoomSceneView: View {
                     cameraControls
                 }
 
-                Spacer(minLength: 0)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    if let selectedPlacement {
-                        selectedItemCard(selectedPlacement)
-                    } else {
-                        Label(
-                            "Mit einem Finger drehen, mit zwei Fingern zoomen und verschieben. Marker antippen, um Gegenstände zu sehen.",
-                            systemImage: "hand.draw.fill"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-
-                    if !manifest.placements.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(spacing: 8) {
-                                ForEach(manifest.placements) { placement in
-                                    Button {
-                                        selectedResourceID = placement.resource.id
-                                    } label: {
-                                        Label(placement.resource.name, systemImage: "mappin.circle.fill")
-                                            .font(.caption.weight(.semibold))
-                                            .lineLimit(1)
-                                            .padding(.horizontal, 11)
-                                            .frame(minHeight: 34)
-                                            .foregroundStyle(
-                                                selectedResourceID == placement.resource.id
-                                                    ? Color.white
-                                                    : InventoryTheme.ink
-                                            )
-                                            .background(
-                                                selectedResourceID == placement.resource.id
-                                                    ? InventoryTheme.accent
-                                                    : Color.white.opacity(0.9),
-                                                in: Capsule()
-                                            )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(12)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(.white.opacity(0.55), lineWidth: 1)
+                if !didShowNavigationHint {
+                    navigationHint
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
             .padding(12)
         }
+        .overlay(alignment: .bottom) {
+            if selectedPlacement != nil || !manifest.placements.isEmpty {
+                itemControls(manifest)
+                    .padding(12)
+            }
+        }
         .background(Color(red: 0.92, green: 0.94, blue: 0.95))
+        .task(id: manifest.scan.id) {
+            guard !didShowNavigationHint else { return }
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            dismissNavigationHint()
+        }
+    }
+
+    private var navigationHint: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "hand.draw.fill")
+                .foregroundStyle(InventoryTheme.accent)
+            Text("Ziehen zum Drehen · zwei Finger zum Zoomen")
+                .font(.caption.weight(.medium))
+                .lineLimit(2)
+            Button(action: dismissNavigationHint) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Hinweis schließen")
+        }
+        .foregroundStyle(InventoryTheme.ink)
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
+        .frame(minHeight: 42)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay { Capsule().stroke(.white.opacity(0.55), lineWidth: 1) }
+        .frame(maxWidth: 310, alignment: .leading)
+    }
+
+    private func itemControls(_ manifest: SpatialRoomSceneManifest) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let selectedPlacement {
+                selectedItemCard(selectedPlacement)
+                    .padding(10)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+
+            if !manifest.placements.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 8) {
+                        ForEach(manifest.placements) { placement in
+                            Button {
+                                dismissNavigationHint()
+                                selectedResourceID = placement.resource.id
+                            } label: {
+                                Label(placement.resource.name, systemImage: "mappin.circle.fill")
+                                    .font(.caption.weight(.semibold))
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 11)
+                                    .frame(minHeight: 34)
+                                    .foregroundStyle(
+                                        selectedResourceID == placement.resource.id
+                                            ? Color.white
+                                            : InventoryTheme.ink
+                                    )
+                                    .background(
+                                        selectedResourceID == placement.resource.id
+                                            ? InventoryTheme.accent
+                                            : Color.white.opacity(0.9),
+                                        in: Capsule()
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var selectedPlacement: SpatialRoomPlacement? {
@@ -141,6 +175,7 @@ struct SpatialRoomSceneView: View {
         command: RoomSceneCameraCommand
     ) -> some View {
         Button {
+            dismissNavigationHint()
             cameraCommand = command
             cameraCommandRevision += 1
         } label: {
@@ -192,6 +227,13 @@ struct SpatialRoomSceneView: View {
         }
     }
 
+    private func dismissNavigationHint() {
+        guard !didShowNavigationHint else { return }
+        withAnimation(.easeOut(duration: 0.2)) {
+            didShowNavigationHint = true
+        }
+    }
+
     @MainActor
     private func loadScene() async {
         guard let client = state.client else { return }
@@ -220,6 +262,7 @@ private struct RoomSceneViewport: UIViewRepresentable {
     @Binding var selectedResourceID: UUID?
     let cameraCommand: RoomSceneCameraCommand
     let cameraCommandRevision: Int
+    let onInteraction: () -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -269,17 +312,11 @@ private struct RoomSceneViewport: UIViewRepresentable {
             markerStyles.removeAll(keepingCapacity: true)
             sceneView = view
 
-            view.gestureRecognizers?
-                .filter { $0.name == "inventory-room-marker-tap" }
-                .forEach(view.removeGestureRecognizer)
-            let tap = UITapGestureRecognizer(target: self, action: #selector(didTapScene(_:)))
-            tap.name = "inventory-room-marker-tap"
-            view.addGestureRecognizer(tap)
-
             let scene = makeScene(from: parent.manifest)
             view.scene = scene
             view.backgroundColor = UIColor(red: 0.94, green: 0.95, blue: 0.96, alpha: 1)
             view.allowsCameraControl = true
+            configureInteractionTracking(for: view)
             view.defaultCameraController.interactionMode = .orbitTurntable
             view.defaultCameraController.inertiaEnabled = true
             view.defaultCameraController.maximumVerticalAngle = 89
@@ -290,6 +327,24 @@ private struct RoomSceneViewport: UIViewRepresentable {
             view.accessibilityLabel = "Interaktives 3D-Modell von \(parent.manifest.room.name)"
             applySelection(parent.selectedResourceID)
             applyCamera(.reset, animated: false)
+        }
+
+        private func configureInteractionTracking(for view: SCNView) {
+            view.gestureRecognizers?
+                .filter { $0.name == "inventory-room-marker-tap" }
+                .forEach(view.removeGestureRecognizer)
+
+            let markerTap = UITapGestureRecognizer(
+                target: self,
+                action: #selector(didTapScene(_:))
+            )
+            markerTap.name = "inventory-room-marker-tap"
+            view.addGestureRecognizer(markerTap)
+
+            for recognizer in view.gestureRecognizers ?? [] {
+                recognizer.removeTarget(self, action: #selector(didInteract(_:)))
+                recognizer.addTarget(self, action: #selector(didInteract(_:)))
+            }
         }
 
         private func makeScene(from manifest: SpatialRoomSceneManifest) -> SCNScene {
@@ -492,6 +547,11 @@ private struct RoomSceneViewport: UIViewRepresentable {
                   let id = resourceID(for: node) else { return }
             parent.selectedResourceID = id
             applySelection(id)
+        }
+
+        @objc private func didInteract(_ gesture: UIGestureRecognizer) {
+            guard gesture.state == .began || gesture.state == .ended else { return }
+            parent.onInteraction()
         }
 
         private func resourceID(for node: SCNNode) -> UUID? {

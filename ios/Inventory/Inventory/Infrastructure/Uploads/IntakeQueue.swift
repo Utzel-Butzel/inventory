@@ -731,7 +731,7 @@ final class IntakeQueue: ObservableObject {
         switch apiError {
         case .transport:
             return true
-        case .http(let statusCode, _, _):
+        case .http(let statusCode, _, _, _):
             return statusCode == 202 || statusCode == 408 || statusCode == 425 ||
                 statusCode == 429 || statusCode >= 500
         default:

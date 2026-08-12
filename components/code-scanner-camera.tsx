@@ -359,10 +359,10 @@ export function CodeScannerCamera({
               id="camera-scanner-title"
               className="flex items-center gap-2 text-sm font-semibold text-[#292c31]"
             >
-              <Camera className="size-4 text-[#635bff]" aria-hidden="true" />
+              <Camera className="size-4 text-[#5147d9]" aria-hidden="true" />
               Scan with camera
             </h2>
-            <p className="mt-1 text-xs leading-5 text-[#747b86]">
+            <p className="mt-1 text-xs leading-5 text-[#5f6672]">
               Hold the complete QR code inside the frame.
             </p>
           </div>
@@ -476,7 +476,7 @@ export function CodeScannerCamera({
             <span>{cameraError}</span>
           </div>
         ) : (
-          <p className="mt-2 text-[11px] leading-4 text-[#8a919c]">
+          <p className="mt-2 text-[11px] leading-4 text-[#5f6672]">
             Camera access works on HTTPS or localhost. The video stays on this device and is
             only inspected for QR codes.
           </p>
@@ -485,7 +485,7 @@ export function CodeScannerCamera({
 
       <div className="flex items-center gap-3" aria-hidden="true">
         <span className="h-px flex-1 bg-[#e4e7eb]" />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9aa0aa]">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#5f6672]">
           or
         </span>
         <span className="h-px flex-1 bg-[#e4e7eb]" />
@@ -494,10 +494,10 @@ export function CodeScannerCamera({
       <div className="grid gap-3 md:grid-cols-2">
         <section className="rounded-xl border border-[#e4e7eb] bg-[#f9fafb] p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-[#34383f]">
-            <FileImage className="size-4 text-[#68707c]" aria-hidden="true" />
+            <FileImage className="size-4 text-[#5f6672]" aria-hidden="true" />
             Upload a QR photo
           </h3>
-          <p className="mt-1 text-xs leading-5 text-[#7a818c]">
+          <p className="mt-1 text-xs leading-5 text-[#5f6672]">
             Useful when camera access is blocked or the label is hard to reach.
           </p>
           <label
@@ -538,7 +538,7 @@ export function CodeScannerCamera({
 
         <section className="rounded-xl border border-[#e4e7eb] bg-[#f9fafb] p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-[#34383f]">
-            <Keyboard className="size-4 text-[#68707c]" aria-hidden="true" />
+            <Keyboard className="size-4 text-[#5f6672]" aria-hidden="true" />
             Enter code manually
           </h3>
           <form className="mt-3" onSubmit={submitManualCode} noValidate>
@@ -557,7 +557,7 @@ export function CodeScannerCamera({
                   setManualCode(event.target.value);
                   if (manualError) setManualError(null);
                 }}
-                className="h-9 min-w-0 flex-1 rounded-lg border border-[#dfe2e7] bg-white px-3 font-mono text-xs text-[#292c31] shadow-sm placeholder:font-sans placeholder:text-[#9aa0aa]"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-[#dfe2e7] bg-white px-3 font-mono text-xs text-[#292c31] shadow-sm placeholder:font-sans placeholder:text-[#5f6672]"
               />
               <Button
                 type="submit"
@@ -568,7 +568,7 @@ export function CodeScannerCamera({
                 Use code
               </Button>
             </div>
-            <p className="mt-2 text-[11px] leading-4 text-[#8a919c]">
+            <p className="mt-2 text-[11px] leading-4 text-[#5f6672]">
               Enter exactly what the QR code contains. Depending on the selected workflow,
               a URL or prefixed value may be required; a bare EPD number is not always enough.
             </p>

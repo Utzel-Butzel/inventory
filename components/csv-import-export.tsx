@@ -499,7 +499,7 @@ export function CsvImportExport({
             <FileSpreadsheet className="size-4 text-emerald-700" aria-hidden="true" />
             CSV import and export
           </div>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
+          <p className="mt-1 text-xs leading-5 text-slate-600">
             {allowImport
               ? "Export a safe spreadsheet, or preview up to 1,000 new inventory items before importing."
               : "Export the current inventory as a spreadsheet."}
@@ -521,7 +521,7 @@ export function CsvImportExport({
             <p className="truncate text-sm font-semibold text-slate-800">
               {selectedFile ? selectedFile.name : "Choose a UTF-8 CSV file"}
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-600">
               {selectedFile
                 ? `${(selectedFile.size / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 })} KB`
                 : "Use the exported headers; id and timestamps are ignored on import."}
@@ -560,7 +560,7 @@ export function CsvImportExport({
         {preview ? (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
                 Preview · {preview.totalRows} {preview.totalRows === 1 ? "row" : "rows"}
               </p>
               {preview.errors.length || rowErrors.length ? (
@@ -585,7 +585,7 @@ export function CsvImportExport({
 
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500">
+                <thead className="bg-slate-50 text-slate-600">
                   <tr>
                     <th className="px-3 py-2 font-semibold">Line</th>
                     <th className="px-3 py-2 font-semibold">Name</th>
@@ -599,7 +599,7 @@ export function CsvImportExport({
                 <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
                   {preview.rows.slice(0, PREVIEW_ROWS).map((row) => (
                     <tr key={row.line} className={row.errors.length ? "bg-red-50/60" : undefined}>
-                      <td className="whitespace-nowrap px-3 py-2 text-slate-400">{row.line}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-slate-600">{row.line}</td>
                       <td className="max-w-52 truncate px-3 py-2 font-medium text-slate-900">
                         {row.values.name || "—"}
                       </td>
@@ -616,7 +616,7 @@ export function CsvImportExport({
               </table>
             </div>
             {preview.totalRows > PREVIEW_ROWS ? (
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-600">
                 Showing the first {PREVIEW_ROWS} rows; all {preview.totalRows} rows were validated.
               </p>
             ) : null}
@@ -650,7 +650,7 @@ export function CsvImportExport({
         ) : null}
 
         <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="max-w-xl text-xs leading-5 text-slate-500">
+          <p className="max-w-xl text-xs leading-5 text-slate-600">
             Import only creates new items. Existing records and matching SKUs are never changed.
           </p>
           <Button onClick={() => void importCsv()} disabled={!canImport}>

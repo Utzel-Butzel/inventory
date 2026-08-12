@@ -21,10 +21,12 @@ import {
 } from "react";
 
 import { prepareUpload } from "@/lib/client-media";
-import { fetchJson } from "@/lib/client-types";
 import type { InventoryCountMarker } from "@/lib/inventory-count-contract";
 
 const markerCoordinateMaximum = 1_000;
+// The initial endpoint only reserves one asynchronous Replicate prediction.
+// Keep a finite transport window for image normalization and provider setup.
+const countRequestTimeoutMilliseconds = 75_000;
 
 type RenderedImageBounds = {
   left: number;
@@ -44,7 +46,15 @@ type PhotoCountResult = {
   model: string;
 };
 
+type PhotoCountProcessing = {
+  status: "processing";
+  jobToken: string;
+  expiresAt: string;
+  message?: string;
+};
+
 type PhotoCountCaptureProps = {
+  itemId: string;
   itemName: string;
   unitName: string;
   direction: "in" | "out";
@@ -53,6 +63,33 @@ type PhotoCountCaptureProps = {
   disabled?: boolean;
   onCount: (result: PhotoCountResult) => void;
 };
+
+class CountRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly retryAfterSeconds?: number,
+    readonly terminal = false,
+  ) {
+    super(message);
+    this.name = "CountRequestError";
+  }
+}
+
+async function waitForCountRetry(milliseconds: number, signal: AbortSignal) {
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      window.clearTimeout(timeout);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    const timeout = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 function confidencePercent(value: number) {
   const normalized = value > 1 ? value : value * 100;
@@ -92,6 +129,106 @@ function cleanCountResult(result: PhotoCountResult) {
     markers,
     model: result.model?.trim() || "AI vision",
   };
+}
+
+async function readCountResponse(
+  response: Response,
+): Promise<PhotoCountResult | PhotoCountProcessing> {
+  const text = await response.text();
+  let payload: unknown;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = null;
+  }
+  if (response.status === 202) {
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      "status" in payload &&
+      payload.status === "processing" &&
+      "jobToken" in payload &&
+      typeof payload.jobToken === "string" &&
+      "expiresAt" in payload &&
+      typeof payload.expiresAt === "string"
+    ) {
+      return payload as PhotoCountProcessing;
+    }
+    throw new Error("The counter returned an invalid processing response.");
+  }
+  if (!response.ok) {
+    const message =
+      typeof payload === "object" &&
+      payload !== null &&
+      "error" in payload &&
+      typeof payload.error === "string"
+        ? payload.error
+        : `Request failed (HTTP ${response.status}).`;
+    const rawRetryAfter = response.headers.get("Retry-After");
+    const retryAfterSeconds = rawRetryAfter === null ? NaN : Number(rawRetryAfter);
+    throw new CountRequestError(
+      message,
+      response.status,
+      Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? retryAfterSeconds
+        : undefined,
+      typeof payload === "object" &&
+        payload !== null &&
+        "terminal" in payload &&
+        payload.terminal === true,
+    );
+  }
+  if (typeof payload !== "object" || payload === null || !("count" in payload)) {
+    throw new Error("The counter returned an invalid result.");
+  }
+  return payload as PhotoCountResult;
+}
+
+async function pollCountJob(
+  processing: PhotoCountProcessing,
+  signal: AbortSignal,
+) {
+  const expiresAt = Date.parse(processing.expiresAt);
+  if (!Number.isFinite(expiresAt)) {
+    throw new Error("The counter returned an invalid job deadline.");
+  }
+  const deadline = Math.min(expiresAt, Date.now() + 11 * 60_000);
+  let jobToken = processing.jobToken;
+  let delayMilliseconds = 3_000;
+  while (Date.now() < deadline) {
+    await waitForCountRetry(delayMilliseconds, signal);
+    try {
+      const response = await fetch("/api/v1/ai/count/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobToken }),
+        signal,
+      });
+      const payload = await readCountResponse(response);
+      if ("count" in payload) return payload;
+      jobToken = payload.jobToken;
+      delayMilliseconds = 3_000;
+    } catch (error) {
+      if (signal.aborted) throw error;
+      if (error instanceof TypeError) continue;
+      if (
+        error instanceof CountRequestError &&
+        [429, 503].includes(error.status) &&
+        error.retryAfterSeconds !== undefined
+      ) {
+        delayMilliseconds = Math.min(
+          10_000,
+          Math.max(1_000, error.retryAfterSeconds * 1_000),
+        );
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new CountRequestError(
+    "Counting took too long and expired. Please try again.",
+    504,
+  );
 }
 
 function PhotoCountPreview({
@@ -187,6 +324,7 @@ function PhotoCountPreview({
 }
 
 export function PhotoCountCapture({
+  itemId,
   itemName,
   unitName,
   direction,
@@ -198,6 +336,7 @@ export function PhotoCountCapture({
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const attemptIdRef = useRef<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [image, setImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -226,6 +365,7 @@ export function PhotoCountCapture({
   function resetImage() {
     abortRef.current?.abort();
     abortRef.current = null;
+    attemptIdRef.current = null;
     setImage(null);
     setResult(null);
     setError(null);
@@ -243,6 +383,7 @@ export function PhotoCountCapture({
     }
 
     abortRef.current?.abort();
+    attemptIdRef.current = null;
     setPreparing(true);
     setError(null);
     setResult(null);
@@ -263,6 +404,15 @@ export function PhotoCountCapture({
   async function countObjects() {
     if (!image || counting) return;
     const controller = new AbortController();
+    const attemptId = attemptIdRef.current ?? crypto.randomUUID();
+    const isResumingAttempt = attemptIdRef.current !== null;
+    attemptIdRef.current = attemptId;
+    let didReceiveJob = false;
+    let didTimeOut = false;
+    let timeout = window.setTimeout(() => {
+      didTimeOut = true;
+      controller.abort();
+    }, countRequestTimeoutMilliseconds);
     abortRef.current?.abort();
     abortRef.current = controller;
     setCounting(true);
@@ -270,28 +420,95 @@ export function PhotoCountCapture({
     setResult(null);
 
     try {
-      const body = new FormData();
-      body.append("image", image, image.name || "stock-count.jpg");
-      body.append("itemHint", `${itemName} (${unitName})`.slice(0, 240));
-      const response = cleanCountResult(
-        await fetchJson<PhotoCountResult>("/api/v1/ai/count", {
-          method: "POST",
-          body,
-          signal: controller.signal,
-        }),
-      );
+      const startRetryDeadline = Date.now() + (isResumingAttempt ? 4_000 : 25_000);
+      let initial: PhotoCountResult | PhotoCountProcessing;
+      while (true) {
+        const body = new FormData();
+        body.append("image", image, image.name || "stock-count.jpg");
+        body.append("itemHint", itemName.slice(0, 240));
+        body.append("itemId", itemId);
+        try {
+          initial = await readCountResponse(
+            await fetch("/api/v1/ai/count", {
+              method: "POST",
+              headers: { "Idempotency-Key": attemptId },
+              body,
+              signal: controller.signal,
+            }),
+          );
+          break;
+        } catch (error) {
+          if (
+            error instanceof CountRequestError &&
+            error.status === 409 &&
+            error.retryAfterSeconds !== undefined &&
+            Date.now() < startRetryDeadline
+          ) {
+            await waitForCountRetry(
+              Math.min(
+                Math.max(250, startRetryDeadline - Date.now()),
+                error.retryAfterSeconds * 1_000,
+              ),
+              controller.signal,
+            );
+            continue;
+          }
+          throw error;
+        }
+      }
+      let rawResult: PhotoCountResult;
+      if ("count" in initial) {
+        rawResult = initial;
+      } else {
+        didReceiveJob = true;
+        const expiresAt = Date.parse(initial.expiresAt);
+        const remainingMilliseconds = Number.isFinite(expiresAt)
+          ? Math.max(10_000, expiresAt - Date.now() + 10_000)
+          : 5 * 60_000 + 10_000;
+        window.clearTimeout(timeout);
+        timeout = window.setTimeout(() => {
+          didTimeOut = true;
+          controller.abort();
+        }, Math.min(remainingMilliseconds, 11 * 60_000));
+        rawResult = await pollCountJob(initial, controller.signal);
+      }
+      attemptIdRef.current = null;
+      const response = cleanCountResult(rawResult);
       setResult(response);
       if (response.count > 0) onCount(response);
     } catch (countError) {
+      if (didTimeOut) {
+        if (didReceiveJob) attemptIdRef.current = null;
+        setError("Counting took too long and was stopped. Please try another photo.");
+        return;
+      }
       if (controller.signal.aborted) return;
+      if (
+        !didReceiveJob &&
+        countError instanceof CountRequestError &&
+        !(
+          countError.status === 409 &&
+          countError.retryAfterSeconds !== undefined
+        )
+      ) {
+        attemptIdRef.current = null;
+      }
+      if (
+        didReceiveJob &&
+        countError instanceof CountRequestError &&
+        countError.terminal
+      ) {
+        attemptIdRef.current = null;
+      }
       setError(
         countError instanceof Error
           ? countError.message
           : "The objects could not be counted from this photo.",
       );
     } finally {
+      window.clearTimeout(timeout);
       if (abortRef.current === controller) abortRef.current = null;
-      if (!controller.signal.aborted) setCounting(false);
+      if (!controller.signal.aborted || didTimeOut) setCounting(false);
     }
   }
 
@@ -320,7 +537,7 @@ export function PhotoCountCapture({
             <span className="block text-xs font-semibold text-slate-900">
               Count pieces from a photo
             </span>
-            <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">
+            <span className="mt-0.5 block text-[11px] leading-4 text-slate-600">
               Take a photo and let AI fill the quantity.
             </span>
           </span>
@@ -341,7 +558,7 @@ export function PhotoCountCapture({
           </span>
           <div>
             <h3 className="text-xs font-semibold text-slate-900">Photo piece counter</h3>
-            <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
+            <p className="mt-0.5 text-[10px] leading-4 text-slate-600">
               Spread pieces out, shoot from above, and avoid overlaps where possible.
             </p>
           </div>
@@ -353,7 +570,7 @@ export function PhotoCountCapture({
             setExpanded(false);
           }}
           disabled={busy}
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40"
           aria-label="Close photo counter"
         >
           <X className="size-4" aria-hidden="true" />
@@ -389,7 +606,7 @@ export function PhotoCountCapture({
             <span className="mt-2 text-xs font-semibold text-slate-800">
               {preparing ? "Preparing photo…" : "Take or choose a photo"}
             </span>
-            <span className="mt-1 text-[10px] text-slate-400">
+            <span className="mt-1 text-[10px] text-slate-600">
               The photo is analyzed for this count and is not attached to the item.
             </span>
           </label>
@@ -417,24 +634,36 @@ export function PhotoCountCapture({
                   <p className="truncate text-[11px] font-semibold text-slate-700">
                     {image.name || "Camera photo"}
                   </p>
-                  <p className="mt-1 text-[10px] leading-4 text-slate-500">
+                  <p className="mt-1 text-[10px] leading-4 text-slate-600">
                     AI will count visible {unitName}s matching “{itemName}”. You can correct
                     the quantity before booking.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void countObjects()}
-                      disabled={busy || disabled}
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-wait disabled:opacity-50"
-                    >
-                      {counting ? (
-                        <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-                      ) : (
+                    {counting ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          abortRef.current?.abort();
+                          abortRef.current = null;
+                          setCounting(false);
+                          setError("Stopped waiting. You can resume the same count.");
+                        }}
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3.5 text-xs font-semibold text-rose-700 shadow-sm transition hover:bg-rose-50"
+                      >
+                        <X className="size-4" aria-hidden="true" />
+                        Stop waiting
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void countObjects()}
+                        disabled={busy || disabled}
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-wait disabled:opacity-50"
+                      >
                         <Sparkles className="size-4" aria-hidden="true" />
-                      )}
-                      {counting ? "Counting pieces…" : "Count pieces"}
-                    </button>
+                        Count pieces
+                      </button>
+                    )}
                     <label
                       htmlFor={inputId}
                       className="inline-flex h-9 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
@@ -462,7 +691,7 @@ export function PhotoCountCapture({
                       <strong className="text-lg tabular-nums">{result.count}</strong>
                       {result.detectedItem}
                     </span>
-                    <span className="rounded-full bg-white/80 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                    <span className="rounded-full bg-white/80 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-slate-600">
                       {confidence}% confidence
                     </span>
                   </div>
@@ -478,7 +707,7 @@ export function PhotoCountCapture({
         )}
 
         {result && (result.explanation || result.warnings.length > 0 || !result.isExact) ? (
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-[10px] leading-4 text-slate-500">
+          <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-[10px] leading-4 text-slate-600">
             {result.explanation ? <p>{result.explanation}</p> : null}
             {!result.isExact ? (
               <p className="mt-1.5 font-semibold text-amber-700">
@@ -491,7 +720,7 @@ export function PhotoCountCapture({
                 {warning}
               </p>
             ))}
-            <p className="mt-2 text-[9px] text-slate-400">Analyzed with {result.model}</p>
+            <p className="mt-2 text-[9px] text-slate-600">Analyzed with {result.model}</p>
           </div>
         ) : null}
 

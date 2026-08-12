@@ -109,7 +109,7 @@ type BuildForm = {
 };
 
 const inputClass =
-  "h-10 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-sm text-[#30343a] outline-none transition placeholder:text-[#9aa0aa] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#9298a2]";
+  "h-10 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-sm text-[#30343a] outline-none transition placeholder:text-[#5f6672] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#5f6672]";
 const labelClass = "block text-[11px] font-semibold text-[#555c67]";
 
 function localDateTime(value: Date | string = new Date()) {
@@ -186,12 +186,12 @@ function SectionHeading({
   return (
     <div className="flex flex-col gap-3 border-b border-[#eceef1] px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
       <div className="flex min-w-0 items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#f0f2f4] text-[#68707c]">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#f0f2f4] text-[#5f6672]">
           {icon}
         </span>
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-[#292c31]">{title}</h2>
-          <p className="mt-0.5 text-[12px] leading-5 text-[#858c96]">{description}</p>
+          <p className="mt-0.5 text-[12px] leading-5 text-[#5f6672]">{description}</p>
         </div>
       </div>
       {trailing ? <div className="shrink-0 pl-12 sm:pl-0">{trailing}</div> : null}
@@ -666,7 +666,7 @@ export function AssemblyManager({
           <div className="border-b border-[#eceef1] p-4 sm:p-5">
             <label className="relative block">
               <span className="sr-only">Search inventory components</span>
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#9298a2]" aria-hidden="true" />
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#5f6672]" aria-hidden="true" />
               <input
                 value={query}
                 onFocus={() => setSearchOpen(true)}
@@ -686,7 +686,7 @@ export function AssemblyManager({
                     setQuery("");
                     setSearchResults([]);
                   }}
-                  className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-[#989ea8] hover:bg-[#f0f2f4]"
+                  className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-[#5f6672] hover:bg-[#f0f2f4]"
                   aria-label="Clear component search"
                 >
                   <X className="size-3.5" aria-hidden="true" />
@@ -696,7 +696,7 @@ export function AssemblyManager({
               {searchOpen && query.trim().length >= 2 ? (
                 <div className="absolute inset-x-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-xl border border-[#dfe2e7] bg-white shadow-[var(--shadow-md)]">
                   {searching ? (
-                    <div className="px-4 py-5 text-center text-[12px] text-[#858c96]">Searching inventory…</div>
+                    <div className="px-4 py-5 text-center text-[12px] text-[#5f6672]">Searching inventory…</div>
                   ) : searchResults.length ? (
                     <div className="max-h-72 overflow-y-auto p-1.5">
                       {searchResults.map((resource) => (
@@ -707,21 +707,21 @@ export function AssemblyManager({
                           onClick={() => addComponent(resource)}
                           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-[#f5f6f8]"
                         >
-                          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#eeedff] text-[#635bff]">
+                          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#eeedff] text-[#5147d9]">
                             <Package className="size-4" aria-hidden="true" />
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-[13px] font-semibold text-[#30343a]">{resource.name}</span>
-                            <span className="mt-0.5 block truncate text-[10px] text-[#9298a2]">
+                            <span className="mt-0.5 block truncate text-[10px] text-[#5f6672]">
                               {resource.sku || "No SKU"} · {resource.quantity} available
                             </span>
                           </span>
-                          <Plus className="size-4 shrink-0 text-[#635bff]" aria-hidden="true" />
+                          <Plus className="size-4 shrink-0 text-[#5147d9]" aria-hidden="true" />
                         </button>
                       ))}
                     </div>
                   ) : (
-                    <div className="px-4 py-5 text-center text-[12px] text-[#858c96]">No unselected items found.</div>
+                    <div className="px-4 py-5 text-center text-[12px] text-[#5f6672]">No unselected items found.</div>
                   )}
                 </div>
               ) : null}
@@ -736,7 +736,7 @@ export function AssemblyManager({
                   <div key={component.resourceId} className="p-4 sm:p-5">
                     <div className="grid gap-4 lg:grid-cols-[minmax(210px,1fr)_130px_140px_auto] lg:items-start">
                       <div className="flex min-w-0 items-start gap-3">
-                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f0f2f4] text-[#68707c]">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f0f2f4] text-[#5f6672]">
                           {component.trackingMode === "serialized" ? (
                             <Barcode className="size-[18px]" aria-hidden="true" />
                           ) : (
@@ -746,11 +746,11 @@ export function AssemblyManager({
                         <div className="min-w-0 pt-0.5">
                           <Link
                             href={`/inventory/${component.resourceId}`}
-                            className="block truncate text-[13px] font-semibold text-[#30343a] hover:text-[#635bff]"
+                            className="block truncate text-[13px] font-semibold text-[#30343a] hover:text-[#5147d9]"
                           >
                             {component.name}
                           </Link>
-                          <p className="mt-1 truncate text-[10px] text-[#9298a2]">
+                          <p className="mt-1 truncate text-[10px] text-[#5f6672]">
                             {component.sku || "No SKU"} · {component.trackingMode}
                           </p>
                         </div>
@@ -788,7 +788,7 @@ export function AssemblyManager({
                           type="button"
                           onClick={() => moveComponent(index, -1)}
                           disabled={index === 0}
-                          className="grid size-9 place-items-center rounded-lg border border-[#dfe2e7] bg-white text-[#68707c] hover:bg-[#f5f6f8] disabled:opacity-30"
+                          className="grid size-9 place-items-center rounded-lg border border-[#dfe2e7] bg-white text-[#5f6672] hover:bg-[#f5f6f8] disabled:opacity-30"
                           aria-label={`Move ${component.name} up`}
                         >
                           <ArrowUp className="size-3.5" aria-hidden="true" />
@@ -797,7 +797,7 @@ export function AssemblyManager({
                           type="button"
                           onClick={() => moveComponent(index, 1)}
                           disabled={index === components.length - 1}
-                          className="grid size-9 place-items-center rounded-lg border border-[#dfe2e7] bg-white text-[#68707c] hover:bg-[#f5f6f8] disabled:opacity-30"
+                          className="grid size-9 place-items-center rounded-lg border border-[#dfe2e7] bg-white text-[#5f6672] hover:bg-[#f5f6f8] disabled:opacity-30"
                           aria-label={`Move ${component.name} down`}
                         >
                           <ArrowDown className="size-3.5" aria-hidden="true" />
@@ -818,7 +818,7 @@ export function AssemblyManager({
                     </div>
 
                     <label className={`${labelClass} mt-3 block lg:ml-[52px]`}>
-                      Assembly note <span className="font-normal text-[#989ea8]">· optional</span>
+                      Assembly note <span className="font-normal text-[#5f6672]">· optional</span>
                       <input
                         value={component.note ?? ""}
                         maxLength={1000}
@@ -844,7 +844,7 @@ export function AssemblyManager({
 
           {dirty ? (
             <div className="flex flex-col gap-3 border-t border-[#eceef1] bg-[#fafbfc] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <p className="text-[11px] text-[#858c96]">Unsaved BOM changes do not affect stock or builds.</p>
+              <p className="text-[11px] text-[#5f6672]">Unsaved BOM changes do not affect stock or builds.</p>
               <Button size="sm" onClick={() => void saveBom()} disabled={savingBom}>
                 {savingBom ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <Save className="size-3.5" aria-hidden="true" />}
                 Save changes
@@ -908,7 +908,7 @@ export function AssemblyManager({
                     </label>
                   </div>
                   <label className={labelClass}>
-                    Finished-stock location <span className="font-normal text-[#989ea8]">· optional</span>
+                    Finished-stock location <span className="font-normal text-[#5f6672]">· optional</span>
                     <input
                       value={buildForm.location}
                       maxLength={240}
@@ -920,7 +920,7 @@ export function AssemblyManager({
                     />
                   </label>
                   <label className={labelClass}>
-                    Build note <span className="font-normal text-[#989ea8]">· optional</span>
+                    Build note <span className="font-normal text-[#5f6672]">· optional</span>
                     <textarea
                       rows={3}
                       value={buildForm.note}
@@ -947,26 +947,26 @@ export function AssemblyManager({
                         placeholder="One code per line"
                         className={`${inputClass} mt-1.5 h-auto resize-y py-3 font-mono text-xs`}
                       />
-                      <span className={cn("mt-1.5 block text-[10px]", outputCodesValid ? "text-[#858c96]" : "text-[#b83243]")}>Optional. Leave blank to generate codes, or enter exactly {buildQuantity} unique {buildQuantity === 1 ? "code" : "codes"}.</span>
+                      <span className={cn("mt-1.5 block text-[10px]", outputCodesValid ? "text-[#5f6672]" : "text-[#b83243]")}>Optional. Leave blank to generate codes, or enter exactly {buildQuantity} unique {buildQuantity === 1 ? "code" : "codes"}.</span>
                     </label>
                   ) : null}
                 </div>
 
                 <div className="min-w-0">
                   <div className="overflow-hidden rounded-xl border border-[#e4e7eb]">
-                    <div className="hidden grid-cols-[minmax(180px,1fr)_90px_90px_90px] gap-3 border-b border-[#eceef1] bg-[#fafbfc] px-4 py-2.5 text-[9px] font-semibold uppercase tracking-[0.09em] text-[#949aa4] sm:grid">
+                    <div className="hidden grid-cols-[minmax(180px,1fr)_90px_90px_90px] gap-3 border-b border-[#eceef1] bg-[#fafbfc] px-4 py-2.5 text-[9px] font-semibold uppercase tracking-[0.09em] text-[#5f6672] sm:grid">
                       <span>Component</span><span>Required</span><span>Available</span><span>After build</span>
                     </div>
                     <div className="divide-y divide-[#eceef1]">
                       {preview.map((component) => (
                         <div key={component.resourceId} className={cn("grid gap-3 px-4 py-3 sm:grid-cols-[minmax(180px,1fr)_90px_90px_90px] sm:items-center", component.shortage && "bg-[#fffafa]")}>
                           <div className="min-w-0">
-                            <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-[#30343a] hover:text-[#635bff]">{component.name}</Link>
-                            <p className="mt-0.5 text-[9px] text-[#9298a2]">{component.quantityPerAssembly} per finished item</p>
+                            <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-[#30343a] hover:text-[#5147d9]">{component.name}</Link>
+                            <p className="mt-0.5 text-[9px] text-[#5f6672]">{component.quantityPerAssembly} per finished item</p>
                           </div>
-                          <div className="flex items-center justify-between sm:block"><span className="text-[9px] uppercase text-[#989ea8] sm:hidden">Required</span><span className="text-[12px] font-semibold tabular-nums text-[#30343a]">{component.required}</span></div>
-                          <div className="flex items-center justify-between sm:block"><span className="text-[9px] uppercase text-[#989ea8] sm:hidden">Available</span><span className={cn("text-[12px] font-semibold tabular-nums", component.shortage ? "text-[#b83243]" : "text-[#30343a]")}>{component.availableQuantity}</span></div>
-                          <div className="flex items-center justify-between sm:block"><span className="text-[9px] uppercase text-[#989ea8] sm:hidden">After build</span><span className={cn("text-[12px] font-semibold tabular-nums", component.remaining < 0 ? "text-[#b83243]" : component.remaining === 0 ? "text-[#9b5300]" : "text-[#11734d]")}>{component.remaining}</span></div>
+                          <div className="flex items-center justify-between sm:block"><span className="text-[9px] uppercase text-[#5f6672] sm:hidden">Required</span><span className="text-[12px] font-semibold tabular-nums text-[#30343a]">{component.required}</span></div>
+                          <div className="flex items-center justify-between sm:block"><span className="text-[9px] uppercase text-[#5f6672] sm:hidden">Available</span><span className={cn("text-[12px] font-semibold tabular-nums", component.shortage ? "text-[#b83243]" : "text-[#30343a]")}>{component.availableQuantity}</span></div>
+                          <div className="flex items-center justify-between sm:block"><span className="text-[9px] uppercase text-[#5f6672] sm:hidden">After build</span><span className={cn("text-[12px] font-semibold tabular-nums", component.remaining < 0 ? "text-[#b83243]" : component.remaining === 0 ? "text-[#9b5300]" : "text-[#11734d]")}>{component.remaining}</span></div>
                         </div>
                       ))}
                     </div>
@@ -991,9 +991,9 @@ export function AssemblyManager({
                                 key={unit.id}
                                 type="button"
                                 onClick={() => toggleUnit(component.resourceId, unit.id, component.required)}
-                                className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition", checked ? "border-[#8f88ff] bg-white text-[#5147d9]" : "border-[#dfddec] bg-white/60 text-[#68707c] hover:border-[#c5c0ff]")}
+                                className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition", checked ? "border-[#8f88ff] bg-white text-[#5147d9]" : "border-[#dfddec] bg-white/60 text-[#5f6672] hover:border-[#c5c0ff]")}
                               >
-                                <span className={cn("grid size-4 shrink-0 place-items-center rounded border", checked ? "border-[#635bff] bg-[#635bff] text-white" : "border-[#cfd3da] bg-white")}>{checked ? <Check className="size-3" aria-hidden="true" /> : null}</span>
+                                <span className={cn("grid size-4 shrink-0 place-items-center rounded border", checked ? "border-[#635bff] bg-[#5147d9] text-white" : "border-[#cfd3da] bg-white")}>{checked ? <Check className="size-3" aria-hidden="true" /> : null}</span>
                                 <span className="min-w-0"><span className="block truncate font-mono text-[10px] font-semibold">{unit.code}</span><span className="mt-0.5 block truncate text-[9px] opacity-70">{unit.location || "No location"}</span></span>
                               </button>
                             );
@@ -1006,7 +1006,7 @@ export function AssemblyManager({
               </div>
 
               <div className="flex flex-col gap-3 border-t border-[#eceef1] bg-[#fafbfc] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                <div className="text-[11px] text-[#747b86]">
+                <div className="text-[11px] text-[#5f6672]">
                   {dirty ? (
                     <span className="font-medium text-[#9b5300]">Save BOM changes before building.</span>
                   ) : preview.some((component) => component.shortage) ? (
@@ -1044,20 +1044,20 @@ export function AssemblyManager({
                       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e8f7f0] text-[#138a5b]"><Factory className="size-[18px]" aria-hidden="true" /></span>
                       <div className="min-w-0">
                         <p className="text-[13px] font-semibold text-[#30343a]">Built {build.quantity} {bom.resource.name}{build.quantity === 1 ? "" : "s"}</p>
-                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[#9298a2]">
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[#5f6672]">
                           <span className="flex items-center gap-1"><CalendarDays className="size-3" aria-hidden="true" /> {formatDate(build.occurredAt, true)}</span>
                           {build.location ? <span className="flex items-center gap-1"><MapPin className="size-3" aria-hidden="true" /> {build.location}</span> : null}
                           <span>{build.createdBy || "System"}</span>
                         </div>
-                        {build.note ? <p className="mt-2 text-[11px] leading-5 text-[#68707c]">{build.note}</p> : null}
+                        {build.note ? <p className="mt-2 text-[11px] leading-5 text-[#5f6672]">{build.note}</p> : null}
                       </div>
                     </div>
-                    <span className="shrink-0 font-mono text-[9px] text-[#a0a5ae]">{build.id.slice(0, 8)}</span>
+                    <span className="shrink-0 font-mono text-[9px] text-[#5f6672]">{build.id.slice(0, 8)}</span>
                   </div>
                   {build.components?.length ? (
                     <div className="mt-3 flex flex-wrap gap-1.5 pl-[52px]">
                       {build.components.map((component, index) => (
-                        <span key={component.resourceId ?? `${build.id}-${index}`} className="rounded-lg bg-[#f0f2f4] px-2.5 py-1 text-[10px] text-[#68707c]">{component.quantityConsumed ?? component.quantity ?? 0} × {component.name ?? component.resourceName ?? component.resourceId?.slice(0, 8) ?? "Deleted component"}</span>
+                        <span key={component.resourceId ?? `${build.id}-${index}`} className="rounded-lg bg-[#f0f2f4] px-2.5 py-1 text-[10px] text-[#5f6672]">{component.quantityConsumed ?? component.quantity ?? 0} × {component.name ?? component.resourceName ?? component.resourceId?.slice(0, 8) ?? "Deleted component"}</span>
                       ))}
                     </div>
                   ) : null}
@@ -1074,7 +1074,7 @@ export function AssemblyManager({
           )}
           {builds.length > 12 ? (
             <div className="border-t border-[#eceef1] bg-[#fafbfc] px-5 py-3 text-right">
-              <Link href={`/inventory/${resourceId}/stock`} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#635bff]">Open stock history <ArrowRight className="size-3" aria-hidden="true" /></Link>
+              <Link href={`/inventory/${resourceId}/stock`} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#5147d9]">Open stock history <ArrowRight className="size-3" aria-hidden="true" /></Link>
             </div>
           ) : null}
         </Card>

@@ -104,7 +104,7 @@ type ReceiptForm = {
 };
 
 const inputClass =
-  "h-10 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-sm text-[#30343a] outline-none transition placeholder:text-[#9aa0aa] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#9298a2]";
+  "h-10 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-sm text-[#30343a] outline-none transition placeholder:text-[#5f6672] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#5f6672]";
 const labelClass = "block text-[11px] font-semibold text-[#555c67]";
 
 const statusLabels: Record<PurchaseOrderStatus, string> = {
@@ -574,11 +574,11 @@ export function PurchaseOrdersManager({
     <div className="space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#635bff]">
+          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#5147d9]">
             <Truck className="size-3.5" aria-hidden="true" /> Incoming stock
           </div>
           <h1 className={cn("font-semibold tracking-[-0.04em] text-[#1e2126]", compact ? "text-xl" : "text-[28px] sm:text-[32px]")}>{resourceId ? "Orders for this item" : "Purchase orders"}</h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#747b86]">Track ordered quantities separately and add stock only when goods are received.</p>
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#5f6672]">Track ordered quantities separately and add stock only when goods are received.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" onClick={() => void loadOrders(true)} disabled={refreshing || loading}>
@@ -608,19 +608,19 @@ export function PurchaseOrdersManager({
       {!compact ? (
         <div className="grid gap-3 sm:grid-cols-3">
           <Card className="p-5">
-            <div className="flex items-center justify-between"><p className="text-[12px] font-semibold text-[#68707c]">Open orders</p><span className="grid size-9 place-items-center rounded-xl bg-[#eeedff] text-[#635bff]"><ShoppingCart className="size-[17px]" aria-hidden="true" /></span></div>
+            <div className="flex items-center justify-between"><p className="text-[12px] font-semibold text-[#5f6672]">Open orders</p><span className="grid size-9 place-items-center rounded-xl bg-[#eeedff] text-[#5147d9]"><ShoppingCart className="size-[17px]" aria-hidden="true" /></span></div>
             <p className="mt-5 text-[28px] font-semibold tracking-[-0.04em] text-[#24272c]">{metrics.active}</p>
-            <p className="mt-1 text-[11px] text-[#8c929c]">Ordered or partially received</p>
+            <p className="mt-1 text-[11px] text-[#5f6672]">Ordered or partially received</p>
           </Card>
           <Card className="p-5">
-            <div className="flex items-center justify-between"><p className="text-[12px] font-semibold text-[#68707c]">Units incoming</p><span className="grid size-9 place-items-center rounded-xl bg-[#e8f7f0] text-[#138a5b]"><PackageCheck className="size-[17px]" aria-hidden="true" /></span></div>
+            <div className="flex items-center justify-between"><p className="text-[12px] font-semibold text-[#5f6672]">Units incoming</p><span className="grid size-9 place-items-center rounded-xl bg-[#e8f7f0] text-[#138a5b]"><PackageCheck className="size-[17px]" aria-hidden="true" /></span></div>
             <p className="mt-5 text-[28px] font-semibold tracking-[-0.04em] text-[#24272c]">{metrics.openUnits.toLocaleString()}</p>
-            <p className="mt-1 text-[11px] text-[#8c929c]">Not counted as available yet</p>
+            <p className="mt-1 text-[11px] text-[#5f6672]">Not counted as available yet</p>
           </Card>
           <Card className={cn("p-5", metrics.overdue > 0 && "border-[#f0ddbd] bg-[#fffaf2]")}>
-            <div className="flex items-center justify-between"><p className="text-[12px] font-semibold text-[#68707c]">Overdue</p><span className={cn("grid size-9 place-items-center rounded-xl", metrics.overdue ? "bg-[#fff2e2] text-[#b56b0c]" : "bg-[#f0f2f4] text-[#68707c]")}><Clock3 className="size-[17px]" aria-hidden="true" /></span></div>
+            <div className="flex items-center justify-between"><p className="text-[12px] font-semibold text-[#5f6672]">Overdue</p><span className={cn("grid size-9 place-items-center rounded-xl", metrics.overdue ? "bg-[#fff2e2] text-[#b56b0c]" : "bg-[#f0f2f4] text-[#5f6672]")}><Clock3 className="size-[17px]" aria-hidden="true" /></span></div>
             <p className="mt-5 text-[28px] font-semibold tracking-[-0.04em] text-[#24272c]">{metrics.overdue}</p>
-            <p className="mt-1 text-[11px] text-[#8c929c]">Open orders past their ETA</p>
+            <p className="mt-1 text-[11px] text-[#5f6672]">Open orders past their ETA</p>
           </Card>
         </div>
       ) : null}
@@ -628,29 +628,29 @@ export function PurchaseOrdersManager({
       {createOpen ? (
         <Card className="overflow-visible">
           <div className="flex items-start gap-3 border-b border-[#eceef1] px-4 py-4 sm:px-5">
-            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#eeedff] text-[#635bff]"><ShoppingCart className="size-4" aria-hidden="true" /></span>
-            <div><h2 className="text-sm font-semibold text-[#292c31]">Create purchase order</h2><p className="mt-0.5 text-[12px] text-[#858c96]">The order is tracked as incoming; it does not change available stock.</p></div>
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#eeedff] text-[#5147d9]"><ShoppingCart className="size-4" aria-hidden="true" /></span>
+            <div><h2 className="text-sm font-semibold text-[#292c31]">Create purchase order</h2><p className="mt-0.5 text-[12px] text-[#5f6672]">The order is tracked as incoming; it does not change available stock.</p></div>
           </div>
           <form onSubmit={createOrder}>
             <div className="grid gap-4 border-b border-[#eceef1] p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
               <label className={labelClass}>Supplier<input value={orderForm.supplier} onChange={(event) => setOrderForm((current) => ({ ...current, supplier: event.target.value }))} placeholder="Supplier name" maxLength={240} className={`${inputClass} mt-1.5`} /></label>
-              <label className={labelClass}>Reference <span className="font-normal text-[#989ea8]">· optional</span><input value={orderForm.reference} onChange={(event) => setOrderForm((current) => ({ ...current, reference: event.target.value }))} placeholder="PO-1048" maxLength={160} className={`${inputClass} mt-1.5`} /></label>
+              <label className={labelClass}>Reference <span className="font-normal text-[#5f6672]">· optional</span><input value={orderForm.reference} onChange={(event) => setOrderForm((current) => ({ ...current, reference: event.target.value }))} placeholder="PO-1048" maxLength={160} className={`${inputClass} mt-1.5`} /></label>
               <label className={labelClass}>Ordered at<input type="datetime-local" required value={orderForm.orderedAt} onChange={(event) => setOrderForm((current) => ({ ...current, orderedAt: event.target.value }))} className={`${inputClass} mt-1.5`} /></label>
-              <label className={labelClass}>Expected arrival <span className="font-normal text-[#989ea8]">· optional</span><input type="date" min={dateInput()} value={orderForm.expectedAt} onChange={(event) => setOrderForm((current) => ({ ...current, expectedAt: event.target.value }))} className={`${inputClass} mt-1.5`} /></label>
-              <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>Order note <span className="font-normal text-[#989ea8]">· optional</span><textarea rows={2} value={orderForm.note} onChange={(event) => setOrderForm((current) => ({ ...current, note: event.target.value }))} maxLength={20000} placeholder="Terms, delivery instructions, or internal context" className={`${inputClass} mt-1.5 h-auto resize-y py-3`} /></label>
+              <label className={labelClass}>Expected arrival <span className="font-normal text-[#5f6672]">· optional</span><input type="date" min={dateInput()} value={orderForm.expectedAt} onChange={(event) => setOrderForm((current) => ({ ...current, expectedAt: event.target.value }))} className={`${inputClass} mt-1.5`} /></label>
+              <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>Order note <span className="font-normal text-[#5f6672]">· optional</span><textarea rows={2} value={orderForm.note} onChange={(event) => setOrderForm((current) => ({ ...current, note: event.target.value }))} maxLength={20000} placeholder="Terms, delivery instructions, or internal context" className={`${inputClass} mt-1.5 h-auto resize-y py-3`} /></label>
             </div>
 
             {!resourceId ? (
               <div className="relative border-b border-[#eceef1] p-4 sm:p-5">
                 <label className="relative block">
                   <span className="sr-only">Search inventory items</span>
-                  <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#9298a2]" aria-hidden="true" />
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#5f6672]" aria-hidden="true" />
                   <input value={itemQuery} onFocus={() => setItemSearchOpen(true)} onChange={(event) => { setItemQuery(event.target.value); setItemSearchOpen(true); }} placeholder="Search inventory to add an order line…" className={`${inputClass} pl-10 pr-10`} />
-                  {searchingItems ? <LoaderCircle className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-[#635bff]" aria-hidden="true" /> : null}
+                  {searchingItems ? <LoaderCircle className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-[#5147d9]" aria-hidden="true" /> : null}
                 </label>
                 {itemSearchOpen && itemQuery.trim().length >= 2 ? (
                   <div className="absolute inset-x-4 top-[calc(100%-14px)] z-30 overflow-hidden rounded-xl border border-[#dfe2e7] bg-white shadow-[var(--shadow-md)] sm:inset-x-5">
-                    {itemResults.length ? <div className="max-h-72 overflow-y-auto p-1.5">{itemResults.map((resource) => <button key={resource.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => addDraftLine(resource)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-[#f5f6f8]"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#f0f2f4] text-[#68707c]"><Package className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold text-[#30343a]">{resource.name}</span><span className="mt-0.5 block truncate text-[10px] text-[#9298a2]">{resource.sku || "No SKU"} · {resource.quantity} available</span></span><Plus className="size-4 text-[#635bff]" aria-hidden="true" /></button>)}</div> : <div className="px-4 py-5 text-center text-[12px] text-[#858c96]">{searchingItems ? "Searching inventory…" : "No unselected items found."}</div>}
+                    {itemResults.length ? <div className="max-h-72 overflow-y-auto p-1.5">{itemResults.map((resource) => <button key={resource.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => addDraftLine(resource)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-[#f5f6f8]"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#f0f2f4] text-[#5f6672]"><Package className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold text-[#30343a]">{resource.name}</span><span className="mt-0.5 block truncate text-[10px] text-[#5f6672]">{resource.sku || "No SKU"} · {resource.quantity} available</span></span><Plus className="size-4 text-[#5147d9]" aria-hidden="true" /></button>)}</div> : <div className="px-4 py-5 text-center text-[12px] text-[#5f6672]">{searchingItems ? "Searching inventory…" : "No unselected items found."}</div>}
                   </div>
                 ) : null}
               </div>
@@ -660,10 +660,10 @@ export function PurchaseOrdersManager({
               <div className="divide-y divide-[#eceef1]">
                 {draftLines.map((line) => (
                   <div key={line.resourceId} className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(190px,1fr)_130px_160px_minmax(180px,1fr)_auto] lg:items-start">
-                    <div className="flex min-w-0 items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f0f2f4] text-[#68707c]"><Package className="size-[18px]" aria-hidden="true" /></span><div className="min-w-0 pt-0.5"><Link href={`/inventory/${line.resourceId}`} className="block truncate text-[13px] font-semibold text-[#30343a] hover:text-[#635bff]">{line.resourceName}</Link><p className="mt-1 truncate text-[10px] text-[#9298a2]">{line.resourceSku || "No SKU"}</p></div></div>
+                    <div className="flex min-w-0 items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#f0f2f4] text-[#5f6672]"><Package className="size-[18px]" aria-hidden="true" /></span><div className="min-w-0 pt-0.5"><Link href={`/inventory/${line.resourceId}`} className="block truncate text-[13px] font-semibold text-[#30343a] hover:text-[#5147d9]">{line.resourceName}</Link><p className="mt-1 truncate text-[10px] text-[#5f6672]">{line.resourceSku || "No SKU"}</p></div></div>
                     <label className={labelClass}>Order quantity<input type="number" min="1" max="2000000000" step="1" required value={line.orderedQuantity} onChange={(event) => updateDraftLine(line.resourceId, { orderedQuantity: event.target.value })} className={`${inputClass} mt-1.5 tabular-nums`} /></label>
-                    <label className={labelClass}>Line ETA <span className="font-normal text-[#989ea8]">· optional</span><input type="date" value={line.expectedAt} onChange={(event) => updateDraftLine(line.resourceId, { expectedAt: event.target.value })} className={`${inputClass} mt-1.5`} /></label>
-                    <label className={labelClass}>Line note <span className="font-normal text-[#989ea8]">· optional</span><input value={line.note} onChange={(event) => updateDraftLine(line.resourceId, { note: event.target.value })} maxLength={20000} placeholder="Variant or packaging" className={`${inputClass} mt-1.5`} /></label>
+                    <label className={labelClass}>Line ETA <span className="font-normal text-[#5f6672]">· optional</span><input type="date" value={line.expectedAt} onChange={(event) => updateDraftLine(line.resourceId, { expectedAt: event.target.value })} className={`${inputClass} mt-1.5`} /></label>
+                    <label className={labelClass}>Line note <span className="font-normal text-[#5f6672]">· optional</span><input value={line.note} onChange={(event) => updateDraftLine(line.resourceId, { note: event.target.value })} maxLength={20000} placeholder="Variant or packaging" className={`${inputClass} mt-1.5`} /></label>
                     {!resourceId ? <button type="button" onClick={() => setDraftLines((current) => current.filter((item) => item.resourceId !== line.resourceId))} className="grid size-9 place-items-center rounded-lg border border-[#f1c7cc] bg-white text-[#b83243] hover:bg-[#fff5f6] lg:mt-[22px]" aria-label={`Remove ${line.resourceName}`}><X className="size-3.5" aria-hidden="true" /></button> : null}
                   </div>
                 ))}
@@ -673,7 +673,7 @@ export function PurchaseOrdersManager({
             )}
 
             <div className="flex flex-col gap-3 border-t border-[#eceef1] bg-[#fafbfc] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <p className="text-[11px] text-[#858c96]">{draftLines.length} {draftLines.length === 1 ? "item" : "items"} · {draftLines.reduce((total, line) => total + (Number(line.orderedQuantity) || 0), 0).toLocaleString()} units ordered</p>
+              <p className="text-[11px] text-[#5f6672]">{draftLines.length} {draftLines.length === 1 ? "item" : "items"} · {draftLines.reduce((total, line) => total + (Number(line.orderedQuantity) || 0), 0).toLocaleString()} units ordered</p>
               <div className="flex items-center justify-end gap-2"><Button variant="ghost" size="sm" onClick={() => { resetCreateForm(); setCreateOpen(false); }}>Cancel</Button><Button type="submit" disabled={creating || !draftLines.length}>{creating ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <ShoppingCart className="size-4" aria-hidden="true" />}{creating ? "Creating…" : "Create order"}</Button></div>
             </div>
           </form>
@@ -682,8 +682,8 @@ export function PurchaseOrdersManager({
 
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-[#e8eaed] p-3 sm:p-4 xl:flex-row xl:items-center xl:justify-between">
-          <label className="relative min-w-0 flex-1 xl:max-w-md"><span className="sr-only">Search purchase orders</span><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#9298a2]" aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search supplier, reference, or item…" className={`${inputClass} bg-[#f8f9fa] pl-10 pr-10`} />{query ? <button type="button" onClick={() => setQuery("")} className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-[#989ea8] hover:bg-[#eceef1]" aria-label="Clear order search"><X className="size-3.5" aria-hidden="true" /></button> : null}</label>
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-[#f0f2f4] p-1 sm:flex">{(Object.keys(filterLabels) as OrderFilter[]).map((value) => <button key={value} type="button" onClick={() => setFilter(value)} className={cn("inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[11px] font-semibold transition", filter === value ? "bg-white text-[#34383e] shadow-sm" : "text-[#727984] hover:text-[#34383e]")}>{filterLabels[value]} <span className={filter === value ? "text-[#635bff]" : "text-[#a0a5ae]"}>{filterCounts[value]}</span></button>)}</div>
+          <label className="relative min-w-0 flex-1 xl:max-w-md"><span className="sr-only">Search purchase orders</span><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#5f6672]" aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search supplier, reference, or item…" className={`${inputClass} bg-[#f8f9fa] pl-10 pr-10`} />{query ? <button type="button" onClick={() => setQuery("")} className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-[#5f6672] hover:bg-[#eceef1]" aria-label="Clear order search"><X className="size-3.5" aria-hidden="true" /></button> : null}</label>
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-[#f0f2f4] p-1 sm:flex">{(Object.keys(filterLabels) as OrderFilter[]).map((value) => <button key={value} type="button" onClick={() => setFilter(value)} className={cn("inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[11px] font-semibold transition", filter === value ? "bg-white text-[#34383e] shadow-sm" : "text-[#5f6672] hover:text-[#34383e]")}>{filterLabels[value]} <span className={filter === value ? "text-[#5147d9]" : "text-[#5f6672]"}>{filterCounts[value]}</span></button>)}</div>
         </div>
 
         {loading ? (
@@ -700,13 +700,13 @@ export function PurchaseOrdersManager({
               return (
                 <article key={order.id} className={cn("transition", isActive(order.status) && totalOpen > 0 && "bg-[#fdfdff]")}>
                   <button type="button" onClick={() => toggleExpanded(order.id)} className="flex w-full flex-col gap-4 px-4 py-4 text-left sm:flex-row sm:items-start sm:justify-between sm:px-5">
-                    <div className="flex min-w-0 items-start gap-3"><span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", order.status === "received" ? "bg-[#e8f7f0] text-[#138a5b]" : order.status === "cancelled" ? "bg-[#fff0f2] text-[#c34755]" : "bg-[#eeedff] text-[#635bff]")}>{order.status === "received" ? <CircleCheck className="size-[18px]" aria-hidden="true" /> : <Truck className="size-[18px]" aria-hidden="true" />}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-[13px] font-semibold text-[#30343a]">{order.supplier || "Supplier not set"}</h3><Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge></div><p className="mt-1 text-[10px] text-[#9298a2]">{order.reference || `Order ${order.id.slice(0, 8)}`} · ordered {formatDate(order.orderedAt)}</p><div className="mt-3 h-1.5 w-52 max-w-full overflow-hidden rounded-full bg-[#e8eaed]"><div className="h-full rounded-full bg-[#635bff] transition-all" style={{ width: `${progress}%` }} /></div><p className="mt-1.5 text-[9px] text-[#989ea8]">{totalReceived} received · {totalOpen} open · {totalOrdered} ordered</p></div></div>
-                    <div className="flex items-center justify-between gap-4 pl-[52px] sm:justify-end sm:pl-0"><div className="text-right"><p className="text-[10px] font-medium text-[#68707c]">{order.expectedAt ? `Expected ${formatDate(order.expectedAt)}` : "No ETA"}</p><p className="mt-1 text-[9px] text-[#a0a5ae]">{visibleLines.length} {visibleLines.length === 1 ? "line" : "lines"}</p></div>{expanded ? <ChevronUp className="size-4 text-[#9298a2]" aria-hidden="true" /> : <ChevronDown className="size-4 text-[#9298a2]" aria-hidden="true" />}</div>
+                    <div className="flex min-w-0 items-start gap-3"><span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", order.status === "received" ? "bg-[#e8f7f0] text-[#138a5b]" : order.status === "cancelled" ? "bg-[#fff0f2] text-[#c34755]" : "bg-[#eeedff] text-[#5147d9]")}>{order.status === "received" ? <CircleCheck className="size-[18px]" aria-hidden="true" /> : <Truck className="size-[18px]" aria-hidden="true" />}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-[13px] font-semibold text-[#30343a]">{order.supplier || "Supplier not set"}</h3><Badge tone={statusTone(order.status)}>{statusLabels[order.status]}</Badge></div><p className="mt-1 text-[10px] text-[#5f6672]">{order.reference || `Order ${order.id.slice(0, 8)}`} · ordered {formatDate(order.orderedAt)}</p><div className="mt-3 h-1.5 w-52 max-w-full overflow-hidden rounded-full bg-[#e8eaed]"><div className="h-full rounded-full bg-[#5147d9] transition-all" style={{ width: `${progress}%` }} /></div><p className="mt-1.5 text-[9px] text-[#5f6672]">{totalReceived} received · {totalOpen} open · {totalOrdered} ordered</p></div></div>
+                    <div className="flex items-center justify-between gap-4 pl-[52px] sm:justify-end sm:pl-0"><div className="text-right"><p className="text-[10px] font-medium text-[#5f6672]">{order.expectedAt ? `Expected ${formatDate(order.expectedAt)}` : "No ETA"}</p><p className="mt-1 text-[9px] text-[#5f6672]">{visibleLines.length} {visibleLines.length === 1 ? "line" : "lines"}</p></div>{expanded ? <ChevronUp className="size-4 text-[#5f6672]" aria-hidden="true" /> : <ChevronDown className="size-4 text-[#5f6672]" aria-hidden="true" />}</div>
                   </button>
 
                   {expanded ? (
                     <div className="border-t border-[#eceef1] bg-white">
-                      {order.note ? <p className="border-b border-[#eceef1] px-5 py-3 text-[11px] leading-5 text-[#68707c]">{order.note}</p> : null}
+                      {order.note ? <p className="border-b border-[#eceef1] px-5 py-3 text-[11px] leading-5 text-[#5f6672]">{order.note}</p> : null}
                       <div className="divide-y divide-[#eceef1]">
                         {visibleLines.map((line) => {
                           const openQuantity = effectiveLineOpen(line);
@@ -714,22 +714,22 @@ export function PurchaseOrdersManager({
                           return (
                             <div key={line.id}>
                               <div className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-[minmax(220px,1fr)_110px_110px_150px_auto] lg:items-center">
-                                <div className="flex min-w-0 items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#f0f2f4] text-[#68707c]"><Package className="size-4" aria-hidden="true" /></span><div className="min-w-0"><Link href={`/inventory/${line.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-[#30343a] hover:text-[#635bff]">{line.resourceName}</Link><p className="mt-0.5 truncate text-[9px] text-[#9298a2]">{line.resourceSku || "No SKU"} · {line.trackingMode}</p>{line.note ? <p className="mt-1.5 text-[10px] text-[#747b86]">{line.note}</p> : null}</div></div>
-                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-[#989ea8]">Ordered</span><p className="mt-0.5 text-[12px] font-semibold tabular-nums text-[#30343a]">{line.orderedQuantity}</p></div>
-                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-[#989ea8]">Open</span><p className={cn("mt-0.5 text-[12px] font-semibold tabular-nums", openQuantity ? "text-[#635bff]" : "text-[#11734d]")}>{openQuantity}</p></div>
-                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-[#989ea8]">ETA</span><p className="mt-0.5 text-[11px] font-medium text-[#68707c]">{formatDate(line.expectedAt ?? order.expectedAt)}</p></div>
+                                <div className="flex min-w-0 items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#f0f2f4] text-[#5f6672]"><Package className="size-4" aria-hidden="true" /></span><div className="min-w-0"><Link href={`/inventory/${line.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-[#30343a] hover:text-[#5147d9]">{line.resourceName}</Link><p className="mt-0.5 truncate text-[9px] text-[#5f6672]">{line.resourceSku || "No SKU"} · {line.trackingMode}</p>{line.note ? <p className="mt-1.5 text-[10px] text-[#5f6672]">{line.note}</p> : null}</div></div>
+                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-[#5f6672]">Ordered</span><p className="mt-0.5 text-[12px] font-semibold tabular-nums text-[#30343a]">{line.orderedQuantity}</p></div>
+                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-[#5f6672]">Open</span><p className={cn("mt-0.5 text-[12px] font-semibold tabular-nums", openQuantity ? "text-[#5147d9]" : "text-[#11734d]")}>{openQuantity}</p></div>
+                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-[#5f6672]">ETA</span><p className="mt-0.5 text-[11px] font-medium text-[#5f6672]">{formatDate(line.expectedAt ?? order.expectedAt)}</p></div>
                                 {openQuantity > 0 && (order.status === "ordered" || order.status === "partially-received") ? <Button size="sm" variant={lineReceiptOpen ? "ghost" : "secondary"} onClick={() => lineReceiptOpen ? setReceiptForm(null) : beginReceipt(order, line)}>{lineReceiptOpen ? <X className="size-3.5" aria-hidden="true" /> : <PackageCheck className="size-3.5" aria-hidden="true" />}{lineReceiptOpen ? "Close" : "Receive"}</Button> : <Badge tone={order.status === "cancelled" ? "danger" : openQuantity ? "neutral" : "success"}>{order.status === "cancelled" ? "Cancelled" : openQuantity ? "Pending" : "Complete"}</Badge>}
                               </div>
 
                               {lineReceiptOpen && receiptForm ? (
                                 <form onSubmit={receiveLine} className="border-t border-[#dedaFF] bg-[#f8f7ff] px-4 py-4 sm:px-5">
-                                  <div className="mb-4 flex items-start gap-2 rounded-lg bg-white/80 px-3 py-2.5 text-[10px] leading-4 text-[#68707c]"><PackageCheck className="mt-0.5 size-3.5 shrink-0 text-[#635bff]" aria-hidden="true" /><span>Receiving creates available stock and an immutable receipt movement. You can receive only part of the open quantity.</span></div>
+                                  <div className="mb-4 flex items-start gap-2 rounded-lg bg-white/80 px-3 py-2.5 text-[10px] leading-4 text-[#5f6672]"><PackageCheck className="mt-0.5 size-3.5 shrink-0 text-[#5147d9]" aria-hidden="true" /><span>Receiving creates available stock and an immutable receipt movement. You can receive only part of the open quantity.</span></div>
                                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                                    <label className={labelClass}>Quantity<input type="number" min="1" max={receiptForm.maxQuantity} step="1" required value={receiptForm.quantity} onChange={(event) => setReceiptForm((current) => current ? { ...current, quantity: event.target.value } : current)} className={`${inputClass} mt-1.5 tabular-nums`} /><span className="mt-1 block text-[9px] font-normal text-[#989ea8]">Up to {receiptForm.maxQuantity} this receipt</span></label>
+                                    <label className={labelClass}>Quantity<input type="number" min="1" max={receiptForm.maxQuantity} step="1" required value={receiptForm.quantity} onChange={(event) => setReceiptForm((current) => current ? { ...current, quantity: event.target.value } : current)} className={`${inputClass} mt-1.5 tabular-nums`} /><span className="mt-1 block text-[9px] font-normal text-[#5f6672]">Up to {receiptForm.maxQuantity} this receipt</span></label>
                                     <label className={labelClass}>Received at<input type="datetime-local" required value={receiptForm.receivedAt} onChange={(event) => setReceiptForm((current) => current ? { ...current, receivedAt: event.target.value } : current)} className={`${inputClass} mt-1.5`} /></label>
-                                    <label className={labelClass}>Stock location <span className="font-normal text-[#989ea8]">· optional</span><input value={receiptForm.location} maxLength={240} onChange={(event) => setReceiptForm((current) => current ? { ...current, location: event.target.value } : current)} placeholder="Workshop · Shelf A3" className={`${inputClass} mt-1.5`} /></label>
-                                    <label className={labelClass}>Receipt note <span className="font-normal text-[#989ea8]">· optional</span><input value={receiptForm.note} maxLength={20000} onChange={(event) => setReceiptForm((current) => current ? { ...current, note: event.target.value } : current)} placeholder="Packing slip or condition" className={`${inputClass} mt-1.5`} /></label>
-                                    {receiptForm.trackingMode === "serialized" ? <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>Unit codes<textarea rows={4} value={receiptForm.unitCodes} onChange={(event) => setReceiptForm((current) => current ? { ...current, unitCodes: event.target.value } : current)} placeholder="One unique unit code per line" className={`${inputClass} mt-1.5 h-auto resize-y py-3 font-mono text-xs`} /><span className="mt-1 block text-[9px] font-normal text-[#989ea8]">Enter exactly {Number(receiptForm.quantity) || 0} unique codes.</span></label> : null}
+                                    <label className={labelClass}>Stock location <span className="font-normal text-[#5f6672]">· optional</span><input value={receiptForm.location} maxLength={240} onChange={(event) => setReceiptForm((current) => current ? { ...current, location: event.target.value } : current)} placeholder="Workshop · Shelf A3" className={`${inputClass} mt-1.5`} /></label>
+                                    <label className={labelClass}>Receipt note <span className="font-normal text-[#5f6672]">· optional</span><input value={receiptForm.note} maxLength={20000} onChange={(event) => setReceiptForm((current) => current ? { ...current, note: event.target.value } : current)} placeholder="Packing slip or condition" className={`${inputClass} mt-1.5`} /></label>
+                                    {receiptForm.trackingMode === "serialized" ? <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>Unit codes<textarea rows={4} value={receiptForm.unitCodes} onChange={(event) => setReceiptForm((current) => current ? { ...current, unitCodes: event.target.value } : current)} placeholder="One unique unit code per line" className={`${inputClass} mt-1.5 h-auto resize-y py-3 font-mono text-xs`} /><span className="mt-1 block text-[9px] font-normal text-[#5f6672]">Enter exactly {Number(receiptForm.quantity) || 0} unique codes.</span></label> : null}
                                   </div>
                                   <div className="mt-4 flex justify-end gap-2 border-t border-[#dfddec] pt-4"><Button type="button" variant="ghost" size="sm" onClick={() => setReceiptForm(null)}>Cancel</Button><Button type="submit" size="sm" disabled={receiving}>{receiving ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <PackageCheck className="size-3.5" aria-hidden="true" />}{receiving ? "Receiving…" : "Receive into stock"}</Button></div>
                                 </form>
@@ -738,7 +738,7 @@ export function PurchaseOrdersManager({
                           );
                         })}
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#eceef1] bg-[#fafbfc] px-5 py-3 text-[9px] text-[#9298a2]"><span className="flex items-center gap-1"><CalendarClock className="size-3" aria-hidden="true" /> Ordered {formatDate(order.orderedAt, true)}</span>{order.expectedAt ? <span className="flex items-center gap-1"><Truck className="size-3" aria-hidden="true" /> Expected {formatDate(order.expectedAt)}</span> : null}<span>{order.createdBy || "System"}</span><span className="ml-auto font-mono">{order.id.slice(0, 8)}</span></div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#eceef1] bg-[#fafbfc] px-5 py-3 text-[9px] text-[#5f6672]"><span className="flex items-center gap-1"><CalendarClock className="size-3" aria-hidden="true" /> Ordered {formatDate(order.orderedAt, true)}</span>{order.expectedAt ? <span className="flex items-center gap-1"><Truck className="size-3" aria-hidden="true" /> Expected {formatDate(order.expectedAt)}</span> : null}<span>{order.createdBy || "System"}</span><span className="ml-auto font-mono">{order.id.slice(0, 8)}</span></div>
                     </div>
                   ) : null}
                 </article>
@@ -756,7 +756,7 @@ export function PurchaseOrdersManager({
       </Card>
 
       {compact && metrics.openUnits > 0 ? (
-        <div className="flex items-start gap-2 rounded-xl border border-[#dedaFF] bg-[#f8f7ff] px-3.5 py-3 text-[10px] leading-4 text-[#5f5a85]"><AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-[#635bff]" aria-hidden="true" /><span>{metrics.openUnits} ordered {metrics.openUnits === 1 ? "unit is" : "units are"} still in transit and excluded from available stock.</span></div>
+        <div className="flex items-start gap-2 rounded-xl border border-[#dedaFF] bg-[#f8f7ff] px-3.5 py-3 text-[10px] leading-4 text-[#5f5a85]"><AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-[#5147d9]" aria-hidden="true" /><span>{metrics.openUnits} ordered {metrics.openUnits === 1 ? "unit is" : "units are"} still in transit and excluded from available stock.</span></div>
       ) : null}
     </div>
   );

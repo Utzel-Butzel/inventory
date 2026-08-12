@@ -111,7 +111,7 @@ type InventoryTypeOption = {
 };
 
 const inputClass =
-  "mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50 disabled:text-slate-400";
+  "mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-600 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50 disabled:text-slate-600";
 const labelClass = "block text-xs font-semibold text-slate-700";
 
 const toForm = (resource: ClientResource): FormState => ({
@@ -536,7 +536,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
 
   if (loading) {
     return (
-      <div className="grid min-h-[60vh] place-items-center text-slate-400">
+      <div className="grid min-h-[60vh] place-items-center text-slate-600">
         <LoaderCircle className="animate-spin" />
       </div>
     );
@@ -547,7 +547,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
     <form onSubmit={onSubmit} className="mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <header className="mb-6 flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-400">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-600">
             <Link href="/inventory" className="inline-flex items-center gap-1 hover:text-slate-800">
               <ArrowLeft size={13} /> Inventory
             </Link>
@@ -558,11 +558,11 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
             {isNew ? "Add inventory item" : resource?.name}
           </h1>
           {!isNew && resource ? (
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-slate-600">
               Updated {new Date(resource.updatedAt).toLocaleString()} · ID {resource.id.slice(0, 8)}
             </p>
           ) : (
-            <p className="mt-1 text-sm text-slate-500">Create manually or let images do the first draft.</p>
+            <p className="mt-1 text-sm text-slate-600">Create manually or let images do the first draft.</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -579,7 +579,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
             <button
               type="button"
               onClick={deleteItem}
-              className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+              className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
               aria-label="Delete item"
             >
               <Trash2 size={17} />
@@ -619,7 +619,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.025)] sm:p-6">
             <div className="mb-5 flex items-center gap-3 border-b border-slate-100 pb-4">
               <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-600"><Package size={17} /></div>
-              <div><h2 className="text-sm font-semibold text-slate-950">Core details</h2><p className="text-xs text-slate-400">Identity, category and availability</p></div>
+              <div><h2 className="text-sm font-semibold text-slate-950">Core details</h2><p className="text-xs text-slate-600">Identity, category and availability</p></div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className={`${labelClass} sm:col-span-2`}>
@@ -659,11 +659,11 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
                 />
               </label>
               <label className={`${labelClass} sm:col-span-2`}>
-                Tags <span className="font-normal text-slate-400">· comma separated</span>
+                Tags <span className="font-normal text-slate-600">· comma separated</span>
                 <input value={form.tags} onChange={(event) => setField("tags", event.target.value)} placeholder="woodworking, power-tool, 230v" className={inputClass} />
               </label>
               <label className={`${labelClass} sm:col-span-2`}>
-                Categories <span className="font-normal text-slate-400">· comma separated</span>
+                Categories <span className="font-normal text-slate-600">· comma separated</span>
                 <input value={form.categories} onChange={(event) => setField("categories", event.target.value)} placeholder="Workshop, Production" className={inputClass} />
               </label>
             </div>
@@ -677,7 +677,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-slate-950">Custom fields</h2>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-600">
                     Fields configured for this inventory type and its categories
                   </p>
                 </div>
@@ -718,11 +718,11 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
               />
             ) : (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-5 py-8 text-center">
-                <Braces className="mx-auto size-5 text-slate-300" aria-hidden="true" />
+                <Braces className="mx-auto size-5 text-slate-600" aria-hidden="true" />
                 <p className="mt-2 text-xs font-semibold text-slate-600">
                   No custom fields apply to this item
                 </p>
-                <p className="mx-auto mt-1 max-w-md text-[11px] leading-4 text-slate-400">
+                <p className="mx-auto mt-1 max-w-md text-[11px] leading-4 text-slate-600">
                   Administrators can configure fields for {form.type} records or matching
                   categories in Settings.
                 </p>
@@ -732,7 +732,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.025)] sm:p-6">
             <div className="mb-5 flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-700"><ImageIcon size={17} /></div><div><h2 className="text-sm font-semibold text-slate-950">Media</h2><p className="text-xs text-slate-400">Images, video and PDFs · {totalMedia} file{totalMedia === 1 ? "" : "s"}</p></div></div>
+              <div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-700"><ImageIcon size={17} /></div><div><h2 className="text-sm font-semibold text-slate-950">Media</h2><p className="text-xs text-slate-600">Images, video and PDFs · {totalMedia} file{totalMedia === 1 ? "" : "s"}</p></div></div>
             </div>
 
             {itemMedia.length ? (
@@ -748,7 +748,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
                         ) : item.kind === "video" ? (
                           <video src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
                         ) : (
-                          <div className="grid h-full place-items-center text-slate-400"><Icon size={34} strokeWidth={1.5} /></div>
+                          <div className="grid h-full place-items-center text-slate-600"><Icon size={34} strokeWidth={1.5} /></div>
                         )}
                       </div>
                       <div className="absolute inset-x-2 top-2 flex items-center justify-between">
@@ -789,14 +789,14 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
               className={`flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-7 text-center transition ${dragging ? "border-emerald-500 bg-emerald-50" : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100/70"}`}
             >
               <input type="file" multiple accept="image/*,video/*,application/pdf" onChange={onFileInput} className="sr-only" />
-              <UploadCloud size={24} className="mb-2 text-slate-400" />
+              <UploadCloud size={24} className="mb-2 text-slate-600" />
               <span className="text-sm font-semibold text-slate-700">Drop files here or browse</span>
-              <span className="mt-1 text-xs text-slate-400">JPG, PNG, WebP, HEIC, MP4, MOV or PDF · up to 12 files</span>
+              <span className="mt-1 text-xs text-slate-600">JPG, PNG, WebP, HEIC, MP4, MOV or PDF · up to 12 files</span>
             </label>
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-            <div className="mb-5 flex items-center gap-3 border-b border-slate-100 pb-4"><div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-50 text-amber-700"><CircleDollarSign size={17} /></div><div><h2 className="text-sm font-semibold text-slate-950">Operations</h2><p className="text-xs text-slate-400">Tracking, value and internal notes</p></div></div>
+            <div className="mb-5 flex items-center gap-3 border-b border-slate-100 pb-4"><div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-50 text-amber-700"><CircleDollarSign size={17} /></div><div><h2 className="text-sm font-semibold text-slate-950">Operations</h2><p className="text-xs text-slate-600">Tracking, value and internal notes</p></div></div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <label className={labelClass}>SKU<input value={form.sku} onChange={(event) => setField("sku", event.target.value)} placeholder="TOOL-0042" className={inputClass} /></label>
               <label className={labelClass}>Serial number<input value={form.serialNumber} onChange={(event) => setField("serialNumber", event.target.value)} className={inputClass} /></label>
@@ -827,8 +827,8 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
             <div className="mb-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-violet-600 text-white shadow-lg shadow-violet-600/20"><Sparkles size={19} /></div><div><h2 className="text-sm font-semibold text-slate-950">AI catalogue studio</h2><p className="text-xs text-violet-700">Vision analysis + image editing</p></div></div>
             {isNew ? (
               <div className="space-y-3">
-                <label className="flex items-start gap-3 rounded-xl border border-violet-100 bg-white/80 p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => setAutoAnalyze(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="block text-xs font-semibold text-slate-800">Analyze images</span><span className="mt-0.5 block text-[11px] leading-4 text-slate-500">Generate title, description, type, tags and alt text.</span></span></label>
-                <label className="flex items-start gap-3 rounded-xl border border-violet-100 bg-white/80 p-3"><input type="checkbox" checked={autoCover} onChange={(event) => setAutoCover(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="block text-xs font-semibold text-slate-800">Generate studio cover</span><span className="mt-0.5 block text-[11px] leading-4 text-slate-500">Create a clean square hero image from the first photo.</span></span></label>
+                <label className="flex items-start gap-3 rounded-xl border border-violet-100 bg-white/80 p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => setAutoAnalyze(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="block text-xs font-semibold text-slate-800">Analyze images</span><span className="mt-0.5 block text-[11px] leading-4 text-slate-600">Generate title, description, type, tags and alt text.</span></span></label>
+                <label className="flex items-start gap-3 rounded-xl border border-violet-100 bg-white/80 p-3"><input type="checkbox" checked={autoCover} onChange={(event) => setAutoCover(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="block text-xs font-semibold text-slate-800">Generate studio cover</span><span className="mt-0.5 block text-[11px] leading-4 text-slate-600">Create a clean square hero image from the first photo.</span></span></label>
                 {autoCover ? (
                   <ImageModelSelector
                     preference={imageModelPreference}
@@ -836,11 +836,11 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
                     className="rounded-xl border border-violet-100 bg-white/80 p-3"
                   />
                 ) : null}
-                <p className="text-[11px] leading-4 text-slate-400">AI runs only after the original files are safely stored. You can always edit the result.</p>
+                <p className="text-[11px] leading-4 text-slate-600">AI runs only after the original files are safely stored. You can always edit the result.</p>
               </div>
             ) : (
               <div className="space-y-3">
-                <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runAnalysis(resourceId, true)} className="flex w-full items-center justify-between rounded-xl bg-violet-600 px-3.5 py-3 text-left text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:opacity-40"><span className="flex items-center gap-2">{aiAction === "analyze" ? <LoaderCircle size={15} className="animate-spin" /> : <Bot size={15} />}Analyze & rewrite fields</span><ChevronRight size={15} /></button>
+                <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runAnalysis(resourceId, true)} className="flex w-full items-center justify-between rounded-xl bg-violet-600 px-3.5 py-3 text-left text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:bg-[#5f6672] disabled:opacity-100"><span className="flex items-center gap-2">{aiAction === "analyze" ? <LoaderCircle size={15} className="animate-spin" /> : <Bot size={15} />}Analyze & rewrite fields</span><ChevronRight size={15} /></button>
                 <div className="rounded-xl border border-violet-100 bg-white/80 p-3">
                   <label className="text-[11px] font-semibold text-slate-600">
                     Cover direction
@@ -851,7 +851,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
                     disabled={Boolean(aiAction)}
                     className="mt-3"
                   />
-                  <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runCover(resourceId)} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 transition hover:bg-violet-100 disabled:opacity-40">{aiAction === "cover" ? <LoaderCircle size={14} className="animate-spin" /> : <WandSparkles size={14} />}Generate new cover</button>
+                  <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runCover(resourceId)} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 transition hover:bg-violet-100 disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-600 disabled:opacity-100">{aiAction === "cover" ? <LoaderCircle size={14} className="animate-spin" /> : <WandSparkles size={14} />}Generate new cover</button>
                 </div>
                 {!hasImage ? <p className="text-[11px] text-amber-700">Upload and save an image to enable AI actions.</p> : null}
                 {resource?.aiMetadata ? <div className="flex items-center justify-between rounded-lg bg-violet-50 px-3 py-2 text-[10px] text-violet-700"><span>Last model</span><span className="max-w-40 truncate font-mono">{resource.aiMetadata.model ?? "AI"}</span></div> : null}
@@ -867,20 +867,20 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
                 <ChevronRight size={14} />
               </Link>
             ) : (
-              <p className="mb-3 text-[11px] leading-4 text-slate-400">Save the item first to draw its point or outline in the map editor.</p>
+              <p className="mb-3 text-[11px] leading-4 text-slate-600">Save the item first to draw its point or outline in the map editor.</p>
             )}
             {resource?.mapFeatures.length ? <p className="mb-3 text-[11px] leading-4 text-violet-700">Coordinates are derived from the saved map geometry. Edit them on the map to keep both views in sync.</p> : null}
             <label className={labelClass}>Latitude<input type="number" step="any" value={form.gpsLatitude} onChange={(event) => setField("gpsLatitude", event.target.value)} placeholder="51.0504" disabled={Boolean(resource?.mapFeatures.length)} className={inputClass} /></label>
             <label className={`${labelClass} mt-3`}>Longitude<input type="number" step="any" value={form.gpsLongitude} onChange={(event) => setField("gpsLongitude", event.target.value)} placeholder="13.7373" disabled={Boolean(resource?.mapFeatures.length)} className={inputClass} /></label>
-            <label className={`${labelClass} mt-3`}>Altitude <span className="font-normal text-slate-400">· metres</span><input type="number" step="any" value={form.gpsAltitude} onChange={(event) => setField("gpsAltitude", event.target.value)} className={inputClass} /></label>
-            {mapHref ? <a href={mapHref} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-900">Open on map <ChevronRight size={13} /></a> : <p className="mt-3 text-[11px] leading-4 text-slate-400">GPS can be read from image metadata, or entered manually.</p>}
+            <label className={`${labelClass} mt-3`}>Altitude <span className="font-normal text-slate-600">· metres</span><input type="number" step="any" value={form.gpsAltitude} onChange={(event) => setField("gpsAltitude", event.target.value)} className={inputClass} /></label>
+            {mapHref ? <a href={mapHref} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-900">Open on map <ChevronRight size={13} /></a> : <p className="mt-3 text-[11px] leading-4 text-slate-600">GPS can be read from image metadata, or entered manually.</p>}
           </section>
 
           {!isNew && resource ? (
             <section className="rounded-2xl border border-slate-200 bg-white p-5">
-              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Record</h2>
-              <button type="button" onClick={() => void navigator.clipboard.writeText(resource.id).then(() => setNotice("Record ID copied."))} className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 text-left"><span className="min-w-0"><span className="block text-[10px] text-slate-400">Resource ID</span><span className="block truncate font-mono text-xs text-slate-600">{resource.id}</span></span><Copy size={14} className="ml-3 shrink-0 text-slate-400" /></button>
-              <button type="button" onClick={() => void loadResource()} className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-900"><RefreshCcw size={13} /> Reload from server</button>
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-600">Record</h2>
+              <button type="button" onClick={() => void navigator.clipboard.writeText(resource.id).then(() => setNotice("Record ID copied."))} className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 text-left"><span className="min-w-0"><span className="block text-[10px] text-slate-600">Resource ID</span><span className="block truncate font-mono text-xs text-slate-600">{resource.id}</span></span><Copy size={14} className="ml-3 shrink-0 text-slate-600" /></button>
+              <button type="button" onClick={() => void loadResource()} className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900"><RefreshCcw size={13} /> Reload from server</button>
             </section>
           ) : null}
         </aside>

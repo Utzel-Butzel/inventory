@@ -8,7 +8,7 @@ export default function SpacesPage() {
   return (
     <Suspense
       fallback={
-        <div className="grid min-h-[calc(100dvh-68px)] place-items-center text-sm text-slate-400">
+        <div className="grid min-h-[calc(100dvh-68px)] place-items-center text-sm text-slate-600">
           Loading 3D rooms…
         </div>
       }

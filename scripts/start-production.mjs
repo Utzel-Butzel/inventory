@@ -27,6 +27,11 @@ if (authSecret.length < 32 || knownUnsafeSecrets.includes(authSecret)) {
   errors.push("AUTH_SECRET must be a non-placeholder secret of at least 32 characters.");
 }
 
+const countJobSecret = value("REPLICATE_COUNT_JOB_SECRET");
+if (countJobSecret && countJobSecret.length < 32) {
+  errors.push("REPLICATE_COUNT_JOB_SECRET must contain at least 32 characters when set.");
+}
+
 const authUrl = value("AUTH_URL");
 if (!authUrl) {
   errors.push("AUTH_URL is required.");

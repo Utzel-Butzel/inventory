@@ -137,9 +137,9 @@ type WorkflowDraft = {
 type Notice = { tone: "success" | "error" | "info"; message: string };
 
 const inputClass =
-  "mt-1.5 h-10 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-[13px] text-[#30343a] outline-none transition placeholder:text-[#a1a6af] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#777e89]";
+  "mt-1.5 h-10 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-[13px] text-[#30343a] outline-none transition placeholder:text-[#5f6672] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#5f6672]";
 const textAreaClass =
-  "mt-1.5 min-h-20 w-full resize-y rounded-xl border border-[#dfe2e7] bg-white px-3 py-2.5 text-[13px] leading-5 text-[#30343a] outline-none transition placeholder:text-[#a1a6af] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#777e89]";
+  "mt-1.5 min-h-20 w-full resize-y rounded-xl border border-[#dfe2e7] bg-white px-3 py-2.5 text-[13px] leading-5 text-[#30343a] outline-none transition placeholder:text-[#5f6672] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#5f6672]";
 const labelClass = "block text-[11px] font-semibold text-[#555c67]";
 
 const unitStatusLabels: Record<UnitStatus, string> = {
@@ -493,16 +493,16 @@ function FlowStep({
           className="absolute bottom-[-18px] left-[18px] top-10 w-px bg-[#dfe2e7] sm:left-[22px] sm:top-12"
         />
       ) : null}
-      <span className="relative z-10 grid size-[38px] place-items-center rounded-xl border border-[#dcd9ff] bg-[#eeedff] text-[#635bff] shadow-sm sm:size-[46px]">
+      <span className="relative z-10 grid size-[38px] place-items-center rounded-xl border border-[#dcd9ff] bg-[#eeedff] text-[#5147d9] shadow-sm sm:size-[46px]">
         {icon}
-        <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-[#635bff] text-[8px] font-bold text-white ring-2 ring-[#f7f8fa]">
+        <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-[#5147d9] text-[8px] font-bold text-white ring-2 ring-[#f7f8fa]">
           {number}
         </span>
       </span>
       <Card className="min-w-0 p-4 sm:p-5">
         <div className="mb-4">
           <h2 className="text-[14px] font-semibold text-[#2b2f34]">{title}</h2>
-          <p className="mt-1 text-[11px] leading-5 text-[#7c838e]">{description}</p>
+          <p className="mt-1 text-[11px] leading-5 text-[#5f6672]">{description}</p>
         </div>
         {children}
       </Card>
@@ -531,7 +531,7 @@ function Toggle({
       onClick={() => onChange(!checked)}
       className={cn(
         "relative h-6 w-11 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-55",
-        checked ? "bg-[#635bff]" : "bg-[#cdd1d7]",
+        checked ? "bg-[#5147d9]" : "bg-[#cdd1d7]",
       )}
     >
       <span
@@ -882,14 +882,14 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
     <div>
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="animate-fade-up">
-          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#78808a]">
-            <Workflow className="size-3.5 text-[#635bff]" aria-hidden="true" />
+          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#5f6672]">
+            <Workflow className="size-3.5 text-[#5147d9]" aria-hidden="true" />
             Scan automation
           </div>
           <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-[#1e2126] sm:text-[32px]">
             Build scan workflows visually.
           </h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#747b86]">
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#5f6672]">
             Turn a QR code into an identified stock unit with guided inputs and consistent properties—without code.
           </p>
         </div>
@@ -923,7 +923,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
           <div className="flex items-center justify-between border-b border-[#e8eaed] px-4 py-3.5">
             <div>
               <h2 className="text-[13px] font-semibold text-[#30343a]">Workflows</h2>
-              <p className="mt-0.5 text-[10px] text-[#9096a0]">
+              <p className="mt-0.5 text-[10px] text-[#5f6672]">
                 {workflows.length} configured
               </p>
             </div>
@@ -932,7 +932,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                 type="button"
                 onClick={chooseTemplate}
                 disabled={interactionBusy}
-                className="grid size-8 place-items-center rounded-lg border border-[#dfe2e7] text-[#6f7681] transition hover:border-[#cbc7ff] hover:bg-[#f5f4ff] hover:text-[#635bff] disabled:cursor-not-allowed disabled:opacity-50"
+                className="grid size-8 place-items-center rounded-lg border border-[#dfe2e7] text-[#5f6672] transition hover:border-[#cbc7ff] hover:bg-[#f5f4ff] hover:text-[#5147d9] disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Create a workflow from the template"
               >
                 <Plus className="size-4" aria-hidden="true" />
@@ -963,7 +963,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                         "grid size-8 shrink-0 place-items-center rounded-lg",
                         workflow.enabled
                           ? "bg-[#e7f7ef] text-[#168258]"
-                          : "bg-[#eceef1] text-[#858c96]",
+                          : "bg-[#eceef1] text-[#5f6672]",
                       )}
                     >
                       <QrCode className="size-4" aria-hidden="true" />
@@ -972,14 +972,14 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                       <span className="block truncate text-[12px] font-semibold text-[#33373d]">
                         {workflow.name}
                       </span>
-                      <span className="mt-0.5 block truncate text-[10px] text-[#8a919b]">
+                      <span className="mt-0.5 block truncate text-[10px] text-[#5f6672]">
                         {resource?.name ?? "Inventory item unavailable"} · v{workflow.revision}
                       </span>
                     </span>
                     <ChevronRight
                       className={cn(
                         "size-3.5 shrink-0 transition",
-                        active ? "text-[#635bff]" : "text-[#b0b5bd] group-hover:text-[#777e89]",
+                        active ? "text-[#5147d9]" : "text-[#5f6672] group-hover:text-[#5f6672]",
                       )}
                       aria-hidden="true"
                     />
@@ -1000,9 +1000,9 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
             />
           )}
 
-          <div className="border-t border-[#e8eaed] bg-[#fafbfc] px-4 py-3 text-[10px] leading-4 text-[#8a919b]">
+          <div className="border-t border-[#e8eaed] bg-[#fafbfc] px-4 py-3 text-[10px] leading-4 text-[#5f6672]">
             <span className="inline-flex items-center gap-1.5 font-medium text-[#646b76]">
-              <ShieldCheck className="size-3.5 text-[#635bff]" aria-hidden="true" />
+              <ShieldCheck className="size-3.5 text-[#5147d9]" aria-hidden="true" />
               Safe by design
             </span>
             <p className="mt-1">Only configured fields and allowed stock actions run after a scan.</p>
@@ -1023,7 +1023,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                   {dirty ? <Badge tone="warning">Unsaved changes</Badge> : null}
                   {!draft.id ? <Badge tone="brand">Template</Badge> : null}
                 </div>
-                <p className="mt-1 text-[11px] text-[#858c96]">
+                <p className="mt-1 text-[11px] text-[#5f6672]">
                   {draft.id ? `Revision ${draft.revision ?? 1}` : "Based on the attached Paperless Paper QR-code use case"}
                 </p>
               </div>
@@ -1101,7 +1101,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-[11px] font-semibold text-[#4e555f]">Workflow enabled</p>
-                    <p className="mt-0.5 text-[10px] leading-4 text-[#8a919b]">Available on the Scan screen.</p>
+                    <p className="mt-0.5 text-[10px] leading-4 text-[#5f6672]">Available on the Scan screen.</p>
                   </div>
                   <Toggle
                     checked={draft.enabled}
@@ -1125,8 +1125,8 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
           </Card>
 
           {!canManage ? (
-            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[#e0e2e7] bg-white px-4 py-3.5 text-[12px] leading-5 text-[#69707b] shadow-[var(--shadow-sm)]">
-              <Eye className="mt-0.5 size-4 shrink-0 text-[#635bff]" aria-hidden="true" />
+            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[#e0e2e7] bg-white px-4 py-3.5 text-[12px] leading-5 text-[#5f6672] shadow-[var(--shadow-sm)]">
+              <Eye className="mt-0.5 size-4 shrink-0 text-[#5147d9]" aria-hidden="true" />
               You can inspect and locally preview this workflow. Editing, enabling, and deleting require editor access.
             </div>
           ) : null}
@@ -1140,12 +1140,12 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
             >
               <div className="flex flex-col gap-3 rounded-xl border border-[#e4e7eb] bg-[#fafbfc] p-3.5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-9 place-items-center rounded-lg bg-white text-[#635bff] shadow-sm ring-1 ring-[#e2e4e8]">
+                  <span className="grid size-9 place-items-center rounded-lg bg-white text-[#5147d9] shadow-sm ring-1 ring-[#e2e4e8]">
                     <ScanLine className="size-[18px]" aria-hidden="true" />
                   </span>
                   <div>
                     <p className="text-[12px] font-semibold text-[#3c4148]">QR code scanned</p>
-                    <p className="mt-0.5 text-[10px] text-[#8b929c]">Pass the decoded text into this workflow</p>
+                    <p className="mt-0.5 text-[10px] text-[#5f6672]">Pass the decoded text into this workflow</p>
                   </div>
                 </div>
                 <Badge tone="brand">Scan trigger</Badge>
@@ -1179,7 +1179,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                       "h-9 rounded-lg px-3 text-[11px] font-semibold transition disabled:cursor-not-allowed",
                       draft.extraction.mode === mode
                         ? "bg-white text-[#3e3a9f] shadow-sm"
-                        : "text-[#747b86] hover:text-[#383c42] disabled:opacity-65",
+                        : "text-[#5f6672] hover:text-[#383c42] disabled:opacity-65",
                     )}
                   >
                     {label}
@@ -1339,7 +1339,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                   <div key={field.uid} className="rounded-xl border border-[#e1e4e8] bg-[#fafbfc] p-3.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <span className="grid size-6 place-items-center rounded-md bg-[#eeedff] text-[10px] font-bold text-[#635bff]">
+                        <span className="grid size-6 place-items-center rounded-md bg-[#eeedff] text-[10px] font-bold text-[#5147d9]">
                           {fieldIndex + 1}
                         </span>
                         <p className="text-[12px] font-semibold text-[#42474f]">Select field</p>
@@ -1397,7 +1397,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
 
                     <div className="mt-4 border-t border-[#e4e7eb] pt-3">
                       <div className="mb-2 flex items-center justify-between gap-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-[#858c96]">Options</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-[#5f6672]">Options</p>
                         {canManage ? (
                           <button
                             type="button"
@@ -1491,7 +1491,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                 ))}
 
                 {draft.inputFields.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-[#d6dae0] px-4 py-6 text-center text-[11px] text-[#858c96]">
+                  <div className="rounded-xl border border-dashed border-[#d6dae0] px-4 py-6 text-center text-[11px] text-[#5f6672]">
                     This workflow has no scan-time questions.
                   </div>
                 ) : null}
@@ -1537,7 +1537,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-[11px] font-semibold text-[#4e555f]">Create missing unit</p>
-                      <p className="mt-1 text-[10px] leading-4 text-[#8a919b]">Register this EPD number if it is new.</p>
+                      <p className="mt-1 text-[10px] leading-4 text-[#5f6672]">Register this EPD number if it is new.</p>
                     </div>
                     <Toggle
                       checked={draft.createMissingUnit}
@@ -1572,7 +1572,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-semibold text-[#4e555f]">Fixed properties</p>
-                    <p className="mt-0.5 text-[10px] text-[#8a919b]">These values are applied on every successful scan.</p>
+                    <p className="mt-0.5 text-[10px] text-[#5f6672]">These values are applied on every successful scan.</p>
                   </div>
                   {canManage ? (
                     <Button
@@ -1635,7 +1635,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                         </label>
                       </div>
                       <div className="mt-2.5 flex items-center justify-between gap-3">
-                        <p className="text-[10px] text-[#7d848f]">
+                        <p className="text-[10px] text-[#5f6672]">
                           Visible as <strong className="text-[#4b5159]">{visiblePropertyValue(property)}</strong>
                         </p>
                         {canManage ? (
@@ -1657,7 +1657,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     </div>
                   ))}
                   {draft.fixedProperties.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-[#d6dae0] px-4 py-5 text-center text-[11px] text-[#858c96]">No fixed properties.</p>
+                    <p className="rounded-xl border border-dashed border-[#d6dae0] px-4 py-5 text-center text-[11px] text-[#5f6672]">No fixed properties.</p>
                   ) : null}
                 </div>
               </div>
@@ -1667,12 +1667,12 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
           <Card className="mt-4 overflow-hidden">
             <div className="border-b border-[#e8eaed] bg-[linear-gradient(110deg,#faf9ff,#fff)] px-4 py-4 sm:px-5">
               <div className="flex items-center gap-3">
-                <span className="grid size-9 place-items-center rounded-xl bg-[#eeedff] text-[#635bff]">
+                <span className="grid size-9 place-items-center rounded-xl bg-[#eeedff] text-[#5147d9]">
                   <QrCode className="size-[18px]" aria-hidden="true" />
                 </span>
                 <div>
                   <h2 className="text-[13px] font-semibold text-[#30343a]">Local scan preview</h2>
-                  <p className="mt-0.5 text-[10px] text-[#858c96]">Test extraction and selections without changing inventory.</p>
+                  <p className="mt-0.5 text-[10px] text-[#5f6672]">Test extraction and selections without changing inventory.</p>
                 </div>
                 <Badge tone="neutral" className="ml-auto">No write</Badge>
               </div>
@@ -1711,7 +1711,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
               </div>
 
               <div className="rounded-xl border border-[#e1e4e8] bg-[#fafbfc] p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#858c96]">Result</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5f6672]">Result</p>
                 {extractionResult.error ? (
                   <div className="mt-3 flex items-start gap-2 rounded-lg bg-[#fff0f2] p-3 text-[11px] leading-5 text-[#a63e4b]">
                     <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
@@ -1719,7 +1719,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                   </div>
                 ) : (
                   <div className="mt-3 rounded-lg border border-[#cce9db] bg-[#f0faf5] p-3">
-                    <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#4e7c65]">
+                    <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#28543f]">
                       <CheckCircle2 className="size-3.5 text-[#168258]" aria-hidden="true" />
                       {draft.identifierPropertyKey || "Identifier"}
                     </div>
@@ -1729,16 +1729,16 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
 
                 <div className="mt-4 space-y-2.5 text-[11px]">
                   <div className="flex items-start justify-between gap-3">
-                    <span className="text-[#858c96]">Target</span>
+                    <span className="text-[#5f6672]">Target</span>
                     <strong className="text-right font-semibold text-[#464c54]">{selectedResource?.name ?? "Not selected"}</strong>
                   </div>
                   <div className="flex items-start justify-between gap-3">
-                    <span className="text-[#858c96]">Unit</span>
+                    <span className="text-[#5f6672]">Unit</span>
                     <strong className="text-right font-semibold text-[#464c54]">{draft.createMissingUnit ? "Find or create" : "Find existing only"}</strong>
                   </div>
                   {draft.fixedProperties.map((property) => (
                     <div key={property.uid} className="flex items-start justify-between gap-3">
-                      <span className="text-[#858c96]">{property.label || property.key}</span>
+                      <span className="text-[#5f6672]">{property.label || property.key}</span>
                       <strong className="text-right font-semibold text-[#464c54]">{visiblePropertyValue(property)}</strong>
                     </div>
                   ))}
@@ -1746,7 +1746,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     const option = field.options.find((item) => item.value === previewInputs[field.uid]);
                     return (
                       <div key={field.uid} className="flex items-center justify-between gap-3">
-                        <span className="text-[#858c96]">{field.label || field.key}</span>
+                        <span className="text-[#5f6672]">{field.label || field.key}</span>
                         <strong className="inline-flex items-center gap-1.5 text-right font-semibold text-[#464c54]">
                           {option?.color ? <span className="size-2.5 rounded-full border border-black/10" style={{ backgroundColor: option.color }} /> : null}
                           {option?.label ?? "Not selected"}

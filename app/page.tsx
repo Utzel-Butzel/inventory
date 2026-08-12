@@ -113,7 +113,7 @@ function AutomationPreview() {
         <div className="overflow-hidden rounded-[20px] bg-[#f6f7f9] p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-[#665cff]">
+              <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-[#5147d9]">
                 AI capture
               </p>
               <p className="mt-1 text-lg font-semibold tracking-[-0.04em] text-[#25262a]">
@@ -158,7 +158,7 @@ function AutomationPreview() {
                     </span>
                     <div className="min-w-0">
                       <p className="text-[8px] font-semibold text-[#3d3f44]">{label}</p>
-                      <p className="mt-0.5 truncate text-[7px] text-[#969ba4]">{value}</p>
+                      <p className="mt-0.5 truncate text-[7px] text-[#5f6672]">{value}</p>
                     </div>
                   </div>
                 ))}
@@ -171,7 +171,7 @@ function AutomationPreview() {
                   </span>
                   <div className="min-w-0">
                     <p className="truncate text-[9px] font-semibold text-[#34363b]">Cordless impact driver</p>
-                    <p className="mt-1 text-[7px] text-[#959aa3]">Tool · Workshop · TOOL-0042</p>
+                    <p className="mt-1 text-[7px] text-[#5f6672]">Tool · Workshop · TOOL-0042</p>
                   </div>
                 </div>
                 <div className="mt-3 flex gap-1.5">
@@ -203,13 +203,13 @@ export default function HomePage() {
           <div className="relative mx-auto max-w-[1240px] px-5 pb-24 pt-16 sm:px-8 sm:pb-32 sm:pt-24 lg:pt-28">
             <div className="grid items-center gap-16 lg:grid-cols-[0.86fr_1.14fr] lg:gap-10">
               <div className="relative z-10 max-w-[650px] animate-fade-up">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#665cff]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5147d9]">
                   AI-native inventory · MIT open source
                 </p>
 
                 <h1 className="mt-5 text-[clamp(3.35rem,6.7vw,6.25rem)] font-semibold leading-[0.91] tracking-[-0.07em] text-[#17181b]">
                   Take a photo.
-                  <span className="block text-[#665cff]">AI builds the record.</span>
+                  <span className="block text-[#5147d9]">AI builds the record.</span>
                 </h1>
                 <p className="mt-7 max-w-[570px] text-[17px] leading-7 text-[#65676d] sm:text-[19px] sm:leading-8">
                   Open Inventory recognizes the item, writes the details, and
@@ -235,7 +235,7 @@ export default function HomePage() {
                   </a>
                 </div>
 
-                <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-[11px] font-semibold text-[#71737a]">
+                <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-[11px] font-semibold text-[#5f6672]">
                   {["MIT licensed", "Self-hosted", "Native iOS app"].map((item) => (
                     <span key={item} className="flex items-center gap-1.5">
                       <Check className="size-3 text-[#17815c]" strokeWidth={2.5} />
@@ -255,7 +255,7 @@ export default function HomePage() {
         <section id="ai" className="scroll-mt-24 bg-[#f7f5ef] py-24 sm:py-32">
           <div className="mx-auto max-w-[1240px] px-5 sm:px-8">
             <div className="max-w-3xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#665cff]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5147d9]">
                 Three AI jobs
               </p>
               <h2 className="mt-4 text-[42px] font-semibold leading-[0.98] tracking-[-0.06em] text-[#1b1c20] sm:text-[60px]">
@@ -272,7 +272,7 @@ export default function HomePage() {
                       <span className={`grid size-11 place-items-center rounded-2xl ${feature.tone}`}>
                         <Icon className="size-5" strokeWidth={1.9} />
                       </span>
-                      <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#a4a39f]">{feature.label}</span>
+                      <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#5f6672]">{feature.label}</span>
                     </div>
                     <h3 className="mt-16 text-[26px] font-semibold tracking-[-0.045em] text-[#222327]">{feature.title}</h3>
                     <p className="mt-3 text-[15px] leading-6 text-[#6f7177]">{feature.copy}</p>
@@ -345,7 +345,7 @@ export default function HomePage() {
                   </span>
                   <div>
                     <p className="text-[9px] font-semibold text-[#303238]">Capture queue ready</p>
-                    <p className="mt-0.5 text-[8px] text-[#9297a0]">Upload · analyze · cover</p>
+                    <p className="mt-0.5 text-[8px] text-[#5f6672]">Upload · analyze · cover</p>
                   </div>
                 </div>
               </div>
@@ -353,7 +353,7 @@ export default function HomePage() {
 
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-black/[0.08] bg-white/70 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#5c5f65]">
-                <Smartphone className="size-3.5 text-[#665cff]" />
+                <Smartphone className="size-3.5 text-[#5147d9]" />
                 Native iOS app
               </span>
               <h2 className="mt-5 max-w-2xl text-[44px] font-semibold leading-[0.97] tracking-[-0.06em] sm:text-[62px]">
@@ -375,7 +375,7 @@ export default function HomePage() {
                   const Icon = item.icon;
                   return (
                     <div key={item.text} className="flex items-center gap-3 rounded-2xl bg-white/70 p-4 text-sm font-medium text-[#4e5056]">
-                      <Icon className="size-4 shrink-0 text-[#665cff]" />
+                      <Icon className="size-4 shrink-0 text-[#5147d9]" />
                       {item.text}
                     </div>
                   );
@@ -391,7 +391,7 @@ export default function HomePage() {
                 Explore the iOS app
                 <ArrowRight className="size-4" />
               </a>
-              <p className="mt-3 text-xs text-[#8a8c91]">Included in the repository · iOS 17 or newer</p>
+              <p className="mt-3 text-xs text-[#5f6672]">Included in the repository · iOS 17 or newer</p>
             </div>
           </div>
         </section>
@@ -399,7 +399,7 @@ export default function HomePage() {
         <section id="docker" className="scroll-mt-20 bg-[#f7f5ef] py-24 sm:py-32">
           <div className="mx-auto grid max-w-[1240px] gap-14 px-5 sm:px-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-center">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#665cff]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5147d9]">
                 MIT licensed · self-hosted
               </p>
               <h2 className="mt-4 text-[44px] font-semibold leading-[0.97] tracking-[-0.06em] sm:text-[60px]">

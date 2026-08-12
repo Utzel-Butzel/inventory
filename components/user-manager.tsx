@@ -241,7 +241,7 @@ export function UserManager() {
                 </span>
               ) : null}
             </div>
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-zinc-600">
               Individual local accounts sharing the same inventory workspace.
             </p>
           </div>
@@ -251,7 +251,7 @@ export function UserManager() {
             type="button"
             onClick={() => void load(true)}
             disabled={loading || refreshing}
-            className="grid size-10 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-500 shadow-sm transition hover:border-zinc-300 hover:text-zinc-900 disabled:opacity-50"
+            className="grid size-10 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-zinc-300 hover:text-zinc-900 disabled:opacity-50"
             aria-label="Refresh users"
           >
             <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -315,7 +315,7 @@ export function UserManager() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((current) => !current)}
-                  className="absolute inset-y-0 right-0 grid w-11 place-items-center text-zinc-400 hover:text-zinc-700"
+                  className="absolute inset-y-0 right-0 grid w-11 place-items-center text-zinc-600 hover:text-zinc-700"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -338,7 +338,7 @@ export function UserManager() {
             </label>
           </div>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs leading-5 text-zinc-500">
+            <p className="text-xs leading-5 text-zinc-600">
               Send the password through a secure channel. There is no public registration.
             </p>
             <button
@@ -381,7 +381,7 @@ export function UserManager() {
             <div>
               <AlertTriangle className="mx-auto size-6 text-rose-500" />
               <p className="mt-3 text-sm font-semibold text-zinc-900">Users could not be loaded</p>
-              <p className="mt-1 text-sm text-zinc-500">{loadError}</p>
+              <p className="mt-1 text-sm text-zinc-600">{loadError}</p>
               <button type="button" onClick={() => void load()} className="mt-3 text-sm font-semibold text-indigo-600 hover:underline">
                 Try again
               </button>
@@ -396,20 +396,20 @@ export function UserManager() {
                 <article key={user.id} className={`rounded-2xl px-3 py-4 transition hover:bg-zinc-50 sm:px-4 ${user.isActive ? "" : "opacity-60"}`}>
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
-                      <span className={`grid size-11 shrink-0 place-items-center rounded-full text-xs font-bold ${user.isActive ? "bg-indigo-100 text-indigo-700" : "bg-zinc-200 text-zinc-500"}`}>
+                      <span className={`grid size-11 shrink-0 place-items-center rounded-full text-xs font-bold ${user.isActive ? "bg-indigo-100 text-indigo-700" : "bg-zinc-200 text-zinc-600"}`}>
                         {initials(user.name, user.email)}
                       </span>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="truncate text-sm font-semibold text-zinc-950">{user.name}</h3>
                           {isCurrent ? <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600">You</span> : null}
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${user.isActive ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}>
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${user.isActive ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-600"}`}>
                             {user.isActive ? <CheckCircle2 className="size-3" /> : <UserX className="size-3" />}
                             {user.isActive ? "Active" : "Disabled"}
                           </span>
                         </div>
-                        <p className="mt-1 truncate text-sm text-zinc-500">{user.email}</p>
-                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-zinc-400">
+                        <p className="mt-1 truncate text-sm text-zinc-600">{user.email}</p>
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-zinc-600">
                           <span>Last sign-in {formatDate(user.lastLoginAt)}</span>
                           <span>Added {formatDate(user.createdAt)}</span>
                         </div>
@@ -419,7 +419,7 @@ export function UserManager() {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <label className="flex items-center gap-2">
                         <span className="sr-only">Role for {user.name}</span>
-                        <ShieldCheck className="size-4 text-zinc-400" />
+                        <ShieldCheck className="size-4 text-zinc-600" />
                         <select
                           value={user.role}
                           disabled={saving || isCurrent}
@@ -463,7 +463,7 @@ export function UserManager() {
       </div>
 
       <div className="border-t border-zinc-100 bg-zinc-50/60 px-5 py-4 sm:px-6">
-        <p className="text-xs leading-5 text-zinc-500">
+        <p className="text-xs leading-5 text-zinc-600">
           Auth0 identities are managed in Auth0. Their workspace role comes from the configured role claim or the deployment&apos;s Auth0 default role.
         </p>
       </div>
@@ -474,9 +474,9 @@ export function UserManager() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold tracking-tight text-zinc-950">Reset password</h3>
-                <p className="mt-1 text-sm text-zinc-500">Set a new password for {resetUser.name}. Existing sessions will be signed out.</p>
+                <p className="mt-1 text-sm text-zinc-600">Set a new password for {resetUser.name}. Existing sessions will be signed out.</p>
               </div>
-              <button type="button" onClick={() => setResetUser(null)} className="grid size-8 shrink-0 place-items-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700" aria-label="Close">
+              <button type="button" onClick={() => setResetUser(null)} className="grid size-8 shrink-0 place-items-center rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-700" aria-label="Close">
                 <X className="size-4" />
               </button>
             </div>
@@ -495,7 +495,7 @@ export function UserManager() {
                   placeholder="At least 12 characters"
                   className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3.5 pr-11 text-sm text-zinc-950 shadow-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
                 />
-                <button type="button" onClick={() => setShowResetPassword((current) => !current)} className="absolute inset-y-0 right-0 grid w-11 place-items-center text-zinc-400 hover:text-zinc-700" aria-label={showResetPassword ? "Hide password" : "Show password"}>
+                <button type="button" onClick={() => setShowResetPassword((current) => !current)} className="absolute inset-y-0 right-0 grid w-11 place-items-center text-zinc-600 hover:text-zinc-700" aria-label={showResetPassword ? "Hide password" : "Show password"}>
                   {showResetPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </span>

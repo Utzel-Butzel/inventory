@@ -27,7 +27,7 @@ export default async function SettingsPage() {
         <h1 className="text-3xl font-semibold tracking-[-0.035em] text-zinc-950 sm:text-4xl">
           Settings
         </h1>
-        <p className="mt-3 text-sm leading-6 text-zinc-500 sm:text-base">
+        <p className="mt-3 text-sm leading-6 text-zinc-600 sm:text-base">
           Check enabled services, manage workspace access, and configure
           scoped credentials for integrations.
         </p>

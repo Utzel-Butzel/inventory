@@ -40,9 +40,11 @@ final class MultipartBuilderTests: XCTestCase {
         try Data([0x01, 0x02, 0x03, 0x04]).write(to: source)
         defer { try? FileManager.default.removeItem(at: source) }
 
+        let itemID = UUID()
         let body = try MultipartFormFileBuilder.buildObjectCount(
             image: MediaUploadFile(fileURL: source, filename: "parts.jpg"),
-            itemHint: "rote 3D-Druckteile"
+            itemHint: "rote 3D-Druckteile",
+            itemID: itemID
         )
         defer { try? FileManager.default.removeItem(at: body.fileURL) }
 
@@ -52,6 +54,8 @@ final class MultipartBuilderTests: XCTestCase {
         XCTAssertTrue(text.contains("Content-Type: image/jpeg"))
         XCTAssertTrue(text.contains("name=\"itemHint\""))
         XCTAssertTrue(text.contains("rote 3D-Druckteile"))
+        XCTAssertTrue(text.contains("name=\"itemId\""))
+        XCTAssertTrue(text.contains(itemID.uuidString.lowercased()))
         XCTAssertTrue(text.hasSuffix("--\(body.boundary)--\r\n"))
     }
 

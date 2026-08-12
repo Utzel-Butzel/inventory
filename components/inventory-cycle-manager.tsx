@@ -441,7 +441,7 @@ export function InventoryCycleManager({
           </span>
           <div>
             <h2 className="text-sm font-semibold text-slate-950">Inventory cycle</h2>
-            <p className="mt-0.5 text-xs leading-4 text-slate-400">
+            <p className="mt-0.5 text-xs leading-4 text-slate-600">
               Schedule recurring physical counts and reconcile discrepancies.
             </p>
           </div>
@@ -450,7 +450,7 @@ export function InventoryCycleManager({
           type="button"
           onClick={() => void loadCycle(true)}
           disabled={refreshing}
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
           aria-label="Refresh inventory cycle"
           title="Refresh inventory cycle"
         >
@@ -487,11 +487,11 @@ export function InventoryCycleManager({
         <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
                 Current schedule
               </p>
               <p className="mt-2 text-base font-semibold text-slate-950">{status.label}</p>
-              <p className="mt-1 text-[11px] leading-4 text-slate-500">{status.detail}</p>
+              <p className="mt-1 text-[11px] leading-4 text-slate-600">{status.detail}</p>
             </div>
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${status.tone}`}>
               {cycle.policy?.enabled ? "Active" : "Inactive"}
@@ -499,13 +499,13 @@ export function InventoryCycleManager({
           </div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
             Last completed
           </p>
           <p className="mt-2 text-sm font-semibold text-slate-900">
             {formatDate(lastCompletedAt)}
           </p>
-          <p className="mt-1 text-[11px] text-slate-400">
+          <p className="mt-1 text-[11px] text-slate-600">
             {cycle.history.length
               ? `${cycle.history.length} recent ${cycle.history.length === 1 ? "count" : "counts"}`
               : "No physical counts yet"}
@@ -528,7 +528,7 @@ export function InventoryCycleManager({
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 grid size-5 place-items-center rounded-full bg-white text-slate-500 shadow-sm transition ${
+                  className={`absolute top-0.5 grid size-5 place-items-center rounded-full bg-white text-slate-600 shadow-sm transition ${
                     enabled ? "left-[22px]" : "left-0.5"
                   }`}
                 >
@@ -543,7 +543,7 @@ export function InventoryCycleManager({
                 <p className="text-xs font-semibold text-slate-800">
                   {enabled ? "Recurring counts enabled" : "Recurring counts paused"}
                 </p>
-                <p className="mt-0.5 text-[10px] text-slate-400">
+                <p className="mt-0.5 text-[10px] text-slate-600">
                   Counts can still be recorded while the reminder is paused.
                 </p>
               </div>
@@ -594,7 +594,7 @@ export function InventoryCycleManager({
                     onChange={(event) => setIntervalDays(event.target.value)}
                     className="h-9 w-28 rounded-xl border border-slate-200 bg-white pl-3 pr-11 text-xs text-slate-800 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50"
                   />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-600">
                     days
                   </span>
                 </label>
@@ -612,7 +612,7 @@ export function InventoryCycleManager({
               Save schedule
             </Button>
           ) : (
-            <p className="text-[10px] leading-4 text-slate-400">
+            <p className="text-[10px] leading-4 text-slate-600">
               Write access is required to change the schedule.
             </p>
           )}
@@ -627,7 +627,7 @@ export function InventoryCycleManager({
             </span>
             <div>
               <h3 className="text-xs font-semibold text-slate-900">Physical count</h3>
-              <p className="mt-1 text-[11px] leading-4 text-slate-400">
+              <p className="mt-1 text-[11px] leading-4 text-slate-600">
                 Record what is physically present; any variance becomes an audited adjustment.
               </p>
             </div>
@@ -675,7 +675,7 @@ export function InventoryCycleManager({
             ) : null}
           </div>
         ) : !canEdit ? (
-          <p className="mt-4 rounded-xl bg-slate-50 px-3.5 py-3 text-[11px] leading-4 text-slate-500">
+          <p className="mt-4 rounded-xl bg-slate-50 px-3.5 py-3 text-[11px] leading-4 text-slate-600">
             You can review completed counts. Recording a new count requires write access.
           </p>
         ) : countOpen ? (
@@ -722,18 +722,18 @@ export function InventoryCycleManager({
                 />
               </label>
               <label className="block text-[11px] font-semibold text-slate-600">
-                Note <span className="font-normal text-slate-400">(optional)</span>
+                Note <span className="font-normal text-slate-600">(optional)</span>
                 <input
                   maxLength={20_000}
                   value={countNote}
                   onChange={(event) => setCountNote(event.target.value)}
                   placeholder="Reason or observation"
-                  className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
+                  className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none placeholder:text-slate-600 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
                 />
               </label>
             </div>
             <div className="mt-4 flex flex-col gap-3 border-t border-emerald-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[10px] leading-4 text-slate-500">
+              <p className="text-[10px] leading-4 text-slate-600">
                 Expected {quantityLabel(expectedQuantity, unitName)} · variance{" "}
                 <span className="font-semibold tabular-nums text-slate-700">
                   {Number.isInteger(Number(countedQuantity))
@@ -751,7 +751,7 @@ export function InventoryCycleManager({
               </Button>
             </div>
             {countTarget === ENTIRE_INVENTORY && locations.some((location) => location.quantity > 0) ? (
-              <p className="mt-3 text-[10px] leading-4 text-slate-400">
+              <p className="mt-3 text-[10px] leading-4 text-slate-600">
                 A total count reconciles unassigned stock. To correct one stored balance,
                 select that location instead.
               </p>
@@ -762,9 +762,9 @@ export function InventoryCycleManager({
 
       <div className="border-t border-slate-100">
         <div className="flex items-center gap-2 px-5 py-3.5 sm:px-6">
-          <History className="size-3.5 text-slate-400" aria-hidden="true" />
+          <History className="size-3.5 text-slate-600" aria-hidden="true" />
           <h3 className="text-xs font-semibold text-slate-800">Recent counts</h3>
-          <span className="ml-auto text-[10px] text-slate-400">{cycle.history.length}</span>
+          <span className="ml-auto text-[10px] text-slate-600">{cycle.history.length}</span>
         </div>
         {cycle.history.length ? (
           <div className="divide-y divide-slate-100 border-t border-slate-100">
@@ -780,16 +780,16 @@ export function InventoryCycleManager({
                   <div className="min-w-0">
                     <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-slate-800">
                       {count.locationResourceId ? (
-                        <MapPin className="size-3 shrink-0 text-slate-400" aria-hidden="true" />
+                        <MapPin className="size-3 shrink-0 text-slate-600" aria-hidden="true" />
                       ) : (
-                        <ClipboardCheck className="size-3 shrink-0 text-slate-400" aria-hidden="true" />
+                        <ClipboardCheck className="size-3 shrink-0 text-slate-600" aria-hidden="true" />
                       )}
                       <span className="truncate">
                         {location?.name ??
                           (count.locationResourceId ? "Unknown location" : "Entire inventory")}
                       </span>
                     </p>
-                    <p className="mt-1 truncate text-[10px] text-slate-400">
+                    <p className="mt-1 truncate text-[10px] text-slate-600">
                       {count.expectedQuantity.toLocaleString()} expected →{" "}
                       {count.countedQuantity.toLocaleString()} counted
                       {count.note ? ` · ${count.note}` : ""}
@@ -807,7 +807,7 @@ export function InventoryCycleManager({
                     {count.variance > 0 ? "+" : ""}
                     {count.variance}
                   </span>
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400 sm:block">
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-600 sm:block">
                     <Clock3 className="size-3 sm:hidden" aria-hidden="true" />
                     <p>{formatDate(count.countedAt)}</p>
                     <p className="mt-0.5 hidden truncate text-[9px] sm:block">
@@ -820,9 +820,9 @@ export function InventoryCycleManager({
           </div>
         ) : (
           <div className="border-t border-slate-100 px-6 py-9 text-center">
-            <ClipboardCheck className="mx-auto size-5 text-slate-300" aria-hidden="true" />
+            <ClipboardCheck className="mx-auto size-5 text-slate-600" aria-hidden="true" />
             <p className="mt-2 text-xs font-semibold text-slate-600">No counts recorded</p>
-            <p className="mt-1 text-[10px] text-slate-400">
+            <p className="mt-1 text-[10px] text-slate-600">
               The first physical check will appear here with its variance.
             </p>
           </div>

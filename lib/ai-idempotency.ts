@@ -1,15 +1,18 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, lte } from "drizzle-orm";
 
 import { aiIdempotencyOperations } from "@/db/schema";
 import { db } from "@/lib/db";
 import { idempotencyResponseHeaders } from "@/lib/idempotency";
 
-export type AiOperationName = "analyze" | "cover";
+export type AiOperationName = "analyze" | "count" | "cover";
 
 type StoredOperation = typeof aiIdempotencyOperations.$inferSelect;
 const processingLeaseMs = 10 * 60_000;
+// Replicate count jobs can run for up to ten minutes. Never reclaim an
+// ambiguous count claim while the original paid prediction may still exist.
+const countProcessingLeaseMs = 15 * 60_000;
 
 export type AiOperationClaim =
   | { kind: "claimed"; operationId: string }
@@ -17,7 +20,10 @@ export type AiOperationClaim =
   | { kind: "replay"; operation: StoredOperation }
   | { kind: "conflict" };
 
-const findOperation = async (operation: AiOperationName, idempotencyKey: string) => {
+export const findAiOperation = async (
+  operation: AiOperationName,
+  idempotencyKey: string,
+) => {
   const [existing] = await db
     .select()
     .from(aiIdempotencyOperations)
@@ -51,11 +57,16 @@ const reclaimStaleOperation = async (
   existing: StoredOperation,
   options: { resourceId: string; requestHash: string },
 ) => {
+  const leaseMilliseconds =
+    existing.operation === "count"
+      ? countProcessingLeaseMs
+      : processingLeaseMs;
+  const staleBefore = new Date(Date.now() - leaseMilliseconds);
   if (
     existing.status !== "processing" ||
     existing.resourceId !== options.resourceId ||
     existing.requestHash !== options.requestHash ||
-    existing.updatedAt.getTime() > Date.now() - processingLeaseMs
+    existing.updatedAt > staleBefore
   ) {
     return null;
   }
@@ -66,7 +77,11 @@ const reclaimStaleOperation = async (
       and(
         eq(aiIdempotencyOperations.id, existing.id),
         eq(aiIdempotencyOperations.status, "processing"),
-        eq(aiIdempotencyOperations.updatedAt, existing.updatedAt),
+        // Compare against a server-side cutoff instead of round-tripping the
+        // original timestamp through JavaScript milliseconds. PostgreSQL's
+        // default timestamp has microsecond precision, so exact equality can
+        // otherwise make a genuinely stale claim impossible to reclaim.
+        lte(aiIdempotencyOperations.updatedAt, staleBefore),
       ),
     )
     .returning({ id: aiIdempotencyOperations.id });
@@ -83,7 +98,7 @@ export async function claimAiOperation(options: {
   // requester is resolving the unique-key conflict. Retry that narrow case so
   // a now-free idempotency key is claimable instead of returning a false 409.
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const existing = await findOperation(
+    const existing = await findAiOperation(
       options.operation,
       options.idempotencyKey,
     );
@@ -111,7 +126,7 @@ export async function claimAiOperation(options: {
       .returning({ id: aiIdempotencyOperations.id });
     if (claimed) return { kind: "claimed", operationId: claimed.id };
 
-    const winner = await findOperation(
+    const winner = await findAiOperation(
       options.operation,
       options.idempotencyKey,
     );

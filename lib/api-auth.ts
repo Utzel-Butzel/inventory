@@ -27,6 +27,17 @@ export type RequestIdentity = {
 export const hashApiToken = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 
+export const hashRequestIdentity = (identity: RequestIdentity) =>
+  createHash("sha256")
+    .update(
+      identity.userId
+        ? `user:${identity.userId}`
+        : identity.tokenId
+          ? `token:${identity.tokenId}`
+          : `subject:${identity.subject}`,
+    )
+    .digest("hex");
+
 export async function getRequestIdentity(
   request: Request,
 ): Promise<RequestIdentity | null> {

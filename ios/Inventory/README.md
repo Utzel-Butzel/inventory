@@ -118,10 +118,16 @@ the native iOS Camera modes. The resource detail opens that same camera directly
 in **Zählen** when the signed-in token has the `ai` scope.
 
 The app sends one downsampled JPEG as multipart field
-`image` and the optional, 240-character item description as `itemHint` to
-`POST /api/v1/ai/count`. The response contains `count`, `confidence`,
+`image`, the optional 240-character item description as `itemHint`, and the
+inventory UUID as `itemId` to
+`POST /api/v1/ai/count`. The server keeps its Replicate credential private and
+runs the configured SAM 3 counter. If the community model is cold, the app
+polls the same signed prediction until its server-provided deadline and retries
+transient poll failures. A stable idempotency key makes a lost start response
+safe to retry; closing the view cancels local waiting. The response contains
+`count`, `confidence`,
 `detectedItem`, `isExact`, `explanation`, `warnings`, `markers` with one
-normalized, material-bound point per counted item, and `model`. The app overlays
+normalized bounding-box center per counted item, and `model`. The app overlays
 those points on the full, uncropped photo in the same 3:4 viewport.
 
 The source photo remains only in the temporary directory for review and is

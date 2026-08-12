@@ -101,7 +101,7 @@ function StatusPill({ ready, label }: { ready: boolean; label?: string }) {
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
         ready
           ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
-          : "bg-zinc-100 text-zinc-500 ring-1 ring-inset ring-zinc-200"
+          : "bg-zinc-100 text-zinc-600 ring-1 ring-inset ring-zinc-200"
       }`}
     >
       {ready ? <CircleCheck className="size-3.5" /> : <CircleX className="size-3.5" />}
@@ -298,7 +298,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
             <h2 id="runtime-heading" className="text-base font-semibold text-zinc-950">
               Runtime configuration
             </h2>
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-zinc-600">
               A live view of services enabled by this deployment&apos;s environment.
             </p>
           </div>
@@ -306,7 +306,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
             type="button"
             onClick={() => void load(true)}
             disabled={loading || refreshing}
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-500 shadow-sm transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Refresh settings"
           >
             <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -338,7 +338,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                 <StatusPill ready={runtime.storage.configured} />
               </div>
               <p className="mt-5 text-sm font-semibold text-zinc-900">File storage</p>
-              <p className="mt-1 text-sm capitalize text-zinc-500">{runtime.storage.provider} provider</p>
+              <p className="mt-1 text-sm capitalize text-zinc-600">{runtime.storage.provider} provider</p>
             </div>
 
             <div className="group rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition hover:border-zinc-300 hover:shadow-sm">
@@ -349,7 +349,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                 <StatusPill ready={runtime.ai.analysis} />
               </div>
               <p className="mt-5 text-sm font-semibold text-zinc-900">AI analysis</p>
-              <p className="mt-1 text-sm text-zinc-500">Metadata and batch enrichment</p>
+              <p className="mt-1 text-sm text-zinc-600">Metadata and batch enrichment</p>
             </div>
 
             <div className="group rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition hover:border-zinc-300 hover:shadow-sm">
@@ -360,7 +360,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                 <StatusPill ready={runtime.ai.imageGeneration} />
               </div>
               <p className="mt-5 text-sm font-semibold text-zinc-900">Image generation</p>
-              <p className="mt-1 text-sm capitalize text-zinc-500">
+              <p className="mt-1 text-sm capitalize text-zinc-600">
                 {imageModelPreference.selectedModel?.provider ?? runtime.ai.imageProvider} provider
               </p>
               <ImageModelSelector
@@ -381,7 +381,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                 />
               </div>
               <p className="mt-5 text-sm font-semibold text-zinc-900">Authentication</p>
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-1 text-sm text-zinc-600">
                 {runtime.auth.password && runtime.auth.auth0
                   ? "Password and Auth0 enabled"
                   : "Workspace sign-in provider"}
@@ -403,7 +403,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
             </span>
             <div>
               <h2 id="api-access-heading" className="font-semibold text-zinc-950">API access</h2>
-              <p className="mt-1 text-sm text-zinc-500">Scoped bearer tokens for scripts and integrations.</p>
+              <p className="mt-1 text-sm text-zinc-600">Scoped bearer tokens for scripts and integrations.</p>
             </div>
           </div>
           <button
@@ -485,7 +485,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
               <div>
                 <label htmlFor="token-name" className="text-sm font-semibold text-zinc-900">Token name</label>
-                <p className="mt-1 text-xs text-zinc-500">Use a name that identifies the integration.</p>
+                <p className="mt-1 text-xs text-zinc-600">Use a name that identifies the integration.</p>
                 <input
                   id="token-name"
                   value={name}
@@ -493,13 +493,13 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                   maxLength={120}
                   placeholder="Warehouse sync"
                   autoFocus
-                  className="mt-3 h-11 w-full rounded-xl border border-zinc-200 bg-white px-3.5 text-sm text-zinc-950 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                  className="mt-3 h-11 w-full rounded-xl border border-zinc-200 bg-white px-3.5 text-sm text-zinc-950 shadow-sm outline-none transition placeholder:text-zinc-600 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
                 />
               </div>
 
               <fieldset>
                 <legend className="text-sm font-semibold text-zinc-900">Expiration</legend>
-                <p className="mt-1 text-xs text-zinc-500">Shorter-lived credentials reduce exposure.</p>
+                <p className="mt-1 text-xs text-zinc-600">Shorter-lived credentials reduce exposure.</p>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
                   {([
                     ["never", "Never"],
@@ -560,7 +560,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                       </span>
                       <span>
                         <span className="block text-sm font-semibold text-zinc-900">{scope.label}</span>
-                        <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{scope.description}</span>
+                        <span className="mt-0.5 block text-xs leading-5 text-zinc-600">{scope.description}</span>
                       </span>
                     </button>
                   );
@@ -610,11 +610,11 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
           ) : tokens.length === 0 ? (
             <div className="grid min-h-56 place-items-center px-4 py-10 text-center">
               <div>
-                <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-zinc-100 text-zinc-500">
+                <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-zinc-100 text-zinc-600">
                   <LockKeyhole className="size-5" />
                 </span>
                 <h3 className="mt-4 text-sm font-semibold text-zinc-900">No active API tokens</h3>
-                <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-zinc-500">Create a scoped token when you are ready to connect a script or another service.</p>
+                <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-zinc-600">Create a scoped token when you are ready to connect a script or another service.</p>
               </div>
             </div>
           ) : (
@@ -623,7 +623,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                 <div key={token.id} className="rounded-xl px-3 py-4 transition hover:bg-zinc-50 sm:px-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
-                      <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-500 shadow-sm">
+                      <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm">
                         <Server className="size-4" />
                       </span>
                       <div className="min-w-0">
@@ -633,7 +633,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                             <span key={scope} className="rounded-md bg-zinc-100 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-zinc-600">{scope}</span>
                           ))}
                         </div>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-600">
                           <code className="font-mono text-zinc-700">{token.prefix}</code>
                           <span>Created {formatDate(token.createdAt, "Unknown")}</span>
                           <span>Expires {formatDate(token.expiresAt)}</span>
@@ -668,7 +668,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                       <button
                         type="button"
                         onClick={() => setConfirmRevoke(token.id)}
-                        className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-lg px-3 text-xs font-semibold text-zinc-500 transition hover:bg-rose-50 hover:text-rose-700 lg:self-auto"
+                        className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-lg px-3 text-xs font-semibold text-zinc-600 transition hover:bg-rose-50 hover:text-rose-700 lg:self-auto"
                       >
                         <Trash2 className="size-3.5" />
                         Revoke
