@@ -661,7 +661,15 @@ export async function POST(request: Request) {
   };
   const status = summary.failed > 0 ? 207 : summary.created > 0 ? 201 : 200;
 
-  if (summary.created > 0 && dataRows.some((row) => row.cells[headers.indexOf("map_features")]?.trim())) {
+  const createdSpatialData = [
+    "map_features",
+    "gps_latitude",
+    "gps_longitude",
+  ].some((header) => {
+    const index = headers.indexOf(header);
+    return index >= 0 && dataRows.some((row) => row.cells[index]?.trim());
+  });
+  if (summary.created > 0 && createdSpatialData) {
     await synchronizeSpatialContainment(authorization.identity.subject);
   }
 

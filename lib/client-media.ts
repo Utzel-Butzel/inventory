@@ -5,12 +5,29 @@ import ExifReader from "exifreader";
 
 export type ImageGps = { latitude: number; longitude: number; altitude?: number };
 
-const numericTag = (tag: unknown) => {
-  if (!tag || typeof tag !== "object") return null;
-  const value = "value" in tag ? (tag as { value: unknown }).value : null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-};
+export function imageGpsFromExifTags(
+  tags: Record<string, unknown>,
+): ImageGps | null {
+  const gps = (tags.gps ?? {}) as Record<string, unknown>;
+  const latitude = gps.Latitude;
+  const longitude = gps.Longitude;
+  const altitude = gps.Altitude;
+  if (
+    typeof latitude !== "number" ||
+    typeof longitude !== "number" ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  ) {
+    return null;
+  }
+  return {
+    latitude,
+    longitude,
+    ...(typeof altitude === "number" && Number.isFinite(altitude)
+      ? { altitude }
+      : {}),
+  };
+}
 
 export async function prepareUpload(file: File) {
   if (!file.type.startsWith("image/") || file.size < 1_500_000) return file;
@@ -30,16 +47,7 @@ export async function readImageGps(file: File): Promise<ImageGps | null> {
       expanded: true,
       computed: true,
     }) as unknown as Record<string, unknown>;
-    const gps = (tags.gps ?? {}) as Record<string, unknown>;
-    const latitude = Number(gps.Latitude);
-    const longitude = Number(gps.Longitude);
-    const altitude = numericTag(tags.GPSAltitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-    return {
-      latitude,
-      longitude,
-      ...(altitude !== null ? { altitude } : {}),
-    };
+    return imageGpsFromExifTags(tags);
   } catch {
     return null;
   }

@@ -13,6 +13,7 @@
     "start": "next start",
     "lint": "eslint . --ignore-pattern .next",
     "typecheck": "tsc --noEmit",
+    "test:locations": "node --experimental-strip-types --test tests/spatial-containment.test.mjs tests/client-media-location.test.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "node scripts/seed.mjs",

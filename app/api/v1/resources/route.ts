@@ -101,7 +101,14 @@ export async function POST(request: Request) {
         idempotencyKey: idempotency.key,
         requestHash,
       });
-      if (!result.replayed && parsed.data.mapFeatures.length) {
+      if (
+        !result.replayed &&
+        (parsed.data.mapFeatures.length > 0 ||
+          (parsed.data.gpsLatitude !== null &&
+            parsed.data.gpsLatitude !== undefined &&
+            parsed.data.gpsLongitude !== null &&
+            parsed.data.gpsLongitude !== undefined))
+      ) {
         await synchronizeSpatialContainment(authorization.identity.subject);
       }
       return Response.json(result.response, {
@@ -114,7 +121,13 @@ export async function POST(request: Request) {
     }
 
     const resource = await createResource(values);
-    if (parsed.data.mapFeatures.length) {
+    if (
+      parsed.data.mapFeatures.length > 0 ||
+      (parsed.data.gpsLatitude !== null &&
+        parsed.data.gpsLatitude !== undefined &&
+        parsed.data.gpsLongitude !== null &&
+        parsed.data.gpsLongitude !== undefined)
+    ) {
       await synchronizeSpatialContainment(authorization.identity.subject);
     }
     return Response.json({ resource }, { status: 201 });

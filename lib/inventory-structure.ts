@@ -10,9 +10,12 @@ import {
   stockLocationBalances,
   stockUnits,
   type ResourceMapCoordinate,
-  type ResourceMapFeature,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import {
+  polygonCoversPoint,
+  spatialFeaturePoints,
+} from "@/lib/spatial-containment";
 
 const RELATION_GRAPH_LOCK_ID = 7_214_002;
 
@@ -516,46 +519,6 @@ export async function deleteManualResourceRelation(
   return deleted;
 }
 
-function pointOnSegment(
-  point: ResourceMapCoordinate,
-  start: ResourceMapCoordinate,
-  end: ResourceMapCoordinate,
-) {
-  const cross =
-    (point[1] - start[1]) * (end[0] - start[0]) -
-    (point[0] - start[0]) * (end[1] - start[1]);
-  if (Math.abs(cross) > 1e-10) return false;
-  const dot =
-    (point[0] - start[0]) * (end[0] - start[0]) +
-    (point[1] - start[1]) * (end[1] - start[1]);
-  if (dot < 0) return false;
-  const squaredLength =
-    (end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2;
-  return dot <= squaredLength;
-}
-
-function polygonCoversPoint(
-  polygon: ResourceMapCoordinate[],
-  point: ResourceMapCoordinate,
-) {
-  let inside = false;
-  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
-    const start = polygon[previous]!;
-    const end = polygon[index]!;
-    if (pointOnSegment(point, start, end)) return true;
-    if (
-      (start[1] > point[1]) !== (end[1] > point[1]) &&
-      point[0] <
-        ((end[0] - start[0]) * (point[1] - start[1])) /
-          (end[1] - start[1]) +
-          start[0]
-    ) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
 function polygonArea(polygon: ResourceMapCoordinate[]) {
   let area = 0;
   for (let index = 0; index < polygon.length - 1; index += 1) {
@@ -564,19 +527,6 @@ function polygonArea(polygon: ResourceMapCoordinate[]) {
     area += current[0] * next[1] - next[0] * current[1];
   }
   return Math.abs(area / 2);
-}
-
-function featurePoints(features: ResourceMapFeature[]) {
-  const point = features.find((feature) => feature.type === "point");
-  if (point?.type === "point") {
-    return [{ point: point.coordinates, featureId: point.id }];
-  }
-  const polygon = features.find((feature) => feature.type === "polygon");
-  if (polygon?.type !== "polygon") return [];
-  return polygon.coordinates.slice(0, -1).map((coordinate) => ({
-    point: coordinate,
-    featureId: polygon.id,
-  }));
 }
 
 export async function synchronizeSpatialContainment(actor = "system:spatial") {
@@ -590,6 +540,8 @@ export async function synchronizeSpatialContainment(actor = "system:spatial") {
           id: resources.id,
           type: resources.type,
           mapFeatures: resources.mapFeatures,
+          gpsLatitude: resources.gpsLatitude,
+          gpsLongitude: resources.gpsLongitude,
         })
         .from(resources),
       transaction
@@ -643,7 +595,7 @@ export async function synchronizeSpatialContainment(actor = "system:spatial") {
     }> = [];
     for (const target of resourceRows) {
       if (manuallyPlaced.has(target.id)) continue;
-      const points = featurePoints(target.mapFeatures);
+      const points = spatialFeaturePoints(target);
       if (!points.length) continue;
       const containing = candidates
         .filter(

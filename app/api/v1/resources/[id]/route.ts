@@ -79,7 +79,12 @@ export async function PATCH(request: Request, context: Context) {
       customFieldsProvided: parsed.data.customFields !== undefined,
     });
     if (!resource) return Response.json({ error: "Not found" }, { status: 404 });
-    if (parsed.data.mapFeatures !== undefined || parsed.data.type !== undefined) {
+    if (
+      parsed.data.mapFeatures !== undefined ||
+      parsed.data.gpsLatitude !== undefined ||
+      parsed.data.gpsLongitude !== undefined ||
+      parsed.data.type !== undefined
+    ) {
       await synchronizeSpatialContainment(authorization.identity.subject);
     }
     return Response.json({ resource });
