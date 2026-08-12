@@ -492,7 +492,7 @@ a comma-separated allowlist and an optional default. Each entry uses
 to clients.
 
 ```dotenv
-IMAGE_EDIT_MODELS=openai:gpt-image-2,google:gemini-2.5-flash-image,google:gemini-3.1-flash-lite-image,google:gemini-3.1-flash-image,google:gemini-3-pro-image
+IMAGE_EDIT_MODELS=openai:gpt-image-1,openai:gpt-image-1-mini,openai:gpt-image-1.5,openai:gpt-image-2,google:gemini-2.5-flash-image,google:gemini-3.1-flash-lite-image,google:gemini-3.1-flash-image,google:gemini-3-pro-image
 IMAGE_EDIT_DEFAULT_MODEL=google:gemini-3.1-flash-image
 ```
 
