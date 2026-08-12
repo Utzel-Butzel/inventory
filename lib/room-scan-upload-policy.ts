@@ -1,8 +1,15 @@
 import type { RoomScanAssetKind } from "@/db/schema";
+import type { RoomScene } from "@/lib/room-scene-contract";
+import {
+  spatialGeoreferenceFramesApproximatelyEqual,
+  type RoomScanSpatialMetadata,
+  type SpatialGeoreference,
+} from "@/lib/spatial-structure-contract";
 
 export const roomScanAssetMimeTypes = {
   world_map: "application/vnd.apple.arkit.world-map",
   model_usdz: "model/vnd.usdz+zip",
+  structure_model: "model/vnd.usdz+zip",
   guide_image: "image/jpeg",
 } as const satisfies Record<RoomScanAssetKind, string>;
 
@@ -17,18 +24,159 @@ export const roomScanWriteReceipt = (id: string, replayed: boolean) => ({
   replayed,
 });
 
-type ExistingRoomScan = {
+export type RoomScanSpatialConflictKind =
+  | "georeference"
+  | "web-from-world"
+  | "world-map";
+
+/** A client-provided spatial frame conflicts with an existing coordinate space. */
+export class RoomScanSpatialConflictError extends Error {
+  readonly kind: RoomScanSpatialConflictKind;
+
+  constructor(kind: RoomScanSpatialConflictKind, message: string) {
+    super(message);
+    this.name = "RoomScanSpatialConflictError";
+    this.kind = kind;
+  }
+}
+
+export const roomScanCreationErrorStatus = (error: unknown) => {
+  if (error instanceof RoomScanSpatialConflictError) return 409;
+  const message = error instanceof Error ? error.message : "";
+  if (
+    message.includes("another room") ||
+    message.includes("another structure") ||
+    message.includes("different spatial metadata") ||
+    message.includes("different upload payload")
+  ) return 409;
+  if (message.includes("not found")) return 404;
+  if (message.includes("only")) return 422;
+  return 500;
+};
+
+export type RoomScanAssetFingerprint = {
+  kind: RoomScanAssetKind;
+  checksumSha256: string;
+};
+
+export type ExistingRoomScanReplayIdentity = {
   id: string;
   roomResourceId: string;
+  structureId: string | null;
+  coordinateSpaceId: string | null;
+  floorIdentifier: string | null;
+  floorIndex: number | null;
+  roomIdentifier: string | null;
+  scene: RoomScene;
+  capturedAt: Date;
+  deviceModel: string | null;
+  coordinateSpaceGeoreference: SpatialGeoreference | null;
+  assets: RoomScanAssetFingerprint[];
 };
+
+export type RoomScanReplayRequest = {
+  roomResourceId: string;
+  scene: RoomScene;
+  capturedAt: Date;
+  deviceModel?: string;
+  spatial?: RoomScanSpatialMetadata;
+  assets: RoomScanAssetFingerprint[];
+};
+
+export const roomScanMatchesSpatialMetadata = (
+  scan: Pick<
+    ExistingRoomScanReplayIdentity,
+    | "id"
+    | "structureId"
+    | "coordinateSpaceId"
+    | "floorIdentifier"
+    | "floorIndex"
+    | "roomIdentifier"
+  >,
+  spatial?: RoomScanSpatialMetadata,
+) => {
+  if (!spatial?.structureId) {
+    return (
+      scan.structureId === null &&
+      scan.coordinateSpaceId === null &&
+      scan.floorIdentifier === null &&
+      scan.floorIndex === null &&
+      scan.roomIdentifier === null
+    );
+  }
+  return (
+    scan.structureId === spatial.structureId &&
+    scan.coordinateSpaceId === (spatial.coordinateSpaceId ?? scan.id) &&
+    scan.floorIdentifier === (spatial.floorIdentifier ?? null) &&
+    scan.floorIndex === (spatial.floorIndex ?? null) &&
+    scan.roomIdentifier === (spatial.roomIdentifier ?? null)
+  );
+};
+
+const canonicalJson = (value: unknown): string => {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  }
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+    .join(",")}}`;
+};
+
+const assetFingerprintsMatch = (
+  left: RoomScanAssetFingerprint[],
+  right: RoomScanAssetFingerprint[],
+) => {
+  const normalize = (assets: RoomScanAssetFingerprint[]) =>
+    assets
+      .map(({ kind, checksumSha256 }) => `${kind}:${checksumSha256}`)
+      .sort();
+  const normalizedLeft = normalize(left);
+  const normalizedRight = normalize(right);
+  return (
+    normalizedLeft.length === normalizedRight.length &&
+    normalizedLeft.every((value, index) => value === normalizedRight[index])
+  );
+};
+
+export const roomScanWorldMapChecksumMatches = (
+  existingChecksum: string | undefined,
+  incomingChecksum: string | undefined,
+) => existingChecksum === undefined || existingChecksum === incomingChecksum;
+
+/**
+ * Scan ids are immutable idempotency keys. A replay is accepted only when all
+ * persisted request data matches, including the coordinate frame and asset
+ * bytes; a reused id with a changed payload is a conflict.
+ */
+export const roomScanMatchesReplayIdentity = (
+  scan: ExistingRoomScanReplayIdentity,
+  request: RoomScanReplayRequest,
+) =>
+  scan.roomResourceId === request.roomResourceId &&
+  roomScanMatchesSpatialMetadata(scan, request.spatial) &&
+  canonicalJson(scan.scene) === canonicalJson(request.scene) &&
+  scan.capturedAt.getTime() === request.capturedAt.getTime() &&
+  scan.deviceModel === (request.deviceModel ?? null) &&
+  assetFingerprintsMatch(scan.assets, request.assets) &&
+  (request.spatial?.georeference === undefined ||
+    (scan.coordinateSpaceGeoreference !== null &&
+      spatialGeoreferenceFramesApproximatelyEqual(
+        scan.coordinateSpaceGeoreference,
+        request.spatial.georeference,
+      )));
 
 export async function reconcileFailedRoomScanCreation(options: {
   scanId: string;
-  roomResourceId: string;
-  findScan: (scanId: string) => Promise<ExistingRoomScan | null>;
+  request: RoomScanReplayRequest;
+  findScan: (
+    scanId: string,
+  ) => Promise<ExistingRoomScanReplayIdentity | null>;
   cleanupUncommittedAssets: () => Promise<void>;
 }) {
-  let existing: ExistingRoomScan | null;
+  let existing: ExistingRoomScanReplayIdentity | null;
   try {
     existing = await options.findScan(options.scanId);
   } catch {
@@ -38,10 +186,12 @@ export async function reconcileFailedRoomScanCreation(options: {
     return { kind: "unknown" } as const;
   }
 
-  if (existing?.roomResourceId === options.roomResourceId) {
+  if (existing && roomScanMatchesReplayIdentity(existing, options.request)) {
     return { kind: "committed", scanId: existing.id } as const;
   }
 
   await options.cleanupUncommittedAssets();
-  return { kind: "not-committed" } as const;
+  return existing
+    ? ({ kind: "conflict" } as const)
+    : ({ kind: "not-committed" } as const);
 }

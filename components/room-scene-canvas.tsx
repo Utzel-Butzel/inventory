@@ -3,29 +3,95 @@
 import { Maximize2, ScanSearch } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import type { ClientRoomSceneManifest } from "@/lib/client-types";
 
 type CameraCommand = "reset" | "top";
 
-const surfaceColors: Record<string, number> = {
-  wall: 0xdde2e8,
-  floor: 0xc7cdd5,
-  door: 0xb88964,
-  window: 0x8fc5df,
-  opening: 0x9ea8b5,
+const objectColors: Record<string, number> = {
+  storage: 0xb79a72,
+  table: 0xc19566,
+  chair: 0xa98768,
+  sofa: 0x8792a8,
+  bed: 0xad9fbb,
+  refrigerator: 0xc2cbd1,
+  stove: 0x747e86,
+  oven: 0x737b82,
+  dishwasher: 0xaab5bd,
+  "washer-dryer": 0xb5bec4,
+  sink: 0xd2d0c9,
+  toilet: 0xd9d7d0,
+  bathtub: 0xd7d4cc,
+  fireplace: 0x9c7d68,
+  television: 0x555c65,
+  stairs: 0x9f9788,
 };
 
-const objectColors: Record<string, number> = {
-  storage: 0x9b8a75,
-  table: 0xb69472,
-  chair: 0x8e9a87,
-  sofa: 0x8d96ad,
-  bed: 0xa9a1bd,
-  refrigerator: 0xaeb9c4,
-  stairs: 0xa7a094,
-};
+type TexturePattern = "plaster" | "grain" | "speckle";
+
+function textureNoise(x: number, y: number, seed: number) {
+  const value = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43_758.5453;
+  return value - Math.floor(value);
+}
+
+function patternValue(pattern: TexturePattern, x: number, y: number, seed: number) {
+  const fine = textureNoise(x, y, seed) * 2 - 1;
+  const broad = textureNoise(Math.floor(x / 9), Math.floor(y / 9), seed + 17) * 2 - 1;
+
+  if (pattern === "grain") {
+    const grain = Math.sin(x * 0.38 + Math.sin(y * 0.09 + seed) * 2.4);
+    return grain * 0.68 + fine * 0.2 + broad * 0.12;
+  }
+  if (pattern === "plaster") {
+    return fine * 0.36 + broad * 0.64;
+  }
+  return fine * 0.7 + broad * 0.3;
+}
+
+function createProceduralTexture({
+  base,
+  variation,
+  pattern,
+  seed,
+  repeat,
+  colorSpace = false,
+  anisotropy,
+}: {
+  base: readonly [number, number, number];
+  variation: number;
+  pattern: TexturePattern;
+  seed: number;
+  repeat: readonly [number, number];
+  colorSpace?: boolean;
+  anisotropy: number;
+}) {
+  const size = 128;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const offset = Math.round(patternValue(pattern, x, y, seed) * variation);
+      const index = (y * size + x) * 4;
+      data[index] = THREE.MathUtils.clamp(base[0] + offset, 0, 255);
+      data[index + 1] = THREE.MathUtils.clamp(base[1] + offset, 0, 255);
+      data[index + 2] = THREE.MathUtils.clamp(base[2] + offset, 0, 255);
+      data[index + 3] = 255;
+    }
+  }
+
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(...repeat);
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = anisotropy;
+  if (colorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
 
 function normalizedDimensions(
   category: string,
@@ -47,10 +113,12 @@ function setMatrix(object: THREE.Object3D, values: number[]) {
 
 export function RoomSceneCanvas({
   manifest,
+  linkedManifests = [],
   selectedResourceId,
   onSelectResource,
 }: {
   manifest: ClientRoomSceneManifest;
+  linkedManifests?: ClientRoomSceneManifest[];
   selectedResourceId: string | null;
   onSelectResource: (resourceId: string) => void;
 }) {
@@ -88,14 +156,164 @@ export function RoomSceneCanvas({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0xf3f5f7, 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.className = "block size-full touch-none";
-    renderer.domElement.setAttribute("aria-label", `3D-Modell von ${manifest.room.name}`);
+    renderer.domElement.setAttribute(
+      "aria-label",
+      linkedManifests.length
+        ? `3D-Modell von ${manifest.room.name} und ${linkedManifests.length} verbundenen Räumen`
+        : `3D-Modell von ${manifest.room.name}`,
+    );
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0xf3f5f7, 18, 55);
+    const roomEnvironment = new RoomEnvironment();
+    const environmentGenerator = new THREE.PMREMGenerator(renderer);
+    const environmentTarget = environmentGenerator.fromScene(roomEnvironment, 0.035);
+    scene.environment = environmentTarget.texture;
+    roomEnvironment.dispose();
+    environmentGenerator.dispose();
+
+    const anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
+    const wallColorMap = createProceduralTexture({
+      base: [242, 239, 233],
+      variation: 7,
+      pattern: "plaster",
+      seed: 11,
+      repeat: [5, 5],
+      colorSpace: true,
+      anisotropy,
+    });
+    const wallBumpMap = createProceduralTexture({
+      base: [128, 128, 128],
+      variation: 34,
+      pattern: "plaster",
+      seed: 29,
+      repeat: [6, 6],
+      anisotropy,
+    });
+    const floorColorMap = createProceduralTexture({
+      base: [196, 179, 151],
+      variation: 18,
+      pattern: "grain",
+      seed: 43,
+      repeat: [6, 4],
+      colorSpace: true,
+      anisotropy,
+    });
+    const floorBumpMap = createProceduralTexture({
+      base: [128, 128, 128],
+      variation: 25,
+      pattern: "grain",
+      seed: 47,
+      repeat: [6, 4],
+      anisotropy,
+    });
+    const doorColorMap = createProceduralTexture({
+      base: [177, 137, 96],
+      variation: 18,
+      pattern: "grain",
+      seed: 59,
+      repeat: [4, 2],
+      colorSpace: true,
+      anisotropy,
+    });
+    const objectColorMap = createProceduralTexture({
+      base: [246, 242, 235],
+      variation: 9,
+      pattern: "speckle",
+      seed: 71,
+      repeat: [3, 3],
+      colorSpace: true,
+      anisotropy,
+    });
+    const objectBumpMap = createProceduralTexture({
+      base: [128, 128, 128],
+      variation: 22,
+      pattern: "speckle",
+      seed: 83,
+      repeat: [4, 4],
+      anisotropy,
+    });
+    const materialTextures = [
+      wallColorMap,
+      wallBumpMap,
+      floorColorMap,
+      floorBumpMap,
+      doorColorMap,
+      objectColorMap,
+      objectBumpMap,
+    ];
+
+    const wallMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: wallColorMap,
+      bumpMap: wallBumpMap,
+      bumpScale: 0.012,
+      roughness: 0.96,
+      metalness: 0,
+    });
+    const floorMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: floorColorMap,
+      bumpMap: floorBumpMap,
+      bumpScale: 0.008,
+      roughness: 0.76,
+      metalness: 0.01,
+    });
+    const doorMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: doorColorMap,
+      bumpMap: floorBumpMap,
+      bumpScale: 0.007,
+      roughness: 0.68,
+      metalness: 0.01,
+    });
+    const windowMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0xaed7e7,
+      roughness: 0.18,
+      metalness: 0,
+      transmission: 0.28,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const openingMaterial = new THREE.MeshStandardMaterial({
+      color: 0x9ea8b5,
+      roughness: 0.9,
+      metalness: 0,
+      transparent: true,
+      opacity: 0.1,
+      depthWrite: false,
+    });
+    const objectMaterials = new Map<string, THREE.MeshStandardMaterial>();
+    const objectMaterial = (category: string) => {
+      const cached = objectMaterials.get(category);
+      if (cached) return cached;
+      const material = new THREE.MeshStandardMaterial({
+        color: objectColors[category] ?? 0xb09b84,
+        map: objectColorMap,
+        bumpMap: objectBumpMap,
+        bumpScale: 0.006,
+        roughness: 0.7,
+        metalness: 0.025,
+      });
+      objectMaterials.set(category, material);
+      return material;
+    };
+    const surfaceMaterial = (category: string): THREE.Material => {
+      if (category === "floor") return floorMaterial;
+      if (category === "door") return doorMaterial;
+      if (category === "window") return windowMaterial;
+      if (category === "opening") return openingMaterial;
+      return wallMaterial;
+    };
+
     const camera = new THREE.PerspectiveCamera(48, 1, 0.02, 250);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -112,58 +330,46 @@ export function RoomSceneCanvas({
     sun.shadow.mapSize.set(1024, 1024);
     scene.add(sun);
 
+    const visibleManifests = [manifest, ...linkedManifests];
     const webRoot = new THREE.Group();
     setMatrix(webRoot, manifest.scan.scene.webFromWorld);
     scene.add(webRoot);
 
-    const modelRoot = new THREE.Group();
-    setMatrix(modelRoot, manifest.scan.scene.worldFromModel);
-    webRoot.add(modelRoot);
+    for (const roomManifest of visibleManifests) {
+      const modelRoot = new THREE.Group();
+      setMatrix(modelRoot, roomManifest.scan.scene.worldFromModel);
+      webRoot.add(modelRoot);
 
-    for (const surface of manifest.scan.scene.surfaces) {
-      const dimensions = normalizedDimensions(surface.category, surface.dimensions);
-      const geometry = new THREE.BoxGeometry(...dimensions);
-      const material = new THREE.MeshStandardMaterial({
-        color: surfaceColors[surface.category] ?? 0xcbd1d8,
-        roughness: 0.9,
-        metalness: 0.02,
-        transparent: surface.category === "window" || surface.category === "opening",
-        opacity: surface.category === "window" ? 0.28 : surface.category === "opening" ? 0.12 : 1,
-        depthWrite: surface.category !== "opening",
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.receiveShadow = true;
-      setMatrix(mesh, surface.transform);
-      modelRoot.add(mesh);
+      for (const surface of roomManifest.scan.scene.surfaces) {
+        const dimensions = normalizedDimensions(surface.category, surface.dimensions);
+        const geometry = new THREE.BoxGeometry(...dimensions);
+        const mesh = new THREE.Mesh(geometry, surfaceMaterial(surface.category));
+        mesh.receiveShadow = true;
+        setMatrix(mesh, surface.transform);
+        modelRoot.add(mesh);
 
-      if (surface.category !== "floor") {
-        const outline = new THREE.LineSegments(
-          new THREE.EdgesGeometry(geometry, 32),
-          new THREE.LineBasicMaterial({
-            color: surface.category === "window" ? 0x5b9cbd : 0x7f8996,
-            transparent: true,
-            opacity: 0.28,
-          }),
-        );
-        mesh.add(outline);
+        if (surface.category !== "floor") {
+          const outline = new THREE.LineSegments(
+            new THREE.EdgesGeometry(geometry, 32),
+            new THREE.LineBasicMaterial({
+              color: surface.category === "window" ? 0x5b9cbd : 0x7f8996,
+              transparent: true,
+              opacity: 0.28,
+            }),
+          );
+          mesh.add(outline);
+        }
       }
-    }
 
-    for (const item of manifest.scan.scene.objects) {
-      const dimensions = normalizedDimensions(item.category, item.dimensions);
-      const geometry = new THREE.BoxGeometry(...dimensions);
-      const material = new THREE.MeshStandardMaterial({
-        color: objectColors[item.category] ?? 0xa59b90,
-        roughness: 0.78,
-        metalness: 0.02,
-        transparent: true,
-        opacity: 0.76,
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      setMatrix(mesh, item.transform);
-      modelRoot.add(mesh);
+      for (const item of roomManifest.scan.scene.objects) {
+        const dimensions = normalizedDimensions(item.category, item.dimensions);
+        const geometry = new THREE.BoxGeometry(...dimensions);
+        const mesh = new THREE.Mesh(geometry, objectMaterial(item.category));
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        setMatrix(mesh, item.transform);
+        modelRoot.add(mesh);
+      }
     }
 
     const markerMeshes: THREE.Object3D[] = [];
@@ -176,7 +382,7 @@ export function RoomSceneCanvas({
         halo: THREE.Mesh;
       }
     >();
-    for (const placement of manifest.placements) {
+    for (const placement of visibleManifests.flatMap((item) => item.placements)) {
       const marker = new THREE.Group();
       marker.position.fromArray(placement.position);
       marker.userData.resourceId = placement.resource.id;
@@ -251,15 +457,17 @@ export function RoomSceneCanvas({
     selectionCommandRef.current = applySelection;
     applySelection(selectedResourceRef.current);
 
-    const bounds = manifest.scan.scene.bounds;
-    const modelBox = new THREE.Box3(
-      new THREE.Vector3(...bounds.min),
-      new THREE.Vector3(...bounds.max),
-    );
-    const modelToWeb = new THREE.Matrix4()
-      .fromArray(manifest.scan.scene.webFromWorld)
-      .multiply(new THREE.Matrix4().fromArray(manifest.scan.scene.worldFromModel));
-    const box = modelBox.clone().applyMatrix4(modelToWeb);
+    const box = visibleManifests.reduce((combined, roomManifest) => {
+      const bounds = roomManifest.scan.scene.bounds;
+      const modelBox = new THREE.Box3(
+        new THREE.Vector3(...bounds.min),
+        new THREE.Vector3(...bounds.max),
+      );
+      const modelToWeb = new THREE.Matrix4()
+        .fromArray(manifest.scan.scene.webFromWorld)
+        .multiply(new THREE.Matrix4().fromArray(roomManifest.scan.scene.worldFromModel));
+      return combined.union(modelBox.applyMatrix4(modelToWeb));
+    }, new THREE.Box3());
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const radius = Math.max(size.length() * 0.5, 1.5);
@@ -350,21 +558,32 @@ export function RoomSceneCanvas({
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       controls.dispose();
+      const materials = new Set<THREE.Material>([
+        wallMaterial,
+        floorMaterial,
+        doorMaterial,
+        windowMaterial,
+        openingMaterial,
+        ...objectMaterials.values(),
+      ]);
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
           object.geometry.dispose();
-          const materials = Array.isArray(object.material)
+          const meshMaterials = Array.isArray(object.material)
             ? object.material
             : [object.material];
-          materials.forEach((material) => material.dispose());
+          meshMaterials.forEach((material) => materials.add(material));
         }
       });
+      materials.forEach((material) => material.dispose());
+      materialTextures.forEach((texture) => texture.dispose());
+      environmentTarget.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       commandRef.current = () => undefined;
       selectionCommandRef.current = () => undefined;
     };
-  }, [manifest]);
+  }, [linkedManifests, manifest]);
 
   return (
     <div ref={hostRef} className="relative size-full overflow-hidden bg-[#f3f5f7]">

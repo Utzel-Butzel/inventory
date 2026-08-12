@@ -9,6 +9,7 @@ import { idempotencyResponseHeaders } from "@/lib/idempotency";
 export type AiOperationName = "analyze" | "cover";
 
 type StoredOperation = typeof aiIdempotencyOperations.$inferSelect;
+const processingLeaseMs = 10 * 60_000;
 
 export type AiOperationClaim =
   | { kind: "claimed"; operationId: string }
@@ -46,34 +47,77 @@ const classifyExisting = (
   return { kind: "processing", operation: existing };
 };
 
+const reclaimStaleOperation = async (
+  existing: StoredOperation,
+  options: { resourceId: string; requestHash: string },
+) => {
+  if (
+    existing.status !== "processing" ||
+    existing.resourceId !== options.resourceId ||
+    existing.requestHash !== options.requestHash ||
+    existing.updatedAt.getTime() > Date.now() - processingLeaseMs
+  ) {
+    return null;
+  }
+  const [reclaimed] = await db
+    .update(aiIdempotencyOperations)
+    .set({ updatedAt: new Date() })
+    .where(
+      and(
+        eq(aiIdempotencyOperations.id, existing.id),
+        eq(aiIdempotencyOperations.status, "processing"),
+        eq(aiIdempotencyOperations.updatedAt, existing.updatedAt),
+      ),
+    )
+    .returning({ id: aiIdempotencyOperations.id });
+  return reclaimed?.id ?? null;
+};
+
 export async function claimAiOperation(options: {
   operation: AiOperationName;
   idempotencyKey: string;
   resourceId: string;
   requestHash: string;
 }): Promise<AiOperationClaim> {
-  const existing = await findOperation(options.operation, options.idempotencyKey);
-  if (existing) return classifyExisting(existing, options);
+  // A transient preflight failure may release a just-won claim while a racing
+  // requester is resolving the unique-key conflict. Retry that narrow case so
+  // a now-free idempotency key is claimable instead of returning a false 409.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const existing = await findOperation(
+      options.operation,
+      options.idempotencyKey,
+    );
+    if (existing) {
+      const reclaimedId = await reclaimStaleOperation(existing, options);
+      return reclaimedId
+        ? { kind: "claimed", operationId: reclaimedId }
+        : classifyExisting(existing, options);
+    }
 
-  const [claimed] = await db
-    .insert(aiIdempotencyOperations)
-    .values({
-      operation: options.operation,
-      idempotencyKey: options.idempotencyKey,
-      resourceId: options.resourceId,
-      requestHash: options.requestHash,
-    })
-    .onConflictDoNothing({
-      target: [
-        aiIdempotencyOperations.operation,
-        aiIdempotencyOperations.idempotencyKey,
-      ],
-    })
-    .returning({ id: aiIdempotencyOperations.id });
-  if (claimed) return { kind: "claimed", operationId: claimed.id };
+    const [claimed] = await db
+      .insert(aiIdempotencyOperations)
+      .values({
+        operation: options.operation,
+        idempotencyKey: options.idempotencyKey,
+        resourceId: options.resourceId,
+        requestHash: options.requestHash,
+      })
+      .onConflictDoNothing({
+        target: [
+          aiIdempotencyOperations.operation,
+          aiIdempotencyOperations.idempotencyKey,
+        ],
+      })
+      .returning({ id: aiIdempotencyOperations.id });
+    if (claimed) return { kind: "claimed", operationId: claimed.id };
 
-  const winner = await findOperation(options.operation, options.idempotencyKey);
-  return winner ? classifyExisting(winner, options) : { kind: "conflict" };
+    const winner = await findOperation(
+      options.operation,
+      options.idempotencyKey,
+    );
+    if (winner) return classifyExisting(winner, options);
+  }
+  return { kind: "conflict" };
 }
 
 const jsonSnapshot = (body: Record<string, unknown>) =>
@@ -101,6 +145,22 @@ export async function finishAiOperation(options: {
     .update(aiIdempotencyOperations)
     .set(aiOperationResponseValues(options))
     .where(eq(aiIdempotencyOperations.id, options.operationId));
+}
+
+/**
+ * Release a newly claimed operation when no provider call was attempted.
+ * Transient preflight failures such as rate limiting must remain retryable with
+ * the same idempotency key after the condition clears.
+ */
+export async function releaseAiOperation(operationId: string) {
+  await db
+    .delete(aiIdempotencyOperations)
+    .where(
+      and(
+        eq(aiIdempotencyOperations.id, operationId),
+        eq(aiIdempotencyOperations.status, "processing"),
+      ),
+    );
 }
 
 export function respondToAiOperationClaim(

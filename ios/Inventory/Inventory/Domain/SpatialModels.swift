@@ -4,11 +4,59 @@ public typealias SpatialVector3 = [Double]
 public typealias SpatialQuaternion = [Double]
 public typealias SpatialMatrix4 = [Double]
 
+/// Connects one ARKit coordinate space to a geographic map location. The
+/// heading is the clockwise true-north bearing of the local ARKit `-Z` axis.
+public struct SpatialStructureGeoreference: Codable, Equatable, Sendable {
+    public enum Source: String, Codable, Equatable, Sendable {
+        case gps
+        case manual
+        case qrMarker = "qr-marker"
+        case appClip = "app-clip"
+        case other
+    }
+
+    public struct ReferencePoint: Codable, Equatable, Sendable {
+        public let id: String
+        public let label: String?
+        public let localPosition: SpatialVector3
+        public let latitude: Double
+        public let longitude: Double
+        public let altitude: Double?
+    }
+
+    public let latitude: Double
+    public let longitude: Double
+    public let altitude: Double?
+    public let headingDegrees: Double
+    public let horizontalAccuracy: Double?
+    public let verticalAccuracy: Double?
+    public let capturedAt: Date
+    public let source: Source
+    public let localReferencePosition: SpatialVector3?
+    public let referencePoints: [ReferencePoint]?
+    public let entryMarkerCode: String?
+}
+
+/// A GPS/compass observation that can be tied to an AR frame once the shared
+/// RoomPlan session has started.
+public struct SpatialGeoreferenceObservation: Equatable, Sendable {
+    public let latitude: Double
+    public let longitude: Double
+    public let altitude: Double?
+    public let horizontalAccuracy: Double?
+    public let verticalAccuracy: Double?
+    public let trueHeading: Double
+    public let headingAccuracy: Double?
+    public let capturedAt: Date
+    public let entryMarkerCode: String?
+}
+
 public struct SpatialRoomSurface: Codable, Equatable, Sendable {
     public let id: UUID
     public let category: String
     public let dimensions: SpatialVector3
     public let transform: SpatialMatrix4
+    public let polygonCorners: [SpatialVector3]?
     public let confidence: String
 }
 
@@ -37,6 +85,8 @@ public struct SpatialRoomScene: Codable, Equatable, Sendable {
     public let objects: [SpatialRoomObject]
 
     public init(
+        worldFromModel: SpatialMatrix4 = Self.identityMatrix,
+        webFromWorld: SpatialMatrix4 = Self.identityMatrix,
         bounds: SpatialRoomBounds,
         surfaces: [SpatialRoomSurface],
         objects: [SpatialRoomObject]
@@ -45,8 +95,8 @@ public struct SpatialRoomScene: Codable, Equatable, Sendable {
         coordinateSystem = "arkit-right-handed-y-up"
         units = "meter"
         matrixOrder = "column-major"
-        worldFromModel = Self.identityMatrix
-        webFromWorld = Self.identityMatrix
+        self.worldFromModel = worldFromModel
+        self.webFromWorld = webFromWorld
         self.bounds = bounds
         self.surfaces = surfaces
         self.objects = objects
@@ -83,6 +133,13 @@ public struct SpatialRoomScanSummary: Codable, Equatable, Identifiable, Sendable
     public let updatedAt: Date
     public let placementCount: Int
     public let assets: [SpatialRoomScanAsset]
+    public let structureID: UUID?
+    public let structureName: String?
+    public let floorIdentifier: String?
+    public let floorIndex: Int?
+    public let roomIdentifier: String?
+    public let coordinateSpaceID: UUID?
+    public let georeference: SpatialStructureGeoreference?
 
     public var worldMapAsset: SpatialRoomScanAsset? {
         assets.first { $0.kind == "world_map" }
@@ -100,6 +157,13 @@ public struct SpatialRoomScanSummary: Codable, Equatable, Identifiable, Sendable
         case updatedAt
         case placementCount
         case assets
+        case structureID = "structureId"
+        case structureName
+        case floorIdentifier
+        case floorIndex
+        case roomIdentifier
+        case coordinateSpaceID = "coordinateSpaceId"
+        case georeference
     }
 }
 
@@ -107,14 +171,129 @@ public struct SpatialRoomScanListResponse: Codable, Equatable, Sendable {
     public let scans: [SpatialRoomScanSummary]
 }
 
+public struct SpatialRoomSceneResponse: Codable, Equatable, Sendable {
+    public let scene: SpatialRoomSceneManifest
+}
+
+public struct SpatialRoomSceneManifest: Codable, Equatable, Sendable {
+    public struct Room: Codable, Equatable, Sendable {
+        public let id: UUID
+        public let name: String
+        public let description: String
+    }
+
+    public struct Scan: Codable, Equatable, Sendable {
+        public let id: UUID
+        public let revision: Int
+        public let status: String
+        public let scene: SpatialRoomScene
+        public let capturedAt: Date
+        public let deviceModel: String?
+        public let assets: [SpatialRoomScanAsset]
+        public let structureID: UUID?
+        public let structureName: String?
+        public let floorIdentifier: String?
+        public let floorIndex: Int?
+        public let roomIdentifier: String?
+        public let coordinateSpaceID: UUID?
+        public let georeference: SpatialStructureGeoreference?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, revision, status, scene, capturedAt, deviceModel, assets
+            case structureID = "structureId"
+            case structureName, floorIdentifier, floorIndex, roomIdentifier
+            case coordinateSpaceID = "coordinateSpaceId"
+            case georeference
+        }
+    }
+
+    public let room: Room
+    public let scan: Scan
+    public let placements: [SpatialRoomPlacement]
+}
+
+public struct SpatialRoomPlacement: Codable, Equatable, Identifiable, Sendable {
+    public struct Resource: Codable, Equatable, Sendable {
+        public struct Cover: Codable, Equatable, Sendable {
+            public let id: UUID
+            public let url: String
+            public let altText: String
+        }
+
+        public let id: UUID
+        public let name: String
+        public let description: String
+        public let type: String
+        public let status: String
+        public let location: String?
+        public let cover: Cover?
+    }
+
+    public let id: UUID
+    public let resource: Resource
+    public let position: SpatialVector3
+    public let orientation: SpatialQuaternion
+    public let extent: SpatialVector3?
+    public let confidence: Double
+    public let method: String
+    public let anchorIdentifier: UUID?
+    public let capturedAt: Date
+    public let updatedAt: Date
+}
+
 public struct SpatialRoomScanDraft: Sendable {
     public let id: UUID
+    public let roomName: String
     public let scene: SpatialRoomScene
     public let capturedAt: Date
     public let deviceModel: String
     public let worldMapURL: URL
     public let modelURL: URL
     public let guideImageURL: URL?
+    public let structureID: UUID?
+    public let structureName: String?
+    public let floorIdentifier: String?
+    public let floorIndex: Int?
+    public let roomIdentifier: String?
+    public let coordinateSpaceID: UUID?
+    public let georeference: SpatialStructureGeoreference?
+    public let structureModelURL: URL?
+
+    public init(
+        id: UUID,
+        roomName: String,
+        scene: SpatialRoomScene,
+        capturedAt: Date,
+        deviceModel: String,
+        worldMapURL: URL,
+        modelURL: URL,
+        guideImageURL: URL?,
+        structureID: UUID? = nil,
+        structureName: String? = nil,
+        floorIdentifier: String? = nil,
+        floorIndex: Int? = nil,
+        roomIdentifier: String? = nil,
+        coordinateSpaceID: UUID? = nil,
+        georeference: SpatialStructureGeoreference? = nil,
+        structureModelURL: URL? = nil
+    ) {
+        self.id = id
+        self.roomName = roomName
+        self.scene = scene
+        self.capturedAt = capturedAt
+        self.deviceModel = deviceModel
+        self.worldMapURL = worldMapURL
+        self.modelURL = modelURL
+        self.guideImageURL = guideImageURL
+        self.structureID = structureID
+        self.structureName = structureName
+        self.floorIdentifier = floorIdentifier
+        self.floorIndex = floorIndex
+        self.roomIdentifier = roomIdentifier
+        self.coordinateSpaceID = coordinateSpaceID
+        self.georeference = georeference
+        self.structureModelURL = structureModelURL
+    }
 
     public func removeLocalArtifacts() {
         let directory = worldMapURL.deletingLastPathComponent().standardizedFileURL
@@ -124,6 +303,10 @@ public struct SpatialRoomScanDraft: Sendable {
               (
                   guideImageURL == nil ||
                   guideImageURL?.deletingLastPathComponent().standardizedFileURL == directory
+              ),
+              (
+                  structureModelURL == nil ||
+                  structureModelURL?.deletingLastPathComponent().standardizedFileURL == directory
               )
         else {
             return

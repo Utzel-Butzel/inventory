@@ -20,8 +20,8 @@ WebRTC is not required for app-to-server uploads.
 - Email/password login with a device token stored in Keychain
 - Manual API token as an optional expert login
 - Optional GPS coordinates for new captures
-- LiDAR RoomPlan capture with versioned USDZ room models and reusable AR world maps
-- Relocalized item capture with automatic scene-depth/plane position measurement
+- Continuous LiDAR multi-room capture with RoomPlan `CapturedStructure` USDZ models
+- Relocalized item capture with automatic room detection and scene-depth/plane measurement
 - Spatial placement persisted in the crash-safe item upload pipeline before media analysis
 
 ## Run it
@@ -40,18 +40,39 @@ but camera and scanner acceptance must be done on a physical iPhone.
 
 ## Spatial rooms
 
-Use the **Räume** tab to scan a room once. Finish only after the mapping hint says
-enough of the room has been recorded; the app then exports normalized RoomPlan
-geometry, USDZ, a guide image, and an `ARWorldMap` that all share the same
-right-handed, Y-up coordinate frame in metres.
+Use the **Räume** tab to name a structure and floor, then scan every connected
+room without leaving the capture flow. **Raum fertig · weiter** processes the
+current room while keeping the shared `ARSession` alive; after the final room,
+`StructureBuilder` creates a `CapturedStructure`. Each room remains a separate,
+versioned scan for backwards compatibility, while all scans in the batch carry
+the same `structureId`, `coordinateSpaceId`, byte-identical `ARWorldMap`, floor
+metadata, and optional georeference. The combined structure USDZ is attached to
+the first room upload so it is not uploaded repeatedly.
 
-During normal item capture, tap **Im Raum**, choose a scan, and point the reticle
-at the item. Capture remains disabled until ARKit has relocalized the saved room.
-LiDAR scene depth is used first, with a detected/estimated plane as fallback.
-The resulting photo continues through the normal create → placement → media →
-analysis → cover queue. If the room is rescanned while a job is queued, the item
-and photo still upload, but the job warns that its 3D position must be captured
-again against the new room revision.
+The optional map anchor pairs a fresh GPS/true-heading observation with the
+current AR camera pose. `headingDegrees` is the clockwise true-north bearing of
+the local ARKit `-Z` axis; `localReferencePosition` records the camera position
+where that pairing occurred. An entrance/QR marker code can be stored as a
+re-entry affordance. With map anchoring enabled, the scan waits for a fresh
+paired GPS/compass reading and offers a retry if either sensor is unavailable.
+GPS and compass only locate and orient the structure on the map—the shared
+world map remains responsible for indoor precision.
+
+Use **Raum/Etage hinzufügen** to preserve the structure while starting a fresh
+coordinate space for another capture batch. Use **Neu scannen** for a strict
+single-room replacement; it does not duplicate the other rooms or their
+resources.
+
+During normal item capture, tap **Im Raum** and choose a structure (or an older
+standalone room). Capture remains disabled until ARKit has relocalized the saved
+coordinate space. The app then compares the camera position with oriented
+RoomPlan floor footprints and changes the active room automatically. Expanded
+exit bounds and several confirming frames prevent flicker around doorways; a
+manual room menu remains available when containment is ambiguous. LiDAR scene
+depth is used first, with a detected/estimated plane as fallback. The resulting
+photo continues through the normal create → placement → media → analysis →
+cover queue. A partial rescan intentionally receives a new `coordinateSpaceId`,
+so scans from unrelated AR origins are never mixed for automatic room detection.
 
 RoomPlan availability is checked at runtime. The simulator can exercise API and
 SwiftUI behavior, but room scanning, relocalization, scene depth, and positional
@@ -91,13 +112,17 @@ Transient network and rate-limit errors use bounded exponential backoff.
 
 ## Photo counting
 
-The resource detail exposes **Teile per Foto zählen** when the signed-in token
-has the `ai` scope. The app sends one downsampled JPEG as multipart field
+Capture, code scanning, and photo counting share one 3:4 camera viewport and
+one running capture session. The bottom mode strip can be tapped or swiped like
+the native iOS Camera modes. The resource detail opens that same camera directly
+in **Zählen** when the signed-in token has the `ai` scope.
+
+The app sends one downsampled JPEG as multipart field
 `image` and the optional, 240-character item description as `itemHint` to
 `POST /api/v1/ai/count`. The response contains `count`, `confidence`,
 `detectedItem`, `isExact`, `explanation`, `warnings`, `markers` with one
-normalized point per counted item, and `model`. The app overlays those points on the full,
-uncropped photo so every item included in the count is visible at a glance.
+normalized, material-bound point per counted item, and `model`. The app overlays
+those points on the full, uncropped photo in the same 3:4 viewport.
 
 The source photo remains only in the temporary directory for review and is
 removed when the sheet closes or another photo is taken. The detected count is

@@ -57,13 +57,19 @@ struct RootView: View {
     private var presentedTool: some View {
         switch state.presentedTool {
         case .capture:
-            CaptureView(onClose: { state.presentedTool = nil }) {
-                state.intakeQueue.enqueue($0)
-            }
+            UnifiedCameraView(
+                initialMode: .capture,
+                onClose: { state.presentedTool = nil },
+                onSubmit: { state.intakeQueue.enqueue($0) }
+            )
             .tint(InventoryTheme.accent)
         case .scanner:
-            ScannerView(onClose: { state.presentedTool = nil })
-                .tint(InventoryTheme.accent)
+            UnifiedCameraView(
+                initialMode: .scan,
+                onClose: { state.presentedTool = nil },
+                onSubmit: { state.intakeQueue.enqueue($0) }
+            )
+            .tint(InventoryTheme.accent)
         case nil:
             EmptyView()
         }

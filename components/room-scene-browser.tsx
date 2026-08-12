@@ -15,15 +15,21 @@ import {
   Rotate3d,
   Search,
   Smartphone,
+  Building2,
+  Layers3,
+  Map as MapIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/components/ui";
+import { floorIdentifier } from "@/lib/spatial-map-features";
 import {
   fetchJson,
   type ClientRoomPlacement,
   type ClientRoomScanSummary,
   type ClientRoomSceneManifest,
+  type ClientSpatialStructureDetail,
+  type ClientSpatialStructureSummary,
 } from "@/lib/client-types";
 
 const RoomSceneCanvas = dynamic(
@@ -58,6 +64,10 @@ export function RoomSceneBrowser() {
   const [loadingScans, setLoadingScans] = useState(true);
   const [loadingScene, setLoadingScene] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [structures, setStructures] = useState<ClientSpatialStructureSummary[]>([]);
+  const [structureDetail, setStructureDetail] = useState<ClientSpatialStructureDetail | null>(null);
+  const [selectedStructureId, setSelectedStructureId] = useState<string | null>(null);
+  const [selectedFloorIdentifier, setSelectedFloorIdentifier] = useState<string | null>(null);
   const sceneRequestRef = useRef(0);
 
   const updateUrl = useCallback(
@@ -92,6 +102,58 @@ export function RoomSceneBrowser() {
       .finally(() => setLoadingScans(false));
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchJson<{ structures: ClientSpatialStructureSummary[] }>(
+      "/api/v1/spatial-structures",
+      { cache: "no-store", signal: controller.signal },
+    )
+      .then(({ structures: loaded }) => setStructures(loaded))
+      .catch(() => {
+        // Legacy servers continue with the flat room-scan list.
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const requestedStructureId = searchParams.get("structure");
+    if (requestedStructureId && structures.some((item) => item.id === requestedStructureId)) {
+      setSelectedStructureId(requestedStructureId);
+    }
+  }, [searchParams, structures]);
+
+  useEffect(() => {
+    if (!selectedStructureId) {
+      setStructureDetail(null);
+      setSelectedFloorIdentifier(null);
+      return;
+    }
+    const controller = new AbortController();
+    void fetchJson<{ structure: ClientSpatialStructureDetail }>(
+      `/api/v1/spatial-structures/${encodeURIComponent(selectedStructureId)}`,
+      { cache: "no-store", signal: controller.signal },
+    )
+      .then(({ structure }) => {
+        setStructureDetail(structure);
+        const requestedFloor = searchParams.get("floor");
+        const floor = structure.floors.find(
+          (candidate) => floorIdentifier(candidate.identifier, candidate.index) === requestedFloor,
+        )
+          ?? structure.floors[0]
+          ?? null;
+        setSelectedFloorIdentifier(
+          floor ? floorIdentifier(floor.identifier, floor.index) : null,
+        );
+        const requestedScan = searchParams.get("room");
+        const room = floor?.rooms.find((candidate) => candidate.scan?.id === requestedScan)
+          ?? floor?.rooms.find((candidate) => candidate.scan)
+          ?? null;
+        if (room?.scan) setSelectedScanId(room.scan.id);
+      })
+      .catch(() => setStructureDetail(null));
+    return () => controller.abort();
+  }, [searchParams, selectedStructureId]);
 
   useEffect(() => {
     if (!scans.length) return;
@@ -150,6 +212,38 @@ export function RoomSceneBrowser() {
     updateUrl(scanId, null);
   };
 
+  const selectStructure = (structureId: string | null) => {
+    setSelectedStructureId(structureId);
+    setSelectedFloorIdentifier(null);
+    const params = new URLSearchParams(searchParams.toString());
+    if (structureId) params.set("structure", structureId);
+    else params.delete("structure");
+    params.delete("floor");
+    params.delete("room");
+    params.delete("resource");
+    const suffix = params.toString();
+    router.replace(suffix ? `/spaces?${suffix}` : "/spaces", { scroll: false });
+  };
+
+  const selectFloor = (identifier: string) => {
+    const floor = structureDetail?.floors.find(
+      (candidate) => floorIdentifier(candidate.identifier, candidate.index) === identifier,
+    );
+    const scanId = floor?.rooms.find((room) => room.scan)?.scan?.id ?? null;
+    setSelectedFloorIdentifier(identifier);
+    if (scanId) {
+      setSelectedScanId(scanId);
+      setSelectedResourceId(null);
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    if (selectedStructureId) params.set("structure", selectedStructureId);
+    params.set("floor", identifier);
+    if (scanId) params.set("room", scanId);
+    else params.delete("room");
+    params.delete("resource");
+    router.replace(`/spaces?${params.toString()}`, { scroll: false });
+  };
+
   const selectResource = useCallback(
     (resourceId: string) => {
       setSelectedResourceId(resourceId);
@@ -158,18 +252,60 @@ export function RoomSceneBrowser() {
     [selectedScanId, updateUrl],
   );
 
+  const selectedFloor = structureDetail?.floors.find(
+    (floor) => floorIdentifier(floor.identifier, floor.index) === selectedFloorIdentifier,
+  ) ?? null;
+  const groupedScans = selectedFloor?.rooms.filter(
+    (room): room is typeof room & { scan: NonNullable<typeof room.scan> } => Boolean(room.scan),
+  ) ?? [];
+
+  const linkedManifests = useMemo<ClientRoomSceneManifest[]>(() => {
+    const linkedFloor = structureDetail?.floors.find(
+      (floor) => floorIdentifier(floor.identifier, floor.index) === selectedFloorIdentifier,
+    );
+    const coordinateSpaceId = manifest?.scan.coordinateSpaceId;
+    if (!manifest || !linkedFloor || !coordinateSpaceId) return [];
+    return linkedFloor.rooms.flatMap((room) => {
+      if (
+        !room.scan ||
+        room.scan.id === manifest.scan.id ||
+        (room.scan.coordinateSpaceId ?? room.coordinateSpaceId) !== coordinateSpaceId
+      ) return [];
+      return [{
+        room: {
+          id: room.roomResourceId,
+          name: room.roomName,
+          description: "",
+        },
+        scan: room.scan,
+        placements: room.placements,
+        structureId: structureDetail?.id,
+        structureName: structureDetail?.name,
+        floorIdentifier: linkedFloor.identifier,
+        floorIndex: linkedFloor.index,
+        roomIdentifier: room.roomIdentifier,
+        coordinateSpaceId,
+        georeference: room.georeference,
+      }];
+    });
+  }, [manifest, selectedFloorIdentifier, structureDetail]);
+
+  const visiblePlacements = useMemo(
+    () => [manifest, ...linkedManifests].flatMap((item) => item?.placements ?? []),
+    [linkedManifests, manifest],
+  );
+
   const placements = useMemo(() => {
-    if (!manifest) return [];
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return manifest.placements;
-    return manifest.placements.filter(({ resource }) =>
+    if (!normalized) return visiblePlacements;
+    return visiblePlacements.filter(({ resource }) =>
       `${resource.name} ${resource.type} ${resource.status} ${resource.location ?? ""}`
         .toLowerCase()
         .includes(normalized),
     );
-  }, [manifest, query]);
+  }, [query, visiblePlacements]);
 
-  const selectedPlacement = manifest?.placements.find(
+  const selectedPlacement = visiblePlacements.find(
     (placement) => placement.resource.id === selectedResourceId,
   ) ?? null;
   const modelAsset = manifest?.scan.assets.find((asset) => asset.kind === "model_usdz");
@@ -226,11 +362,65 @@ export function RoomSceneBrowser() {
             {scans.length} room{scans.length === 1 ? "" : "s"}
           </span>
           <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            {manifest?.placements.length ?? 0} positioned item
-            {(manifest?.placements.length ?? 0) === 1 ? "" : "s"}
+            {visiblePlacements.length} positioned item
+            {visiblePlacements.length === 1 ? "" : "s"}
           </span>
+          {linkedManifests.length ? (
+            <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 font-semibold text-emerald-700 shadow-sm">
+              {linkedManifests.length + 1} linked rooms · shared AR frame
+            </span>
+          ) : null}
         </div>
       </header>
+
+      {structures.length ? (
+        <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:flex-row md:items-center">
+          <label className="flex min-w-0 flex-1 items-center gap-2">
+            <Building2 className="size-4 shrink-0 text-violet-600" aria-hidden="true" />
+            <span className="sr-only">Building</span>
+            <select
+              value={selectedStructureId ?? ""}
+              onChange={(event) => selectStructure(event.target.value || null)}
+              className="h-9 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 outline-none focus:border-violet-400 focus:bg-white"
+            >
+              <option value="">All individual rooms</option>
+              {structures.map((structure) => (
+                <option key={structure.id} value={structure.id}>
+                  {structure.name} · {structure.floorCount} floors · {structure.roomCount} rooms
+                </option>
+              ))}
+            </select>
+          </label>
+          {structureDetail?.floors.length ? (
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              <Layers3 className="mx-1 size-4 shrink-0 text-slate-400" aria-hidden="true" />
+              {structureDetail.floors.map((floor) => (
+                <button
+                  key={`${floor.identifier ?? "unassigned"}:${floor.index ?? "none"}`}
+                  type="button"
+                  onClick={() => selectFloor(floorIdentifier(floor.identifier, floor.index))}
+                  className={cn(
+                    "shrink-0 rounded-xl px-3 py-2 text-[11px] font-semibold transition",
+                    selectedFloorIdentifier === floorIdentifier(floor.identifier, floor.index)
+                      ? "bg-violet-600 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                  )}
+                >
+                  {floorIdentifier(floor.identifier, floor.index)} · {floor.roomCount}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {selectedStructureId ? (
+            <Link
+              href={`/map?structure=${encodeURIComponent(selectedStructureId)}${selectedFloorIdentifier ? `&floor=${encodeURIComponent(selectedFloorIdentifier)}` : ""}`}
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              <MapIcon className="size-3.5" aria-hidden="true" /> View on map
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
 
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -244,7 +434,16 @@ export function RoomSceneBrowser() {
             Scanned rooms
           </p>
           <div className="space-y-1">
-            {scans.map((scan) => {
+            {(selectedStructureId && groupedScans.length
+              ? groupedScans.map(({ scan, roomName }) => ({
+                  id: scan.id,
+                  roomName,
+                  revision: scan.revision,
+                  placementCount: selectedFloor?.rooms.find((room) => room.scan?.id === scan.id)?.placements.length ?? 0,
+                  coordinateSpaceId: scan.coordinateSpaceId,
+                }))
+              : scans
+            ).map((scan) => {
               const active = scan.id === selectedScanId;
               return (
                 <button
@@ -271,6 +470,11 @@ export function RoomSceneBrowser() {
                     <span className="mt-0.5 block text-[11px] text-slate-500">
                       Revision {scan.revision} · {scan.placementCount} items
                     </span>
+                    {scan.coordinateSpaceId ? (
+                      <span className="mt-0.5 block truncate text-[9px] text-slate-400">
+                        Shared AR frame {scan.coordinateSpaceId.slice(0, 8)}
+                      </span>
+                    ) : null}
                   </span>
                   <ChevronRight className="size-4 shrink-0 opacity-45" aria-hidden="true" />
                 </button>
@@ -283,6 +487,7 @@ export function RoomSceneBrowser() {
           {manifest && !loadingScene ? (
             <RoomSceneCanvas
               manifest={manifest}
+              linkedManifests={linkedManifests}
               selectedResourceId={selectedResourceId}
               onSelectResource={selectResource}
             />
@@ -296,7 +501,7 @@ export function RoomSceneBrowser() {
             <SelectedPlacementCard placement={selectedPlacement} />
           ) : null}
 
-          {manifest && !manifest.placements.length ? (
+          {manifest && !visiblePlacements.length ? (
             <div className="absolute inset-x-4 bottom-14 mx-auto max-w-md rounded-2xl border border-white/80 bg-white/90 p-4 text-center shadow-lg backdrop-blur">
               <MapPin className="mx-auto size-5 text-violet-500" aria-hidden="true" />
               <p className="mt-2 text-sm font-semibold text-slate-800">No items placed yet</p>

@@ -1,14 +1,38 @@
 import AVFoundation
 import AudioToolbox
 import Foundation
+import ImageIO
+import UIKit
 
 final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
+    static let photoAspectRatio: CGFloat = 3.0 / 4.0
+
     enum State: Equatable {
         case idle
         case requestingPermission
         case ready
         case denied
         case unavailable(String)
+    }
+
+    enum PhotoCaptureError: Error, LocalizedError, Sendable {
+        case cameraNotReady
+        case captureFailed(String)
+        case processingFailed(String)
+        case missingImageData
+
+        var errorDescription: String? {
+            switch self {
+            case .cameraNotReady:
+                "Die Kamera ist noch nicht bereit. Bitte versuche es erneut."
+            case .captureFailed(let message):
+                "Die Aufnahme wurde nicht abgeschlossen: \(message)"
+            case .processingFailed(let message):
+                "Das Foto konnte nicht aufgenommen werden: \(message)"
+            case .missingImageData:
+                "Die Kamera hat kein lesbares Foto geliefert. Bitte versuche es erneut."
+            }
+        }
     }
 
     @Published private(set) var state: State = .idle
@@ -32,7 +56,7 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
     var onCode: ((String) -> Void)?
-    var onPhoto: ((Data) -> Void)?
+    var onPhoto: ((Result<Data, PhotoCaptureError>) -> Void)?
 
     private let sessionQueue = DispatchQueue(
         label: "digital.congru.inventory.camera.session",
@@ -48,6 +72,9 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     private var lastScan: (value: String, time: Date)?
     private let scanningStateLock = NSLock()
     private var scanningEnabledStorage = true
+    private var videoRotationAngle: CGFloat = 90
+    private let photoCaptureStateLock = NSLock()
+    private var processedPhotoCaptureIDs: Set<Int64> = []
 
     func start() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -75,17 +102,24 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
 
     func capturePhoto() {
         sessionQueue.async { [weak self] in
-            guard let self, self.configured, self.session.isRunning else { return }
-            let settings: AVCapturePhotoSettings
-            if self.photoOutput.availablePhotoCodecTypes.contains(.jpeg) {
-                settings = AVCapturePhotoSettings(
-                    format: [AVVideoCodecKey: AVVideoCodecType.jpeg]
+            guard let self else { return }
+            guard self.configured, self.session.isRunning else {
+                self.deliverPhotoResult(
+                    Result<Data, PhotoCaptureError>.failure(.cameraNotReady)
                 )
-            } else {
-                settings = AVCapturePhotoSettings()
+                return
             }
-            settings.photoQualityPrioritization = .balanced
+            self.applyOutputGeometry()
+            let settings = self.makePhotoSettings()
             self.photoOutput.capturePhoto(with: settings, delegate: self)
+        }
+    }
+
+    func updateVideoRotationAngle(_ angle: CGFloat) {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.videoRotationAngle = angle
+            self.applyOutputGeometry()
         }
     }
 
@@ -146,10 +180,12 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
                 }
 
                 self.session.addInput(nextInput)
+                self.configurePhotoDimensions(for: nextDevice)
                 self.session.commitConfiguration()
 
                 self.cameraInput = nextInput
                 self.cameraDevice = nextDevice
+                self.applyOutputGeometry()
                 self.publishCapabilities(for: nextDevice)
             } catch {
                 // Keep the current camera active if the alternate input cannot be created.
@@ -200,6 +236,7 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
             }
             session.addInput(input)
             session.addOutput(photoOutput)
+            configurePhotoDimensions(for: device)
 
             if session.canAddOutput(metadataOutput) {
                 session.addOutput(metadataOutput)
@@ -216,6 +253,7 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
 
             cameraInput = input
             cameraDevice = device
+            applyOutputGeometry()
             configured = true
             publishCapabilities(for: device)
             return true
@@ -285,6 +323,100 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     private func setSwitchingCamera(_ switching: Bool) {
         DispatchQueue.main.async { [weak self] in self?.isSwitchingCamera = switching }
     }
+
+    private func applyOutputGeometry() {
+        for output in session.outputs {
+            guard let connection = output.connection(with: .video) else { continue }
+            if connection.isVideoRotationAngleSupported(videoRotationAngle) {
+                connection.videoRotationAngle = videoRotationAngle
+            }
+            if connection.isVideoMirroringSupported {
+                connection.automaticallyAdjustsVideoMirroring = false
+                connection.isVideoMirrored = cameraDevice?.position == .front
+            }
+        }
+    }
+
+    private func configurePhotoDimensions(for device: AVCaptureDevice) {
+        let sensorAspectRatio = 1 / Self.photoAspectRatio
+        let dimensions = device.activeFormat.supportedMaxPhotoDimensions.min { lhs, rhs in
+            let lhsRatio = CGFloat(max(lhs.width, lhs.height))
+                / CGFloat(min(lhs.width, lhs.height))
+            let rhsRatio = CGFloat(max(rhs.width, rhs.height))
+                / CGFloat(min(rhs.width, rhs.height))
+            let lhsDistance = abs(lhsRatio - sensorAspectRatio)
+            let rhsDistance = abs(rhsRatio - sensorAspectRatio)
+            if abs(lhsDistance - rhsDistance) > 0.000_1 {
+                return lhsDistance < rhsDistance
+            }
+            return Int64(lhs.width) * Int64(lhs.height) > Int64(rhs.width) * Int64(rhs.height)
+        }
+        if let dimensions {
+            photoOutput.maxPhotoDimensions = dimensions
+        }
+    }
+
+    private func makePhotoSettings() -> AVCapturePhotoSettings {
+        let settings: AVCapturePhotoSettings
+        if photoOutput.availablePhotoCodecTypes.contains(.jpeg) {
+            settings = AVCapturePhotoSettings(
+                format: [AVVideoCodecKey: AVVideoCodecType.jpeg]
+            )
+        } else {
+            settings = AVCapturePhotoSettings()
+        }
+        settings.photoQualityPrioritization = .balanced
+        let maximumDimensions = photoOutput.maxPhotoDimensions
+        if maximumDimensions.width > 0, maximumDimensions.height > 0 {
+            settings.maxPhotoDimensions = maximumDimensions
+        }
+        if let previewPixelFormat = settings.availablePreviewPhotoPixelFormatTypes.first {
+            // Ask AVFoundation for a preview generated from the same processed photo.
+            // Its 3:4 dimensions mirror the in-app viewfinder and also provide a
+            // usable fallback if the primary encoded representation is unavailable.
+            settings.previewPhotoFormat = [
+                kCVPixelBufferPixelFormatTypeKey as String: previewPixelFormat,
+                kCVPixelBufferWidthKey as String: 1_200,
+                kCVPixelBufferHeightKey as String: 1_600,
+            ]
+        }
+        return settings
+    }
+
+    private func deliverPhotoResult(_ result: Result<Data, PhotoCaptureError>) {
+        DispatchQueue.main.async { [weak self] in self?.onPhoto?(result) }
+    }
+
+    private func deliverProcessedPhotoResult(
+        id: Int64,
+        _ result: Result<Data, PhotoCaptureError>
+    ) {
+        photoCaptureStateLock.lock()
+        let inserted = processedPhotoCaptureIDs.insert(id).inserted
+        photoCaptureStateLock.unlock()
+        guard inserted else { return }
+        deliverPhotoResult(result)
+    }
+
+    private func finishPhotoCapture(id: Int64, error: Error?) {
+        photoCaptureStateLock.lock()
+        let processingDelivered = processedPhotoCaptureIDs.remove(id) != nil
+        photoCaptureStateLock.unlock()
+        guard !processingDelivered else { return }
+        if let error {
+            deliverPhotoResult(.failure(.captureFailed(error.localizedDescription)))
+        } else {
+            deliverPhotoResult(.failure(.missingImageData))
+        }
+    }
+
+    private static func previewJPEGData(from photo: AVCapturePhoto) -> Data? {
+        guard let preview = photo.previewCGImageRepresentation() else { return nil }
+        let rawOrientation = photo.metadata[kCGImagePropertyOrientation as String] as? UInt32
+        let orientation = rawOrientation.flatMap(UIImage.Orientation.init(exifOrientation:)) ?? .up
+        return UIImage(cgImage: preview, scale: 1, orientation: orientation)
+            .jpegData(compressionQuality: 0.95)
+    }
 }
 
 extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
@@ -318,7 +450,42 @@ extension CameraService: AVCapturePhotoCaptureDelegate {
         didFinishProcessingPhoto photo: AVCapturePhoto,
         error: Error?
     ) {
-        guard error == nil, let data = photo.fileDataRepresentation() else { return }
-        DispatchQueue.main.async { [weak self] in self?.onPhoto?(data) }
+        let captureID = photo.resolvedSettings.uniqueID
+        if let error {
+            deliverProcessedPhotoResult(
+                id: captureID,
+                .failure(.processingFailed(error.localizedDescription))
+            )
+            return
+        }
+        if let data = photo.fileDataRepresentation() ?? Self.previewJPEGData(from: photo) {
+            deliverProcessedPhotoResult(id: captureID, .success(data))
+        } else {
+            deliverProcessedPhotoResult(id: captureID, .failure(.missingImageData))
+        }
+    }
+
+    func photoOutput(
+        _ output: AVCapturePhotoOutput,
+        didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings,
+        error: Error?
+    ) {
+        finishPhotoCapture(id: resolvedSettings.uniqueID, error: error)
+    }
+}
+
+private extension UIImage.Orientation {
+    init?(exifOrientation: UInt32) {
+        switch exifOrientation {
+        case 1: self = .up
+        case 2: self = .upMirrored
+        case 3: self = .down
+        case 4: self = .downMirrored
+        case 5: self = .leftMirrored
+        case 6: self = .right
+        case 7: self = .rightMirrored
+        case 8: self = .left
+        default: return nil
+        }
     }
 }

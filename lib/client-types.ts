@@ -8,6 +8,7 @@ import type {
   SpatialQuaternion,
   SpatialVector3,
 } from "@/lib/room-scene-contract";
+import type { SpatialGeoreference } from "@/lib/spatial-georeference";
 
 export type ClientMedia = Omit<MediaRecord, "createdAt"> & {
   createdAt: string;
@@ -34,7 +35,7 @@ export type ClientApiToken = Omit<
 
 export type ClientRoomScanAsset = {
   id: string;
-  kind: "world_map" | "model_usdz" | "guide_image";
+  kind: "world_map" | "model_usdz" | "structure_model" | "guide_image";
   name: string;
   mimeType: string;
   size: number;
@@ -55,6 +56,13 @@ export type ClientRoomScanSummary = {
   updatedAt: string;
   placementCount: number;
   assets: ClientRoomScanAsset[];
+  structureId?: string | null;
+  structureName?: string | null;
+  floorIdentifier?: string | null;
+  floorIndex?: number | null;
+  roomIdentifier?: string | null;
+  coordinateSpaceId?: string | null;
+  georeference?: SpatialGeoreference | null;
 };
 
 export type ClientRoomPlacement = {
@@ -78,18 +86,77 @@ export type ClientRoomPlacement = {
   updatedAt: string;
 };
 
+export type ClientRoomSceneScan = {
+  id: string;
+  revision: number;
+  status: "active" | "superseded";
+  scene: RoomScene;
+  capturedAt: string;
+  deviceModel: string | null;
+  assets: ClientRoomScanAsset[];
+  structureId?: string | null;
+  structureName?: string | null;
+  floorIdentifier?: string | null;
+  floorIndex?: number | null;
+  roomIdentifier?: string | null;
+  coordinateSpaceId?: string | null;
+  georeference?: SpatialGeoreference | null;
+};
+
 export type ClientRoomSceneManifest = {
   room: { id: string; name: string; description: string };
-  scan: {
-    id: string;
-    revision: number;
-    status: "active" | "superseded";
-    scene: RoomScene;
-    capturedAt: string;
-    deviceModel: string | null;
-    assets: ClientRoomScanAsset[];
-  };
+  scan: ClientRoomSceneScan;
   placements: ClientRoomPlacement[];
+  structureId?: string | null;
+  structureName?: string | null;
+  floorIdentifier?: string | null;
+  floorIndex?: number | null;
+  roomIdentifier?: string | null;
+  coordinateSpaceId?: string | null;
+  georeference?: SpatialGeoreference | null;
+};
+
+export type ClientSpatialStructureBounds = {
+  min: SpatialVector3;
+  max: SpatialVector3;
+};
+
+export type ClientSpatialStructureSummary = {
+  id: string;
+  name: string;
+  description: string;
+  georeference: SpatialGeoreference | null;
+  floorCount: number;
+  roomCount: number;
+  activeScanCount: number;
+  coordinateSpaceCount?: number;
+  boundsCoordinateSpaceId?: string | null;
+  boundsGeoreference?: SpatialGeoreference | null;
+  bounds: ClientSpatialStructureBounds | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ClientSpatialStructureRoom = {
+  roomIdentifier: string | null;
+  roomResourceId: string;
+  roomName: string;
+  coordinateSpaceId?: string | null;
+  georeference?: SpatialGeoreference | null;
+  scan: ClientRoomSceneScan | null;
+  placements: ClientRoomPlacement[];
+};
+
+export type ClientSpatialStructureFloor = {
+  identifier: string | null;
+  index: number | null;
+  roomCount: number;
+  bounds?: ClientSpatialStructureBounds | null;
+  rooms: ClientSpatialStructureRoom[];
+};
+
+export type ClientSpatialStructureDetail = ClientSpatialStructureSummary & {
+  floors: ClientSpatialStructureFloor[];
 };
 
 export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit) {

@@ -52,12 +52,18 @@ struct ResourceDetailView: View {
                 showEditor = false
             }
         }
-        .sheet(isPresented: $showStockCounter) {
-            StockCountView(resource: current) { updated in
-                current = updated
-                showStockCounter = false
-            }
-            .presentationDetents([.large])
+        .fullScreenCover(isPresented: $showStockCounter) {
+            UnifiedCameraView(
+                initialMode: .count,
+                initialCountResource: current,
+                onClose: { showStockCounter = false },
+                onSubmit: { state.intakeQueue.enqueue($0) },
+                onCountApplied: { updated in
+                    current = updated
+                    showStockCounter = false
+                }
+            )
+            .tint(InventoryTheme.accent)
         }
         .sheet(isPresented: $showStockManagement, onDismiss: {
             Task { await refresh() }

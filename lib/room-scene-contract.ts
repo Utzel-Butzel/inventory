@@ -51,8 +51,23 @@ export const roomSurfaceSchema = z.object({
   category: roomSurfaceCategorySchema,
   dimensions: dimensionsSchema,
   transform: spatialMatrix4Schema,
+  polygonCorners: z.array(spatialVector3Schema).min(3).max(1_024).optional(),
   confidence: z.enum(["low", "medium", "high"]),
 });
+
+export const spatialMatricesApproximatelyEqual = (
+  left: readonly number[],
+  right: readonly number[],
+  epsilon = 1e-6,
+) =>
+  left.length === 16 &&
+  right.length === 16 &&
+  left.every(
+    (value, index) =>
+      Number.isFinite(value) &&
+      Number.isFinite(right[index]) &&
+      Math.abs(value - right[index]!) <= epsilon,
+  );
 
 export const roomObjectSchema = z.object({
   id: z.uuid(),

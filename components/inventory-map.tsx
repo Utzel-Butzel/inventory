@@ -17,6 +17,8 @@ import {
   Satellite,
   Search,
   Shapes,
+  Building2,
+  Layers3,
   Trash2,
   X,
 } from "lucide-react";
@@ -26,7 +28,17 @@ import type {
   ResourceMapCoordinate,
   ResourceMapFeature,
 } from "@/db/schema";
-import { fetchJson, type ClientResource } from "@/lib/client-types";
+import {
+  fetchJson,
+  type ClientResource,
+  type ClientSpatialStructureDetail,
+  type ClientSpatialStructureSummary,
+} from "@/lib/client-types";
+import {
+  floorIdentifier,
+  spatialStructureMapFeatures,
+  type SpatialMapFeatureProperties,
+} from "@/lib/spatial-map-features";
 import type { MapBasemap, MapDrawMode } from "@/components/inventory-map-canvas";
 
 const InventoryMapCanvas = dynamic(
@@ -128,6 +140,10 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
   const [resourceTypes, setResourceTypes] = useState<InventoryTypeOption[]>(
     fallbackResourceTypes,
   );
+  const [structures, setStructures] = useState<ClientSpatialStructureSummary[]>([]);
+  const [structureDetail, setStructureDetail] = useState<ClientSpatialStructureDetail | null>(null);
+  const [activeStructureId, setActiveStructureId] = useState<string | null>(null);
+  const [activeFloorIdentifier, setActiveFloorIdentifier] = useState<string | null>(null);
   const isEditing = canEdit && editMode;
 
   useEffect(() => {
@@ -142,6 +158,60 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
     });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setActiveStructureId(params.get("structure"));
+    setActiveFloorIdentifier(params.get("floor"));
+  }, []);
+
+  const updateSpatialUrl = useCallback((structureId: string | null, floor: string | null) => {
+    const params = new URLSearchParams(window.location.search);
+    if (structureId) params.set("structure", structureId);
+    else params.delete("structure");
+    if (floor) params.set("floor", floor);
+    else params.delete("floor");
+    const suffix = params.toString();
+    window.history.replaceState(null, "", suffix ? `/map?${suffix}` : "/map");
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchJson<{ structures: ClientSpatialStructureSummary[] }>(
+      "/api/v1/spatial-structures",
+      { cache: "no-store", signal: controller.signal },
+    )
+      .then(({ structures: loaded }) => setStructures(loaded))
+      .catch(() => {
+        // Older servers simply keep the existing item-only map.
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!activeStructureId) {
+      setStructureDetail(null);
+      setActiveFloorIdentifier(null);
+      return;
+    }
+    const controller = new AbortController();
+    void fetchJson<{ structure: ClientSpatialStructureDetail }>(
+      `/api/v1/spatial-structures/${encodeURIComponent(activeStructureId)}`,
+      { cache: "no-store", signal: controller.signal },
+    )
+      .then(({ structure }) => {
+        setStructureDetail(structure);
+        setActiveFloorIdentifier((current) =>
+          structure.floors.some((floor) => floorIdentifier(floor.identifier, floor.index) === current)
+            ? current
+            : structure.floors[0]
+              ? floorIdentifier(structure.floors[0].identifier, structure.floors[0].index)
+              : null,
+        );
+      })
+      .catch(() => setStructureDetail(null));
+    return () => controller.abort();
+  }, [activeStructureId]);
 
   const featuresByResource = useMemo(
     () =>
@@ -199,6 +269,23 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
   const locatedCount = resources.filter(
     (resource) => (featuresByResource[resource.id] ?? []).length > 0,
   ).length;
+  const spatialFeatures = useMemo(
+    () => spatialStructureMapFeatures(structures, structureDetail, {
+      activeStructureId,
+      activeFloorIdentifier,
+    }),
+    [activeFloorIdentifier, activeStructureId, structureDetail, structures],
+  );
+
+  const selectSpatialFeature = useCallback((feature: SpatialMapFeatureProperties) => {
+    setActiveStructureId(feature.structureId);
+    if (feature.floorIdentifier) setActiveFloorIdentifier(feature.floorIdentifier);
+    if (feature.resourceId) {
+      setActiveResourceId(feature.resourceId);
+      setSelectedIds([feature.resourceId]);
+    }
+    updateSpatialUrl(feature.structureId, feature.floorIdentifier ?? null);
+  }, [updateSpatialUrl]);
 
   useEffect(() => {
     if (!activeResourceId) {
@@ -423,7 +510,8 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
             {isEditing ? "Edit locations" : "Locations"}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            {locatedCount} of {resources.length} items positioned · points, rooms and object outlines
+            {locatedCount} of {resources.length} items positioned
+            {structures.length ? ` · ${structures.length} georeferenced building${structures.length === 1 ? "" : "s"}` : " · points, rooms and object outlines"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -625,12 +713,68 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
             drawMode={drawMode}
             basemap={basemap}
             polygonDraft={polygonDraft}
+            spatialFeatures={spatialFeatures}
+            activeSpatialStructureId={activeStructureId}
+            onSelectSpatialFeature={selectSpatialFeature}
             onSelectResource={selectResource}
             onSelectFeature={setActiveFeatureId}
             onPlacePoint={addPoint}
             onAddPolygonPoint={(coordinate) => setPolygonDraft((current) => [...current, coordinate])}
             onChangeFeatures={markChanged}
           />
+
+          {structures.length ? (
+            <div className="absolute right-14 top-3 z-10 w-[min(300px,calc(100%-72px))] rounded-xl border border-white/80 bg-white/95 p-2 shadow-lg backdrop-blur">
+              <div className="flex items-center gap-2 px-1 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                <Building2 size={13} className="text-violet-600" /> Buildings
+              </div>
+              <select
+                value={activeStructureId ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value || null;
+                  setActiveStructureId(value);
+                  setActiveFloorIdentifier(null);
+                  updateSpatialUrl(value, null);
+                }}
+                className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none focus:border-violet-400"
+                aria-label="Select building"
+              >
+                <option value="">All buildings</option>
+                {structures.map((structure) => (
+                  <option key={structure.id} value={structure.id}>
+                    {structure.name} · {structure.roomCount} rooms
+                  </option>
+                ))}
+              </select>
+              {structureDetail?.floors.length ? (
+                <div className="mt-2 flex items-center gap-1.5 overflow-x-auto">
+                  <Layers3 size={13} className="mx-1 shrink-0 text-slate-400" />
+                  {structureDetail.floors.map((floor) => (
+                    <button
+                      key={`${floor.identifier ?? "unassigned"}:${floor.index ?? "none"}`}
+                      type="button"
+                      onClick={() => {
+                        const identifier = floorIdentifier(floor.identifier, floor.index);
+                        setActiveFloorIdentifier(identifier);
+                        updateSpatialUrl(activeStructureId, identifier);
+                      }}
+                      className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold ${activeFloorIdentifier === floorIdentifier(floor.identifier, floor.index) ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+                    >
+                      {floorIdentifier(floor.identifier, floor.index)} · {floor.roomCount}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {activeStructureId ? (
+                <Link
+                  href={`/spaces?structure=${encodeURIComponent(activeStructureId)}${activeFloorIdentifier ? `&floor=${encodeURIComponent(activeFloorIdentifier)}` : ""}`}
+                  className="mt-2 flex h-8 items-center justify-center rounded-lg bg-slate-900 text-[10px] font-semibold text-white hover:bg-slate-800"
+                >
+                  Open rooms in 3D
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="absolute left-3 top-3 z-10 flex rounded-xl border border-white/80 bg-white/95 p-1 shadow-lg backdrop-blur">
             <button type="button" onClick={() => setBasemap("streets")} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold ${basemap === "streets" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}><MapIcon size={13} /> Map</button>
