@@ -25,6 +25,8 @@ public enum JPEGDownsamplingError: Error, LocalizedError, Sendable {
     case unableToCreateDestination
     case unableToFinalizeDestination
     case unableToReadOutputSize
+    case invalidCropAspectRatio
+    case unableToCropImage
 
     public var errorDescription: String? {
         switch self {
@@ -42,6 +44,10 @@ public enum JPEGDownsamplingError: Error, LocalizedError, Sendable {
             return "The JPEG could not be written."
         case .unableToReadOutputSize:
             return "The size of the processed JPEG could not be determined."
+        case .invalidCropAspectRatio:
+            return "The requested image crop aspect ratio is invalid."
+        case .unableToCropImage:
+            return "The image could not be cropped to the camera viewfinder."
         }
     }
 }
@@ -65,19 +71,25 @@ public actor JPEGDownsampler {
 
     public func downsample(
         sourceURL: URL,
-        destinationURL: URL
+        destinationURL: URL,
+        cropAspectRatio: CGFloat? = nil
     ) throws -> ProcessedJPEG {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, sourceOptions) else {
             throw JPEGDownsamplingError.unreadableSource
         }
-        return try writeDownsampledJPEG(from: source, destinationURL: destinationURL)
+        return try writeDownsampledJPEG(
+            from: source,
+            destinationURL: destinationURL,
+            cropAspectRatio: cropAspectRatio
+        )
     }
 
     /// Useful for AVCapturePhoto output, which already arrives as encoded Data.
     public func downsample(
         encodedImageData: Data,
-        destinationURL: URL
+        destinationURL: URL,
+        cropAspectRatio: CGFloat? = nil
     ) throws -> ProcessedJPEG {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(
@@ -86,12 +98,17 @@ public actor JPEGDownsampler {
         ) else {
             throw JPEGDownsamplingError.unreadableSource
         }
-        return try writeDownsampledJPEG(from: source, destinationURL: destinationURL)
+        return try writeDownsampledJPEG(
+            from: source,
+            destinationURL: destinationURL,
+            cropAspectRatio: cropAspectRatio
+        )
     }
 
     private func writeDownsampledJPEG(
         from source: CGImageSource,
-        destinationURL: URL
+        destinationURL: URL,
+        cropAspectRatio: CGFloat?
     ) throws -> ProcessedJPEG {
         let thumbnailOptions: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -107,6 +124,8 @@ public actor JPEGDownsampler {
             throw JPEGDownsamplingError.unableToCreateThumbnail
         }
 
+        let outputImage = try centerCroppedImage(image, aspectRatio: cropAspectRatio)
+
         guard let destination = CGImageDestinationCreateWithURL(
             destinationURL as CFURL,
             UTType.jpeg.identifier as CFString,
@@ -120,7 +139,7 @@ public actor JPEGDownsampler {
             kCGImageDestinationLossyCompressionQuality: compressionQuality,
             kCGImagePropertyOrientation: 1,
         ]
-        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        CGImageDestinationAddImage(destination, outputImage, properties as CFDictionary)
         guard CGImageDestinationFinalize(destination) else {
             throw JPEGDownsamplingError.unableToFinalizeDestination
         }
@@ -131,9 +150,48 @@ public actor JPEGDownsampler {
         }
         return ProcessedJPEG(
             fileURL: destinationURL,
-            pixelWidth: image.width,
-            pixelHeight: image.height,
+            pixelWidth: outputImage.width,
+            pixelHeight: outputImage.height,
             byteCount: byteCount
         )
+    }
+
+    private func centerCroppedImage(
+        _ image: CGImage,
+        aspectRatio: CGFloat?
+    ) throws -> CGImage {
+        guard let aspectRatio else { return image }
+        guard aspectRatio.isFinite, aspectRatio > 0 else {
+            throw JPEGDownsamplingError.invalidCropAspectRatio
+        }
+
+        let width = CGFloat(image.width)
+        let height = CGFloat(image.height)
+        let currentAspectRatio = width / height
+        guard abs(currentAspectRatio - aspectRatio) > 0.000_1 else { return image }
+
+        let cropRect: CGRect
+        if currentAspectRatio > aspectRatio {
+            let croppedWidth = floor(height * aspectRatio)
+            cropRect = CGRect(
+                x: floor((width - croppedWidth) / 2),
+                y: 0,
+                width: croppedWidth,
+                height: height
+            )
+        } else {
+            let croppedHeight = floor(width / aspectRatio)
+            cropRect = CGRect(
+                x: 0,
+                y: floor((height - croppedHeight) / 2),
+                width: width,
+                height: croppedHeight
+            )
+        }
+
+        guard let cropped = image.cropping(to: cropRect.integral) else {
+            throw JPEGDownsamplingError.unableToCropImage
+        }
+        return cropped
     }
 }

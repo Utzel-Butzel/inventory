@@ -46,7 +46,10 @@ public final class APIClient: Sendable {
 
     private let credentialStore: any CredentialStore
     private let session: URLSession
+    private let objectCountSession: URLSession
     private let onUnauthorized: (@Sendable () async -> Void)?
+
+    private static let objectCountTimeout: TimeInterval = 360
 
     /// `serverURL` is the deployment root, for example `https://inventory.example`,
     /// not the `/api/v1` URL. This lets relative `/api/files/...` media resolve safely.
@@ -64,7 +67,21 @@ public final class APIClient: Sendable {
             .appendingPathComponent("api", isDirectory: true)
             .appendingPathComponent("v1", isDirectory: true)
         self.credentialStore = credentialStore
-        self.session = session ?? Self.makeSecureSession(for: normalizedURL)
+        if let session {
+            // Preserve the injected configuration (including URLProtocol test doubles),
+            // but clone it so the count timeout cannot affect unrelated API traffic.
+            self.session = session
+            self.objectCountSession = Self.makeObjectCountSession(
+                for: normalizedURL,
+                basedOn: session.configuration
+            )
+        } else {
+            self.session = Self.makeSecureSession(for: normalizedURL)
+            self.objectCountSession = Self.makeObjectCountSession(
+                for: normalizedURL,
+                basedOn: .default
+            )
+        }
         self.onUnauthorized = onUnauthorized
     }
 
@@ -143,6 +160,15 @@ public final class APIClient: Sendable {
 
     public func listRoomScans() async throws -> SpatialRoomScanListResponse {
         let url = try makeAPIURL(path: ["room-scans"])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func roomScene(scanID: UUID) async throws -> SpatialRoomSceneResponse {
+        let url = try makeAPIURL(path: [
+            "room-scans",
+            scanID.uuidString.lowercased(),
+        ])
         let request = try await authorizedRequest(url: url, method: "GET")
         return try await execute(request)
     }
@@ -374,13 +400,19 @@ public final class APIClient: Sendable {
 
         let url = try makeAPIURL(path: ["ai", "count"])
         var request = try await authorizedRequest(url: url, method: "POST")
+        // The server may legitimately use its complete 300-second execution window.
+        // Leave transport overhead without weakening timeouts for unrelated requests.
+        request.timeoutInterval = Self.objectCountTimeout
         request.setValue(
             "multipart/form-data; boundary=\(body.boundary)",
             forHTTPHeaderField: "Content-Type"
         )
 
         do {
-            let (data, response) = try await session.upload(for: request, fromFile: body.fileURL)
+            let (data, response) = try await objectCountSession.upload(
+                for: request,
+                fromFile: body.fileURL
+            )
             return try decodeResponse(data: data, response: response)
         } catch is CancellationError {
             throw CancellationError()
@@ -844,13 +876,32 @@ public final class APIClient: Sendable {
         return components.url
     }
 
-    private static func makeSecureSession(for serverURL: URL) -> URLSession {
+    private static func makeSecureSession(
+        for serverURL: URL,
+        requestTimeout: TimeInterval = 120,
+        resourceTimeout: TimeInterval = 300
+    ) -> URLSession {
         let configuration = URLSessionConfiguration.default
         configuration.waitsForConnectivity = true
-        configuration.timeoutIntervalForRequest = 120
-        configuration.timeoutIntervalForResource = 300
+        configuration.timeoutIntervalForRequest = requestTimeout
+        configuration.timeoutIntervalForResource = resourceTimeout
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.httpMaximumConnectionsPerHost = 2
+        return URLSession(
+            configuration: configuration,
+            delegate: SameOriginRedirectDelegate(allowedOrigin: serverURL),
+            delegateQueue: nil
+        )
+    }
+
+    private static func makeObjectCountSession(
+        for serverURL: URL,
+        basedOn sourceConfiguration: URLSessionConfiguration
+    ) -> URLSession {
+        let configuration = sourceConfiguration
+        configuration.timeoutIntervalForRequest = objectCountTimeout
+        configuration.timeoutIntervalForResource = objectCountTimeout
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(
             configuration: configuration,
             delegate: SameOriginRedirectDelegate(allowedOrigin: serverURL),

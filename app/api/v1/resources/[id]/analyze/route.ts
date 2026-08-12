@@ -11,13 +11,17 @@ import {
   aiOperationResponseValues,
   claimAiOperation,
   finishAiOperation,
+  releaseAiOperation,
   respondToAiOperationClaim,
   respondToFinishedAiOperation,
 } from "@/lib/ai-idempotency";
+import {
+  consumePaidAiRateLimit,
+  paidAiRateLimitHeaders,
+} from "@/lib/ai-rate-limit";
 import { requireIdentity } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { hashIdempotentPayload, readIdempotencyKey } from "@/lib/idempotency";
-import { checkRateLimit } from "@/lib/rate-limit";
 import { getResource } from "@/lib/resources";
 import { mediaToDataUrl } from "@/lib/storage";
 
@@ -74,6 +78,25 @@ export async function POST(request: Request, context: Context) {
       idempotencyKey: idempotency.key,
     });
   };
+  const finishTransient = async (
+    body: Record<string, unknown>,
+    status: number,
+    headers?: Record<string, string>,
+  ) => {
+    if (operationId) {
+      try {
+        await releaseAiOperation(operationId);
+      } catch (error) {
+        console.error("Unable to release the transient AI analysis claim.", error);
+      }
+    }
+    return respondToFinishedAiOperation({
+      body,
+      status,
+      headers,
+      idempotencyKey: idempotency.key,
+    });
+  };
 
   const resource = await getResource(id);
   if (!resource) return finish({ error: "Not found" }, 404);
@@ -87,20 +110,45 @@ export async function POST(request: Request, context: Context) {
     );
   }
 
-  const limit = checkRateLimit(`analyze:${authorization.identity.subject}`, {
-    limit: Number(process.env.AI_RATE_LIMIT_PER_MINUTE ?? "10"),
-    windowMs: 60_000,
-  });
-  if (!limit.allowed) {
+  let dataUrls: string[];
+  try {
+    dataUrls = await Promise.all(imageMedia.map(mediaToDataUrl));
+  } catch (error) {
     return finish(
-      { error: "AI request limit reached. Try again shortly." },
+      {
+        error:
+          error instanceof Error ? error.message : "Unable to read item images.",
+      },
+      502,
+    );
+  }
+
+  let limit;
+  try {
+    limit = await consumePaidAiRateLimit({
+      operation: "analyze",
+      identity: authorization.identity,
+    });
+  } catch (error) {
+    console.error("Unable to check the AI analysis rate limit.", error);
+    return finishTransient(
+      { error: "AI rate limiting is temporarily unavailable." },
+      503,
+    );
+  }
+  if (!limit.allowed) {
+    return finishTransient(
+      {
+        error: limit.disabled
+          ? "AI analysis is disabled by the administrator."
+          : "AI request limit reached. Try again shortly.",
+      },
       429,
-      { "Retry-After": String(limit.retryAfterSeconds ?? 60) },
+      paidAiRateLimitHeaders(limit),
     );
   }
 
   try {
-    const dataUrls = await Promise.all(imageMedia.map(mediaToDataUrl));
     const { result, model } = await analyzeInventoryImages(dataUrls);
     const generatedFields: string[] = [];
     const values: Partial<NewResource> = {

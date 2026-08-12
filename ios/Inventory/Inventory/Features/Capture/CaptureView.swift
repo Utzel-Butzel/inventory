@@ -37,11 +37,16 @@ struct CaptureView: View {
                     codeScanning = false
                     camera.scanningEnabled = false
                 }
-                camera.onPhoto = { data in
-                    withAnimation(.easeOut(duration: 0.12)) { shutterFlash = true }
-                    model.addCapturedData(data)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
-                        withAnimation(.easeIn(duration: 0.14)) { shutterFlash = false }
+                camera.onPhoto = { result in
+                    switch result {
+                    case .success(let data):
+                        withAnimation(.easeOut(duration: 0.12)) { shutterFlash = true }
+                        model.addCameraCapturedData(data)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+                            withAnimation(.easeIn(duration: 0.14)) { shutterFlash = false }
+                        }
+                    case .failure(let error):
+                        model.errorMessage = error.localizedDescription
                     }
                 }
                 if !state.canUseAI {

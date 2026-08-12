@@ -163,12 +163,11 @@ a separate managed PostgreSQL service:
    add the optional AI provider credentials. Never configure
    `SIMPLE_AUTH_PASSWORD` on the production container.
 
-Deploy with one replica for migrations and AI rate limiting. The migration lock
-makes concurrent starts safe, but the current AI limiter is process-local. Back
-up PostgreSQL and `/app/data/uploads` together; database media rows and stored
-files form one logical dataset. A deployment is not complete until login,
-upload, API-token, stock-movement, container-recreation, and backup/restore
-smoke tests have passed.
+The migration lock makes concurrent starts safe, and paid-AI limits are shared
+through PostgreSQL, so neither requires a single app replica. Back up PostgreSQL
+and `/app/data/uploads` together; database media rows and stored files form one
+logical dataset. A deployment is not complete until login, upload, API-token,
+stock-movement, container-recreation, and backup/restore smoke tests have passed.
 
 ## Authentication
 
@@ -273,29 +272,50 @@ movement. Serialized inventory is reviewed through its individual units; after
 any unit statuses are corrected, the matching review completes the same cycle
 without replacing unit-level traceability with a bulk adjustment.
 
-### Indoor 3D rooms
+### Indoor 3D rooms and structures
 
-On a LiDAR-capable iPhone, open **Rooms**, create a named room, and walk its
-perimeter while RoomPlan records walls, openings, floors, and recognized
-furniture. Inventory stores a versioned normalized scene for the web viewer,
-the original USDZ model, an optional guide image, and an archived `ARWorldMap`
-used only by the native app.
+On a LiDAR-capable iPhone, open **Rooms**, create or continue a named structure,
+and scan its rooms floor by floor. RoomPlan records walls, openings, floors,
+and recognized furniture; rooms captured in one uninterrupted capture batch
+share a `coordinateSpaceId`. Inventory stores each room as a
+versioned normalized scene together with its original USDZ model, an optional
+combined structure USDZ and guide image, and an archived `ARWorldMap` used only
+by the native app.
+
+**Add room/floor** keeps the building identity but starts a deliberately new
+coordinate space, while **Rescan room** replaces only that room's active
+revision. This prevents independently initialized AR sessions from being
+overlaid as though they shared an origin.
 
 When capturing a new item, choose **Im Raum**, select the recorded room, and
 point the reticle at the object. The app first relocalizes against the saved
 world map; only then does it combine LiDAR scene depth (or a plane raycast) with
 the camera pose to save the item's position in metres. The same AR frame becomes
 an ordinary inventory photo, so the existing image analysis can learn the
-record's name and appearance. Open **Rooms 3D** in the web app to orbit the
-parametric room, search its positioned items, and click a marker to open the
-inventory record.
+record's name and appearance. Open **Rooms 3D** in the web app to select a
+building and floor, orbit its connected parametric rooms, search positioned
+items, and click a marker to open the inventory record.
+
+A structure can carry a canonical latitude/longitude marker, while every AR
+coordinate space can carry its own geographic anchor, altitude, and true-north
+heading. The map uses these anchors to drill down from a building marker to
+floors, room footprints, and positioned inventory. GPS and compass establish
+the global building location; when map anchoring is enabled, capture waits for
+a fresh paired reading before the scan begins. The saved AR world map remains responsible for
+precise indoor relocalization. An entry marker code can be stored for a future
+or external re-entry workflow, but the current client does not use it to
+relocalize. Independently captured or unrelocalized frames are never overlaid:
+local room bounds are combined only when all involved scans have the same
+explicit `coordinateSpaceId`.
 
 RoomPlan is a measured parametric model rather than a photorealistic scan, and
 small tools are represented by location markers rather than automatically
 generated 3D meshes. A new room revision intentionally supersedes the previous
-coordinate frame; old placements stay attached to the old revision until each
-item is captured again. `MAX_ROOM_SCAN_UPLOAD_MB` limits the combined world map,
-USDZ, and guide image for one upload and defaults to 100 MB.
+room scan. A new rescan receives a new `coordinateSpaceId` instead of being
+assumed compatible with an older AR origin; old placements stay attached to the
+old revision until each item is captured again. `MAX_ROOM_SCAN_UPLOAD_MB` limits the
+combined world map, room/structure USDZ, and guide image for one upload and
+defaults to 100 MB.
 
 ### Assignments and reservations
 
@@ -432,25 +452,30 @@ Image analysis uses OpenAI’s Responses API:
 ```dotenv
 OPENAI_API_KEY=...
 OPENAI_VISION_MODEL=gpt-4.1-mini
-# Optional; defaults to OPENAI_VISION_MODEL when omitted
+# Optional; the counting-specific default is gpt-5.4 when omitted
 OPENAI_COUNT_MODEL=
 AI_OUTPUT_LANGUAGE=English
+AI_ANALYSIS_RATE_LIMIT_PER_MINUTE=10
+AI_COUNT_RATE_LIMIT_PER_MINUTE=10
 ```
 
 An OpenAI-compatible endpoint can be selected with `OPENAI_BASE_URL`.
 
 The bulk-stock screen and native item detail can send one transient camera image
-to the vision model, count the requested part, and copy the result into a stock
-receipt or issue. The image is decoded, resized, and passed to the provider but
-is not stored as inventory media. Counting can be uncertain when parts overlap,
-are cropped, or are hidden, so the detected quantity and confidence are always
-shown for review and can be corrected before the stock movement is submitted.
+to the counting model, localize the requested parts, and copy the result into a
+stock receipt or issue. Counting uses OpenAI Responses with Code Interpreter and
+an independent visual verification pass. Its temporary `user_data` upload is
+deleted after the request (with a one-hour expiry as a cleanup safeguard) and is
+not stored as inventory media. Counting can be uncertain when parts overlap, are
+cropped, or are hidden, so the detected quantity and confidence are always shown
+for review and can be corrected before the stock movement is submitted.
 
 Cover generation can use OpenAI:
 
 ```dotenv
 IMAGE_EDIT_PROVIDER=openai
 OPENAI_IMAGE_EDIT_MODEL=gpt-image-1
+AI_IMAGE_RATE_LIMIT_PER_HOUR=12
 ```
 
 Or Google:
@@ -475,9 +500,15 @@ The model choice is remembered locally in each client and included in every
 cover request. The server validates it against this allowlist. Leave both new
 variables empty to keep the existing single-provider, single-model behavior.
 
-AI routes are authenticated, scope-checked, upload-limited, and protected by
-per-process rate limits. For a multi-replica public deployment, replace the
-in-memory limiter with a shared Redis-compatible limiter.
+Every provider-backed AI route is authenticated, scope-checked, upload-limited,
+and protected by an atomic PostgreSQL rate limit per identity. The limits work
+across app replicas and restarts. `AI_ANALYSIS_RATE_LIMIT_PER_MINUTE` and
+`AI_COUNT_RATE_LIMIT_PER_MINUTE` control analysis and photo counting
+independently; if either is unset, it falls back to the backwards-compatible
+`AI_RATE_LIMIT_PER_MINUTE` value (default `10`). Cover generation uses
+`AI_IMAGE_RATE_LIMIT_PER_HOUR` (default `12`). Set an operation's value to `0`
+to disable it. Invalid explicitly configured values fail closed and disable the
+affected operation until the configuration is corrected.
 
 ## API tokens
 
@@ -486,7 +517,7 @@ once; only its SHA-256 digest is stored. Available scopes are:
 
 - `read`: list and retrieve records, files, statistics, and duplicate matches
 - `write`: create, edit, delete, upload, reorder, and merge
-- `ai`: run image analysis and cover generation
+- `ai`: run image analysis, photo counting, and cover generation
 
 Use a token as a bearer credential:
 

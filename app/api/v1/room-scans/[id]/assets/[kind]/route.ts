@@ -13,6 +13,7 @@ type Context = { params: Promise<{ id: string; kind: string }> };
 const allowedKinds = new Set<RoomScanAssetKind>([
   "world_map",
   "model_usdz",
+  "structure_model",
   "guide_image",
 ]);
 

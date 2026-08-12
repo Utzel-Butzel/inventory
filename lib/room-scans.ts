@@ -8,6 +8,8 @@ import {
   resourceSpatialPlacements,
   roomScanAssets,
   roomScans,
+  spatialCoordinateSpaces,
+  spatialStructures,
   type RoomScanAssetKind,
 } from "@/db/schema";
 import { db } from "@/lib/db";
@@ -15,7 +17,19 @@ import type {
   RoomScene,
   SpatialPlacementInput,
 } from "@/lib/room-scene-contract";
+import { spatialMatricesApproximatelyEqual } from "@/lib/room-scene-contract";
+import {
+  RoomScanSpatialConflictError,
+  roomScanMatchesReplayIdentity,
+  roomScanWorldMapChecksumMatches,
+  type ExistingRoomScanReplayIdentity,
+  type RoomScanReplayRequest,
+} from "@/lib/room-scan-upload-policy";
 import type { StoredBinaryAsset } from "@/lib/storage";
+import {
+  spatialGeoreferenceFramesApproximatelyEqual,
+  type RoomScanSpatialMetadata,
+} from "@/lib/spatial-structure-contract";
 
 const assetUrl = (scanId: string, kind: RoomScanAssetKind) =>
   `/api/v1/room-scans/${encodeURIComponent(scanId)}/assets/${kind}`;
@@ -34,9 +48,19 @@ const serializeAsset = (asset: typeof roomScanAssets.$inferSelect) => ({
 export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
   const activeOnly = options.activeOnly ?? true;
   const rows = await db
-    .select({ scan: roomScans, room: resources })
+    .select({
+      scan: roomScans,
+      room: resources,
+      structure: spatialStructures,
+      coordinateSpace: spatialCoordinateSpaces,
+    })
     .from(roomScans)
     .innerJoin(resources, eq(resources.id, roomScans.roomResourceId))
+    .leftJoin(spatialStructures, eq(spatialStructures.id, roomScans.structureId))
+    .leftJoin(
+      spatialCoordinateSpaces,
+      eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+    )
     .where(activeOnly ? eq(roomScans.status, "active") : undefined)
     .orderBy(desc(roomScans.capturedAt));
 
@@ -56,10 +80,17 @@ export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
   ]);
 
   return {
-    scans: rows.map(({ scan, room }) => ({
+    scans: rows.map(({ scan, room, structure, coordinateSpace }) => ({
       id: scan.id,
       roomResourceId: room.id,
       roomName: room.name,
+      structureId: scan.structureId,
+      structureName: structure?.name ?? null,
+      coordinateSpaceId: scan.coordinateSpaceId,
+      floorIdentifier: scan.floorIdentifier,
+      floorIndex: scan.floorIndex,
+      roomIdentifier: scan.roomIdentifier,
+      georeference: coordinateSpace?.georeference ?? null,
       revision: scan.revision,
       status: scan.status,
       capturedAt: scan.capturedAt,
@@ -77,9 +108,19 @@ export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
 
 export async function getRoomScene(scanId: string) {
   const [row] = await db
-    .select({ scan: roomScans, room: resources })
+    .select({
+      scan: roomScans,
+      room: resources,
+      structure: spatialStructures,
+      coordinateSpace: spatialCoordinateSpaces,
+    })
     .from(roomScans)
     .innerJoin(resources, eq(resources.id, roomScans.roomResourceId))
+    .leftJoin(spatialStructures, eq(spatialStructures.id, roomScans.structureId))
+    .leftJoin(
+      spatialCoordinateSpaces,
+      eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+    )
     .where(eq(roomScans.id, scanId))
     .limit(1);
   if (!row) return null;
@@ -113,8 +154,22 @@ export async function getRoomScene(scanId: string) {
       name: row.room.name,
       description: row.room.description,
     },
+    structureId: row.scan.structureId,
+    structureName: row.structure?.name ?? null,
+    coordinateSpaceId: row.scan.coordinateSpaceId,
+    floorIdentifier: row.scan.floorIdentifier,
+    floorIndex: row.scan.floorIndex,
+    roomIdentifier: row.scan.roomIdentifier,
+    georeference: row.coordinateSpace?.georeference ?? null,
     scan: {
       id: row.scan.id,
+      structureId: row.scan.structureId,
+      structureName: row.structure?.name ?? null,
+      coordinateSpaceId: row.scan.coordinateSpaceId,
+      floorIdentifier: row.scan.floorIdentifier,
+      floorIndex: row.scan.floorIndex,
+      roomIdentifier: row.scan.roomIdentifier,
+      georeference: row.coordinateSpace?.georeference ?? null,
       revision: row.scan.revision,
       status: row.scan.status,
       scene: row.scan.scene,
@@ -191,6 +246,36 @@ export async function findRoomScan(scanId: string) {
   return scan ?? null;
 }
 
+export async function findRoomScanReplayIdentity(
+  scanId: string,
+): Promise<ExistingRoomScanReplayIdentity | null> {
+  const [row] = await db
+    .select({
+      scan: roomScans,
+      coordinateSpaceGeoreference: spatialCoordinateSpaces.georeference,
+    })
+    .from(roomScans)
+    .leftJoin(
+      spatialCoordinateSpaces,
+      eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+    )
+    .where(eq(roomScans.id, scanId))
+    .limit(1);
+  if (!row) return null;
+  const assets = await db
+    .select({
+      kind: roomScanAssets.kind,
+      checksumSha256: roomScanAssets.checksumSha256,
+    })
+    .from(roomScanAssets)
+    .where(eq(roomScanAssets.roomScanId, scanId));
+  return {
+    ...row.scan,
+    coordinateSpaceGeoreference: row.coordinateSpaceGeoreference ?? null,
+    assets,
+  };
+}
+
 export async function createRoomScan(options: {
   id: string;
   roomResourceId: string;
@@ -202,11 +287,23 @@ export async function createRoomScan(options: {
     kind: RoomScanAssetKind;
     stored: StoredBinaryAsset;
   }>;
+  spatial?: RoomScanSpatialMetadata;
 }) {
-  const existing = await findRoomScan(options.id);
+  const replayRequest: RoomScanReplayRequest = {
+    roomResourceId: options.roomResourceId,
+    scene: options.scene,
+    capturedAt: options.capturedAt,
+    deviceModel: options.deviceModel,
+    spatial: options.spatial,
+    assets: options.assets.map(({ kind, stored }) => ({
+      kind,
+      checksumSha256: stored.checksumSha256,
+    })),
+  };
+  const existing = await findRoomScanReplayIdentity(options.id);
   if (existing) {
-    if (existing.roomResourceId !== options.roomResourceId) {
-      throw new Error("That scan identifier belongs to another room.");
+    if (!roomScanMatchesReplayIdentity(existing, replayRequest)) {
+      throw new Error("That scan identifier belongs to a different upload payload.");
     }
     return { kind: "existing", scanId: existing.id } as const;
   }
@@ -220,17 +317,38 @@ export async function createRoomScan(options: {
     // race into a duplicate insert and leave the loser's files orphaned.
     const [lockedExisting] = await transaction
       .select({
-        id: roomScans.id,
-        roomResourceId: roomScans.roomResourceId,
+        scan: roomScans,
+        coordinateSpaceGeoreference: spatialCoordinateSpaces.georeference,
       })
       .from(roomScans)
+      .leftJoin(
+        spatialCoordinateSpaces,
+        eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+      )
       .where(eq(roomScans.id, options.id))
       .limit(1);
     if (lockedExisting) {
-      if (lockedExisting.roomResourceId !== options.roomResourceId) {
-        throw new Error("That scan identifier belongs to another room.");
+      const existingAssets = await transaction
+        .select({
+          kind: roomScanAssets.kind,
+          checksumSha256: roomScanAssets.checksumSha256,
+        })
+        .from(roomScanAssets)
+        .where(eq(roomScanAssets.roomScanId, options.id));
+      if (
+        !roomScanMatchesReplayIdentity(
+          {
+            ...lockedExisting.scan,
+            coordinateSpaceGeoreference:
+              lockedExisting.coordinateSpaceGeoreference ?? null,
+            assets: existingAssets,
+          },
+          replayRequest,
+        )
+      ) {
+        throw new Error("That scan identifier belongs to a different upload payload.");
       }
-      return { kind: "existing", scanId: lockedExisting.id } as const;
+      return { kind: "existing", scanId: lockedExisting.scan.id } as const;
     }
 
     const [room] = await transaction
@@ -241,6 +359,165 @@ export async function createRoomScan(options: {
     if (!room) throw new Error("Room resource not found.");
     if (room.type !== "place") {
       throw new Error("Room scans can only be attached to place resources.");
+    }
+
+    let structureId: string | null = null;
+    let coordinateSpaceId: string | null = null;
+    if (options.spatial?.structureId) {
+      structureId = options.spatial.structureId;
+      let [existingStructure] = await transaction
+        .select()
+        .from(spatialStructures)
+        .where(eq(spatialStructures.id, structureId))
+        .limit(1);
+      if (!existingStructure) {
+        await transaction
+          .insert(spatialStructures)
+          .values({
+            id: structureId,
+            name: options.spatial.structureName ?? "Untitled structure",
+            georeference: options.spatial.georeference ?? null,
+            createdBy: options.actor,
+            updatedBy: options.actor,
+          })
+          .onConflictDoNothing({ target: spatialStructures.id });
+        [existingStructure] = await transaction
+          .select()
+          .from(spatialStructures)
+          .where(eq(spatialStructures.id, structureId))
+          .limit(1);
+      }
+      if (!existingStructure) {
+        throw new Error("Unable to resolve the spatial structure.");
+      }
+      if (!existingStructure.georeference && options.spatial.georeference) {
+        await transaction
+          .update(spatialStructures)
+          .set({
+            georeference: options.spatial.georeference,
+            updatedBy: options.actor,
+            updatedAt: new Date(),
+          })
+          .where(eq(spatialStructures.id, structureId));
+      }
+
+      // A grouped upload without an explicit coordinate-space id is isolated
+      // to this scan. That is safer than assuming separately captured rooms
+      // share an AR origin and rotation.
+      coordinateSpaceId = options.spatial.coordinateSpaceId ?? options.id;
+      let [existingSpace] = await transaction
+        .select()
+        .from(spatialCoordinateSpaces)
+        .where(eq(spatialCoordinateSpaces.id, coordinateSpaceId))
+        .limit(1);
+      if (!existingSpace) {
+        await transaction
+          .insert(spatialCoordinateSpaces)
+          .values({
+            id: coordinateSpaceId,
+            structureId,
+            georeference: options.spatial.georeference ?? null,
+            createdBy: options.actor,
+            updatedBy: options.actor,
+          })
+          .onConflictDoNothing({ target: spatialCoordinateSpaces.id });
+        [existingSpace] = await transaction
+          .select()
+          .from(spatialCoordinateSpaces)
+          .where(eq(spatialCoordinateSpaces.id, coordinateSpaceId))
+          .limit(1);
+        if (!existingSpace) {
+          throw new Error("Unable to resolve the coordinate space.");
+        }
+      }
+      // Serialize grouped uploads through the coordinate-space row. The web
+      // viewer and map both rely on one immutable frame definition for every
+      // room in a shared AR coordinate space.
+      await transaction.execute(
+        sql`select ${spatialCoordinateSpaces.id} from ${spatialCoordinateSpaces} where ${spatialCoordinateSpaces.id} = ${coordinateSpaceId} for update`,
+      );
+      [existingSpace] = await transaction
+        .select()
+        .from(spatialCoordinateSpaces)
+        .where(eq(spatialCoordinateSpaces.id, coordinateSpaceId))
+        .limit(1);
+      if (!existingSpace) {
+        throw new Error("Unable to resolve the coordinate space.");
+      }
+      if (existingSpace.structureId !== structureId) {
+        throw new Error("That coordinate space belongs to another structure.");
+      }
+      if (
+        existingSpace.georeference &&
+        options.spatial.georeference &&
+        !spatialGeoreferenceFramesApproximatelyEqual(
+          existingSpace.georeference,
+          options.spatial.georeference,
+        )
+      ) {
+        throw new RoomScanSpatialConflictError(
+          "georeference",
+          "That coordinate space already has a different georeference.",
+        );
+      }
+      if (!existingSpace.georeference && options.spatial.georeference) {
+        await transaction
+          .update(spatialCoordinateSpaces)
+          .set({
+            georeference: options.spatial.georeference,
+            updatedBy: options.actor,
+            updatedAt: new Date(),
+          })
+          .where(eq(spatialCoordinateSpaces.id, coordinateSpaceId));
+      }
+
+      const [existingCoordinateScene] = await transaction
+        .select({ scene: roomScans.scene })
+        .from(roomScans)
+        .where(eq(roomScans.coordinateSpaceId, coordinateSpaceId))
+        .limit(1);
+      if (
+        existingCoordinateScene &&
+        !spatialMatricesApproximatelyEqual(
+          existingCoordinateScene.scene.webFromWorld,
+          options.scene.webFromWorld,
+        )
+      ) {
+        throw new RoomScanSpatialConflictError(
+          "web-from-world",
+          "That coordinate space already has a different webFromWorld transform.",
+        );
+      }
+
+      // A coordinate-space id identifies one archived ARWorldMap snapshot.
+      // The current iOS batch deliberately uploads byte-identical map data for
+      // every room in that snapshot, giving the server a stronger frame guard
+      // than today's identity webFromWorld matrix alone.
+      const incomingWorldMap = options.assets.find(
+        ({ kind }) => kind === "world_map",
+      );
+      const [existingWorldMap] = await transaction
+        .select({ checksumSha256: roomScanAssets.checksumSha256 })
+        .from(roomScanAssets)
+        .innerJoin(roomScans, eq(roomScans.id, roomScanAssets.roomScanId))
+        .where(
+          and(
+            eq(roomScans.coordinateSpaceId, coordinateSpaceId),
+            eq(roomScanAssets.kind, "world_map"),
+          ),
+        )
+        .limit(1);
+      if (
+        !roomScanWorldMapChecksumMatches(
+          existingWorldMap?.checksumSha256,
+          incomingWorldMap?.stored.checksumSha256,
+        )
+      ) {
+        throw new RoomScanSpatialConflictError(
+          "world-map",
+          "That coordinate space already has a different ARWorldMap snapshot.",
+        );
+      }
     }
 
     const [{ highestRevision }] = await transaction
@@ -263,6 +540,11 @@ export async function createRoomScan(options: {
     await transaction.insert(roomScans).values({
       id: options.id,
       roomResourceId: room.id,
+      structureId,
+      coordinateSpaceId,
+      floorIdentifier: options.spatial?.floorIdentifier,
+      floorIndex: options.spatial?.floorIndex,
+      roomIdentifier: options.spatial?.roomIdentifier,
       revision,
       status: "active",
       scene: options.scene,

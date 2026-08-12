@@ -116,7 +116,8 @@ final class StockCountViewModel: ObservableObject {
             do {
                 let image = try await downsampler.downsample(
                     encodedImageData: data,
-                    destinationURL: destination
+                    destinationURL: destination,
+                    cropAspectRatio: CameraService.photoAspectRatio
                 )
                 try Task.checkCancellation()
                 photoURL = image.fileURL
@@ -168,6 +169,12 @@ final class StockCountViewModel: ObservableObject {
         pendingMovement = nil
         errorMessage = nil
         phase = .camera
+    }
+
+    func prepare(for itemHint: String) {
+        guard phase != .booking else { return }
+        retake()
+        self.itemHint = Self.limitItemHint(itemHint)
     }
 
     func apply(

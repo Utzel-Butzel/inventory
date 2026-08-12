@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inventory API
-  version: 1.9.0
+  version: 1.10.0
   description: Scoped API for configurable inventory structures, indoor 3D room scans, location-aware stock, cycle counts, assignments, CSV exchange, typed custom fields, media, AI, and data quality.
   license:
     name: MIT License
@@ -42,6 +42,62 @@ tags:
   - name: Insights
     description: Workspace statistics and duplicate detection.
 paths:
+  /spatial-structures:
+    get:
+      tags: [Spatial rooms]
+      summary: List buildings and their active indoor-scan coverage
+      responses:
+        "200":
+          description: Structures with active room, floor, coordinate-space, and compatible-bounds counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [structures]
+                properties:
+                  structures:
+                    type: array
+                    items: { $ref: "#/components/schemas/SpatialStructureSummary" }
+    post:
+      tags: [Spatial rooms]
+      summary: Create a building or other multi-room structure
+      description: Requires write scope. A structure may also be created atomically by the first grouped room-scan upload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SpatialStructureCreate" }
+      responses:
+        "201":
+          description: Structure created
+        "409": { description: The client-provided structure id already exists }
+        "422": { description: Invalid structure or georeference }
+  /spatial-structures/{structureId}:
+    parameters:
+      - name: structureId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Spatial rooms]
+      summary: Retrieve active rooms grouped by floor and AR coordinate space
+      responses:
+        "200":
+          description: Structure, coordinate spaces, floors, room scenes, and placements
+        "404": { description: Spatial structure not found }
+        "422": { description: Invalid spatial structure identifier }
+    patch:
+      tags: [Spatial rooms]
+      summary: Update a structure's name or canonical map anchor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SpatialStructurePatch" }
+      responses:
+        "200": { description: Structure updated }
+        "404": { description: Spatial structure not found }
+        "422": { description: Invalid structure change or georeference }
   /room-scans:
     get:
       tags: [Spatial rooms]
@@ -80,6 +136,22 @@ paths:
                 roomResourceId: { type: string, format: uuid }
                 capturedAt: { type: string, format: date-time }
                 deviceModel: { type: string, maxLength: 120 }
+                structureId:
+                  type: string
+                  format: uuid
+                  description: Groups this room into a building. The first upload may create this id.
+                structureName: { type: string, minLength: 1, maxLength: 240 }
+                coordinateSpaceId:
+                  type: string
+                  format: uuid
+                  description: Shared by rooms captured or relocalized in the same ARKit world frame. Never reuse it for independently captured coordinate systems.
+                floorIdentifier: { type: string, minLength: 1, maxLength: 120 }
+                floorIndex: { type: integer, minimum: -1000, maximum: 10000 }
+                roomIdentifier: { type: string, minLength: 1, maxLength: 120 }
+                georeference:
+                  type: string
+                  contentMediaType: application/json
+                  description: UTF-8 JSON encoding of SpatialGeoreference for this coordinate space.
                 scene:
                   type: string
                   description: UTF-8 JSON encoding of the RoomScene schema.
@@ -92,6 +164,10 @@ paths:
                   type: string
                   format: binary
                   description: Original RoomPlan USDZ mesh.
+                structureModel:
+                  type: string
+                  format: binary
+                  description: Optional combined multi-room USDZ model produced by StructureBuilder.
                 guideImage: { type: string, format: binary }
       responses:
         "201":
@@ -138,7 +214,7 @@ paths:
       - name: kind
         in: path
         required: true
-        schema: { type: string, enum: [world_map, model_usdz, guide_image] }
+        schema: { type: string, enum: [world_map, model_usdz, structure_model, guide_image] }
     get:
       tags: [Spatial rooms]
       summary: Download an authenticated native room-scan asset
@@ -573,6 +649,7 @@ paths:
             Retry-After:
               schema: { type: integer, minimum: 1 }
         "502": { description: AI provider or structured-output error }
+        "503": { description: Shared AI rate limiter unavailable }
   /ai/image-models:
     get:
       tags: [AI]
@@ -1527,8 +1604,13 @@ paths:
         "200": { description: Item enriched or completed response replayed }
         "202": { description: An operation with this key is still processing }
         "409": { description: Idempotency key belongs to another resource or payload }
-        "429": { description: Rate limited }
+        "429":
+          description: AI request limit reached
+          headers:
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
         "502": { description: AI provider error }
+        "503": { description: Shared AI rate limiter unavailable }
   /resources/{id}/cover:
     post:
       tags: [AI]
@@ -1553,8 +1635,13 @@ paths:
         "202": { description: An operation with this key is still processing }
         "409": { description: Idempotency key belongs to another resource or payload }
         "422": { description: Invalid request or unavailable image model }
-        "429": { description: Rate limited }
+        "429":
+          description: Image generation limit reached
+          headers:
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
         "502": { description: AI provider error }
+        "503": { description: Shared AI rate limiter unavailable }
   /stats:
     get:
       tags: [Insights]
@@ -1643,6 +1730,95 @@ components:
       maxItems: 16
       items: { type: number, minimum: -10000, maximum: 10000 }
       description: Column-major affine 4x4 matrix.
+    SpatialReferencePoint:
+      type: object
+      additionalProperties: false
+      required: [id, localPosition, latitude, longitude]
+      properties:
+        id: { type: string, minLength: 1, maxLength: 80 }
+        label: { type: string, minLength: 1, maxLength: 120 }
+        localPosition: { $ref: "#/components/schemas/SpatialVector3" }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        altitude: { type: number, minimum: -12000, maximum: 100000 }
+    SpatialGeoreference:
+      type: object
+      additionalProperties: false
+      required: [latitude, longitude, headingDegrees, capturedAt, source]
+      description: Geographic anchor for one ARKit coordinate space. headingDegrees is the bearing of AR local -Z measured clockwise from true north; latitude/longitude/altitude identify localReferencePosition.
+      properties:
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        altitude: { type: number, minimum: -12000, maximum: 100000 }
+        headingDegrees: { type: number, minimum: 0, exclusiveMaximum: 360 }
+        horizontalAccuracy: { type: number, minimum: 0, maximum: 100000 }
+        verticalAccuracy: { type: number, minimum: 0, maximum: 100000 }
+        capturedAt: { type: string, format: date-time }
+        source: { type: string, enum: [gps, manual, qr-marker, app-clip, other] }
+        localReferencePosition:
+          allOf:
+            - { $ref: "#/components/schemas/SpatialVector3" }
+          default: [0, 0, 0]
+        referencePoints:
+          type: array
+          maxItems: 64
+          items: { $ref: "#/components/schemas/SpatialReferencePoint" }
+        entryMarkerCode: { type: string, minLength: 1, maxLength: 240 }
+    SpatialStructureCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 10000, default: "" }
+        georeference:
+          oneOf:
+            - { $ref: "#/components/schemas/SpatialGeoreference" }
+            - { type: "null" }
+    SpatialStructurePatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 240 }
+        description: { type: string, maxLength: 10000 }
+        georeference:
+          oneOf:
+            - { $ref: "#/components/schemas/SpatialGeoreference" }
+            - { type: "null" }
+    SpatialStructureSummary:
+      type: object
+      required: [id, name, description, floorCount, roomCount, activeScanCount, coordinateSpaceCount, bounds, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        georeference:
+          oneOf:
+            - { $ref: "#/components/schemas/SpatialGeoreference" }
+            - { type: "null" }
+          description: Canonical building map marker, not necessarily the anchor for every room scan.
+        floorCount: { type: integer, minimum: 0 }
+        roomCount: { type: integer, minimum: 0 }
+        activeScanCount: { type: integer, minimum: 0 }
+        coordinateSpaceCount: { type: integer, minimum: 0 }
+        bounds:
+          oneOf:
+            - type: object
+              required: [min, max]
+              properties:
+                min: { $ref: "#/components/schemas/SpatialVector3" }
+                max: { $ref: "#/components/schemas/SpatialVector3" }
+            - { type: "null" }
+          description: Local bounds only when every active scan shares one explicit coordinateSpaceId; otherwise null.
+        boundsCoordinateSpaceId: { type: [string, "null"], format: uuid }
+        boundsGeoreference:
+          oneOf:
+            - { $ref: "#/components/schemas/SpatialGeoreference" }
+            - { type: "null" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     RoomSceneElement:
       type: object
       additionalProperties: false
@@ -1652,6 +1828,12 @@ components:
         category: { type: string, minLength: 1, maxLength: 80 }
         dimensions: { $ref: "#/components/schemas/SpatialDimensions" }
         transform: { $ref: "#/components/schemas/SpatialMatrix4" }
+        polygonCorners:
+          type: array
+          minItems: 3
+          maxItems: 1024
+          description: Ordered RoomPlan boundary in the surface-local coordinate system; preferred over dimensions for non-rectangular floors.
+          items: { $ref: "#/components/schemas/SpatialVector3" }
         confidence: { type: string, enum: [low, medium, high] }
     RoomScene:
       type: object
@@ -1663,7 +1845,10 @@ components:
         units: { type: string, const: meter }
         matrixOrder: { type: string, const: column-major }
         worldFromModel: { $ref: "#/components/schemas/SpatialMatrix4" }
-        webFromWorld: { $ref: "#/components/schemas/SpatialMatrix4" }
+        webFromWorld:
+          allOf:
+            - { $ref: "#/components/schemas/SpatialMatrix4" }
+          description: Visualization transform shared by every scan with the same coordinateSpaceId.
         bounds:
           type: object
           additionalProperties: false
@@ -1684,7 +1869,7 @@ components:
       required: [id, kind, name, mimeType, size, checksumSha256, url, createdAt]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [world_map, model_usdz, guide_image] }
+        kind: { type: string, enum: [world_map, model_usdz, structure_model, guide_image] }
         name: { type: string }
         mimeType: { type: string }
         size: { type: integer, minimum: 0 }
@@ -1698,6 +1883,16 @@ components:
         id: { type: string, format: uuid }
         roomResourceId: { type: string, format: uuid }
         roomName: { type: string }
+        structureId: { type: [string, "null"], format: uuid }
+        structureName: { type: [string, "null"] }
+        coordinateSpaceId: { type: [string, "null"], format: uuid }
+        floorIdentifier: { type: [string, "null"] }
+        floorIndex: { type: [integer, "null"] }
+        roomIdentifier: { type: [string, "null"] }
+        georeference:
+          oneOf:
+            - { $ref: "#/components/schemas/SpatialGeoreference" }
+            - { type: "null" }
         revision: { type: integer, minimum: 1 }
         status: { type: string, enum: [active, superseded] }
         capturedAt: { type: string, format: date-time }
@@ -1731,6 +1926,16 @@ components:
       type: object
       required: [room, scan, placements]
       properties:
+        structureId: { type: [string, "null"], format: uuid }
+        structureName: { type: [string, "null"] }
+        coordinateSpaceId: { type: [string, "null"], format: uuid }
+        floorIdentifier: { type: [string, "null"] }
+        floorIndex: { type: [integer, "null"] }
+        roomIdentifier: { type: [string, "null"] }
+        georeference:
+          oneOf:
+            - { $ref: "#/components/schemas/SpatialGeoreference" }
+            - { type: "null" }
         room:
           type: object
           required: [id, name]
@@ -1743,6 +1948,16 @@ components:
           required: [id, revision, status, scene, capturedAt, assets]
           properties:
             id: { type: string, format: uuid }
+            structureId: { type: [string, "null"], format: uuid }
+            structureName: { type: [string, "null"] }
+            coordinateSpaceId: { type: [string, "null"], format: uuid }
+            floorIdentifier: { type: [string, "null"] }
+            floorIndex: { type: [integer, "null"] }
+            roomIdentifier: { type: [string, "null"] }
+            georeference:
+              oneOf:
+                - { $ref: "#/components/schemas/SpatialGeoreference" }
+                - { type: "null" }
             revision: { type: integer, minimum: 1 }
             status: { type: string, enum: [active, superseded] }
             scene: { $ref: "#/components/schemas/RoomScene" }
@@ -2082,7 +2297,7 @@ components:
           items: { type: string, minLength: 1, maxLength: 240 }
         markers:
           type: array
-          description: One point per counted item on a 0...1000 image grid, measured from the top-left corner of the orientation-corrected full image.
+          description: One material-bound point per counted item on a 0...1000 image grid, measured from the top-left corner of the orientation-corrected full image.
           items:
             type: object
             additionalProperties: false

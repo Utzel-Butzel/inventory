@@ -138,13 +138,43 @@ enum MultipartFormFileBuilder {
             defer { try? output.close() }
 
             let iso8601 = ISO8601DateFormatter()
-            let fields = [
+            var fields = [
                 ("id", draft.id.uuidString.lowercased()),
                 ("roomResourceId", roomResourceID.uuidString.lowercased()),
                 ("capturedAt", iso8601.string(from: draft.capturedAt)),
                 ("deviceModel", draft.deviceModel),
                 ("scene", sceneJSON),
             ]
+            if let structureID = draft.structureID {
+                fields.append(("structureId", structureID.uuidString.lowercased()))
+            }
+            if let structureName = draft.structureName {
+                fields.append(("structureName", structureName))
+            }
+            if let floorIdentifier = draft.floorIdentifier {
+                fields.append(("floorIdentifier", floorIdentifier))
+            }
+            if let floorIndex = draft.floorIndex {
+                fields.append(("floorIndex", String(floorIndex)))
+            }
+            if let roomIdentifier = draft.roomIdentifier {
+                fields.append(("roomIdentifier", roomIdentifier))
+            }
+            if let coordinateSpaceID = draft.coordinateSpaceID {
+                fields.append(("coordinateSpaceId", coordinateSpaceID.uuidString.lowercased()))
+            }
+            if let georeference = draft.georeference {
+                let encoder = JSONEncoder()
+                encoder.dateEncodingStrategy = .iso8601
+                encoder.outputFormatting = [.sortedKeys]
+                let data = try encoder.encode(georeference)
+                guard let json = String(data: data, encoding: .utf8) else {
+                    throw APIClientError.invalidUpload(
+                        "Die geografische Referenz konnte nicht codiert werden."
+                    )
+                }
+                fields.append(("georeference", json))
+            }
             for (name, value) in fields {
                 try write("--\(boundary)\r\n", to: output)
                 try write(
@@ -162,6 +192,9 @@ enum MultipartFormFileBuilder {
             ]
             if let guideImageURL = draft.guideImageURL {
                 assets.append(("guideImage", guideImageURL, "image/jpeg"))
+            }
+            if let structureModelURL = draft.structureModelURL {
+                assets.append(("structureModel", structureModelURL, "model/vnd.usdz+zip"))
             }
 
             for asset in assets {

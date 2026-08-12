@@ -8,10 +8,13 @@ import simd
 @MainActor
 final class ItemPlacementController: UIViewController, @preconcurrency ARSessionDelegate {
     var onTracking: ((String, Bool) -> Void)?
+    var onRoomChanged: ((SpatialRoomScanSummary?) -> Void)?
     var onCaptured: ((Result<(SpatialPlacementDraft, Data), Error>) -> Void)?
 
     private let worldMapData: Data
-    private let roomScan: SpatialRoomScanSummary
+    private let roomCandidates: [SpatialRoomDetectionCandidate]
+    private var activeRoomScan: SpatialRoomScanSummary?
+    private var containmentTracker: SpatialRoomContainmentTracker
     private var arView: ARView!
     private var coachingOverlay: ARCoachingOverlayView!
     private var lastCaptureRequest = 0
@@ -23,10 +26,24 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
     private var lastTrackingReadiness: Bool?
     private var relocalizationTimeoutTask: Task<Void, Never>?
     private var isStopped = false
+    private var lastManualRoomRequest = 0
 
-    init(worldMapData: Data, roomScan: SpatialRoomScanSummary) {
+    init(
+        worldMapData: Data,
+        roomScan: SpatialRoomScanSummary,
+        roomCandidates: [SpatialRoomDetectionCandidate]
+    ) {
         self.worldMapData = worldMapData
-        self.roomScan = roomScan
+        let normalizedCandidates = roomCandidates.filter {
+            $0.scan.coordinateSpaceID == roomScan.coordinateSpaceID || roomScan.coordinateSpaceID == nil
+        }
+        self.roomCandidates = normalizedCandidates
+        activeRoomScan = normalizedCandidates.count <= 1 ? roomScan : nil
+        var tracker = SpatialRoomContainmentTracker(candidates: normalizedCandidates)
+        if normalizedCandidates.count <= 1 {
+            tracker.selectManually(scanID: roomScan.id)
+        }
+        containmentTracker = tracker
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -100,7 +117,9 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
     func requestCapture(_ request: Int) {
         guard request != lastCaptureRequest else { return }
         lastCaptureRequest = request
-        guard !isStopped, trackingReady, !captureInProgress else {
+        guard !isStopped, trackingReady, !captureInProgress,
+              let roomScan = activeRoomScan
+        else {
             publishTracking("Der Raum muss zuerst vollständig erkannt werden.", false)
             return
         }
@@ -171,6 +190,7 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         updateTracking(camera: frame.camera)
+        updateCurrentRoom(position: frame.camera.transform.translation)
     }
 
     func session(_ session: ARSession, didFailWithError error: Error) {
@@ -201,9 +221,8 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
         switch camera.trackingState {
         case .normal:
             relocalizationGate.markReady()
-            trackingReady = relocalizationGate.isReady
             cancelRelocalizationTimeout()
-            publishTracking("Raum erkannt. Richte das Fadenkreuz auf den Gegenstand.", true)
+            updateReadyState()
         case .limited(let reason):
             relocalizationGate.beginSearching()
             trackingReady = false
@@ -231,6 +250,53 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
             startRelocalizationTimeoutIfNeeded()
             publishTracking("Raumortung wird vorbereitet …", false)
         }
+    }
+
+    private func updateCurrentRoom(position: SIMD3<Float>) {
+        guard !isStopped, relocalizationGate.isReady, !roomCandidates.isEmpty else { return }
+        let previousID = activeRoomScan?.id
+        let scanID = containmentTracker.update(position: [
+            Double(position.x),
+            Double(position.y),
+            Double(position.z),
+        ])
+        activeRoomScan = roomCandidates.first { $0.scan.id == scanID }?.scan
+        if activeRoomScan?.id != previousID {
+            onRoomChanged?(activeRoomScan)
+        }
+        updateReadyState()
+    }
+
+    private func updateReadyState() {
+        guard relocalizationGate.isReady else {
+            trackingReady = false
+            return
+        }
+        if roomCandidates.count <= 1, activeRoomScan == nil {
+            activeRoomScan = roomCandidates.first?.scan
+        }
+        guard let activeRoomScan else {
+            trackingReady = false
+            publishTracking(
+                "Struktur erkannt. Gehe weiter in einen gescannten Raum oder wähle ihn manuell.",
+                false
+            )
+            return
+        }
+        trackingReady = true
+        publishTracking(
+            "\(activeRoomScan.roomName) erkannt. Richte das Fadenkreuz auf den Gegenstand.",
+            true
+        )
+    }
+
+    func selectRoomManually(scanID: UUID?, request: Int) {
+        guard request != lastManualRoomRequest else { return }
+        lastManualRoomRequest = request
+        containmentTracker.selectManually(scanID: scanID)
+        activeRoomScan = roomCandidates.first { $0.scan.id == scanID }?.scan
+        onRoomChanged?(activeRoomScan)
+        updateReadyState()
     }
 
     private func startRelocalizationTimeoutIfNeeded() {
@@ -441,16 +507,22 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
 struct ItemPlacementControllerView: UIViewControllerRepresentable {
     let worldMapData: Data
     let roomScan: SpatialRoomScanSummary
+    let roomCandidates: [SpatialRoomDetectionCandidate]
     let captureRequest: Int
+    let manualRoomScanID: UUID?
+    let manualRoomRequest: Int
     let onTracking: (String, Bool) -> Void
+    let onRoomChanged: (SpatialRoomScanSummary?) -> Void
     let onCaptured: (Result<(SpatialPlacementDraft, Data), Error>) -> Void
 
     func makeUIViewController(context: Context) -> ItemPlacementController {
         let controller = ItemPlacementController(
             worldMapData: worldMapData,
-            roomScan: roomScan
+            roomScan: roomScan,
+            roomCandidates: roomCandidates
         )
         controller.onTracking = onTracking
+        controller.onRoomChanged = onRoomChanged
         controller.onCaptured = onCaptured
         return controller
     }
@@ -460,7 +532,12 @@ struct ItemPlacementControllerView: UIViewControllerRepresentable {
         context: Context
     ) {
         uiViewController.onTracking = onTracking
+        uiViewController.onRoomChanged = onRoomChanged
         uiViewController.onCaptured = onCaptured
+        uiViewController.selectRoomManually(
+            scanID: manualRoomScanID,
+            request: manualRoomRequest
+        )
         uiViewController.requestCapture(captureRequest)
     }
 
@@ -469,6 +546,7 @@ struct ItemPlacementControllerView: UIViewControllerRepresentable {
         coordinator: Void
     ) {
         uiViewController.onTracking = nil
+        uiViewController.onRoomChanged = nil
         uiViewController.onCaptured = nil
         uiViewController.stop()
     }

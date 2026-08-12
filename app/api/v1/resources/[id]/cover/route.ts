@@ -6,14 +6,18 @@ import {
   aiOperationResponseValues,
   claimAiOperation,
   finishAiOperation,
+  releaseAiOperation,
   respondToAiOperationClaim,
   respondToFinishedAiOperation,
 } from "@/lib/ai-idempotency";
+import {
+  consumePaidAiRateLimit,
+  paidAiRateLimitHeaders,
+} from "@/lib/ai-rate-limit";
 import { requireIdentity } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { hashIdempotentPayload, readIdempotencyKey } from "@/lib/idempotency";
 import { resolveImageGenerationModel } from "@/lib/image-generation-models";
-import { checkRateLimit } from "@/lib/rate-limit";
 import { getResource } from "@/lib/resources";
 import {
   deleteStoredMedia,
@@ -80,6 +84,25 @@ export async function POST(request: Request, context: Context) {
       idempotencyKey: idempotency.key,
     });
   };
+  const finishTransient = async (
+    body: Record<string, unknown>,
+    status: number,
+    headers?: Record<string, string>,
+  ) => {
+    if (operationId) {
+      try {
+        await releaseAiOperation(operationId);
+      } catch (error) {
+        console.error("Unable to release the transient AI cover claim.", error);
+      }
+    }
+    return respondToFinishedAiOperation({
+      body,
+      status,
+      headers,
+      idempotencyKey: idempotency.key,
+    });
+  };
 
   const imageModel = resolveImageGenerationModel(parsed.data.modelId);
   if (!imageModel) {
@@ -105,20 +128,45 @@ export async function POST(request: Request, context: Context) {
     );
   }
 
-  const limit = checkRateLimit(`cover:${authorization.identity.subject}`, {
-    limit: Number(process.env.AI_IMAGE_RATE_LIMIT_PER_HOUR ?? "12"),
-    windowMs: 60 * 60 * 1_000,
-  });
-  if (!limit.allowed) {
+  let sourceBytes: Buffer;
+  try {
+    sourceBytes = await readMediaBytes(source);
+  } catch (error) {
     return finish(
-      { error: "Image generation limit reached. Try again later." },
+      {
+        error:
+          error instanceof Error ? error.message : "Unable to read cover source.",
+      },
+      502,
+    );
+  }
+
+  let limit;
+  try {
+    limit = await consumePaidAiRateLimit({
+      operation: "cover",
+      identity: authorization.identity,
+    });
+  } catch (error) {
+    console.error("Unable to check the AI cover rate limit.", error);
+    return finishTransient(
+      { error: "AI rate limiting is temporarily unavailable." },
+      503,
+    );
+  }
+  if (!limit.allowed) {
+    return finishTransient(
+      {
+        error: limit.disabled
+          ? "AI cover generation is disabled by the administrator."
+          : "Image generation limit reached. Try again later.",
+      },
       429,
-      { "Retry-After": String(limit.retryAfterSeconds ?? 3600) },
+      paidAiRateLimitHeaders(limit),
     );
   }
 
   try {
-    const sourceBytes = await readMediaBytes(source);
     const generated = await generateCoverImage({
       source: sourceBytes,
       sourceMimeType: source.mimeType,

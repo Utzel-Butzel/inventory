@@ -55,6 +55,16 @@ final class CaptureViewModel: ObservableObject {
     }
 
     func addCapturedData(_ data: Data) {
+        addEncodedData(data, cropAspectRatio: nil)
+    }
+
+    /// Camera shutter photos mirror the 3:4 viewfinder. Imported and spatial
+    /// images intentionally retain their original composition.
+    func addCameraCapturedData(_ data: Data) {
+        addEncodedData(data, cropAspectRatio: CameraService.photoAspectRatio)
+    }
+
+    private func addEncodedData(_ data: Data, cropAspectRatio: CGFloat?) {
         guard photos.count + processingCount < Self.maximumPhotos else {
             errorMessage = "Pro Gegenstand sind höchstens zwölf Fotos möglich."
             return
@@ -66,7 +76,8 @@ final class CaptureViewModel: ObservableObject {
             do {
                 let image = try await downsampler.downsample(
                     encodedImageData: data,
-                    destinationURL: destination
+                    destinationURL: destination,
+                    cropAspectRatio: cropAspectRatio
                 )
                 photos.append(
                     CapturedInventoryPhoto(

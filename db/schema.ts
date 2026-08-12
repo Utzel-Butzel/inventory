@@ -3,10 +3,12 @@ import {
   boolean,
   check,
   doublePrecision,
+  foreignKey,
   index,
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -19,6 +21,7 @@ import type {
   ScanWorkflowFixedProperty,
   ScanWorkflowInputField,
 } from "@/lib/scan-workflow-contract";
+import type { PaidAiOperation } from "@/lib/ai-rate-limit-policy";
 import {
   customFieldResourceTypes,
   type CustomFieldEntityType,
@@ -28,6 +31,7 @@ import {
   type CustomFieldValues,
 } from "@/lib/custom-field-contract";
 import type { RoomScene } from "@/lib/room-scene-contract";
+import type { SpatialGeoreference } from "@/lib/spatial-structure-contract";
 
 export const userRoles = ["admin", "editor", "viewer"] as const;
 export type UserRole = (typeof userRoles)[number];
@@ -113,6 +117,7 @@ export type RoomScanStatus = (typeof roomScanStatuses)[number];
 export const roomScanAssetKinds = [
   "world_map",
   "model_usdz",
+  "structure_model",
   "guide_image",
 ] as const;
 export type RoomScanAssetKind = (typeof roomScanAssetKinds)[number];
@@ -286,6 +291,62 @@ export const resources = pgTable(
   ],
 );
 
+export const spatialStructures = pgTable(
+  "spatial_structures",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 240 }).notNull(),
+    description: text("description").notNull().default(""),
+    georeference: jsonb("georeference").$type<SpatialGeoreference>(),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("spatial_structures_name_idx").on(table.name),
+    index("spatial_structures_updated_at_idx").on(table.updatedAt),
+    check(
+      "spatial_structures_georeference_object",
+      sql`${table.georeference} is null or jsonb_typeof(${table.georeference}) = 'object'`,
+    ),
+  ],
+);
+
+export const spatialCoordinateSpaces = pgTable(
+  "spatial_coordinate_spaces",
+  {
+    id: uuid("id").primaryKey(),
+    structureId: uuid("structure_id")
+      .notNull()
+      .references(() => spatialStructures.id, { onDelete: "cascade" }),
+    georeference: jsonb("georeference").$type<SpatialGeoreference>(),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("spatial_coordinate_spaces_id_structure_unique").on(
+      table.id,
+      table.structureId,
+    ),
+    index("spatial_coordinate_spaces_structure_idx").on(table.structureId),
+    check(
+      "spatial_coordinate_spaces_georeference_object",
+      sql`${table.georeference} is null or jsonb_typeof(${table.georeference}) = 'object'`,
+    ),
+  ],
+);
+
 export const roomScans = pgTable(
   "room_scans",
   {
@@ -293,6 +354,13 @@ export const roomScans = pgTable(
     roomResourceId: uuid("room_resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "cascade" }),
+    structureId: uuid("structure_id").references(() => spatialStructures.id, {
+      onDelete: "set null",
+    }),
+    coordinateSpaceId: uuid("coordinate_space_id"),
+    floorIdentifier: varchar("floor_identifier", { length: 120 }),
+    floorIndex: integer("floor_index"),
+    roomIdentifier: varchar("room_identifier", { length: 120 }),
     revision: integer("revision").notNull(),
     status: varchar("status", { length: 16 })
       .$type<RoomScanStatus>()
@@ -310,6 +378,17 @@ export const roomScans = pgTable(
       .defaultNow(),
   },
   (table) => [
+    // The hand-written migration uses PostgreSQL's column-specific
+    // ON DELETE SET NULL (coordinate_space_id), preserving structure-only
+    // legacy scans. Drizzle currently models only the generic action.
+    foreignKey({
+      name: "room_scans_coordinate_space_structure_fk",
+      columns: [table.coordinateSpaceId, table.structureId],
+      foreignColumns: [
+        spatialCoordinateSpaces.id,
+        spatialCoordinateSpaces.structureId,
+      ],
+    }).onDelete("set null"),
     uniqueIndex("room_scans_room_revision_unique").on(
       table.roomResourceId,
       table.revision,
@@ -318,6 +397,13 @@ export const roomScans = pgTable(
       .on(table.roomResourceId)
       .where(sql`${table.status} = 'active'`),
     index("room_scans_room_status_idx").on(table.roomResourceId, table.status),
+    index("room_scans_structure_status_idx").on(table.structureId, table.status),
+    index("room_scans_coordinate_space_idx").on(table.coordinateSpaceId),
+    index("room_scans_structure_floor_idx").on(
+      table.structureId,
+      table.floorIndex,
+      table.floorIdentifier,
+    ),
     index("room_scans_captured_at_idx").on(table.capturedAt),
     check("room_scans_revision_positive", sql`${table.revision} > 0`),
     check(
@@ -325,6 +411,10 @@ export const roomScans = pgTable(
       sql`${table.status} in ('active', 'superseded')`,
     ),
     check("room_scans_scene_object", sql`jsonb_typeof(${table.scene}) = 'object'`),
+    check(
+      "room_scans_coordinate_space_requires_structure",
+      sql`${table.coordinateSpaceId} is null or ${table.structureId} is not null`,
+    ),
   ],
 );
 
@@ -354,7 +444,7 @@ export const roomScanAssets = pgTable(
     index("room_scan_assets_scan_idx").on(table.roomScanId),
     check(
       "room_scan_assets_kind_check",
-      sql`${table.kind} in ('world_map', 'model_usdz', 'guide_image')`,
+      sql`${table.kind} in ('world_map', 'model_usdz', 'structure_model', 'guide_image')`,
     ),
     check("room_scan_assets_size_nonnegative", sql`${table.size} >= 0`),
   ],
@@ -1424,6 +1514,39 @@ export const aiIdempotencyOperations = pgTable(
     check(
       "ai_idempotency_operations_status_check",
       sql`${table.status} in ('processing', 'completed', 'failed')`,
+    ),
+  ],
+);
+
+export const aiRateLimitBuckets = pgTable(
+  "ai_rate_limit_buckets",
+  {
+    operation: varchar("operation", { length: 24 })
+      .$type<PaidAiOperation>()
+      .notNull(),
+    subjectHash: varchar("subject_hash", { length: 64 }).notNull(),
+    requestCount: integer("request_count").notNull().default(1),
+    resetsAt: timestamp("resets_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "ai_rate_limit_buckets_operation_subject_pk",
+      columns: [table.operation, table.subjectHash],
+    }),
+    check(
+      "ai_rate_limit_buckets_operation_check",
+      sql`${table.operation} in ('analyze', 'count', 'cover')`,
+    ),
+    check(
+      "ai_rate_limit_buckets_request_count_positive",
+      sql`${table.requestCount} > 0`,
+    ),
+    check(
+      "ai_rate_limit_buckets_subject_hash_check",
+      sql`${table.subjectHash} ~ '^[0-9a-f]{64}$'`,
     ),
   ],
 );

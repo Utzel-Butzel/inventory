@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   identitySpatialMatrix,
   roomSceneSchema,
+  spatialMatricesApproximatelyEqual,
   spatialPlacementInputSchema,
 } from "../lib/room-scene-contract.ts";
 
@@ -24,6 +25,7 @@ const validScene = {
       category: "wall",
       dimensions: [4, 2.6, 0],
       transform: identitySpatialMatrix,
+      polygonCorners: [[-2, -1.3, 0], [2, -1.3, 0], [2, 1.3, 0], [-2, 1.3, 0]],
       confidence: "high",
     },
   ],
@@ -87,6 +89,27 @@ test("requires normalized orientation and non-negative item extents", () => {
       ...validPlacement,
       extent: [0.2, 100.01, 0.3],
     }).success,
+    false,
+  );
+});
+
+test("compares a shared world-to-web transform with numeric tolerance", () => {
+  assert.equal(
+    spatialMatricesApproximatelyEqual(
+      identitySpatialMatrix,
+      identitySpatialMatrix.map((value, index) =>
+        index === 12 ? value + 1e-7 : value
+      ),
+    ),
+    true,
+  );
+  assert.equal(
+    spatialMatricesApproximatelyEqual(
+      identitySpatialMatrix,
+      identitySpatialMatrix.map((value, index) =>
+        index === 12 ? value + 0.01 : value
+      ),
+    ),
     false,
   );
 });

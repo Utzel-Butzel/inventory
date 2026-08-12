@@ -71,8 +71,14 @@ struct StockCountView: View {
         }
         .onAppear {
             camera.scanningEnabled = false
-            camera.onPhoto = { data in
+            camera.onPhoto = { result in
                 captureRequested = false
+                guard case .success(let data) = result else {
+                    if case .failure(let error) = result {
+                        model.errorMessage = error.localizedDescription
+                    }
+                    return
+                }
                 if camera.torchEnabled { camera.toggleTorch() }
                 camera.stop()
                 guard let client = state.client else {
@@ -453,7 +459,7 @@ struct StockCountView: View {
     }
 }
 
-private struct StockCountPhotoPreview: View {
+struct StockCountPhotoPreview: View {
     let url: URL
     let markers: [ObjectCountMarker]
     @State private var image: UIImage?

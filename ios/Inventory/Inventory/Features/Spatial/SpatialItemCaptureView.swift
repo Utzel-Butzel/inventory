@@ -7,6 +7,7 @@ struct SpatialItemCaptureView: View {
 
     @State private var scans: [SpatialRoomScanSummary] = []
     @State private var selectedScan: SpatialRoomScanSummary?
+    @State private var activeRoomScan: SpatialRoomScanSummary?
     @State private var loadedWorldMap: LoadedSpatialWorldMap?
     @State private var loading = true
     @State private var loadingWorldMap = false
@@ -17,6 +18,8 @@ struct SpatialItemCaptureView: View {
     @State private var errorMessage: String?
     @State private var selectionState = SpatialWorldMapSelectionState()
     @State private var worldMapLoadTask: Task<Void, Never>?
+    @State private var manualRoomScanID: UUID?
+    @State private var manualRoomRequest = 0
 
     var body: some View {
         NavigationStack {
@@ -47,8 +50,25 @@ struct SpatialItemCaptureView: View {
                 }
                 if selectedScan != nil {
                     ToolbarItem(placement: .primaryAction) {
-                        Button("Raum wechseln") {
+                        Button("Bereich wechseln") {
                             resetSelection()
+                        }
+                    }
+                }
+                if let loadedWorldMap, loadedWorldMap.candidates.count > 1 {
+                    ToolbarItem(placement: .secondaryAction) {
+                        Menu {
+                            Button("Automatisch erkennen") {
+                                selectManualRoom(nil)
+                            }
+                            Divider()
+                            ForEach(loadedWorldMap.candidates, id: \.scan.id) { candidate in
+                                Button(candidate.scan.roomName) {
+                                    selectManualRoom(candidate.scan.id)
+                                }
+                            }
+                        } label: {
+                            Label("Raum wählen", systemImage: "door.left.hand.open")
                         }
                     }
                 }
@@ -85,32 +105,32 @@ struct SpatialItemCaptureView: View {
     private var roomSelection: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Wähle den Raum, in dem der Gegenstand gerade liegt. Die App erkennt anschließend die gespeicherte 3D-Umgebung wieder.")
+                Text("Wähle eine verbundene Struktur. Nach der AR-Wiedererkennung bestimmt die App beim Durchqueren von Türen automatisch den aktuellen Raum. Einzelne ältere Raumscans bleiben auswählbar.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 4)
 
-                ForEach(scans) { scan in
+                ForEach(selectionEntries) { entry in
                     Button {
-                        startSelecting(scan)
+                        startSelecting(entry)
                     } label: {
                         HStack(spacing: 14) {
-                            Image(systemName: "cube.transparent.fill")
+                            Image(systemName: entry.scans.count > 1 ? "square.3.layers.3d" : "cube.transparent.fill")
                                 .font(.title2)
                                 .foregroundStyle(InventoryTheme.accent)
                                 .frame(width: 48, height: 48)
                                 .background(InventoryTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
 
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(scan.roomName)
+                                Text(entry.title)
                                     .font(.headline)
                                     .foregroundStyle(InventoryTheme.ink)
-                                Text("\(scan.placementCount) Gegenstände · Scan \(scan.revision)")
+                                Text(entry.subtitle)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            if loadingWorldMap && selectedScan?.id == scan.id {
+                            if loadingWorldMap && selectedScan?.id == entry.sourceScan.id {
                                 ProgressView()
                             } else {
                                 Image(systemName: "chevron.right")
@@ -141,7 +161,10 @@ struct SpatialItemCaptureView: View {
             ItemPlacementControllerView(
                 worldMapData: worldMap.data,
                 roomScan: scan,
+                roomCandidates: worldMap.candidates,
                 captureRequest: captureRequest,
+                manualRoomScanID: manualRoomScanID,
+                manualRoomRequest: manualRoomRequest,
                 onTracking: { message, ready in
                     guard selectionState.accepts(
                         scanID: scan.id,
@@ -149,6 +172,13 @@ struct SpatialItemCaptureView: View {
                     ) else { return }
                     trackingMessage = message
                     trackingReady = ready
+                },
+                onRoomChanged: { detectedScan in
+                    guard selectionState.accepts(
+                        scanID: scan.id,
+                        generation: worldMap.generation
+                    ) else { return }
+                    activeRoomScan = detectedScan
                 },
                 onCaptured: { result in
                     guard selectionState.accepts(
@@ -187,7 +217,14 @@ struct SpatialItemCaptureView: View {
 
             VStack {
                 VStack(spacing: 7) {
-                    Label(scan.roomName, systemImage: "location.fill")
+                    Label(
+                        activeRoomScan?.roomName ?? (
+                            worldMap.candidates.count > 1 ? "Raum wird bestimmt" : scan.roomName
+                        ),
+                        systemImage: activeRoomScan == nil && worldMap.candidates.count > 1
+                            ? "location.magnifyingglass"
+                            : "location.fill"
+                    )
                         .font(.caption.weight(.bold))
                     Text(trackingMessage)
                         .font(.caption)
@@ -262,17 +299,21 @@ struct SpatialItemCaptureView: View {
     }
 
     @MainActor
-    private func startSelecting(_ scan: SpatialRoomScanSummary) {
+    private func startSelecting(_ entry: SpatialRoomSelectionEntry) {
         worldMapLoadTask?.cancel()
+        let scan = entry.sourceScan
         let generation = selectionState.begin(scanID: scan.id)
         selectedScan = scan
+        activeRoomScan = entry.scans.count == 1 ? scan : nil
         loadedWorldMap = nil
         loadingWorldMap = true
         trackingReady = false
         capturing = false
+        manualRoomScanID = nil
+        manualRoomRequest = 0
 
         worldMapLoadTask = Task { @MainActor in
-            await select(scan, generation: generation)
+            await select(entry, generation: generation)
         }
     }
 
@@ -282,17 +323,21 @@ struct SpatialItemCaptureView: View {
         worldMapLoadTask = nil
         selectionState.cancel()
         selectedScan = nil
+        activeRoomScan = nil
         loadedWorldMap = nil
         loadingWorldMap = false
         trackingReady = false
         capturing = false
+        manualRoomScanID = nil
+        manualRoomRequest = 0
     }
 
     @MainActor
     private func select(
-        _ scan: SpatialRoomScanSummary,
+        _ entry: SpatialRoomSelectionEntry,
         generation: UUID
     ) async {
+        let scan = entry.sourceScan
         guard let client = state.client else { return }
         defer {
             if selectionState.accepts(scanID: scan.id, generation: generation) {
@@ -301,7 +346,35 @@ struct SpatialItemCaptureView: View {
             }
         }
         do {
-            let downloadedWorldMap = try await client.downloadRoomWorldMap(scanID: scan.id)
+            async let worldMapRequest = client.downloadRoomWorldMap(scanID: scan.id)
+            let sourceResponse = try await client.roomScene(scanID: scan.id)
+            var candidates = [
+                SpatialRoomDetectionCandidate(
+                    scan: scan,
+                    scene: sourceResponse.scene.scan.scene
+                ),
+            ]
+            for candidateScan in entry.scans where candidateScan.id != scan.id {
+                do {
+                    let response = try await client.roomScene(scanID: candidateScan.id)
+                    guard candidateScan.coordinateSpaceID == scan.coordinateSpaceID ||
+                            entry.scans.count == 1
+                    else { continue }
+                    candidates.append(
+                        SpatialRoomDetectionCandidate(
+                            scan: candidateScan,
+                            scene: response.scene.scan.scene
+                        )
+                    )
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    // A single stale room must not make the shared world map unusable.
+                    // It remains available through the legacy manual room flow.
+                    continue
+                }
+            }
+            let downloadedWorldMap = try await worldMapRequest
             try Task.checkCancellation()
             guard selectionState.accepts(scanID: scan.id, generation: generation),
                   selectedScan?.id == scan.id
@@ -311,7 +384,8 @@ struct SpatialItemCaptureView: View {
             loadedWorldMap = LoadedSpatialWorldMap(
                 scanID: scan.id,
                 generation: generation,
-                data: downloadedWorldMap
+                data: downloadedWorldMap,
+                candidates: candidates
             )
             trackingMessage = "Zeige auf bekannte Wände oder Möbel, bis der Raum erkannt ist."
             trackingReady = false
@@ -329,15 +403,57 @@ struct SpatialItemCaptureView: View {
             errorMessage = error.localizedDescription
         }
     }
+
+    @MainActor
+    private func selectManualRoom(_ scanID: UUID?) {
+        manualRoomScanID = scanID
+        manualRoomRequest += 1
+    }
+
+    private var selectionEntries: [SpatialRoomSelectionEntry] {
+        var consumedCoordinateSpaces = Set<UUID>()
+        var entries: [SpatialRoomSelectionEntry] = []
+        for scan in scans {
+            if let coordinateSpaceID = scan.coordinateSpaceID {
+                guard consumedCoordinateSpaces.insert(coordinateSpaceID).inserted else { continue }
+                let grouped = scans.filter { $0.coordinateSpaceID == coordinateSpaceID }
+                entries.append(SpatialRoomSelectionEntry(scans: grouped))
+            } else {
+                entries.append(SpatialRoomSelectionEntry(scans: [scan]))
+            }
+        }
+        return entries
+    }
 }
 
 private struct LoadedSpatialWorldMap {
     let scanID: UUID
     let generation: UUID
     let data: Data
+    let candidates: [SpatialRoomDetectionCandidate]
 }
 
 private struct SpatialCaptureSessionIdentity: Hashable {
     let scanID: UUID
     let generation: UUID
+}
+
+private struct SpatialRoomSelectionEntry: Identifiable {
+    let scans: [SpatialRoomScanSummary]
+
+    var id: UUID { sourceScan.id }
+    var sourceScan: SpatialRoomScanSummary { scans[0] }
+    var title: String {
+        if scans.count > 1 {
+            return sourceScan.structureName ?? "Verbundene Räume"
+        }
+        return sourceScan.roomName
+    }
+    var subtitle: String {
+        if scans.count > 1 {
+            let floor = sourceScan.floorIdentifier.map { " · \($0)" } ?? ""
+            return "\(scans.count) Räume\(floor) · automatische Erkennung"
+        }
+        return "\(sourceScan.placementCount) Gegenstände · Scan \(sourceScan.revision)"
+    }
 }

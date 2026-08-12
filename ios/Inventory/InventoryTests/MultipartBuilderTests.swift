@@ -54,4 +54,72 @@ final class MultipartBuilderTests: XCTestCase {
         XCTAssertTrue(text.contains("rote 3D-Druckteile"))
         XCTAssertTrue(text.hasSuffix("--\(body.boundary)--\r\n"))
     }
+
+    func testRoomScanBodyIncludesMultiRoomAndGeoreferenceContract() throws {
+        let scanID = UUID()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("inventory-room-scan-\(scanID.uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let worldMapURL = directory.appendingPathComponent("room.arworldmap")
+        let modelURL = directory.appendingPathComponent("room.usdz")
+        let structureURL = directory.appendingPathComponent("structure.usdz")
+        try Data([0x01]).write(to: worldMapURL)
+        try Data([0x02]).write(to: modelURL)
+        try Data([0x03]).write(to: structureURL)
+
+        let structureID = UUID()
+        let coordinateSpaceID = UUID()
+        let georeference = SpatialStructureGeoreference(
+            latitude: 49.452,
+            longitude: 11.077,
+            altitude: 310,
+            headingDegrees: 28,
+            horizontalAccuracy: 4,
+            verticalAccuracy: 7,
+            capturedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            source: .gps,
+            localReferencePosition: [1, 1.5, -2],
+            referencePoints: nil,
+            entryMarkerCode: "ENTRANCE-A"
+        )
+        let draft = SpatialRoomScanDraft(
+            id: scanID,
+            roomName: "Werkstatt",
+            scene: SpatialRoomScene(
+                bounds: SpatialRoomBounds(min: [-1, 0, -1], max: [1, 3, 1]),
+                surfaces: [],
+                objects: []
+            ),
+            capturedAt: Date(timeIntervalSince1970: 1_800_000_001),
+            deviceModel: "iPhone",
+            worldMapURL: worldMapURL,
+            modelURL: modelURL,
+            guideImageURL: nil,
+            structureID: structureID,
+            structureName: "Rosenwerk",
+            floorIdentifier: "EG",
+            floorIndex: 0,
+            roomIdentifier: "room-a",
+            coordinateSpaceID: coordinateSpaceID,
+            georeference: georeference,
+            structureModelURL: structureURL
+        )
+
+        let body = try MultipartFormFileBuilder.buildRoomScan(
+            draft: draft,
+            roomResourceID: UUID()
+        )
+        defer { try? FileManager.default.removeItem(at: body.fileURL) }
+        let text = String(decoding: try Data(contentsOf: body.fileURL), as: UTF8.self)
+
+        XCTAssertTrue(text.contains("name=\"structureId\""))
+        XCTAssertTrue(text.contains(structureID.uuidString.lowercased()))
+        XCTAssertTrue(text.contains("name=\"coordinateSpaceId\""))
+        XCTAssertTrue(text.contains(coordinateSpaceID.uuidString.lowercased()))
+        XCTAssertTrue(text.contains("name=\"georeference\""))
+        XCTAssertTrue(text.contains("\"headingDegrees\":28"))
+        XCTAssertTrue(text.contains("\"localReferencePosition\":[1,1.5,-2]"))
+        XCTAssertTrue(text.contains("name=\"structureModel\"; filename=\"structure.usdz\""))
+    }
 }

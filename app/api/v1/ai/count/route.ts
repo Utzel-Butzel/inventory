@@ -1,9 +1,13 @@
 import {
   countInventoryItems,
+  InventoryCountLocalizationError,
   prepareInventoryCountImage,
 } from "@/lib/ai";
+import {
+  consumePaidAiRateLimit,
+  paidAiRateLimitHeaders,
+} from "@/lib/ai-rate-limit";
 import { requireIdentity } from "@/lib/api-auth";
-import { checkRateLimit } from "@/lib/rate-limit";
 import { maxUploadBytes } from "@/lib/storage";
 import { inventoryCountInputSchema } from "@/lib/validators";
 
@@ -21,13 +25,6 @@ const noStoreHeaders = { "Cache-Control": "no-store" };
 const countImageSizeLimit = () =>
   Math.min(maxUploadBytes(), 25 * 1_024 * 1_024);
 
-const countRateLimit = () => {
-  const configured = Number(process.env.AI_RATE_LIMIT_PER_MINUTE ?? "10");
-  return Number.isInteger(configured) && configured > 0
-    ? Math.min(configured, 100)
-    : 10;
-};
-
 const json = (
   body: Record<string, unknown>,
   options: { status?: number; headers?: Record<string, string> } = {},
@@ -39,7 +36,8 @@ const json = (
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+// Dense photos require two independently tool-verified localization passes.
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const authorization = await requireIdentity(request, "ai");
@@ -68,20 +66,6 @@ export async function POST(request: Request) {
         { status: 413 },
       );
     }
-  }
-
-  const limit = checkRateLimit(
-    `count:${authorization.identity.subject}`,
-    { limit: countRateLimit(), windowMs: 60_000 },
-  );
-  if (!limit.allowed) {
-    return json(
-      { error: "AI request limit reached. Try again shortly." },
-      {
-        status: 429,
-        headers: { "Retry-After": String(limit.retryAfterSeconds ?? 60) },
-      },
-    );
   }
 
   let form: FormData;
@@ -149,13 +133,40 @@ export async function POST(request: Request) {
     );
   }
 
+  let limit;
+  try {
+    limit = await consumePaidAiRateLimit({
+      operation: "count",
+      identity: authorization.identity,
+    });
+  } catch (error) {
+    console.error("Unable to check the AI counting rate limit.", error);
+    return json(
+      { error: "AI rate limiting is temporarily unavailable." },
+      { status: 503 },
+    );
+  }
+  if (!limit.allowed) {
+    return json(
+      {
+        error: limit.disabled
+          ? "AI photo counting is disabled by the administrator."
+          : "AI request limit reached. Try again shortly.",
+      },
+      { status: 429, headers: paidAiRateLimitHeaders(limit) },
+    );
+  }
+
   try {
     const { result, model } = await countInventoryItems({
       imageDataUrl,
       itemHint: parsed.data.itemHint,
     });
     return json({ ...result, model });
-  } catch {
+  } catch (error) {
+    if (error instanceof InventoryCountLocalizationError) {
+      return json({ error: error.message }, { status: 502 });
+    }
     return json(
       { error: "Unable to count items in this image." },
       { status: 502 },

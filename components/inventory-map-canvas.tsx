@@ -10,7 +10,7 @@ import {
   Map as MapLibre,
   NavigationControl,
 } from "maplibre-gl";
-import type { Feature, FeatureCollection, Point, Polygon } from "geojson";
+import type { Feature, FeatureCollection, Geometry, Point, Polygon } from "geojson";
 import { useEffect, useRef } from "react";
 
 import type {
@@ -18,6 +18,7 @@ import type {
   ResourceMapFeature,
 } from "@/db/schema";
 import type { ClientResource } from "@/lib/client-types";
+import type { SpatialMapFeatureProperties } from "@/lib/spatial-map-features";
 
 export type MapDrawMode = "idle" | "point" | "polygon";
 export type MapBasemap = "streets" | "satellite";
@@ -46,6 +47,9 @@ type InventoryMapCanvasProps = {
   drawMode: MapDrawMode;
   basemap: MapBasemap;
   polygonDraft: ResourceMapCoordinate[];
+  spatialFeatures?: FeatureCollection<Geometry, SpatialMapFeatureProperties>;
+  activeSpatialStructureId?: string | null;
+  onSelectSpatialFeature?: (feature: SpatialMapFeatureProperties) => void;
   onSelectResource: (resourceId: string, additive: boolean) => void;
   onSelectFeature: (featureId: string) => void;
   onPlacePoint: (coordinate: ResourceMapCoordinate) => void;
@@ -87,6 +91,7 @@ const SATELLITE_TILE_URL =
       || "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const sourceIds = {
   resources: "inventory-resources",
+  spatial: "inventory-spatial-structures",
   vertices: "inventory-edit-vertices",
   draft: "inventory-polygon-draft",
   satellite: "inventory-satellite",
@@ -207,6 +212,46 @@ function setSourceData(map: MapLibreMap, id: string, data: FeatureCollection) {
   source?.setData(data);
 }
 
+function spatialCoordinates(
+  collection: FeatureCollection<Geometry, SpatialMapFeatureProperties> | undefined,
+): ResourceMapCoordinate[] {
+  if (!collection) return [];
+  return collection.features.flatMap((feature) => {
+    if (feature.geometry.type === "Point") {
+      return [[feature.geometry.coordinates[0], feature.geometry.coordinates[1]] as ResourceMapCoordinate];
+    }
+    if (feature.geometry.type === "Polygon") {
+      return (feature.geometry.coordinates[0] ?? []).map(
+        (coordinate) => [coordinate[0], coordinate[1]] as ResourceMapCoordinate,
+      );
+    }
+    if (feature.geometry.type === "MultiPolygon") {
+      return feature.geometry.coordinates.flatMap((polygon) =>
+        (polygon[0] ?? []).map(
+          (coordinate) => [coordinate[0], coordinate[1]] as ResourceMapCoordinate,
+        ),
+      );
+    }
+    return [];
+  });
+}
+
+function activeStructureCoordinate(
+  collection: FeatureCollection<Geometry, SpatialMapFeatureProperties> | undefined,
+  structureId: string | null | undefined,
+): ResourceMapCoordinate | null {
+  if (!collection || !structureId) return null;
+  const marker = collection.features.find(
+    (feature) =>
+      feature.properties.structureId === structureId &&
+      feature.properties.spatialKind === "structure-marker" &&
+      feature.geometry.type === "Point",
+  );
+  return marker?.geometry.type === "Point"
+    ? [marker.geometry.coordinates[0], marker.geometry.coordinates[1]]
+    : null;
+}
+
 function installLayers(map: MapLibreMap) {
   if (map.getSource(sourceIds.resources)) return;
 
@@ -221,6 +266,111 @@ function installLayers(map: MapLibreMap) {
     type: "raster",
     source: sourceIds.satellite,
     layout: { visibility: "none" },
+  });
+
+  map.addSource(sourceIds.spatial, {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+  });
+  map.addLayer({
+    id: "inventory-spatial-structure-fill",
+    type: "fill",
+    source: sourceIds.spatial,
+    filter: ["==", ["get", "spatialKind"], "structure-footprint"],
+    maxzoom: 21,
+    paint: {
+      "fill-color": ["case", ["get", "selected"], "#635bff", "#0f766e"],
+      "fill-opacity": [
+        "interpolate", ["linear"], ["zoom"],
+        12, 0.14,
+        18, 0.25,
+      ],
+    },
+  });
+  map.addLayer({
+    id: "inventory-spatial-structure-line",
+    type: "line",
+    source: sourceIds.spatial,
+    filter: ["==", ["get", "spatialKind"], "structure-footprint"],
+    paint: {
+      "line-color": ["case", ["get", "selected"], "#4f46e5", "#0f766e"],
+      "line-width": ["case", ["get", "selected"], 3, 2],
+    },
+  });
+  map.addLayer({
+    id: "inventory-spatial-room-fill",
+    type: "fill",
+    source: sourceIds.spatial,
+    filter: ["==", ["get", "spatialKind"], "room-footprint"],
+    minzoom: 17,
+    paint: {
+      "fill-color": "#8b5cf6",
+      "fill-opacity": 0.24,
+    },
+  });
+  map.addLayer({
+    id: "inventory-spatial-room-line",
+    type: "line",
+    source: sourceIds.spatial,
+    filter: ["==", ["get", "spatialKind"], "room-footprint"],
+    minzoom: 17,
+    paint: {
+      "line-color": "#6d28d9",
+      "line-width": 2.5,
+    },
+  });
+  map.addLayer({
+    id: "inventory-spatial-structure-points",
+    type: "circle",
+    source: sourceIds.spatial,
+    filter: ["==", ["get", "spatialKind"], "structure-marker"],
+    maxzoom: 18.5,
+    paint: {
+      "circle-color": ["case", ["get", "selected"], "#635bff", "#0f766e"],
+      "circle-radius": [
+        "interpolate", ["linear"], ["zoom"],
+        8, 7,
+        17, 12,
+      ],
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 3,
+    },
+  });
+  map.addLayer({
+    id: "inventory-spatial-item-points",
+    type: "circle",
+    source: sourceIds.spatial,
+    filter: ["==", ["get", "spatialKind"], "positioned-item"],
+    minzoom: 18,
+    paint: {
+      "circle-color": "#f97316",
+      "circle-radius": 6,
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 2,
+    },
+  });
+  map.addLayer({
+    id: "inventory-spatial-labels",
+    type: "symbol",
+    source: sourceIds.spatial,
+    filter: ["in", ["get", "spatialKind"], ["literal", ["structure-marker", "room-footprint"]]],
+    layout: {
+      "text-field": [
+        "case",
+        ["==", ["get", "spatialKind"], "room-footprint"],
+        ["get", "roomName"],
+        ["get", "structureName"],
+      ],
+      "text-size": 12,
+      "text-offset": [0, 1.45],
+      "text-anchor": "top",
+      "text-allow-overlap": false,
+    },
+    paint: {
+      "text-color": "#312e81",
+      "text-halo-color": "#ffffff",
+      "text-halo-width": 1.5,
+    },
   });
 
   map.addSource(sourceIds.resources, {
@@ -340,10 +490,13 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
     drawMode,
     basemap,
     polygonDraft,
+    spatialFeatures,
+    activeSpatialStructureId,
   } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const fittedRef = useRef(false);
+  const spatialFittedRef = useRef(false);
   const latestRef = useRef(props);
 
   useEffect(() => {
@@ -362,7 +515,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
       ? firstFeature.coordinates
       : firstFeature?.type === "polygon"
         ? firstFeature.coordinates[0]
-        : undefined;
+        : spatialCoordinates(props.spatialFeatures)[0];
 
     const map = new MapLibre({
       container: containerRef.current,
@@ -387,6 +540,22 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
         type: "FeatureCollection",
         features: [...data.polygons.features, ...data.points.features],
       });
+      setSourceData(
+        map,
+        sourceIds.spatial,
+        current.spatialFeatures ?? { type: "FeatureCollection", features: [] },
+      );
+      const selectedStructureCoordinate = activeStructureCoordinate(
+        current.spatialFeatures,
+        current.activeSpatialStructureId,
+      );
+      if (selectedStructureCoordinate) {
+        map.jumpTo({
+          center: selectedStructureCoordinate,
+          zoom: Math.max(map.getZoom(), 18),
+        });
+        fittedRef.current = true;
+      }
       const activeFeature = current.activeResourceId
         ? (current.featuresByResource[current.activeResourceId] ?? []).find(
             (feature) => feature.id === current.activeFeatureId,
@@ -404,11 +573,14 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
       );
 
       if (!fittedRef.current) {
-        const allCoordinates = Object.values(current.featuresByResource).flatMap((features) =>
-          features.flatMap((feature) =>
-            feature.type === "point" ? [feature.coordinates] : feature.coordinates,
+        const allCoordinates = [
+          ...Object.values(current.featuresByResource).flatMap((features) =>
+            features.flatMap((feature) =>
+              feature.type === "point" ? [feature.coordinates] : feature.coordinates,
+            ),
           ),
-        );
+          ...spatialCoordinates(current.spatialFeatures),
+        ];
         if (allCoordinates.length > 1) {
           const bounds = allCoordinates.reduce(
             (result, coordinate) => result.extend(coordinate),
@@ -416,7 +588,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
           );
           map.fitBounds(bounds, { padding: 70, maxZoom: 19, duration: 0 });
         }
-        fittedRef.current = true;
+        if (allCoordinates.length) fittedRef.current = true;
       }
     };
 
@@ -491,8 +663,29 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
       }
 
       const hit = map.queryRenderedFeatures(event.point, {
-        layers: ["inventory-points", "inventory-polygons-fill", "inventory-polygons-line"],
+        layers: [
+          "inventory-spatial-item-points",
+          "inventory-spatial-room-fill",
+          "inventory-spatial-room-line",
+          "inventory-spatial-structure-points",
+          "inventory-spatial-structure-fill",
+          "inventory-spatial-structure-line",
+          "inventory-points",
+          "inventory-polygons-fill",
+          "inventory-polygons-line",
+        ],
       })[0];
+      const spatialKind = hit?.properties?.spatialKind as
+        | SpatialMapFeatureProperties["spatialKind"]
+        | undefined;
+      if (spatialKind && current.onSelectSpatialFeature) {
+        const feature = hit.properties as unknown as SpatialMapFeatureProperties;
+        current.onSelectSpatialFeature(feature);
+        if (spatialKind === "structure-marker" || spatialKind === "structure-footprint") {
+          map.easeTo({ center: event.lngLat, zoom: Math.max(map.getZoom(), 18), duration: 700 });
+        }
+        return;
+      }
       const resourceId = hit?.properties?.resourceId as string | undefined;
       const featureId = hit?.properties?.featureId as string | undefined;
       if (resourceId) {
@@ -541,9 +734,15 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
     map.on("mousemove", onMove);
     map.on("mouseup", onUp);
     map.on("mouseenter", "inventory-points", () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseenter", "inventory-spatial-structure-points", () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseenter", "inventory-spatial-room-fill", () => { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseenter", "inventory-spatial-item-points", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseenter", "inventory-polygons-fill", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseenter", "inventory-vertices", () => { map.getCanvas().style.cursor = "grab"; });
     map.on("mouseleave", "inventory-points", () => { map.getCanvas().style.cursor = ""; });
+    map.on("mouseleave", "inventory-spatial-structure-points", () => { map.getCanvas().style.cursor = ""; });
+    map.on("mouseleave", "inventory-spatial-room-fill", () => { map.getCanvas().style.cursor = ""; });
+    map.on("mouseleave", "inventory-spatial-item-points", () => { map.getCanvas().style.cursor = ""; });
     map.on("mouseleave", "inventory-polygons-fill", () => { map.getCanvas().style.cursor = ""; });
     map.on("mouseleave", "inventory-vertices", () => { map.getCanvas().style.cursor = ""; });
 
@@ -577,11 +776,14 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
     setSourceData(map, sourceIds.draft, draftCollection(editable ? polygonDraft : []));
 
     if (!fittedRef.current) {
-      const allCoordinates = Object.values(featuresByResource).flatMap((features) =>
-        features.flatMap((feature) =>
-          feature.type === "point" ? [feature.coordinates] : feature.coordinates,
+      const allCoordinates = [
+        ...Object.values(featuresByResource).flatMap((features) =>
+          features.flatMap((feature) =>
+            feature.type === "point" ? [feature.coordinates] : feature.coordinates,
+          ),
         ),
-      );
+        ...spatialCoordinates(spatialFeatures),
+      ];
       if (allCoordinates.length > 1) {
         const bounds = allCoordinates.reduce(
           (result, coordinate) => result.extend(coordinate),
@@ -589,7 +791,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
         );
         map.fitBounds(bounds, { padding: 70, maxZoom: 19, duration: 0 });
       }
-      fittedRef.current = true;
+      if (allCoordinates.length) fittedRef.current = true;
     }
   }, [
     activeFeatureId,
@@ -599,7 +801,51 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
     polygonDraft,
     resources,
     selectedIds,
+    spatialFeatures,
   ]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.loaded() || !map.getSource(sourceIds.spatial)) return;
+    setSourceData(
+      map,
+      sourceIds.spatial,
+      spatialFeatures ?? { type: "FeatureCollection", features: [] },
+    );
+    const matching = spatialFeatures?.features.filter(
+      (feature) => feature.properties.structureId === activeSpatialStructureId,
+    ) ?? [];
+    if (activeSpatialStructureId && matching.length) {
+      const point = matching.find(
+        (feature) =>
+          feature.properties.spatialKind === "structure-marker" &&
+          feature.geometry.type === "Point",
+      );
+      if (point?.geometry.type === "Point") {
+        map.easeTo({
+          center: [point.geometry.coordinates[0], point.geometry.coordinates[1]],
+          zoom: Math.max(map.getZoom(), 18),
+          duration: 700,
+        });
+      }
+      return;
+    }
+    if (spatialFittedRef.current) return;
+    const coordinates = spatialCoordinates(spatialFeatures);
+    if (!coordinates.length) return;
+    const resourceCoordinates = Object.values(featuresByResource).flatMap((features) =>
+      features.flatMap((feature) =>
+        feature.type === "point" ? [feature.coordinates] : feature.coordinates,
+      ),
+    );
+    const allCoordinates = [...resourceCoordinates, ...coordinates];
+    const bounds = allCoordinates.reduce(
+      (result, coordinate) => result.extend(coordinate),
+      new LngLatBounds(allCoordinates[0], allCoordinates[0]),
+    );
+    map.fitBounds(bounds, { padding: 70, maxZoom: 19, duration: 500 });
+    spatialFittedRef.current = true;
+  }, [activeSpatialStructureId, featuresByResource, spatialFeatures]);
 
   useEffect(() => {
     const map = mapRef.current;
