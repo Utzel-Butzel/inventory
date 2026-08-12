@@ -5,6 +5,7 @@ import {
   type Map as MapLibreMap,
   type MapLayerMouseEvent,
   type MapMouseEvent,
+  type MapOptions,
   LngLatBounds,
   Map as MapLibre,
   NavigationControl,
@@ -41,6 +42,7 @@ type InventoryMapCanvasProps = {
   selectedIds: string[];
   activeResourceId: string | null;
   activeFeatureId: string | null;
+  editable: boolean;
   drawMode: MapDrawMode;
   basemap: MapBasemap;
   polygonDraft: ResourceMapCoordinate[];
@@ -51,12 +53,38 @@ type InventoryMapCanvasProps = {
   onChangeFeatures: (resourceId: string, features: ResourceMapFeature[]) => void;
 };
 
-const STREET_STYLE =
-  process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim()
-  || "https://tiles.openfreemap.org/styles/liberty";
+const MAPBOX_ACCESS_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN?.trim();
+
+function mapboxTileUrl(style: string) {
+  return `https://api.mapbox.com/styles/v1/mapbox/${style}/tiles/512/{z}/{x}/{y}?access_token=${encodeURIComponent(MAPBOX_ACCESS_TOKEN ?? "")}`;
+}
+
+const STREET_STYLE: MapOptions["style"] = MAPBOX_ACCESS_TOKEN
+  ? {
+      version: 8,
+      sources: {
+        "mapbox-streets": {
+          type: "raster",
+          tiles: [mapboxTileUrl("streets-v12")],
+          tileSize: 512,
+          attribution: "© Mapbox © OpenStreetMap",
+        },
+      },
+      layers: [
+        {
+          id: "mapbox-streets",
+          type: "raster",
+          source: "mapbox-streets",
+        },
+      ],
+    }
+  : process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim()
+    || "https://tiles.openfreemap.org/styles/liberty";
 const SATELLITE_TILE_URL =
-  process.env.NEXT_PUBLIC_SATELLITE_TILE_URL?.trim()
-  || "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+  MAPBOX_ACCESS_TOKEN
+    ? mapboxTileUrl("satellite-streets-v12")
+    : process.env.NEXT_PUBLIC_SATELLITE_TILE_URL?.trim()
+      || "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const sourceIds = {
   resources: "inventory-resources",
   vertices: "inventory-edit-vertices",
@@ -185,8 +213,8 @@ function installLayers(map: MapLibreMap) {
   map.addSource(sourceIds.satellite, {
     type: "raster",
     tiles: [SATELLITE_TILE_URL],
-    tileSize: 256,
-    attribution: "Tiles © Esri",
+    tileSize: MAPBOX_ACCESS_TOKEN ? 512 : 256,
+    attribution: MAPBOX_ACCESS_TOKEN ? "© Mapbox © OpenStreetMap" : "Tiles © Esri",
   });
   map.addLayer({
     id: sourceIds.satellite,
@@ -308,6 +336,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
     selectedIds,
     activeResourceId,
     activeFeatureId,
+    editable,
     drawMode,
     basemap,
     polygonDraft,
@@ -363,12 +392,16 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
             (feature) => feature.id === current.activeFeatureId,
           )
         : undefined;
-      const handles = editHandles(activeFeature);
+      const handles = editHandles(current.editable ? activeFeature : undefined);
       setSourceData(map, sourceIds.vertices, {
         type: "FeatureCollection",
         features: [...handles.midpoints, ...handles.vertices],
       });
-      setSourceData(map, sourceIds.draft, draftCollection(current.polygonDraft));
+      setSourceData(
+        map,
+        sourceIds.draft,
+        draftCollection(current.editable ? current.polygonDraft : []),
+      );
 
       if (!fittedRef.current) {
         const allCoordinates = Object.values(current.featuresByResource).flatMap((features) =>
@@ -398,18 +431,20 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
 
     map.on("click", (event: MapMouseEvent) => {
       const current = latestRef.current;
-      if (current.drawMode === "point") {
+      if (current.editable && current.drawMode === "point") {
         current.onPlacePoint([event.lngLat.lng, event.lngLat.lat]);
         return;
       }
-      if (current.drawMode === "polygon") {
+      if (current.editable && current.drawMode === "polygon") {
         current.onAddPolygonPoint([event.lngLat.lng, event.lngLat.lat]);
         return;
       }
 
-      const midpoint = map.queryRenderedFeatures(event.point, {
-        layers: ["inventory-midpoints"],
-      })[0];
+      const midpoint = current.editable
+        ? map.queryRenderedFeatures(event.point, {
+            layers: ["inventory-midpoints"],
+          })[0]
+        : undefined;
       if (midpoint && current.activeResourceId && current.activeFeatureId) {
         const insertIndex = Number(midpoint.properties?.vertexIndex);
         const features = current.featuresByResource[current.activeResourceId] ?? [];
@@ -428,9 +463,11 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
         return;
       }
 
-      const vertex = map.queryRenderedFeatures(event.point, {
-        layers: ["inventory-vertices"],
-      })[0];
+      const vertex = current.editable
+        ? map.queryRenderedFeatures(event.point, {
+            layers: ["inventory-vertices"],
+          })[0]
+        : undefined;
       if (
         vertex &&
         event.originalEvent.altKey &&
@@ -471,7 +508,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
     const onMove = (event: MapMouseEvent) => {
       if (!dragging) return;
       const current = latestRef.current;
-      if (!current.activeResourceId) return;
+      if (!current.editable || !current.activeResourceId) return;
       const features = current.featuresByResource[current.activeResourceId] ?? [];
       const coordinate: ResourceMapCoordinate = [event.lngLat.lng, event.lngLat.lat];
       current.onChangeFeatures(
@@ -491,6 +528,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
       map.dragPan.enable();
     };
     map.on("mousedown", "inventory-vertices", (event: MapLayerMouseEvent) => {
+      if (!latestRef.current.editable) return;
       const vertex = event.features?.[0];
       if (!vertex) return;
       event.preventDefault();
@@ -531,12 +569,12 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
           (feature) => feature.id === activeFeatureId,
         )
       : undefined;
-    const handles = editHandles(activeFeature);
+    const handles = editHandles(editable ? activeFeature : undefined);
     setSourceData(map, sourceIds.vertices, {
       type: "FeatureCollection",
       features: [...handles.midpoints, ...handles.vertices],
     });
-    setSourceData(map, sourceIds.draft, draftCollection(polygonDraft));
+    setSourceData(map, sourceIds.draft, draftCollection(editable ? polygonDraft : []));
 
     if (!fittedRef.current) {
       const allCoordinates = Object.values(featuresByResource).flatMap((features) =>
@@ -556,6 +594,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
   }, [
     activeFeatureId,
     activeResourceId,
+    editable,
     featuresByResource,
     polygonDraft,
     resources,
@@ -575,8 +614,14 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    map.getCanvas().style.cursor = drawMode === "idle" ? "" : "crosshair";
-  }, [drawMode]);
+    map.getCanvas().style.cursor = editable && drawMode !== "idle" ? "crosshair" : "";
+  }, [drawMode, editable]);
 
-  return <div ref={containerRef} className="absolute inset-0" aria-label="Inventory map" />;
+  return (
+    <div
+      ref={containerRef}
+      className="h-full min-h-[560px] w-full"
+      aria-label="Inventory map"
+    />
+  );
 }

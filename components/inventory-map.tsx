@@ -6,6 +6,7 @@ import {
   Box,
   Check,
   CircleDot,
+  Eye,
   ListChecks,
   LoaderCircle,
   Map as MapIcon,
@@ -114,6 +115,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
   const [batchSaving, setBatchSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
   const [multiSelect, setMultiSelect] = useState(false);
   const [drawMode, setDrawMode] = useState<MapDrawMode>("idle");
   const [basemap, setBasemap] = useState<MapBasemap>("streets");
@@ -121,6 +123,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
   const [newLayer, setNewLayer] = useState("Location");
   const [batchForm, setBatchForm] = useState<BatchForm>(emptyBatchForm);
   const [applyLocation, setApplyLocation] = useState(false);
+  const isEditing = canEdit && editMode;
 
   const featuresByResource = useMemo(
     () =>
@@ -190,12 +193,13 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
   }, [activeFeatureId, activeFeatures, activeResourceId]);
 
   const markChanged = useCallback((resourceId: string, features: ResourceMapFeature[]) => {
+    if (!isEditing) return;
     setDrafts((current) => ({ ...current, [resourceId]: features }));
     setDirtyIds((current) => current.includes(resourceId) ? current : [...current, resourceId]);
-  }, []);
+  }, [isEditing]);
 
   const selectResource = useCallback((resourceId: string, additive: boolean) => {
-    const shouldAdd = multiSelect || additive;
+    const shouldAdd = isEditing && (multiSelect || additive);
     setSelectedIds((current) => {
       if (!shouldAdd) return [resourceId];
       return current.includes(resourceId)
@@ -205,17 +209,17 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
     setActiveResourceId(resourceId);
     setDrawMode("idle");
     setPolygonDraft([]);
-  }, [multiSelect]);
+  }, [isEditing, multiSelect]);
 
   const startDrawing = useCallback((mode: Exclude<MapDrawMode, "idle">) => {
-    if (!canEdit || !activeResourceId) return;
+    if (!isEditing || !activeResourceId) return;
     setError(null);
     setPolygonDraft([]);
     setDrawMode(mode);
-  }, [activeResourceId, canEdit]);
+  }, [activeResourceId, isEditing]);
 
   const addPoint = (coordinate: ResourceMapCoordinate) => {
-    if (!activeResourceId || !canEdit) return;
+    if (!activeResourceId || !isEditing) return;
     const feature: ResourceMapFeature = {
       id: crypto.randomUUID(),
       type: "point",
@@ -230,7 +234,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
   };
 
   const finishPolygon = useCallback(() => {
-    if (!activeResourceId || !canEdit) return;
+    if (!activeResourceId || !isEditing) return;
     if (polygonDraft.length < 3) {
       setError("A polygon needs at least three points.");
       return;
@@ -248,7 +252,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
     setPolygonDraft([]);
     setDrawMode("idle");
     setNotice("Outline added. Drag orange corners or click green handles to refine it.");
-  }, [activeFeatures, activeResourceId, canEdit, markChanged, newLayer, polygonDraft]);
+  }, [activeFeatures, activeResourceId, isEditing, markChanged, newLayer, polygonDraft]);
 
   const cancelDrawing = useCallback(() => {
     setPolygonDraft([]);
@@ -256,7 +260,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
   }, []);
 
   const saveAllGeometry = useCallback(async () => {
-    if (!dirtyIds.length || !canEdit) return;
+    if (!dirtyIds.length || !isEditing) return;
     setSaving(true);
     setError(null);
     const pendingIds = [...dirtyIds];
@@ -287,10 +291,11 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
     if (failed) setError(`${failed} map change${failed === 1 ? "" : "s"} could not be saved.`);
     else setNotice(`${saved.length} map change${saved.length === 1 ? "" : "s"} saved.`);
     setSaving(false);
-  }, [canEdit, dirtyIds, drafts, featuresByResource]);
+  }, [dirtyIds, drafts, featuresByResource, isEditing]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!isEditing) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         void saveAllGeometry();
@@ -306,10 +311,10 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cancelDrawing, drawMode, finishPolygon, saveAllGeometry, startDrawing]);
+  }, [cancelDrawing, drawMode, finishPolygon, isEditing, saveAllGeometry, startDrawing]);
 
   const deleteActiveFeature = () => {
-    if (!activeResourceId || !activeFeature) return;
+    if (!isEditing || !activeResourceId || !activeFeature) return;
     markChanged(
       activeResourceId,
       activeFeatures.filter((feature) => feature.id !== activeFeature.id),
@@ -318,7 +323,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
   };
 
   const updateActiveFeature = (changes: Partial<Pick<ResourceMapFeature, "layer" | "description">>) => {
-    if (!activeResourceId || !activeFeature) return;
+    if (!isEditing || !activeResourceId || !activeFeature) return;
     markChanged(
       activeResourceId,
       activeFeatures.map((feature) =>
@@ -328,7 +333,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
   };
 
   const applyBatch = async () => {
-    if (!canEdit || !selectedIds.length) return;
+    if (!isEditing || !selectedIds.length) return;
     const changes: Record<string, unknown> = {};
     if (batchForm.status) changes.status = batchForm.status;
     if (batchForm.type) changes.type = batchForm.type;
@@ -370,6 +375,17 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
     }
   };
 
+  const leaveEditMode = () => {
+    if (dirtyIds.length) {
+      setError("Save your map changes before returning to the map view.");
+      return;
+    }
+    cancelDrawing();
+    setMultiSelect(false);
+    setSelectedIds(activeResourceId ? [activeResourceId] : []);
+    setEditMode(false);
+  };
+
   if (loading) {
     return (
       <div className="grid min-h-[calc(100vh-68px)] place-items-center text-slate-400">
@@ -386,7 +402,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
             <MapPin size={13} /> Spatial inventory
           </div>
           <h1 className="text-2xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-3xl">
-            Map editor
+            {isEditing ? "Edit locations" : "Locations"}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             {locatedCount} of {resources.length} items positioned · points, rooms and object outlines
@@ -398,22 +414,39 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
               {dirtyIds.length} unsaved
             </span>
           ) : null}
-          <button
-            type="button"
-            onClick={() => setMultiSelect((current) => !current)}
-            className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3.5 text-xs font-semibold transition ${multiSelect ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
-          >
-            <ListChecks size={15} /> {multiSelect ? "Multi-select on" : "Multi-select"}
-          </button>
-          {canEdit ? (
+          {isEditing ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setMultiSelect((current) => !current)}
+                className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3.5 text-xs font-semibold transition ${multiSelect ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                <ListChecks size={15} /> {multiSelect ? "Multi-select on" : "Multi-select"}
+              </button>
+              <button
+                type="button"
+                onClick={leaveEditMode}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                <Eye size={15} /> Ansicht
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveAllGeometry()}
+                disabled={!dirtyIds.length || saving}
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#635bff] px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-[#5147f5] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {saving ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}
+                Save map changes
+              </button>
+            </>
+          ) : canEdit ? (
             <button
               type="button"
-              onClick={() => void saveAllGeometry()}
-              disabled={!dirtyIds.length || saving}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#635bff] px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-[#5147f5] disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={() => setEditMode(true)}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#635bff] px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-[#5147f5]"
             >
-              {saving ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}
-              Save map changes
+              <PenTool size={15} /> Bearbeiten
             </button>
           ) : (
             <span className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">Read only</span>
@@ -439,13 +472,15 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find items, locations or tags…" className={`${inputClass} pl-9`} />
             </label>
-            <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-              <span>{selectedIds.length} selected</span>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => { setSelectedIds(displayed.map((resource) => resource.id)); setMultiSelect(true); }} className="font-semibold text-violet-600 hover:text-violet-800">Select results</button>
-                {selectedIds.length ? <button type="button" onClick={() => { setSelectedIds([]); setActiveResourceId(null); }} className="font-semibold text-slate-500 hover:text-slate-800">Clear</button> : null}
+            {isEditing ? (
+              <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+                <span>{selectedIds.length} selected</span>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => { setSelectedIds(displayed.map((resource) => resource.id)); setMultiSelect(true); }} className="font-semibold text-violet-600 hover:text-violet-800">Select results</button>
+                  {selectedIds.length ? <button type="button" onClick={() => { setSelectedIds([]); setActiveResourceId(null); }} className="font-semibold text-slate-500 hover:text-slate-800">Clear</button> : null}
+                </div>
               </div>
-            </div>
+            ) : null}
           </div>
 
           <div className="max-h-[270px] min-h-[160px] overflow-y-auto border-b border-slate-100 p-2 scrollbar-thin lg:max-h-[32vh]">
@@ -459,7 +494,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                   onClick={(event) => selectResource(resource.id, event.shiftKey || event.metaKey || event.ctrlKey)}
                   className={`mb-1 flex w-full items-center gap-2.5 rounded-xl p-2 text-left transition ${activeResourceId === resource.id ? "bg-violet-50 ring-1 ring-inset ring-violet-200" : selected ? "bg-slate-50" : "hover:bg-slate-50"}`}
                 >
-                  <span className={`grid size-5 shrink-0 place-items-center rounded-md border ${selected ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 bg-white text-transparent"}`}><Check size={12} /></span>
+                  {isEditing ? <span className={`grid size-5 shrink-0 place-items-center rounded-md border ${selected ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 bg-white text-transparent"}`}><Check size={12} /></span> : null}
                   <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-100 text-slate-400">
                     {resource.cover?.url ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -492,7 +527,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                     <Link href={`/inventory/${activeResource.id}`} className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50">Open item</Link>
                   </div>
 
-                  {canEdit ? (
+                  {isEditing ? (
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Draw geometry</p>
                       <input value={newLayer} onChange={(event) => setNewLayer(event.target.value)} placeholder="Layer, e.g. Workshop" className={inputClass} />
@@ -528,7 +563,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                   </section>
                 ) : null}
 
-                {activeFeature && canEdit ? (
+                {activeFeature && isEditing ? (
                   <section className="rounded-xl border border-orange-200 bg-orange-50/60 p-3">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-orange-700">Edit {activeFeature.type}</p>
@@ -540,18 +575,18 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                   </section>
                 ) : null}
 
-                {selectedIds.length ? (
+                {isEditing && selectedIds.length ? (
                   <section className="border-t border-slate-100 pt-4">
                     <div className="mb-2 flex items-center gap-2"><MousePointer2 size={13} className="text-violet-600" /><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Quick edit · {selectedIds.length} selected</p></div>
                     <div className="grid grid-cols-2 gap-2">
-                      <select value={batchForm.status} onChange={(event) => setBatchForm((current) => ({ ...current, status: event.target.value }))} className={inputClass} disabled={!canEdit}><option value="">Keep status</option><option value="available">Available</option><option value="in-use">In use</option><option value="maintenance">Maintenance</option><option value="archived">Archived</option></select>
-                      <select value={batchForm.type} onChange={(event) => setBatchForm((current) => ({ ...current, type: event.target.value }))} className={inputClass} disabled={!canEdit}><option value="">Keep type</option>{resourceTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select>
-                      <select value={batchForm.priority} onChange={(event) => setBatchForm((current) => ({ ...current, priority: event.target.value }))} className={`${inputClass} col-span-2`} disabled={!canEdit}><option value="">Keep priority</option>{[1, 2, 3, 4, 5].map((priority) => <option key={priority} value={priority}>Priority {priority}</option>)}</select>
-                      <input value={batchForm.addTags} onChange={(event) => setBatchForm((current) => ({ ...current, addTags: event.target.value }))} placeholder="Add tags…" className={`${inputClass} col-span-2`} disabled={!canEdit} />
-                      <label className="col-span-2 flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[10px] font-semibold text-slate-600"><input type="checkbox" checked={applyLocation} onChange={(event) => setApplyLocation(event.target.checked)} disabled={!canEdit} className="accent-violet-600" /> Change location label</label>
-                      {applyLocation ? <input value={batchForm.location} onChange={(event) => setBatchForm((current) => ({ ...current, location: event.target.value }))} placeholder="Workshop · Shelf A3 (empty clears)" className={`${inputClass} col-span-2`} disabled={!canEdit} /> : null}
+                      <select value={batchForm.status} onChange={(event) => setBatchForm((current) => ({ ...current, status: event.target.value }))} className={inputClass}><option value="">Keep status</option><option value="available">Available</option><option value="in-use">In use</option><option value="maintenance">Maintenance</option><option value="archived">Archived</option></select>
+                      <select value={batchForm.type} onChange={(event) => setBatchForm((current) => ({ ...current, type: event.target.value }))} className={inputClass}><option value="">Keep type</option>{resourceTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select>
+                      <select value={batchForm.priority} onChange={(event) => setBatchForm((current) => ({ ...current, priority: event.target.value }))} className={`${inputClass} col-span-2`}><option value="">Keep priority</option>{[1, 2, 3, 4, 5].map((priority) => <option key={priority} value={priority}>Priority {priority}</option>)}</select>
+                      <input value={batchForm.addTags} onChange={(event) => setBatchForm((current) => ({ ...current, addTags: event.target.value }))} placeholder="Add tags…" className={`${inputClass} col-span-2`} />
+                      <label className="col-span-2 flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[10px] font-semibold text-slate-600"><input type="checkbox" checked={applyLocation} onChange={(event) => setApplyLocation(event.target.checked)} className="accent-violet-600" /> Change location label</label>
+                      {applyLocation ? <input value={batchForm.location} onChange={(event) => setBatchForm((current) => ({ ...current, location: event.target.value }))} placeholder="Workshop · Shelf A3 (empty clears)" className={`${inputClass} col-span-2`} /> : null}
                     </div>
-                    {canEdit ? <button type="button" onClick={() => void applyBatch()} disabled={batchSaving} className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-slate-900 text-xs font-semibold text-white disabled:opacity-50">{batchSaving ? <LoaderCircle size={14} className="animate-spin" /> : <ListChecks size={14} />}Apply to selection</button> : null}
+                    <button type="button" onClick={() => void applyBatch()} disabled={batchSaving} className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-slate-900 text-xs font-semibold text-white disabled:opacity-50">{batchSaving ? <LoaderCircle size={14} className="animate-spin" /> : <ListChecks size={14} />}Apply to selection</button>
                   </section>
                 ) : null}
               </div>
@@ -568,6 +603,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
             selectedIds={selectedIds}
             activeResourceId={activeResourceId}
             activeFeatureId={activeFeatureId}
+            editable={isEditing}
             drawMode={drawMode}
             basemap={basemap}
             polygonDraft={polygonDraft}
@@ -582,14 +618,16 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
             <button type="button" onClick={() => setBasemap("streets")} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold ${basemap === "streets" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}><MapIcon size={13} /> Map</button>
             <button type="button" onClick={() => setBasemap("satellite")} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold ${basemap === "satellite" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}><Satellite size={13} /> Satellite</button>
           </div>
-          {drawMode !== "idle" ? (
+          {isEditing && drawMode !== "idle" ? (
             <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-xl border border-white/80 bg-slate-950/90 px-3 py-2 text-xs font-semibold text-white shadow-xl backdrop-blur">
               {drawMode === "point" ? "Click once to place the item" : `${polygonDraft.length} corners · Enter to finish · Esc to cancel`}
             </div>
           ) : null}
-          <div className="pointer-events-none absolute bottom-3 right-3 z-10 hidden rounded-lg bg-white/90 px-2.5 py-1.5 text-[10px] text-slate-500 shadow sm:block">
-            Shift-click to add to selection · P point · G polygon · ⌘/Ctrl+S save
-          </div>
+          {isEditing ? (
+            <div className="pointer-events-none absolute bottom-3 right-3 z-10 hidden rounded-lg bg-white/90 px-2.5 py-1.5 text-[10px] text-slate-500 shadow sm:block">
+              Shift-click to add to selection · P point · G polygon · ⌘/Ctrl+S save
+            </div>
+          ) : null}
         </section>
       </div>
     </main>
