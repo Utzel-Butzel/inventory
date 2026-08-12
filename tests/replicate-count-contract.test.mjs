@@ -2,9 +2,91 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createInventoryCountResultFromGroundingDino,
+  createInventoryCountResultFromSam2,
   createInventoryCountResultFromSam3,
+  createInventoryCountResultFromYoloWorld,
   normalizeReplicateCountPrompt,
 } from "../lib/replicate-count-contract.ts";
+
+test("maps Grounding DINO pixel xyxy boxes to existing 0...1000 markers", () => {
+  const result = createInventoryCountResultFromGroundingDino({
+    output: {
+      detections: [
+        { bbox: [100, 200, 300, 600], label: "PCB", confidence: 0.8 },
+        { bbox: [700, 100, 900, 300], label: "PCB", confidence: 0.6 },
+      ],
+    },
+    itemHint: "Platinen",
+    prompt: "Platinen",
+    imageWidth: 1_000,
+    imageHeight: 800,
+    language: "Deutsch",
+  });
+
+  assert.equal(result.count, 2);
+  assert.deepEqual(result.markers, [
+    { x: 200, y: 500 },
+    { x: 800, y: 250 },
+  ]);
+  assert.equal(result.confidence, 0.7);
+  assert.equal(result.detectedItem, "Platinen");
+});
+
+test("rejects Grounding DINO boxes outside the submitted image", () => {
+  assert.throws(() =>
+    createInventoryCountResultFromGroundingDino({
+      output: {
+        detections: [{ bbox: [10, 20, 650, 100], label: "part", confidence: 0.9 }],
+      },
+      prompt: "part",
+      imageWidth: 640,
+      imageHeight: 480,
+      language: "English",
+    }),
+  );
+});
+
+test("maps YOLO World JSON detections into count markers", () => {
+  const result = createInventoryCountResultFromYoloWorld({
+    output: {
+      json_str: JSON.stringify([
+        {
+          name: "part",
+          confidence: 0.91,
+          box: { x1: 0, y1: 100, x2: 200, y2: 300 },
+        },
+      ]),
+    },
+    prompt: "part",
+    imageWidth: 400,
+    imageHeight: 400,
+    language: "English",
+  });
+
+  assert.equal(result.count, 1);
+  assert.deepEqual(result.markers, [{ x: 250, y: 500 }]);
+  assert.match(result.explanation, /YOLO World/);
+});
+
+test("creates advisory SAM 2 results from downloaded mask centroids", () => {
+  const result = createInventoryCountResultFromSam2({
+    centroids: [
+      { x: 0.25, y: 0.5 },
+      { x: 0.75, y: 0.1 },
+    ],
+    itemHint: "Platinen",
+    prompt: "Platinen",
+    language: "Deutsch",
+  });
+
+  assert.equal(result.count, 2);
+  assert.deepEqual(result.markers, [
+    { x: 250, y: 500 },
+    { x: 750, y: 100 },
+  ]);
+  assert.match(result.warnings.join(" "), /Artikeltext/);
+});
 
 test("normalizes whitespace without dropping meaningful part qualifiers", () => {
   assert.equal(

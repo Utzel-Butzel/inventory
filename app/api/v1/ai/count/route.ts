@@ -22,6 +22,10 @@ import {
 } from "@/lib/replicate-count-job";
 import { maxUploadBytes } from "@/lib/storage";
 import { inventoryCountInputSchema } from "@/lib/validators";
+import {
+  isInventoryCountModelId,
+  resolveInventoryCountModel,
+} from "@/lib/inventory-count-models";
 
 const supportedImageTypes = new Set([
   "image/jpeg",
@@ -174,6 +178,29 @@ export async function POST(request: Request) {
     return json({ error: "itemHint must be a single text field." }, { status: 422 });
   }
   const rawHint = hintEntries[0];
+  const modelEntries = form.getAll("modelId");
+  if (
+    modelEntries.length > 1 ||
+    (modelEntries.length === 1 && typeof modelEntries[0] !== "string")
+  ) {
+    return json({ error: "modelId must be a single text field." }, { status: 422 });
+  }
+  const rawModelId = modelEntries[0];
+  if (
+    typeof rawModelId === "string" &&
+    rawModelId.trim() &&
+    !isInventoryCountModelId(rawModelId.trim())
+  ) {
+    return json({ error: "The selected counting model is unavailable." }, { status: 422 });
+  }
+  const countModel = resolveInventoryCountModel(
+    typeof rawModelId === "string" && rawModelId.trim()
+      ? rawModelId.trim()
+      : undefined,
+  );
+  if (!countModel) {
+    return json({ error: "The selected counting model is unavailable." }, { status: 422 });
+  }
   const itemIdEntries = form.getAll("itemId");
   if (
     itemIdEntries.length > 1 ||
@@ -221,6 +248,7 @@ export async function POST(request: Request) {
     actor: hashRequestIdentity(authorization.identity),
     imageSha256: createHash("sha256").update(imageBytes).digest("hex"),
     itemHint: parsed.data.itemHint,
+    modelId: countModel.id,
     mimeType: normalizedMimeType,
   });
   let claim;
@@ -313,9 +341,9 @@ export async function POST(request: Request) {
     );
   }
 
-  let imageDataUrl: string;
+  let preparedImage: Awaited<ReturnType<typeof prepareInventoryCountImage>>;
   try {
-    imageDataUrl = await prepareInventoryCountImage(imageBytes);
+    preparedImage = await prepareInventoryCountImage(imageBytes);
   } catch {
     if (operationId) await releaseAiOperation(operationId).catch(() => undefined);
     return json(
@@ -346,8 +374,11 @@ export async function POST(request: Request) {
   try {
     providerAttempted = true;
     const outcome = await countInventoryItems({
-      imageDataUrl,
+      imageDataUrl: preparedImage.dataUrl,
+      imageWidth: preparedImage.width,
+      imageHeight: preparedImage.height,
       itemHint: parsed.data.itemHint,
+      modelId: countModel.id,
     });
     if (outcome.kind === "processing") {
       const jobToken = createReplicateCountJobToken({

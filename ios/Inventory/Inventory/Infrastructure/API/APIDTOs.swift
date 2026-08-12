@@ -125,6 +125,27 @@ public struct ImageGenerationModelsResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct ObjectCountModelOption: Codable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public let provider: String
+    public let model: String
+    public let label: String
+    public let description: String
+
+    public init(id: String, provider: String, model: String, label: String, description: String) {
+        self.id = id
+        self.provider = provider
+        self.model = model
+        self.label = label
+        self.description = description
+    }
+}
+
+public struct ObjectCountModelsResponse: Codable, Equatable, Sendable {
+    public let models: [ObjectCountModelOption]
+    public let defaultModelId: String
+}
+
 public struct LoginUser: Codable, Equatable, Sendable {
     public let id: String
     public let name: String

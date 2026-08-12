@@ -50,6 +50,21 @@ final class StockCountViewModel: ObservableObject {
     @Published private(set) var phase: Phase = .camera
     @Published private(set) var photoURL: URL?
     @Published private(set) var result: ObjectCountResponse?
+    @Published private(set) var countModels: [ObjectCountModelOption] = [
+        ObjectCountModelOption(
+            id: "sam-3",
+            provider: "replicate",
+            model: "yodagg/sam3-image-seg",
+            label: "SAM 3 · genaue Masken",
+            description: "Genauere Segmentierung; ein Kaltstart kann länger dauern."
+        ),
+    ]
+    @Published var selectedCountModelID = "sam-3" {
+        didSet {
+            UserDefaults.standard.set(selectedCountModelID, forKey: Self.countModelPreferenceKey)
+            countAttemptID = nil
+        }
+    }
     @Published var adjustedCount = 0 {
         didSet {
             if adjustedCount < 0 {
@@ -75,6 +90,7 @@ final class StockCountViewModel: ObservableObject {
     private var analysisTask: Task<Void, Never>?
     private var countAttemptID: UUID?
     private var pendingMovement: PendingMovement?
+    private static let countModelPreferenceKey = "inventory.count-model"
 
     init(itemHint: String, itemID: UUID? = nil) {
         self.itemHint = Self.limitItemHint(itemHint)
@@ -83,6 +99,10 @@ final class StockCountViewModel: ObservableObject {
             maximumPixelSize: 2_200,
             compressionQuality: 0.86
         )
+        if let stored = UserDefaults.standard.string(forKey: Self.countModelPreferenceKey),
+           countModels.contains(where: { $0.id == stored }) {
+            selectedCountModelID = stored
+        }
     }
 
     var isBusy: Bool {
@@ -98,6 +118,25 @@ final class StockCountViewModel: ObservableObject {
 
     var canApplyReceipt: Bool {
         result != nil && adjustedCount > 0 && !isBusy
+    }
+
+    func loadCountModels(using client: APIClient) async {
+        do {
+            let response = try await client.objectCountModels()
+            guard !response.models.isEmpty else { return }
+            guard !isBusy, result == nil else { return }
+            countModels = response.models
+            let stored = UserDefaults.standard.string(forKey: Self.countModelPreferenceKey)
+            let preferred = stored.flatMap { storedID in
+                response.models.first(where: { $0.id == storedID })?.id
+            }
+            let serverDefault = response.models.first(where: {
+                $0.id == response.defaultModelId
+            })?.id
+            selectedCountModelID = preferred ?? serverDefault ?? response.models[0].id
+        } catch {
+            // The built-in catalog keeps counting available with older servers.
+        }
     }
 
     func canApplyIssue(currentQuantity: Int) -> Bool {
@@ -268,6 +307,7 @@ final class StockCountViewModel: ObservableObject {
             in: MediaUploadFile(fileURL: photoURL, filename: "count.jpg"),
             itemHint: itemHint,
             itemID: itemID,
+            modelID: selectedCountModelID,
             idempotencyKey: countAttemptID
         )
         guard response.count >= 0 else {

@@ -447,14 +447,17 @@ request common cached image sizes.
 
 ## AI features
 
-Image analysis uses OpenAI’s Responses API, while photo counting uses SAM 3
-through Replicate:
+Image analysis uses OpenAI’s Responses API, while photo counting uses selectable
+Replicate models:
 
 ```dotenv
 OPENAI_API_KEY=...
 OPENAI_VISION_MODEL=gpt-4.1-mini
 REPLICATE_API_TOKEN=...
-# Optional; keep a tested Replicate community-model version pinned
+REPLICATE_COUNT_DEFAULT_MODEL=grounding-dino
+REPLICATE_GROUNDING_DINO_MODEL=adirik/grounding-dino:efd10a8ddc57ea28773327e881ce95e20cc1d734c589f7dd01d2036921ed78aa
+REPLICATE_YOLO_WORLD_MODEL=ultralytics/yolov8s-worldv2:5e89b91b497fa7329dc88dbf820923190236ef7bc5a9b4aa1b7192b206656650
+REPLICATE_SAM2_MODEL=meta/sam-2:fe97b453a6455861e3bac769b441ca1f1086110da7466dbb65cf1eecfd60dc83
 REPLICATE_COUNT_MODEL=yodagg/sam3-image-seg:29c8e52db92a11c64f8939244d6b3a047ce2af24412b7971309008b9a61e2f6e
 REPLICATE_COUNT_DEADLINE_SECONDS=300
 REPLICATE_COUNT_JOB_SECRET=... # optional; falls back to AUTH_SECRET
@@ -468,9 +471,11 @@ AI_COUNT_RATE_LIMIT_PER_MINUTE=10
 An OpenAI-compatible endpoint can be selected with `OPENAI_BASE_URL`.
 
 The bulk-stock screen and native item detail can send one transient camera image
-to the counting model, localize the requested parts, and copy the result into a
-stock receipt or issue. Counting uses a pinned Replicate SAM 3 community model
-with the inventory name as its text prompt. The API token remains server-side;
+to the selected counting model, localize the requested parts, and copy the
+result into a stock receipt or issue. Grounding DINO is the fast default. YOLO
+World is a second open-vocabulary detector, SAM 3 provides detailed
+text-directed segmentation, and SAM 2 is available as an experimental automatic
+mask counter that can also count background regions. The API token remains server-side;
 Replicate automatically removes API prediction inputs and outputs after its
 retention window, and the source is not stored as inventory media. A provider
 deadline and matching client timeouts prevent a cold model from leaving the UI

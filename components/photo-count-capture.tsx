@@ -22,6 +22,10 @@ import {
 
 import { prepareUpload } from "@/lib/client-media";
 import type { InventoryCountMarker } from "@/lib/inventory-count-contract";
+import {
+  CountModelSelector,
+  useCountModelPreference,
+} from "@/components/count-model-selector";
 
 const markerCoordinateMaximum = 1_000;
 // The initial endpoint only reserves one asynchronous Replicate prediction.
@@ -344,6 +348,7 @@ export function PhotoCountCapture({
   const [counting, setCounting] = useState(false);
   const [result, setResult] = useState<PhotoCountResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const countModelPreference = useCountModelPreference();
 
   useEffect(() => {
     if (!image) {
@@ -427,6 +432,9 @@ export function PhotoCountCapture({
         body.append("image", image, image.name || "stock-count.jpg");
         body.append("itemHint", itemName.slice(0, 240));
         body.append("itemId", itemId);
+        if (countModelPreference.selectedModelId) {
+          body.append("modelId", countModelPreference.selectedModelId);
+        }
         try {
           initial = await readCountResponse(
             await fetch("/api/v1/ai/count", {
@@ -587,6 +595,19 @@ export function PhotoCountCapture({
           onChange={(event) => void selectImage(event)}
           disabled={busy || disabled}
           className="sr-only"
+        />
+
+        <CountModelSelector
+          preference={countModelPreference}
+          disabled={busy || disabled}
+          onChange={() => {
+            abortRef.current?.abort();
+            abortRef.current = null;
+            attemptIdRef.current = null;
+            setCounting(false);
+            setResult(null);
+            setError(null);
+          }}
         />
 
         {!image ? (

@@ -57,7 +57,8 @@ enum MultipartFormFileBuilder {
     static func buildObjectCount(
         image: MediaUploadFile,
         itemHint: String?,
-        itemID: UUID? = nil
+        itemID: UUID? = nil,
+        modelID: String? = nil
     ) throws -> MultipartBodyFile {
         let boundary = "InventoryBoundary-\(UUID().uuidString)"
         let outputURL = FileManager.default.temporaryDirectory
@@ -111,6 +112,15 @@ enum MultipartFormFileBuilder {
                     to: output
                 )
                 try write("\(itemID.uuidString.lowercased())\r\n", to: output)
+            }
+            if let modelID, !modelID.isEmpty {
+                try write("--\(boundary)\r\n", to: output)
+                try write(
+                    "Content-Disposition: form-data; name=\"modelId\"\r\n\r\n",
+                    to: output
+                )
+                try output.write(contentsOf: Data(modelID.utf8))
+                try write("\r\n", to: output)
             }
 
             try write("--\(boundary)--\r\n", to: output)

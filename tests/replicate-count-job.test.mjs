@@ -11,11 +11,14 @@ process.env.REPLICATE_COUNT_JOB_SECRET = "test-count-job-secret-that-is-at-least
 const subjectHash = "a".repeat(64);
 const job = {
   predictionId: "prediction-123",
+  countModelId: "sam-3",
   model: "yodagg/sam3-image-seg",
   version: "b".repeat(64),
   itemHint: "Platine (Rev B)",
   prompt: "Platine (Rev B)",
   maxMasks: 100,
+  imageWidth: 1_600,
+  imageHeight: 1_200,
   expiresAt: new Date(Date.now() + 60_000).toISOString(),
 };
 

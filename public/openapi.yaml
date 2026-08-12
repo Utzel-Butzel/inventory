@@ -616,7 +616,7 @@ paths:
     post:
       tags: [AI]
       summary: Count matching physical items in one transient image
-      description: Requires the ai scope. A server-side Replicate SAM 3 prediction uses itemHint as a text prompt. The result is advisory and does not mutate stock; clients should let the user review it before creating a stock movement. Supply a stable Idempotency-Key when retrying the same upload so a lost start response cannot create another paid prediction. The pinned community model can return at most 100 masks; reaching that limit produces a 422 response instead of silently returning a truncated count.
+      description: Requires the ai scope. A selectable server-side Replicate model analyzes the image; text-aware models use itemHint as their query. The result is advisory and does not mutate stock. Supply a stable Idempotency-Key when retrying the same upload so a lost start response cannot create another paid prediction.
       parameters:
         - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
       requestBody:
@@ -640,6 +640,10 @@ paths:
                   type: string
                   format: uuid
                   description: Optional inventory item identifier used to scope idempotent retries.
+                modelId:
+                  type: string
+                  enum: [grounding-dino, yolo-world, sam-2, sam-3]
+                  description: Optional counting model. The server default is used when omitted.
       responses:
         "400": { description: Missing or malformed Idempotency-Key, or malformed multipart request }
         "200":
@@ -662,7 +666,7 @@ paths:
               schema: { type: integer, minimum: 1 }
         "413": { description: Image exceeds the configured upload limit }
         "415": { description: Request is not multipart or the image type is unsupported }
-        "422": { description: Invalid image or item hint, or the 100-piece model limit was reached }
+        "422": { description: Invalid image, item hint, model, or provider detection limit }
         "429":
           description: AI request limit reached
           headers:
@@ -715,6 +719,28 @@ paths:
                   terminal: { type: boolean }
         "503": { description: Replicate authentication/configuration error, or a transient capacity/poll timeout marked with Retry-After }
         "504": { description: Prediction exceeded its deadline }
+  /ai/count-models:
+    get:
+      tags: [AI]
+      summary: List Replicate counting models enabled for this deployment
+      description: Requires the ai scope. The same catalog is consumed by the web app and iOS app.
+      responses:
+        "200":
+          description: Available counting models and the deployment default
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [models, defaultModelId]
+                properties:
+                  models:
+                    type: array
+                    items: { $ref: "#/components/schemas/InventoryCountModel" }
+                  defaultModelId:
+                    type: string
+                    enum: [grounding-dino, yolo-world, sam-2, sam-3]
+        "401": { description: Missing or invalid token }
+        "403": { description: Token is missing the ai scope }
   /ai/image-models:
     get:
       tags: [AI]
@@ -2389,6 +2415,18 @@ components:
         provider: { type: string, enum: [openai, google] }
         model: { type: string, maxLength: 233, example: "gemini-3.1-flash-image" }
         label: { type: string, maxLength: 260, example: "Nano Banana 2" }
+    InventoryCountModel:
+      type: object
+      required: [id, provider, model, label, description]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          enum: [grounding-dino, yolo-world, sam-2, sam-3]
+        provider: { type: string, enum: [replicate] }
+        model: { type: string, maxLength: 240 }
+        label: { type: string, maxLength: 260 }
+        description: { type: string, maxLength: 500 }
     BomComponentInput:
       type: object
       required: [resourceId, quantityPerAssembly]

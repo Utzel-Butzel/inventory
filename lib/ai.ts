@@ -159,12 +159,23 @@ export async function prepareInventoryCountImage(source: Buffer) {
     throw new Error("The normalized count image is too large for the provider.");
   }
 
-  return `data:image/jpeg;base64,${normalized.toString("base64")}`;
+  const normalizedMetadata = await sharp(normalized).metadata();
+  if (!normalizedMetadata.width || !normalizedMetadata.height) {
+    throw new Error("The normalized count image dimensions could not be read.");
+  }
+  return {
+    dataUrl: `data:image/jpeg;base64,${normalized.toString("base64")}`,
+    width: normalizedMetadata.width,
+    height: normalizedMetadata.height,
+  };
 }
 
 export async function countInventoryItems(options: {
   imageDataUrl: string;
+  imageWidth: number;
+  imageHeight: number;
   itemHint?: string;
+  modelId?: string;
   signal?: AbortSignal;
 }) {
   return countInventoryItemsWithReplicate(options);

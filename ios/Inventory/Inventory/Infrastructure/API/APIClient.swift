@@ -168,6 +168,12 @@ public final class APIClient: Sendable {
         return try await execute(request)
     }
 
+    public func objectCountModels() async throws -> ObjectCountModelsResponse {
+        let url = try makeAPIURL(path: ["ai", "count-models"])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
     public func listRoomScans() async throws -> SpatialRoomScanListResponse {
         let url = try makeAPIURL(path: ["room-scans"])
         let request = try await authorizedRequest(url: url, method: "GET")
@@ -397,6 +403,7 @@ public final class APIClient: Sendable {
         in image: MediaUploadFile,
         itemHint: String? = nil,
         itemID: UUID? = nil,
+        modelID: String? = nil,
         idempotencyKey: UUID? = nil
     ) async throws -> ObjectCountResponse {
         try Task.checkCancellation()
@@ -410,7 +417,8 @@ public final class APIClient: Sendable {
         let body = try MultipartFormFileBuilder.buildObjectCount(
             image: image,
             itemHint: normalizedHint?.isEmpty == false ? normalizedHint : nil,
-            itemID: itemID
+            itemID: itemID,
+            modelID: modelID
         )
         defer { try? FileManager.default.removeItem(at: body.fileURL) }
 
