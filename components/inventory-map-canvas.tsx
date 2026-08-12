@@ -603,7 +603,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map?.loaded() || !map.getLayer(sourceIds.satellite)) return;
+    if (!map?.getLayer(sourceIds.satellite)) return;
     map.setLayoutProperty(
       sourceIds.satellite,
       "visibility",
