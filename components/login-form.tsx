@@ -80,7 +80,7 @@ export function LoginForm({
             autoFocus
             required
             placeholder="you@company.com"
-            className="h-11 w-full rounded-xl border border-[#dfe2e7] bg-white px-3.5 text-sm text-[#24272b] shadow-sm transition placeholder:text-[#a2a8b1] hover:border-[#cdd1d8] focus:border-[#776fff] focus:outline-none focus:ring-4 focus:ring-[#635bff]/10"
+            className="h-11 w-full rounded-xl border border-[#dfe2e7] bg-white px-3.5 text-sm text-[#24272b] shadow-sm transition placeholder:text-[#5f6672] hover:border-[#cdd1d8] focus:border-[#776fff] focus:outline-none focus:ring-4 focus:ring-[#635bff]/10"
           />
         </div>
 
@@ -101,12 +101,12 @@ export function LoginForm({
               autoComplete="current-password"
               required
               placeholder="Enter your password"
-              className="h-11 w-full rounded-xl border border-[#dfe2e7] bg-white px-3.5 pr-11 text-sm text-[#24272b] shadow-sm transition placeholder:text-[#a2a8b1] hover:border-[#cdd1d8] focus:border-[#776fff] focus:outline-none focus:ring-4 focus:ring-[#635bff]/10"
+              className="h-11 w-full rounded-xl border border-[#dfe2e7] bg-white px-3.5 pr-11 text-sm text-[#24272b] shadow-sm transition placeholder:text-[#5f6672] hover:border-[#cdd1d8] focus:border-[#776fff] focus:outline-none focus:ring-4 focus:ring-[#635bff]/10"
             />
             <button
               type="button"
               onClick={() => setShowPassword((current) => !current)}
-              className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-xl text-[#747b86] transition hover:text-[#30343a]"
+              className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-xl text-[#5f6672] transition hover:text-[#30343a]"
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? (
@@ -147,7 +147,7 @@ export function LoginForm({
 
       {auth0Enabled ? (
         <div className="mt-5">
-          <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.12em] text-[#9aa0a9] before:h-px before:flex-1 before:bg-[#e8eaed] after:h-px after:flex-1 after:bg-[#e8eaed]">
+          <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.12em] text-[#5f6672] before:h-px before:flex-1 before:bg-[#e8eaed] after:h-px after:flex-1 after:bg-[#e8eaed]">
             or
           </div>
           <Button

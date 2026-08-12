@@ -5,6 +5,7 @@ import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import {
+  ArrowRight,
   Boxes,
   ChevronRight,
   CircleHelp,
@@ -86,7 +87,7 @@ function SidebarContent({
           onClick={onNavigate}
           className="flex items-center gap-2.5 rounded-lg text-[#1f2227]"
         >
-          <span className="grid size-8 place-items-center rounded-[10px] bg-[#635bff] text-white shadow-[0_5px_14px_rgba(99,91,255,0.22)]">
+          <span className="grid size-8 place-items-center rounded-[10px] bg-[#5147d9] text-white shadow-[0_5px_14px_rgba(99,91,255,0.22)]">
             <Boxes className="size-[18px]" strokeWidth={2.2} aria-hidden="true" />
           </span>
           <span className="text-[15px] font-semibold tracking-[-0.02em]">
@@ -100,7 +101,7 @@ function SidebarContent({
           <Link
             href="/inventory/new"
             onClick={onNavigate}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#635bff] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#5147f5] active:bg-[#443be0]"
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#5147d9] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#5147f5] active:bg-[#443be0]"
           >
             <Plus className="size-4" strokeWidth={2.2} aria-hidden="true" />
             Add inventory item
@@ -109,7 +110,7 @@ function SidebarContent({
       ) : null}
 
       <nav className="mt-6 flex-1 px-3" aria-label="Main navigation">
-        <p className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#989ea8]">
+        <p className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#5f6672]">
           Workspace
         </p>
         <div className="space-y-0.5">
@@ -137,15 +138,15 @@ function SidebarContent({
                   className={cn(
                     "size-[17px] shrink-0",
                     active
-                      ? "text-[#635bff]"
-                      : "text-[#858b95] group-hover:text-[#555c67]",
+                      ? "text-[#5147d9]"
+                      : "text-[#5f6672] group-hover:text-[#555c67]",
                   )}
                   strokeWidth={active ? 2.2 : 1.9}
                   aria-hidden="true"
                 />
                 {item.label}
                 {item.href === "/batch" ? (
-                  <span className="ml-auto rounded-full bg-[#e1dfff] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#5d55db]">
+                  <span className="ml-auto rounded-full bg-[#e1dfff] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#5147d9]">
                     AI
                   </span>
                 ) : null}
@@ -154,7 +155,7 @@ function SidebarContent({
           })}
         </div>
 
-        <p className="mb-2 mt-7 px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#989ea8]">
+        <p className="mb-2 mt-7 px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#5f6672]">
           Manage
         </p>
         <div className="space-y-0.5">
@@ -178,8 +179,8 @@ function SidebarContent({
                   className={cn(
                     "size-[17px]",
                     active
-                      ? "text-[#635bff]"
-                      : "text-[#858b95] group-hover:text-[#555c67]",
+                      ? "text-[#5147d9]"
+                      : "text-[#5f6672] group-hover:text-[#555c67]",
                   )}
                   strokeWidth={1.9}
                   aria-hidden="true"
@@ -200,17 +201,17 @@ function SidebarContent({
             <p className="truncate text-[12px] font-semibold text-[#34383e]">
               {user.name || "Inventory admin"}
             </p>
-            <p className="truncate text-[10px] text-[#9298a2]">
+            <p className="truncate text-[10px] text-[#5f6672]">
               {user.email || "Signed in"}
             </p>
-            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#8b83df]">
+            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#5147d9]">
               {user.role}
             </p>
           </div>
           <button
             type="button"
             onClick={() => signOut({ redirectTo: "/login" })}
-            className="grid size-8 shrink-0 place-items-center rounded-lg text-[#8b919b] transition hover:bg-[#eceef1] hover:text-[#3b3f46]"
+            className="grid size-8 shrink-0 place-items-center rounded-lg text-[#5f6672] transition hover:bg-[#eceef1] hover:text-[#3b3f46]"
             aria-label="Sign out"
             title="Sign out"
           >
@@ -263,7 +264,7 @@ export function AppShell({
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
-              className="absolute right-3 top-[18px] z-10 grid size-8 place-items-center rounded-lg text-[#737984] hover:bg-[#eceef1]"
+              className="absolute right-3 top-[18px] z-10 grid size-8 place-items-center rounded-lg text-[#5f6672] hover:bg-[#eceef1]"
               aria-label="Close navigation"
             >
               <X className="size-4" aria-hidden="true" />
@@ -289,9 +290,9 @@ export function AppShell({
           </button>
 
           <div className="flex min-w-0 items-center gap-2 text-sm">
-            <span className="hidden text-[#a0a5ae] sm:inline">Workspace</span>
+            <span className="hidden text-[#5f6672] sm:inline">Workspace</span>
             <ChevronRight
-              className="hidden size-3.5 text-[#b5bac1] sm:block"
+              className="hidden size-3.5 text-[#5f6672] sm:block"
               aria-hidden="true"
             />
             <span className="truncate font-semibold text-[#34383e]">{pageName}</span>
@@ -304,7 +305,7 @@ export function AppShell({
               role="search"
             >
               <Search
-                className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[#9197a1]"
+                className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6672]"
                 aria-hidden="true"
               />
               <input
@@ -312,12 +313,26 @@ export function AppShell({
                 name="q"
                 aria-label="Search inventory"
                 placeholder="Search inventory…"
-                className="h-9 w-56 rounded-xl border border-[#e1e4e8] bg-[#f8f9fa] pl-9 pr-3 text-[12px] text-[#33373d] transition placeholder:text-[#9298a2] hover:border-[#d4d8de] focus:w-64 focus:border-[#776fff] focus:bg-white focus:outline-none focus:ring-3 focus:ring-[#635bff]/10"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    event.currentTarget.form?.requestSubmit();
+                  }
+                }}
+                className="h-9 w-56 rounded-xl border border-[#e1e4e8] bg-[#f8f9fa] pl-9 pr-10 text-[12px] text-[#33373d] transition placeholder:text-[#5f6672] hover:border-[#d4d8de] focus:w-64 focus:border-[#776fff] focus:bg-white focus:outline-none focus:ring-3 focus:ring-[#635bff]/10"
               />
+              <button
+                type="submit"
+                className="absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-[#5f6672] transition hover:bg-[#eceef1] hover:text-[#33373d]"
+                aria-label="Submit inventory search"
+                title="Search"
+              >
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </button>
             </form>
             <Link
               href="/settings"
-              className="grid size-9 place-items-center rounded-xl text-[#7d838d] transition hover:bg-[#f0f2f4] hover:text-[#33373d]"
+              className="grid size-9 place-items-center rounded-xl text-[#5f6672] transition hover:bg-[#f0f2f4] hover:text-[#33373d]"
               aria-label="Help and configuration"
               title="Help and configuration"
             >
@@ -326,7 +341,7 @@ export function AppShell({
             {user.role !== "viewer" ? (
               <Link
                 href="/inventory/new"
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#635bff] px-3 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#5147f5] sm:px-3.5"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#5147d9] px-3 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#5147f5] sm:px-3.5"
               >
                 <Plus className="size-3.5" strokeWidth={2.4} aria-hidden="true" />
                 <span className="hidden sm:inline">Add item</span>

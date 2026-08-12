@@ -643,7 +643,7 @@ export default function BatchCapturePage() {
                 <Aperture className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a8277]">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5f6672]">
                   Fast intake
                 </p>
                 <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
@@ -655,7 +655,7 @@ export default function BatchCapturePage() {
           <div className="flex items-center gap-2 self-start rounded-full border border-[#dfe2d9] bg-white px-3 py-2 text-xs font-medium text-[#687065] shadow-sm sm:self-auto">
             <span
               className={`h-2 w-2 rounded-full ${
-                activeJobs ? "animate-pulse bg-[#635bff]" : "bg-[#9ba397]"
+                activeJobs ? "animate-pulse bg-[#5147d9]" : "bg-[#9ba397]"
               }`}
             />
             {activeJobs
@@ -929,14 +929,14 @@ export default function BatchCapturePage() {
           <aside className="flex flex-col rounded-[28px] border border-[#dfe2d9] bg-white p-5 shadow-[0_12px_36px_rgba(25,29,22,0.06)] sm:p-6">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8a9187]">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5f6672]">
                   Defaults
                 </p>
                 <h2 className="mt-1 text-xl font-semibold tracking-[-0.025em]">
                   Describe the batch
                 </h2>
               </div>
-              <span className="rounded-full bg-[#f0f1ec] px-2.5 py-1 text-[11px] font-semibold text-[#737a70]">
+              <span className="rounded-full bg-[#f0f1ec] px-2.5 py-1 text-[11px] font-semibold text-[#5f6672]">
                 Optional
               </span>
             </div>
@@ -961,7 +961,7 @@ export default function BatchCapturePage() {
                     ))}
                   </select>
                   <ChevronDown
-                    className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#767d73]"
+                    className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5f6672]"
                     aria-hidden="true"
                   />
                 </span>
@@ -973,7 +973,7 @@ export default function BatchCapturePage() {
                 </span>
                 <span className="relative block">
                   <MapPin
-                    className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#81887e]"
+                    className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5f6672]"
                     aria-hidden="true"
                   />
                   <input
@@ -981,7 +981,7 @@ export default function BatchCapturePage() {
                     onChange={(event) => setLocationName(event.target.value)}
                     maxLength={240}
                     placeholder="e.g. Workshop · Shelf B2"
-                    className="h-12 w-full rounded-2xl border border-[#dde0d7] bg-[#f8f9f5] pl-11 pr-4 text-sm outline-none transition placeholder:text-[#a2a89f] focus:border-[#635bff] focus:bg-white focus:ring-4 focus:ring-[#635bff]/10"
+                    className="h-12 w-full rounded-2xl border border-[#dde0d7] bg-[#f8f9f5] pl-11 pr-4 text-sm outline-none transition placeholder:text-[#5f6672] focus:border-[#635bff] focus:bg-white focus:ring-4 focus:ring-[#635bff]/10"
                   />
                 </span>
               </label>
@@ -999,7 +999,7 @@ export default function BatchCapturePage() {
                         setGeoState("idle");
                         setGeoMessage(null);
                       }}
-                      className="text-xs font-medium text-[#777e74] underline-offset-2 hover:text-[#30352e] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff]"
+                      className="text-xs font-medium text-[#5f6672] underline-offset-2 hover:text-[#30352e] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff]"
                     >
                       Clear
                     </button>
@@ -1019,7 +1019,7 @@ export default function BatchCapturePage() {
                     className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
                       coordinates
                         ? "bg-[#dfff71] text-[#32372f]"
-                        : "bg-white text-[#737a70] shadow-sm"
+                        : "bg-white text-[#5f6672] shadow-sm"
                     }`}
                   >
                     {geoState === "requesting" ? (
@@ -1041,7 +1041,7 @@ export default function BatchCapturePage() {
                           ? "Finding your location…"
                           : "Use current location"}
                     </span>
-                    <span className="mt-0.5 block text-xs text-[#858c82]">
+                    <span className="mt-0.5 block text-xs text-[#5f6672]">
                       {coordinates
                         ? `Accurate to about ${Math.round(coordinates.accuracy)} m · Tap to refresh`
                         : "Saved privately with this inventory item"}
@@ -1049,7 +1049,7 @@ export default function BatchCapturePage() {
                   </span>
                   {coordinates ? (
                     <RefreshCw
-                      className="ml-auto h-3.5 w-3.5 shrink-0 text-[#7e857b]"
+                      className="ml-auto h-3.5 w-3.5 shrink-0 text-[#5f6672]"
                       aria-hidden="true"
                     />
                   ) : null}
@@ -1061,14 +1061,14 @@ export default function BatchCapturePage() {
 
               <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-[#dedcfb] bg-[#f7f6ff] p-4">
                 <span className="flex min-w-0 items-start gap-3">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#635bff] text-white shadow-sm shadow-[#635bff]/25">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#5147d9] text-white shadow-sm shadow-[#635bff]/25">
                     <WandSparkles className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <span>
                     <span className="block text-sm font-semibold text-[#353251]">
                       Generate AI cover
                     </span>
-                    <span className="mt-0.5 block text-xs leading-5 text-[#777392]">
+                    <span className="mt-0.5 block text-xs leading-5 text-[#5f6672]">
                       Identify the item, then create a clean studio cover from the first photo.
                     </span>
                   </span>
@@ -1080,7 +1080,7 @@ export default function BatchCapturePage() {
                     onChange={(event) => setAutoGenerateCover(event.target.checked)}
                     className="peer sr-only"
                   />
-                  <span className="block h-6 w-11 rounded-full bg-[#c9c7df] transition peer-checked:bg-[#635bff] peer-focus-visible:ring-2 peer-focus-visible:ring-[#635bff] peer-focus-visible:ring-offset-2" />
+                  <span className="block h-6 w-11 rounded-full bg-[#c9c7df] transition peer-checked:bg-[#5147d9] peer-focus-visible:ring-2 peer-focus-visible:ring-[#635bff] peer-focus-visible:ring-offset-2" />
                   <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
                 </span>
               </label>
@@ -1109,7 +1109,7 @@ export default function BatchCapturePage() {
                 type="button"
                 onClick={sendBatch}
                 disabled={!photos.length}
-                className="group flex min-h-14 w-full items-center justify-between rounded-2xl bg-[#20251f] px-5 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(32,37,31,0.18)] transition hover:-translate-y-0.5 hover:bg-[#2b3129] hover:shadow-[0_14px_30px_rgba(32,37,31,0.22)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-[#c8ccc4] disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff] focus-visible:ring-offset-2"
+                className="group flex min-h-14 w-full items-center justify-between rounded-2xl bg-[#20251f] px-5 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(32,37,31,0.18)] transition hover:-translate-y-0.5 hover:bg-[#2b3129] hover:shadow-[0_14px_30px_rgba(32,37,31,0.22)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-[#687065] disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff] focus-visible:ring-offset-2"
               >
                 <span className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4" aria-hidden="true" />
@@ -1122,7 +1122,7 @@ export default function BatchCapturePage() {
                   <Send className="h-4 w-4" aria-hidden="true" />
                 </span>
               </button>
-              <p className="mt-3 text-center text-xs leading-5 text-[#92988f]">
+              <p className="mt-3 text-center text-xs leading-5 text-[#5f6672]">
                 The tray clears immediately, so you can capture the next item while AI works.
               </p>
             </div>
@@ -1132,7 +1132,7 @@ export default function BatchCapturePage() {
         <section className="mt-6" aria-labelledby="jobs-heading" aria-live="polite">
           <div className="mb-3 flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8a9187]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5f6672]">
                 Background queue
               </p>
               <h2 id="jobs-heading" className="mt-1 text-lg font-semibold">
@@ -1147,7 +1147,7 @@ export default function BatchCapturePage() {
                     current.filter((job) => job.state === "running"),
                   )
                 }
-                className="rounded-lg px-2 py-1.5 text-xs font-medium text-[#747b71] transition hover:bg-white hover:text-[#30352e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff]"
+                className="rounded-lg px-2 py-1.5 text-xs font-medium text-[#5f6672] transition hover:bg-white hover:text-[#30352e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff]"
               >
                 Clear finished
               </button>
@@ -1165,7 +1165,7 @@ export default function BatchCapturePage() {
                     <span
                       className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
                         job.state === "running"
-                          ? "bg-[#efeeff] text-[#635bff]"
+                          ? "bg-[#efeeff] text-[#5147d9]"
                           : job.state === "complete"
                             ? "bg-[#effbd9] text-[#4c7118]"
                             : job.state === "warning"
@@ -1192,7 +1192,7 @@ export default function BatchCapturePage() {
                               ? job.resourceName
                               : `${job.photoCount}-photo capture`}
                           </p>
-                          <p className="mt-0.5 text-xs text-[#8a9187]">
+                          <p className="mt-0.5 text-xs text-[#5f6672]">
                             {job.createdAt} · {stageLabel(job)}
                           </p>
                         </div>
@@ -1214,7 +1214,7 @@ export default function BatchCapturePage() {
                                 ? "bg-amber-500"
                                 : job.state === "complete"
                                   ? "bg-[#87b438]"
-                                  : "bg-[#635bff]"
+                                  : "bg-[#5147d9]"
                           }`}
                           style={{ width: `${job.progress}%` }}
                         />
@@ -1226,13 +1226,13 @@ export default function BatchCapturePage() {
                               ? "text-red-700"
                               : job.state === "warning"
                                 ? "text-amber-700"
-                                : "text-[#777e74]"
+                                : "text-[#5f6672]"
                           }`}
                         >
                           {job.message}
                         </p>
                       ) : (
-                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#8c9389]">
+                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#5f6672]">
                           <span
                             className={
                               job.stage !== "creating" ? "text-[#526b2e]" : ""
@@ -1278,13 +1278,13 @@ export default function BatchCapturePage() {
             <div className="flex min-h-32 items-center justify-center rounded-2xl border border-dashed border-[#d5d9cf] bg-white/45 px-6 text-center">
               <div>
                 <ImagePlus
-                  className="mx-auto h-5 w-5 text-[#949b91]"
+                  className="mx-auto h-5 w-5 text-[#5f6672]"
                   aria-hidden="true"
                 />
                 <p className="mt-2 text-sm font-medium text-[#687065]">
                   Nothing queued yet
                 </p>
-                <p className="mt-1 text-xs text-[#969c93]">
+                <p className="mt-1 text-xs text-[#5f6672]">
                   Completed and in-progress items will stay visible here.
                 </p>
               </div>

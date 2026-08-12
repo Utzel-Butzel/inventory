@@ -202,9 +202,9 @@ function Runway({ item, compact = false }: { item: StockItem; compact?: boolean 
   if (days === null || !Number.isFinite(days)) {
     return (
       <div className={cn(compact && "flex items-center justify-between")}>
-        <p className="text-[12px] font-medium text-[#68707c]">Not forecast</p>
+        <p className="text-[12px] font-medium text-[#5f6672]">Not forecast</p>
         {!compact ? (
-          <p className="mt-0.5 text-[10px] text-[#9aa0aa]">Add usage to calculate runway</p>
+          <p className="mt-0.5 text-[10px] text-[#5f6672]">Add usage to calculate runway</p>
         ) : null}
       </div>
     );
@@ -224,7 +224,7 @@ function Runway({ item, compact = false }: { item: StockItem; compact?: boolean 
         {label}
       </p>
       {predictedDate ? (
-        <p className={cn("text-[10px] text-[#9298a2]", !compact && "mt-0.5")}>Runs out {predictedDate}</p>
+        <p className={cn("text-[10px] text-[#5f6672]", !compact && "mt-0.5")}>Runs out {predictedDate}</p>
       ) : null}
     </div>
   );
@@ -412,21 +412,21 @@ export function StockOverview() {
       <StockSectionNav />
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="animate-fade-up">
-          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#78808a]">
-            <Warehouse className="size-3.5 text-[#635bff]" aria-hidden="true" />
+          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#5f6672]">
+            <Warehouse className="size-3.5 text-[#5147d9]" aria-hidden="true" />
             Stock planning
           </div>
           <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-[#1e2126] sm:text-[32px]">
             Stock health, at a glance.
           </h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#747b86]">
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#5f6672]">
             See what is running low, understand available runway, and replenish before work stops.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/stock/scan"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#635bff] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5147f5]"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#5147d9] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5147f5]"
           >
             <QrCode className="size-4" aria-hidden="true" />
             Scan code
@@ -480,7 +480,7 @@ export function StockOverview() {
                 value: compactNumber.format(metrics.trackedItems),
                 detail: `${compactNumber.format(metrics.totalQuantity)} units on hand`,
                 icon: Boxes,
-                iconClass: "bg-[#eeedff] text-[#635bff]",
+                iconClass: "bg-[#eeedff] text-[#5147d9]",
               },
               {
                 label: "Incoming",
@@ -515,13 +515,13 @@ export function StockOverview() {
               return (
                 <Card key={metric.label} className="p-5">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[12px] font-semibold text-[#68707c]">{metric.label}</p>
+                    <p className="text-[12px] font-semibold text-[#5f6672]">{metric.label}</p>
                     <span className={cn("grid size-9 place-items-center rounded-xl", metric.iconClass)}>
                       <Icon className="size-[17px]" aria-hidden="true" />
                     </span>
                   </div>
                   <p className="mt-5 text-[28px] font-semibold tracking-[-0.04em] text-[#24272c]">{metric.value}</p>
-                  <p className="mt-1 text-[11px] text-[#8c929c]">{metric.detail}</p>
+                  <p className="mt-1 text-[11px] text-[#5f6672]">{metric.detail}</p>
                 </Card>
               );
             })}
@@ -549,7 +549,7 @@ export function StockOverview() {
                   <p className="text-sm font-semibold text-[#292c31]">
                     {needsAttention} {needsAttention === 1 ? "item needs" : "items need"} attention
                   </p>
-                  <p className="mt-1 text-[12px] leading-5 text-[#737984]">
+                  <p className="mt-1 text-[12px] leading-5 text-[#5f6672]">
                     {metrics.out
                       ? `${metrics.out} ${metrics.out === 1 ? "item is" : "items are"} out of stock and ${metrics.low} ${metrics.low === 1 ? "is" : "are"} below the desired level.`
                       : "These items have reached their minimum level or are forecast to run out soon."}
@@ -571,14 +571,14 @@ export function StockOverview() {
           {dueCounts.length ? (
             <Card className="overflow-hidden border-[#d8d4ff]">
               <div className="flex items-center gap-3 border-b border-[#e8e6ff] bg-[#f8f7ff] px-4 py-3.5 sm:px-5">
-                <span className="grid size-9 place-items-center rounded-xl bg-[#eeedff] text-[#635bff]">
+                <span className="grid size-9 place-items-center rounded-xl bg-[#eeedff] text-[#5147d9]">
                   <CalendarClock className="size-4" aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-[#30343a]">
                     {dueCounts.length} physical {dueCounts.length === 1 ? "count is" : "counts are"} due
                   </p>
-                  <p className="mt-0.5 text-[11px] text-[#777e89]">
+                  <p className="mt-0.5 text-[11px] text-[#5f6672]">
                     Open an item to reconcile its actual quantity.
                   </p>
                 </div>
@@ -594,14 +594,14 @@ export function StockOverview() {
                       <p className="truncate text-[13px] font-semibold text-[#34383e]">
                         {item.name}
                       </p>
-                      <p className="mt-0.5 text-[10px] text-[#9298a2]">
+                      <p className="mt-0.5 text-[10px] text-[#5f6672]">
                         Every {item.intervalDays} days · due {formatDate(item.nextDueAt) ?? "now"}
                       </p>
                     </div>
-                    <span className="text-[11px] font-semibold text-[#635bff]">
+                    <span className="text-[11px] font-semibold text-[#5147d9]">
                       Count {compactNumber.format(item.quantity)}
                     </span>
-                    <ChevronRight className="size-4 text-[#a0a5ae]" aria-hidden="true" />
+                    <ChevronRight className="size-4 text-[#5f6672]" aria-hidden="true" />
                   </Link>
                 ))}
               </div>
@@ -613,18 +613,18 @@ export function StockOverview() {
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <label className="relative min-w-0 flex-1 xl:max-w-md">
                   <span className="sr-only">Search stock</span>
-                  <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#9298a2]" aria-hidden="true" />
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#5f6672]" aria-hidden="true" />
                   <input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="Search item, type, tracking mode…"
-                    className="h-10 w-full rounded-xl border border-[#dfe2e7] bg-[#f8f9fa] pl-10 pr-10 text-[13px] text-[#33373d] outline-none transition placeholder:text-[#989ea8] focus:border-[#776fff] focus:bg-white focus:ring-3 focus:ring-[#635bff]/10"
+                    className="h-10 w-full rounded-xl border border-[#dfe2e7] bg-[#f8f9fa] pl-10 pr-10 text-[13px] text-[#33373d] outline-none transition placeholder:text-[#5f6672] focus:border-[#776fff] focus:bg-white focus:ring-3 focus:ring-[#635bff]/10"
                   />
                   {query ? (
                     <button
                       type="button"
                       onClick={() => setQuery("")}
-                      className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-[#989ea8] transition hover:bg-[#eceef1] hover:text-[#555c67]"
+                      className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-[#5f6672] transition hover:bg-[#eceef1] hover:text-[#555c67]"
                       aria-label="Clear search"
                     >
                       <X className="size-3.5" aria-hidden="true" />
@@ -654,11 +654,11 @@ export function StockOverview() {
                           "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[11px] font-semibold transition",
                           filter === value
                             ? "bg-white text-[#34383e] shadow-sm"
-                            : "text-[#727984] hover:text-[#34383e]",
+                            : "text-[#5f6672] hover:text-[#34383e]",
                         )}
                       >
                         {filterLabels[value]}
-                        <span className={cn("tabular-nums", filter === value ? "text-[#635bff]" : "text-[#a0a5ae]")}>
+                        <span className={cn("tabular-nums", filter === value ? "text-[#5147d9]" : "text-[#5f6672]")}>
                           {compactNumber.format(count)}
                         </span>
                       </button>
@@ -705,7 +705,7 @@ export function StockOverview() {
                 <div className="hidden overflow-x-auto lg:block">
                   <table className="w-full min-w-[960px] border-collapse text-left">
                     <thead>
-                      <tr className="border-b border-[#eceef1] bg-[#fafbfc] text-[10px] font-semibold uppercase tracking-[0.09em] text-[#949aa4]">
+                      <tr className="border-b border-[#eceef1] bg-[#fafbfc] text-[10px] font-semibold uppercase tracking-[0.09em] text-[#5f6672]">
                         <th className="px-5 py-3">Item</th>
                         <th className="px-4 py-3">On hand</th>
                         <th className="px-4 py-3">Incoming</th>
@@ -737,16 +737,16 @@ export function StockOverview() {
                                       ? "bg-[#fff0f2] text-[#c34755]"
                                       : state === "low"
                                         ? "bg-[#fff2e2] text-[#b56b0c]"
-                                        : "bg-[#f0f2f4] text-[#6c737e]",
+                                        : "bg-[#f0f2f4] text-[#5f6672]",
                                   )}
                                 >
                                   {state === "healthy" ? <Package className="size-4" aria-hidden="true" /> : <TrendingDown className="size-4" aria-hidden="true" />}
                                 </span>
                                 <div className="min-w-0">
-                                  <Link href={`/inventory/${item.resourceId}/stock`} className="block max-w-[260px] truncate text-[13px] font-semibold text-[#30343a] transition hover:text-[#635bff]">
+                                  <Link href={`/inventory/${item.resourceId}/stock`} className="block max-w-[260px] truncate text-[13px] font-semibold text-[#30343a] transition hover:text-[#5147d9]">
                                     {item.name}
                                   </Link>
-                                  <p className="mt-0.5 text-[10px] text-[#9298a2]">{titleCase(item.type)} · {titleCase(item.trackingMode)}</p>
+                                  <p className="mt-0.5 text-[10px] text-[#5f6672]">{titleCase(item.type)} · {titleCase(item.trackingMode)}</p>
                                 </div>
                               </div>
                             </td>
@@ -761,20 +761,20 @@ export function StockOverview() {
                                   <p className="text-[12px] font-semibold tabular-nums text-[#2670b8]">
                                     +{formatQuantity(item.onOrder, item.unitName)}
                                   </p>
-                                  <p className="mt-0.5 text-[10px] text-[#9298a2]">
+                                  <p className="mt-0.5 text-[10px] text-[#5f6672]">
                                     {formatDate(item.nextExpectedAt)
                                       ? `Expected ${formatDate(item.nextExpectedAt)}`
                                       : `Projected ${formatQuantity(item.projectedQuantity, item.unitName)}`}
                                   </p>
                                 </div>
                               ) : (
-                                <span className="text-[12px] text-[#b0b5bd]">—</span>
+                                <span className="text-[12px] text-[#5f6672]">—</span>
                               )}
                             </td>
-                            <td className="px-4 py-4 text-[12px] font-medium tabular-nums text-[#68707c]">
+                            <td className="px-4 py-4 text-[12px] font-medium tabular-nums text-[#5f6672]">
                               {item.minimumStock === null ? "Not set" : formatQuantity(item.minimumStock, item.unitName)}
                             </td>
-                            <td className="px-4 py-4 text-[12px] font-medium text-[#68707c]">
+                            <td className="px-4 py-4 text-[12px] font-medium text-[#5f6672]">
                               {formatUsage(item.averageDailyUsage, item.unitName)}
                             </td>
                             <td className="px-4 py-4"><Runway item={item} /></td>
@@ -783,7 +783,7 @@ export function StockOverview() {
                               <Link
                                 href={`/inventory/${item.resourceId}/stock`}
                                 aria-label={`Open stock settings for ${item.name}`}
-                                className="grid size-8 place-items-center rounded-lg text-[#a0a5ae] transition group-hover:bg-[#eeedff] group-hover:text-[#635bff]"
+                                className="grid size-8 place-items-center rounded-lg text-[#5f6672] transition group-hover:bg-[#eeedff] group-hover:text-[#5147d9]"
                               >
                                 <ChevronRight className="size-4" aria-hidden="true" />
                               </Link>
@@ -816,7 +816,7 @@ export function StockOverview() {
                                 ? "bg-[#fff0f2] text-[#c34755]"
                                 : state === "low"
                                   ? "bg-[#fff2e2] text-[#b56b0c]"
-                                  : "bg-[#f0f2f4] text-[#6c737e]",
+                                  : "bg-[#f0f2f4] text-[#5f6672]",
                             )}
                           >
                             <Package className="size-[18px]" aria-hidden="true" />
@@ -825,39 +825,39 @@ export function StockOverview() {
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <h3 className="truncate text-[13px] font-semibold text-[#30343a]">{item.name}</h3>
-                                <p className="mt-0.5 text-[10px] text-[#9298a2]">{titleCase(item.type)} · {titleCase(item.trackingMode)}</p>
+                                <p className="mt-0.5 text-[10px] text-[#5f6672]">{titleCase(item.type)} · {titleCase(item.trackingMode)}</p>
                               </div>
-                              <ChevronRight className="mt-0.5 size-4 shrink-0 text-[#a0a5ae] transition group-hover:translate-x-0.5 group-hover:text-[#635bff]" aria-hidden="true" />
+                              <ChevronRight className="mt-0.5 size-4 shrink-0 text-[#5f6672] transition group-hover:translate-x-0.5 group-hover:text-[#5147d9]" aria-hidden="true" />
                             </div>
 
                             <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-white/80 p-3 ring-1 ring-inset ring-[#e8eaed]">
                               <div>
-                                <p className="text-[9px] font-semibold uppercase tracking-wider text-[#9aa0aa]">On hand</p>
+                                <p className="text-[9px] font-semibold uppercase tracking-wider text-[#5f6672]">On hand</p>
                                 <p className={cn("mt-1 text-[13px] font-semibold tabular-nums", state === "out" ? "text-[#b83243]" : "text-[#30343a]")}>
                                   {formatQuantity(item.quantity, item.unitName)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[9px] font-semibold uppercase tracking-wider text-[#9aa0aa]">Minimum</p>
+                                <p className="text-[9px] font-semibold uppercase tracking-wider text-[#5f6672]">Minimum</p>
                                 <p className="mt-1 text-[13px] font-semibold tabular-nums text-[#4d535c]">
                                   {item.minimumStock === null ? "Not set" : formatQuantity(item.minimumStock, item.unitName)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[9px] font-semibold uppercase tracking-wider text-[#9aa0aa]">Incoming</p>
+                                <p className="text-[9px] font-semibold uppercase tracking-wider text-[#5f6672]">Incoming</p>
                                 <p className="mt-1 text-[13px] font-semibold tabular-nums text-[#2670b8]">
                                   {item.onOrder > 0 ? `+${formatQuantity(item.onOrder, item.unitName)}` : "—"}
                                 </p>
                               </div>
                               <div className="col-span-2 border-t border-[#eceef1] pt-3">
-                                <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-[#9aa0aa]">Estimated runway</p>
+                                <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-[#5f6672]">Estimated runway</p>
                                 <Runway item={item} compact />
                               </div>
                             </div>
 
                             <div className="mt-3 flex items-center justify-between gap-3">
                               <StockStatus item={item} />
-                              <span className="flex items-center gap-1 text-[10px] font-medium text-[#9298a2]">
+                              <span className="flex items-center gap-1 text-[10px] font-medium text-[#5f6672]">
                                 <Clock3 className="size-3" aria-hidden="true" />
                                 {formatUsage(item.averageDailyUsage, item.unitName)}
                               </span>
@@ -872,7 +872,7 @@ export function StockOverview() {
             )}
 
             {filteredItems.length ? (
-              <div className="flex flex-col gap-2 border-t border-[#e8eaed] bg-[#fafbfc] px-4 py-3 text-[11px] text-[#858c96] sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="flex flex-col gap-2 border-t border-[#e8eaed] bg-[#fafbfc] px-4 py-3 text-[11px] text-[#5f6672] sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <span>
                   Showing {filteredItems.length} of {metrics.trackedItems} tracked items
                 </span>

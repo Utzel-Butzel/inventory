@@ -20,7 +20,7 @@ export function Button({
 }: ButtonProps) {
   const variants = {
     primary:
-      "border-transparent bg-[#635bff] text-white shadow-sm hover:bg-[#5147f5] active:bg-[#443be0]",
+      "border-transparent bg-[#5147d9] text-white shadow-sm hover:bg-[#5147f5] active:bg-[#443be0]",
     secondary:
       "border-[#dfe2e7] bg-white text-[#282b31] shadow-sm hover:border-[#cfd3da] hover:bg-[#fafafa] active:bg-[#f3f4f6]",
     ghost:
@@ -122,11 +122,11 @@ export function EmptyState({
         className,
       )}
     >
-      <div className="mb-4 grid size-11 place-items-center rounded-xl border border-[#e1e4e8] bg-[#f8f9fa] text-[#6b7280] shadow-sm">
+      <div className="mb-4 grid size-11 place-items-center rounded-xl border border-[#e1e4e8] bg-[#f8f9fa] text-[#5f6672] shadow-sm">
         {icon ?? <Inbox className="size-5" aria-hidden="true" />}
       </div>
       <h3 className="text-sm font-semibold text-[#292c31]">{title}</h3>
-      <p className="mt-1.5 max-w-sm text-[13px] leading-5 text-[#747b86]">
+      <p className="mt-1.5 max-w-sm text-[13px] leading-5 text-[#5f6672]">
         {description}
       </p>
       {action ? <div className="mt-5">{action}</div> : null}

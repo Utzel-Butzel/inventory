@@ -616,7 +616,9 @@ paths:
     post:
       tags: [AI]
       summary: Count matching physical items in one transient image
-      description: Requires the ai scope. The result is advisory and does not mutate stock; clients should let the user review it before creating a stock movement.
+      description: Requires the ai scope. A server-side Replicate SAM 3 prediction uses itemHint as a text prompt. The result is advisory and does not mutate stock; clients should let the user review it before creating a stock movement. Supply a stable Idempotency-Key when retrying the same upload so a lost start response cannot create another paid prediction. The pinned community model can return at most 100 masks; reaching that limit produces a 422 response instead of silently returning a truncated count.
+      parameters:
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
       requestBody:
         required: true
         content:
@@ -634,22 +636,85 @@ paths:
                   minLength: 1
                   maxLength: 240
                   description: Optional description of the object that should be counted.
+                itemId:
+                  type: string
+                  format: uuid
+                  description: Optional inventory item identifier used to scope idempotent retries.
       responses:
+        "400": { description: Missing or malformed Idempotency-Key, or malformed multipart request }
         "200":
           description: Advisory visual count
           content:
             application/json:
               schema: { $ref: "#/components/schemas/InventoryCount" }
+        "202":
+          description: The Replicate prediction was created and is warming or processing; poll it with the signed jobToken.
+          headers:
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCountJob" }
+        "409":
+          description: The same idempotent start is still being persisted, or Replicate may have accepted it without returning a job ID. Retry only with the same image and Idempotency-Key after Retry-After; the server keeps the attempt reserved long enough to prevent an overlapping paid prediction.
+          headers:
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
         "413": { description: Image exceeds the configured upload limit }
         "415": { description: Request is not multipart or the image type is unsupported }
-        "422": { description: Invalid image or item hint }
+        "422": { description: Invalid image or item hint, or the 100-piece model limit was reached }
         "429":
           description: AI request limit reached
           headers:
             Retry-After:
               schema: { type: integer, minimum: 1 }
-        "502": { description: AI provider or structured-output error }
-        "503": { description: Shared AI rate limiter unavailable }
+        "502": { description: Replicate prediction creation or result-validation error }
+        "503": { description: Replicate configuration, billing, authentication, capacity, or shared rate limiter unavailable }
+        "504": { description: Replicate prediction exceeded the configured deadline }
+  /ai/count/jobs:
+    post:
+      tags: [AI]
+      summary: Poll one signed Replicate count job
+      description: Requires the ai scope and the same authenticated identity that created the job. Polling checks the existing prediction and does not start or bill another prediction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [jobToken]
+              properties:
+                jobToken: { type: string, minLength: 1, maxLength: 4096 }
+      responses:
+        "200":
+          description: Completed advisory visual count
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCount" }
+        "202":
+          description: Prediction is still processing
+          headers:
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryCountJob" }
+        "401": { description: Missing or invalid identity }
+        "403": { description: Identity is missing the ai scope }
+        "422": { description: Invalid, expired, or wrong-identity job token }
+        "502":
+          description: Replicate polling or result-validation error. terminal=true means the prediction itself has finished and a new count may be started; terminal=false means the same signed job should be resumed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, terminal]
+                properties:
+                  error: { type: string }
+                  terminal: { type: boolean }
+        "503": { description: Replicate authentication/configuration error, or a transient capacity/poll timeout marked with Retry-After }
+        "504": { description: Prediction exceeded its deadline }
   /ai/image-models:
     get:
       tags: [AI]
@@ -2289,7 +2354,7 @@ components:
         detectedItem: { type: string, minLength: 1, maxLength: 240 }
         isExact:
           type: boolean
-          description: True only when every counted instance is individually visible without meaningful ambiguity.
+          description: True only when every counted instance is individually visible without meaningful ambiguity. The current zero-shot SAM 3 provider returns false so clients require review.
         explanation: { type: string, minLength: 1, maxLength: 1000 }
         warnings:
           type: array
@@ -2297,7 +2362,7 @@ components:
           items: { type: string, minLength: 1, maxLength: 240 }
         markers:
           type: array
-          description: One material-bound point per counted item on a 0...1000 image grid, measured from the top-left corner of the orientation-corrected full image.
+          description: One bounding-box center per counted item on a 0...1000 image grid, measured from the top-left corner of the orientation-corrected full image.
           items:
             type: object
             additionalProperties: false
@@ -2306,6 +2371,15 @@ components:
               x: { type: integer, minimum: 0, maximum: 1000 }
               y: { type: integer, minimum: 0, maximum: 1000 }
         model: { type: string }
+    InventoryCountJob:
+      type: object
+      additionalProperties: false
+      required: [status, jobToken, expiresAt]
+      properties:
+        status: { type: string, enum: [processing] }
+        jobToken: { type: string, minLength: 1, maxLength: 4096 }
+        expiresAt: { type: string, format: date-time }
+        message: { type: string }
     ImageGenerationModel:
       type: object
       required: [id, provider, model, label]

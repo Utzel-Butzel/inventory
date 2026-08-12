@@ -19,7 +19,7 @@ export type CustomFieldInputsProps = {
 };
 
 const inputClass =
-  "mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+  "mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-600 hover:border-slate-300 focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600";
 const labelClass = "block text-xs font-semibold text-slate-700";
 
 function hasOwnValue(values: CustomFieldValues, key: string) {
@@ -136,7 +136,7 @@ export function CustomFieldInputs({
           </>
         );
         const description = definition.description ? (
-          <span id={descriptionId} className="mt-1.5 block text-[11px] font-normal leading-4 text-slate-400">
+          <span id={descriptionId} className="mt-1.5 block text-[11px] font-normal leading-4 text-slate-600">
             {definition.description}
           </span>
         ) : null;

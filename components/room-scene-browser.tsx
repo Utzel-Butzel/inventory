@@ -40,7 +40,7 @@ const RoomSceneCanvas = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="absolute inset-0 grid place-items-center bg-[#f3f5f7] text-slate-400">
+      <div className="absolute inset-0 grid place-items-center bg-[#f3f5f7] text-slate-600">
         <LoaderCircle className="size-6 animate-spin" aria-hidden="true" />
       </div>
     ),
@@ -312,7 +312,7 @@ export function RoomSceneBrowser() {
 
   if (loadingScans) {
     return (
-      <div className="grid min-h-[calc(100dvh-68px)] place-items-center text-slate-400">
+      <div className="grid min-h-[calc(100dvh-68px)] place-items-center text-slate-600">
         <LoaderCircle className="size-6 animate-spin" aria-hidden="true" />
       </div>
     );
@@ -328,7 +328,7 @@ export function RoomSceneBrowser() {
           <h1 className="mt-5 text-2xl font-semibold tracking-tight text-slate-900">
             No rooms have been scanned yet
           </h1>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-600">
             Open the Inventory iPhone app, choose Rooms, and scan a room with RoomPlan.
             Its 3D model and every spatially captured inventory item will appear here.
           </p>
@@ -353,11 +353,11 @@ export function RoomSceneBrowser() {
           <h1 className="text-2xl font-semibold tracking-[-0.025em] text-slate-900">
             Rooms in 3D
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-600">
             Navigate RoomPlan scans and open inventory items at their measured positions.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
           <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
             {scans.length} room{scans.length === 1 ? "" : "s"}
           </span>
@@ -393,7 +393,7 @@ export function RoomSceneBrowser() {
           </label>
           {structureDetail?.floors.length ? (
             <div className="flex items-center gap-1.5 overflow-x-auto">
-              <Layers3 className="mx-1 size-4 shrink-0 text-slate-400" aria-hidden="true" />
+              <Layers3 className="mx-1 size-4 shrink-0 text-slate-600" aria-hidden="true" />
               {structureDetail.floors.map((floor) => (
                 <button
                   key={`${floor.identifier ?? "unassigned"}:${floor.index ?? "none"}`}
@@ -430,7 +430,7 @@ export function RoomSceneBrowser() {
 
       <div className="grid min-h-[680px] flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[280px_minmax(0,1fr)_300px]">
         <aside className="border-b border-slate-200 bg-[#fbfbfc] p-3 lg:border-b-0 lg:border-r">
-          <p className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-400">
+          <p className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-600">
             Scanned rooms
           </p>
           <div className="space-y-1">
@@ -460,18 +460,18 @@ export function RoomSceneBrowser() {
                   <span
                     className={cn(
                       "grid size-9 shrink-0 place-items-center rounded-xl",
-                      active ? "bg-violet-600 text-white" : "bg-white text-slate-500 shadow-sm",
+                      active ? "bg-violet-600 text-white" : "bg-white text-slate-600 shadow-sm",
                     )}
                   >
                     <Box className="size-4" aria-hidden="true" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{scan.roomName}</span>
-                    <span className="mt-0.5 block text-[11px] text-slate-500">
+                    <span className="mt-0.5 block text-[11px] text-slate-600">
                       Revision {scan.revision} · {scan.placementCount} items
                     </span>
                     {scan.coordinateSpaceId ? (
-                      <span className="mt-0.5 block truncate text-[9px] text-slate-400">
+                      <span className="mt-0.5 block truncate text-[9px] text-slate-600">
                         Shared AR frame {scan.coordinateSpaceId.slice(0, 8)}
                       </span>
                     ) : null}
@@ -492,7 +492,7 @@ export function RoomSceneBrowser() {
               onSelectResource={selectResource}
             />
           ) : (
-            <div className="absolute inset-0 grid place-items-center text-slate-400">
+            <div className="absolute inset-0 grid place-items-center text-slate-600">
               <LoaderCircle className="size-6 animate-spin" aria-hidden="true" />
             </div>
           )}
@@ -505,7 +505,7 @@ export function RoomSceneBrowser() {
             <div className="absolute inset-x-4 bottom-14 mx-auto max-w-md rounded-2xl border border-white/80 bg-white/90 p-4 text-center shadow-lg backdrop-blur">
               <MapPin className="mx-auto size-5 text-violet-500" aria-hidden="true" />
               <p className="mt-2 text-sm font-semibold text-slate-800">No items placed yet</p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
+              <p className="mt-1 text-xs leading-5 text-slate-600">
                 Capture an item in this room with the AR mode in the iPhone app.
               </p>
             </div>
@@ -520,7 +520,7 @@ export function RoomSceneBrowser() {
                   {manifest?.room.name ?? "Room"}
                 </h2>
                 {manifest ? (
-                  <p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                  <p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-600">
                     <CalendarClock className="size-3.5" aria-hidden="true" />
                     {formatDate(manifest.scan.capturedAt)}
                   </p>
@@ -529,7 +529,7 @@ export function RoomSceneBrowser() {
               {modelAsset ? (
                 <a
                   href={modelAsset.url}
-                  className="grid size-9 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-violet-200 hover:text-violet-600"
+                  className="grid size-9 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-violet-200 hover:text-violet-600"
                   title="Download original USDZ"
                   aria-label="Download original USDZ"
                 >
@@ -539,7 +539,7 @@ export function RoomSceneBrowser() {
             </div>
             <label className="relative mt-4 block">
               <Search
-                className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-slate-400"
+                className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-slate-600"
                 aria-hidden="true"
               />
               <input
@@ -581,7 +581,7 @@ export function RoomSceneBrowser() {
                         <span className="block truncate text-xs font-semibold text-slate-800">
                           {placement.resource.name}
                         </span>
-                        <span className="mt-0.5 block truncate text-[10px] text-slate-500">
+                        <span className="mt-0.5 block truncate text-[10px] text-slate-600">
                           {placement.position.map((value) => value.toFixed(2)).join(" · ")} m
                         </span>
                       </span>
@@ -590,7 +590,7 @@ export function RoomSceneBrowser() {
                 })}
               </div>
             ) : (
-              <div className="p-6 text-center text-xs text-slate-400">
+              <div className="p-6 text-center text-xs text-slate-600">
                 <Boxes className="mx-auto mb-2 size-5" aria-hidden="true" />
                 No matching items
               </div>
@@ -623,7 +623,7 @@ function SelectedPlacementCard({ placement }: { placement: ClientRoomPlacement }
           <p className="truncate text-sm font-semibold text-slate-900">
             {placement.resource.name}
           </p>
-          <p className="mt-0.5 text-[10px] text-slate-500">
+          <p className="mt-0.5 text-[10px] text-slate-600">
             Accuracy {Math.round(placement.confidence * 100)}% · {placement.method}
           </p>
         </div>

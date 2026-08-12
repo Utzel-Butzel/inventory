@@ -81,7 +81,7 @@ const emptyForm: AssignmentForm = {
 };
 
 const inputClass =
-  "mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-100 disabled:text-slate-400";
+  "mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-100 disabled:text-slate-600";
 const labelClass = "block text-xs font-semibold text-slate-700";
 
 const kindLabels: Record<AssignmentKind, string> = {
@@ -248,7 +248,7 @@ export function ResourceAssignmentsManager({
             </span>
             <div>
               <h2 className="font-semibold text-slate-950">Assignments & reservations</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-600">
                 Check out, reserve, or permanently assign available inventory with a complete stock trail.
               </p>
             </div>
@@ -257,7 +257,7 @@ export function ResourceAssignmentsManager({
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"
+            className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
             aria-label="Refresh assignments"
           >
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
@@ -275,7 +275,7 @@ export function ResourceAssignmentsManager({
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-slate-900">Active</h3>
               {data ? (
-                <div className="flex items-center gap-2 text-xs text-slate-500">
+                <div className="flex items-center gap-2 text-xs text-slate-600">
                   <Badge tone="success">{data.availability.availableQuantity} available</Badge>
                   <span>{data.availability.activeQuantity} allocated</span>
                 </div>
@@ -283,7 +283,7 @@ export function ResourceAssignmentsManager({
             </div>
 
             {loading && !data ? (
-              <div className="grid min-h-48 place-items-center text-slate-400">
+              <div className="grid min-h-48 place-items-center text-slate-600">
                 <LoaderCircle className="size-5 animate-spin" aria-label="Loading assignments" />
               </div>
             ) : activeAssignments.length ? (
@@ -328,7 +328,7 @@ export function ResourceAssignmentsManager({
           <aside className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
             <h3 className="text-sm font-semibold text-slate-950">New allocation</h3>
             {!canEdit ? (
-              <p className="mt-2 text-sm leading-6 text-slate-500">
+              <p className="mt-2 text-sm leading-6 text-slate-600">
                 You have read-only access to assignments.
               </p>
             ) : (
@@ -350,7 +350,7 @@ export function ResourceAssignmentsManager({
                 <label className={labelClass}>
                   Recipient
                   <div className="relative">
-                    <UserRound className="pointer-events-none absolute left-3 top-1/2 mt-0.5 size-4 -translate-y-1/2 text-slate-400" />
+                    <UserRound className="pointer-events-none absolute left-3 top-1/2 mt-0.5 size-4 -translate-y-1/2 text-slate-600" />
                     <input
                       required
                       maxLength={240}
@@ -482,7 +482,7 @@ function AssignmentRow({
             <Badge tone={statusTone(assignment.status)}>{assignment.status}</Badge>
             <Badge>{kindLabels[assignment.kind]}</Badge>
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
             <span className="inline-flex items-center gap-1">
               <PackageCheck className="size-3.5" aria-hidden="true" />
               {assignment.stockUnit?.code ?? `${assignment.quantity} unit${assignment.quantity === 1 ? "" : "s"}`}
@@ -531,7 +531,7 @@ function AssignmentRow({
             </Button>
           </div>
         ) : assignment.completedAt ? (
-          <span className="shrink-0 text-xs text-slate-400">
+          <span className="shrink-0 text-xs text-slate-600">
             {formatDate(assignment.completedAt)}
           </span>
         ) : null}

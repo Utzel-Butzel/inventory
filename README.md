@@ -447,13 +447,19 @@ request common cached image sizes.
 
 ## AI features
 
-Image analysis uses OpenAI’s Responses API:
+Image analysis uses OpenAI’s Responses API, while photo counting uses SAM 3
+through Replicate:
 
 ```dotenv
 OPENAI_API_KEY=...
 OPENAI_VISION_MODEL=gpt-4.1-mini
-# Optional; the counting-specific default is gpt-5.4 when omitted
-OPENAI_COUNT_MODEL=
+REPLICATE_API_TOKEN=...
+# Optional; keep a tested Replicate community-model version pinned
+REPLICATE_COUNT_MODEL=yodagg/sam3-image-seg:29c8e52db92a11c64f8939244d6b3a047ce2af24412b7971309008b9a61e2f6e
+REPLICATE_COUNT_DEADLINE_SECONDS=300
+REPLICATE_COUNT_JOB_SECRET=... # optional; falls back to AUTH_SECRET
+REPLICATE_COUNT_CONFIDENCE=0.5
+REPLICATE_COUNT_MAX_MASKS=100
 AI_OUTPUT_LANGUAGE=English
 AI_ANALYSIS_RATE_LIMIT_PER_MINUTE=10
 AI_COUNT_RATE_LIMIT_PER_MINUTE=10
@@ -463,12 +469,26 @@ An OpenAI-compatible endpoint can be selected with `OPENAI_BASE_URL`.
 
 The bulk-stock screen and native item detail can send one transient camera image
 to the counting model, localize the requested parts, and copy the result into a
-stock receipt or issue. Counting uses OpenAI Responses with Code Interpreter and
-an independent visual verification pass. Its temporary `user_data` upload is
-deleted after the request (with a one-hour expiry as a cleanup safeguard) and is
-not stored as inventory media. Counting can be uncertain when parts overlap, are
-cropped, or are hidden, so the detected quantity and confidence are always shown
-for review and can be corrected before the stock movement is submitted.
+stock receipt or issue. Counting uses a pinned Replicate SAM 3 community model
+with the inventory name as its text prompt. The API token remains server-side;
+Replicate automatically removes API prediction inputs and outputs after its
+retention window, and the source is not stored as inventory media. A provider
+deadline and matching client timeouts prevent a cold model from leaving the UI
+waiting indefinitely. The initial request returns a signed job token; Web and
+iOS then poll that exact prediction, retry transient poll errors, and never start
+a second prediction merely because the model is still warming. An idempotency
+key also makes a lost start response safe to retry. Counting can be uncertain
+when parts overlap, are cropped,
+hidden, unusually small, or too specialized for the text description, so the
+detected quantity and confidence are always shown for review and can be corrected
+before the stock movement is submitted.
+
+The current pinned SAM 3 wrapper accepts the count photo plus a text prompt; it
+does not accept a separate reference photo. It can return at most 100 masks. If
+that ceiling is reached, the API rejects the truncated result and asks the user
+to split the parts into smaller groups instead of filling an incorrect quantity.
+The server resizes count photos to a bounded JPEG and sends them inline, so no
+public image URL or separate Replicate file upload is required.
 
 Cover generation can use OpenAI:
 

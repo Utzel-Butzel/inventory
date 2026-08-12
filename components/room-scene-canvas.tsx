@@ -97,7 +97,14 @@ function normalizedDimensions(
   category: string,
   dimensions: [number, number, number],
 ) {
-  const minimum = category === "floor" ? 0.025 : 0.035;
+  const minimum =
+    category === "floor"
+      ? 0.025
+      : category === "door"
+        ? 0.065
+        : category === "window"
+          ? 0.045
+          : 0.035;
   return dimensions.map((value) => Math.max(value, minimum)) as [
     number,
     number,
@@ -157,7 +164,7 @@ export function RoomSceneCanvas({
     renderer.setClearColor(0xf3f5f7, 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.08;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.className = "block size-full touch-none";
@@ -175,6 +182,7 @@ export function RoomSceneCanvas({
     const environmentGenerator = new THREE.PMREMGenerator(renderer);
     const environmentTarget = environmentGenerator.fromScene(roomEnvironment, 0.035);
     scene.environment = environmentTarget.texture;
+    scene.environmentIntensity = 0.82;
     roomEnvironment.dispose();
     environmentGenerator.dispose();
 
@@ -197,8 +205,8 @@ export function RoomSceneCanvas({
       anisotropy,
     });
     const floorColorMap = createProceduralTexture({
-      base: [196, 179, 151],
-      variation: 18,
+      base: [112, 91, 69],
+      variation: 15,
       pattern: "grain",
       seed: 43,
       repeat: [6, 4],
@@ -258,7 +266,7 @@ export function RoomSceneCanvas({
       metalness: 0,
     });
     const floorMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
+      color: 0xe4d8ca,
       map: floorColorMap,
       bumpMap: floorBumpMap,
       bumpScale: 0.008,
@@ -272,6 +280,9 @@ export function RoomSceneCanvas({
       bumpScale: 0.007,
       roughness: 0.68,
       metalness: 0.01,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -2,
     });
     const windowMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xaed7e7,
@@ -323,12 +334,18 @@ export function RoomSceneCanvas({
     controls.maxPolarAngle = Math.PI * 0.495;
     controls.screenSpacePanning = true;
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x8792a0, 2.25));
-    const sun = new THREE.DirectionalLight(0xffffff, 2.1);
-    sun.position.set(6, 11, 5);
+    const ambientLight = new THREE.HemisphereLight(0xfffaf1, 0x66758a, 1.45);
+    scene.add(ambientLight);
+
+    const sun = new THREE.DirectionalLight(0xfff1dc, 3.15);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    scene.add(sun);
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.00025;
+    sun.shadow.normalBias = 0.025;
+
+    const fillLight = new THREE.DirectionalLight(0xdcecff, 1.15);
+    const rimLight = new THREE.DirectionalLight(0xffe2c2, 0.7);
+    scene.add(sun, sun.target, fillLight, fillLight.target, rimLight, rimLight.target);
 
     const visibleManifests = [manifest, ...linkedManifests];
     const webRoot = new THREE.Group();
@@ -344,7 +361,9 @@ export function RoomSceneCanvas({
         const dimensions = normalizedDimensions(surface.category, surface.dimensions);
         const geometry = new THREE.BoxGeometry(...dimensions);
         const mesh = new THREE.Mesh(geometry, surfaceMaterial(surface.category));
+        mesh.castShadow = surface.category === "door";
         mesh.receiveShadow = true;
+        if (surface.category === "door") mesh.renderOrder = 2;
         setMatrix(mesh, surface.transform);
         modelRoot.add(mesh);
 
@@ -471,6 +490,25 @@ export function RoomSceneCanvas({
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const radius = Math.max(size.length() * 0.5, 1.5);
+    sun.position.copy(center).add(new THREE.Vector3(radius * 1.25, radius * 2.4, radius * 1.15));
+    sun.target.position.copy(center);
+    fillLight.position
+      .copy(center)
+      .add(new THREE.Vector3(-radius * 1.6, radius * 1.1, -radius * 0.9));
+    fillLight.target.position.copy(center);
+    rimLight.position
+      .copy(center)
+      .add(new THREE.Vector3(radius * 0.25, radius * 1.4, -radius * 1.8));
+    rimLight.target.position.copy(center);
+
+    const shadowExtent = radius * 1.45;
+    sun.shadow.camera.left = -shadowExtent;
+    sun.shadow.camera.right = shadowExtent;
+    sun.shadow.camera.top = shadowExtent;
+    sun.shadow.camera.bottom = -shadowExtent;
+    sun.shadow.camera.near = Math.max(0.1, radius * 0.05);
+    sun.shadow.camera.far = radius * 6;
+    sun.shadow.camera.updateProjectionMatrix();
     const gridSize = Math.max(10, Math.ceil(Math.max(size.x, size.z) * 1.8));
     const grid = new THREE.GridHelper(gridSize, Math.max(10, gridSize * 2), 0xb5bcc6, 0xd8dde3);
     grid.position.set(center.x, box.min.y - 0.025, center.z);

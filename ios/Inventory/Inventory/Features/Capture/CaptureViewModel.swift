@@ -58,10 +58,13 @@ final class CaptureViewModel: ObservableObject {
         addEncodedData(data, cropAspectRatio: nil)
     }
 
-    /// Camera shutter photos mirror the 3:4 viewfinder. Imported and spatial
+    /// Camera shutter photos mirror their viewfinder. Imported and spatial
     /// images intentionally retain their original composition.
-    func addCameraCapturedData(_ data: Data) {
-        addEncodedData(data, cropAspectRatio: CameraService.photoAspectRatio)
+    func addCameraCapturedData(
+        _ data: Data,
+        cropAspectRatio: CGFloat = CameraService.photoAspectRatio
+    ) {
+        addEncodedData(data, cropAspectRatio: cropAspectRatio)
     }
 
     private func addEncodedData(_ data: Data, cropAspectRatio: CGFloat?) {

@@ -63,6 +63,7 @@ final class StockCountViewModel: ObservableObject {
         }
     }
     @Published var errorMessage: String?
+    private var itemID: UUID?
 
     private struct PendingMovement: Equatable {
         let id: UUID
@@ -72,10 +73,12 @@ final class StockCountViewModel: ObservableObject {
 
     private let downsampler: JPEGDownsampler
     private var analysisTask: Task<Void, Never>?
+    private var countAttemptID: UUID?
     private var pendingMovement: PendingMovement?
 
-    init(itemHint: String) {
+    init(itemHint: String, itemID: UUID? = nil) {
         self.itemHint = Self.limitItemHint(itemHint)
+        self.itemID = itemID
         downsampler = try! JPEGDownsampler(
             maximumPixelSize: 2_200,
             compressionQuality: 0.86
@@ -101,12 +104,17 @@ final class StockCountViewModel: ObservableObject {
         result != nil && adjustedCount > 0 && adjustedCount <= currentQuantity && !isBusy
     }
 
-    func analyzeCapturedData(_ data: Data, using client: APIClient) {
+    func analyzeCapturedData(
+        _ data: Data,
+        cropAspectRatio: CGFloat = CameraService.photoAspectRatio,
+        using client: APIClient
+    ) {
         guard !isBusy else { return }
         analysisTask?.cancel()
         removePhoto()
         result = nil
         adjustedCount = 0
+        countAttemptID = UUID()
         errorMessage = nil
         phase = .preparingPhoto
 
@@ -117,7 +125,7 @@ final class StockCountViewModel: ObservableObject {
                 let image = try await downsampler.downsample(
                     encodedImageData: data,
                     destinationURL: destination,
-                    cropAspectRatio: CameraService.photoAspectRatio
+                    cropAspectRatio: cropAspectRatio
                 )
                 try Task.checkCancellation()
                 photoURL = image.fileURL
@@ -125,7 +133,18 @@ final class StockCountViewModel: ObservableObject {
                 try await analyzePreparedPhoto(using: client)
             } catch is CancellationError {
                 try? FileManager.default.removeItem(at: destination)
+                if phase == .preparingPhoto {
+                    phase = .camera
+                } else if phase == .analyzing {
+                    phase = photoURL == nil ? .camera : .result
+                }
             } catch {
+                if let apiError = error as? APIClientError,
+                   apiError.statusCode != nil,
+                   (apiError.statusCode != 502 || apiError.isTerminal),
+                   !(apiError.statusCode == 409 && apiError.retryAfter != nil) {
+                    countAttemptID = UUID()
+                }
                 if photoURL == nil {
                     try? FileManager.default.removeItem(at: destination)
                     phase = .camera
@@ -141,6 +160,9 @@ final class StockCountViewModel: ObservableObject {
     func retryAnalysis(using client: APIClient) {
         guard photoURL != nil, !isBusy else { return }
         analysisTask?.cancel()
+        if countAttemptID == nil {
+            countAttemptID = UUID()
+        }
         result = nil
         adjustedCount = 0
         errorMessage = nil
@@ -152,6 +174,12 @@ final class StockCountViewModel: ObservableObject {
             } catch is CancellationError {
                 phase = .result
             } catch {
+                if let apiError = error as? APIClientError,
+                   apiError.statusCode != nil,
+                   (apiError.statusCode != 502 || apiError.isTerminal),
+                   !(apiError.statusCode == 409 && apiError.retryAfter != nil) {
+                    countAttemptID = UUID()
+                }
                 phase = .result
                 errorMessage = error.localizedDescription
             }
@@ -163,6 +191,7 @@ final class StockCountViewModel: ObservableObject {
         guard phase != .booking else { return }
         analysisTask?.cancel()
         analysisTask = nil
+        countAttemptID = nil
         removePhoto()
         result = nil
         adjustedCount = 0
@@ -171,10 +200,11 @@ final class StockCountViewModel: ObservableObject {
         phase = .camera
     }
 
-    func prepare(for itemHint: String) {
+    func prepare(for itemHint: String, itemID: UUID? = nil) {
         guard phase != .booking else { return }
         retake()
         self.itemHint = Self.limitItemHint(itemHint)
+        self.itemID = itemID
     }
 
     func apply(
@@ -236,12 +266,15 @@ final class StockCountViewModel: ObservableObject {
         }
         let response = try await client.countObjects(
             in: MediaUploadFile(fileURL: photoURL, filename: "count.jpg"),
-            itemHint: itemHint
+            itemHint: itemHint,
+            itemID: itemID,
+            idempotencyKey: countAttemptID
         )
         guard response.count >= 0 else {
             throw APIClientError.invalidResponse
         }
         result = response
+        countAttemptID = nil
         adjustedCount = response.count
         phase = .result
     }

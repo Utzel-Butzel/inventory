@@ -296,7 +296,7 @@ export function StockLocationsManager({
           </span>
           <div>
             <h2 className="text-sm font-semibold text-slate-950">Stock by location</h2>
-            <p className="mt-0.5 text-xs leading-4 text-slate-400">
+            <p className="mt-0.5 text-xs leading-4 text-slate-600">
               The total stays simple; expand it only when placement matters.
             </p>
           </div>
@@ -305,7 +305,7 @@ export function StockLocationsManager({
           type="button"
           onClick={() => void loadLocations(true)}
           disabled={refreshing}
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
           aria-label="Refresh stock locations"
           title="Refresh stock locations"
         >
@@ -340,19 +340,19 @@ export function StockLocationsManager({
 
       <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">
         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Total</p>
           <p className="mt-1.5 text-xl font-semibold tracking-tight text-slate-950">
             {totalQuantity.toLocaleString()}
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Assigned</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Assigned</p>
           <p className="mt-1.5 text-xl font-semibold tracking-tight text-slate-950">
             {data.breakdown.assignedQuantity.toLocaleString()}
           </p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Unassigned</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Unassigned</p>
           <p className="mt-1.5 text-xl font-semibold tracking-tight text-slate-950">
             {data.breakdown.unassignedQuantity.toLocaleString()}
           </p>
@@ -362,16 +362,16 @@ export function StockLocationsManager({
       <div className="border-y border-slate-100">
         {!hasStock ? (
           <div className="px-6 py-10 text-center">
-            <PackageOpen className="mx-auto size-6 text-slate-300" aria-hidden="true" />
+            <PackageOpen className="mx-auto size-6 text-slate-600" aria-hidden="true" />
             <p className="mt-3 text-sm font-semibold text-slate-700">No stock to place</p>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-slate-600">
               Book stock in first, then assign it to a location.
             </p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
             <div className="flex items-center gap-3 px-5 py-3.5 sm:px-6">
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">
                 <Boxes className="size-3.5" aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
@@ -407,7 +407,7 @@ export function StockLocationsManager({
                         <p className="truncate text-xs font-semibold text-slate-800">
                           {location.name}
                         </p>
-                        <p className="mt-0.5 text-[10px] capitalize text-slate-400">
+                        <p className="mt-0.5 text-[10px] capitalize text-slate-600">
                           {location.type}
                         </p>
                       </div>
@@ -435,11 +435,11 @@ export function StockLocationsManager({
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h3 className="text-xs font-semibold text-slate-900">Move stock</h3>
-              <p className="mt-1 text-[11px] leading-4 text-slate-400">
+              <p className="mt-1 text-[11px] leading-4 text-slate-600">
                 Transfers change only where stock is stored, never the total.
               </p>
             </div>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold capitalize text-slate-500">
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold capitalize text-slate-600">
               {data.breakdown.trackingMode}
             </span>
           </div>
@@ -479,7 +479,7 @@ export function StockLocationsManager({
                   ))}
                 </select>
               </label>
-              <MoveRight className="mb-3 hidden size-4 text-slate-300 sm:block" aria-hidden="true" />
+              <MoveRight className="mb-3 hidden size-4 text-slate-600 sm:block" aria-hidden="true" />
               <label className="block text-[11px] font-semibold text-slate-600">
                 To
                 <select
@@ -518,7 +518,7 @@ export function StockLocationsManager({
           sourceOptions.length > 0 &&
           hasTransferDestination ? (
             <div className="mt-4 flex items-center justify-between gap-4 border-t border-slate-100 pt-4">
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-slate-600">
                 {sourceQuantity > 0
                   ? `${quantityLabel(sourceQuantity, unitName)} available at source`
                   : "No stock available at the source"}
@@ -535,7 +535,7 @@ export function StockLocationsManager({
           ) : null}
         </form>
       ) : (
-        <div className="px-5 py-4 text-[11px] leading-5 text-slate-400 sm:px-6">
+        <div className="px-5 py-4 text-[11px] leading-5 text-slate-600 sm:px-6">
           You can review location balances. Editing requires inventory write access.
         </div>
       )}

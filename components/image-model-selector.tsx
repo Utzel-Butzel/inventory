@@ -182,7 +182,7 @@ export function ImageModelSelector({
         }
         disabled={disabled}
         aria-describedby={description ? descriptionId : undefined}
-        className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+        className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600"
       >
         <option value="">
           Server default{defaultModel ? ` (${defaultModel.label})` : ""}
@@ -194,7 +194,7 @@ export function ImageModelSelector({
         ))}
       </select>
       {description ? (
-        <p id={descriptionId} className="mt-1 text-[10px] leading-4 text-slate-500">
+        <p id={descriptionId} className="mt-1 text-[10px] leading-4 text-slate-600">
           {description}
         </p>
       ) : null}

@@ -8,7 +8,12 @@ public enum APIClientError: Error, LocalizedError, Sendable {
     case transport(String)
     case invalidResponse
     case decoding(String)
-    case http(statusCode: Int, message: String, retryAfter: TimeInterval?)
+    case http(
+        statusCode: Int,
+        message: String,
+        retryAfter: TimeInterval?,
+        terminal: Bool = false
+    )
 
     public var errorDescription: String? {
         switch self {
@@ -24,19 +29,24 @@ public enum APIClientError: Error, LocalizedError, Sendable {
             return "The inventory server returned an invalid response."
         case .decoding(let message):
             return "The inventory response could not be read: \(message)"
-        case .http(_, let message, _):
+        case .http(_, let message, _, _):
             return message
         }
     }
 
     public var statusCode: Int? {
-        guard case .http(let statusCode, _, _) = self else { return nil }
+        guard case .http(let statusCode, _, _, _) = self else { return nil }
         return statusCode
     }
 
     public var retryAfter: TimeInterval? {
-        guard case .http(_, _, let retryAfter) = self else { return nil }
+        guard case .http(_, _, let retryAfter, _) = self else { return nil }
         return retryAfter
+    }
+
+    public var isTerminal: Bool {
+        guard case .http(_, _, _, let terminal) = self else { return false }
+        return terminal
     }
 }
 
@@ -49,7 +59,7 @@ public final class APIClient: Sendable {
     private let objectCountSession: URLSession
     private let onUnauthorized: (@Sendable () async -> Void)?
 
-    private static let objectCountTimeout: TimeInterval = 360
+    private static let objectCountTimeout: TimeInterval = 80
 
     /// `serverURL` is the deployment root, for example `https://inventory.example`,
     /// not the `/api/v1` URL. This lets relative `/api/files/...` media resolve safely.
@@ -198,6 +208,9 @@ public final class APIClient: Sendable {
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as URLError where error.code == .cancelled {
+            guard Task.isCancelled else {
+                throw APIClientError.transport(error.localizedDescription)
+            }
             throw CancellationError()
         } catch let error as APIClientError {
             await notifyIfUnauthorized(error, request: request)
@@ -382,7 +395,9 @@ public final class APIClient: Sendable {
 
     public func countObjects(
         in image: MediaUploadFile,
-        itemHint: String? = nil
+        itemHint: String? = nil,
+        itemID: UUID? = nil,
+        idempotencyKey: UUID? = nil
     ) async throws -> ObjectCountResponse {
         try Task.checkCancellation()
         let normalizedHint = itemHint?
@@ -394,29 +409,57 @@ public final class APIClient: Sendable {
         }
         let body = try MultipartFormFileBuilder.buildObjectCount(
             image: image,
-            itemHint: normalizedHint?.isEmpty == false ? normalizedHint : nil
+            itemHint: normalizedHint?.isEmpty == false ? normalizedHint : nil,
+            itemID: itemID
         )
         defer { try? FileManager.default.removeItem(at: body.fileURL) }
 
         let url = try makeAPIURL(path: ["ai", "count"])
         var request = try await authorizedRequest(url: url, method: "POST")
-        // The server may legitimately use its complete 300-second execution window.
-        // Leave transport overhead without weakening timeouts for unrelated requests.
+        // The server only reserves the asynchronous Replicate job here. Keep a
+        // finite transport deadline for image normalization and provider setup.
         request.timeoutInterval = Self.objectCountTimeout
         request.setValue(
             "multipart/form-data; boundary=\(body.boundary)",
             forHTTPHeaderField: "Content-Type"
         )
+        setIdempotencyKey(idempotencyKey, on: &request)
 
         do {
-            let (data, response) = try await objectCountSession.upload(
-                for: request,
-                fromFile: body.fileURL
-            )
-            return try decodeResponse(data: data, response: response)
+            let startRetryDeadline = Date().addingTimeInterval(5)
+            while true {
+                let (data, response) = try await objectCountSession.upload(
+                    for: request,
+                    fromFile: body.fileURL
+                )
+                do {
+                    switch try decodeObjectCountStep(data: data, response: response) {
+                    case .completed(let result):
+                        return result
+                    case .processing(let jobToken, let retryAfter, let expiresAt):
+                        return try await pollObjectCountJob(
+                            jobToken: jobToken,
+                            retryAfter: retryAfter,
+                            expiresAt: expiresAt
+                        )
+                    }
+                } catch let error as APIClientError
+                    where error.statusCode == 409 &&
+                          error.retryAfter != nil &&
+                          Date() < startRetryDeadline {
+                    try await Task.sleep(
+                        for: .seconds(min(5, max(1, error.retryAfter ?? 1)))
+                    )
+                    try Task.checkCancellation()
+                    continue
+                }
+            }
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as URLError where error.code == .cancelled {
+            guard Task.isCancelled else {
+                throw APIClientError.transport(error.localizedDescription)
+            }
             throw CancellationError()
         } catch let error as APIClientError {
             await notifyIfUnauthorized(error, request: request)
@@ -424,6 +467,100 @@ public final class APIClient: Sendable {
         } catch {
             throw APIClientError.transport(error.localizedDescription)
         }
+    }
+
+    private func pollObjectCountJob(
+        jobToken: String,
+        retryAfter: TimeInterval,
+        expiresAt: Date
+    ) async throws -> ObjectCountResponse {
+        var deadline = min(
+            Date().addingTimeInterval(11 * 60),
+            expiresAt.addingTimeInterval(10)
+        )
+        var currentToken = jobToken
+        var delay = min(10, max(1, retryAfter))
+        while Date() < deadline {
+            try await Task.sleep(for: .seconds(delay))
+            try Task.checkCancellation()
+            let url = try makeAPIURL(path: ["ai", "count", "jobs"])
+            var request = try await jsonRequest(
+                url: url,
+                method: "POST",
+                body: ObjectCountJobRequest(jobToken: currentToken)
+            )
+            request.timeoutInterval = 15
+            do {
+                let (data, response) = try await objectCountSession.data(for: request)
+                switch try decodeObjectCountStep(data: data, response: response) {
+                case .completed(let result):
+                    return result
+                case .processing(let nextToken, let retryAfter, let expiresAt):
+                    currentToken = nextToken
+                    delay = min(10, max(1, retryAfter))
+                    deadline = min(deadline, expiresAt.addingTimeInterval(10))
+                }
+            } catch let error as APIClientError
+                where [429, 503].contains(error.statusCode ?? 0) &&
+                      error.retryAfter != nil {
+                delay = min(10, max(1, error.retryAfter ?? 3))
+                continue
+            } catch let error as URLError {
+                guard !Task.isCancelled else { throw CancellationError() }
+                if [
+                    .timedOut,
+                    .networkConnectionLost,
+                    .notConnectedToInternet,
+                    .cannotConnectToHost,
+                    .cannotFindHost,
+                    .dnsLookupFailed,
+                ].contains(error.code) {
+                    continue
+                }
+                throw error
+            }
+        }
+        throw APIClientError.http(
+            statusCode: 504,
+            message: "Die Zählung hat zu lange gedauert. Bitte starte sie erneut.",
+            retryAfter: nil,
+            terminal: true
+        )
+    }
+
+    private func decodeObjectCountStep(
+        data: Data,
+        response: URLResponse
+    ) throws -> ObjectCountStep {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.invalidResponse
+        }
+        if httpResponse.statusCode == 202 {
+            let processing: ObjectCountProcessingResponse
+            do {
+                processing = try Self.makeJSONDecoder().decode(
+                    ObjectCountProcessingResponse.self,
+                    from: data
+                )
+            } catch {
+                throw APIClientError.decoding(String(describing: error))
+            }
+            guard processing.status == "processing", !processing.jobToken.isEmpty else {
+                throw APIClientError.invalidResponse
+            }
+            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
+                .flatMap(TimeInterval.init) ?? 3
+            return .processing(
+                jobToken: processing.jobToken,
+                retryAfter: retryAfter,
+                expiresAt: processing.expiresAt
+            )
+        }
+        let result: ObjectCountResponse = try decodeResponse(
+            data: data,
+            response: response
+        )
+        return .completed(result)
     }
 
     public func generateCover(
@@ -729,7 +866,8 @@ public final class APIClient: Sendable {
             throw APIClientError.http(
                 statusCode: response.statusCode,
                 message: message,
-                retryAfter: retryAfter
+                retryAfter: retryAfter,
+                terminal: payload?.terminal ?? false
             )
         }
 
@@ -1013,6 +1151,21 @@ private struct AnalyzeRequest: Encodable, Sendable {
     let overwrite: Bool
 }
 
+private enum ObjectCountStep {
+    case completed(ObjectCountResponse)
+    case processing(jobToken: String, retryAfter: TimeInterval, expiresAt: Date)
+}
+
+private struct ObjectCountProcessingResponse: Decodable {
+    let status: String
+    let jobToken: String
+    let expiresAt: Date
+}
+
+private struct ObjectCountJobRequest: Encodable, Sendable {
+    let jobToken: String
+}
+
 private struct LoginRequest: Encodable, Sendable {
     let email: String
     let password: String
@@ -1033,4 +1186,5 @@ private struct CoverRequest: Encodable, Sendable {
 
 private struct ServerErrorResponse: Decodable {
     let error: String?
+    let terminal: Bool?
 }

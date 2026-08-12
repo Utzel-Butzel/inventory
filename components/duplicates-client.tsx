@@ -94,7 +94,7 @@ function ResourceImage({ resource }: { resource: DuplicateResource }) {
 
   if (!image || failed) {
     return (
-      <div className="grid aspect-[4/3] w-full place-items-center bg-gradient-to-br from-zinc-100 to-zinc-50 text-zinc-300">
+      <div className="grid aspect-[4/3] w-full place-items-center bg-gradient-to-br from-zinc-100 to-zinc-50 text-zinc-600">
         <ImageIcon className="size-9" />
       </div>
     );
@@ -124,9 +124,9 @@ function DetailRow({
 }) {
   return (
     <div className="grid grid-cols-[1.1rem_5.5rem_minmax(0,1fr)] items-start gap-2 text-xs">
-      <Icon className="mt-0.5 size-3.5 text-zinc-400" />
-      <span className="text-zinc-400">{label}</span>
-      <span className={`min-w-0 break-words font-medium ${muted ? "text-zinc-400" : "text-zinc-700"}`}>
+      <Icon className="mt-0.5 size-3.5 text-zinc-600" />
+      <span className="text-zinc-600">{label}</span>
+      <span className={`min-w-0 break-words font-medium ${muted ? "text-zinc-600" : "text-zinc-700"}`}>
         {value}
       </span>
     </div>
@@ -154,7 +154,7 @@ function ResourcePanel({ resource, side }: { resource: DuplicateResource; side: 
             <h3 className="truncate text-base font-semibold tracking-[-0.015em] text-zinc-950" title={resource.name}>
               {resource.name}
             </h3>
-            <p className="mt-1 text-xs text-zinc-400">Updated {formatDate(resource.updatedAt)}</p>
+            <p className="mt-1 text-xs text-zinc-600">Updated {formatDate(resource.updatedAt)}</p>
           </div>
           <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 ring-1 ring-inset ring-emerald-200">
             {sentenceCase(resource.status)}
@@ -162,7 +162,7 @@ function ResourcePanel({ resource, side }: { resource: DuplicateResource; side: 
         </div>
 
         {resource.description ? (
-          <p className="mt-4 line-clamp-3 text-xs leading-5 text-zinc-500">{resource.description}</p>
+          <p className="mt-4 line-clamp-3 text-xs leading-5 text-zinc-600">{resource.description}</p>
         ) : null}
 
         <div className="mt-5 space-y-3 border-t border-zinc-100 pt-4">
@@ -181,10 +181,10 @@ function ResourcePanel({ resource, side }: { resource: DuplicateResource; side: 
               </span>
             ))
           ) : (
-            <span className="text-xs text-zinc-400">No tags or categories</span>
+            <span className="text-xs text-zinc-600">No tags or categories</span>
           )}
           {descriptors.length > 6 ? (
-            <span className="rounded-md bg-zinc-100 px-2 py-1 text-[10px] font-medium text-zinc-500">+{descriptors.length - 6}</span>
+            <span className="rounded-md bg-zinc-100 px-2 py-1 text-[10px] font-medium text-zinc-600">+{descriptors.length - 6}</span>
           ) : null}
         </div>
       </div>
@@ -290,7 +290,7 @@ export function DuplicatesClient() {
             <h2 id="matches-heading" className="text-sm font-semibold text-zinc-950">
               {loading ? "Scanning inventory…" : `${duplicates.length} potential ${duplicates.length === 1 ? "match" : "matches"}`}
             </h2>
-            <p className="mt-0.5 text-xs leading-5 text-zinc-500">Matches are ranked using SKU and name similarity.</p>
+            <p className="mt-0.5 text-xs leading-5 text-zinc-600">Matches are ranked using SKU and name similarity.</p>
           </div>
         </div>
         <button
@@ -337,7 +337,7 @@ export function DuplicatesClient() {
               <Sparkles className="size-6" />
             </span>
             <h2 className="mt-5 text-lg font-semibold tracking-tight text-zinc-950">Everything looks tidy</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500">No likely duplicate records were found. Run the scan again after importing or creating more inventory.</p>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-600">No likely duplicate records were found. Run the scan again after importing or creating more inventory.</p>
           </div>
         </div>
       ) : (
@@ -354,7 +354,7 @@ export function DuplicatesClient() {
                     <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-600"><GitMerge className="size-4" /></span>
                     <div>
                       <h3 className="text-sm font-semibold text-zinc-950">Potential match {index + 1}</h3>
-                      <p className="mt-0.5 text-xs text-zinc-500">{pair.reason}</p>
+                      <p className="mt-0.5 text-xs text-zinc-600">{pair.reason}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -413,8 +413,8 @@ export function DuplicatesClient() {
                         disabled={merging}
                         className="group flex min-h-12 items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 text-left transition hover:border-indigo-300 hover:bg-indigo-50/50 disabled:opacity-50"
                       >
-                        <span className="min-w-0"><span className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Keep record A</span><span className="block truncate text-sm font-semibold text-zinc-800">{pair.left.name}</span></span>
-                        <ArrowRight className="size-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-indigo-600" />
+                        <span className="min-w-0"><span className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Keep record A</span><span className="block truncate text-sm font-semibold text-zinc-800">{pair.left.name}</span></span>
+                        <ArrowRight className="size-4 shrink-0 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-indigo-600" />
                       </button>
                       <button
                         type="button"
@@ -422,8 +422,8 @@ export function DuplicatesClient() {
                         disabled={merging}
                         className="group flex min-h-12 items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 text-left transition hover:border-indigo-300 hover:bg-indigo-50/50 disabled:opacity-50"
                       >
-                        <span className="min-w-0"><span className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Keep record B</span><span className="block truncate text-sm font-semibold text-zinc-800">{pair.right.name}</span></span>
-                        <ArrowRight className="size-4 shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-indigo-600" />
+                        <span className="min-w-0"><span className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Keep record B</span><span className="block truncate text-sm font-semibold text-zinc-800">{pair.right.name}</span></span>
+                        <ArrowRight className="size-4 shrink-0 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-indigo-600" />
                       </button>
                     </div>
                   </footer>

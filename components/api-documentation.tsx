@@ -16,7 +16,7 @@ const ApiReference = dynamic(
         className="grid min-h-[520px] place-items-center bg-white"
         aria-live="polite"
       >
-        <div className="flex items-center gap-3 text-sm font-medium text-zinc-500">
+        <div className="flex items-center gap-3 text-sm font-medium text-zinc-600">
           <span className="size-4 animate-spin rounded-full border-2 border-zinc-200 border-t-indigo-500" />
           Loading API reference…
         </div>
@@ -27,7 +27,10 @@ const ApiReference = dynamic(
 
 const customCss = `
   :root {
-    --scalar-color-accent: #635bff;
+    --scalar-color-accent: #5147d9;
+    --scalar-color-1: #1f2937;
+    --scalar-color-2: #4b5563;
+    --scalar-color-3: #5f6672;
     --scalar-background-1: #ffffff;
     --scalar-background-2: #f8f9fb;
     --scalar-background-3: #f0f2f5;
@@ -41,8 +44,19 @@ const customCss = `
     --scalar-color-accent: #8b85ff;
   }
 
+  .scalar-app {
+    --scalar-color-accent: #5147d9;
+    --scalar-color-1: #1f2937;
+    --scalar-color-2: #4b5563;
+    --scalar-color-3: #5f6672;
+  }
+
   .references-layout {
     min-height: 720px;
+  }
+
+  .sidebar-search-placeholder {
+    color: #5f6672;
   }
 `;
 

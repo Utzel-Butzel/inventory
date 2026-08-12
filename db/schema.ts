@@ -1479,7 +1479,7 @@ export const aiIdempotencyOperations = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     operation: varchar("operation", { length: 24 })
-      .$type<"analyze" | "cover">()
+      .$type<"analyze" | "count" | "cover">()
       .notNull(),
     idempotencyKey: uuid("idempotency_key").notNull(),
     resourceId: uuid("resource_id").notNull(),
@@ -1509,7 +1509,7 @@ export const aiIdempotencyOperations = pgTable(
     index("ai_idempotency_operations_resource_id_idx").on(table.resourceId),
     check(
       "ai_idempotency_operations_operation_check",
-      sql`${table.operation} in ('analyze', 'cover')`,
+      sql`${table.operation} in ('analyze', 'count', 'cover')`,
     ),
     check(
       "ai_idempotency_operations_status_check",

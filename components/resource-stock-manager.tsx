@@ -228,7 +228,7 @@ type StockLocationOption = {
 type StockLocationsApiResponse = { availableLocations: StockLocationOption[] };
 
 const inputClass =
-  "mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+  "mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-600 hover:border-slate-300 focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600";
 const labelClass = "block text-xs font-semibold text-slate-700";
 
 const movementLabels: Record<MovementType, string> = {
@@ -420,7 +420,7 @@ function SectionHeading({
         </div>
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-slate-950">{title}</h2>
-          <p className="mt-0.5 text-xs leading-4 text-slate-400">{description}</p>
+          <p className="mt-0.5 text-xs leading-4 text-slate-600">{description}</p>
         </div>
       </div>
       {trailing}
@@ -861,7 +861,7 @@ export function ResourceStockManager({
         <div className="rounded-2xl border border-rose-200 bg-white px-6 py-12 shadow-sm">
           <AlertTriangle className="mx-auto size-7 text-rose-500" aria-hidden="true" />
           <h1 className="mt-4 text-lg font-semibold text-slate-950">Stock data is unavailable</h1>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
             {error ?? "The stock record could not be loaded."}
           </p>
           <div className="mt-6 flex justify-center gap-2">
@@ -894,7 +894,7 @@ export function ResourceStockManager({
     <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <header className="mb-6 flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-400">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-600">
             <Link href="/inventory" className="inline-flex items-center gap-1 hover:text-slate-800">
               <ArrowLeft className="size-3.5" aria-hidden="true" /> Inventory
             </Link>
@@ -916,7 +916,7 @@ export function ResourceStockManager({
               {stock.config.trackingMode}
             </span>
           </div>
-          <p className="mt-1.5 text-sm text-slate-500">
+          <p className="mt-1.5 text-sm text-slate-600">
             Book movements, keep reorder levels healthy, and trace every serialized unit.
           </p>
         </div>
@@ -937,7 +937,7 @@ export function ResourceStockManager({
             type="button"
             onClick={() => void loadStock(true)}
             disabled={refreshing}
-            className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+            className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
             aria-label="Refresh stock data"
             title="Refresh stock data"
           >
@@ -974,7 +974,7 @@ export function ResourceStockManager({
       <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,.03)]">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-500">Available stock</p>
+            <p className="text-xs font-medium text-slate-600">Available stock</p>
             <span className="grid size-8 place-items-center rounded-xl bg-violet-50 text-violet-700">
               <Boxes className="size-4" aria-hidden="true" />
             </span>
@@ -982,13 +982,13 @@ export function ResourceStockManager({
           <p className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
             {currentQuantity.toLocaleString()}
           </p>
-          <p className="mt-1 text-[11px] text-slate-400">
+          <p className="mt-1 text-[11px] text-slate-600">
             {pluralize(currentQuantity, unitName)} ready to use
           </p>
         </div>
         <div className="rounded-2xl border border-blue-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,.03)]">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-500">Incoming</p>
+            <p className="text-xs font-medium text-slate-600">Incoming</p>
             <span className="grid size-8 place-items-center rounded-xl bg-blue-50 text-blue-700">
               <ShoppingCart className="size-4" aria-hidden="true" />
             </span>
@@ -996,7 +996,7 @@ export function ResourceStockManager({
           <p className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
             {onOrder.toLocaleString()}
           </p>
-          <p className="mt-1 text-[11px] text-slate-400">
+          <p className="mt-1 text-[11px] text-slate-600">
             {onOrder > 0
               ? `${pluralize(stock.procurement.projectedQuantity, unitName)} after receipt${stock.procurement.nextExpectedAt ? ` · ${formatDate(stock.procurement.nextExpectedAt)}` : ""}`
               : "Nothing currently on order"}
@@ -1004,7 +1004,7 @@ export function ResourceStockManager({
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,.03)]">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-500">Minimum level</p>
+            <p className="text-xs font-medium text-slate-600">Minimum level</p>
             <span
               className={`grid size-8 place-items-center rounded-xl ${forecast.isBelowMinimum ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}
             >
@@ -1018,13 +1018,13 @@ export function ResourceStockManager({
           <p className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
             {minimum.toLocaleString()}
           </p>
-          <p className={`mt-1 text-[11px] ${forecast.isBelowMinimum ? "font-medium text-rose-600" : "text-slate-400"}`}>
+          <p className={`mt-1 text-[11px] ${forecast.isBelowMinimum ? "font-medium text-rose-600" : "text-slate-600"}`}>
             {forecast.isBelowMinimum ? "Reorder threshold reached" : "Stock is above the threshold"}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,.03)]">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-500">Average usage</p>
+            <p className="text-xs font-medium text-slate-600">Average usage</p>
             <span className="grid size-8 place-items-center rounded-xl bg-blue-50 text-blue-700">
               <TrendingDown className="size-4" aria-hidden="true" />
             </span>
@@ -1032,11 +1032,11 @@ export function ResourceStockManager({
           <p className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
             {forecast.averageDailyUsage.toLocaleString(undefined, { maximumFractionDigits: 2 })}
           </p>
-          <p className="mt-1 text-[11px] text-slate-400">{unitName}s used per day</p>
+          <p className="mt-1 text-[11px] text-slate-600">{unitName}s used per day</p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,.03)]">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-500">Stock runway</p>
+            <p className="text-xs font-medium text-slate-600">Stock runway</p>
             <span className="grid size-8 place-items-center rounded-xl bg-amber-50 text-amber-700">
               <Clock3 className="size-4" aria-hidden="true" />
             </span>
@@ -1046,7 +1046,7 @@ export function ResourceStockManager({
               ? "Stable"
               : `${Math.max(0, Math.round(forecast.daysUntilStockout))}d`}
           </p>
-          <p className="mt-1 text-[11px] text-slate-400">
+          <p className="mt-1 text-[11px] text-slate-600">
             {forecast.predictedStockoutAt
               ? `Estimated ${formatDate(forecast.predictedStockoutAt)}`
               : "No stockout predicted"}
@@ -1090,7 +1090,7 @@ export function ResourceStockManager({
               title="Book a stock movement"
               description="Record incoming or outgoing inventory with a dated audit entry."
               trailing={
-                <span className="hidden text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:block">
+                <span className="hidden text-[10px] font-semibold uppercase tracking-wider text-slate-600 sm:block">
                   Available {currentQuantity}
                 </span>
               }
@@ -1103,7 +1103,7 @@ export function ResourceStockManager({
                   className={`flex h-10 items-center justify-center gap-2 rounded-lg text-xs font-semibold transition ${
                     direction === "in"
                       ? "bg-white text-emerald-700 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800"
+                      : "text-slate-600 hover:text-slate-800"
                   }`}
                 >
                   <Plus className="size-4" aria-hidden="true" /> Stock in
@@ -1114,7 +1114,7 @@ export function ResourceStockManager({
                   className={`flex h-10 items-center justify-center gap-2 rounded-lg text-xs font-semibold transition ${
                     direction === "out"
                       ? "bg-white text-rose-700 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800"
+                      : "text-slate-600 hover:text-slate-800"
                   }`}
                 >
                   <Minus className="size-4" aria-hidden="true" /> Stock out
@@ -1122,6 +1122,7 @@ export function ResourceStockManager({
               </div>
 
               <PhotoCountCapture
+                itemId={stock.resource.id}
                 itemName={stock.resource.name}
                 unitName={unitName}
                 direction={direction}
@@ -1145,7 +1146,7 @@ export function ResourceStockManager({
                       onChange={(event) => updateMovement("quantity", event.target.value)}
                       className={`${inputClass} pr-20`}
                     />
-                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-slate-400">
+                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-slate-600">
                       {unitName}s
                     </span>
                   </div>
@@ -1175,7 +1176,7 @@ export function ResourceStockManager({
                   />
                 </label>
                 <label className={`${labelClass} sm:col-span-2`}>
-                  Reason <span className="font-normal text-slate-400">· optional</span>
+                  Reason <span className="font-normal text-slate-600">· optional</span>
                   <input
                     value={movementForm.reason}
                     maxLength={240}
@@ -1189,7 +1190,7 @@ export function ResourceStockManager({
                   />
                 </label>
                 <label className={labelClass}>
-                  Location <span className="font-normal text-slate-400">· optional</span>
+                  Location <span className="font-normal text-slate-600">· optional</span>
                   <input
                     value={movementForm.location}
                     maxLength={240}
@@ -1199,7 +1200,7 @@ export function ResourceStockManager({
                   />
                 </label>
                 <label className={`${labelClass} sm:col-span-2 lg:col-span-3`}>
-                  Note <span className="font-normal text-slate-400">· optional</span>
+                  Note <span className="font-normal text-slate-600">· optional</span>
                   <textarea
                     rows={3}
                     value={movementForm.note}
@@ -1223,7 +1224,7 @@ export function ResourceStockManager({
               ) : null}
 
               <div className="mt-5 flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-slate-600">
                   Projected balance: {Math.max(
                     0,
                     currentQuantity +
@@ -1276,14 +1277,14 @@ export function ResourceStockManager({
                     <option value="out">Stock out</option>
                     <option value="audit">Audit only</option>
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3 -translate-y-1/2 text-slate-400" />
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3 -translate-y-1/2 text-slate-600" />
                 </div>
               }
             />
 
             {filteredMovements.length ? (
               <div>
-                <div className="hidden grid-cols-[90px_minmax(160px,1.25fr)_minmax(130px,1fr)_100px_120px] gap-4 border-b border-slate-100 bg-slate-50/60 px-6 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 md:grid">
+                <div className="hidden grid-cols-[90px_minmax(160px,1.25fr)_minmax(130px,1fr)_100px_120px] gap-4 border-b border-slate-100 bg-slate-50/60 px-6 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 md:grid">
                   <span>Change</span>
                   <span>Reason</span>
                   <span>Location / unit</span>
@@ -1319,7 +1320,7 @@ export function ResourceStockManager({
                             {positive ? "+" : ""}
                             {movement.delta}
                           </span>
-                          <span className="text-[10px] text-slate-400 md:hidden">
+                          <span className="text-[10px] text-slate-600 md:hidden">
                             {formatDate(movement.occurredAt, true)}
                           </span>
                         </div>
@@ -1329,36 +1330,36 @@ export function ResourceStockManager({
                               movementLabels[movement.type as MovementType] ||
                               "Stock update"}
                           </p>
-                          <p className="mt-0.5 truncate text-[10px] text-slate-400">
+                          <p className="mt-0.5 truncate text-[10px] text-slate-600">
                             {movementLabels[movement.type as MovementType] ??
                               movement.type.replaceAll("-", " ")}
                             {movement.note ? ` · ${movement.note}` : ""}
                           </p>
                         </div>
-                        <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-slate-500">
+                        <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-slate-600">
                           {movement.location ? (
                             <>
-                              <MapPin className="size-3 shrink-0 text-slate-400" aria-hidden="true" />
+                              <MapPin className="size-3 shrink-0 text-slate-600" aria-hidden="true" />
                               <span className="truncate">{movement.location}</span>
                             </>
                           ) : movement.unitId ? (
                             <>
-                              <Barcode className="size-3 shrink-0 text-slate-400" aria-hidden="true" />
+                              <Barcode className="size-3 shrink-0 text-slate-600" aria-hidden="true" />
                               <span className="truncate font-mono">{movement.unitId.slice(0, 8)}</span>
                             </>
                           ) : (
-                            <span className="text-slate-300">—</span>
+                            <span className="text-slate-600">—</span>
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-500 md:font-semibold md:tabular-nums">
+                        <p className="text-[11px] text-slate-600 md:font-semibold md:tabular-nums">
                           <span className="md:hidden">Balance </span>
                           {movement.balanceAfter.toLocaleString()}
                         </p>
                         <div className="hidden md:block">
-                          <p className="text-[10px] text-slate-500">
+                          <p className="text-[10px] text-slate-600">
                             {formatDate(movement.occurredAt)}
                           </p>
-                          <p className="mt-0.5 truncate text-[9px] text-slate-400">
+                          <p className="mt-0.5 truncate text-[9px] text-slate-600">
                             {movement.createdBy || "System"}
                           </p>
                         </div>
@@ -1369,9 +1370,9 @@ export function ResourceStockManager({
               </div>
             ) : (
               <div className="px-6 py-14 text-center">
-                <History className="mx-auto size-6 text-slate-300" aria-hidden="true" />
+                <History className="mx-auto size-6 text-slate-600" aria-hidden="true" />
                 <p className="mt-3 text-sm font-semibold text-slate-700">No matching movements</p>
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-slate-600">
                   {stock.movements.length
                     ? "Choose another filter to see the audit trail."
                     : "Your first stock booking will appear here."}
@@ -1407,7 +1408,7 @@ export function ResourceStockManager({
                       className={`h-9 rounded-lg text-[11px] font-semibold capitalize transition ${
                         configForm.trackingMode === mode
                           ? "bg-white text-violet-700 shadow-sm"
-                          : "text-slate-500 hover:text-slate-800"
+                          : "text-slate-600 hover:text-slate-800"
                       } disabled:cursor-not-allowed disabled:opacity-35`}
                       title={
                         mode === "bulk" &&
@@ -1421,7 +1422,7 @@ export function ResourceStockManager({
                     </button>
                   ))}
                 </div>
-                <p className="mt-2 text-[10px] leading-4 text-slate-400">
+                <p className="mt-2 text-[10px] leading-4 text-slate-600">
                   {configForm.trackingMode === "bulk"
                     ? "Track one shared quantity for interchangeable items."
                     : "Give each physical item its own ID, status, and history."}
@@ -1484,7 +1485,7 @@ export function ResourceStockManager({
                       }
                       className={`${inputClass} pr-12`}
                     />
-                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[10px] text-slate-400">
+                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[10px] text-slate-600">
                       days
                     </span>
                   </div>
@@ -1531,7 +1532,7 @@ export function ResourceStockManager({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold text-slate-900">Stock forecast</p>
-                <p className="mt-1 text-[10px] text-slate-500">
+                <p className="mt-1 text-[10px] text-slate-600">
                   Based on recorded outgoing movement.
                 </p>
               </div>
@@ -1556,26 +1557,26 @@ export function ResourceStockManager({
                 title="Minimum stock"
               />
             </div>
-            <div className="mt-2 flex justify-between text-[9px] text-slate-400">
+            <div className="mt-2 flex justify-between text-[9px] text-slate-600">
               <span>0</span>
               <span>Minimum {minimum}</span>
               <span>{stockBarMax}</span>
             </div>
             <div className="mt-5 rounded-xl border border-white/80 bg-white/70 p-3.5">
               <div className="flex items-center justify-between gap-4">
-                <span className="text-[11px] text-slate-500">Suggested order</span>
+                <span className="text-[11px] text-slate-600">Suggested order</span>
                 <span className="text-sm font-semibold text-slate-950">
                   {pluralize(forecast.suggestedReorderQuantity, unitName)}
                 </span>
               </div>
               <div className="mt-2 flex items-center justify-between gap-4">
-                <span className="text-[11px] text-slate-500">Lead time</span>
+                <span className="text-[11px] text-slate-600">Lead time</span>
                 <span className="text-xs font-semibold text-slate-700">
                   {stock.config.leadTimeDays} days
                 </span>
               </div>
               <div className="mt-2 flex items-center justify-between gap-4">
-                <span className="text-[11px] text-slate-500">Already ordered</span>
+                <span className="text-[11px] text-slate-600">Already ordered</span>
                 <span className="text-xs font-semibold text-blue-700">
                   {pluralize(onOrder, unitName)}
                 </span>
@@ -1627,7 +1628,7 @@ export function ResourceStockManager({
             <h3 className="mt-4 text-sm font-semibold text-slate-800">
               Serialized tracking is not enabled
             </h3>
-            <p className="mx-auto mt-1.5 max-w-lg text-xs leading-5 text-slate-500">
+            <p className="mx-auto mt-1.5 max-w-lg text-xs leading-5 text-slate-600">
               Choose serialized mode in Tracking settings when each physical item needs
               its own code, status, location, and movement trail.
             </p>
@@ -1653,7 +1654,7 @@ export function ResourceStockManager({
                 </span>
                 <div>
                   <h3 className="text-xs font-semibold text-slate-900">Register units</h3>
-                  <p className="text-[10px] text-slate-400">Generated or your own asset IDs</p>
+                  <p className="text-[10px] text-slate-600">Generated or your own asset IDs</p>
                 </div>
               </div>
 
@@ -1666,7 +1667,7 @@ export function ResourceStockManager({
                   className={`h-9 rounded-lg text-[11px] font-semibold transition ${
                     unitCreateForm.idMode === "generated"
                       ? "bg-white text-violet-700 shadow-sm"
-                      : "text-slate-500"
+                      : "text-slate-600"
                   }`}
                 >
                   Generate IDs
@@ -1679,7 +1680,7 @@ export function ResourceStockManager({
                   className={`h-9 rounded-lg text-[11px] font-semibold transition ${
                     unitCreateForm.idMode === "custom"
                       ? "bg-white text-violet-700 shadow-sm"
-                      : "text-slate-500"
+                      : "text-slate-600"
                   }`}
                 >
                   Custom IDs
@@ -1708,7 +1709,7 @@ export function ResourceStockManager({
                   </label>
                 ) : (
                   <label className={labelClass}>
-                    Unit IDs <span className="font-normal text-slate-400">· one per line</span>
+                    Unit IDs <span className="font-normal text-slate-600">· one per line</span>
                     <textarea
                       rows={5}
                       required
@@ -1725,7 +1726,7 @@ export function ResourceStockManager({
                   </label>
                 )}
                 <label className={labelClass}>
-                  Inventory location <span className="font-normal text-slate-400">· optional</span>
+                  Inventory location <span className="font-normal text-slate-600">· optional</span>
                   <select
                     value={unitCreateForm.locationResourceId}
                     onChange={(event) =>
@@ -1745,7 +1746,7 @@ export function ResourceStockManager({
                   </select>
                 </label>
                 <label className={labelClass}>
-                  Location note <span className="font-normal text-slate-400">· optional</span>
+                  Location note <span className="font-normal text-slate-600">· optional</span>
                   <input
                     value={unitCreateForm.location}
                     maxLength={240}
@@ -1777,7 +1778,7 @@ export function ResourceStockManager({
                   <div className="rounded-xl border border-violet-100 bg-white p-3.5">
                     <div className="mb-3">
                       <p className="text-xs font-semibold text-slate-800">Custom fields</p>
-                      <p className="mt-0.5 text-[10px] leading-4 text-slate-400">
+                      <p className="mt-0.5 text-[10px] leading-4 text-slate-600">
                         These values are shared by every unit created in this batch.
                       </p>
                     </div>
@@ -1801,7 +1802,7 @@ export function ResourceStockManager({
                   </p>
                 ) : null}
                 <label className={labelClass}>
-                  Advanced metadata <span className="font-normal text-slate-400">· JSON</span>
+                  Advanced metadata <span className="font-normal text-slate-600">· JSON</span>
                   <textarea
                     rows={4}
                     value={unitCreateForm.metadata}
@@ -1840,7 +1841,7 @@ export function ResourceStockManager({
                       <div key={unit.id} className="p-4 sm:p-5">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                           <div className="flex min-w-0 items-start gap-3">
-                            <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500">
+                            <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600">
                               <Barcode className="size-[18px]" aria-hidden="true" />
                             </span>
                             <div className="min-w-0">
@@ -1854,7 +1855,7 @@ export function ResourceStockManager({
                                   {statusLabels[unit.status] ?? unit.status}
                                 </span>
                               </div>
-                              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400">
+                              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-600">
                                 <span className="flex items-center gap-1">
                                   <MapPin className="size-3" aria-hidden="true" />
                                   {unit.location || "No location"}
@@ -1903,7 +1904,7 @@ export function ResourceStockManager({
                             <button
                               type="button"
                               onClick={() => void navigator.clipboard.writeText(unit.code)}
-                              className="grid size-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-400 transition hover:bg-slate-50 hover:text-slate-700"
+                              className="grid size-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-700"
                               aria-label={`Copy unit ID ${unit.code}`}
                               title="Copy unit ID"
                             >
@@ -1937,7 +1938,7 @@ export function ResourceStockManager({
                             onSubmit={saveUnit}
                             className="mt-4 rounded-xl border border-violet-100 bg-violet-50/45 p-4"
                           >
-                            <div className="mb-3 flex items-start gap-2 rounded-lg bg-white/80 px-3 py-2 text-[10px] leading-4 text-slate-500">
+                            <div className="mb-3 flex items-start gap-2 rounded-lg bg-white/80 px-3 py-2 text-[10px] leading-4 text-slate-600">
                               <Info className="mt-0.5 size-3 shrink-0 text-violet-600" aria-hidden="true" />
                               Moving between Available and any other status automatically creates
                               a dated ±1 stock movement. Location, custom field, or metadata edits
@@ -2015,7 +2016,7 @@ export function ResourceStockManager({
                                 />
                               </label>
                               <label className={`${labelClass} sm:col-span-2`}>
-                                Reason <span className="font-normal text-slate-400">· optional</span>
+                                Reason <span className="font-normal text-slate-600">· optional</span>
                                 <input
                                   value={unitEditForm.reason}
                                   onChange={(event) =>
@@ -2045,7 +2046,7 @@ export function ResourceStockManager({
                                     <p className="text-xs font-semibold text-slate-800">
                                       Custom fields
                                     </p>
-                                    <p className="mt-0.5 text-[10px] leading-4 text-slate-400">
+                                    <p className="mt-0.5 text-[10px] leading-4 text-slate-600">
                                       Structured details configured for this inventory type or
                                       category.
                                     </p>
@@ -2064,7 +2065,7 @@ export function ResourceStockManager({
                               ) : null}
                               <label className={`${labelClass} sm:col-span-2 lg:col-span-3`}>
                                 Advanced metadata{" "}
-                                <span className="font-normal text-slate-400">· JSON</span>
+                                <span className="font-normal text-slate-600">· JSON</span>
                                 <textarea
                                   rows={4}
                                   value={unitEditForm.metadata}
@@ -2079,7 +2080,7 @@ export function ResourceStockManager({
                               </label>
                             </div>
                             <div className="mt-4 flex flex-col-reverse gap-2 border-t border-violet-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                              <p className="text-[9px] text-slate-400">
+                              <p className="text-[9px] text-slate-600">
                                 Registered {formatDate(unit.createdAt, true)} · Updated {formatDate(unit.updatedAt, true)}
                               </p>
                               <button
@@ -2103,9 +2104,9 @@ export function ResourceStockManager({
                 </div>
               ) : (
                 <div className="px-6 py-16 text-center">
-                  <Barcode className="mx-auto size-7 text-slate-300" aria-hidden="true" />
+                  <Barcode className="mx-auto size-7 text-slate-600" aria-hidden="true" />
                   <h3 className="mt-4 text-sm font-semibold text-slate-700">No unit records yet</h3>
-                  <p className="mx-auto mt-1.5 max-w-md text-xs leading-5 text-slate-400">
+                  <p className="mx-auto mt-1.5 max-w-md text-xs leading-5 text-slate-600">
                     Register generated IDs or enter the asset codes already attached to your
                     physical inventory.
                   </p>
@@ -2133,19 +2134,19 @@ export function ResourceStockManager({
             >
               Confirm outgoing stock
             </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
+            <p className="mt-2 text-sm leading-6 text-slate-600">
               This booking removes {pluralize(Math.abs(pendingMovement.delta), unitName)} from
               available inventory. Review the balance before confirming.
             </p>
             <div className="mt-5 grid grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
               <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-600">
                   Before
                 </p>
                 <p className="mt-1 text-base font-semibold text-slate-800">{currentQuantity}</p>
               </div>
               <div className="border-x border-slate-200">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-600">
                   Change
                 </p>
                 <p className="mt-1 text-base font-semibold text-rose-700">
@@ -2153,7 +2154,7 @@ export function ResourceStockManager({
                 </p>
               </div>
               <div>
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-600">
                   After
                 </p>
                 <p className="mt-1 text-base font-semibold text-slate-800">

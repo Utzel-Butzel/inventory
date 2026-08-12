@@ -38,11 +38,11 @@ export function StockSectionNav() {
                 "flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-[12px] font-semibold transition",
                 active
                   ? "bg-[#eeedff] text-[#5147d9] shadow-sm"
-                  : "text-[#6d7480] hover:bg-[#f5f6f8] hover:text-[#34383e]",
+                  : "text-[#5f6672] hover:bg-[#f5f6f8] hover:text-[#34383e]",
               )}
             >
               <Icon
-                className={cn("size-4", active ? "text-[#635bff]" : "text-[#9298a2]")}
+                className={cn("size-4", active ? "text-[#5147d9]" : "text-[#5f6672]")}
                 aria-hidden="true"
               />
               {section.label}

@@ -35,8 +35,15 @@ enum CameraMode: String, CaseIterable, Identifiable, Sendable {
 }
 
 private enum CameraPhotoRequest: Equatable {
-    case capture(UUID)
-    case count(UUID)
+    case capture(UUID, cropAspectRatio: CGFloat)
+    case count(UUID, cropAspectRatio: CGFloat)
+
+    var cropAspectRatio: CGFloat {
+        switch self {
+        case .capture(_, let cropAspectRatio), .count(_, let cropAspectRatio):
+            cropAspectRatio
+        }
+    }
 }
 
 struct UnifiedCameraView: View {
@@ -82,7 +89,10 @@ struct UnifiedCameraView: View {
         _mode = State(initialValue: initialMode)
         _countResource = State(initialValue: initialCountResource)
         _countModel = StateObject(
-            wrappedValue: StockCountViewModel(itemHint: initialCountResource?.name ?? "")
+            wrappedValue: StockCountViewModel(
+                itemHint: initialCountResource?.name ?? "",
+                itemID: initialCountResource?.id
+            )
         )
         self.onClose = onClose
         self.onSubmit = onSubmit
@@ -90,42 +100,36 @@ struct UnifiedCameraView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    cameraViewport
-                    modeDetails
+        GeometryReader { geometry in
+            ZStack {
+                cameraViewport
+
+                VStack(spacing: 0) {
+                    cameraTopBar
+                        .padding(.horizontal, 16)
+                        .padding(.top, geometry.safeAreaInsets.top + 8)
+
+                    Spacer(minLength: 12)
+
+                    cameraControlDeck(
+                        viewportAspectRatio: max(
+                            0.1,
+                            geometry.size.width / max(1, geometry.size.height)
+                        )
+                    )
+                    .padding(.bottom, max(8, geometry.safeAreaInsets.bottom))
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
             }
-            .background(InventoryTheme.canvas)
-            .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(mode.navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Schließen", action: close)
-                        .disabled(countModel.phase == .booking)
-                }
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                CameraModeBar(selection: $mode)
-                    .disabled(countModel.phase == .booking)
-                    .opacity(countModel.phase == .booking ? 0.65 : 1)
-            }
+            .background(.black)
+            .ignoresSafeArea()
         }
+        .statusBarHidden()
         .interactiveDismissDisabled(countModel.phase == .booking)
         .onAppear(perform: configureCamera)
         .onDisappear(perform: tearDown)
         .onChange(of: mode) { _, _ in
             lastCode = nil
             configureMode()
-        }
-        .onChange(of: camera.isUsingFrontCamera) { _, usesFrontCamera in
-            if usesFrontCamera, mode != .capture {
-                camera.switchCamera()
-            }
         }
         .onChange(of: pickerItems) { _, items in
             captureModel.addPickerItems(items)
@@ -144,7 +148,7 @@ struct UnifiedCameraView: View {
             resolve(code, purpose: .inventoryLookup)
         }
         .sheet(isPresented: $showCaptureDetails) {
-            captureDetailsSheet
+            cameraDetailsSheet
                 .presentationDetents([.medium, .large], selection: $detailsDetent)
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.regularMaterial)
@@ -248,7 +252,8 @@ struct UnifiedCameraView: View {
             if mode == .count, let photoURL = countModel.photoURL {
                 StockCountPhotoPreview(
                     url: photoURL,
-                    markers: countModel.result?.markers ?? []
+                    markers: countModel.result?.markers ?? [],
+                    contentMode: .fill
                 )
             }
 
@@ -273,13 +278,6 @@ struct UnifiedCameraView: View {
                         .shadow(color: .black.opacity(0.25), radius: 8)
                 }
             }
-
-            VStack {
-                cameraTopBar
-                Spacer()
-                cameraBottomControls
-            }
-            .padding(16)
 
             if countModel.isAnalyzing, mode == .count {
                 VStack(spacing: 12) {
@@ -306,47 +304,56 @@ struct UnifiedCameraView: View {
                 unavailableOverlay(message)
             }
         }
-        .aspectRatio(CameraService.photoAspectRatio, contentMode: .fit)
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(.white.opacity(0.16), lineWidth: 1)
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .simultaneousGesture(cameraModeSwipe)
     }
 
     private var cameraTopBar: some View {
         HStack(spacing: 10) {
-            Label(cameraLabel, systemImage: "circle.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.black.opacity(0.4), in: Capsule())
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 44, height: 44)
+                    .background(.black.opacity(0.48), in: Circle())
+            }
+            .foregroundStyle(.white)
+            .disabled(countModel.phase == .booking)
+            .accessibilityLabel("Kamera schließen")
 
             Spacer()
 
-            if mode == .capture {
-                Button {
-                    openCaptureDetails()
-                } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "photo.stack")
-                            .font(.title3)
-                            .frame(width: 42, height: 42)
-                            .background(.black.opacity(0.4), in: Circle())
-                        Text("\(captureModel.photos.count)")
+            Label(cameraLabel, systemImage: "circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(.black.opacity(0.48), in: Capsule())
+
+            Spacer()
+
+            Button {
+                openCaptureDetails()
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.up")
+                    Text("Details")
+                    if let detailsBadgeText {
+                        Text(detailsBadgeText)
                             .font(.caption2.monospacedDigit().bold())
-                            .foregroundStyle(InventoryTheme.ink)
+                            .foregroundStyle(.black)
                             .frame(minWidth: 20, minHeight: 20)
-                            .background(InventoryTheme.lime, in: Capsule())
-                            .offset(x: 5, y: -5)
+                            .background(.white, in: Capsule())
                     }
                 }
-                .foregroundStyle(.white)
-                .accessibilityLabel("Aufgenommene Fotos: \(captureModel.photos.count)")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 12)
+                .frame(height: 44)
+                .background(.black.opacity(0.48), in: Capsule())
             }
+            .foregroundStyle(.white)
+            .accessibilityLabel("Details öffnen")
 
             if !showingCountPhoto {
                 Button { camera.toggleTorch() } label: {
@@ -365,8 +372,58 @@ struct UnifiedCameraView: View {
         }
     }
 
+    private func cameraControlDeck(viewportAspectRatio: CGFloat) -> some View {
+        VStack(spacing: 14) {
+            if !showingCountPhoto {
+                zoomSelector
+            }
+
+            cameraBottomControls(viewportAspectRatio: viewportAspectRatio)
+                .frame(minHeight: 88)
+
+            CameraModeBar(selection: $mode)
+                .disabled(countModel.phase == .booking)
+                .opacity(countModel.phase == .booking ? 0.65 : 1)
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 18)
+        .background(
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.48), .black.opacity(0.78)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
+    }
+
+    private var zoomSelector: some View {
+        HStack(spacing: 14) {
+            ForEach(camera.zoomPresets) { preset in
+                let selected = abs(camera.selectedZoomFactor - preset.displayFactor) < 0.05
+                Button {
+                    camera.selectZoom(preset)
+                } label: {
+                    Text(preset.label)
+                        .font(.subheadline.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(selected ? .yellow : .white)
+                        .frame(width: selected ? 52 : 38, height: selected ? 52 : 38)
+                        .background(
+                            selected ? Color.black.opacity(0.52) : Color.black.opacity(0.22),
+                            in: Circle()
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Zoom \(preset.label)")
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 54)
+        .animation(.easeInOut(duration: 0.16), value: camera.selectedZoomFactor)
+    }
+
     @ViewBuilder
-    private var cameraBottomControls: some View {
+    private func cameraBottomControls(viewportAspectRatio: CGFloat) -> some View {
         switch mode {
         case .capture:
             HStack {
@@ -385,7 +442,12 @@ struct UnifiedCameraView: View {
 
                 Spacer()
                 shutterButton(accessibilityLabel: "Inventarfoto aufnehmen") {
-                    requestPhoto(for: .capture(UUID()))
+                    requestPhoto(
+                        for: .capture(
+                            UUID(),
+                            cropAspectRatio: viewportAspectRatio
+                        )
+                    )
                 }
                 .disabled(
                     camera.state != .ready
@@ -393,61 +455,104 @@ struct UnifiedCameraView: View {
                         || captureModel.photos.count >= CaptureViewModel.maximumPhotos
                 )
                 Spacer()
-
-                Button { camera.switchCamera() } label: {
-                    Group {
-                        if camera.isSwitchingCamera {
-                            ProgressView().tint(.white)
-                        } else {
-                            Image(systemName: "arrow.triangle.2.circlepath.camera.fill")
-                                .font(.title3)
-                        }
-                    }
-                    .frame(width: 52, height: 52)
-                    .background(.black.opacity(0.4), in: Circle())
-                }
-                .foregroundStyle(.white)
-                .disabled(!camera.canSwitchCamera || camera.isSwitchingCamera)
-                .opacity(camera.canSwitchCamera ? 1 : 0.45)
+                cameraSwitchButton
             }
 
         case .scan:
-            EmptyView()
+            HStack {
+                Color.clear.frame(width: 52, height: 52)
+                Spacer()
+                Image(systemName: "viewfinder")
+                    .font(.system(size: 34, weight: .light))
+                    .foregroundStyle(InventoryTheme.lime)
+                    .frame(width: 82, height: 82)
+                    .background(.black.opacity(0.4), in: Circle())
+                    .accessibilityLabel("Code wird automatisch gescannt")
+                Spacer()
+                cameraSwitchButton
+            }
 
         case .count:
-            if !state.canUseAI {
-                Label("KI-Berechtigung fehlt", systemImage: "lock.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(.black.opacity(0.56), in: Capsule())
-            } else if countResource == nil {
-                Text("Artikelcode scannen")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(.black.opacity(0.56), in: Capsule())
-            } else if countModel.photoURL == nil, !countModel.isAnalyzing {
-                shutterButton(accessibilityLabel: "Foto aufnehmen und Teile zählen") {
-                    requestPhoto(for: .count(UUID()))
-                }
-                .disabled(camera.state != .ready || pendingPhotoRequest != nil)
-            } else if countModel.result != nil {
-                Button {
-                    countModel.retake()
-                    configureMode()
-                } label: {
-                    Label("Neues Foto", systemImage: "camera.rotate")
+            HStack {
+                Color.clear.frame(width: 52, height: 52)
+                Spacer()
+                if !state.canUseAI {
+                    Label("KI fehlt", systemImage: "lock.fill")
                         .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 11)
+                        .padding(.vertical, 12)
                         .background(.black.opacity(0.56), in: Capsule())
+                } else if countResource == nil {
+                    Image(systemName: "viewfinder")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(InventoryTheme.lime)
+                        .frame(width: 82, height: 82)
+                        .background(.black.opacity(0.4), in: Circle())
+                        .accessibilityLabel("Artikelcode scannen")
+                } else if countModel.photoURL == nil, !countModel.isAnalyzing {
+                    shutterButton(accessibilityLabel: "Foto aufnehmen und Teile zählen") {
+                        requestPhoto(
+                            for: .count(
+                                UUID(),
+                                cropAspectRatio: viewportAspectRatio
+                            )
+                        )
+                    }
+                    .disabled(camera.state != .ready || pendingPhotoRequest != nil)
+                } else if countModel.result != nil {
+                    Button {
+                        countModel.retake()
+                        configureMode()
+                    } label: {
+                        Label("Neues Foto", systemImage: "camera.rotate")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(.black.opacity(0.56), in: Capsule())
+                    }
+                    .foregroundStyle(.white)
+                } else if countModel.photoURL != nil, !countModel.isAnalyzing {
+                    Button {
+                        guard let client = state.client else {
+                            countModel.errorMessage = "Keine Verbindung zum Inventarserver."
+                            return
+                        }
+                        countModel.retryAnalysis(using: client)
+                    } label: {
+                        Label("Erneut zählen", systemImage: "arrow.clockwise")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(.black.opacity(0.56), in: Capsule())
+                    }
+                    .foregroundStyle(.white)
+                } else {
+                    ProgressView().tint(.white).controlSize(.large)
                 }
-                .foregroundStyle(.white)
+                Spacer()
+                cameraSwitchButton
             }
         }
+    }
+
+    private var cameraSwitchButton: some View {
+        Button { camera.switchCamera() } label: {
+            Group {
+                if camera.isSwitchingCamera {
+                    ProgressView().tint(.white)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath.camera.fill")
+                        .font(.title3)
+                }
+            }
+            .frame(width: 52, height: 52)
+            .background(.black.opacity(0.48), in: Circle())
+        }
+        .foregroundStyle(.white)
+        .disabled(!camera.canSwitchCamera || camera.isSwitchingCamera)
+        .opacity(camera.canSwitchCamera ? 1 : 0.45)
+        .accessibilityLabel("Kamera wechseln")
     }
 
     private func shutterButton(
@@ -463,58 +568,6 @@ struct UnifiedCameraView: View {
             }
         }
         .accessibilityLabel(accessibilityLabel)
-    }
-
-    @ViewBuilder
-    private var modeDetails: some View {
-        switch mode {
-        case .capture:
-            captureActions
-        case .scan:
-            scannerDetails
-        case .count:
-            countDetails
-        }
-    }
-
-    private var captureActions: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Button {
-                    openCaptureDetails()
-                } label: {
-                    Label(captureDetailsSummary, systemImage: "slider.horizontal.3")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.bordered)
-
-                Button(action: submitCapture) {
-                    HStack(spacing: 6) {
-                        if captureModel.processingCount > 0 {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "arrow.up")
-                        }
-                        Text("Hochladen")
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(InventoryTheme.ink)
-                .disabled(!captureModel.canSubmit || captureModel.processingCount > 0)
-            }
-
-            if captureModel.photos.isEmpty {
-                Text("Nimm ein oder mehrere Fotos auf. Details können vor dem Hochladen ergänzt werden.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("\(captureModel.photos.count) von \(CaptureViewModel.maximumPhotos) Fotos bereit")
-                    .font(.caption.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .inventoryCard()
     }
 
     private var scannerDetails: some View {
@@ -813,12 +866,20 @@ struct UnifiedCameraView: View {
         .inventoryCard()
     }
 
-    private var captureDetailsSheet: some View {
+    private var cameraDetailsSheet: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    capturePhotoTray
-                    captureOptions
+                    switch mode {
+                    case .capture:
+                        capturePhotoTray
+                        captureOptions
+                        captureUploadAction
+                    case .scan:
+                        scannerDetails
+                    case .count:
+                        countDetails
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -826,7 +887,7 @@ struct UnifiedCameraView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(InventoryTheme.canvas)
-            .navigationTitle("Details")
+            .navigationTitle(mode.navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -834,6 +895,34 @@ struct UnifiedCameraView: View {
                 }
             }
         }
+    }
+
+    private var captureUploadAction: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button(action: submitCapture) {
+                HStack(spacing: 8) {
+                    if captureModel.processingCount > 0 {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.up.circle.fill")
+                    }
+                    Text("Inventar hochladen")
+                }
+                .frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(InventoryTheme.ink)
+            .disabled(!captureModel.canSubmit || captureModel.processingCount > 0)
+
+            Text(
+                captureModel.photos.isEmpty
+                    ? "Nimm mindestens ein Foto auf."
+                    : "\(captureModel.photos.count) von \(CaptureViewModel.maximumPhotos) Fotos bereit"
+            )
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+        .inventoryCard()
     }
 
     @ViewBuilder
@@ -1031,16 +1120,15 @@ struct UnifiedCameraView: View {
         }
     }
 
-    private var captureDetailsSummary: String {
-        let count = [
-            captureModel.name,
-            captureModel.locationName,
-            captureModel.sku,
-            captureModel.serialNumber,
-        ]
-        .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        .count + (captureModel.locationService.coordinates == nil ? 0 : 1)
-        return count == 0 ? "Details" : "Details · \(count) Angaben"
+    private var detailsBadgeText: String? {
+        switch mode {
+        case .capture:
+            captureModel.photos.isEmpty ? nil : "\(captureModel.photos.count)"
+        case .scan:
+            unmatchedCode == nil ? nil : "!"
+        case .count:
+            countModel.result == nil ? nil : "\(countModel.adjustedCount)"
+        }
     }
 
     private var cameraModeSwipe: some Gesture {
@@ -1113,9 +1201,6 @@ struct UnifiedCameraView: View {
             }
         }
         camera.scanningEnabled = shouldScanCodes
-        if mode != .capture, camera.isUsingFrontCamera, !camera.isSwitchingCamera {
-            camera.switchCamera()
-        }
         camera.start()
     }
 
@@ -1163,7 +1248,10 @@ struct UnifiedCameraView: View {
         switch request {
         case .capture:
             withAnimation(.easeOut(duration: 0.12)) { shutterFlash = true }
-            captureModel.addCameraCapturedData(data)
+            captureModel.addCameraCapturedData(
+                data,
+                cropAspectRatio: request.cropAspectRatio
+            )
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
                 withAnimation(.easeIn(duration: 0.14)) { shutterFlash = false }
             }
@@ -1173,7 +1261,11 @@ struct UnifiedCameraView: View {
                 countModel.errorMessage = "Keine Verbindung zum Inventarserver."
                 return
             }
-            countModel.analyzeCapturedData(data, using: client)
+            countModel.analyzeCapturedData(
+                data,
+                cropAspectRatio: request.cropAspectRatio,
+                using: client
+            )
         }
     }
 
@@ -1206,10 +1298,12 @@ struct UnifiedCameraView: View {
                 isResolvingCode = false
                 switch purpose {
                 case .inventoryLookup:
+                    showCaptureDetails = false
                     camera.stop()
                     foundResource = result.resource
                 case .countTarget:
-                    countModel.prepare(for: result.resource.name)
+                    showCaptureDetails = false
+                    countModel.prepare(for: result.resource.name, itemID: result.resource.id)
                     countResource = result.resource
                 }
             } catch is CancellationError {
@@ -1220,6 +1314,8 @@ struct UnifiedCameraView: View {
                 isResolvingCode = false
                 if purpose == .inventoryLookup {
                     unmatchedCode = code
+                    detailsDetent = .medium
+                    showCaptureDetails = true
                 } else {
                     scannerErrorMessage = "Zu diesem Code wurde kein Inventarartikel gefunden."
                 }
@@ -1292,7 +1388,7 @@ private struct CameraModeBar: View {
     @Binding var selection: CameraMode
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 26) {
             ForEach(CameraMode.allCases) { mode in
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
@@ -1303,26 +1399,34 @@ private struct CameraModeBar: View {
                         .font(.caption.weight(.bold))
                         .tracking(0.35)
                         .foregroundStyle(
-                            selection == mode ? InventoryTheme.lime : Color.white.opacity(0.78)
+                            selection == mode ? Color.yellow : Color.white.opacity(0.82)
                         )
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(
-                            selection == mode ? Color.white.opacity(0.11) : .clear,
-                            in: Capsule()
-                        )
+                        .frame(minHeight: 44)
+                        .scaleEffect(selection == mode ? 1.05 : 1)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(mode.accessibilityLabel)
                 .accessibilityAddTraits(selection == mode ? .isSelected : [])
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(InventoryTheme.ink)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(.white.opacity(0.12))
-                .frame(height: 1)
-        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 4)
+        .background(.black.opacity(0.34), in: Capsule())
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    guard abs(value.translation.width) > abs(value.translation.height),
+                          abs(value.translation.width) >= 28,
+                          let currentIndex = CameraMode.allCases.firstIndex(of: selection) else {
+                        return
+                    }
+                    let offset = value.translation.width < 0 ? 1 : -1
+                    let nextIndex = currentIndex + offset
+                    guard CameraMode.allCases.indices.contains(nextIndex) else { return }
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        selection = CameraMode.allCases[nextIndex]
+                    }
+                }
+        )
     }
 }

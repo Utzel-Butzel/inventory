@@ -260,13 +260,13 @@ export function LabelPrinter() {
     <div className={styles.page}>
       <div className="mb-7 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#635bff]">
+          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#5147d9]">
             <ScanQrCode size={15} aria-hidden="true" /> Label studio
           </div>
           <h1 className="text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl">
             Print labels that scan.
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             Select inventory items, choose the loaded Brother media and print QR
             plus Code 128 labels directly through your browser.
           </p>
@@ -288,7 +288,7 @@ export function LabelPrinter() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-sm font-semibold text-slate-950">1. Select items</h2>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                  <p className="mt-1 text-xs leading-5 text-slate-600">
                     Selection stays active while you search or change pages.
                   </p>
                 </div>
@@ -296,7 +296,7 @@ export function LabelPrinter() {
                   <button
                     type="button"
                     onClick={clearSelection}
-                    className="shrink-0 text-xs font-semibold text-slate-500 hover:text-slate-950"
+                    className="shrink-0 text-xs font-semibold text-slate-600 hover:text-slate-950"
                   >
                     Clear {selected.size}
                   </button>
@@ -306,7 +306,7 @@ export function LabelPrinter() {
                 <span className="sr-only">Search inventory</span>
                 <Search
                   size={16}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-600"
                   aria-hidden="true"
                 />
                 <input
@@ -320,7 +320,7 @@ export function LabelPrinter() {
                     type="button"
                     onClick={() => setQuery("")}
                     aria-label="Clear search"
-                    className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                    className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-700"
                   >
                     <X size={14} aria-hidden="true" />
                   </button>
@@ -338,7 +338,7 @@ export function LabelPrinter() {
                 <span
                   className={`grid size-4 place-items-center rounded border ${
                     visibleSelected
-                      ? "border-[#635bff] bg-[#635bff] text-white"
+                      ? "border-[#635bff] bg-[#5147d9] text-white"
                       : "border-slate-300 bg-white"
                   }`}
                 >
@@ -346,7 +346,7 @@ export function LabelPrinter() {
                 </span>
                 Select page
               </button>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-[11px] text-slate-600">
                 {pagination.total} {pagination.total === 1 ? "item" : "items"}
               </span>
             </div>
@@ -366,9 +366,9 @@ export function LabelPrinter() {
                 </div>
               ) : resources.length === 0 ? (
                 <div className="flex min-h-52 flex-col items-center justify-center px-6 text-center">
-                  <PackageOpen size={25} className="text-slate-300" aria-hidden="true" />
+                  <PackageOpen size={25} className="text-slate-600" aria-hidden="true" />
                   <p className="mt-3 text-sm font-semibold text-slate-800">No matching items</p>
-                  <p className="mt-1 text-xs text-slate-500">Try another name, SKU or location.</p>
+                  <p className="mt-1 text-xs text-slate-600">Try another name, SKU or location.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
@@ -387,7 +387,7 @@ export function LabelPrinter() {
                         <span
                           className={`grid size-5 shrink-0 place-items-center rounded-md border ${
                             isSelected
-                              ? "border-[#635bff] bg-[#635bff] text-white"
+                              ? "border-[#635bff] bg-[#5147d9] text-white"
                               : "border-slate-300 bg-white"
                           }`}
                         >
@@ -397,12 +397,12 @@ export function LabelPrinter() {
                           <span className="block truncate text-[13px] font-semibold text-slate-900">
                             {resource.name}
                           </span>
-                          <span className="mt-0.5 block truncate text-[11px] text-slate-500">
+                          <span className="mt-0.5 block truncate text-[11px] text-slate-600">
                             {resource.sku || "No SKU"}
                             {resource.location ? ` · ${resource.location}` : ""}
                           </span>
                         </span>
-                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold capitalize text-slate-500">
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold capitalize text-slate-600">
                           {resource.type}
                         </span>
                       </button>
@@ -414,7 +414,7 @@ export function LabelPrinter() {
 
             {pagination.pages > 1 ? (
               <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
-                <span className="text-[11px] text-slate-500">
+                <span className="text-[11px] text-slate-600">
                   Page {pagination.page} of {pagination.pages}
                 </span>
                 <div className="flex gap-1.5">
@@ -460,7 +460,7 @@ export function LabelPrinter() {
                         <button
                           type="button"
                           onClick={() => setCopyCount(resource.id, count - 1)}
-                          className="grid size-7 place-items-center rounded-md text-slate-500 hover:bg-slate-100"
+                          className="grid size-7 place-items-center rounded-md text-slate-600 hover:bg-slate-100"
                           aria-label={`Fewer copies of ${resource.name}`}
                         >
                           <Minus size={13} aria-hidden="true" />
@@ -471,7 +471,7 @@ export function LabelPrinter() {
                         <button
                           type="button"
                           onClick={() => setCopyCount(resource.id, count + 1)}
-                          className="grid size-7 place-items-center rounded-md text-slate-500 hover:bg-slate-100"
+                          className="grid size-7 place-items-center rounded-md text-slate-600 hover:bg-slate-100"
                           aria-label={`More copies of ${resource.name}`}
                         >
                           <Plus size={13} aria-hidden="true" />
@@ -490,7 +490,7 @@ export function LabelPrinter() {
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-slate-950">2. Choose media</h2>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
+                <p className="mt-1 text-xs leading-5 text-slate-600">
                   Match this size to the paper selected in the Brother driver.
                 </p>
               </div>
@@ -509,7 +509,7 @@ export function LabelPrinter() {
                 </select>
               </label>
             </div>
-            <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-500">
+            <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-600">
               {LABEL_FORMATS.find((option) => option.id === format)?.description}
             </p>
           </div>
@@ -528,11 +528,11 @@ export function LabelPrinter() {
               </div>
             ) : (
               <div className="flex min-h-[500px] flex-col items-center justify-center text-center">
-                <span className="grid size-14 place-items-center rounded-2xl border border-white bg-white/80 text-slate-400 shadow-sm">
+                <span className="grid size-14 place-items-center rounded-2xl border border-white bg-white/80 text-slate-600 shadow-sm">
                   <ScanQrCode size={25} aria-hidden="true" />
                 </span>
                 <h3 className="mt-4 text-sm font-semibold text-slate-800">Select an item to preview</h3>
-                <p className="mt-1 max-w-xs text-xs leading-5 text-slate-500">
+                <p className="mt-1 max-w-xs text-xs leading-5 text-slate-600">
                   Every label includes its name, SKU or stable ID, inventory URL,
                   QR code and Code 128 barcode.
                 </p>
@@ -541,12 +541,12 @@ export function LabelPrinter() {
           </div>
 
           <div className="flex items-start gap-3 border-t border-slate-200 bg-white p-4 sm:p-5">
-            <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-[#eeedff] text-[#635bff]">
+            <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-[#eeedff] text-[#5147d9]">
               <Wifi size={15} aria-hidden="true" />
             </span>
             <div>
               <h3 className="text-xs font-semibold text-slate-800">Brother Wi-Fi printing</h3>
-              <p className="mt-1 text-[11px] leading-5 text-slate-500">
+              <p className="mt-1 text-[11px] leading-5 text-slate-600">
                 Add the printer to this computer first. In the browser print dialog,
                 select that Brother printer, the matching media size, 100% scale and
                 no margins. Printing uses the installed system driver; this page does

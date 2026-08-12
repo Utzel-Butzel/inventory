@@ -38,7 +38,7 @@ export default async function LoginPage({
     <main className="min-h-dvh bg-white lg:grid lg:grid-cols-[minmax(460px,0.94fr)_minmax(520px,1.06fr)]">
       <section className="flex min-h-dvh flex-col px-6 py-7 sm:px-10 lg:px-14 xl:px-20">
         <div className="flex items-center gap-2.5 text-[#1f2227]">
-          <span className="grid size-8 place-items-center rounded-[10px] bg-[#635bff] text-white shadow-[0_6px_16px_rgba(99,91,255,0.24)]">
+          <span className="grid size-8 place-items-center rounded-[10px] bg-[#5147d9] text-white shadow-[0_6px_16px_rgba(99,91,255,0.24)]">
             <Boxes className="size-[18px]" strokeWidth={2.2} aria-hidden="true" />
           </span>
           <span className="text-[15px] font-semibold tracking-[-0.02em]">
@@ -48,7 +48,7 @@ export default async function LoginPage({
 
         <div className="mx-auto flex w-full max-w-[420px] flex-1 flex-col justify-center py-16">
           <div className="animate-fade-up">
-            <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#635bff]">
+            <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#5147d9]">
               Welcome back
             </p>
             <h1 className="text-[32px] font-semibold tracking-[-0.045em] text-[#1d2025] sm:text-[36px]">
@@ -74,7 +74,7 @@ export default async function LoginPage({
       </section>
 
       <section className="subtle-grid relative hidden min-h-dvh overflow-hidden bg-[#171821] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
-        <div className="pointer-events-none absolute -right-36 -top-36 size-[520px] rounded-full bg-[#635bff]/25 blur-[100px]" />
+        <div className="pointer-events-none absolute -right-36 -top-36 size-[520px] rounded-full bg-[#5147d9]/25 blur-[100px]" />
         <div className="pointer-events-none absolute -bottom-44 left-[-80px] size-[480px] rounded-full bg-[#3b82f6]/15 blur-[110px]" />
 
         <div className="relative flex items-center justify-between text-xs text-white/55">
@@ -139,7 +139,7 @@ export default async function LoginPage({
                     {["workshop", "power tool", "18V"].map((tag) => (
                       <span
                         key={tag}
-                        className="rounded-md bg-[#635bff]/15 px-2 py-1 text-[9px] text-[#b9b5ff]"
+                        className="rounded-md bg-[#5147d9]/15 px-2 py-1 text-[9px] text-[#b9b5ff]"
                       >
                         {tag}
                       </span>

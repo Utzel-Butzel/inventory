@@ -186,7 +186,7 @@ export function ResourceRelationsManager({
             </span>
             <div>
               <h2 className="font-semibold text-slate-950">Placement & relationships</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-600">
                 Map outlines assign the most specific containing item automatically. Manual placements stay pinned.
               </p>
             </div>
@@ -195,7 +195,7 @@ export function ResourceRelationsManager({
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50"
+            className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
             aria-label="Refresh relationships"
           >
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
@@ -272,7 +272,7 @@ export function ResourceRelationsManager({
                   onRemove={canEdit ? removeRelation : undefined}
                 />
               )) : (
-                <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-400">
+                <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-600">
                   No contained items yet.
                 </p>
               )}
@@ -356,10 +356,10 @@ function RelationRow({
 }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-      <ArrowDownToLine className="size-4 shrink-0 text-slate-400" aria-hidden="true" />
+      <ArrowDownToLine className="size-4 shrink-0 text-slate-600" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-slate-800">{resource?.name ?? "Missing item"}</p>
-        <p className="mt-0.5 text-[10px] text-slate-400">{label} · {resource?.type ?? "unknown"}</p>
+        <p className="mt-0.5 text-[10px] text-slate-600">{label} · {resource?.type ?? "unknown"}</p>
       </div>
       {relation.origin === "spatial" ? (
         <Badge tone="brand"><Sparkles className="mr-1 size-3" /> Automatic</Badge>
@@ -371,7 +371,7 @@ function RelationRow({
           type="button"
           onClick={() => onRemove(relation)}
           disabled={saving}
-          className="grid size-8 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+          className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-red-50 hover:text-red-600"
           aria-label={`Remove relationship with ${resource?.name ?? "item"}`}
         >
           <Trash2 className="size-4" />

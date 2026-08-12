@@ -19,7 +19,7 @@ struct StockCountView: View {
         self.resource = resource
         self.onApplied = onApplied
         _model = StateObject(
-            wrappedValue: StockCountViewModel(itemHint: resource.name)
+            wrappedValue: StockCountViewModel(itemHint: resource.name, itemID: resource.id)
         )
     }
 
@@ -46,11 +46,11 @@ struct StockCountView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Schließen") { dismiss() }
-                        .disabled(model.isBusy)
+                        .disabled(model.phase == .booking)
                 }
             }
         }
-        .interactiveDismissDisabled(model.isBusy)
+        .interactiveDismissDisabled(model.phase == .booking)
         .confirmationDialog(
             "Gezählte Teile entnehmen?",
             isPresented: $confirmIssue,
@@ -462,7 +462,18 @@ struct StockCountView: View {
 struct StockCountPhotoPreview: View {
     let url: URL
     let markers: [ObjectCountMarker]
+    let contentMode: ContentMode
     @State private var image: UIImage?
+
+    init(
+        url: URL,
+        markers: [ObjectCountMarker],
+        contentMode: ContentMode = .fit
+    ) {
+        self.url = url
+        self.markers = markers
+        self.contentMode = contentMode
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -471,7 +482,7 @@ struct StockCountPhotoPreview: View {
                 if let image {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFit()
+                        .aspectRatio(contentMode: contentMode)
                         .frame(
                             width: geometry.size.width,
                             height: geometry.size.height
@@ -490,7 +501,7 @@ struct StockCountPhotoPreview: View {
 
     private func markerOverlay(imageSize: CGSize) -> some View {
         Canvas { context, size in
-            let imageRect = aspectFitRect(imageSize: imageSize, in: size)
+            let imageRect = displayedImageRect(imageSize: imageSize, in: size)
             guard !imageRect.isEmpty else { return }
 
             for marker in markers
@@ -516,17 +527,21 @@ struct StockCountPhotoPreview: View {
         .accessibilityHidden(true)
     }
 
-    private func aspectFitRect(imageSize: CGSize, in containerSize: CGSize) -> CGRect {
+    private func displayedImageRect(imageSize: CGSize, in containerSize: CGSize) -> CGRect {
         guard imageSize.width > 0,
               imageSize.height > 0,
               containerSize.width > 0,
               containerSize.height > 0 else {
             return .zero
         }
-        let scale = min(
-            containerSize.width / imageSize.width,
-            containerSize.height / imageSize.height
-        )
+        let horizontalScale = containerSize.width / imageSize.width
+        let verticalScale = containerSize.height / imageSize.height
+        let scale = switch contentMode {
+        case .fit:
+            min(horizontalScale, verticalScale)
+        case .fill:
+            max(horizontalScale, verticalScale)
+        }
         let fittedSize = CGSize(
             width: imageSize.width * scale,
             height: imageSize.height * scale

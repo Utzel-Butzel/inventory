@@ -88,13 +88,20 @@ function ResourceVisual({ resource }: { resource: ClientResource }) {
     );
   }
   return (
-    <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_30%_20%,#e1faf0,transparent_46%),linear-gradient(135deg,#f4f7f5,#e7ece9)] text-slate-400">
+    <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_30%_20%,#e1faf0,transparent_46%),linear-gradient(135deg,#f4f7f5,#e7ece9)] text-slate-600">
       <Icon size={42} strokeWidth={1.35} />
     </div>
   );
 }
 
-export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
+export function InventoryClient({
+  canWrite = false,
+  initialQuery = "",
+}: {
+  canWrite?: boolean;
+  initialQuery?: string;
+}) {
+  const normalizedInitialQuery = initialQuery.trim();
   const [resources, setResources] = useState<ClientResource[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
@@ -102,8 +109,8 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
     total: 0,
     pages: 1,
   });
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [query, setQuery] = useState(normalizedInitialQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState(normalizedInitialQuery);
   const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
@@ -113,6 +120,12 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
   const [inventoryTypes, setInventoryTypes] = useState<InventoryTypeOption[]>(
     fallbackTypeOptions,
   );
+
+  useEffect(() => {
+    setQuery(normalizedInitialQuery);
+    setDebouncedQuery(normalizedInitialQuery);
+    setPage(1);
+  }, [normalizedInitialQuery]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -185,7 +198,7 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
           <h1 className="text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl">
             Everything, findable.
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             Search every tool, object, space and kit. Add media, enrich records with AI,
             and keep the physical world organized.
           </p>
@@ -212,19 +225,19 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
             <span className="sr-only">Search inventory</span>
             <Search
               size={18}
-              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600"
             />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search name, description, SKU, tag or location…"
-              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50/70 pl-10 pr-10 text-sm text-slate-900 outline-none transition placeholder:text-slate-600 focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
             />
             {query ? (
               <button
                 type="button"
                 onClick={() => setQuery("")}
-                className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-slate-600 hover:bg-slate-200 hover:text-slate-700"
                 aria-label="Clear search"
               >
                 <X size={15} />
@@ -270,12 +283,12 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
               <button
                 type="button"
                 onClick={clearFilters}
-                className="px-2 text-xs font-semibold text-slate-500 hover:text-slate-950"
+                className="px-2 text-xs font-semibold text-slate-600 hover:text-slate-950"
               >
                 Clear {activeFilters} {activeFilters === 1 ? "filter" : "filters"}
               </button>
             ) : (
-              <span className="px-2 text-xs font-medium text-slate-400">
+              <span className="px-2 text-xs font-medium text-slate-600">
                 {pagination.total} records
               </span>
             )}
@@ -284,7 +297,7 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
                 type="button"
                 onClick={() => setView("grid")}
                 className={`grid h-8 w-8 place-items-center rounded-lg transition ${
-                  view === "grid" ? "bg-white text-slate-950 shadow-sm" : "text-slate-400"
+                  view === "grid" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
                 }`}
                 aria-label="Grid view"
               >
@@ -294,7 +307,7 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
                 type="button"
                 onClick={() => setView("table")}
                 className={`grid h-8 w-8 place-items-center rounded-lg transition ${
-                  view === "table" ? "bg-white text-slate-950 shadow-sm" : "text-slate-400"
+                  view === "table" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
                 }`}
                 aria-label="Table view"
               >
@@ -309,7 +322,7 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
         <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-700 marker:content-none">
           <Sheet size={16} className="text-emerald-700" aria-hidden="true" />
           CSV import and export
-          <span className="ml-auto text-xs font-medium text-slate-400 group-open:hidden">
+          <span className="ml-auto text-xs font-medium text-slate-600 group-open:hidden">
             Open
           </span>
         </summary>
@@ -348,7 +361,7 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
           <h2 className="text-xl font-semibold tracking-tight text-slate-950">
             {activeFilters ? "No matching items" : "Your inventory is ready"}
           </h2>
-          <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+          <p className="mt-2 max-w-md text-sm leading-6 text-slate-600">
             {activeFilters
               ? "Try a broader search or clear the active filters."
               : "Add your first record manually, or use batch capture to photograph and catalogue it with AI."}
@@ -408,14 +421,14 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
                   </h2>
                   <ArrowRight
                     size={16}
-                    className="mt-0.5 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-700"
+                    className="mt-0.5 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-700"
                   />
                 </div>
-                <p className="line-clamp-2 min-h-10 text-xs leading-5 text-slate-500">
+                <p className="line-clamp-2 min-h-10 text-xs leading-5 text-slate-600">
                   {resource.description || "No description yet."}
                 </p>
                 <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs">
-                  <div className="flex min-w-0 items-center gap-1.5 text-slate-500">
+                  <div className="flex min-w-0 items-center gap-1.5 text-slate-600">
                     <MapPin size={13} className="shrink-0" />
                     <span className="truncate">{resource.location || "No location"}</span>
                   </div>
@@ -429,7 +442,7 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          <div className="hidden grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] gap-4 border-b border-slate-200 bg-slate-50/80 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 lg:grid">
+          <div className="hidden grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] gap-4 border-b border-slate-200 bg-slate-50/80 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-600 lg:grid">
             <span>Item</span><span>Status</span><span>SKU</span><span>Location</span><span>Value</span><span />
           </div>
           <div className="divide-y divide-slate-100">
@@ -445,16 +458,16 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
                   </div>
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-slate-900">{resource.name}</div>
-                    <div className="mt-0.5 truncate text-xs capitalize text-slate-400">{resource.type} · {resource.quantity} unit{resource.quantity === 1 ? "" : "s"}</div>
+                    <div className="mt-0.5 truncate text-xs capitalize text-slate-600">{resource.type} · {resource.quantity} unit{resource.quantity === 1 ? "" : "s"}</div>
                   </div>
                 </div>
                 <span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
                   {resource.status.replace("-", " ")}
                 </span>
-                <span className="truncate font-mono text-xs text-slate-500">{resource.sku || "—"}</span>
-                <span className="truncate text-xs text-slate-500">{resource.location || "—"}</span>
+                <span className="truncate font-mono text-xs text-slate-600">{resource.sku || "—"}</span>
+                <span className="truncate text-xs text-slate-600">{resource.location || "—"}</span>
                 <span className="text-xs font-semibold text-slate-800">{formatValue(resource.valueCents, resource.currency)}</span>
-                <ArrowRight size={16} className="hidden text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-800 lg:block" />
+                <ArrowRight size={16} className="hidden text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-slate-800 lg:block" />
               </Link>
             ))}
           </div>
@@ -463,7 +476,7 @@ export function InventoryClient({ canWrite = false }: { canWrite?: boolean }) {
 
       {!loading && pagination.pages > 1 ? (
         <div className="mt-6 flex items-center justify-between border-t border-slate-200 pt-5">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-600">
             Page {pagination.page} of {pagination.pages} · {pagination.total} items
           </p>
           <div className="flex gap-2">

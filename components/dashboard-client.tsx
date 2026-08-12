@@ -190,14 +190,14 @@ export function DashboardClient() {
         <div className="animate-fade-up">
           <div className="mb-2 flex items-center gap-2">
             <span className="size-1.5 rounded-full bg-[#20a36d] ring-4 ring-[#20a36d]/10" />
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#78808a]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6672]">
               Workspace overview
             </p>
           </div>
           <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-[#1e2126] sm:text-[32px]">
             {greeting}
           </h1>
-          <p className="mt-1.5 text-sm text-[#747b86]">
+          <p className="mt-1.5 text-sm text-[#5f6672]">
             Here’s what’s happening across your inventory.
           </p>
         </div>
@@ -206,12 +206,12 @@ export function DashboardClient() {
             href="/batch"
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#dfe2e7] bg-white px-3.5 text-[13px] font-semibold text-[#3e4249] shadow-sm transition hover:border-[#cfd3da] hover:bg-[#fafafa]"
           >
-            <UploadCloud className="size-4 text-[#777e89]" aria-hidden="true" />
+            <UploadCloud className="size-4 text-[#5f6672]" aria-hidden="true" />
             Batch upload
           </Link>
           <Link
             href="/inventory/new"
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#635bff] px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#5147f5]"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#5147d9] px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#5147f5]"
           >
             <PackagePlus className="size-4" aria-hidden="true" />
             Add item
@@ -246,7 +246,7 @@ export function DashboardClient() {
                 value: compactNumber.format(stats.resources),
                 detail: `${compactNumber.format(stats.units)} total units`,
                 icon: Boxes,
-                iconClass: "bg-[#eeedff] text-[#635bff]",
+                iconClass: "bg-[#eeedff] text-[#5147d9]",
               },
               {
                 label: "Tracked value",
@@ -277,7 +277,7 @@ export function DashboardClient() {
                   className="group p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[#d8dbe1] hover:shadow-[var(--shadow-md)]"
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-[12px] font-medium text-[#707782]">
+                    <p className="text-[12px] font-medium text-[#5f6672]">
                       {metric.label}
                     </p>
                     <span className={cn("grid size-8 place-items-center rounded-xl", metric.iconClass)}>
@@ -287,7 +287,7 @@ export function DashboardClient() {
                   <p className="mt-5 truncate text-[27px] font-semibold tracking-[-0.04em] text-[#24272c]">
                     {metric.value}
                   </p>
-                  <p className="mt-1 text-[11px] text-[#9298a2]">{metric.detail}</p>
+                  <p className="mt-1 text-[11px] text-[#5f6672]">{metric.detail}</p>
                 </Card>
               );
             })}
@@ -298,7 +298,7 @@ export function DashboardClient() {
               <div className="flex items-center justify-between border-b border-[#eceef1] px-5 py-4 sm:px-6">
                 <div>
                   <h2 className="text-sm font-semibold text-[#2c3036]">Recent inventory</h2>
-                  <p className="mt-0.5 text-[11px] text-[#8b919b]">Latest additions and updates</p>
+                  <p className="mt-0.5 text-[11px] text-[#5f6672]">Latest additions and updates</p>
                 </div>
                 <Link
                   href="/inventory"
@@ -319,7 +319,7 @@ export function DashboardClient() {
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <div
-                          className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f1f3f5] bg-cover bg-center text-[#9298a2]"
+                          className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f1f3f5] bg-cover bg-center text-[#5f6672]"
                           style={
                             resource.cover?.url
                               ? { backgroundImage: `url(${JSON.stringify(resource.cover.url)})` }
@@ -334,7 +334,7 @@ export function DashboardClient() {
                           <p className="truncate text-[13px] font-semibold text-[#33373d] transition group-hover:text-[#5147d9]">
                             {resource.name}
                           </p>
-                          <div className="mt-1 flex min-w-0 items-center gap-2 text-[10px] text-[#9298a2]">
+                          <div className="mt-1 flex min-w-0 items-center gap-2 text-[10px] text-[#5f6672]">
                             <span className="capitalize">{resource.type}</span>
                             <span aria-hidden="true">·</span>
                             <span>Qty {resource.quantity}</span>
@@ -351,7 +351,7 @@ export function DashboardClient() {
                         </div>
                       </div>
                       <div className="hidden sm:block">{statusBadge(resource.status)}</div>
-                      <span className="text-right text-[10px] text-[#9aa0a9]">
+                      <span className="text-right text-[10px] text-[#5f6672]">
                         {relativeDate(resource.updatedAt)}
                       </span>
                     </Link>
@@ -366,7 +366,7 @@ export function DashboardClient() {
                   action={
                     <Link
                       href="/inventory/new"
-                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#635bff] px-3.5 text-[12px] font-semibold text-white shadow-sm hover:bg-[#5147f5]"
+                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#5147d9] px-3.5 text-[12px] font-semibold text-white shadow-sm hover:bg-[#5147f5]"
                     >
                       <PlusIcon />
                       Add first item
@@ -381,9 +381,9 @@ export function DashboardClient() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-sm font-semibold text-[#2c3036]">Inventory mix</h2>
-                    <p className="mt-0.5 text-[11px] text-[#8b919b]">Items by type</p>
+                    <p className="mt-0.5 text-[11px] text-[#5f6672]">Items by type</p>
                   </div>
-                  <span className="grid size-8 place-items-center rounded-xl bg-[#f1f2f5] text-[#777e89]">
+                  <span className="grid size-8 place-items-center rounded-xl bg-[#f1f2f5] text-[#5f6672]">
                     <Layers3 className="size-4" aria-hidden="true" />
                   </span>
                 </div>
@@ -395,7 +395,7 @@ export function DashboardClient() {
                           <span className="font-medium text-[#5d646f]">
                             {typeLabels[item.type] ?? item.type}
                           </span>
-                          <span className="tabular-nums text-[#9399a3]">{item.value}</span>
+                          <span className="tabular-nums text-[#5f6672]">{item.value}</span>
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-full bg-[#eef0f2]">
                           <div
@@ -410,15 +410,15 @@ export function DashboardClient() {
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-6 rounded-xl bg-[#f8f9fa] p-4 text-center text-[12px] text-[#8b919b]">
+                  <p className="mt-6 rounded-xl bg-[#f8f9fa] p-4 text-center text-[12px] text-[#5f6672]">
                     Item types will appear here.
                   </p>
                 )}
               </Card>
 
               <Card className="relative overflow-hidden border-[#dedcff] bg-gradient-to-br from-[#f7f6ff] to-white p-5 sm:p-6">
-                <div className="absolute -right-12 -top-14 size-32 rounded-full bg-[#635bff]/10 blur-2xl" />
-                <span className="relative grid size-9 place-items-center rounded-xl bg-[#635bff] text-white shadow-[0_6px_16px_rgba(99,91,255,0.22)]">
+                <div className="absolute -right-12 -top-14 size-32 rounded-full bg-[#5147d9]/10 blur-2xl" />
+                <span className="relative grid size-9 place-items-center rounded-xl bg-[#5147d9] text-white shadow-[0_6px_16px_rgba(99,91,255,0.22)]">
                   <Sparkles className="size-4" aria-hidden="true" />
                 </span>
                 <h2 className="relative mt-4 text-sm font-semibold text-[#322f66]">Turn photos into records</h2>

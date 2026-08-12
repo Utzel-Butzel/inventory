@@ -7,6 +7,20 @@ import UIKit
 final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     static let photoAspectRatio: CGFloat = 3.0 / 4.0
 
+    struct ZoomPreset: Identifiable, Equatable, Sendable {
+        let displayFactor: CGFloat
+        let deviceFactor: CGFloat
+
+        var id: CGFloat { displayFactor }
+
+        var label: String {
+            let fractionDigits = displayFactor.rounded() == displayFactor ? 0 : 1
+            return Double(displayFactor).formatted(
+                .number.precision(.fractionLength(fractionDigits))
+            ) + "×"
+        }
+    }
+
     enum State: Equatable {
         case idle
         case requestingPermission
@@ -41,6 +55,8 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     @Published private(set) var canSwitchCamera = false
     @Published private(set) var isUsingFrontCamera = false
     @Published private(set) var isSwitchingCamera = false
+    @Published private(set) var zoomPresets: [ZoomPreset] = []
+    @Published private(set) var selectedZoomFactor: CGFloat = 1
 
     let session = AVCaptureSession()
     var scanningEnabled: Bool {
@@ -120,6 +136,26 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
             guard let self else { return }
             self.videoRotationAngle = angle
             self.applyOutputGeometry()
+        }
+    }
+
+    func selectZoom(_ preset: ZoomPreset) {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.cameraDevice else { return }
+            let factor = min(
+                max(preset.deviceFactor, device.minAvailableVideoZoomFactor),
+                device.maxAvailableVideoZoomFactor
+            )
+            do {
+                try device.lockForConfiguration()
+                device.ramp(toVideoZoomFactor: factor, withRate: 8)
+                device.unlockForConfiguration()
+                DispatchQueue.main.async { [weak self] in
+                    self?.selectedZoomFactor = preset.displayFactor
+                }
+            } catch {
+                // Keep the current lens/zoom if the device is temporarily unavailable.
+            }
         }
     }
 
@@ -218,11 +254,8 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
         session.sessionPreset = .photo
 
         guard
-            let device = AVCaptureDevice.default(
-                .builtInWideAngleCamera,
-                for: .video,
-                position: .back
-            ) ?? AVCaptureDevice.default(for: .video)
+            let device = Self.videoDevice(position: .back)
+                ?? AVCaptureDevice.default(for: .video)
         else {
             setState(.unavailable("Auf diesem Gerät wurde keine Kamera gefunden."))
             return false
@@ -268,7 +301,24 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private static func videoDevice(position: AVCaptureDevice.Position) -> AVCaptureDevice? {
-        AVCaptureDevice.default(
+        if position == .back {
+            let preferredTypes: [AVCaptureDevice.DeviceType] = [
+                .builtInTripleCamera,
+                .builtInDualWideCamera,
+                .builtInDualCamera,
+                .builtInWideAngleCamera,
+            ]
+            for type in preferredTypes {
+                if let device = AVCaptureDevice.default(
+                    type,
+                    for: .video,
+                    position: position
+                ) {
+                    return device
+                }
+            }
+        }
+        return AVCaptureDevice.default(
             .builtInWideAngleCamera,
             for: .video,
             position: position
@@ -287,6 +337,11 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
         if device.isSmoothAutoFocusSupported {
             device.isSmoothAutoFocusEnabled = true
         }
+        let oneTimesFactor = 1 / Self.zoomDisplayMultiplier(for: device)
+        device.videoZoomFactor = min(
+            max(oneTimesFactor, device.minAvailableVideoZoomFactor),
+            device.maxAvailableVideoZoomFactor
+        )
     }
 
     private func turnOffTorch(on device: AVCaptureDevice) {
@@ -311,12 +366,63 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
         let backAvailable = Self.videoDevice(position: .back) != nil
         let hasTorch = device.hasTorch
         let usesFrontCamera = device.position == .front
+        let presets = Self.zoomPresets(for: device)
+        let currentDisplayFactor = device.videoZoomFactor * Self.zoomDisplayMultiplier(for: device)
+        let selectedPreset = presets.min {
+            abs($0.displayFactor - currentDisplayFactor)
+                < abs($1.displayFactor - currentDisplayFactor)
+        }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.canSwitchCamera = frontAvailable && backAvailable
             self.torchAvailable = hasTorch
             self.isUsingFrontCamera = usesFrontCamera
+            self.zoomPresets = presets
+            self.selectedZoomFactor = selectedPreset?.displayFactor ?? currentDisplayFactor
             if !hasTorch { self.torchEnabled = false }
+        }
+    }
+
+    private static func zoomDisplayMultiplier(for device: AVCaptureDevice) -> CGFloat {
+        if #available(iOS 18.0, *) {
+            return device.displayVideoZoomFactorMultiplier
+        }
+        switch device.deviceType {
+        case .builtInTripleCamera, .builtInDualWideCamera:
+            return 0.5
+        default:
+            return 1
+        }
+    }
+
+    private static func zoomPresets(for device: AVCaptureDevice) -> [ZoomPreset] {
+        let multiplier = zoomDisplayMultiplier(for: device)
+        let minimum = device.minAvailableVideoZoomFactor * multiplier
+        let maximum = device.maxAvailableVideoZoomFactor * multiplier
+        var requested: [CGFloat] = []
+
+        if minimum < 0.95 {
+            requested.append((minimum * 10).rounded() / 10)
+        }
+        requested.append(contentsOf: [1, 2, 5])
+
+        var unique: [CGFloat] = []
+        for factor in requested where factor >= minimum - 0.01 && factor <= maximum + 0.01 {
+            if !unique.contains(where: { abs($0 - factor) < 0.01 }) {
+                unique.append(factor)
+            }
+        }
+        if unique.isEmpty {
+            unique = [min(max(1, minimum), maximum)]
+        }
+        return unique.map {
+            ZoomPreset(
+                displayFactor: $0,
+                deviceFactor: min(
+                    max($0 / multiplier, device.minAvailableVideoZoomFactor),
+                    device.maxAvailableVideoZoomFactor
+                )
+            )
         }
     }
 

@@ -163,7 +163,7 @@ export function InventoryTypeManager() {
           </span>
           <div>
             <h2 className="font-semibold text-zinc-950">Inventory types</h2>
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-zinc-600">
               Configure rooms, furniture, devices, containers, or any type your workspace needs.
             </p>
           </div>
@@ -172,7 +172,7 @@ export function InventoryTypeManager() {
           <button
             type="button"
             onClick={() => void load()}
-            className="grid size-10 place-items-center rounded-xl border border-zinc-200 text-zinc-500 hover:bg-zinc-50"
+            className="grid size-10 place-items-center rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
             aria-label="Refresh inventory types"
           >
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
@@ -325,7 +325,7 @@ function TypeRow({
             onChange={(event) => setLabel(event.target.value)}
             className="h-9 w-full rounded-lg border border-transparent bg-transparent px-2 text-sm font-semibold text-zinc-900 outline-none hover:border-zinc-200 focus:border-indigo-300 focus:bg-white"
           />
-          <p className="truncate px-2 font-mono text-[10px] text-zinc-400">{type.key}</p>
+          <p className="truncate px-2 font-mono text-[10px] text-zinc-600">{type.key}</p>
         </div>
       </div>
       <label className="flex items-center gap-2 text-xs font-medium text-zinc-600">
@@ -367,7 +367,7 @@ function TypeRow({
           type="button"
           onClick={() => onSave({ archived: !type.archivedAt })}
           disabled={saving || type.key === "other"}
-          className="grid size-9 place-items-center rounded-lg border border-zinc-200 text-zinc-500 hover:bg-zinc-50 disabled:opacity-40"
+          className="grid size-9 place-items-center rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
           aria-label={type.archivedAt ? `Restore ${type.label}` : `Archive ${type.label}`}
         >
           {type.archivedAt ? <RotateCcw className="size-4" /> : <Archive className="size-4" />}

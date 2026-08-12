@@ -473,12 +473,12 @@ function swatchColor(option: FieldOption) {
 
 function MetadataRows({ metadata }: { metadata: JsonRecord | null }) {
   const entries = metadata ? Object.entries(metadata) : [];
-  if (!entries.length) return <p className="text-xs text-[#8a919c]">No metadata</p>;
+  if (!entries.length) return <p className="text-xs text-[#5f6672]">No metadata</p>;
   return (
     <dl className="grid gap-x-5 gap-y-2 sm:grid-cols-2">
       {entries.map(([key, value]) => (
         <div key={key} className="min-w-0">
-          <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8a919c]">
+          <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#5f6672]">
             {titleCase(key)}
           </dt>
           <dd className="mt-0.5 break-words text-xs font-medium text-[#34383f]">
@@ -699,7 +699,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
             <h1 className="text-3xl font-semibold tracking-[-0.035em] text-zinc-950 sm:text-4xl">
               Scan into stock
             </h1>
-            <p className="mt-3 text-sm leading-6 text-zinc-500 sm:text-base">
+            <p className="mt-3 text-sm leading-6 text-zinc-600 sm:text-base">
               Scan the complete QR content, let the selected workflow extract its
               identifier, and review every change before it reaches inventory.
             </p>
@@ -744,7 +744,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
               <Card className="p-4 sm:p-5">
                 <label
                   htmlFor="scan-workflow"
-                  className="text-xs font-semibold uppercase tracking-[0.08em] text-[#68707c]"
+                  className="text-xs font-semibold uppercase tracking-[0.08em] text-[#5f6672]"
                 >
                   Scan workflow
                 </label>
@@ -762,7 +762,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                   ))}
                 </select>
                 {selectedWorkflow?.description ? (
-                  <p className="mt-2 text-xs leading-5 text-[#7a818c]">
+                  <p className="mt-2 text-xs leading-5 text-[#5f6672]">
                     {selectedWorkflow.description}
                   </p>
                 ) : null}
@@ -793,7 +793,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                   <div className="space-y-5 p-5 sm:p-6">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="rounded-xl bg-[#f8f9fa] p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8a919c]">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5f6672]">
                           Unit
                         </p>
                         <p className="mt-1 break-all font-mono text-sm font-semibold text-[#292c31]">
@@ -806,19 +806,19 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                         ) : null}
                       </div>
                       <div className="rounded-xl bg-[#f8f9fa] p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8a919c]">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5f6672]">
                           Resource
                         </p>
                         <p className="mt-1 text-sm font-semibold text-[#292c31]">
                           {result.resource.name}
                         </p>
-                        <p className="mt-1 truncate font-mono text-[11px] text-[#8a919c]">
+                        <p className="mt-1 truncate font-mono text-[11px] text-[#5f6672]">
                           {result.resource.id}
                         </p>
                       </div>
                     </div>
                     <div>
-                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#68707c]">
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#5f6672]">
                         Saved metadata
                       </h3>
                       <MetadataRows metadata={result.metadataAfter} />
@@ -888,7 +888,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
             <aside className="space-y-4 lg:sticky lg:top-6">
               <Card className="p-5">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-[#292c31]">
-                  <ScanLine className="size-4 text-[#635bff]" aria-hidden="true" />
+                  <ScanLine className="size-4 text-[#5147d9]" aria-hidden="true" />
                   How this scan works
                 </h2>
                 <ol className="mt-4 space-y-4">
@@ -903,7 +903,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                       </span>
                       <span>
                         <span className="block text-xs font-semibold text-[#34383f]">{title}</span>
-                        <span className="mt-0.5 block text-xs leading-5 text-[#7a818c]">
+                        <span className="mt-0.5 block text-xs leading-5 text-[#5f6672]">
                           {detail}
                         </span>
                       </span>
@@ -961,7 +961,7 @@ function ReviewForm({
       <div className="border-b border-[#e4e7eb] bg-[#f9fafb] px-5 py-4 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#635bff]">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#5147d9]">
               Review scan
             </p>
             <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[#25282d]">
@@ -981,7 +981,7 @@ function ReviewForm({
       <div className="space-y-6 p-5 sm:p-6">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-[#e4e7eb] p-4">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8a919c]">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5f6672]">
               <QrCode className="size-3" aria-hidden="true" /> Extracted EPD / code
             </p>
             <p className="mt-2 break-all font-mono text-sm font-semibold text-[#292c31]">
@@ -989,13 +989,13 @@ function ReviewForm({
             </p>
           </div>
           <div className="rounded-xl border border-[#e4e7eb] p-4">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8a919c]">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5f6672]">
               <Warehouse className="size-3" aria-hidden="true" /> Target stock unit
             </p>
             <p className="mt-2 text-sm font-semibold text-[#292c31]">
               {resolution.unit?.code ?? resolution.extractedCode}
             </p>
-            <p className="mt-1 text-xs text-[#7a818c]">
+            <p className="mt-1 text-xs text-[#5f6672]">
               {resolution.unit
                 ? `Current status: ${titleCase(resolution.unit.status ?? "unknown")}`
                 : resolution.willCreateUnit
@@ -1017,7 +1017,7 @@ function ReviewForm({
           </h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg bg-white/80 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#777e89]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#5f6672]">
                 Lifecycle status
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-[#292c31]">
@@ -1033,7 +1033,7 @@ function ReviewForm({
             <div className="rounded-lg bg-white/80 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#777e89]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#5f6672]">
                     Available stock
                   </p>
                   <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-[#292c31]">
@@ -1067,14 +1067,14 @@ function ReviewForm({
           <section aria-labelledby="fixed-properties-title">
             <h3
               id="fixed-properties-title"
-              className="text-xs font-semibold uppercase tracking-[0.08em] text-[#68707c]"
+              className="text-xs font-semibold uppercase tracking-[0.08em] text-[#5f6672]"
             >
               Set by workflow
             </h3>
             <dl className="mt-3 grid gap-2 sm:grid-cols-2">
               {resolution.fixedProperties.map((property) => (
                 <div key={property.key} className="rounded-xl bg-[#f4f5f7] px-3 py-2.5">
-                  <dt className="text-[10px] font-medium text-[#8a919c]">{property.label}</dt>
+                  <dt className="text-[10px] font-medium text-[#5f6672]">{property.label}</dt>
                   <dd className="mt-0.5 text-sm font-semibold text-[#34383f]">
                     {displayValue(property.value)}
                   </dd>
@@ -1088,7 +1088,7 @@ function ReviewForm({
           <section aria-labelledby="scan-properties-title">
             <h3
               id="scan-properties-title"
-              className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#68707c]"
+              className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#5f6672]"
             >
               <Palette className="size-3.5" aria-hidden="true" /> Complete scan properties
             </h3>
@@ -1193,7 +1193,7 @@ function ReviewForm({
           <section aria-labelledby="metadata-preview-title" className="rounded-xl bg-[#f8f9fa] p-4">
             <h3
               id="metadata-preview-title"
-              className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#68707c]"
+              className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#5f6672]"
             >
               Metadata preview
             </h3>
