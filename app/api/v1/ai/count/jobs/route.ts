@@ -22,7 +22,9 @@ const json = (
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 15;
+// SAM 2 returns individual mask files which are fetched and localized after
+// the Replicate prediction succeeds.
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const authorization = await requireIdentity(request, "ai");

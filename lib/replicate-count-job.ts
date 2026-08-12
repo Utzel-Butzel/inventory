@@ -7,15 +7,19 @@ import {
 import { z } from "zod";
 
 import type { ReplicateCountJob } from "@/lib/replicate-count";
+import { inventoryCountModelIds } from "@/lib/inventory-count-models";
 
 const jobSchema = z
   .object({
     predictionId: z.string().trim().min(1).max(160),
+    countModelId: z.enum(inventoryCountModelIds),
     model: z.string().regex(/^[a-z0-9][a-z0-9_-]*\/[a-z0-9][a-z0-9_.-]*$/iu),
     version: z.string().regex(/^[a-f0-9]{64}$/iu),
     itemHint: z.string().trim().min(1).max(240).optional(),
     prompt: z.string().trim().min(1).max(240),
     maxMasks: z.number().int().min(1).max(100),
+    imageWidth: z.number().int().min(1).max(20_000),
+    imageHeight: z.number().int().min(1).max(20_000),
     expiresAt: z.string().datetime({ offset: true }),
     subjectHash: z.string().regex(/^[a-f0-9]{64}$/u),
   })
@@ -93,11 +97,14 @@ export function readReplicateCountJobToken(options: {
   }
   return {
     predictionId: parsed.predictionId,
+    countModelId: parsed.countModelId,
     model: parsed.model,
     version: parsed.version,
     itemHint: parsed.itemHint,
     prompt: parsed.prompt,
     maxMasks: parsed.maxMasks,
+    imageWidth: parsed.imageWidth,
+    imageHeight: parsed.imageHeight,
     expiresAt: parsed.expiresAt,
   };
 }

@@ -126,6 +126,11 @@ struct UnifiedCameraView: View {
         .statusBarHidden()
         .interactiveDismissDisabled(countModel.phase == .booking)
         .onAppear(perform: configureCamera)
+        .task {
+            if let client = state.client {
+                await countModel.loadCountModels(using: client)
+            }
+        }
         .onDisappear(perform: tearDown)
         .onChange(of: mode) { _, _ in
             lastCode = nil
@@ -661,6 +666,7 @@ struct UnifiedCameraView: View {
                 .inventoryCard()
 
                 countHintField
+                countModelPicker
 
                 if let result = countModel.result {
                     countResultCard(result)
@@ -715,6 +721,29 @@ struct UnifiedCameraView: View {
                 .padding(13)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
                 .disabled(countModel.isBusy || countModel.result != nil)
+        }
+        .inventoryCard()
+    }
+
+    private var countModelPicker: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Zählmodell")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Picker("Zählmodell", selection: $countModel.selectedCountModelID) {
+                ForEach(countModel.countModels) { option in
+                    Text(option.label).tag(option.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .disabled(countModel.isBusy || countModel.result != nil)
+            if let selected = countModel.countModels.first(where: {
+                $0.id == countModel.selectedCountModelID
+            }) {
+                Text(selected.description)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
         .inventoryCard()
     }

@@ -29,6 +29,7 @@ struct StockCountView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     introduction
                     itemHintField
+                    countModelPicker
                     cameraPanel
                     if let result = model.result {
                         resultCard(result)
@@ -51,6 +52,11 @@ struct StockCountView: View {
             }
         }
         .interactiveDismissDisabled(model.phase == .booking)
+        .task {
+            if let client = state.client {
+                await model.loadCountModels(using: client)
+            }
+        }
         .confirmationDialog(
             "Gezählte Teile entnehmen?",
             isPresented: $confirmIssue,
@@ -146,6 +152,29 @@ struct StockCountView: View {
                 .padding(13)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
                 .disabled(model.isBusy || model.result != nil)
+        }
+        .inventoryCard()
+    }
+
+    private var countModelPicker: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("Zählmodell")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Picker("Zählmodell", selection: $model.selectedCountModelID) {
+                ForEach(model.countModels) { option in
+                    Text(option.label).tag(option.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .disabled(model.isBusy || model.result != nil)
+            if let selected = model.countModels.first(where: {
+                $0.id == model.selectedCountModelID
+            }) {
+                Text(selected.description)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
         .inventoryCard()
     }
