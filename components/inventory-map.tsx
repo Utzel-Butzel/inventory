@@ -139,7 +139,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
       .then((result) => setResourceTypes(result.types))
       .catch(() => {
         // The map remains usable with the built-in fallback types.
-      });
+    });
     return () => controller.abort();
   }, []);
 
