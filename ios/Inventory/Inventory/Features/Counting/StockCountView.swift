@@ -147,7 +147,10 @@ struct StockCountView: View {
     private var cameraPanel: some View {
         ZStack {
             if let photoURL = model.photoURL {
-                StockCountPhotoPreview(url: photoURL)
+                StockCountPhotoPreview(
+                    url: photoURL,
+                    markers: model.result?.markers ?? []
+                )
             } else {
                 CameraPreview(camera: camera)
             }
@@ -452,22 +455,81 @@ struct StockCountView: View {
 
 private struct StockCountPhotoPreview: View {
     let url: URL
+    let markers: [ObjectCountMarker]
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack {
-            Rectangle().fill(.secondary.opacity(0.12))
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                ProgressView()
+        GeometryReader { geometry in
+            ZStack {
+                Rectangle().fill(.secondary.opacity(0.12))
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(
+                            width: geometry.size.width,
+                            height: geometry.size.height
+                        )
+                    markerOverlay(imageSize: image.size)
+                } else {
+                    ProgressView()
+                }
             }
         }
         .clipped()
         .task(id: url) {
             image = UIImage(contentsOfFile: url.path)
         }
+    }
+
+    private func markerOverlay(imageSize: CGSize) -> some View {
+        Canvas { context, size in
+            let imageRect = aspectFitRect(imageSize: imageSize, in: size)
+            guard !imageRect.isEmpty else { return }
+
+            for marker in markers
+                where (0 ... 1_000).contains(marker.x) && (0 ... 1_000).contains(marker.y) {
+                let point = CGPoint(
+                    x: imageRect.minX + imageRect.width * CGFloat(marker.x) / 1_000,
+                    y: imageRect.minY + imageRect.height * CGFloat(marker.y) / 1_000
+                )
+                let outerRect = CGRect(
+                    x: point.x - 7,
+                    y: point.y - 7,
+                    width: 14,
+                    height: 14
+                )
+                context.fill(Path(ellipseIn: outerRect), with: .color(.white))
+                context.fill(
+                    Path(ellipseIn: outerRect.insetBy(dx: 2.5, dy: 2.5)),
+                    with: .color(InventoryTheme.lime)
+                )
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func aspectFitRect(imageSize: CGSize, in containerSize: CGSize) -> CGRect {
+        guard imageSize.width > 0,
+              imageSize.height > 0,
+              containerSize.width > 0,
+              containerSize.height > 0 else {
+            return .zero
+        }
+        let scale = min(
+            containerSize.width / imageSize.width,
+            containerSize.height / imageSize.height
+        )
+        let fittedSize = CGSize(
+            width: imageSize.width * scale,
+            height: imageSize.height * scale
+        )
+        return CGRect(
+            x: (containerSize.width - fittedSize.width) / 2,
+            y: (containerSize.height - fittedSize.height) / 2,
+            width: fittedSize.width,
+            height: fittedSize.height
+        )
     }
 }

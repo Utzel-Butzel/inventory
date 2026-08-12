@@ -326,6 +326,11 @@ export default function DocsPage() {
               </div>
 
               <div className="mt-6 flex flex-wrap gap-3">
+                <Link href="/api-docs" className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#665cff] px-4 text-sm font-semibold text-white hover:bg-[#5549e8]">
+                  <BookOpenText className="size-4" aria-hidden="true" />
+                  Explore API reference
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
                 <a href="/openapi.yaml" className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#17181d] px-4 text-sm font-semibold text-white hover:bg-[#2d2e33]">
                   <FileCode2 className="size-4" aria-hidden="true" />
                   Open YAML

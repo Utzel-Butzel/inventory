@@ -107,6 +107,110 @@ public final class APIClient: Sendable {
         return try await execute(request)
     }
 
+    public func runtimeSettings() async throws -> RuntimeSettingsResponse {
+        let url = try makeServerURL(path: ["api", "settings", "status"])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func inventoryTypes(
+        includeArchived: Bool = false
+    ) async throws -> InventoryTypesResponse {
+        let queryItems = includeArchived
+            ? [URLQueryItem(name: "includeArchived", value: "true")]
+            : []
+        let url = try makeAPIURL(path: ["inventory-types"], queryItems: queryItems)
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func customFieldDefinitions(
+        entityType: CustomFieldEntityType? = nil
+    ) async throws -> CustomFieldDefinitionsResponse {
+        let queryItems = entityType.map {
+            [URLQueryItem(name: "entityType", value: $0.rawValue)]
+        } ?? []
+        let url = try makeAPIURL(path: ["custom-fields"], queryItems: queryItems)
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func imageGenerationModels() async throws -> ImageGenerationModelsResponse {
+        let url = try makeAPIURL(path: ["ai", "image-models"])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func listRoomScans() async throws -> SpatialRoomScanListResponse {
+        let url = try makeAPIURL(path: ["room-scans"])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func uploadRoomScan(
+        _ draft: SpatialRoomScanDraft,
+        roomResourceID: UUID
+    ) async throws -> SpatialRoomScanUploadResponse {
+        try Task.checkCancellation()
+        let body = try MultipartFormFileBuilder.buildRoomScan(
+            draft: draft,
+            roomResourceID: roomResourceID
+        )
+        defer { try? FileManager.default.removeItem(at: body.fileURL) }
+
+        let url = try makeAPIURL(path: ["room-scans"])
+        var request = try await authorizedRequest(url: url, method: "POST")
+        request.timeoutInterval = 300
+        request.setValue(
+            "multipart/form-data; boundary=\(body.boundary)",
+            forHTTPHeaderField: "Content-Type"
+        )
+
+        do {
+            let (data, response) = try await session.upload(for: request, fromFile: body.fileURL)
+            return try decodeResponse(data: data, response: response)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
+        } catch let error as APIClientError {
+            await notifyIfUnauthorized(error, request: request)
+            throw error
+        } catch {
+            throw APIClientError.transport(error.localizedDescription)
+        }
+    }
+
+    public func downloadRoomWorldMap(scanID: UUID) async throws -> Data {
+        let url = try makeAPIURL(path: [
+            "room-scans",
+            scanID.uuidString.lowercased(),
+            "assets",
+            "world_map",
+        ])
+        var request = try await authorizedRequest(url: url, method: "GET")
+        request.setValue("application/vnd.apple.arkit.world-map", forHTTPHeaderField: "Accept")
+        return try await executeBytes(request)
+    }
+
+    public func saveSpatialPlacement(
+        resourceID: UUID,
+        draft: SpatialPlacementDraft
+    ) async throws -> SpatialPlacementResponse {
+        let url = try makeAPIURL(path: [
+            "room-scans",
+            draft.roomScanID.uuidString.lowercased(),
+            "placements",
+            resourceID.uuidString.lowercased(),
+        ])
+        let request = try await jsonRequest(
+            url: url,
+            method: "PUT",
+            body: SpatialPlacementRequest(draft: draft)
+        )
+        return try await execute(request)
+    }
+
     public func login(
         email: String,
         password: String,
@@ -294,6 +398,7 @@ public final class APIClient: Sendable {
         resourceID: UUID,
         sourceMediaID: UUID? = nil,
         prompt: String? = nil,
+        modelID: String? = nil,
         idempotencyKey: UUID? = nil
     ) async throws -> CoverResourceResponse {
         let url = try makeAPIURL(path: [
@@ -304,7 +409,11 @@ public final class APIClient: Sendable {
         var request = try await jsonRequest(
             url: url,
             method: "POST",
-            body: CoverRequest(sourceMediaID: sourceMediaID, prompt: prompt)
+            body: CoverRequest(
+                sourceMediaID: sourceMediaID,
+                prompt: prompt,
+                modelID: modelID
+            )
         )
         setIdempotencyKey(idempotencyKey, on: &request)
         return try await execute(request)
@@ -500,6 +609,36 @@ public final class APIClient: Sendable {
         }
     }
 
+    private func executeBytes(_ request: URLRequest) async throws -> Data {
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let response = response as? HTTPURLResponse else {
+                throw APIClientError.invalidResponse
+            }
+            guard (200 ... 299).contains(response.statusCode) else {
+                let payload = try? JSONDecoder().decode(ServerErrorResponse.self, from: data)
+                throw APIClientError.http(
+                    statusCode: response.statusCode,
+                    message: payload?.error ?? HTTPURLResponse.localizedString(
+                        forStatusCode: response.statusCode
+                    ),
+                    retryAfter: response.value(forHTTPHeaderField: "Retry-After")
+                        .flatMap(TimeInterval.init)
+                )
+            }
+            return data
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
+        } catch let error as APIClientError {
+            await notifyIfUnauthorized(error, request: request)
+            throw error
+        } catch {
+            throw APIClientError.transport(error.localizedDescription)
+        }
+    }
+
     private func executeWithoutResponse(_ request: URLRequest) async throws {
         do {
             let (data, response) = try await session.data(for: request)
@@ -637,6 +776,25 @@ public final class APIClient: Sendable {
         components.queryItems = queryItems
         guard let result = components.url else {
             throw APIClientError.invalidRequest("The API URL could not be created.")
+        }
+        return result
+    }
+
+    private func makeServerURL(
+        path: [String],
+        queryItems: [URLQueryItem] = []
+    ) throws -> URL {
+        let url = path.reduce(serverURL) { partialURL, component in
+            partialURL.appendingPathComponent(component)
+        }
+        guard !queryItems.isEmpty else { return url }
+
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            throw APIClientError.invalidRequest("The server URL could not be created.")
+        }
+        components.queryItems = queryItems
+        guard let result = components.url else {
+            throw APIClientError.invalidRequest("The server URL could not be created.")
         }
         return result
     }
@@ -813,10 +971,12 @@ private struct LoginRequest: Encodable, Sendable {
 private struct CoverRequest: Encodable, Sendable {
     let sourceMediaID: UUID?
     let prompt: String?
+    let modelID: String?
 
     private enum CodingKeys: String, CodingKey {
         case sourceMediaID = "sourceMediaId"
         case prompt
+        case modelID = "modelId"
     }
 }
 

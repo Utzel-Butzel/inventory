@@ -41,7 +41,7 @@
         <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-	<string>Für Fotos und QR-/Barcodes.</string>
+	<string>Für Inventarfotos, QR-/Barcodes, 3D-Raumscans und die AR-Positionierung von Gegenständen.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
 	<string>Für den optionalen Inventarstandort.</string>
     <key>NSPhotoLibraryUsageDescription</key>

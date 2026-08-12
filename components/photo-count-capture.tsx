@@ -11,7 +11,9 @@ import {
   X,
 } from "lucide-react";
 import {
+  type CSSProperties,
   type ChangeEvent,
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -20,6 +22,16 @@ import {
 
 import { prepareUpload } from "@/lib/client-media";
 import { fetchJson } from "@/lib/client-types";
+import type { InventoryCountMarker } from "@/lib/inventory-count-contract";
+
+const markerCoordinateMaximum = 1_000;
+
+type RenderedImageBounds = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
 
 type PhotoCountResult = {
   count: number;
@@ -28,6 +40,7 @@ type PhotoCountResult = {
   isExact: boolean;
   explanation: string;
   warnings: string[];
+  markers: InventoryCountMarker[];
   model: string;
 };
 
@@ -50,6 +63,24 @@ function cleanCountResult(result: PhotoCountResult) {
   if (!Number.isInteger(result.count) || result.count < 0) {
     throw new Error("The counter returned an invalid quantity. Please try another photo.");
   }
+  const markers = Array.isArray(result.markers)
+    ? result.markers.filter(
+        (marker) =>
+          marker !== null &&
+          typeof marker === "object" &&
+          Number.isInteger(marker.x) &&
+          marker.x >= 0 &&
+          marker.x <= markerCoordinateMaximum &&
+          Number.isInteger(marker.y) &&
+          marker.y >= 0 &&
+          marker.y <= markerCoordinateMaximum,
+      )
+    : [];
+  if (markers.length !== result.count) {
+    throw new Error(
+      "The counter could not place one highlight on every piece. Please try another photo.",
+    );
+  }
   return {
     ...result,
     confidence: Number.isFinite(result.confidence) ? result.confidence : 0,
@@ -58,8 +89,101 @@ function cleanCountResult(result: PhotoCountResult) {
     warnings: Array.isArray(result.warnings)
       ? result.warnings.filter((warning) => typeof warning === "string" && warning.trim())
       : [],
+    markers,
     model: result.model?.trim() || "AI vision",
   };
+}
+
+function PhotoCountPreview({
+  previewUrl,
+  markers,
+}: {
+  previewUrl: string | null;
+  markers: InventoryCountMarker[];
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [imageBounds, setImageBounds] = useState<RenderedImageBounds | null>(null);
+
+  const updateImageBounds = useCallback(() => {
+    const container = containerRef.current;
+    const image = imageRef.current;
+    if (!container || !image?.naturalWidth || !image.naturalHeight) {
+      setImageBounds(null);
+      return;
+    }
+
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    const scale = Math.min(
+      containerWidth / image.naturalWidth,
+      containerHeight / image.naturalHeight,
+    );
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+    setImageBounds({
+      left: (containerWidth - width) / 2,
+      top: (containerHeight - height) / 2,
+      width,
+      height,
+    });
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(updateImageBounds);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [previewUrl, updateImageBounds]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative aspect-[4/3] overflow-hidden rounded-xl border border-violet-200 bg-slate-100"
+    >
+      {previewUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          ref={imageRef}
+          src={previewUrl}
+          alt={
+            markers.length
+              ? `Photo with ${markers.length} highlighted counted pieces`
+              : "Photo selected for piece counting"
+          }
+          className="size-full object-contain"
+          onLoad={updateImageBounds}
+        />
+      ) : null}
+      {imageBounds
+        ? markers.map((marker, index) => {
+            const style = {
+              left:
+                imageBounds.left +
+                (marker.x / markerCoordinateMaximum) * imageBounds.width,
+              top:
+                imageBounds.top +
+                (marker.y / markerCoordinateMaximum) * imageBounds.height,
+            } satisfies CSSProperties;
+            return (
+              <span
+                // The index distinguishes two exceptionally close detections.
+                key={`${marker.x}-${marker.y}-${index}`}
+                className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-600 shadow-[0_1px_4px_rgba(15,23,42,.7)] ring-2 ring-white sm:size-3.5"
+                style={style}
+                aria-hidden="true"
+              />
+            );
+          })
+        : null}
+      {markers.length ? (
+        <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-slate-950/75 px-2 py-1 text-[9px] font-bold text-white shadow-sm backdrop-blur">
+          {markers.length} highlighted
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 export function PhotoCountCapture({
@@ -270,16 +394,12 @@ export function PhotoCountCapture({
             </span>
           </label>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-[112px_minmax(0,1fr)]">
-            <div className="relative aspect-square overflow-hidden rounded-xl border border-violet-200 bg-slate-100">
-              {previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewUrl}
-                  alt="Photo selected for piece counting"
-                  className="size-full object-cover"
-                />
-              ) : null}
+          <div className="grid gap-3 sm:grid-cols-[minmax(220px,0.9fr)_minmax(0,1.1fr)]">
+            <div className="relative">
+              <PhotoCountPreview
+                previewUrl={previewUrl}
+                markers={result?.markers ?? []}
+              />
               <button
                 type="button"
                 onClick={resetImage}

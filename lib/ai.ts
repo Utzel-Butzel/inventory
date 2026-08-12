@@ -7,6 +7,11 @@ import sharp from "sharp";
 import { z } from "zod";
 
 import { resourceTypes, type ResourceType } from "@/db/schema";
+import type { ImageGenerationModel } from "@/lib/image-generation-models";
+import {
+  inventoryCountCoordinateMaximum,
+  inventoryCountResultSchema,
+} from "@/lib/inventory-count-contract";
 export { defaultCoverPrompt } from "@/lib/ai-prompts";
 
 const analysisResultSchema = z.object({
@@ -20,18 +25,7 @@ const analysisResultSchema = z.object({
 
 export type InventoryAnalysis = z.infer<typeof analysisResultSchema>;
 
-const inventoryCountResultSchema = z
-  .object({
-    count: z.number().int().min(0).max(1_000_000),
-    confidence: z.number().min(0).max(1),
-    detectedItem: z.string().trim().min(1).max(240),
-    isExact: z.boolean(),
-    explanation: z.string().trim().min(1).max(1_000),
-    warnings: z.array(z.string().trim().min(1).max(240)).max(10),
-  })
-  .strict();
-
-export type InventoryCountResult = z.infer<typeof inventoryCountResultSchema>;
+export type { InventoryCountResult } from "@/lib/inventory-count-contract";
 
 const maximumCountInputPixels = 64_000_000;
 const maximumCountImageDimension = 2_048;
@@ -186,6 +180,26 @@ export async function countInventoryItems(options: {
               maxItems: 10,
               items: { type: "string", minLength: 1, maxLength: 240 },
             },
+            markers: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  x: {
+                    type: "integer",
+                    minimum: 0,
+                    maximum: inventoryCountCoordinateMaximum,
+                  },
+                  y: {
+                    type: "integer",
+                    minimum: 0,
+                    maximum: inventoryCountCoordinateMaximum,
+                  },
+                },
+                required: ["x", "y"],
+              },
+            },
           },
           required: [
             "count",
@@ -194,6 +208,7 @@ export async function countInventoryItems(options: {
             "isExact",
             "explanation",
             "warnings",
+            "markers",
           ],
         },
       },
@@ -213,6 +228,8 @@ ${
 }
 
 Count each distinct physical instance exactly once. Count a partially occluded instance only when it is clearly separable from its neighbors. Never estimate hidden, off-frame, or fully covered objects. Do not count shadows, reflections, printed images, holes, surface features, loose packaging, or containers as extra instances. If no matching item is visible, return zero.
+
+For every counted instance, add exactly one entry to markers. Place the point near the center of that instance's visible area, using integer image coordinates from 0 to ${inventoryCountCoordinateMaximum}: (0, 0) is the top-left corner and (${inventoryCountCoordinateMaximum}, ${inventoryCountCoordinateMaximum}) is the bottom-right corner. markers must contain exactly count entries, with no duplicate point for the same object. If you cannot place a point on an instance confidently, do not count that instance and mention the ambiguity in warnings.
 
 Set isExact to true only when every counted instance is individually visible and there is no meaningful ambiguity. Lower confidence and add short warnings for overlap, blur, cropping, mixed object types, poor lighting, or likely hidden instances. detectedItem, explanation, and warnings must be written in ${language}. Keep the explanation to one short sentence. Return only the requested JSON object.`,
           },
@@ -239,6 +256,7 @@ export async function generateCoverImage(options: {
   source: Buffer;
   sourceMimeType: string;
   prompt: string;
+  imageModel: ImageGenerationModel;
 }) {
   const normalized = await sharp(options.source, { failOnError: false })
     .rotate()
@@ -250,19 +268,14 @@ export async function generateCoverImage(options: {
     })
     .png()
     .toBuffer();
-  const provider = (process.env.IMAGE_EDIT_PROVIDER ?? "openai")
-    .trim()
-    .toLowerCase();
+  const { id, provider, model, label } = options.imageModel;
   let generatedBytes: Buffer;
-  let model: string;
 
   if (provider === "google") {
-    const apiKey = (
-      process.env.GOOGLE_AI_API_KEY ?? process.env.GOOGLE_API_KEY
-    )?.trim();
+    const apiKey =
+      process.env.GOOGLE_AI_API_KEY?.trim() ||
+      process.env.GOOGLE_API_KEY?.trim();
     if (!apiKey) throw new Error("GOOGLE_AI_API_KEY is not configured.");
-    model =
-      process.env.GOOGLE_IMAGE_EDIT_MODEL?.trim() || "gemini-2.5-flash-image";
     const client = new GoogleGenAI({ apiKey });
     const response = await client.models.generateContent({
       model,
@@ -280,7 +293,7 @@ export async function generateCoverImage(options: {
       ],
     });
     const imagePart = response.candidates?.[0]?.content?.parts?.find(
-      (part) => Boolean(part.inlineData?.data),
+      (part) => part.thought !== true && Boolean(part.inlineData?.data),
     );
     if (!imagePart?.inlineData?.data) {
       throw new Error("Google image generation did not return an image.");
@@ -288,7 +301,6 @@ export async function generateCoverImage(options: {
     generatedBytes = Buffer.from(imagePart.inlineData.data, "base64");
   } else {
     const openai = createOpenAI();
-    model = process.env.OPENAI_IMAGE_EDIT_MODEL?.trim() || "gpt-image-1";
     const image = await toFile(normalized, "inventory-source.png", {
       type: "image/png",
     });
@@ -309,7 +321,14 @@ export async function generateCoverImage(options: {
     .resize({ width: 1024, height: 1024, fit: "cover" })
     .jpeg({ quality: 90, mozjpeg: true })
     .toBuffer();
-  return { bytes: jpeg, mimeType: "image/jpeg", model, provider };
+  return {
+    bytes: jpeg,
+    mimeType: "image/jpeg",
+    id,
+    provider,
+    model,
+    label,
+  };
 }
 
 export function isResourceType(value: string): value is ResourceType {

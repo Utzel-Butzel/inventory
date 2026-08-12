@@ -13,6 +13,12 @@ struct ScannerView: View {
     @State private var showCreateForm = false
     @State private var errorMessage: String?
 
+    let onClose: (() -> Void)?
+
+    init(onClose: (() -> Void)? = nil) {
+        self.onClose = onClose
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -27,6 +33,18 @@ struct ScannerView: View {
             .background(InventoryTheme.canvas)
             .navigationTitle("QR & Barcode")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if let onClose {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button {
+                            onClose()
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .accessibilityLabel("Scanner schließen")
+                    }
+                }
+            }
             .onAppear {
                 camera.scanningEnabled = true
                 camera.onCode = { code in resolve(code) }
@@ -152,7 +170,7 @@ struct ScannerView: View {
                 Button {
                     state.pendingCaptureCode = code
                     unmatchedCode = nil
-                    state.selectedTab = .capture
+                    state.presentedTool = .capture
                 } label: {
                     Label("Mit Fotos erfassen", systemImage: "camera.fill")
                         .frame(maxWidth: .infinity, minHeight: 44)

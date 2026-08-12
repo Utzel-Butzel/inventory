@@ -5,7 +5,6 @@ import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import {
-  BookOpenText,
   Boxes,
   ChevronRight,
   CircleHelp,
@@ -38,22 +37,22 @@ const navigation = [
   { label: "Inventory", href: "/inventory", icon: PackageOpen },
   { label: "Stock", href: "/stock", icon: Warehouse },
   { label: "Locations", href: "/map", icon: MapPinned },
+  { label: "Rooms 3D", href: "/spaces", icon: Boxes },
   { label: "Batch studio", href: "/batch", icon: Sparkles },
   { label: "Labels", href: "/labels", icon: ScanQrCode },
   { label: "Duplicates", href: "/duplicates", icon: Files },
 ];
 
 const manageNavigation = [
-  { label: "API docs", href: "/api-docs", icon: BookOpenText },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
 const pageNames: Record<string, string> = {
-  "api-docs": "API docs",
   dashboard: "Overview",
   inventory: "Inventory",
   stock: "Stock",
   map: "Locations",
+  spaces: "Rooms 3D",
   batch: "Batch studio",
   labels: "Labels",
   duplicates: "Duplicates",

@@ -3,6 +3,11 @@ import type {
   MediaRecord,
   ResourceRecord,
 } from "@/db/schema";
+import type {
+  RoomScene,
+  SpatialQuaternion,
+  SpatialVector3,
+} from "@/lib/room-scene-contract";
 
 export type ClientMedia = Omit<MediaRecord, "createdAt"> & {
   createdAt: string;
@@ -25,6 +30,66 @@ export type ClientApiToken = Omit<
   createdAt: string;
   expiresAt: string | null;
   lastUsedAt: string | null;
+};
+
+export type ClientRoomScanAsset = {
+  id: string;
+  kind: "world_map" | "model_usdz" | "guide_image";
+  name: string;
+  mimeType: string;
+  size: number;
+  checksumSha256: string;
+  url: string;
+  createdAt: string;
+};
+
+export type ClientRoomScanSummary = {
+  id: string;
+  roomResourceId: string;
+  roomName: string;
+  revision: number;
+  status: "active" | "superseded";
+  capturedAt: string;
+  deviceModel: string | null;
+  createdAt: string;
+  updatedAt: string;
+  placementCount: number;
+  assets: ClientRoomScanAsset[];
+};
+
+export type ClientRoomPlacement = {
+  id: string;
+  resource: {
+    id: string;
+    name: string;
+    description: string;
+    type: string;
+    status: string;
+    location: string | null;
+    cover: { id: string; url: string; altText: string } | null;
+  };
+  position: SpatialVector3;
+  orientation: SpatialQuaternion;
+  extent: SpatialVector3 | null;
+  confidence: number;
+  method: "scene-depth" | "mesh-raycast" | "plane-raycast" | "manual";
+  anchorIdentifier: string | null;
+  capturedAt: string;
+  updatedAt: string;
+};
+
+export type ClientRoomSceneManifest = {
+  room: { id: string; name: string; description: string };
+  scan: {
+    id: string;
+    revision: number;
+    status: "active" | "superseded";
+    scene: RoomScene;
+    capturedAt: string;
+    deviceModel: string | null;
+    assets: ClientRoomScanAsset[];
+  };
+  placements: ClientRoomPlacement[];
 };
 
 export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit) {

@@ -113,6 +113,89 @@ enum MultipartFormFileBuilder {
         }
     }
 
+    static func buildRoomScan(
+        draft: SpatialRoomScanDraft,
+        roomResourceID: UUID
+    ) throws -> MultipartBodyFile {
+        let boundary = "InventoryBoundary-\(UUID().uuidString)"
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("inventory-room-scan-\(UUID().uuidString)")
+            .appendingPathExtension("multipart")
+
+        guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
+            throw APIClientError.invalidUpload("Der Raumscan-Upload konnte nicht vorbereitet werden.")
+        }
+
+        do {
+            let sceneEncoder = JSONEncoder()
+            sceneEncoder.outputFormatting = [.sortedKeys]
+            let sceneData = try sceneEncoder.encode(draft.scene)
+            guard let sceneJSON = String(data: sceneData, encoding: .utf8) else {
+                throw APIClientError.invalidUpload("Die Raumgeometrie konnte nicht codiert werden.")
+            }
+
+            let output = try FileHandle(forWritingTo: outputURL)
+            defer { try? output.close() }
+
+            let iso8601 = ISO8601DateFormatter()
+            let fields = [
+                ("id", draft.id.uuidString.lowercased()),
+                ("roomResourceId", roomResourceID.uuidString.lowercased()),
+                ("capturedAt", iso8601.string(from: draft.capturedAt)),
+                ("deviceModel", draft.deviceModel),
+                ("scene", sceneJSON),
+            ]
+            for (name, value) in fields {
+                try write("--\(boundary)\r\n", to: output)
+                try write(
+                    "Content-Disposition: form-data; name=\"\(name)\"\r\n",
+                    to: output
+                )
+                try write("Content-Type: text/plain; charset=utf-8\r\n\r\n", to: output)
+                try output.write(contentsOf: Data(value.utf8))
+                try write("\r\n", to: output)
+            }
+
+            var assets: [(field: String, url: URL, mimeType: String)] = [
+                ("worldMap", draft.worldMapURL, "application/vnd.apple.arkit.world-map"),
+                ("model", draft.modelURL, "model/vnd.usdz+zip"),
+            ]
+            if let guideImageURL = draft.guideImageURL {
+                assets.append(("guideImage", guideImageURL, "image/jpeg"))
+            }
+
+            for asset in assets {
+                try validateLocalFile(asset.url)
+                let filename = sanitizeHeaderValue(asset.url.lastPathComponent)
+                try write("--\(boundary)\r\n", to: output)
+                try write(
+                    "Content-Disposition: form-data; name=\"\(asset.field)\"; filename=\"\(filename)\"\r\n",
+                    to: output
+                )
+                try write("Content-Type: \(asset.mimeType)\r\n\r\n", to: output)
+                try copy(asset.url, to: output)
+                try write("\r\n", to: output)
+            }
+
+            try write("--\(boundary)--\r\n", to: output)
+            try output.synchronize()
+            return MultipartBodyFile(fileURL: outputURL, boundary: boundary)
+        } catch {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw error
+        }
+    }
+
+    private static func validateLocalFile(_ url: URL) throws {
+        guard url.isFileURL else {
+            throw APIClientError.invalidUpload("Raumscan-Dateien müssen lokal gespeichert sein.")
+        }
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+        guard values.isRegularFile == true, (values.fileSize ?? 0) > 0 else {
+            throw APIClientError.invalidUpload("\(url.lastPathComponent) fehlt oder ist leer.")
+        }
+    }
+
     private static func copy(_ inputURL: URL, to output: FileHandle) throws {
         let input = try FileHandle(forReadingFrom: inputURL)
         defer { try? input.close() }

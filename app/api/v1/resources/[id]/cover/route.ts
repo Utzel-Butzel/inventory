@@ -12,6 +12,7 @@ import {
 import { requireIdentity } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { hashIdempotentPayload, readIdempotencyKey } from "@/lib/idempotency";
+import { resolveImageGenerationModel } from "@/lib/image-generation-models";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getResource } from "@/lib/resources";
 import {
@@ -80,6 +81,18 @@ export async function POST(request: Request, context: Context) {
     });
   };
 
+  const imageModel = resolveImageGenerationModel(parsed.data.modelId);
+  if (!imageModel) {
+    return finish(
+      {
+        error: parsed.data.modelId
+          ? "The selected image generation model is unsupported or unavailable."
+          : "No image generation model is configured or available.",
+      },
+      422,
+    );
+  }
+
   const resource = await getResource(id);
   if (!resource) return finish({ error: "Not found" }, 404);
   const source = parsed.data.sourceMediaId
@@ -110,6 +123,7 @@ export async function POST(request: Request, context: Context) {
       source: sourceBytes,
       sourceMimeType: source.mimeType,
       prompt: parsed.data.prompt || defaultCoverPrompt(resource.name),
+      imageModel,
     });
     const stored = await storeMedia({
       bytes: generated.bytes,
@@ -161,7 +175,12 @@ export async function POST(request: Request, context: Context) {
             media: mediaRows,
             cover: mediaRows.find((item) => item.kind === "image") ?? null,
           },
-          generation: { provider: generated.provider, model: generated.model },
+          generation: {
+            id: generated.id,
+            provider: generated.provider,
+            model: generated.model,
+            label: generated.label,
+          },
         };
         if (operationId) {
           await transaction

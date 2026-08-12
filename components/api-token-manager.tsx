@@ -23,6 +23,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import {
+  ImageModelSelector,
+  useImageModelPreference,
+} from "@/components/image-model-selector";
+
 type ApiScope = "read" | "write" | "ai";
 
 type RuntimeStatus = {
@@ -119,6 +124,7 @@ function LoadingBlock() {
 }
 
 export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
+  const imageModelPreference = useImageModelPreference();
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
   const [tokens, setTokens] = useState<ApiToken[]>([]);
   const [loading, setLoading] = useState(true);
@@ -354,7 +360,14 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                 <StatusPill ready={runtime.ai.imageGeneration} />
               </div>
               <p className="mt-5 text-sm font-semibold text-zinc-900">Image generation</p>
-              <p className="mt-1 text-sm capitalize text-zinc-500">{runtime.ai.imageProvider} provider</p>
+              <p className="mt-1 text-sm capitalize text-zinc-500">
+                {imageModelPreference.selectedModel?.provider ?? runtime.ai.imageProvider} provider
+              </p>
+              <ImageModelSelector
+                preference={imageModelPreference}
+                description="Used for covers created in this browser."
+                className="mt-4 border-t border-zinc-100 pt-3"
+              />
             </div>
 
             <div className="group rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition hover:border-zinc-300 hover:shadow-sm">

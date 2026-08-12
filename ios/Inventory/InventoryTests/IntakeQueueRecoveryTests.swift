@@ -3,6 +3,33 @@ import XCTest
 @testable import Inventory
 
 final class IntakeQueueRecoveryTests: XCTestCase {
+    func testImageModelSelectionSurvivesManifestRoundTrip() throws {
+        let job = makeJob(expectedFileCount: 0, imageModelID: "google-nano-banana-pro")
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(IntakeJob.self, from: encoder.encode(job))
+
+        XCTAssertEqual(decoded.imageModelID, "google-nano-banana-pro")
+    }
+
+    func testLegacyManifestWithoutImageModelUsesServerDefault() throws {
+        let job = makeJob(expectedFileCount: 0)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(job)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNil(object["imageModelID"])
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(IntakeJob.self, from: data)
+
+        XCTAssertNil(decoded.imageModelID)
+    }
+
     func testPreparingJobRecoversOnlyWhenEveryPhotoExists() throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -64,7 +91,8 @@ final class IntakeQueueRecoveryTests: XCTestCase {
 
     private func makeJob(
         expectedFileCount: Int,
-        mediaUploaded: Bool = false
+        mediaUploaded: Bool = false,
+        imageModelID: String? = nil
     ) -> IntakeJob {
         IntakeJob(
             id: UUID(),
@@ -76,6 +104,7 @@ final class IntakeQueueRecoveryTests: XCTestCase {
             serverOrigin: "https://inventory.example",
             shouldAnalyze: false,
             shouldGenerateCover: false,
+            imageModelID: imageModelID,
             stage: .preparing,
             progress: 0.03,
             resourceID: nil,

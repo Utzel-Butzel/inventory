@@ -23,6 +23,8 @@ import {
   purchaseOrderLines,
   resourceCreationRequests,
   resourceRelations,
+  roomScanAssets,
+  roomScans,
   resources,
   stockLocationBalances,
   stockMovements,
@@ -253,6 +255,16 @@ export async function updateResourceWithCustomFieldValidation(options: {
     if (!current) return null;
 
     let values = options.values;
+    if (values.type !== undefined && values.type !== "place") {
+      const [spatialScan] = await transaction
+        .select({ id: roomScans.id })
+        .from(roomScans)
+        .where(eq(roomScans.roomResourceId, current.id))
+        .limit(1);
+      if (spatialScan) {
+        throw new Error("RESOURCE_HAS_ROOM_SCANS");
+      }
+    }
     if (options.validateCustomFields) {
       const customFields = await validateCustomFieldValues({
         entityType: "inventory",
@@ -318,8 +330,25 @@ export async function updateResourcesBatch(options: {
 export async function deleteResource(id: string) {
   const resource = await getResource(id);
   if (!resource) return null;
-  await db.delete(resources).where(eq(resources.id, id));
-  return resource;
+  const deleted = await db.transaction(async (transaction) => {
+    const [locked] = await transaction
+      .select({ id: resources.id })
+      .from(resources)
+      .where(eq(resources.id, id))
+      .for("update");
+    if (!locked) return null;
+    const spatialAssets = await transaction
+      .select({
+        storageKey: roomScanAssets.storageKey,
+        url: roomScanAssets.storageUrl,
+      })
+      .from(roomScanAssets)
+      .innerJoin(roomScans, eq(roomScans.id, roomScanAssets.roomScanId))
+      .where(eq(roomScans.roomResourceId, id));
+    await transaction.delete(resources).where(eq(resources.id, id));
+    return spatialAssets;
+  });
+  return deleted ? { ...resource, roomScanAssets: deleted } : null;
 }
 
 export async function getDashboardStats() {
@@ -443,6 +472,15 @@ export async function mergeResources(
     const lockedDuplicate = lockedResources.find((item) => item.id === duplicateId);
     if (!lockedKeep || !lockedDuplicate) {
       return false;
+    }
+
+    const [spatialScan] = await transaction
+      .select({ id: roomScans.id })
+      .from(roomScans)
+      .where(inArray(roomScans.roomResourceId, [keepId, duplicateId]))
+      .limit(1);
+    if (spatialScan) {
+      throw new Error("Rooms with 3D room scans cannot be merged.");
     }
 
     const [

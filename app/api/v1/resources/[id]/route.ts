@@ -109,6 +109,12 @@ export async function PATCH(request: Request, context: Context) {
       );
     }
     const message = error instanceof Error ? error.message : "Unable to update item.";
+    if (message.includes("RESOURCE_HAS_ROOM_SCANS")) {
+      return Response.json(
+        { error: "A scanned room must keep the place type." },
+        { status: 409 },
+      );
+    }
     const duplicateSku = message.includes("resources_sku_unique");
     return Response.json(
       { error: duplicateSku ? "That SKU is already in use." : message },
@@ -143,7 +149,9 @@ export async function DELETE(request: Request, context: Context) {
   if (!resource) return Response.json({ error: "Not found" }, { status: 404 });
 
   await Promise.allSettled(
-    resource.media.map((item) => deleteStoredMedia(item)),
+    [...resource.media, ...resource.roomScanAssets].map((item) =>
+      deleteStoredMedia(item),
+    ),
   );
   return new Response(null, { status: 204 });
 }

@@ -9,26 +9,26 @@ struct CaptureView: View {
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var shutterFlash = false
     @State private var codeScanning = false
-    @State private var controlsExpanded = false
-    @GestureState private var drawerDragOffset: CGFloat = 0
+    @State private var showDetails = false
+    @State private var detailsDetent: PresentationDetent = .medium
+    @State private var showSpatialCapture = false
 
+    let onClose: (() -> Void)?
     let onSubmit: (IntakeSubmission) -> Void
+
+    init(
+        onClose: (() -> Void)? = nil,
+        onSubmit: @escaping (IntakeSubmission) -> Void
+    ) {
+        self.onClose = onClose
+        self.onSubmit = onSubmit
+    }
 
     var body: some View {
         NavigationStack {
-            GeometryReader { geometry in
-                let drawerHeight = min(
-                    max(geometry.size.height * 0.66, 320),
-                    min(geometry.size.height, 610)
-                )
-
-                ZStack(alignment: .bottom) {
-                    cameraPanel
-                    captureDrawer(height: drawerHeight)
-                }
+            cameraPanel
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.black)
-            }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 camera.scanningEnabled = false
@@ -57,6 +57,22 @@ struct CaptureView: View {
                 pickerItems = []
             }
             .onChange(of: state.pendingCaptureCode) { _, _ in consumePendingCode() }
+            .sheet(isPresented: $showDetails) {
+                detailsSheet
+                    .presentationDetents([.medium, .large], selection: $detailsDetent)
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(.regularMaterial)
+            }
+            .fullScreenCover(
+                isPresented: $showSpatialCapture,
+                onDismiss: { camera.start() }
+            ) {
+                SpatialItemCaptureView { placement, imageData in
+                    model.applySpatialPlacement(placement)
+                    model.addCapturedData(imageData)
+                }
+                .environmentObject(state)
+            }
             .alert(
                 "Foto konnte nicht hinzugefügt werden",
                 isPresented: Binding(
@@ -74,7 +90,7 @@ struct CaptureView: View {
     private var cameraPanel: some View {
         ZStack {
             CameraPreview(camera: camera)
-                .ignoresSafeArea(.container, edges: .horizontal)
+                .ignoresSafeArea()
             Color.white.opacity(shutterFlash ? 0.72 : 0)
 
             LinearGradient(
@@ -90,14 +106,11 @@ struct CaptureView: View {
             }
 
             VStack {
-                HStack {
-                    Label(cameraLabel, systemImage: "circle.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(.black.opacity(0.36), in: Capsule())
-                    Spacer()
+                HStack(spacing: 8) {
+                    capturedPhotosButton
+
+                    Spacer(minLength: 4)
+
                     Button {
                         toggleCodeScanning()
                     } label: {
@@ -114,11 +127,34 @@ struct CaptureView: View {
                             .background(.black.opacity(0.36), in: Circle())
                     }
                     .foregroundStyle(camera.torchEnabled ? InventoryTheme.lime : .white)
+                    .disabled(!camera.torchAvailable)
+                    .opacity(camera.torchAvailable ? 1 : 0.45)
+
+                    if let onClose {
+                        Button {
+                            onClose()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.subheadline.weight(.bold))
+                                .frame(width: 42, height: 42)
+                                .background(.black.opacity(0.36), in: Circle())
+                        }
+                        .foregroundStyle(.white)
+                        .accessibilityLabel("Erfassen schließen")
+                    }
+
+                    topUploadButton
                 }
 
                 Spacer()
 
-                if !controlsExpanded {
+                if !codeScanning {
+                    HStack(spacing: 10) {
+                        detailsButton
+                        spatialCaptureButton
+                    }
+                    .padding(.bottom, 14)
+
                     HStack(alignment: .center) {
                         PhotosPicker(
                             selection: $pickerItems,
@@ -155,18 +191,37 @@ struct CaptureView: View {
 
                         Spacer()
 
-                        Text("\(model.photos.count)/\(CaptureViewModel.maximumPhotos)")
-                            .font(.callout.monospacedDigit().weight(.semibold))
+                        Button {
+                            camera.switchCamera()
+                        } label: {
+                            Group {
+                                if camera.isSwitchingCamera {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Image(systemName: "arrow.triangle.2.circlepath.camera.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.white)
+                                }
+                            }
                             .frame(width: 52, height: 52)
                             .background(.black.opacity(0.36), in: Circle())
-                            .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!camera.canSwitchCamera || camera.isSwitchingCamera)
+                        .opacity(camera.canSwitchCamera ? 1 : 0.45)
+                        .accessibilityLabel(
+                            camera.isUsingFrontCamera
+                                ? "Zur Rückkamera wechseln"
+                                : "Zur Frontkamera wechseln"
+                        )
                     }
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .transition(.opacity)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
-            .padding(.bottom, collapsedDrawerHeight + 20)
+            .padding(.bottom, 20)
 
             if camera.state == .denied {
                 permissionOverlay
@@ -177,100 +232,147 @@ struct CaptureView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func captureDrawer(height: CGFloat) -> some View {
-        let restingOffset = controlsExpanded ? 0 : height - collapsedDrawerHeight
-        let maximumOffset = height - collapsedDrawerHeight
-        let currentOffset = min(max(restingOffset + drawerDragOffset, 0), maximumOffset)
-
-        return VStack(spacing: 0) {
-            drawerHeader
-            Divider().opacity(controlsExpanded ? 1 : 0)
-
-            ScrollView {
-                VStack(spacing: 16) {
-                    photoTray
-                    intakeOptions
-                    submitButton
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 24)
-            }
-            .scrollDismissesKeyboard(.interactively)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: height, alignment: .top)
-        .background(.regularMaterial)
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 28,
-                topTrailingRadius: 28,
-                style: .continuous
-            )
-        )
-        .shadow(color: .black.opacity(0.24), radius: 18, y: -5)
-        .offset(y: currentOffset)
-        .animation(.interactiveSpring(response: 0.34, dampingFraction: 0.86), value: controlsExpanded)
-    }
-
-    private var drawerHeader: some View {
+    private var capturedPhotosButton: some View {
         Button {
-            withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.86)) {
-                setControlsExpanded(!controlsExpanded)
-            }
+            openDetails()
         } label: {
-            VStack(spacing: 6) {
-                Capsule()
-                    .fill(.secondary.opacity(0.45))
-                    .frame(width: 38, height: 5)
-
-                HStack(spacing: 12) {
-                    Text("Details")
-                        .font(.headline)
-
-                    Spacer()
-
-                    if !model.photos.isEmpty {
-                        Label("\(model.photos.count)", systemImage: "photo.stack")
-                            .font(.subheadline.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(.secondary)
+            ZStack(alignment: .topTrailing) {
+                Group {
+                    if let photo = model.photos.last {
+                        LocalThumbnail(url: photo.fileURL, size: 44)
+                    } else {
+                        Image(systemName: "photo.stack")
+                            .font(.title3)
+                            .frame(width: 44, height: 44)
+                            .foregroundStyle(.white)
                     }
-
-                    Image(systemName: controlsExpanded ? "chevron.down" : "chevron.up")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.secondary)
                 }
+                .background(.black.opacity(0.36))
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .stroke(.white.opacity(0.55), lineWidth: 1)
+                }
+
+                Text("\(model.photos.count)")
+                    .font(.caption2.monospacedDigit().bold())
+                    .foregroundStyle(InventoryTheme.ink)
+                    .padding(.horizontal, 6)
+                    .frame(minWidth: 22, minHeight: 22)
+                    .background(InventoryTheme.lime, in: Capsule())
+                    .offset(x: 8, y: -7)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 6)
-            .frame(height: collapsedDrawerHeight)
-            .contentShape(Rectangle())
+            .padding(.top, 7)
+            .padding(.trailing, 8)
         }
         .buttonStyle(.plain)
-        .gesture(drawerDragGesture)
-        .accessibilityHint(controlsExpanded ? "Klappt die Details ein" : "Klappt die Details auf")
+        .accessibilityLabel(
+            "Aufgenommene Fotos: \(model.photos.count) von \(CaptureViewModel.maximumPhotos)"
+        )
+        .accessibilityHint("Öffnet die aufgenommenen Fotos")
     }
 
-    private var drawerDragGesture: some Gesture {
-        DragGesture(minimumDistance: 5)
-            .updating($drawerDragOffset) { value, offset, _ in
-                offset = value.translation.height
+    private var detailsButton: some View {
+        Button {
+            openDetails()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "slider.horizontal.3")
+                Text(detailsSummary)
             }
-            .onEnded { value in
-                let projectedDistance = value.predictedEndTranslation.height
-                let shouldExpand: Bool
-                if projectedDistance < -45 {
-                    shouldExpand = true
-                } else if projectedDistance > 45 {
-                    shouldExpand = false
-                } else {
-                    shouldExpand = controlsExpanded
-                }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
+            .background(.black.opacity(0.48), in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(.white.opacity(0.28), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Öffnet Namen, Ort und weitere Angaben")
+    }
 
-                withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.86)) {
-                    setControlsExpanded(shouldExpand)
+    private var spatialCaptureButton: some View {
+        Button {
+            presentSpatialCapture()
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: model.spatialPlacement == nil ? "cube.transparent" : "mappin.and.ellipse")
+                Text(model.spatialPlacement == nil ? "Im Raum" : model.spatialPlacement?.roomName ?? "Im Raum")
+                    .lineLimit(1)
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(model.spatialPlacement == nil ? .white : InventoryTheme.ink)
+            .padding(.horizontal, 15)
+            .frame(minHeight: 44)
+            .background(
+                model.spatialPlacement == nil ? Color.black.opacity(0.48) : InventoryTheme.lime,
+                in: Capsule()
+            )
+            .overlay {
+                Capsule().stroke(.white.opacity(0.28), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Erfasst Foto und 3D-Position in einem gescannten Raum")
+    }
+
+    private var detailsSummary: String {
+        let count = [model.name, model.locationName, model.sku, model.serialNumber]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .count + (model.locationService.coordinates == nil ? 0 : 1)
+        return count == 0 ? "Details" : "Details · \(count) Angaben"
+    }
+
+    private var detailsSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 18) {
+                    photoTray
+                    intakeOptions
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 30)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .background(InventoryTheme.canvas)
+            .navigationTitle("Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Fertig") {
+                        showDetails = false
+                    }
                 }
             }
+        }
+    }
+
+    private var topUploadButton: some View {
+        Button(action: submitCapture) {
+            HStack(spacing: 6) {
+                if model.processingCount > 0 {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(InventoryTheme.ink)
+                } else {
+                    Image(systemName: "arrow.up")
+                }
+                Text("Hochladen")
+            }
+            .font(.caption.weight(.bold))
+            .foregroundStyle(InventoryTheme.ink)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 42)
+            .background(InventoryTheme.lime, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!model.canSubmit || model.processingCount > 0)
+        .opacity(model.canSubmit && model.processingCount == 0 ? 1 : 0.55)
+        .accessibilityHint("Legt den Gegenstand an und startet den Upload")
     }
 
     @ViewBuilder
@@ -339,6 +441,25 @@ struct CaptureView: View {
                 .padding(13)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
 
+            if let placement = model.spatialPlacement {
+                HStack(spacing: 10) {
+                    Image(systemName: "mappin.and.ellipse")
+                        .foregroundStyle(InventoryTheme.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("3D-Position in \(placement.roomName)")
+                            .font(.caption.weight(.semibold))
+                        Text(placement.position.map { String(format: "%.2f", $0) }.joined(separator: " · ") + " m")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Entfernen") { model.clearSpatialPlacement() }
+                        .font(.caption.weight(.semibold))
+                }
+                .padding(12)
+                .background(InventoryTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
+            }
+
             VStack(alignment: .leading, spacing: 9) {
                 HStack {
                     Label(
@@ -372,32 +493,6 @@ struct CaptureView: View {
         }
     }
 
-    private var submitButton: some View {
-        Button {
-            let submission = model.makeSubmission()
-            onSubmit(submission)
-            withAnimation {
-                model.resetAfterSubmitting()
-                controlsExpanded = false
-            }
-        } label: {
-            HStack {
-                Image(systemName: "arrow.up.circle.fill")
-                Text("Hochladen")
-                Spacer()
-                Text("\(model.photos.count)").monospacedDigit()
-            }
-            .font(.headline)
-            .padding(.horizontal, 18)
-            .frame(maxWidth: .infinity, minHeight: 56)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(InventoryTheme.ink)
-        .background(InventoryTheme.lime, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .disabled(!model.canSubmit || model.processingCount > 0)
-        .opacity(model.canSubmit && model.processingCount == 0 ? 1 : 0.45)
-    }
-
     private var permissionOverlay: some View {
         VStack(spacing: 12) {
             Image(systemName: "camera.fill").font(.largeTitle)
@@ -429,24 +524,31 @@ struct CaptureView: View {
         .padding(24)
     }
 
-    private var cameraLabel: String {
-        switch camera.state {
-        case .idle: "Kamera aus"
-        case .requestingPermission: "Berechtigung …"
-        case .ready: "Bereit"
-        case .denied: "Gesperrt"
-        case .unavailable: "Nicht verfügbar"
+    private func submitCapture() {
+        guard model.canSubmit, model.processingCount == 0 else { return }
+        let submission = model.makeSubmission(imageModelID: state.selectedImageModelID)
+        onSubmit(submission)
+        withAnimation {
+            model.resetAfterSubmitting()
+            showDetails = false
         }
     }
 
-    private var collapsedDrawerHeight: CGFloat { 64 }
-
-    private func setControlsExpanded(_ expanded: Bool) {
-        controlsExpanded = expanded
-        if expanded, codeScanning {
+    private func openDetails() {
+        if codeScanning {
             codeScanning = false
             camera.scanningEnabled = false
         }
+        detailsDetent = .medium
+        showDetails = true
+    }
+
+    private func presentSpatialCapture() {
+        codeScanning = false
+        camera.scanningEnabled = false
+        camera.stop()
+        showDetails = false
+        showSpatialCapture = true
     }
 
     private func toggleCodeScanning() {
@@ -454,9 +556,7 @@ struct CaptureView: View {
         codeScanning = nextValue
         camera.scanningEnabled = nextValue
         if nextValue {
-            withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.86)) {
-                controlsExpanded = false
-            }
+            showDetails = false
         }
     }
 

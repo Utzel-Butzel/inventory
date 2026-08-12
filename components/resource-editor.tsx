@@ -43,6 +43,10 @@ import { prepareUpload, readImageGps } from "@/lib/client-media";
 import { AssemblyManager } from "@/components/assembly-manager";
 import { CustomFieldInputs } from "@/components/custom-field-inputs";
 import {
+  ImageModelSelector,
+  useImageModelPreference,
+} from "@/components/image-model-selector";
+import {
   isCustomFieldDefinitionApplicable,
   type CustomFieldDefinition,
   type CustomFieldValues,
@@ -147,6 +151,7 @@ const customFieldDefinitionsFromResponse = (payload: unknown) => {
 export function ResourceEditor({ resourceId }: { resourceId?: string }) {
   const router = useRouter();
   const isNew = !resourceId;
+  const imageModelPreference = useImageModelPreference();
   const [resource, setResource] = useState<ClientResource | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [inventoryTypes, setInventoryTypes] = useState<InventoryTypeOption[]>(
@@ -397,7 +402,12 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: coverPrompt || undefined }),
+          body: JSON.stringify({
+            prompt: coverPrompt || undefined,
+            ...(imageModelPreference.selectedModelId
+              ? { modelId: imageModelPreference.selectedModelId }
+              : {}),
+          }),
         },
       );
       setResource(response.resource);
@@ -819,12 +829,30 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
               <div className="space-y-3">
                 <label className="flex items-start gap-3 rounded-xl border border-violet-100 bg-white/80 p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => setAutoAnalyze(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="block text-xs font-semibold text-slate-800">Analyze images</span><span className="mt-0.5 block text-[11px] leading-4 text-slate-500">Generate title, description, type, tags and alt text.</span></span></label>
                 <label className="flex items-start gap-3 rounded-xl border border-violet-100 bg-white/80 p-3"><input type="checkbox" checked={autoCover} onChange={(event) => setAutoCover(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="block text-xs font-semibold text-slate-800">Generate studio cover</span><span className="mt-0.5 block text-[11px] leading-4 text-slate-500">Create a clean square hero image from the first photo.</span></span></label>
+                {autoCover ? (
+                  <ImageModelSelector
+                    preference={imageModelPreference}
+                    disabled={Boolean(aiAction)}
+                    className="rounded-xl border border-violet-100 bg-white/80 p-3"
+                  />
+                ) : null}
                 <p className="text-[11px] leading-4 text-slate-400">AI runs only after the original files are safely stored. You can always edit the result.</p>
               </div>
             ) : (
               <div className="space-y-3">
                 <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runAnalysis(resourceId, true)} className="flex w-full items-center justify-between rounded-xl bg-violet-600 px-3.5 py-3 text-left text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:opacity-40"><span className="flex items-center gap-2">{aiAction === "analyze" ? <LoaderCircle size={15} className="animate-spin" /> : <Bot size={15} />}Analyze & rewrite fields</span><ChevronRight size={15} /></button>
-                <div className="rounded-xl border border-violet-100 bg-white/80 p-3"><label className="text-[11px] font-semibold text-slate-600">Cover direction<textarea value={coverPrompt} onChange={(event) => setCoverPrompt(event.target.value)} rows={5} className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-white p-2.5 text-xs leading-5 text-slate-700 outline-none focus:border-violet-400" /></label><button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runCover(resourceId)} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 transition hover:bg-violet-100 disabled:opacity-40">{aiAction === "cover" ? <LoaderCircle size={14} className="animate-spin" /> : <WandSparkles size={14} />}Generate new cover</button></div>
+                <div className="rounded-xl border border-violet-100 bg-white/80 p-3">
+                  <label className="text-[11px] font-semibold text-slate-600">
+                    Cover direction
+                    <textarea value={coverPrompt} onChange={(event) => setCoverPrompt(event.target.value)} rows={5} className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-white p-2.5 text-xs leading-5 text-slate-700 outline-none focus:border-violet-400" />
+                  </label>
+                  <ImageModelSelector
+                    preference={imageModelPreference}
+                    disabled={Boolean(aiAction)}
+                    className="mt-3"
+                  />
+                  <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runCover(resourceId)} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 transition hover:bg-violet-100 disabled:opacity-40">{aiAction === "cover" ? <LoaderCircle size={14} className="animate-spin" /> : <WandSparkles size={14} />}Generate new cover</button>
+                </div>
                 {!hasImage ? <p className="text-[11px] text-amber-700">Upload and save an image to enable AI actions.</p> : null}
                 {resource?.aiMetadata ? <div className="flex items-center justify-between rounded-lg bg-violet-50 px-3 py-2 text-[10px] text-violet-700"><span>Last model</span><span className="max-w-40 truncate font-mono">{resource.aiMetadata.model ?? "AI"}</span></div> : null}
               </div>

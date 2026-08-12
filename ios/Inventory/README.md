@@ -12,6 +12,7 @@ WebRTC is not required for app-to-server uploads.
 - Create a new item from an unknown code and continue in the same photo flow
 - Capture or select up to 12 photos, downsampled with ImageIO to 2,200 px JPEG
 - Persistent, crash-safe upload pipeline: create → media → analysis → optional cover
+- Server-approved image-model selection, remembered separately for each server
 - Automatic retry with backoff and end-to-end idempotency for every queued stage
 - Inventory search, authenticated image loading, details, and manual editing
 - One-tap stock receipts plus confirmed stock issues from a scanned item
@@ -19,13 +20,16 @@ WebRTC is not required for app-to-server uploads.
 - Email/password login with a device token stored in Keychain
 - Manual API token as an optional expert login
 - Optional GPS coordinates for new captures
+- LiDAR RoomPlan capture with versioned USDZ room models and reusable AR world maps
+- Relocalized item capture with automatic scene-depth/plane position measurement
+- Spatial placement persisted in the crash-safe item upload pipeline before media analysis
 
 ## Run it
 
 1. Start a reachable Inventory server and apply all database migrations.
 2. Open `Inventory.xcodeproj` in Xcode 26 or newer.
 3. Select the `Inventory` target, choose your Apple development team,
-   and run on an iPhone with iOS 17 or newer.
+   and run on a LiDAR-capable iPhone with iOS 17 or newer (a recent Pro model).
 4. Enter the deployment root URL and sign in with email and password. A manual
    API token remains available under the expert option.
 
@@ -33,6 +37,25 @@ Use HTTPS for devices. Plain HTTP is accepted only for `localhost`, loopback,
 and `.local` development hosts; bearer tokens are never sent over public HTTP.
 The Simulator can build and exercise API/UI behavior,
 but camera and scanner acceptance must be done on a physical iPhone.
+
+## Spatial rooms
+
+Use the **Räume** tab to scan a room once. Finish only after the mapping hint says
+enough of the room has been recorded; the app then exports normalized RoomPlan
+geometry, USDZ, a guide image, and an `ARWorldMap` that all share the same
+right-handed, Y-up coordinate frame in metres.
+
+During normal item capture, tap **Im Raum**, choose a scan, and point the reticle
+at the item. Capture remains disabled until ARKit has relocalized the saved room.
+LiDAR scene depth is used first, with a detected/estimated plane as fallback.
+The resulting photo continues through the normal create → placement → media →
+analysis → cover queue. If the room is rescanned while a job is queued, the item
+and photo still upload, but the job warns that its 3D position must be captured
+again against the new room revision.
+
+RoomPlan availability is checked at runtime. The simulator can exercise API and
+SwiftUI behavior, but room scanning, relocalization, scene depth, and positional
+accuracy must be verified on the physical LiDAR device.
 
 ## Recognized resource codes
 
@@ -62,6 +85,8 @@ Each job is pinned to the canonical server origin and carries stable operation
 IDs for resource creation, media, analysis, and cover generation. The matching
 API routes persist these idempotency keys, so a lost response can be retried
 without creating a second item, duplicate media, or another paid AI operation.
+The selected cover model is copied into the queued job as well, so changing the
+app preference does not alter work that is already waiting to upload.
 Transient network and rate-limit errors use bounded exponential backoff.
 
 ## Photo counting
@@ -70,7 +95,9 @@ The resource detail exposes **Teile per Foto zählen** when the signed-in token
 has the `ai` scope. The app sends one downsampled JPEG as multipart field
 `image` and the optional, 240-character item description as `itemHint` to
 `POST /api/v1/ai/count`. The response contains `count`, `confidence`,
-`detectedItem`, `isExact`, `explanation`, `warnings`, and `model`.
+`detectedItem`, `isExact`, `explanation`, `warnings`, `markers` with one
+normalized point per counted item, and `model`. The app overlays those points on the full,
+uncropped photo so every item included in the count is visible at a glance.
 
 The source photo remains only in the temporary directory for review and is
 removed when the sheet closes or another photo is taken. The detected count is

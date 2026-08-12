@@ -12,6 +12,7 @@ enum IntakeJobStage: String, Codable, Sendable {
     case preparing
     case queued
     case creating
+    case placing
     case uploading
     case analyzing
     case generatingCover
@@ -34,6 +35,7 @@ struct IntakeJob: Identifiable, Codable, Equatable, Sendable {
     var serverOrigin: String?
     var shouldAnalyze: Bool
     var shouldGenerateCover: Bool
+    var imageModelID: String?
     var stage: IntakeJobStage
     var progress: Double
     var resourceID: UUID?
@@ -43,6 +45,9 @@ struct IntakeJob: Identifiable, Codable, Equatable, Sendable {
     var coverCompleted: Bool
     var analysisOperationID: UUID?
     var coverOperationID: UUID?
+    var spatialPlacement: SpatialPlacementDraft? = nil
+    var placementCompleted: Bool? = nil
+    var placementWarning: String? = nil
     var attemptCount: Int?
     var nextAttemptAt: Date?
     var message: String?
@@ -125,6 +130,7 @@ final class IntakeQueue: ObservableObject {
             serverOrigin: client?.serverURL.absoluteString,
             shouldAnalyze: submission.analyze,
             shouldGenerateCover: submission.generateCover,
+            imageModelID: submission.imageModelID,
             stage: .preparing,
             progress: 0.03,
             resourceID: nil,
@@ -134,6 +140,9 @@ final class IntakeQueue: ObservableObject {
             coverCompleted: !submission.generateCover,
             analysisOperationID: submission.analyze ? UUID() : nil,
             coverOperationID: submission.generateCover ? UUID() : nil,
+            spatialPlacement: submission.spatialPlacement,
+            placementCompleted: submission.spatialPlacement == nil,
+            placementWarning: nil,
             attemptCount: 0,
             nextAttemptAt: nil,
             message: "Fotos werden für den Upload gesichert."
@@ -330,9 +339,38 @@ final class IntakeQueue: ObservableObject {
                 throw APIClientError.invalidResponse
             }
 
+            if let spatialPlacement = job.spatialPlacement,
+               job.placementCompleted != true {
+                job.stage = .placing
+                job.progress = 0.34
+                job.message = "3D-Position wird im Raum gespeichert."
+                replace(job)
+
+                do {
+                    _ = try await client.saveSpatialPlacement(
+                        resourceID: resourceID,
+                        draft: spatialPlacement
+                    )
+                    job.placementCompleted = true
+                    job.placementWarning = nil
+                    job.progress = 0.4
+                } catch let error as APIClientError where error.statusCode == 409 {
+                    // A room may be rescanned while this durable job is waiting.
+                    // Keep the new item and its photos instead of retrying the
+                    // now-invalid coordinate frame forever.
+                    job.placementCompleted = true
+                    job.placementWarning =
+                        "Der Raum wurde zwischenzeitlich neu gescannt; die 3D-Position muss erneut erfasst werden."
+                    job.progress = 0.4
+                }
+                guard replace(job) else { throw IntakeQueuePersistenceError.unableToPersist }
+                guard configurationID == generation else { throw CancellationError() }
+                try Task.checkCancellation()
+            }
+
             if !job.mediaUploaded {
                 job.stage = .uploading
-                job.progress = 0.36
+                job.progress = 0.44
                 job.message = "\(job.filenames.count) Foto(s) werden hochgeladen."
                 replace(job)
 
@@ -391,6 +429,7 @@ final class IntakeQueue: ObservableObject {
                 do {
                     let response = try await client.generateCover(
                         resourceID: resourceID,
+                        modelID: job.imageModelID,
                         idempotencyKey: job.coverOperationID ?? job.id
                     )
                     job.resourceName = response.resource.name
@@ -411,11 +450,13 @@ final class IntakeQueue: ObservableObject {
                 }
             }
 
-            job.stage = .complete
+            job.stage = job.placementWarning == nil ? .complete : .warning
             job.progress = 1
             job.attemptCount = 0
             job.nextAttemptAt = nil
-            job.message = "Fertig."
+            job.message = job.placementWarning.map {
+                "Gegenstand und Fotos sind gespeichert. \($0)"
+            } ?? "Fertig."
             if replace(job) {
                 cleanupPhotoFiles(for: job.id)
             }

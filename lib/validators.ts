@@ -344,6 +344,7 @@ export const nativeLoginInputSchema = z.object({
 export const coverInputSchema = z.object({
   sourceMediaId: z.string().uuid().optional(),
   prompt: z.string().trim().max(5_000).optional(),
+  modelId: z.string().trim().min(1).max(240).optional(),
 });
 
 export const inventoryCountInputSchema = z

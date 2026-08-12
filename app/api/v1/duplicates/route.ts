@@ -44,7 +44,8 @@ export async function POST(request: Request) {
       message.includes("no longer exists") ||
       message.includes("circular bill of materials") ||
       message.includes("assembly build history") ||
-      message.includes("purchase-order history");
+      message.includes("purchase-order history") ||
+      message.includes("3D room scans");
     return Response.json(
       { error: message },
       { status: stockConflict ? 409 : 500 },

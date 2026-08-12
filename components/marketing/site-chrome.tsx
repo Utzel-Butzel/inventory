@@ -33,6 +33,7 @@ const navLinks = [
   { label: "App", href: "/#app" },
   { label: "Docker", href: "/#docker" },
   { label: "Docs", href: "/docs" },
+  { label: "API", href: "/api-docs" },
 ];
 
 export function MarketingHeader() {
@@ -136,6 +137,7 @@ export function MarketingFooter() {
               <Link href="/#app" className="w-fit hover:text-white">iOS app</Link>
               <Link href="/#docker" className="w-fit hover:text-white">Docker</Link>
               <Link href="/docs" className="w-fit hover:text-white">Documentation</Link>
+              <Link href="/api-docs" className="w-fit hover:text-white">API reference</Link>
             </div>
           </div>
           <div>
@@ -146,7 +148,7 @@ export function MarketingFooter() {
               <a href={githubUrl} target="_blank" rel="noreferrer" className="w-fit hover:text-white">GitHub</a>
               <a href={`${githubUrl}/issues`} target="_blank" rel="noreferrer" className="w-fit hover:text-white">Issues</a>
               <a href={`${githubUrl}/blob/main/LICENSE`} target="_blank" rel="noreferrer" className="w-fit hover:text-white">MIT License</a>
-              <a href={`${githubUrl}/blob/main/public/openapi.yaml`} target="_blank" rel="noreferrer" className="w-fit hover:text-white">OpenAPI</a>
+              <Link href="/openapi.yaml" className="w-fit hover:text-white">OpenAPI</Link>
               <Link href="/impressum" className="w-fit hover:text-white">Impressum</Link>
             </div>
           </div>

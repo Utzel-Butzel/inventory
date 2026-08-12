@@ -2,7 +2,7 @@ import "server-only";
 
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import sharp from "sharp";
 
 export type StorageProvider = "local" | "openinary";
@@ -16,6 +16,15 @@ export type StoredMedia = {
   size: number;
   width: number | null;
   height: number | null;
+};
+
+export type StoredBinaryAsset = {
+  storageKey: string;
+  url: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  checksumSha256: string;
 };
 
 const localRoot = () =>
@@ -124,31 +133,44 @@ const uploadOpeninary = async (
   };
 };
 
+async function storeBytes(options: {
+  bytes: Buffer;
+  mimeType: string;
+  originalName: string;
+  folder: string;
+}) {
+  const filename = `${randomUUID()}-${safeFilename(options.originalName)}`;
+  const key = validateStorageKey(`${options.folder}/${filename}`);
+
+  if (getStorageProvider() === "openinary") {
+    return uploadOpeninary(options.bytes, options.mimeType, key);
+  }
+
+  const target = localPathForKey(key);
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(target, options.bytes, { flag: "wx" });
+  return {
+    storageKey: key,
+    url: `/api/files/${key
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/")}`,
+  };
+}
+
 export async function storeMedia(options: {
   bytes: Buffer;
   mimeType: string;
   originalName: string;
   resourceId: string;
 }): Promise<StoredMedia> {
-  const filename = `${randomUUID()}-${safeFilename(options.originalName)}`;
-  const key = validateStorageKey(`resources/${options.resourceId}/${filename}`);
   const dimensions = await imageMetadata(options.bytes, options.mimeType);
-
-  let stored: { storageKey: string; url: string };
-  if (getStorageProvider() === "openinary") {
-    stored = await uploadOpeninary(options.bytes, options.mimeType, key);
-  } else {
-    const target = localPathForKey(key);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, options.bytes, { flag: "wx" });
-    stored = {
-      storageKey: key,
-      url: `/api/files/${key
-        .split("/")
-        .map((segment) => encodeURIComponent(segment))
-        .join("/")}`,
-    };
-  }
+  const stored = await storeBytes({
+    bytes: options.bytes,
+    mimeType: options.mimeType,
+    originalName: options.originalName,
+    folder: `resources/${options.resourceId}`,
+  });
 
   return {
     ...stored,
@@ -157,6 +179,27 @@ export async function storeMedia(options: {
     kind: getMediaKind(options.mimeType),
     size: options.bytes.length,
     ...dimensions,
+  };
+}
+
+export async function storeRoomScanAsset(options: {
+  bytes: Buffer;
+  mimeType: string;
+  originalName: string;
+  roomScanId: string;
+}): Promise<StoredBinaryAsset> {
+  const stored = await storeBytes({
+    bytes: options.bytes,
+    mimeType: options.mimeType,
+    originalName: options.originalName,
+    folder: `room-scans/${options.roomScanId}`,
+  });
+  return {
+    ...stored,
+    name: options.originalName,
+    mimeType: options.mimeType,
+    size: options.bytes.length,
+    checksumSha256: createHash("sha256").update(options.bytes).digest("hex"),
   };
 }
 
@@ -239,4 +282,13 @@ export async function deleteStoredMedia(item: {
 export const maxUploadBytes = () => {
   const configured = Number(process.env.MAX_UPLOAD_MB ?? "25");
   return Math.max(1, Math.min(100, Number.isFinite(configured) ? configured : 25)) * 1024 * 1024;
+};
+
+export const maxRoomScanUploadBytes = () => {
+  const configured = Number(process.env.MAX_ROOM_SCAN_UPLOAD_MB ?? "100");
+  return (
+    Math.max(10, Math.min(500, Number.isFinite(configured) ? configured : 100)) *
+    1024 *
+    1024
+  );
 };

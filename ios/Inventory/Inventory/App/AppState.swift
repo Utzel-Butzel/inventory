@@ -7,7 +7,11 @@ final class AppState: ObservableObject {
     @Published private(set) var client: APIClient?
     @Published private(set) var configurationError: String?
     @Published private(set) var grantedScopes: Set<String> = []
-    @Published var selectedTab: RootTab = .capture
+    @Published private(set) var availableImageModels: [ImageGenerationModelOption] = []
+    @Published private(set) var defaultImageModelID: String?
+    @Published private(set) var selectedImageModelID: String?
+    @Published var selectedTab: RootTab = .inventory
+    @Published var presentedTool: PresentedTool?
     @Published var pendingScanCode: String?
     @Published var pendingCaptureCode: String?
 
@@ -19,6 +23,7 @@ final class AppState: ObservableObject {
     private let scopesKey = "inventory.tokenScopes"
     private let authenticationMethodKey = "inventory.authenticationMethod"
     private let tokenExpiresAtKey = "inventory.tokenExpiresAt"
+    private let imageModelPreferencesKey = "inventory.imageGenerationModelPreferences"
     private var authenticationMethod: StoredAuthenticationMethod?
     private var tokenExpiresAt: Date?
     private var currentToken: String?
@@ -41,6 +46,29 @@ final class AppState: ObservableObject {
 
     var isConfigured: Bool { client != nil && hasStoredToken }
     var canUseAI: Bool { grantedScopes.contains("ai") }
+
+    func selectImageModel(_ modelID: String?) {
+        guard let client else { return }
+        let normalized = modelID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let selection = normalized.flatMap { $0.isEmpty ? nil : $0 }
+        guard selection == nil || availableImageModels.contains(where: { $0.id == selection }) else {
+            return
+        }
+
+        selectedImageModelID = selection
+        var preferences = defaults.dictionary(forKey: imageModelPreferencesKey)?
+            .compactMapValues { $0 as? String } ?? [:]
+        if let selection {
+            preferences[client.serverURL.absoluteString] = selection
+        } else {
+            preferences.removeValue(forKey: client.serverURL.absoluteString)
+        }
+        if preferences.isEmpty {
+            defaults.removeObject(forKey: imageModelPreferencesKey)
+        } else {
+            defaults.set(preferences, forKey: imageModelPreferencesKey)
+        }
+    }
 
     @discardableResult
     func saveConfiguration(server: String, token: String?) async throws -> ResourceListResponse {
@@ -197,8 +225,15 @@ final class AppState: ObservableObject {
         currentToken = token
         activeClientID = nextClientID
         client = nextClient
+        selectedTab = .inventory
+        presentedTool = nil
         configurationError = nil
         intakeQueue.configure(client: nextClient)
+        scheduleImageModelDiscovery(
+            using: candidateClient,
+            activeClient: nextClient,
+            scopes: candidateScopes
+        )
         return testResult
     }
 
@@ -359,6 +394,11 @@ final class AppState: ObservableObject {
             defaults.set(Array(scopes).sorted(), forKey: scopesKey)
             configurationError = nil
             intakeQueue.configure(client: restoredClient)
+            scheduleImageModelDiscovery(
+                using: candidateClient,
+                activeClient: restoredClient,
+                scopes: scopes
+            )
         } catch is CancellationError {
             return
         } catch let error as APIClientError where error.statusCode == 401 {
@@ -372,6 +412,7 @@ final class AppState: ObservableObject {
             guard authenticationOperationID == operationID else { return }
             client = nil
             grantedScopes = []
+            resetImageModelState()
             configurationError = error.localizedDescription
             intakeQueue.configure(client: nil)
         }
@@ -424,11 +465,82 @@ final class AppState: ObservableObject {
         defaults.removeObject(forKey: tokenExpiresAtKey)
         hasStoredToken = false
         grantedScopes = []
+        resetImageModelState()
         authenticationMethod = nil
         tokenExpiresAt = nil
         currentToken = nil
         client = nil
         configurationError = message
+    }
+
+    private func scheduleImageModelDiscovery(
+        using discoveryClient: APIClient,
+        activeClient: APIClient,
+        scopes: Set<String>
+    ) {
+        guard scopes.contains("ai") else {
+            resetImageModelState()
+            return
+        }
+        availableImageModels = []
+        defaultImageModelID = nil
+        selectedImageModelID = storedImageModelID(for: activeClient)
+        Task { [weak self] in
+            await self?.loadImageModels(
+                using: discoveryClient,
+                activeClient: activeClient
+            )
+        }
+    }
+
+    private func loadImageModels(
+        using discoveryClient: APIClient,
+        activeClient: APIClient
+    ) async {
+        do {
+            let response = try await discoveryClient.imageGenerationModels()
+            guard client === activeClient else { return }
+
+            var seen = Set<String>()
+            let models = response.models.filter { option in
+                !option.id.isEmpty && seen.insert(option.id).inserted
+            }
+            availableImageModels = models
+            defaultImageModelID = response.defaultModelId.flatMap { identifier in
+                models.contains(where: { $0.id == identifier }) ? identifier : nil
+            }
+
+            let storedSelection = defaults.dictionary(forKey: imageModelPreferencesKey)?[
+                activeClient.serverURL.absoluteString
+            ] as? String
+            if let storedSelection,
+               models.contains(where: { $0.id == storedSelection }) {
+                selectedImageModelID = storedSelection
+            } else {
+                selectedImageModelID = nil
+                if storedSelection != nil {
+                    selectImageModel(nil)
+                }
+            }
+        } catch {
+            guard client === activeClient else { return }
+            // Model discovery is optional. Older or temporarily unavailable servers
+            // keep using a remembered explicit selection when one exists.
+            availableImageModels = []
+            defaultImageModelID = nil
+        }
+    }
+
+    private func storedImageModelID(for client: APIClient) -> String? {
+        defaults.dictionary(forKey: imageModelPreferencesKey)?[
+            client.serverURL.absoluteString
+        ] as? String
+    }
+
+    private func resetImageModelState() {
+        availableImageModels = []
+        defaultImageModelID = nil
+        selectedImageModelID = nil
     }
 
     private func revokeBestEffort(serverURL: URL, token: String) async {
@@ -534,9 +646,15 @@ private enum StoredAuthenticationMethod: String {
 }
 
 enum RootTab: Hashable {
+    case inventory
+    case map
+    case rooms
+    case settings
+}
+
+enum PresentedTool: String, Identifiable {
     case capture
     case scanner
-    case inventory
-    case uploads
-    case settings
+
+    var id: String { rawValue }
 }

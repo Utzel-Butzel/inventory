@@ -2,8 +2,12 @@ import SwiftUI
 
 struct InventoryListView: View {
     @EnvironmentObject private var state: AppState
+    @Binding private var searchRequested: Bool
+    private let onCapture: () -> Void
+    private let onScan: () -> Void
     @State private var resources: [InventoryResource] = []
     @State private var query = ""
+    @State private var searchPresented = false
     @State private var typeFilter: InventoryResourceType?
     @State private var statusFilter: InventoryResourceStatus?
     @State private var page = 1
@@ -13,6 +17,16 @@ struct InventoryListView: View {
     @State private var loadingMore = false
     @State private var errorMessage: String?
     @State private var showNewResource = false
+
+    init(
+        searchRequested: Binding<Bool> = .constant(false),
+        onCapture: @escaping () -> Void = {},
+        onScan: @escaping () -> Void = {}
+    ) {
+        _searchRequested = searchRequested
+        self.onCapture = onCapture
+        self.onScan = onScan
+    }
 
     var body: some View {
         NavigationStack {
@@ -52,14 +66,34 @@ struct InventoryListView: View {
             .background(InventoryTheme.canvas)
             .navigationTitle("Inventar")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: "Name, SKU, Tag oder Ort")
+            .searchable(
+                text: $query,
+                isPresented: $searchPresented,
+                prompt: "Name, SKU, Tag oder Ort"
+            )
             .safeAreaInset(edge: .top, spacing: 0) { filterBar }
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button(action: onCapture) {
+                        Image(systemName: "camera.fill")
+                    }
+                    .accessibilityLabel("Erfassen")
+
+                    Button(action: onScan) {
+                        Image(systemName: "barcode.viewfinder")
+                    }
+                    .accessibilityLabel("Scannen")
+
                     Button { showNewResource = true } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel("Neuer Eintrag")
                 }
+            }
+            .onChange(of: searchRequested) { _, requested in
+                guard requested else { return }
+                searchPresented = true
+                searchRequested = false
             }
             .task(id: searchKey) {
                 if !query.isEmpty {

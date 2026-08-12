@@ -116,6 +116,55 @@ final class StockContractTests: XCTestCase {
         XCTAssertTrue(object["location"] is NSNull)
     }
 
+    func testObjectCountResponseDecodesOneMarkerPerPart() throws {
+        let data = Data(
+            #"""
+            {
+              "count": 2,
+              "confidence": 0.94,
+              "detectedItem": "Unterlegscheiben",
+              "isExact": true,
+              "explanation": "Zwei Teile sind einzeln sichtbar.",
+              "warnings": [],
+              "markers": [
+                { "x": 125, "y": 250 },
+                { "x": 875, "y": 750 }
+              ],
+              "model": "vision-test"
+            }
+            """#.utf8
+        )
+
+        let result = try JSONDecoder().decode(ObjectCountResponse.self, from: data)
+
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(
+            result.markers,
+            [ObjectCountMarker(x: 125, y: 250), ObjectCountMarker(x: 875, y: 750)]
+        )
+    }
+
+    func testObjectCountResponseTreatsMissingMarkersAsEmptyForOlderServers() throws {
+        let data = Data(
+            #"""
+            {
+              "count": 1,
+              "confidence": 0.8,
+              "detectedItem": "Teil",
+              "isExact": false,
+              "explanation": "Ein Teil ist sichtbar.",
+              "warnings": [],
+              "model": "legacy-vision-test"
+            }
+            """#.utf8
+        )
+
+        let result = try JSONDecoder().decode(ObjectCountResponse.self, from: data)
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertTrue(result.markers.isEmpty)
+    }
+
     private func jsonObject<Value: Encodable>(for value: Value) throws -> [String: Any] {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601

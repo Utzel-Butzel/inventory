@@ -14,7 +14,7 @@ struct InventoryApp: App {
                 .onOpenURL { url in
                     guard ResourceCodeParser.parse(url.absoluteString).resourceID != nil else { return }
                     state.pendingScanCode = url.absoluteString
-                    state.selectedTab = .scanner
+                    state.presentedTool = .scanner
                 }
         }
         .onChange(of: scenePhase) { _, phase in

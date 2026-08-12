@@ -5,6 +5,126 @@ public struct CapabilitiesResponse: Codable, Equatable, Sendable {
     public let scopes: [String]
 }
 
+public struct RuntimeSettingsResponse: Codable, Equatable, Sendable {
+    public let storage: RuntimeStorageStatus
+    public let ai: RuntimeAIStatus
+    public let auth: RuntimeAuthenticationStatus
+    public let user: RuntimeUserStatus
+}
+
+public struct RuntimeStorageStatus: Codable, Equatable, Sendable {
+    public let provider: String
+    public let configured: Bool
+}
+
+public struct RuntimeAIStatus: Codable, Equatable, Sendable {
+    public let analysis: Bool
+    public let imageGeneration: Bool
+    public let imageProvider: String
+}
+
+public struct RuntimeAuthenticationStatus: Codable, Equatable, Sendable {
+    public let password: Bool
+    public let auth0: Bool
+}
+
+public struct RuntimeUserStatus: Codable, Equatable, Sendable {
+    public let role: String?
+}
+
+public struct InventoryTypeDefinition: Codable, Equatable, Identifiable, Sendable {
+    public let key: String
+    public let label: String
+    public let description: String
+    public let color: String
+    public let icon: String
+    public let canContain: Bool
+    public let spatialContainment: Bool
+    public let position: Int
+    public let isSystem: Bool
+    public let archivedAt: Date?
+
+    public var id: String { key }
+}
+
+public struct InventoryTypesResponse: Codable, Equatable, Sendable {
+    public let types: [InventoryTypeDefinition]
+}
+
+public enum CustomFieldEntityType: String, Codable, CaseIterable, Sendable {
+    case inventory
+    case stockUnit = "stock_unit"
+}
+
+public enum CustomFieldValueType: String, Codable, CaseIterable, Sendable {
+    case text
+    case textarea
+    case number
+    case boolean
+    case date
+    case datetime
+    case select
+    case multiSelect = "multi_select"
+    case email
+    case url
+}
+
+public struct CustomFieldOption: Codable, Equatable, Identifiable, Sendable {
+    public let value: String
+    public let label: String
+    public let color: String?
+
+    public var id: String { value }
+}
+
+public struct CustomFieldDefinition: Codable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public let entityType: CustomFieldEntityType
+    public let key: String
+    public let label: String
+    public let fieldType: CustomFieldValueType
+    public let description: String
+    public let placeholder: String
+    public let required: Bool
+    public let minValue: Double?
+    public let maxValue: Double?
+    public let step: Double?
+    public let resourceTypes: [String]
+    public let categories: [String]
+    public let options: [CustomFieldOption]
+    public let position: Int
+    public let revision: Int
+    public let archivedAt: Date?
+}
+
+public struct CustomFieldDefinitionsResponse: Codable, Equatable, Sendable {
+    public let definitions: [CustomFieldDefinition]
+}
+
+public struct ImageGenerationModelOption: Codable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public let provider: String
+    public let model: String
+    public let label: String
+
+    public init(id: String, provider: String, model: String, label: String) {
+        self.id = id
+        self.provider = provider
+        self.model = model
+        self.label = label
+    }
+}
+
+public struct ImageGenerationModelsResponse: Codable, Equatable, Sendable {
+    public let models: [ImageGenerationModelOption]
+    public let defaultModelId: String?
+
+    public init(models: [ImageGenerationModelOption], defaultModelId: String?) {
+        self.models = models
+        self.defaultModelId = defaultModelId
+    }
+}
+
 public struct LoginUser: Codable, Equatable, Sendable {
     public let id: String
     public let name: String
@@ -126,6 +246,16 @@ public struct AnalyzeResourceResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct ObjectCountMarker: Codable, Equatable, Sendable {
+    public let x: Int
+    public let y: Int
+
+    public init(x: Int, y: Int) {
+        self.x = x
+        self.y = y
+    }
+}
+
 public struct ObjectCountResponse: Codable, Equatable, Sendable {
     public let count: Int
     public let confidence: Double
@@ -133,6 +263,7 @@ public struct ObjectCountResponse: Codable, Equatable, Sendable {
     public let isExact: Bool
     public let explanation: String
     public let warnings: [String]
+    public let markers: [ObjectCountMarker]
     public let model: String
 
     public init(
@@ -142,6 +273,7 @@ public struct ObjectCountResponse: Codable, Equatable, Sendable {
         isExact: Bool,
         explanation: String,
         warnings: [String],
+        markers: [ObjectCountMarker] = [],
         model: String
     ) {
         self.count = count
@@ -150,7 +282,24 @@ public struct ObjectCountResponse: Codable, Equatable, Sendable {
         self.isExact = isExact
         self.explanation = explanation
         self.warnings = warnings
+        self.markers = markers
         self.model = model
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case count, confidence, detectedItem, isExact, explanation, warnings, markers, model
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        count = try container.decode(Int.self, forKey: .count)
+        confidence = try container.decode(Double.self, forKey: .confidence)
+        detectedItem = try container.decode(String.self, forKey: .detectedItem)
+        isExact = try container.decode(Bool.self, forKey: .isExact)
+        explanation = try container.decode(String.self, forKey: .explanation)
+        warnings = try container.decode([String].self, forKey: .warnings)
+        markers = try container.decodeIfPresent([ObjectCountMarker].self, forKey: .markers) ?? []
+        model = try container.decode(String.self, forKey: .model)
     }
 }
 

@@ -33,6 +33,11 @@ import {
   useState,
 } from "react";
 
+import {
+  ImageModelSelector,
+  useImageModelPreference,
+} from "@/components/image-model-selector";
+
 const MAX_PHOTOS = 12;
 const MAX_CAPTURE_EDGE = 1920;
 
@@ -145,6 +150,7 @@ const stageLabel = (job: BatchJob) => {
 };
 
 export default function BatchCapturePage() {
+  const imageModelPreference = useImageModelPreference();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -457,6 +463,7 @@ export default function BatchCapturePage() {
         locationName: string;
         coordinates: Coordinates | null;
         cover: boolean;
+        modelId?: string;
       },
     ) => {
       let createdResource: Resource | undefined;
@@ -530,7 +537,9 @@ export default function BatchCapturePage() {
               {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify({}),
+                body: JSON.stringify(
+                  input.modelId ? { modelId: input.modelId } : {},
+                ),
               },
             );
             analyzedResource = covered.resource;
@@ -597,6 +606,7 @@ export default function BatchCapturePage() {
       locationName,
       coordinates,
       cover: autoGenerateCover,
+      modelId: imageModelPreference.selectedModelId,
     };
 
     updatePhotos((current) => {
@@ -1074,6 +1084,12 @@ export default function BatchCapturePage() {
                   <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
                 </span>
               </label>
+              {autoGenerateCover ? (
+                <ImageModelSelector
+                  preference={imageModelPreference}
+                  className="mt-3 rounded-2xl border border-[#dedcfb] bg-white p-4"
+                />
+              ) : null}
             </div>
 
             <div className="mt-auto pt-6">

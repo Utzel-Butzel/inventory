@@ -13,6 +13,10 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
 
     @Published private(set) var state: State = .idle
     @Published private(set) var torchEnabled = false
+    @Published private(set) var torchAvailable = false
+    @Published private(set) var canSwitchCamera = false
+    @Published private(set) var isUsingFrontCamera = false
+    @Published private(set) var isSwitchingCamera = false
 
     let session = AVCaptureSession()
     var scanningEnabled: Bool {
@@ -38,7 +42,9 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     private let photoOutput = AVCapturePhotoOutput()
     private let metadataOutput = AVCaptureMetadataOutput()
     private var cameraDevice: AVCaptureDevice?
+    private var cameraInput: AVCaptureDeviceInput?
     private var configured = false
+    private var switchInProgress = false
     private var lastScan: (value: String, time: Date)?
     private let scanningStateLock = NSLock()
     private var scanningEnabledStorage = true
@@ -102,6 +108,55 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
+    func switchCamera() {
+        sessionQueue.async { [weak self] in
+            guard
+                let self,
+                self.configured,
+                !self.switchInProgress,
+                let currentInput = self.cameraInput
+            else { return }
+
+            let targetPosition: AVCaptureDevice.Position =
+                currentInput.device.position == .front ? .back : .front
+            guard let nextDevice = Self.videoDevice(position: targetPosition) else { return }
+
+            self.switchInProgress = true
+            self.setSwitchingCamera(true)
+            defer {
+                self.switchInProgress = false
+                self.setSwitchingCamera(false)
+            }
+
+            do {
+                let nextInput = try AVCaptureDeviceInput(device: nextDevice)
+                try self.configureDevice(nextDevice)
+                self.turnOffTorch(on: currentInput.device)
+
+                self.session.beginConfiguration()
+                self.session.removeInput(currentInput)
+
+                guard self.session.canAddInput(nextInput) else {
+                    if self.session.canAddInput(currentInput) {
+                        self.session.addInput(currentInput)
+                    }
+                    self.session.commitConfiguration()
+                    self.publishCapabilities(for: currentInput.device)
+                    return
+                }
+
+                self.session.addInput(nextInput)
+                self.session.commitConfiguration()
+
+                self.cameraInput = nextInput
+                self.cameraDevice = nextDevice
+                self.publishCapabilities(for: nextDevice)
+            } catch {
+                // Keep the current camera active if the alternate input cannot be created.
+            }
+        }
+    }
+
     func updateScanningRegion(_ region: CGRect) {
         sessionQueue.async { [weak self] in
             self?.metadataOutput.rectOfInterest = region
@@ -157,18 +212,12 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
                 }
             }
 
-            try device.lockForConfiguration()
-            if device.isFocusModeSupported(.continuousAutoFocus) {
-                device.focusMode = .continuousAutoFocus
-            }
-            if device.isExposureModeSupported(.continuousAutoExposure) {
-                device.exposureMode = .continuousAutoExposure
-            }
-            if device.isSmoothAutoFocusSupported { device.isSmoothAutoFocusEnabled = true }
-            device.unlockForConfiguration()
+            try configureDevice(device)
 
+            cameraInput = input
             cameraDevice = device
             configured = true
+            publishCapabilities(for: device)
             return true
         } catch {
             setState(.unavailable(error.localizedDescription))
@@ -178,6 +227,63 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
 
     private func setState(_ next: State) {
         DispatchQueue.main.async { [weak self] in self?.state = next }
+    }
+
+    private static func videoDevice(position: AVCaptureDevice.Position) -> AVCaptureDevice? {
+        AVCaptureDevice.default(
+            .builtInWideAngleCamera,
+            for: .video,
+            position: position
+        )
+    }
+
+    private func configureDevice(_ device: AVCaptureDevice) throws {
+        try device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+        if device.isFocusModeSupported(.continuousAutoFocus) {
+            device.focusMode = .continuousAutoFocus
+        }
+        if device.isExposureModeSupported(.continuousAutoExposure) {
+            device.exposureMode = .continuousAutoExposure
+        }
+        if device.isSmoothAutoFocusSupported {
+            device.isSmoothAutoFocusEnabled = true
+        }
+    }
+
+    private func turnOffTorch(on device: AVCaptureDevice) {
+        guard device.hasTorch else {
+            DispatchQueue.main.async { [weak self] in self?.torchEnabled = false }
+            return
+        }
+        do {
+            try device.lockForConfiguration()
+            if device.isTorchModeSupported(.off) {
+                device.torchMode = .off
+            }
+            device.unlockForConfiguration()
+        } catch {
+            // The input can still be switched if the torch cannot be changed.
+        }
+        DispatchQueue.main.async { [weak self] in self?.torchEnabled = false }
+    }
+
+    private func publishCapabilities(for device: AVCaptureDevice) {
+        let frontAvailable = Self.videoDevice(position: .front) != nil
+        let backAvailable = Self.videoDevice(position: .back) != nil
+        let hasTorch = device.hasTorch
+        let usesFrontCamera = device.position == .front
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.canSwitchCamera = frontAvailable && backAvailable
+            self.torchAvailable = hasTorch
+            self.isUsingFrontCamera = usesFrontCamera
+            if !hasTorch { self.torchEnabled = false }
+        }
+    }
+
+    private func setSwitchingCamera(_ switching: Bool) {
+        DispatchQueue.main.async { [weak self] in self?.isSwitchingCamera = switching }
     }
 }
 

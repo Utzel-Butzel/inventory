@@ -14,6 +14,7 @@
     "lint": "eslint . --ignore-pattern .next",
     "typecheck": "tsc --noEmit",
     "test:locations": "node --experimental-strip-types --test tests/spatial-containment.test.mjs tests/client-media-location.test.mjs",
+    "test:room-scenes": "node --experimental-strip-types --test tests/room-scene-contract.test.mjs tests/room-scan-upload-policy.test.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "node scripts/seed.mjs",
@@ -37,6 +38,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "sharp": "^0.34.5",
+    "three": "^0.185.1",
     "yaml": "^2.9.0",
     "zod": "^4.3.6"
   },
@@ -45,6 +47,7 @@
     "@types/node": "^22.19.19",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.185.4",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.1.6",

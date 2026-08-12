@@ -12,32 +12,30 @@ private struct UploadJobsContent: View {
     @ObservedObject var queue: IntakeQueue
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if queue.jobs.isEmpty {
-                    ContentUnavailableView("Keine Uploads", systemImage: "arrow.up.circle")
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            if let storageError = queue.storageError {
-                                Label(storageError, systemImage: "externaldrive.badge.exclamationmark")
-                                    .font(.caption)
-                                    .foregroundStyle(InventoryTheme.danger)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .inventoryCard()
-                            }
-                            ForEach(queue.jobs) { job in
-                                jobCard(job)
-                            }
+        Group {
+            if queue.jobs.isEmpty {
+                ContentUnavailableView("Keine Uploads", systemImage: "arrow.up.circle")
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        if let storageError = queue.storageError {
+                            Label(storageError, systemImage: "externaldrive.badge.exclamationmark")
+                                .font(.caption)
+                                .foregroundStyle(InventoryTheme.danger)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .inventoryCard()
                         }
-                        .padding(16)
+                        ForEach(queue.jobs) { job in
+                            jobCard(job)
+                        }
                     }
+                    .padding(16)
                 }
             }
-            .background(InventoryTheme.canvas)
-            .navigationTitle("Upload-Queue")
-            .navigationBarTitleDisplayMode(.inline)
         }
+        .background(InventoryTheme.canvas)
+        .navigationTitle("Uploads")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func jobCard(_ job: IntakeJob) -> some View {
@@ -120,6 +118,7 @@ private extension IntakeJobStage {
         case .preparing: "Fotos vorbereiten"
         case .queued: "Wartet auf Upload"
         case .creating: "Gegenstand anlegen"
+        case .placing: "Position im Raum speichern"
         case .uploading: "Fotos hochladen"
         case .analyzing: "Fotos analysieren"
         case .generatingCover: "Cover erzeugen"
@@ -134,6 +133,7 @@ private extension IntakeJobStage {
         case .preparing: "photo.badge.arrow.down"
         case .queued: "clock.fill"
         case .creating: "plus.app.fill"
+        case .placing: "location.fill"
         case .uploading: "arrow.up.circle.fill"
         case .analyzing: "sparkles"
         case .generatingCover: "wand.and.stars"

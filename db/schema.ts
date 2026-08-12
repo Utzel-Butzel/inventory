@@ -27,6 +27,7 @@ import {
   type CustomFieldType,
   type CustomFieldValues,
 } from "@/lib/custom-field-contract";
+import type { RoomScene } from "@/lib/room-scene-contract";
 
 export const userRoles = ["admin", "editor", "viewer"] as const;
 export type UserRole = (typeof userRoles)[number];
@@ -105,6 +106,24 @@ export const purchaseOrderStatuses = [
   "cancelled",
 ] as const;
 export type PurchaseOrderStatus = (typeof purchaseOrderStatuses)[number];
+
+export const roomScanStatuses = ["active", "superseded"] as const;
+export type RoomScanStatus = (typeof roomScanStatuses)[number];
+
+export const roomScanAssetKinds = [
+  "world_map",
+  "model_usdz",
+  "guide_image",
+] as const;
+export type RoomScanAssetKind = (typeof roomScanAssetKinds)[number];
+
+export const spatialPlacementMethods = [
+  "scene-depth",
+  "mesh-raycast",
+  "plane-raycast",
+  "manual",
+] as const;
+export type SpatialPlacementMethod = (typeof spatialPlacementMethods)[number];
 
 export type ResourceCategory = {
   name: string;
@@ -263,6 +282,136 @@ export const resources = pgTable(
     check(
       "resources_custom_fields_object",
       sql`jsonb_typeof(${table.customFields}) = 'object'`,
+    ),
+  ],
+);
+
+export const roomScans = pgTable(
+  "room_scans",
+  {
+    id: uuid("id").primaryKey(),
+    roomResourceId: uuid("room_resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    status: varchar("status", { length: 16 })
+      .$type<RoomScanStatus>()
+      .notNull()
+      .default("active"),
+    scene: jsonb("scene").$type<RoomScene>().notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+    deviceModel: varchar("device_model", { length: 120 }),
+    createdBy: varchar("created_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("room_scans_room_revision_unique").on(
+      table.roomResourceId,
+      table.revision,
+    ),
+    uniqueIndex("room_scans_one_active_per_room")
+      .on(table.roomResourceId)
+      .where(sql`${table.status} = 'active'`),
+    index("room_scans_room_status_idx").on(table.roomResourceId, table.status),
+    index("room_scans_captured_at_idx").on(table.capturedAt),
+    check("room_scans_revision_positive", sql`${table.revision} > 0`),
+    check(
+      "room_scans_status_check",
+      sql`${table.status} in ('active', 'superseded')`,
+    ),
+    check("room_scans_scene_object", sql`jsonb_typeof(${table.scene}) = 'object'`),
+  ],
+);
+
+export const roomScanAssets = pgTable(
+  "room_scan_assets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    roomScanId: uuid("room_scan_id")
+      .notNull()
+      .references(() => roomScans.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 24 }).$type<RoomScanAssetKind>().notNull(),
+    storageKey: text("storage_key").notNull(),
+    storageUrl: text("storage_url").notNull(),
+    name: varchar("name", { length: 280 }).notNull(),
+    mimeType: varchar("mime_type", { length: 160 }).notNull(),
+    size: integer("size").notNull(),
+    checksumSha256: varchar("checksum_sha256", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("room_scan_assets_scan_kind_unique").on(
+      table.roomScanId,
+      table.kind,
+    ),
+    index("room_scan_assets_scan_idx").on(table.roomScanId),
+    check(
+      "room_scan_assets_kind_check",
+      sql`${table.kind} in ('world_map', 'model_usdz', 'guide_image')`,
+    ),
+    check("room_scan_assets_size_nonnegative", sql`${table.size} >= 0`),
+  ],
+);
+
+export const resourceSpatialPlacements = pgTable(
+  "resource_spatial_placements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    roomScanId: uuid("room_scan_id")
+      .notNull()
+      .references(() => roomScans.id, { onDelete: "cascade" }),
+    positionX: doublePrecision("position_x").notNull(),
+    positionY: doublePrecision("position_y").notNull(),
+    positionZ: doublePrecision("position_z").notNull(),
+    quaternionX: doublePrecision("quaternion_x").notNull().default(0),
+    quaternionY: doublePrecision("quaternion_y").notNull().default(0),
+    quaternionZ: doublePrecision("quaternion_z").notNull().default(0),
+    quaternionW: doublePrecision("quaternion_w").notNull().default(1),
+    extentX: doublePrecision("extent_x"),
+    extentY: doublePrecision("extent_y"),
+    extentZ: doublePrecision("extent_z"),
+    confidence: doublePrecision("confidence").notNull(),
+    method: varchar("method", { length: 24 })
+      .$type<SpatialPlacementMethod>()
+      .notNull(),
+    anchorIdentifier: uuid("anchor_identifier"),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("resource_spatial_placements_resource_unique").on(table.resourceId),
+    index("resource_spatial_placements_scan_idx").on(table.roomScanId),
+    check(
+      "resource_spatial_placements_method_check",
+      sql`${table.method} in ('scene-depth', 'mesh-raycast', 'plane-raycast', 'manual')`,
+    ),
+    check(
+      "resource_spatial_placements_confidence_range",
+      sql`${table.confidence} between 0 and 1`,
+    ),
+    check(
+      "resource_spatial_placements_quaternion_normalized",
+      sql`abs(((${table.quaternionX} * ${table.quaternionX}) + (${table.quaternionY} * ${table.quaternionY}) + (${table.quaternionZ} * ${table.quaternionZ}) + (${table.quaternionW} * ${table.quaternionW})) - 1) < 0.1`,
+    ),
+    check(
+      "resource_spatial_placements_extent_nonnegative",
+      sql`(${table.extentX} is null or ${table.extentX} between 0 and 100) and (${table.extentY} is null or ${table.extentY} between 0 and 100) and (${table.extentZ} is null or ${table.extentZ} between 0 and 100)`,
     ),
   ],
 );
@@ -1341,3 +1490,7 @@ export type PurchaseReceiptRecord = typeof purchaseReceipts.$inferSelect;
 export type StockScanWorkflowRecord = typeof stockScanWorkflows.$inferSelect;
 export type StockScanExecutionRecord = typeof stockScanExecutions.$inferSelect;
 export type UserRecord = typeof users.$inferSelect;
+export type RoomScanRecord = typeof roomScans.$inferSelect;
+export type RoomScanAssetRecord = typeof roomScanAssets.$inferSelect;
+export type ResourceSpatialPlacementRecord =
+  typeof resourceSpatialPlacements.$inferSelect;

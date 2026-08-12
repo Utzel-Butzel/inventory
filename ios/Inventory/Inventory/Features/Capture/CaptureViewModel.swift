@@ -20,6 +20,8 @@ struct IntakeSubmission: Sendable {
     let photos: [MediaUploadFile]
     let analyze: Bool
     let generateCover: Bool
+    let imageModelID: String?
+    let spatialPlacement: SpatialPlacementDraft?
 }
 
 @MainActor
@@ -36,6 +38,7 @@ final class CaptureViewModel: ObservableObject {
     @Published private(set) var photos: [CapturedInventoryPhoto] = []
     @Published private(set) var processingCount = 0
     @Published var errorMessage: String?
+    @Published private(set) var spatialPlacement: SpatialPlacementDraft?
 
     let locationService = LocationService()
     private let downsampler: JPEGDownsampler
@@ -133,7 +136,16 @@ final class CaptureViewModel: ObservableObject {
         }
     }
 
-    func makeSubmission() -> IntakeSubmission {
+    func applySpatialPlacement(_ placement: SpatialPlacementDraft) {
+        spatialPlacement = placement
+        locationName = placement.roomName
+    }
+
+    func clearSpatialPlacement() {
+        spatialPlacement = nil
+    }
+
+    func makeSubmission(imageModelID: String? = nil) -> IntakeSubmission {
         let coordinates = locationService.coordinates
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let request = ResourceCreateRequest(
@@ -155,7 +167,9 @@ final class CaptureViewModel: ObservableObject {
                 MediaUploadFile(fileURL: $0.fileURL, filename: $0.fileURL.lastPathComponent)
             },
             analyze: autoAnalyze && !photos.isEmpty,
-            generateCover: autoAnalyze && autoCover && !photos.isEmpty
+            generateCover: autoAnalyze && autoCover && !photos.isEmpty,
+            imageModelID: imageModelID,
+            spatialPlacement: spatialPlacement
         )
     }
 
@@ -164,6 +178,7 @@ final class CaptureViewModel: ObservableObject {
         sku = ""
         serialNumber = ""
         photos = []
+        spatialPlacement = nil
         errorMessage = nil
     }
 

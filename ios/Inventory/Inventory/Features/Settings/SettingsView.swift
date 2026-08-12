@@ -14,17 +14,13 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 14) {
-                    hero
-                    connectionForm
-                    if !onboarding && state.isConfigured { disconnectButton }
+            Group {
+                if onboarding {
+                    connectionPage
+                } else {
+                    settingsMenu
                 }
-                .padding(16)
             }
-            .background(InventoryTheme.canvas)
-            .navigationTitle(onboarding ? "Anmelden" : "Einstellungen")
-            .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 if server.isEmpty { server = state.serverAddress }
             }
@@ -40,6 +36,203 @@ struct SettingsView: View {
                 Text(errorMessage ?? "Unbekannter Fehler")
             }
         }
+    }
+
+    private var connectionPage: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                hero
+                connectionForm
+            }
+            .padding(16)
+        }
+        .background(InventoryTheme.canvas)
+        .navigationTitle(onboarding ? "Anmelden" : "Verbindung & Konto")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var settingsMenu: some View {
+        List {
+            Section("Aktivität") {
+                NavigationLink {
+                    UploadJobsView()
+                } label: {
+                    UploadSettingsLabel(queue: state.intakeQueue)
+                }
+            }
+
+            Section("Arbeitsbereich") {
+                NavigationLink {
+                    InventoryTypesSettingsView(client: state.client)
+                } label: {
+                    settingsRow(
+                        title: "Inventartypen",
+                        subtitle: "Struktur, Container und Kartenzuordnung",
+                        systemImage: "square.3.layers.3d"
+                    )
+                }
+
+                NavigationLink {
+                    CustomFieldsSettingsView(client: state.client)
+                } label: {
+                    settingsRow(
+                        title: "Benutzerdefinierte Felder",
+                        subtitle: "Zusätzliche Angaben für Inventar und Einheiten",
+                        systemImage: "text.badge.plus"
+                    )
+                }
+            }
+
+            Section("Server & Zugriff") {
+                NavigationLink {
+                    RuntimeSettingsView(client: state.client)
+                } label: {
+                    settingsRow(
+                        title: "Systemstatus",
+                        subtitle: "Speicher, KI und Anmeldung",
+                        systemImage: "server.rack"
+                    )
+                }
+
+                NavigationLink {
+                    PermissionsSettingsView(client: state.client)
+                } label: {
+                    settingsRow(
+                        title: "Berechtigungen",
+                        subtitle: "Konto, Rolle und gewährte Rechte",
+                        systemImage: "checkmark.shield.fill"
+                    )
+                }
+            }
+
+            if state.canUseAI {
+                Section("KI") {
+                    Picker("Bildmodell", selection: imageModelSelection) {
+                        Text(serverDefaultModelLabel)
+                            .tag("")
+                        ForEach(state.availableImageModels) { option in
+                            Text(option.label)
+                                .tag(option.id)
+                        }
+                        if let identifier = unavailableSelectedImageModelID {
+                            Text("Gespeichert (\(identifier))")
+                                .tag(identifier)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+
+                    Text(imageModelHelpText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let webSettingsURL, let apiDocumentationURL {
+                Section("Web") {
+                    Link(destination: webSettingsURL) {
+                        settingsRow(
+                            title: "Webverwaltung",
+                            subtitle: "Typen, Felder, Benutzer und API-Zugänge bearbeiten",
+                            systemImage: "safari.fill"
+                        )
+                    }
+
+                    Link(destination: apiDocumentationURL) {
+                        settingsRow(
+                            title: "API-Dokumentation",
+                            subtitle: "Schnittstellen und Beispiele öffnen",
+                            systemImage: "curlybraces.square.fill"
+                        )
+                    }
+                }
+            }
+
+            Section("Konto") {
+                NavigationLink {
+                    connectionPage
+                } label: {
+                    settingsRow(
+                        title: "Verbindung & Konto",
+                        subtitle: state.serverAddress,
+                        systemImage: "person.crop.circle.badge.checkmark"
+                    )
+                }
+
+                disconnectButton
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(InventoryTheme.canvas)
+        .navigationTitle("Einstellungen")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var webSettingsURL: URL? {
+        state.client?.serverURL.appendingPathComponent("settings")
+    }
+
+    private var apiDocumentationURL: URL? {
+        state.client?.serverURL.appendingPathComponent("api-docs")
+    }
+
+    private func settingsRow(
+        title: String,
+        subtitle: String? = nil,
+        systemImage: String
+    ) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .foregroundStyle(.primary)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        } icon: {
+            Image(systemName: systemImage)
+                .foregroundStyle(InventoryTheme.accent)
+        }
+    }
+
+    private var imageModelSelection: Binding<String> {
+        Binding(
+            get: { state.selectedImageModelID ?? "" },
+            set: { state.selectImageModel($0.isEmpty ? nil : $0) }
+        )
+    }
+
+    private var serverDefaultModelLabel: String {
+        guard let identifier = state.defaultImageModelID,
+              let model = state.availableImageModels.first(where: { $0.id == identifier }) else {
+            return "Server-Standard"
+        }
+        return "Server-Standard (\(model.label))"
+    }
+
+    private var unavailableSelectedImageModelID: String? {
+        guard let identifier = state.selectedImageModelID,
+              !state.availableImageModels.contains(where: { $0.id == identifier }) else {
+            return nil
+        }
+        return identifier
+    }
+
+    private var imageModelHelpText: String {
+        if state.availableImageModels.isEmpty {
+            if let identifier = state.selectedImageModelID {
+                return "Das gespeicherte Modell \(identifier) wird verwendet. Die Modellliste des Servers ist gerade nicht verfügbar."
+            }
+            return "Der Server bietet keine Modellauswahl an. Cover verwenden das Server-Standardmodell."
+        }
+        if let identifier = state.selectedImageModelID,
+           let selected = state.availableImageModels.first(where: { $0.id == identifier }) {
+            return "\(selected.provider) · \(selected.model). Die Auswahl gilt für neue Uploads."
+        }
+        return "Neue Cover verwenden das vom Server festgelegte Standardmodell."
     }
 
     private var hero: some View {
@@ -112,7 +305,7 @@ struct SettingsView: View {
             } label: {
                 HStack {
                     if saving { ProgressView().tint(.white) }
-                    Text(saving ? "Anmelden …" : "Anmelden")
+                    Text(saveButtonTitle)
                 }
                 .font(.headline)
                 .frame(maxWidth: .infinity, minHeight: 52)
@@ -127,21 +320,36 @@ struct SettingsView: View {
 
     private var disconnectButton: some View {
         Button(role: .destructive) {
-            saving = true
-            errorMessage = nil
-            Task {
-                do {
-                    try await state.disconnect()
-                } catch {
-                    errorMessage = error.localizedDescription
-                }
-                saving = false
-            }
+            disconnect()
         } label: {
-            Label("Abmelden", systemImage: "rectangle.portrait.and.arrow.right")
-                .frame(maxWidth: .infinity, minHeight: 46)
+            HStack {
+                Label("Abmelden", systemImage: "rectangle.portrait.and.arrow.right")
+                Spacer()
+                if saving {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
         }
-        .buttonStyle(.bordered)
+        .disabled(saving)
+    }
+
+    private var saveButtonTitle: String {
+        if saving { return onboarding ? "Anmelden …" : "Speichern …" }
+        return onboarding ? "Anmelden" : "Verbindung speichern"
+    }
+
+    private func disconnect() {
+        saving = true
+        errorMessage = nil
+        Task {
+            do {
+                try await state.disconnect()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            saving = false
+        }
     }
 
     private func saveAndTest() {
@@ -187,5 +395,38 @@ struct SettingsView: View {
         let hasPassword = !password.isEmpty
         if hasEmail || hasPassword { return hasEmail && hasPassword }
         return state.hasStoredToken
+    }
+}
+
+private struct UploadSettingsLabel: View {
+    @ObservedObject var queue: IntakeQueue
+
+    var body: some View {
+        Label {
+            HStack {
+                Text("Uploads")
+                    .foregroundStyle(.primary)
+                Spacer()
+                if activeCount > 0 {
+                    Text("\(activeCount)")
+                        .font(.caption.monospacedDigit().bold())
+                        .foregroundStyle(InventoryTheme.ink)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(InventoryTheme.lime, in: Capsule())
+                } else if !queue.jobs.isEmpty {
+                    Text("\(queue.jobs.count)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } icon: {
+            Image(systemName: "arrow.up.circle.fill")
+                .foregroundStyle(InventoryTheme.accent)
+        }
+    }
+
+    private var activeCount: Int {
+        queue.jobs.filter { !$0.stage.isTerminal }.count
     }
 }

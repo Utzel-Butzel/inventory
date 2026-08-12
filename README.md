@@ -42,6 +42,10 @@ Open Inventory is released under the [MIT License](LICENSE).
 - JPG, PNG, WebP, AVIF, HEIC, MP4, MOV, WebM, and PDF uploads
 - EXIF location detection and client-side image optimization
 - Camera-first batch capture with successive background jobs
+- LiDAR RoomPlan room scans, reusable AR world maps, and measured indoor 3D
+  placement for inventory captured with the native iPhone app
+- Navigable Three.js room models with searchable, clickable inventory markers
+  under **Rooms 3D**
 - Photo-based counting with a reviewable quantity before stock receipt or issue
 - OpenAI image-to-record analysis with structured title, description, type,
   tags, alt text, and confidence output
@@ -269,6 +273,30 @@ movement. Serialized inventory is reviewed through its individual units; after
 any unit statuses are corrected, the matching review completes the same cycle
 without replacing unit-level traceability with a bulk adjustment.
 
+### Indoor 3D rooms
+
+On a LiDAR-capable iPhone, open **Rooms**, create a named room, and walk its
+perimeter while RoomPlan records walls, openings, floors, and recognized
+furniture. Inventory stores a versioned normalized scene for the web viewer,
+the original USDZ model, an optional guide image, and an archived `ARWorldMap`
+used only by the native app.
+
+When capturing a new item, choose **Im Raum**, select the recorded room, and
+point the reticle at the object. The app first relocalizes against the saved
+world map; only then does it combine LiDAR scene depth (or a plane raycast) with
+the camera pose to save the item's position in metres. The same AR frame becomes
+an ordinary inventory photo, so the existing image analysis can learn the
+record's name and appearance. Open **Rooms 3D** in the web app to orbit the
+parametric room, search its positioned items, and click a marker to open the
+inventory record.
+
+RoomPlan is a measured parametric model rather than a photorealistic scan, and
+small tools are represented by location markers rather than automatically
+generated 3D meshes. A new room revision intentionally supersedes the previous
+coordinate frame; old placements stay attached to the old revision until each
+item is captured again. `MAX_ROOM_SCAN_UPLOAD_MB` limits the combined world map,
+USDZ, and guide image for one upload and defaults to 100 MB.
+
 ### Assignments and reservations
 
 Bulk quantities and serialized units can be checked out, assigned, or reserved
@@ -379,6 +407,7 @@ system with the matching media selected and page scaling disabled.
 STORAGE_PROVIDER=local
 STORAGE_LOCAL_PATH=./data/uploads
 MAX_UPLOAD_MB=25
+MAX_ROOM_SCAN_UPLOAD_MB=100
 ```
 
 Files are kept outside the application bundle and streamed through an
@@ -431,6 +460,20 @@ IMAGE_EDIT_PROVIDER=google
 GOOGLE_AI_API_KEY=...
 GOOGLE_IMAGE_EDIT_MODEL=gemini-2.5-flash-image
 ```
+
+To let the Webapp and iOS app choose among several approved models, configure
+a comma-separated allowlist and an optional default. Each entry uses
+`provider:model`; models whose provider credentials are missing are not offered
+to clients.
+
+```dotenv
+IMAGE_EDIT_MODELS=openai:gpt-image-2,google:gemini-2.5-flash-image,google:gemini-3.1-flash-lite-image,google:gemini-3.1-flash-image,google:gemini-3-pro-image
+IMAGE_EDIT_DEFAULT_MODEL=google:gemini-3.1-flash-image
+```
+
+The model choice is remembered locally in each client and included in every
+cover request. The server validates it against this allowlist. Leave both new
+variables empty to keep the existing single-provider, single-model behavior.
 
 AI routes are authenticated, scope-checked, upload-limited, and protected by
 per-process rate limits. For a multi-replica public deployment, replace the
@@ -539,8 +582,9 @@ curl -X POST "http://localhost:3000/api/v1/resources/RESOURCE_ID/analyze" \
 
 The checked-in [OpenAPI YAML specification](./public/openapi.yaml) documents
 the complete bearer-token surface. A running deployment also serves the same
-contract as JSON at `/openapi.json`; signed-in users can browse and test it in
-the interactive API reference at `/api-docs`.
+contract as JSON at `/openapi.json`. Anyone can browse the interactive API
+reference at `/api-docs`; authenticated requests still require a browser
+session or scoped API token.
 
 ## Commands
 
@@ -550,6 +594,8 @@ npm run build        Create a production build
 npm run start        Start the production server
 npm run lint         Run ESLint
 npm run typecheck    Run TypeScript checks
+npm run test:locations   Test geographic containment and EXIF coordinates
+npm run test:room-scenes Test RoomPlan scene and placement contracts
 npm run db:migrate   Apply checked-in PostgreSQL migrations
 npm run db:seed      Add sample records when the database is empty
 npm run db:generate  Generate a Drizzle migration after schema changes

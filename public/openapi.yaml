@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Inventory API
-  version: 1.7.0
-  description: Scoped API for configurable inventory structures, location-aware stock, cycle counts, assignments, CSV exchange, typed custom fields, media, AI, and data quality.
+  version: 1.9.0
+  description: Scoped API for configurable inventory structures, indoor 3D room scans, location-aware stock, cycle counts, assignments, CSV exchange, typed custom fields, media, AI, and data quality.
   license:
     name: MIT License
     identifier: MIT
@@ -35,11 +35,148 @@ tags:
     description: Configurable scan actions and execution.
   - name: Media
     description: Resource images, metadata, and ordering.
+  - name: Spatial rooms
+    description: Versioned RoomPlan scenes, native AR world-map assets, and measured indoor item placements.
   - name: AI
     description: Visual counting, item analysis, and generated covers.
   - name: Insights
     description: Workspace statistics and duplicate detection.
 paths:
+  /room-scans:
+    get:
+      tags: [Spatial rooms]
+      summary: List active 3D room scans
+      parameters:
+        - name: includeSuperseded
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Room scans ordered by capture time
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scans]
+                properties:
+                  scans:
+                    type: array
+                    items: { $ref: "#/components/schemas/RoomScanSummary" }
+        "401": { description: Missing or invalid session or bearer token }
+        "403": { description: Authenticated identity does not have the read scope }
+    post:
+      tags: [Spatial rooms]
+      summary: Upload a normalized RoomPlan scan and its native assets
+      description: Requires write scope. The client-generated scan id makes exact retries idempotent. The referenced resource must have type `place`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [id, roomResourceId, capturedAt, scene, worldMap, model]
+              properties:
+                id: { type: string, format: uuid }
+                roomResourceId: { type: string, format: uuid }
+                capturedAt: { type: string, format: date-time }
+                deviceModel: { type: string, maxLength: 120 }
+                scene:
+                  type: string
+                  description: UTF-8 JSON encoding of the RoomScene schema.
+                  contentMediaType: application/json
+                worldMap:
+                  type: string
+                  format: binary
+                  description: NSSecureCoding archive of the ARWorldMap used for later relocalization.
+                model:
+                  type: string
+                  format: binary
+                  description: Original RoomPlan USDZ mesh.
+                guideImage: { type: string, format: binary }
+      responses:
+        "201":
+          description: Scan created and made the active revision for its room
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomScanUploadResult" }
+        "200":
+          description: Exact scan-id replay; no duplicate revision was created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoomScanUploadResult" }
+        "404": { description: Room resource not found }
+        "409": { description: Scan id belongs to another room }
+        "413": { description: Combined upload exceeds the configured room-scan limit }
+        "422": { description: Invalid scene, identifier, date, or non-place resource }
+  /room-scans/{scanId}:
+    parameters:
+      - name: scanId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Spatial rooms]
+      summary: Retrieve a web-viewer scene with positioned inventory
+      responses:
+        "200":
+          description: Normalized room scene, assets, and current placements attached to this revision
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scene]
+                properties:
+                  scene: { $ref: "#/components/schemas/RoomSceneManifest" }
+        "404": { description: Room scan not found }
+        "422": { description: Invalid room scan identifier }
+  /room-scans/{scanId}/assets/{kind}:
+    parameters:
+      - name: scanId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: kind
+        in: path
+        required: true
+        schema: { type: string, enum: [world_map, model_usdz, guide_image] }
+    get:
+      tags: [Spatial rooms]
+      summary: Download an authenticated native room-scan asset
+      responses:
+        "200": { description: Binary asset returned as an attachment }
+        "404": { description: Scan asset or stored bytes not found }
+        "422": { description: Invalid room scan identifier }
+  /room-scans/{scanId}/placements/{resourceId}:
+    parameters:
+      - name: scanId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: resourceId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [Spatial rooms]
+      summary: Create or replace an item's current indoor 3D placement
+      description: The scan must still be the active revision. Coordinates use its ARKit world frame in metres.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SpatialPlacementInput" }
+      responses:
+        "200": { description: Placement saved }
+        "404": { description: Room scan or inventory item not found }
+        "409": { description: Room scan was superseded and the item must be relocalized }
+        "422": { description: Invalid identifier or placement }
+    delete:
+      tags: [Spatial rooms]
+      summary: Remove an item's placement from this scan
+      responses:
+        "204": { description: Placement removed }
+        "404": { description: Placement not found }
+        "422": { description: Invalid identifier }
   /auth/login:
     post:
       tags: [Authentication]
@@ -436,6 +573,27 @@ paths:
             Retry-After:
               schema: { type: integer, minimum: 1 }
         "502": { description: AI provider or structured-output error }
+  /ai/image-models:
+    get:
+      tags: [AI]
+      summary: List image-generation models enabled for this deployment
+      description: Requires the ai scope. Only allowlisted models with configured provider credentials are returned.
+      responses:
+        "200":
+          description: Available image-generation models and the deployment default
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [models, defaultModelId]
+                properties:
+                  models:
+                    type: array
+                    items: { $ref: "#/components/schemas/ImageGenerationModel" }
+                  defaultModelId:
+                    type: [string, "null"]
+        "401": { description: Missing or invalid token }
+        "403": { description: Token is missing the ai scope }
   /resources:
     get:
       tags: [Resources]
@@ -1386,10 +1544,15 @@ paths:
               properties:
                 sourceMediaId: { type: string, format: uuid }
                 prompt: { type: string, maxLength: 5000 }
+                modelId:
+                  type: string
+                  maxLength: 240
+                  description: An ID returned by GET /ai/image-models. Omit it to use the deployment default.
       responses:
         "200": { description: Cover generated or completed response replayed }
         "202": { description: An operation with this key is still processing }
         "409": { description: Idempotency key belongs to another resource or payload }
+        "422": { description: Invalid request or unavailable image model }
         "429": { description: Rate limited }
         "502": { description: AI provider error }
   /stats:
@@ -1457,6 +1620,166 @@ components:
     NotFound:
       description: Resource not found
   schemas:
+    SpatialVector3:
+      type: array
+      minItems: 3
+      maxItems: 3
+      items: { type: number, minimum: -10000, maximum: 10000 }
+      description: XYZ values in metres.
+    SpatialDimensions:
+      type: array
+      minItems: 3
+      maxItems: 3
+      items: { type: number, minimum: 0, maximum: 100 }
+    SpatialQuaternion:
+      type: array
+      minItems: 4
+      maxItems: 4
+      items: { type: number, minimum: -1, maximum: 1 }
+      description: Normalized XYZW quaternion.
+    SpatialMatrix4:
+      type: array
+      minItems: 16
+      maxItems: 16
+      items: { type: number, minimum: -10000, maximum: 10000 }
+      description: Column-major affine 4x4 matrix.
+    RoomSceneElement:
+      type: object
+      additionalProperties: false
+      required: [id, category, dimensions, transform, confidence]
+      properties:
+        id: { type: string, format: uuid }
+        category: { type: string, minLength: 1, maxLength: 80 }
+        dimensions: { $ref: "#/components/schemas/SpatialDimensions" }
+        transform: { $ref: "#/components/schemas/SpatialMatrix4" }
+        confidence: { type: string, enum: [low, medium, high] }
+    RoomScene:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, coordinateSystem, units, matrixOrder, worldFromModel, webFromWorld, bounds, surfaces, objects]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        coordinateSystem: { type: string, const: arkit-right-handed-y-up }
+        units: { type: string, const: meter }
+        matrixOrder: { type: string, const: column-major }
+        worldFromModel: { $ref: "#/components/schemas/SpatialMatrix4" }
+        webFromWorld: { $ref: "#/components/schemas/SpatialMatrix4" }
+        bounds:
+          type: object
+          additionalProperties: false
+          required: [min, max]
+          properties:
+            min: { $ref: "#/components/schemas/SpatialVector3" }
+            max: { $ref: "#/components/schemas/SpatialVector3" }
+        surfaces:
+          type: array
+          maxItems: 4096
+          items: { $ref: "#/components/schemas/RoomSceneElement" }
+        objects:
+          type: array
+          maxItems: 2048
+          items: { $ref: "#/components/schemas/RoomSceneElement" }
+    RoomScanAsset:
+      type: object
+      required: [id, kind, name, mimeType, size, checksumSha256, url, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [world_map, model_usdz, guide_image] }
+        name: { type: string }
+        mimeType: { type: string }
+        size: { type: integer, minimum: 0 }
+        checksumSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        url: { type: string }
+        createdAt: { type: string, format: date-time }
+    RoomScanSummary:
+      type: object
+      required: [id, roomResourceId, roomName, revision, status, capturedAt, createdAt, updatedAt, placementCount, assets]
+      properties:
+        id: { type: string, format: uuid }
+        roomResourceId: { type: string, format: uuid }
+        roomName: { type: string }
+        revision: { type: integer, minimum: 1 }
+        status: { type: string, enum: [active, superseded] }
+        capturedAt: { type: string, format: date-time }
+        deviceModel: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        placementCount: { type: integer, minimum: 0 }
+        assets:
+          type: array
+          items: { $ref: "#/components/schemas/RoomScanAsset" }
+    RoomScanUploadResult:
+      type: object
+      additionalProperties: false
+      required: [id, replayed]
+      properties:
+        id: { type: string, format: uuid }
+        replayed: { type: boolean }
+    SpatialPlacementInput:
+      type: object
+      additionalProperties: false
+      required: [position, orientation, confidence, method, capturedAt]
+      properties:
+        position: { $ref: "#/components/schemas/SpatialVector3" }
+        orientation: { $ref: "#/components/schemas/SpatialQuaternion" }
+        extent: { $ref: "#/components/schemas/SpatialDimensions" }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        method: { type: string, enum: [scene-depth, mesh-raycast, plane-raycast, manual] }
+        anchorIdentifier: { type: string, format: uuid }
+        capturedAt: { type: string, format: date-time }
+    RoomSceneManifest:
+      type: object
+      required: [room, scan, placements]
+      properties:
+        room:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            description: { type: string }
+        scan:
+          type: object
+          required: [id, revision, status, scene, capturedAt, assets]
+          properties:
+            id: { type: string, format: uuid }
+            revision: { type: integer, minimum: 1 }
+            status: { type: string, enum: [active, superseded] }
+            scene: { $ref: "#/components/schemas/RoomScene" }
+            capturedAt: { type: string, format: date-time }
+            deviceModel: { type: [string, "null"] }
+            assets:
+              type: array
+              items: { $ref: "#/components/schemas/RoomScanAsset" }
+        placements:
+          type: array
+          items:
+            type: object
+            required: [id, resource, position, orientation, confidence, method, capturedAt, updatedAt]
+            properties:
+              id: { type: string, format: uuid }
+              resource:
+                type: object
+                required: [id, name, type, status]
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
+                  description: { type: string }
+                  type: { type: string }
+                  status: { type: string }
+                  location: { type: [string, "null"] }
+                  cover: { type: [object, "null"] }
+              position: { $ref: "#/components/schemas/SpatialVector3" }
+              orientation: { $ref: "#/components/schemas/SpatialQuaternion" }
+              extent:
+                oneOf:
+                  - { $ref: "#/components/schemas/SpatialDimensions" }
+                  - { type: "null" }
+              confidence: { type: number, minimum: 0, maximum: 1 }
+              method: { type: string, enum: [scene-depth, mesh-raycast, plane-raycast, manual] }
+              anchorIdentifier: { type: [string, "null"], format: uuid }
+              capturedAt: { type: string, format: date-time }
+              updatedAt: { type: string, format: date-time }
     DefinitionKey:
       type: string
       minLength: 1
@@ -1744,7 +2067,7 @@ components:
         archivedAt: { type: [string, "null"], format: date-time }
     InventoryCount:
       type: object
-      required: [count, confidence, detectedItem, isExact, explanation, warnings, model]
+      required: [count, confidence, detectedItem, isExact, explanation, warnings, markers, model]
       properties:
         count: { type: integer, minimum: 0, maximum: 1000000 }
         confidence: { type: number, minimum: 0, maximum: 1 }
@@ -1757,7 +2080,26 @@ components:
           type: array
           maxItems: 10
           items: { type: string, minLength: 1, maxLength: 240 }
+        markers:
+          type: array
+          description: One point per counted item on a 0...1000 image grid, measured from the top-left corner of the orientation-corrected full image.
+          items:
+            type: object
+            additionalProperties: false
+            required: [x, y]
+            properties:
+              x: { type: integer, minimum: 0, maximum: 1000 }
+              y: { type: integer, minimum: 0, maximum: 1000 }
         model: { type: string }
+    ImageGenerationModel:
+      type: object
+      required: [id, provider, model, label]
+      additionalProperties: false
+      properties:
+        id: { type: string, maxLength: 240, example: "google:gemini-3.1-flash-image" }
+        provider: { type: string, enum: [openai, google] }
+        model: { type: string, maxLength: 233, example: "gemini-3.1-flash-image" }
+        label: { type: string, maxLength: 260, example: "Nano Banana 2" }
     BomComponentInput:
       type: object
       required: [resourceId, quantityPerAssembly]
