@@ -542,6 +542,17 @@ enum SpatialCaptureError: Error, LocalizedError {
     }
 }
 
+extension SpatialRoomScene {
+    static func normalizedPolygonCorners(
+        _ corners: [SIMD3<Float>]
+    ) -> [SpatialVector3]? {
+        guard (3 ... 1_024).contains(corners.count) else { return nil }
+        return corners.map { corner in
+            [Double(corner.x), Double(corner.y), Double(corner.z)]
+        }
+    }
+}
+
 private extension SpatialRoomScene {
     static func make(from room: CapturedRoom) -> SpatialRoomScene {
         let allSurfaces = room.walls + room.doors + room.windows + room.openings + room.floors
@@ -551,7 +562,7 @@ private extension SpatialRoomScene {
                 category: categoryName(surface.category),
                 dimensions: vector(surface.dimensions),
                 transform: matrix(surface.transform),
-                polygonCorners: surface.polygonCorners.map(vector),
+                polygonCorners: normalizedPolygonCorners(surface.polygonCorners),
                 confidence: confidenceName(surface.confidence)
             )
         }

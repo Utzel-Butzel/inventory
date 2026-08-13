@@ -38,6 +38,11 @@ export const spatialMatrix4Schema = z
 
 const dimensionsSchema = z.tuple([dimension, dimension, dimension]);
 
+const roomSurfacePolygonSchema = z.preprocess(
+  (value) => (Array.isArray(value) && value.length === 0 ? undefined : value),
+  z.array(spatialVector3Schema).min(3).max(1_024).optional(),
+);
+
 export const roomSurfaceCategorySchema = z.enum([
   "wall",
   "floor",
@@ -51,7 +56,10 @@ export const roomSurfaceSchema = z.object({
   category: roomSurfaceCategorySchema,
   dimensions: dimensionsSchema,
   transform: spatialMatrix4Schema,
-  polygonCorners: z.array(spatialVector3Schema).min(3).max(1_024).optional(),
+  // RoomPlan can return an empty array when it has no non-rectangular outline.
+  // Treat that the same as an omitted optional polygon so older app builds can
+  // still upload the surface's measured dimensions and transform.
+  polygonCorners: roomSurfacePolygonSchema,
   confidence: z.enum(["low", "medium", "high"]),
 });
 

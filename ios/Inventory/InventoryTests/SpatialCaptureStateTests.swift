@@ -121,6 +121,24 @@ final class SpatialCaptureStateTests: XCTestCase {
         )
     }
 
+    func testRoomPlanSceneOmitsEmptyAndPartialPolygons() {
+        XCTAssertNil(SpatialRoomScene.normalizedPolygonCorners([]))
+        XCTAssertNil(
+            SpatialRoomScene.normalizedPolygonCorners([
+                SIMD3<Float>(0, 0, 0),
+                SIMD3<Float>(1, 0, 0),
+            ])
+        )
+        XCTAssertEqual(
+            SpatialRoomScene.normalizedPolygonCorners([
+                SIMD3<Float>(0, 0, 0),
+                SIMD3<Float>(1, 0, 0),
+                SIMD3<Float>(0, 1, 0),
+            ]),
+            [[0, 0, 0], [1, 0, 0], [0, 1, 0]]
+        )
+    }
+
     func testContainmentTrackerRequiresStableTransitionBetweenRooms() {
         let first = makeCandidate(
             name: "Werkstatt",
