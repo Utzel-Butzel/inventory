@@ -62,7 +62,14 @@
     "accuracy": "Accurate to about {{meters}} m · Tap to refresh",
     "locationPrivacy": "Saved privately with this inventory item",
     "generateCover": "Generate AI cover",
-    "generateCoverDescription": "Identify the item, then create a clean studio cover from the first photo."
+    "generateCoverDescription": "Identify the item, then create a clean studio cover from the first photo.",
+    "transparentBackground": "Transparent background",
+    "transparentBackgroundDescription": "Save generated covers as transparent PNGs.",
+    "transparencyMethod": "Transparency method",
+    "differenceMatting": "Difference matting · best quality",
+    "differenceMattingDescription": "Two aligned image passes preserve clean edges, glass, and soft shadows.",
+    "greenscreen": "Greenscreen · faster",
+    "greenscreenDescription": "One image pass, with more risk around green objects and fine edges."
   },
   "submit": {
     "create": "Create with AI",

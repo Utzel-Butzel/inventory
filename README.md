@@ -522,7 +522,9 @@ MAX_ROOM_SCAN_UPLOAD_MB=100
 
 Files are kept outside the application bundle and streamed through an
 authenticated same-origin route. In Docker, `/app/data/uploads` is backed by the
-`inventory_uploads` volume.
+`inventory_uploads` volume. Apple Object Capture models are stored as `.usdz`
+files with the registered `model/vnd.usdz+zip` media type and use the same
+per-file `MAX_UPLOAD_MB` limit as other inventory media.
 
 ### Openinary
 
@@ -533,7 +535,10 @@ OPENINARY_API_KEY=...
 ```
 
 Uploads use Openinary’s `/api/upload` endpoint with bearer authentication and
-request common cached image sizes.
+request common cached image sizes. Openinary currently accepts image and video
+formats only, so USDZ inventory models require `STORAGE_PROVIDER=local` with a
+persistent upload volume; the API rejects that provider mismatch before writing
+any part of the upload batch.
 
 ## AI features
 
@@ -626,6 +631,14 @@ The model choice is remembered locally in each client and included in every
 cover request. The server validates it against this allowlist. Leave both new
 variables empty to keep the existing single-provider, single-model behavior.
 
+The inventory editor can store generated covers as transparent PNGs. The
+`greenscreen` method uses one chroma-keyed generation and is faster, while
+`difference-matting` (the default transparent method) generates aligned white
+and black passes before recovering the alpha channel. Difference matting costs
+two provider image generations but preserves fine edges, glass, and soft
+shadows more reliably. API clients opt in with `transparentBackground: true`
+and may set `transparencyMethod` to either method.
+
 Every provider-backed AI route is authenticated, scope-checked, upload-limited,
 and protected by an atomic PostgreSQL rate limit per identity. The limits work
 across app replicas and restarts. `AI_ANALYSIS_RATE_LIMIT_PER_MINUTE` and
@@ -708,6 +721,15 @@ Upload media after creation:
 curl -X POST "http://localhost:3000/api/v1/resources/RESOURCE_ID/media" \
   -H "Authorization: Bearer inv_your_token" \
   -F "files=@drill.jpg"
+```
+
+Apple Object Capture output uses the same endpoint with its canonical media
+type (and requires local storage):
+
+```bash
+curl -X POST "http://localhost:3000/api/v1/resources/RESOURCE_ID/media" \
+  -H "Authorization: Bearer inv_your_token" \
+  -F "files=@drill.usdz;type=model/vnd.usdz+zip"
 ```
 
 ## Native iOS scanner

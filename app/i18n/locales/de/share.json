@@ -68,6 +68,13 @@
     "yes": "Ja",
     "no": "Nein"
   },
+  "modelViewer": {
+    "loading": "3D-Modell wird geladen…",
+    "unavailable": "Dieses Modell kann in diesem Browser nicht dargestellt werden. Die USDZ-Datei kann weiterhin heruntergeladen werden.",
+    "viewInAr": "In AR ansehen",
+    "download": "USDZ herunterladen",
+    "interaction": "Interaktive 3D-Vorschau von {{name}}. Zum Drehen ziehen und zum Zoomen scrollen."
+  },
   "unavailable": {
     "title": "Dieses geteilte Inventar ist nicht verfügbar",
     "description": "Der Link ist möglicherweise ungültig, abgelaufen oder die Freigabe wurde beendet."

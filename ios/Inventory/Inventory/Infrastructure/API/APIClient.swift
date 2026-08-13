@@ -365,6 +365,9 @@ public final class APIClient: Sendable {
             "media",
         ])
         var request = try await authorizedRequest(url: url, method: "POST")
+        if files.contains(where: { $0.mimeType == "model/vnd.usdz+zip" }) {
+            request.timeoutInterval = 300
+        }
         request.setValue(
             "multipart/form-data; boundary=\(body.boundary)",
             forHTTPHeaderField: "Content-Type"

@@ -30,6 +30,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CustomFieldValueDisplay } from "@/components/custom-field-inputs";
 import { ResourceShareButton } from "@/components/resource-share-button";
+import { UsdzModelViewer } from "@/components/usdz-model-viewer";
 import {
   fetchJson,
   type ClientMedia,
@@ -40,6 +41,7 @@ import type {
   CustomFieldDefinition,
   CustomFieldValue,
 } from "@/lib/custom-field-contract";
+import { isUsdzMedia } from "@/lib/usdz";
 
 const statusStyles: Record<string, string> = {
   available: "bg-success-soft text-success ring-success-border",
@@ -108,7 +110,24 @@ function DetailField({
 }
 
 function MediaCard({ item, kindLabel }: { item: ClientMedia; kindLabel: string }) {
+  const { t } = useT("inventory");
   const Icon = item.kind === "document" ? FileText : Paperclip;
+
+  if (isUsdzMedia(item)) {
+    return (
+      <UsdzModelViewer
+        src={item.url}
+        name={item.name}
+        labels={{
+          loading: t("modelViewer.loading"),
+          unavailable: t("modelViewer.unavailable"),
+          viewInAr: t("modelViewer.viewInAr"),
+          download: t("modelViewer.download"),
+          interaction: t("modelViewer.interaction", { name: item.name }),
+        }}
+      />
+    );
+  }
 
   if (item.kind === "image") {
     return (

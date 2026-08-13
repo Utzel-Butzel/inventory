@@ -42,4 +42,19 @@ final class ResourceRequestTests: XCTestCase {
         XCTAssertTrue(InventoryResourceType.allCases.allSatisfy(\.isBuiltIn))
         XCTAssertEqual(InventoryResourceType(rawValue: "tool"), .tool)
     }
+
+    func testModelMediaKindDecodesAndUnknownKindsRemainReadable() throws {
+        let decoder = JSONDecoder()
+        let model = try decoder.decode(
+            InventoryMediaKind.self,
+            from: Data("\"model\"".utf8)
+        )
+        let future = try decoder.decode(
+            InventoryMediaKind.self,
+            from: Data("\"point-cloud\"".utf8)
+        )
+
+        XCTAssertEqual(model, .model)
+        XCTAssertEqual(future, .unknown)
+    }
 }

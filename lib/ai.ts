@@ -8,6 +8,16 @@ import sharp from "sharp";
 import { z } from "zod";
 
 import { resourceTypes, type ResourceType } from "@/db/schema";
+import {
+  coverPromptForTransparency,
+  defaultCoverTransparencyMethod,
+  differenceMattingBlackPassPrompt,
+  type CoverTransparencyMethod,
+} from "@/lib/cover-generation-contract";
+import {
+  extractDifferenceMatte,
+  extractGreenScreen,
+} from "@/lib/cover-transparency";
 import type { ImageGenerationModel } from "@/lib/image-generation-models";
 import {
   countInventoryItemsWithReplicate,
@@ -20,7 +30,10 @@ export type {
   ReplicateCountJob,
   ReplicateCountOutcome,
 } from "@/lib/replicate-count";
-export { defaultCoverPrompt } from "@/lib/ai-prompts";
+export {
+  defaultCoverPrompt,
+  defaultTransparentCoverPrompt,
+} from "@/lib/ai-prompts";
 
 const analysisResultSchema = z.object({
   title: z.string().trim().min(1).max(240),
@@ -290,9 +303,8 @@ export async function countInventoryItems(options: {
   return countInventoryItemsWithReplicate(options);
 }
 
-export async function generateCoverImage(options: {
+async function generateEditedImage(options: {
   source: Buffer;
-  sourceMimeType: string;
   prompt: string;
   imageModel: ImageGenerationModel;
 }) {
@@ -306,8 +318,7 @@ export async function generateCoverImage(options: {
     })
     .png()
     .toBuffer();
-  const { id, provider, model, label } = options.imageModel;
-  let generatedBytes: Buffer;
+  const { provider, model } = options.imageModel;
 
   if (provider === "google") {
     const apiKey =
@@ -336,32 +347,86 @@ export async function generateCoverImage(options: {
     if (!imagePart?.inlineData?.data) {
       throw new Error("Google image generation did not return an image.");
     }
-    generatedBytes = Buffer.from(imagePart.inlineData.data, "base64");
-  } else {
-    const openai = createOpenAI();
-    const image = await toFile(normalized, "inventory-source.png", {
-      type: "image/png",
-    });
-    const response = await openai.images.edit({
-      model,
-      image,
-      prompt: options.prompt,
-      size: "1024x1024",
-      quality: "high",
-      background: "opaque",
-    });
-    const base64 = response.data?.[0]?.b64_json;
-    if (!base64) throw new Error("OpenAI image generation did not return an image.");
-    generatedBytes = Buffer.from(base64, "base64");
+    return Buffer.from(imagePart.inlineData.data, "base64");
   }
 
-  const jpeg = await sharp(generatedBytes, { failOnError: false })
-    .resize({ width: 1024, height: 1024, fit: "cover" })
-    .jpeg({ quality: 90, mozjpeg: true })
-    .toBuffer();
+  const openai = createOpenAI();
+  const image = await toFile(normalized, "inventory-source.png", {
+    type: "image/png",
+  });
+  const response = await openai.images.edit({
+    model,
+    image,
+    prompt: options.prompt,
+    size: "1024x1024",
+    quality: "high",
+    background: "opaque",
+  });
+  const base64 = response.data?.[0]?.b64_json;
+  if (!base64) throw new Error("OpenAI image generation did not return an image.");
+  return Buffer.from(base64, "base64");
+}
+
+export async function generateCoverImage(options: {
+  source: Buffer;
+  sourceMimeType: string;
+  prompt: string;
+  imageModel: ImageGenerationModel;
+  transparentBackground?: boolean;
+  transparencyMethod?: CoverTransparencyMethod;
+}) {
+  const { id, provider, model, label } = options.imageModel;
+  const transparentBackground = options.transparentBackground ?? false;
+  const transparencyMethod =
+    options.transparencyMethod ?? defaultCoverTransparencyMethod;
+  let generatedBytes: Buffer;
+  let mimeType: "image/jpeg" | "image/png";
+
+  if (!transparentBackground) {
+    const opaqueImage = await generateEditedImage({
+      source: options.source,
+      prompt: options.prompt,
+      imageModel: options.imageModel,
+    });
+    generatedBytes = await sharp(opaqueImage, { failOnError: false })
+      .resize({ width: 1024, height: 1024, fit: "cover" })
+      .jpeg({ quality: 90, mozjpeg: true })
+      .toBuffer();
+    mimeType = "image/jpeg";
+  } else if (transparencyMethod === "greenscreen") {
+    const greenImage = await generateEditedImage({
+      source: options.source,
+      prompt: coverPromptForTransparency(options.prompt, "greenscreen"),
+      imageModel: options.imageModel,
+    });
+    generatedBytes = await extractGreenScreen(greenImage);
+    mimeType = "image/png";
+  } else {
+    const whiteImage = await generateEditedImage({
+      source: options.source,
+      prompt: coverPromptForTransparency(
+        options.prompt,
+        "difference-matting",
+      ),
+      imageModel: options.imageModel,
+    });
+    const blackImage = await generateEditedImage({
+      source: whiteImage,
+      prompt: differenceMattingBlackPassPrompt,
+      imageModel: options.imageModel,
+    });
+    generatedBytes = await extractDifferenceMatte(whiteImage, blackImage);
+    mimeType = "image/png";
+  }
+
+  // Keep this argument in the public contract: callers pass the trusted media
+  // MIME type even though Sharp validates and normalizes the actual bytes.
+  void options.sourceMimeType;
   return {
-    bytes: jpeg,
-    mimeType: "image/jpeg",
+    bytes: generatedBytes,
+    mimeType,
+    transparentBackground,
+    transparencyMethod: transparentBackground ? transparencyMethod : null,
     id,
     provider,
     model,

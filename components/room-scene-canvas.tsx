@@ -8,8 +8,23 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import type { ClientRoomSceneManifest } from "@/lib/client-types";
+import { createRoomObjectModel } from "@/components/room-object-models";
 
 type CameraCommand = "reset" | "top";
+
+type RoomSurface =
+  ClientRoomSceneManifest["scan"]["scene"]["surfaces"][number];
+
+type SurfaceRect = {
+  left: number;
+  right: number;
+  bottom: number;
+  top: number;
+};
+
+type WallAperture = {
+  rect: SurfaceRect;
+};
 
 const objectColors: Record<string, number> = {
   storage: 0xb79a72,
@@ -117,6 +132,140 @@ function setMatrix(object: THREE.Object3D, values: number[]) {
   object.matrixAutoUpdate = false;
   object.matrix.fromArray(values);
   object.matrixWorldNeedsUpdate = true;
+}
+
+function subtractRect(source: SurfaceRect, cutout: SurfaceRect) {
+  const overlap = {
+    left: Math.max(source.left, cutout.left),
+    right: Math.min(source.right, cutout.right),
+    bottom: Math.max(source.bottom, cutout.bottom),
+    top: Math.min(source.top, cutout.top),
+  };
+  if (overlap.right - overlap.left <= 0.001 || overlap.top - overlap.bottom <= 0.001) {
+    return [source];
+  }
+
+  const pieces: SurfaceRect[] = [];
+  if (overlap.left - source.left > 0.001) {
+    pieces.push({
+      left: source.left,
+      right: overlap.left,
+      bottom: source.bottom,
+      top: source.top,
+    });
+  }
+  if (source.right - overlap.right > 0.001) {
+    pieces.push({
+      left: overlap.right,
+      right: source.right,
+      bottom: source.bottom,
+      top: source.top,
+    });
+  }
+  if (overlap.bottom - source.bottom > 0.001) {
+    pieces.push({
+      left: overlap.left,
+      right: overlap.right,
+      bottom: source.bottom,
+      top: overlap.bottom,
+    });
+  }
+  if (source.top - overlap.top > 0.001) {
+    pieces.push({
+      left: overlap.left,
+      right: overlap.right,
+      bottom: overlap.top,
+      top: source.top,
+    });
+  }
+  return pieces;
+}
+
+/**
+ * RoomPlan reports doors, windows, and openings as separate surfaces that sit
+ * on a wall plane. Associate each one with its closest compatible wall so the
+ * wall can be built around it instead of behind it.
+ */
+function wallApertures(surfaces: RoomSurface[]) {
+  const walls = surfaces.filter((surface) => surface.category === "wall");
+  const apertures = surfaces.filter((surface) =>
+    ["door", "window", "opening"].includes(surface.category),
+  );
+  const matches = new Map<string, WallAperture[]>();
+
+  for (const aperture of apertures) {
+    const apertureWidth = Math.max(aperture.dimensions[0], 0.04);
+    const apertureHeight = Math.max(aperture.dimensions[1], 0.04);
+    let best:
+      | { wall: RoomSurface; rect: SurfaceRect; score: number }
+      | undefined;
+
+    for (const wall of walls) {
+      const wallWidth = Math.max(wall.dimensions[0], 0.04);
+      const wallHeight = Math.max(wall.dimensions[1], 0.04);
+      const wallFromAperture = new THREE.Matrix4()
+        .fromArray(wall.transform)
+        .invert()
+        .multiply(new THREE.Matrix4().fromArray(aperture.transform));
+      const apertureNormal = new THREE.Vector3(0, 0, 1).transformDirection(
+        wallFromAperture,
+      );
+      const normalAlignment = Math.abs(apertureNormal.z);
+      if (normalAlignment < 0.82) continue;
+
+      const corners = [
+        new THREE.Vector3(-apertureWidth / 2, -apertureHeight / 2, 0),
+        new THREE.Vector3(apertureWidth / 2, -apertureHeight / 2, 0),
+        new THREE.Vector3(apertureWidth / 2, apertureHeight / 2, 0),
+        new THREE.Vector3(-apertureWidth / 2, apertureHeight / 2, 0),
+      ].map((corner) => corner.applyMatrix4(wallFromAperture));
+      const planeDistance = Math.max(...corners.map((corner) => Math.abs(corner.z)));
+      if (planeDistance > 0.24) continue;
+
+      const projected = {
+        left: Math.min(...corners.map((corner) => corner.x)),
+        right: Math.max(...corners.map((corner) => corner.x)),
+        bottom: Math.min(...corners.map((corner) => corner.y)),
+        top: Math.max(...corners.map((corner) => corner.y)),
+      };
+      const wallBounds = {
+        left: -wallWidth / 2,
+        right: wallWidth / 2,
+        bottom: -wallHeight / 2,
+        top: wallHeight / 2,
+      };
+      const outside =
+        Math.max(0, wallBounds.left - projected.left) +
+        Math.max(0, projected.right - wallBounds.right) +
+        Math.max(0, wallBounds.bottom - projected.bottom) +
+        Math.max(0, projected.top - wallBounds.top);
+      const overlapWidth =
+        Math.min(projected.right, wallBounds.right) -
+        Math.max(projected.left, wallBounds.left);
+      const overlapHeight =
+        Math.min(projected.top, wallBounds.top) -
+        Math.max(projected.bottom, wallBounds.bottom);
+      if (overlapWidth < 0.04 || overlapHeight < 0.04) continue;
+
+      const cutoutPadding = 0.012;
+      const rect = {
+        left: Math.max(wallBounds.left, projected.left - cutoutPadding),
+        right: Math.min(wallBounds.right, projected.right + cutoutPadding),
+        bottom: Math.max(wallBounds.bottom, projected.bottom - cutoutPadding),
+        top: Math.min(wallBounds.top, projected.top + cutoutPadding),
+      };
+      const score = planeDistance * 5 + (1 - normalAlignment) * 2 + outside * 3;
+      if (!best || score < best.score) best = { wall, rect, score };
+    }
+
+    if (best) {
+      const wallMatches = matches.get(best.wall.id) ?? [];
+      wallMatches.push({ rect: best.rect });
+      matches.set(best.wall.id, wallMatches);
+    }
+  }
+
+  return matches;
 }
 
 export function RoomSceneCanvas({
@@ -288,27 +437,46 @@ export function RoomSceneCanvas({
       bumpScale: 0.007,
       roughness: 0.68,
       metalness: 0.01,
-      polygonOffset: true,
-      polygonOffsetFactor: -1,
-      polygonOffsetUnits: -2,
+    });
+    const doorDetailMaterial = new THREE.MeshStandardMaterial({
+      color: 0xc08d5d,
+      map: doorColorMap,
+      roughness: 0.76,
+      metalness: 0,
+    });
+    const trimMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf0ece4,
+      map: wallColorMap,
+      bumpMap: wallBumpMap,
+      bumpScale: 0.006,
+      roughness: 0.78,
+      metalness: 0,
+    });
+    const windowFrameMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe7eaeb,
+      roughness: 0.5,
+      metalness: 0.06,
+    });
+    const hardwareMaterial = new THREE.MeshStandardMaterial({
+      color: 0xb9a56f,
+      roughness: 0.27,
+      metalness: 0.82,
     });
     const windowMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0xaed7e7,
-      roughness: 0.18,
+      color: 0x82b4c8,
+      roughness: 0.12,
       metalness: 0,
-      transmission: 0.28,
+      transmission: 0.42,
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.46,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
     const openingMaterial = new THREE.MeshStandardMaterial({
-      color: 0x9ea8b5,
-      roughness: 0.9,
+      color: 0xd9d4ca,
+      map: wallColorMap,
+      roughness: 0.86,
       metalness: 0,
-      transparent: true,
-      opacity: 0.1,
-      depthWrite: false,
     });
     const objectMaterials = new Map<string, THREE.MeshStandardMaterial>();
     const objectMaterial = (category: string) => {
@@ -325,14 +493,51 @@ export function RoomSceneCanvas({
       objectMaterials.set(category, material);
       return material;
     };
-    const surfaceMaterial = (category: string): THREE.Material => {
-      if (category === "floor") return floorMaterial;
-      if (category === "door") return doorMaterial;
-      if (category === "window") return windowMaterial;
-      if (category === "opening") return openingMaterial;
-      return wallMaterial;
-    };
-
+    const objectLightMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe8e1d6,
+      map: objectColorMap,
+      bumpMap: objectBumpMap,
+      bumpScale: 0.004,
+      roughness: 0.72,
+      metalness: 0.01,
+    });
+    const objectDarkMaterial = new THREE.MeshStandardMaterial({
+      color: 0x30363d,
+      roughness: 0.52,
+      metalness: 0.12,
+    });
+    const objectMetalMaterial = new THREE.MeshStandardMaterial({
+      color: 0xaeb7bd,
+      roughness: 0.3,
+      metalness: 0.72,
+    });
+    const objectGlassMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0x263947,
+      roughness: 0.16,
+      metalness: 0.12,
+      transparent: true,
+      opacity: 0.82,
+    });
+    const objectCeramicMaterial = new THREE.MeshStandardMaterial({
+      color: 0xf0efeb,
+      roughness: 0.3,
+      metalness: 0.02,
+    });
+    const objectWaterMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0x69abc1,
+      roughness: 0.12,
+      transmission: 0.24,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+    });
+    const objectWarmMaterial = new THREE.MeshStandardMaterial({
+      color: 0xc87543,
+      emissive: 0x6b2410,
+      emissiveIntensity: 0.18,
+      roughness: 0.68,
+      metalness: 0,
+    });
     const camera = new THREE.PerspectiveCamera(48, 1, 0.02, 250);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -360,42 +565,319 @@ export function RoomSceneCanvas({
     setMatrix(webRoot, manifest.scan.scene.webFromWorld);
     scene.add(webRoot);
 
+    const addBox = ({
+      parent,
+      size,
+      position = [0, 0, 0],
+      material,
+      castShadow = false,
+      receiveShadow = true,
+    }: {
+      parent: THREE.Object3D;
+      size: readonly [number, number, number];
+      position?: readonly [number, number, number];
+      material: THREE.Material;
+      castShadow?: boolean;
+      receiveShadow?: boolean;
+    }) => {
+      const geometry = new THREE.BoxGeometry(
+        Math.max(size[0], 0.002),
+        Math.max(size[1], 0.002),
+        Math.max(size[2], 0.002),
+      );
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(...position);
+      mesh.castShadow = castShadow;
+      mesh.receiveShadow = receiveShadow;
+      parent.add(mesh);
+      return mesh;
+    };
+
+    const makeWallNode = (surface: RoomSurface, apertures: WallAperture[]) => {
+      const [width, height, depth] = normalizedDimensions(
+        surface.category,
+        surface.dimensions,
+      );
+      let pieces: SurfaceRect[] = [
+        {
+          left: -width / 2,
+          right: width / 2,
+          bottom: -height / 2,
+          top: height / 2,
+        },
+      ];
+      for (const aperture of apertures) {
+        pieces = pieces.flatMap((piece) => subtractRect(piece, aperture.rect));
+      }
+
+      const wall = new THREE.Group();
+      setMatrix(wall, surface.transform);
+      for (const piece of pieces) {
+        addBox({
+          parent: wall,
+          size: [piece.right - piece.left, piece.top - piece.bottom, depth],
+          position: [
+            (piece.left + piece.right) / 2,
+            (piece.bottom + piece.top) / 2,
+            0,
+          ],
+          material: wallMaterial,
+        });
+      }
+      return wall;
+    };
+
+    const makeDoorNode = (surface: RoomSurface) => {
+      const [width, height, measuredDepth] = normalizedDimensions(
+        surface.category,
+        surface.dimensions,
+      );
+      const door = new THREE.Group();
+      setMatrix(door, surface.transform);
+
+      const frameWidth = THREE.MathUtils.clamp(
+        Math.min(width, height) * 0.075,
+        0.035,
+        0.085,
+      );
+      const frameDepth = Math.max(measuredDepth, 0.1);
+      const gap = Math.min(0.012, width * 0.025);
+      const panelWidth = Math.max(width - frameWidth * 2 - gap * 2, 0.025);
+      const panelHeight = Math.max(height - frameWidth - gap * 2, 0.025);
+      const panelDepth = THREE.MathUtils.clamp(measuredDepth * 0.72, 0.035, 0.055);
+
+      addBox({
+        parent: door,
+        size: [frameWidth, height, frameDepth],
+        position: [-width / 2 + frameWidth / 2, 0, 0],
+        material: trimMaterial,
+        castShadow: true,
+      });
+      addBox({
+        parent: door,
+        size: [frameWidth, height, frameDepth],
+        position: [width / 2 - frameWidth / 2, 0, 0],
+        material: trimMaterial,
+        castShadow: true,
+      });
+      addBox({
+        parent: door,
+        size: [width - frameWidth * 2, frameWidth, frameDepth],
+        position: [0, height / 2 - frameWidth / 2, 0],
+        material: trimMaterial,
+        castShadow: true,
+      });
+      addBox({
+        parent: door,
+        size: [panelWidth, panelHeight, panelDepth],
+        position: [0, -frameWidth / 2, 0],
+        material: doorMaterial,
+        castShadow: true,
+      });
+
+      if (panelWidth > 0.32 && panelHeight > 0.75) {
+        const detailDepth = 0.009;
+        const detailWidth = panelWidth * 0.68;
+        const detailHeight = panelHeight * 0.28;
+        for (const zDirection of [-1, 1]) {
+          for (const y of [-panelHeight * 0.22, panelHeight * 0.2]) {
+            addBox({
+              parent: door,
+              size: [detailWidth, detailHeight, detailDepth],
+              position: [
+                0,
+                y - frameWidth / 2,
+                zDirection * (panelDepth / 2 + detailDepth / 2),
+              ],
+              material: doorDetailMaterial,
+              castShadow: true,
+            });
+          }
+        }
+      }
+
+      if (panelWidth > 0.24 && panelHeight > 0.5) {
+        const handleX = panelWidth * 0.34;
+        const handleY = -height / 2 + Math.min(1, height * 0.48);
+        const rosetteRadius = THREE.MathUtils.clamp(width * 0.032, 0.018, 0.032);
+        for (const zDirection of [-1, 1]) {
+          const rosette = new THREE.Mesh(
+            new THREE.CylinderGeometry(
+              rosetteRadius,
+              rosetteRadius,
+              0.014,
+              20,
+            ),
+            hardwareMaterial,
+          );
+          rosette.position.set(
+            handleX,
+            handleY,
+            zDirection * (panelDepth / 2 + 0.009),
+          );
+          rosette.rotation.x = Math.PI / 2;
+          rosette.castShadow = true;
+          door.add(rosette);
+          addBox({
+            parent: door,
+            size: [rosetteRadius * 2.6, rosetteRadius * 0.48, 0.018],
+            position: [
+              handleX - rosetteRadius * 0.8,
+              handleY,
+              zDirection * (panelDepth / 2 + 0.022),
+            ],
+            material: hardwareMaterial,
+            castShadow: true,
+          });
+        }
+      }
+      return door;
+    };
+
+    const makeWindowNode = (surface: RoomSurface) => {
+      const [width, height, measuredDepth] = normalizedDimensions(
+        surface.category,
+        surface.dimensions,
+      );
+      const window = new THREE.Group();
+      setMatrix(window, surface.transform);
+
+      const frameWidth = THREE.MathUtils.clamp(
+        Math.min(width, height) * 0.085,
+        0.032,
+        0.075,
+      );
+      const frameDepth = Math.max(measuredDepth, 0.085);
+      const glassWidth = Math.max(width - frameWidth * 2, 0.02);
+      const glassHeight = Math.max(height - frameWidth * 2, 0.02);
+
+      addBox({
+        parent: window,
+        size: [glassWidth, glassHeight, 0.012],
+        material: windowMaterial,
+        receiveShadow: false,
+      });
+      for (const x of [-width / 2 + frameWidth / 2, width / 2 - frameWidth / 2]) {
+        addBox({
+          parent: window,
+          size: [frameWidth, height, frameDepth],
+          position: [x, 0, 0],
+          material: windowFrameMaterial,
+          castShadow: true,
+        });
+      }
+      for (const y of [
+        -height / 2 + frameWidth / 2,
+        height / 2 - frameWidth / 2,
+      ]) {
+        addBox({
+          parent: window,
+          size: [width - frameWidth * 2, frameWidth, frameDepth],
+          position: [0, y, 0],
+          material: windowFrameMaterial,
+          castShadow: true,
+        });
+      }
+      if (glassWidth > 0.68) {
+        addBox({
+          parent: window,
+          size: [frameWidth * 0.58, glassHeight, frameDepth * 0.82],
+          material: windowFrameMaterial,
+          castShadow: true,
+        });
+      }
+      if (glassHeight > 1.05) {
+        addBox({
+          parent: window,
+          size: [glassWidth, frameWidth * 0.58, frameDepth * 0.82],
+          material: windowFrameMaterial,
+          castShadow: true,
+        });
+      }
+      addBox({
+        parent: window,
+        size: [width + 0.08, 0.032, frameDepth + 0.12],
+        position: [0, -height / 2 + 0.012, 0.025],
+        material: trimMaterial,
+        castShadow: true,
+      });
+      return window;
+    };
+
+    const makeOpeningNode = (surface: RoomSurface) => {
+      const [width, height, measuredDepth] = normalizedDimensions(
+        surface.category,
+        surface.dimensions,
+      );
+      const opening = new THREE.Group();
+      setMatrix(opening, surface.transform);
+      const trimWidth = THREE.MathUtils.clamp(
+        Math.min(width, height) * 0.045,
+        0.025,
+        0.06,
+      );
+      const trimDepth = Math.max(measuredDepth, 0.075);
+      for (const x of [-width / 2 + trimWidth / 2, width / 2 - trimWidth / 2]) {
+        addBox({
+          parent: opening,
+          size: [trimWidth, height, trimDepth],
+          position: [x, 0, 0],
+          material: openingMaterial,
+        });
+      }
+      addBox({
+        parent: opening,
+        size: [width - trimWidth * 2, trimWidth, trimDepth],
+        position: [0, height / 2 - trimWidth / 2, 0],
+        material: openingMaterial,
+      });
+      return opening;
+    };
+
     for (const roomManifest of visibleManifests) {
       const modelRoot = new THREE.Group();
       setMatrix(modelRoot, roomManifest.scan.scene.worldFromModel);
       webRoot.add(modelRoot);
 
-      for (const surface of roomManifest.scan.scene.surfaces) {
-        const dimensions = normalizedDimensions(surface.category, surface.dimensions);
-        const geometry = new THREE.BoxGeometry(...dimensions);
-        const mesh = new THREE.Mesh(geometry, surfaceMaterial(surface.category));
-        mesh.castShadow = surface.category === "door";
-        mesh.receiveShadow = true;
-        if (surface.category === "door") mesh.renderOrder = 2;
-        setMatrix(mesh, surface.transform);
-        modelRoot.add(mesh);
+      const aperturesByWall = wallApertures(roomManifest.scan.scene.surfaces);
 
-        if (surface.category !== "floor") {
-          const outline = new THREE.LineSegments(
-            new THREE.EdgesGeometry(geometry, 32),
-            new THREE.LineBasicMaterial({
-              color: surface.category === "window" ? 0x5b9cbd : 0x7f8996,
-              transparent: true,
-              opacity: 0.28,
-            }),
-          );
-          mesh.add(outline);
+      for (const surface of roomManifest.scan.scene.surfaces) {
+        if (surface.category === "wall") {
+          modelRoot.add(makeWallNode(surface, aperturesByWall.get(surface.id) ?? []));
+        } else if (surface.category === "door") {
+          modelRoot.add(makeDoorNode(surface));
+        } else if (surface.category === "window") {
+          modelRoot.add(makeWindowNode(surface));
+        } else if (surface.category === "opening") {
+          modelRoot.add(makeOpeningNode(surface));
+        } else {
+          const dimensions = normalizedDimensions(surface.category, surface.dimensions);
+          const geometry = new THREE.BoxGeometry(...dimensions);
+          const mesh = new THREE.Mesh(geometry, floorMaterial);
+          mesh.receiveShadow = true;
+          setMatrix(mesh, surface.transform);
+          modelRoot.add(mesh);
         }
       }
 
       for (const item of roomManifest.scan.scene.objects) {
         const dimensions = normalizedDimensions(item.category, item.dimensions);
-        const geometry = new THREE.BoxGeometry(...dimensions);
-        const mesh = new THREE.Mesh(geometry, objectMaterial(item.category));
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        setMatrix(mesh, item.transform);
-        modelRoot.add(mesh);
+        const objectModel = createRoomObjectModel({
+          category: item.category,
+          dimensions,
+          materials: {
+            primary: objectMaterial(item.category),
+            light: objectLightMaterial,
+            dark: objectDarkMaterial,
+            metal: objectMetalMaterial,
+            glass: objectGlassMaterial,
+            ceramic: objectCeramicMaterial,
+            water: objectWaterMaterial,
+            warm: objectWarmMaterial,
+          },
+        });
+        setMatrix(objectModel, item.transform);
+        modelRoot.add(objectModel);
       }
     }
 
@@ -608,8 +1090,19 @@ export function RoomSceneCanvas({
         wallMaterial,
         floorMaterial,
         doorMaterial,
+        doorDetailMaterial,
+        trimMaterial,
+        windowFrameMaterial,
+        hardwareMaterial,
         windowMaterial,
         openingMaterial,
+        objectLightMaterial,
+        objectDarkMaterial,
+        objectMetalMaterial,
+        objectGlassMaterial,
+        objectCeramicMaterial,
+        objectWaterMaterial,
+        objectWarmMaterial,
         ...objectMaterials.values(),
       ]);
       scene.traverse((object) => {

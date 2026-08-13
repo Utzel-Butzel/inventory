@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowUp,
   Bot,
+  Box,
   Braces,
   Check,
   ChevronRight,
@@ -38,7 +39,10 @@ import {
 } from "react";
 import { useT } from "next-i18next/client";
 
-import { defaultCoverPrompt } from "@/lib/ai-prompts";
+import {
+  defaultCoverPrompt,
+  defaultTransparentCoverPrompt,
+} from "@/lib/ai-prompts";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 import { prepareUpload, readImageGps } from "@/lib/client-media";
 import { AssemblyManager } from "@/components/assembly-manager";
@@ -53,6 +57,8 @@ import {
   type CustomFieldDefinition,
   type CustomFieldValues,
 } from "@/lib/custom-field-contract";
+import type { CoverTransparencyMethod } from "@/lib/cover-generation-contract";
+import { canonicalUsdzMimeType, isUsdzMedia } from "@/lib/usdz";
 
 type FormState = {
   name: string;
@@ -137,9 +143,10 @@ const toForm = (resource: ClientResource): FormState => ({
   notes: resource.notes,
 });
 
-const mediaIcon = (kind: string) => {
-  if (kind === "image") return ImageIcon;
-  if (kind === "document") return FileText;
+const mediaIcon = (item: { kind: string; mimeType?: string; name?: string }) => {
+  if (isUsdzMedia(item)) return Box;
+  if (item.kind === "image") return ImageIcon;
+  if (item.kind === "document") return FileText;
   return Paperclip;
 };
 
@@ -149,6 +156,88 @@ const customFieldDefinitionsFromResponse = (payload: unknown) => {
   const candidate = (payload as { definitions?: unknown }).definitions;
   return Array.isArray(candidate) ? (candidate as CustomFieldDefinition[]) : [];
 };
+
+function CoverTransparencyOptions({
+  transparentBackground,
+  transparencyMethod,
+  disabled,
+  onTransparentBackgroundChange,
+  onTransparencyMethodChange,
+}: {
+  transparentBackground: boolean;
+  transparencyMethod: CoverTransparencyMethod;
+  disabled: boolean;
+  onTransparentBackgroundChange: (value: boolean) => void;
+  onTransparencyMethodChange: (value: CoverTransparencyMethod) => void;
+}) {
+  const { t } = useT("resource");
+
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-surface-subtle p-2.5">
+      <label className="flex items-start gap-2.5">
+        <input
+          type="checkbox"
+          checked={transparentBackground}
+          disabled={disabled}
+          onChange={(event) =>
+            onTransparentBackgroundChange(event.target.checked)
+          }
+          className="mt-0.5 h-4 w-4 accent-brand-solid"
+        />
+        <span>
+          <span className="block text-[11px] font-semibold text-muted-strong">
+            {t("ai.transparentBackground")}
+          </span>
+          <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+            {t("ai.transparentBackgroundDescription")}
+          </span>
+        </span>
+      </label>
+      {transparentBackground ? (
+        <fieldset className="mt-3 border-t border-border pt-2.5" disabled={disabled}>
+          <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+            {t("ai.transparencyMethod")}
+          </legend>
+          <div className="mt-1.5 grid gap-2">
+            {(
+              ["difference-matting", "greenscreen"] as const
+            ).map((method) => (
+              <label
+                key={method}
+                className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-surface px-2.5 py-2"
+              >
+                <input
+                  type="radio"
+                  name="cover-transparency-method"
+                  value={method}
+                  checked={transparencyMethod === method}
+                  onChange={() => onTransparencyMethodChange(method)}
+                  className="mt-0.5 h-3.5 w-3.5 accent-brand-solid"
+                />
+                <span>
+                  <span className="block text-[10px] font-semibold text-muted-strong">
+                    {t(
+                      method === "difference-matting"
+                        ? "ai.differenceMatting"
+                        : "ai.greenscreen",
+                    )}
+                  </span>
+                  <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                    {t(
+                      method === "difference-matting"
+                        ? "ai.differenceMattingDescription"
+                        : "ai.greenscreenDescription",
+                    )}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+    </div>
+  );
+}
 
 export function ResourceEditor({
   resourceId,
@@ -189,6 +278,10 @@ export function ResourceEditor({
   const [autoAnalyze, setAutoAnalyze] = useState(canUseAi);
   const [autoCover, setAutoCover] = useState(false);
   const [coverPrompt, setCoverPrompt] = useState("");
+  const [coverPromptCustomized, setCoverPromptCustomized] = useState(false);
+  const [transparentCover, setTransparentCover] = useState(false);
+  const [coverTransparencyMethod, setCoverTransparencyMethod] =
+    useState<CoverTransparencyMethod>("difference-matting");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -204,6 +297,7 @@ export function ResourceEditor({
       setForm(toForm(response.resource));
       setCustomFields(response.resource.customFields ?? {});
       setCoverPrompt(defaultCoverPrompt(response.resource.name));
+      setCoverPromptCustomized(false);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : t("errors.load"));
     } finally {
@@ -271,6 +365,18 @@ export function ResourceEditor({
   const setField = (field: keyof FormState, value: string) =>
     setForm((current) => ({ ...current, [field]: value }));
 
+  const changeTransparentCover = (transparent: boolean) => {
+    const title = resource?.name || form.name;
+    if (!coverPromptCustomized) {
+      setCoverPrompt(
+        transparent
+          ? defaultTransparentCoverPrompt(title)
+          : defaultCoverPrompt(title),
+      );
+    }
+    setTransparentCover(transparent);
+  };
+
   const categoryNames = useMemo(
     () =>
       form.categories
@@ -307,12 +413,21 @@ export function ResourceEditor({
       (file) =>
         file.type.startsWith("image/") ||
         file.type.startsWith("video/") ||
-        file.type === "application/pdf",
+        file.type === "application/pdf" ||
+        isUsdzMedia(file),
     );
     if (supported.length !== incoming.length) {
       setError(t("errors.unsupportedFiles"));
     }
-    const prepared = await Promise.all(supported.slice(0, 12).map(prepareUpload));
+    const normalized = supported.slice(0, 12).map((file) =>
+      isUsdzMedia(file) && file.type !== canonicalUsdzMimeType
+        ? new File([file], file.name, {
+            type: canonicalUsdzMimeType,
+            lastModified: file.lastModified,
+          })
+        : file,
+    );
+    const prepared = await Promise.all(normalized.map(prepareUpload));
     setFiles((current) => [...current, ...prepared].slice(0, 12));
 
     const firstImage = prepared.find((file) => file.type.startsWith("image/"));
@@ -398,7 +513,12 @@ export function ResourceEditor({
       setResource(response.resource);
       setForm(toForm(response.resource));
       setCustomFields(response.resource.customFields ?? {});
-      setCoverPrompt(defaultCoverPrompt(response.resource.name));
+      setCoverPrompt(
+        transparentCover
+          ? defaultTransparentCoverPrompt(response.resource.name)
+          : defaultCoverPrompt(response.resource.name),
+      );
+      setCoverPromptCustomized(false);
       setNotice(t("notices.analysisComplete"));
       return response.resource;
     } catch (analysisError) {
@@ -425,6 +545,10 @@ export function ResourceEditor({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             prompt: coverPrompt || undefined,
+            transparentBackground: transparentCover,
+            ...(transparentCover
+              ? { transparencyMethod: coverTransparencyMethod }
+              : {}),
             ...(imageModelPreference.selectedModelId
               ? { modelId: imageModelPreference.selectedModelId }
               : {}),
@@ -865,7 +989,7 @@ export function ResourceEditor({
             {itemMedia.length ? (
               <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {itemMedia.map((item, index) => {
-                  const Icon = mediaIcon(item.kind);
+                  const Icon = mediaIcon(item);
                   return (
                     <div key={item.id} className="group relative overflow-hidden rounded-2xl border border-border bg-surface-subtle">
                       <div className="aspect-square overflow-hidden">
@@ -902,6 +1026,8 @@ export function ResourceEditor({
                     {files[index]?.type.startsWith("image/") ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={preview} alt={t("media.pendingUpload")} className="h-full w-full object-cover opacity-90" />
+                    ) : files[index] && isUsdzMedia(files[index]) ? (
+                      <div className="grid h-full place-items-center text-success"><Box size={28} strokeWidth={1.5} /></div>
                     ) : (
                       <div className="grid h-full place-items-center text-success"><Paperclip size={24} /></div>
                     )}
@@ -917,7 +1043,7 @@ export function ResourceEditor({
               onDrop={onDrop}
               className={`flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-7 text-center transition ${dragging ? "border-success-border bg-success-soft" : "border-border bg-surface-subtle hover:border-border-strong hover:bg-surface-muted/70"}`}
             >
-              <input type="file" multiple accept="image/*,video/*,application/pdf" onChange={onFileInput} className="sr-only" />
+              <input type="file" multiple accept="image/*,video/*,application/pdf,.usdz,model/vnd.usdz+zip" onChange={onFileInput} className="sr-only" />
               <UploadCloud size={24} className="mb-2 text-muted" />
               <span className="text-sm font-semibold text-muted-strong">
                 {t("media.drop")}
@@ -970,11 +1096,20 @@ export function ResourceEditor({
                 <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-surface/80 p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => setAutoAnalyze(event.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.analyzeDescription")}</span></span></label>
                 <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-surface/80 p-3"><input type="checkbox" checked={autoCover} onChange={(event) => setAutoCover(event.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.coverDescription")}</span></span></label>
                 {autoCover ? (
-                  <ImageModelSelector
-                    preference={imageModelPreference}
-                    disabled={Boolean(aiAction)}
-                    className="rounded-xl border border-brand-border bg-surface/80 p-3"
-                  />
+                  <div className="rounded-xl border border-brand-border bg-surface/80 p-3">
+                    <CoverTransparencyOptions
+                      transparentBackground={transparentCover}
+                      transparencyMethod={coverTransparencyMethod}
+                      disabled={Boolean(aiAction)}
+                      onTransparentBackgroundChange={changeTransparentCover}
+                      onTransparencyMethodChange={setCoverTransparencyMethod}
+                    />
+                    <ImageModelSelector
+                      preference={imageModelPreference}
+                      disabled={Boolean(aiAction)}
+                      className="mt-3"
+                    />
+                  </div>
                 ) : null}
                 <p className="text-[11px] leading-4 text-muted">{t("ai.safety")}</p>
               </div>
@@ -984,8 +1119,15 @@ export function ResourceEditor({
                 <div className="rounded-xl border border-brand-border bg-surface/80 p-3">
                   <label className="text-[11px] font-semibold text-muted">
                     {t("ai.coverDirection")}
-                    <textarea value={coverPrompt} onChange={(event) => setCoverPrompt(event.target.value)} rows={5} className="mt-2 w-full resize-none rounded-lg border border-border bg-surface p-2.5 text-xs leading-5 text-muted-strong outline-none focus:border-focus" />
+                    <textarea value={coverPrompt} onChange={(event) => { setCoverPrompt(event.target.value); setCoverPromptCustomized(true); }} rows={5} className="mt-2 w-full resize-none rounded-lg border border-border bg-surface p-2.5 text-xs leading-5 text-muted-strong outline-none focus:border-focus" />
                   </label>
+                  <CoverTransparencyOptions
+                    transparentBackground={transparentCover}
+                    transparencyMethod={coverTransparencyMethod}
+                    disabled={Boolean(aiAction)}
+                    onTransparentBackgroundChange={changeTransparentCover}
+                    onTransparencyMethodChange={setCoverTransparencyMethod}
+                  />
                   <ImageModelSelector
                     preference={imageModelPreference}
                     disabled={Boolean(aiAction)}

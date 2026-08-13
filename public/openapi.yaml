@@ -2120,7 +2120,7 @@ paths:
       - { $ref: "#/components/parameters/ResourceId" }
     post:
       tags: [Media]
-      summary: Upload up to 12 media files
+      summary: Upload up to 12 media files, including Apple USDZ object models
       parameters:
         - { $ref: "#/components/parameters/IdempotencyKey" }
       requestBody:
@@ -2133,11 +2133,15 @@ paths:
                 files:
                   type: array
                   maxItems: 12
+                  description: Images, videos, PDF documents, or .usdz models sent as model/vnd.usdz+zip.
                   items: { type: string, format: binary }
       responses:
         "200": { description: Replayed the existing upload batch }
         "201": { description: Uploaded }
+        "413": { description: A file exceeds the configured per-file upload limit }
+        "415": { description: Unsupported media type, invalid USDZ filename, or invalid USDZ package signature }
         "409": { description: Idempotency key belongs to another resource }
+        "503": { description: The configured storage provider cannot store the accepted media type }
     patch:
       tags: [Media]
       summary: Reorder all media
@@ -2189,7 +2193,7 @@ paths:
   /resources/{id}/cover:
     post:
       tags: [AI]
-      summary: Generate a square studio cover from an item image
+      summary: Generate a square studio or transparent cover from an item image
       parameters:
         - { $ref: "#/components/parameters/ResourceId" }
         - { $ref: "#/components/parameters/IdempotencyKey" }
@@ -2205,6 +2209,15 @@ paths:
                   type: string
                   maxLength: 240
                   description: An ID returned by GET /ai/image-models. Omit it to use the deployment default.
+                transparentBackground:
+                  type: boolean
+                  default: false
+                  description: When true, store a transparent PNG instead of an opaque JPEG.
+                transparencyMethod:
+                  type: string
+                  enum: [greenscreen, difference-matting]
+                  default: difference-matting
+                  description: Greenscreen uses one generated chroma-key pass. Difference matting uses aligned white and black passes for higher-quality alpha, including translucent details and soft shadows.
       responses:
         "200": { description: Cover generated or completed response replayed }
         "202": { description: An operation with this key is still processing }
@@ -3526,7 +3539,7 @@ components:
         url: { type: string }
         name: { type: string }
         mimeType: { type: string }
-        kind: { type: string, enum: [image, video, document, unknown] }
+        kind: { type: string, enum: [image, video, document, model, unknown] }
         position: { type: integer }
         source: { type: string, enum: [upload, ai] }
         altText: { type: string }

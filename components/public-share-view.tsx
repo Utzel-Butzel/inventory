@@ -13,11 +13,13 @@ import {
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { LocalizedThemeToggle } from "@/components/theme-toggle";
+import { UsdzModelViewer } from "@/components/usdz-model-viewer";
 import type {
   PublicCustomFieldDefinition,
   PublicResource,
 } from "@/lib/public-shares";
 import { getT } from "@/lib/ui-i18n/server";
+import { isUsdzMedia } from "@/lib/usdz";
 
 const statusStyles: Record<string, string> = {
   available: "bg-success-soft text-success ring-success-border",
@@ -293,16 +295,35 @@ export async function PublicResourceView({
               <section className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
                 <h2 className="text-sm font-semibold text-foreground">{t("resource.media")}</h2>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {resource.media.map((item) => item.kind === "image" && item.mimeType.startsWith("image/") && item.mimeType !== "image/svg+xml" ? (
-                    <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="aspect-square overflow-hidden rounded-xl border border-border bg-surface-muted">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={item.url} alt={item.altText || item.name} className="h-full w-full object-cover" />
-                    </a>
-                  ) : (
-                    <a key={item.id} href={item.url} className="flex min-h-24 items-center gap-3 rounded-xl border border-border p-4 text-sm font-semibold text-foreground">
-                      <FileText className="size-5 text-muted" /> {item.name}
-                    </a>
-                  ))}
+                  {resource.media.map((item) =>
+                    isUsdzMedia(item) ? (
+                      <UsdzModelViewer
+                        key={item.id}
+                        src={item.url}
+                        name={item.name}
+                        labels={{
+                          loading: t("modelViewer.loading"),
+                          unavailable: t("modelViewer.unavailable"),
+                          viewInAr: t("modelViewer.viewInAr"),
+                          download: t("modelViewer.download"),
+                          interaction: t("modelViewer.interaction", {
+                            name: item.name,
+                          }),
+                        }}
+                      />
+                    ) : item.kind === "image" &&
+                      item.mimeType.startsWith("image/") &&
+                      item.mimeType !== "image/svg+xml" ? (
+                      <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="aspect-square overflow-hidden rounded-xl border border-border bg-surface-muted">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={item.url} alt={item.altText || item.name} className="h-full w-full object-cover" />
+                      </a>
+                    ) : (
+                      <a key={item.id} href={item.url} className="flex min-h-24 items-center gap-3 rounded-xl border border-border p-4 text-sm font-semibold text-foreground">
+                        <FileText className="size-5 text-muted" /> {item.name}
+                      </a>
+                    ),
+                  )}
                 </div>
               </section>
             ) : null}

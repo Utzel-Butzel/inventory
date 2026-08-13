@@ -39,6 +39,7 @@ import {
   ImageModelSelector,
   useImageModelPreference,
 } from "@/components/image-model-selector";
+import type { CoverTransparencyMethod } from "@/lib/cover-generation-contract";
 
 const MAX_PHOTOS = 12;
 const MAX_CAPTURE_EDGE = 1920;
@@ -175,6 +176,9 @@ export default function BatchCapturePage() {
   const [geoState, setGeoState] = useState<GeoState>("idle");
   const [geoMessage, setGeoMessage] = useState<string | null>(null);
   const [autoGenerateCover, setAutoGenerateCover] = useState(true);
+  const [transparentCover, setTransparentCover] = useState(false);
+  const [coverTransparencyMethod, setCoverTransparencyMethod] =
+    useState<CoverTransparencyMethod>("difference-matting");
   const [formError, setFormError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<BatchJob[]>([]);
 
@@ -468,6 +472,8 @@ export default function BatchCapturePage() {
         coordinates: Coordinates | null;
         cover: boolean;
         modelId?: string;
+        transparentBackground: boolean;
+        transparencyMethod: CoverTransparencyMethod;
       },
     ) => {
       let createdResource: Resource | undefined;
@@ -544,9 +550,13 @@ export default function BatchCapturePage() {
               {
                 method: "POST",
                 headers: { "content-type": "application/json" },
-                body: JSON.stringify(
-                  input.modelId ? { modelId: input.modelId } : {},
-                ),
+                body: JSON.stringify({
+                  ...(input.modelId ? { modelId: input.modelId } : {}),
+                  transparentBackground: input.transparentBackground,
+                  ...(input.transparentBackground
+                    ? { transparencyMethod: input.transparencyMethod }
+                    : {}),
+                }),
               },
             );
             analyzedResource = covered.resource;
@@ -617,6 +627,8 @@ export default function BatchCapturePage() {
       coordinates,
       cover: autoGenerateCover,
       modelId: imageModelPreference.selectedModelId,
+      transparentBackground: transparentCover,
+      transparencyMethod: coverTransparencyMethod,
     };
 
     updatePhotos((current) => {
@@ -1112,10 +1124,70 @@ export default function BatchCapturePage() {
                 </span>
               </label>
               {autoGenerateCover ? (
-                <ImageModelSelector
-                  preference={imageModelPreference}
-                  className="mt-3 rounded-2xl border border-brand-border bg-surface p-4"
-                />
+                <div className="mt-3 rounded-2xl border border-brand-border bg-surface p-4">
+                  <label className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={transparentCover}
+                      onChange={(event) => setTransparentCover(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-brand-solid"
+                    />
+                    <span>
+                      <span className="block text-xs font-semibold text-muted-strong">
+                        {t("defaults.transparentBackground")}
+                      </span>
+                      <span className="mt-0.5 block text-xs leading-5 text-muted">
+                        {t("defaults.transparentBackgroundDescription")}
+                      </span>
+                    </span>
+                  </label>
+                  {transparentCover ? (
+                    <fieldset className="mt-3 border-t border-border pt-3">
+                      <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                        {t("defaults.transparencyMethod")}
+                      </legend>
+                      <div className="mt-2 grid gap-2">
+                        {(["difference-matting", "greenscreen"] as const).map(
+                          (method) => (
+                            <label
+                              key={method}
+                              className="flex cursor-pointer items-start gap-2 rounded-lg border border-border bg-surface-subtle p-2.5"
+                            >
+                              <input
+                                type="radio"
+                                name="batch-cover-transparency-method"
+                                value={method}
+                                checked={coverTransparencyMethod === method}
+                                onChange={() => setCoverTransparencyMethod(method)}
+                                className="mt-0.5 h-3.5 w-3.5 accent-brand-solid"
+                              />
+                              <span>
+                                <span className="block text-xs font-semibold text-muted-strong">
+                                  {t(
+                                    method === "difference-matting"
+                                      ? "defaults.differenceMatting"
+                                      : "defaults.greenscreen",
+                                  )}
+                                </span>
+                                <span className="mt-0.5 block text-[11px] leading-4 text-muted">
+                                  {t(
+                                    method === "difference-matting"
+                                      ? "defaults.differenceMattingDescription"
+                                      : "defaults.greenscreenDescription",
+                                  )}
+                                </span>
+                              </span>
+                            </label>
+                          ),
+                        )}
+                      </div>
+                    </fieldset>
+                  ) : null}
+                  <ImageModelSelector
+                    preference={imageModelPreference}
+                    className="mt-3"
+                  />
+                </div>
               ) : null}
             </div>
 

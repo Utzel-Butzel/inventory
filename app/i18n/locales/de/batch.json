@@ -62,7 +62,14 @@
     "accuracy": "Auf etwa {{meters}} m genau · Zum Aktualisieren tippen",
     "locationPrivacy": "Wird vertraulich mit diesem Inventarelement gespeichert",
     "generateCover": "KI-Titelbild erstellen",
-    "generateCoverDescription": "Element erkennen und anschließend aus dem ersten Foto ein sauberes Studio-Titelbild erstellen."
+    "generateCoverDescription": "Element erkennen und anschließend aus dem ersten Foto ein sauberes Studio-Titelbild erstellen.",
+    "transparentBackground": "Transparenter Hintergrund",
+    "transparentBackgroundDescription": "Erstellte Titelbilder als transparente PNGs speichern.",
+    "transparencyMethod": "Transparenzmethode",
+    "differenceMatting": "Differenz-Matting · beste Qualität",
+    "differenceMattingDescription": "Zwei deckungsgleiche Bilddurchläufe erhalten saubere Kanten, Glas und weiche Schatten.",
+    "greenscreen": "Greenscreen · schneller",
+    "greenscreenDescription": "Ein Bilddurchlauf, mit höherem Risiko bei grünen Objekten und feinen Kanten."
   },
   "submit": {
     "create": "Mit KI erstellen",

@@ -15,25 +15,20 @@ import {
 } from "@/lib/idempotency";
 import { getResource } from "@/lib/resources";
 import {
+  hasUsdzFileSignature,
+  isUsdzMediaType,
+  validateResourceMediaUpload,
+} from "@/lib/resource-media-contract";
+import {
+  assertStorageSupportsMediaType,
   deleteStoredMedia,
   maxUploadBytes,
   storeMedia,
   type StoredMedia,
+  UnsupportedStorageMediaTypeError,
 } from "@/lib/storage";
 
 type Context = { params: Promise<{ id: string }> };
-
-const allowedMimeTypes = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/avif",
-  "image/heic",
-  "video/mp4",
-  "video/quicktime",
-  "video/webm",
-  "application/pdf",
-]);
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -127,18 +122,32 @@ export async function POST(request: Request, context: Context) {
     );
   }
   const sizeLimit = maxUploadBytes();
-  const invalid = files.find(
-    (file) => file.size > sizeLimit || !allowedMimeTypes.has(file.type),
-  );
-  if (invalid) {
-    return Response.json(
-      {
-        error: allowedMimeTypes.has(invalid.type)
-          ? `${invalid.name} exceeds the upload size limit.`
-          : `${invalid.name} has an unsupported file type (${invalid.type || "unknown"}).`,
-      },
-      { status: 415 },
-    );
+  for (const file of files) {
+    const validation = validateResourceMediaUpload(file, sizeLimit);
+    if (!validation.valid) {
+      return Response.json(
+        { error: validation.error },
+        { status: validation.status },
+      );
+    }
+    if (isUsdzMediaType(file.type)) {
+      const signature = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+      if (!hasUsdzFileSignature(signature)) {
+        return Response.json(
+          { error: `${file.name} is not a readable USDZ package.` },
+          { status: 415 },
+        );
+      }
+    }
+  }
+
+  try {
+    for (const file of files) assertStorageSupportsMediaType(file.type);
+  } catch (error) {
+    if (error instanceof UnsupportedStorageMediaTypeError) {
+      return Response.json({ error: error.message }, { status: 503 });
+    }
+    throw error;
   }
 
   const storedFiles: StoredMedia[] = [];

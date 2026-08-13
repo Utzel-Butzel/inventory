@@ -5,6 +5,13 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import sharp from "sharp";
 
+import {
+  resourceMediaKind,
+  storageProviderSupportsMediaType,
+  USDZ_MEDIA_TYPE,
+  type ResourceMediaKind,
+} from "@/lib/resource-media-contract";
+
 export type StorageProvider = "local" | "openinary";
 
 export type StoredMedia = {
@@ -12,7 +19,7 @@ export type StoredMedia = {
   url: string;
   name: string;
   mimeType: string;
-  kind: "image" | "video" | "document" | "unknown";
+  kind: ResourceMediaKind;
   size: number;
   width: number | null;
   height: number | null;
@@ -65,11 +72,24 @@ export const getStorageProvider = (): StorageProvider =>
     ? "openinary"
     : "local";
 
-export const getMediaKind = (mimeType: string): StoredMedia["kind"] => {
-  if (mimeType.startsWith("image/")) return "image";
-  if (mimeType.startsWith("video/")) return "video";
-  if (mimeType === "application/pdf") return "document";
-  return "unknown";
+export const getMediaKind = resourceMediaKind;
+
+export class UnsupportedStorageMediaTypeError extends Error {
+  constructor(provider: StorageProvider, mimeType: string) {
+    super(
+      provider === "openinary" && mimeType === USDZ_MEDIA_TYPE
+        ? "The configured Openinary storage provider does not accept USDZ models. Set STORAGE_PROVIDER=local with persistent storage to upload Object Capture models."
+        : `The configured ${provider} storage provider does not accept ${mimeType || "this file type"}.`,
+    );
+    this.name = "UnsupportedStorageMediaTypeError";
+  }
+}
+
+export const assertStorageSupportsMediaType = (mimeType: string) => {
+  const provider = getStorageProvider();
+  if (!storageProviderSupportsMediaType(provider, mimeType)) {
+    throw new UnsupportedStorageMediaTypeError(provider, mimeType);
+  }
 };
 
 const imageMetadata = async (bytes: Buffer, mimeType: string) => {
@@ -139,6 +159,7 @@ async function storeBytes(options: {
   originalName: string;
   folder: string;
 }) {
+  assertStorageSupportsMediaType(options.mimeType);
   const filename = `${randomUUID()}-${safeFilename(options.originalName)}`;
   const key = validateStorageKey(`${options.folder}/${filename}`);
 

@@ -10,6 +10,9 @@ import {
   customFieldEntityTypes,
   customFieldTypes,
 } from "@/lib/custom-field-contract";
+import {
+  coverTransparencyMethods,
+} from "@/lib/cover-generation-contract";
 
 const passwordSchema = z
   .string()
@@ -432,6 +435,8 @@ export const coverInputSchema = z.object({
   sourceMediaId: z.string().uuid().optional(),
   prompt: z.string().trim().max(5_000).optional(),
   modelId: z.string().trim().min(1).max(240).optional(),
+  transparentBackground: z.boolean().optional(),
+  transparencyMethod: z.enum(coverTransparencyMethods).optional(),
 });
 
 export const inventoryCountInputSchema = z

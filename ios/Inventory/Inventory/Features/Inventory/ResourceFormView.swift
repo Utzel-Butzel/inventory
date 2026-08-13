@@ -6,6 +6,7 @@ struct ResourceFormView: View {
 
     let resource: InventoryResource?
     let prefilledCode: String?
+    let objectModel: CapturedObjectModel?
     let onSaved: (InventoryResource) -> Void
 
     @State private var name: String
@@ -20,14 +21,18 @@ struct ResourceFormView: View {
     @State private var notes: String
     @State private var saving = false
     @State private var errorMessage: String?
+    @State private var createOperationID = UUID()
+    @State private var modelUploadOperationID = UUID()
 
     init(
         resource: InventoryResource? = nil,
         prefilledCode: String? = nil,
+        objectModel: CapturedObjectModel? = nil,
         onSaved: @escaping (InventoryResource) -> Void
     ) {
         self.resource = resource
         self.prefilledCode = prefilledCode
+        self.objectModel = objectModel
         self.onSaved = onSaved
 
         let scanned = prefilledCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -66,6 +71,31 @@ struct ResourceFormView: View {
                         } icon: {
                             Image(systemName: "qrcode")
                         }
+                    }
+                }
+
+                if let objectModel {
+                    Section("3D-Modell") {
+                        LabeledContent {
+                            VStack(alignment: .trailing, spacing: 3) {
+                                Text(objectModel.fileURL.lastPathComponent)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(1)
+                                Text(objectModel.byteCount.formatted(.byteCount(style: .file)))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } label: {
+                            Label("Apple Object Capture", systemImage: "cube.fill")
+                        }
+
+                        if objectModel.shotCount > 0 {
+                            LabeledContent("Aufnahmen", value: "\(objectModel.shotCount)")
+                        }
+
+                        Text("Das reduzierte USDZ-Modell wird zusammen mit dem neuen Eintrag hochgeladen.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -118,6 +148,7 @@ struct ResourceFormView: View {
                 }
             }
             .interactiveDismissDisabled(saving)
+            .onDisappear(perform: cleanupObjectModel)
             .alert(
                 "Speichern fehlgeschlagen",
                 isPresented: Binding(
@@ -157,7 +188,7 @@ struct ResourceFormView: View {
                         )
                     )
                 } else {
-                    saved = try await client.createResource(
+                    let created = try await client.createResource(
                         ResourceCreateRequest(
                             name: normalized(name),
                             description: normalized(description),
@@ -169,9 +200,21 @@ struct ResourceFormView: View {
                             serialNumber: optional(serialNumber),
                             tags: parsedTags,
                             notes: normalized(notes)
-                        )
+                        ),
+                        idempotencyKey: createOperationID
                     )
+                    if let objectModel {
+                        _ = try await client.uploadMedia(
+                            resourceID: created.id,
+                            files: [objectModel.uploadFile],
+                            idempotencyKey: modelUploadOperationID
+                        )
+                        saved = try await client.getResource(id: created.id)
+                    } else {
+                        saved = created
+                    }
                 }
+                cleanupObjectModel()
                 onSaved(saved)
                 dismiss()
             } catch {
@@ -206,6 +249,11 @@ struct ResourceFormView: View {
 
     private func nullable(_ value: String) -> NullablePatch<String> {
         optional(value).map(NullablePatch.value) ?? .null
+    }
+
+    private func cleanupObjectModel() {
+        guard let objectModel else { return }
+        try? objectModel.removeLocalFiles()
     }
 }
 

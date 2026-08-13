@@ -1,4 +1,5 @@
 import { getPublicSharedMedia } from "@/lib/public-shares";
+import { isInlinePublicMediaType } from "@/lib/resource-media-contract";
 import { readMediaBytes } from "@/lib/storage";
 
 type Context = {
@@ -27,7 +28,7 @@ export async function GET(_request: Request, context: Context) {
   if (!item) return unavailable();
   try {
     const bytes = await readMediaBytes(item);
-    const safeInline = item.mimeType.startsWith("image/") && item.mimeType !== "image/svg+xml";
+    const safeInline = isInlinePublicMediaType(item.mimeType);
     return new Response(bytes, {
       headers: {
         "Content-Type": item.mimeType || "application/octet-stream",

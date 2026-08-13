@@ -64,8 +64,8 @@
   },
   "media": {
     "title": "Media",
-    "description_one": "Images, video and PDFs · {{count}} file",
-    "description_other": "Images, video and PDFs · {{count}} files",
+    "description_one": "Images, video, PDFs and 3D models · {{count}} file",
+    "description_other": "Images, video, PDFs and 3D models · {{count}} files",
     "cover": "Cover",
     "ai": "AI",
     "moveEarlier": "Move file earlier",
@@ -74,7 +74,7 @@
     "pendingUpload": "Pending upload",
     "removePending": "Remove pending file",
     "drop": "Drop files here or browse",
-    "formats": "JPG, PNG, WebP, HEIC, MP4, MOV or PDF · up to 12 files"
+    "formats": "JPG, PNG, WebP, HEIC, MP4, MOV, PDF or USDZ · up to 12 files"
   },
   "operations": {
     "title": "Operations",
@@ -107,6 +107,13 @@
     "safety": "AI runs only after the original files are safely stored. You can always edit the result.",
     "rewrite": "Analyze & rewrite fields",
     "coverDirection": "Cover direction",
+    "transparentBackground": "Transparent background",
+    "transparentBackgroundDescription": "Extract the generated cover as a transparent PNG.",
+    "transparencyMethod": "Transparency method",
+    "differenceMatting": "Difference matting · best quality",
+    "differenceMattingDescription": "Uses aligned white and black passes for clean edges, glass, and soft shadows. Uses two image generations.",
+    "greenscreen": "Greenscreen · faster",
+    "greenscreenDescription": "Uses one chroma-green pass. Faster, but green items and fine edges can show artifacts.",
     "generateNewCover": "Generate new cover",
     "imageRequired": "Upload and save an image to enable AI actions.",
     "lastModel": "Last model"
@@ -271,7 +278,7 @@
   "errors": {
     "load": "Unable to load item.",
     "loadCustomFields": "Unable to load custom field definitions.",
-    "unsupportedFiles": "Some files were skipped. Supported formats are images, video, and PDF.",
+    "unsupportedFiles": "Some files were skipped. Supported formats are images, video, PDF, and USDZ 3D models.",
     "analysis": "AI analysis failed.",
     "cover": "Cover generation failed.",
     "requiredCustomField": "Complete the required custom field “{{label}}”.",

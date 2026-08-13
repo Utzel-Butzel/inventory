@@ -1,7 +1,11 @@
 import { asc, eq, sql } from "drizzle-orm";
 
 import { aiIdempotencyOperations, media, resources } from "@/db/schema";
-import { defaultCoverPrompt, generateCoverImage } from "@/lib/ai";
+import {
+  defaultCoverPrompt,
+  defaultTransparentCoverPrompt,
+  generateCoverImage,
+} from "@/lib/ai";
 import {
   aiOperationResponseValues,
   claimAiOperation,
@@ -29,7 +33,7 @@ import { coverInputSchema } from "@/lib/validators";
 type Context = { params: Promise<{ id: string }> };
 
 export const runtime = "nodejs";
-export const maxDuration = 180;
+export const maxDuration = 300;
 
 export async function POST(request: Request, context: Context) {
   const { id } = await context.params;
@@ -167,16 +171,24 @@ export async function POST(request: Request, context: Context) {
   }
 
   try {
+    const transparentBackground = parsed.data.transparentBackground ?? false;
     const generated = await generateCoverImage({
       source: sourceBytes,
       sourceMimeType: source.mimeType,
-      prompt: parsed.data.prompt || defaultCoverPrompt(resource.name),
+      prompt:
+        parsed.data.prompt ||
+        (transparentBackground
+          ? defaultTransparentCoverPrompt(resource.name)
+          : defaultCoverPrompt(resource.name)),
       imageModel,
+      transparentBackground,
+      transparencyMethod: parsed.data.transparencyMethod,
     });
+    const fileExtension = generated.mimeType === "image/png" ? "png" : "jpg";
     const stored = await storeMedia({
       bytes: generated.bytes,
       mimeType: generated.mimeType,
-      originalName: `${resource.name.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}-ai-cover.jpg`,
+      originalName: `${resource.name.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}-ai-cover.${fileExtension}`,
       resourceId: resource.id,
     });
 
@@ -192,7 +204,9 @@ export async function POST(request: Request, context: Context) {
           ...stored,
           position: 0,
           source: "ai",
-          altText: `AI-generated studio cover of ${resource.name}`,
+          altText: generated.transparentBackground
+            ? `AI-generated transparent-background cover of ${resource.name}`
+            : `AI-generated studio cover of ${resource.name}`,
         });
         const [updated] = await transaction
           .update(resources)
@@ -228,6 +242,8 @@ export async function POST(request: Request, context: Context) {
             provider: generated.provider,
             model: generated.model,
             label: generated.label,
+            transparentBackground: generated.transparentBackground,
+            transparencyMethod: generated.transparencyMethod,
           },
         };
         if (operationId) {

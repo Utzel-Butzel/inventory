@@ -89,7 +89,19 @@ public enum InventoryMediaKind: String, Codable, CaseIterable, Sendable {
     case image
     case video
     case document
+    case model
     case unknown
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = Self(rawValue: rawValue) ?? .unknown
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 public enum InventoryMediaSource: String, Codable, CaseIterable, Sendable {

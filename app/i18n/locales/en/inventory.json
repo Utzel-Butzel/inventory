@@ -106,7 +106,15 @@
     "image": "Image",
     "video": "Video",
     "document": "Document",
+    "model": "3D model",
     "other": "File"
+  },
+  "modelViewer": {
+    "loading": "Loading 3D model…",
+    "unavailable": "This model cannot be rendered in this browser. You can still download the USDZ file.",
+    "viewInAr": "View in AR",
+    "download": "Download USDZ",
+    "interaction": "Interactive 3D preview of {{name}}. Drag to rotate and scroll to zoom."
   },
   "details": {
     "loading": "Loading item details",

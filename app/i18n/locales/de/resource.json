@@ -64,8 +64,8 @@
   },
   "media": {
     "title": "Medien",
-    "description_one": "Bilder, Video und PDFs · {{count}} Datei",
-    "description_other": "Bilder, Video und PDFs · {{count}} Dateien",
+    "description_one": "Bilder, Videos, PDFs und 3D-Modelle · {{count}} Datei",
+    "description_other": "Bilder, Videos, PDFs und 3D-Modelle · {{count}} Dateien",
     "cover": "Titelbild",
     "ai": "KI",
     "moveEarlier": "Datei nach vorn verschieben",
@@ -74,7 +74,7 @@
     "pendingUpload": "Ausstehender Upload",
     "removePending": "Ausstehende Datei entfernen",
     "drop": "Dateien hier ablegen oder auswählen",
-    "formats": "JPG, PNG, WebP, HEIC, MP4, MOV oder PDF · bis zu 12 Dateien"
+    "formats": "JPG, PNG, WebP, HEIC, MP4, MOV, PDF oder USDZ · bis zu 12 Dateien"
   },
   "operations": {
     "title": "Betrieb",
@@ -107,6 +107,13 @@
     "safety": "Die KI läuft erst, nachdem die Originaldateien sicher gespeichert wurden. Das Ergebnis kann jederzeit bearbeitet werden.",
     "rewrite": "Felder analysieren und neu schreiben",
     "coverDirection": "Vorgabe für das Titelbild",
+    "transparentBackground": "Transparenter Hintergrund",
+    "transparentBackgroundDescription": "Das erstellte Titelbild als transparentes PNG freistellen.",
+    "transparencyMethod": "Transparenzmethode",
+    "differenceMatting": "Differenz-Matting · beste Qualität",
+    "differenceMattingDescription": "Verwendet deckungsgleiche weiße und schwarze Durchläufe für saubere Kanten, Glas und weiche Schatten. Benötigt zwei Bildgenerierungen.",
+    "greenscreen": "Greenscreen · schneller",
+    "greenscreenDescription": "Verwendet einen chromagrünen Durchlauf. Schneller, aber grüne Objekte und feine Kanten können Artefakte zeigen.",
     "generateNewCover": "Neues Titelbild erstellen",
     "imageRequired": "Lade ein Bild hoch und speichere es, um KI-Aktionen zu aktivieren.",
     "lastModel": "Letztes Modell"
@@ -271,7 +278,7 @@
   "errors": {
     "load": "Element konnte nicht geladen werden.",
     "loadCustomFields": "Definitionen der benutzerdefinierten Felder konnten nicht geladen werden.",
-    "unsupportedFiles": "Einige Dateien wurden übersprungen. Unterstützt werden Bilder, Videos und PDF-Dateien.",
+    "unsupportedFiles": "Einige Dateien wurden übersprungen. Unterstützt werden Bilder, Videos, PDF-Dateien und USDZ-3D-Modelle.",
     "analysis": "KI-Analyse fehlgeschlagen.",
     "cover": "Titelbilderstellung fehlgeschlagen.",
     "requiredCustomField": "Fülle das erforderliche benutzerdefinierte Feld „{{label}}“ aus.",

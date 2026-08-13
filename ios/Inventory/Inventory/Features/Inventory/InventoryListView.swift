@@ -14,7 +14,10 @@ struct InventoryListView: View {
     @State private var loading = false
     @State private var loadingMore = false
     @State private var errorMessage: String?
-    @State private var showNewResource = false
+    @State private var creationSheet: InventoryCreationSheet?
+    @State private var showObjectCapture = false
+    @State private var capturedObjectPendingForm: CapturedObjectModel?
+    @State private var openManualFormAfterCapture = false
     @State private var resourcePendingDeletion: InventoryResource?
     @State private var deletingResourceID: UUID?
     @State private var deletionErrorMessage: String?
@@ -48,7 +51,7 @@ struct InventoryListView: View {
                         if hasActiveSearchOrFilters {
                             Button("Suche und Filter zurücksetzen") { resetSearchAndFilters() }
                         } else {
-                            Button("Neuer Eintrag") { showNewResource = true }
+                            creationMenu
                                 .buttonStyle(.borderedProminent)
                         }
                     }
@@ -90,7 +93,9 @@ struct InventoryListView: View {
                     }
                     .accessibilityLabel("Scannen")
 
-                    Button { showNewResource = true } label: {
+                    Menu {
+                        creationMenuActions
+                    } label: {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("Neuer Eintrag")
@@ -103,11 +108,30 @@ struct InventoryListView: View {
                 }
                 await load(reset: true)
             }
-            .sheet(isPresented: $showNewResource) {
-                ResourceFormView(resource: nil, prefilledCode: nil) { resource in
-                    resources.insert(resource, at: 0)
-                    total += 1
-                    showNewResource = false
+            .sheet(item: $creationSheet) { destination in
+                switch destination {
+                case .manual:
+                    ResourceFormView(resource: nil, prefilledCode: nil) {
+                        didCreate($0)
+                    }
+                case .objectScan(let model):
+                    ResourceFormView(
+                        resource: nil,
+                        prefilledCode: nil,
+                        objectModel: model
+                    ) {
+                        didCreate($0)
+                    }
+                }
+            }
+            .fullScreenCover(
+                isPresented: $showObjectCapture,
+                onDismiss: presentFormAfterObjectCapture
+            ) {
+                ObjectCaptureFlowView { model in
+                    capturedObjectPendingForm = model
+                } onFallback: {
+                    openManualFormAfterCapture = true
                 }
             }
             .alert(
@@ -154,6 +178,43 @@ struct InventoryListView: View {
             get: { resourcePendingDeletion != nil },
             set: { if !$0 { resourcePendingDeletion = nil } }
         )
+    }
+
+    private var creationMenu: some View {
+        Menu("Neuer Eintrag") {
+            creationMenuActions
+        }
+    }
+
+    @ViewBuilder
+    private var creationMenuActions: some View {
+        Button {
+            creationSheet = .manual
+        } label: {
+            Label("Manuell anlegen", systemImage: "doc.badge.plus")
+        }
+
+        Button {
+            showObjectCapture = true
+        } label: {
+            Label("3D-Objekt scannen", systemImage: "cube.transparent")
+        }
+    }
+
+    private func presentFormAfterObjectCapture() {
+        if let capturedObjectPendingForm {
+            self.capturedObjectPendingForm = nil
+            creationSheet = .objectScan(capturedObjectPendingForm)
+        } else if openManualFormAfterCapture {
+            openManualFormAfterCapture = false
+            creationSheet = .manual
+        }
+    }
+
+    private func didCreate(_ resource: InventoryResource) {
+        resources.insert(resource, at: 0)
+        total += 1
+        creationSheet = nil
     }
 
     private var filterMenu: some View {
@@ -339,6 +400,18 @@ struct InventoryListView: View {
             deletionErrorMessage = nil
         } catch {
             deletionErrorMessage = error.localizedDescription
+        }
+    }
+}
+
+private enum InventoryCreationSheet: Identifiable {
+    case manual
+    case objectScan(CapturedObjectModel)
+
+    var id: String {
+        switch self {
+        case .manual: "manual"
+        case .objectScan(let model): "object-scan-\(model.id.uuidString)"
         }
     }
 }

@@ -207,6 +207,15 @@ export type PurchaseOrderStatus = (typeof purchaseOrderStatuses)[number];
 export const roomScanStatuses = ["active", "superseded"] as const;
 export type RoomScanStatus = (typeof roomScanStatuses)[number];
 
+export const mediaKinds = [
+  "image",
+  "video",
+  "document",
+  "model",
+  "unknown",
+] as const;
+export type MediaKind = (typeof mediaKinds)[number];
+
 export const roomScanAssetKinds = [
   "world_map",
   "model_usdz",
@@ -1800,7 +1809,10 @@ export const media = pgTable(
     url: text("url").notNull(),
     name: varchar("name", { length: 280 }).notNull(),
     mimeType: varchar("mime_type", { length: 160 }).notNull(),
-    kind: varchar("kind", { length: 24 }).notNull().default("image"),
+    kind: varchar("kind", { length: 24 })
+      .$type<MediaKind>()
+      .notNull()
+      .default("image"),
     size: integer("size").notNull().default(0),
     width: integer("width"),
     height: integer("height"),
