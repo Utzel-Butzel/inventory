@@ -16,7 +16,11 @@ export async function GET(request: Request) {
   const authorization = await requireSessionPermission(request, "webhooks.manage");
   if (authorization.response) return authorization.response;
   return Response.json(
-    { webhooks: await listWebhookEndpoints() },
+    {
+      webhooks: await listWebhookEndpoints(
+        authorization.identity.organizationId,
+      ),
+    },
     { headers: noStoreHeaders },
   );
 }
@@ -39,7 +43,11 @@ export async function POST(request: Request) {
   }
   try {
     return Response.json(
-      await createWebhookEndpoint(parsed.data, authorization.identity.subject),
+      await createWebhookEndpoint(
+        authorization.identity.organizationId,
+        parsed.data,
+        authorization.identity.subject,
+      ),
       { status: 201, headers: noStoreHeaders },
     );
   } catch (error) {

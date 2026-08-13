@@ -9,6 +9,13 @@
     "workspace": "Arbeitsbereich",
     "manage": "Verwalten"
   },
+  "organizations": {
+    "label": "Organisation",
+    "switcherLabel": "Organisation wechseln",
+    "errors": {
+      "switch": "Die Organisation konnte nicht gewechselt werden."
+    }
+  },
   "navigation": {
     "mainLabel": "Hauptnavigation",
     "overview": "Übersicht",
@@ -61,6 +68,10 @@
       "developer": "Entwicklung"
     },
     "items": {
+      "organization": {
+        "label": "Organisation",
+        "description": "Organisationen und Namen verwalten"
+      },
       "data": {
         "label": "Datentransfer",
         "description": "Inventar importieren und exportieren"

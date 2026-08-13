@@ -6,6 +6,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 import { users, type UserRecord } from "@/db/schema";
 import { db } from "@/lib/db";
+import { ensureDefaultOrganizationMembership } from "@/lib/organizations";
 
 const invalidPasswordHash =
   "$2b$12$b72wh6gSHWSo86C55dE9ru8PkOxR5dELMTwsOEQ8XApwiuWCejrna";
@@ -84,12 +85,26 @@ async function bootstrapFirstAdmin(email: string, password: string) {
     .onConflictDoNothing({ target: users.email })
     .returning();
 
-  if (created) return created;
+  if (created) {
+    await ensureDefaultOrganizationMembership({
+      userId: created.id,
+      role: created.role,
+      actor: "bootstrap",
+    });
+    return created;
+  }
   const [concurrentUser] = await db
     .select()
     .from(users)
     .where(eq(users.email, settings.email))
     .limit(1);
+  if (concurrentUser) {
+    await ensureDefaultOrganizationMembership({
+      userId: concurrentUser.id,
+      role: concurrentUser.role,
+      actor: "bootstrap",
+    });
+  }
   return concurrentUser ?? null;
 }
 

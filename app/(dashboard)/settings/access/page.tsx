@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AccessManager } from "@/components/access-manager";
 import { SettingsPageHeader } from "@/components/settings-page-header";
 import { getSessionIdentity } from "@/lib/api-auth";
+import { organizationPath } from "@/lib/organization-path";
 import { getT } from "@/lib/ui-i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,7 +18,9 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AccessSettingsPage() {
   const identity = await getSessionIdentity();
   if (!identity) redirect("/login");
-  if (!identity.permissions.includes("roles.manage")) redirect("/settings/data");
+  if (!identity.permissions.includes("roles.manage")) {
+    redirect(organizationPath(identity.organizationId, "/settings/data"));
+  }
   const { t } = await getT("settings");
 
   return (

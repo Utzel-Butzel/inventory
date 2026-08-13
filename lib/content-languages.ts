@@ -20,23 +20,34 @@ export type TranslationLanguageInput = {
   position?: number;
 };
 
-export async function listTranslationLanguages(includeArchived = false) {
+export async function listTranslationLanguages(
+  organizationId: string,
+  includeArchived = false,
+) {
   return db
     .select()
     .from(translationLanguages)
-    .where(includeArchived ? undefined : isNull(translationLanguages.archivedAt))
+    .where(
+      and(
+        eq(translationLanguages.organizationId, organizationId),
+        ...(includeArchived
+          ? []
+          : [isNull(translationLanguages.archivedAt)]),
+      ),
+    )
     .orderBy(
       asc(translationLanguages.position),
       asc(translationLanguages.label),
     );
 }
 
-export async function getDefaultTranslationLanguage() {
+export async function getDefaultTranslationLanguage(organizationId: string) {
   const [language] = await db
     .select()
     .from(translationLanguages)
     .where(
       and(
+        eq(translationLanguages.organizationId, organizationId),
         isNull(translationLanguages.archivedAt),
         eq(translationLanguages.isDefault, true),
       ),
@@ -46,6 +57,7 @@ export async function getDefaultTranslationLanguage() {
 }
 
 export async function createTranslationLanguage(
+  organizationId: string,
   input: TranslationLanguageInput,
   actor: string,
 ) {
@@ -54,15 +66,26 @@ export async function createTranslationLanguage(
     const active = await transaction
       .select()
       .from(translationLanguages)
-      .where(isNull(translationLanguages.archivedAt))
+      .where(
+        and(
+          eq(translationLanguages.organizationId, organizationId),
+          isNull(translationLanguages.archivedAt),
+        ),
+      )
       .orderBy(asc(translationLanguages.position))
       .for("update");
     const makeDefault = input.isDefault === true || active.length === 0;
     if (makeDefault && active.some((language) => language.isDefault)) {
       const [[{ value: translationCount }], [{ value: jobCount }]] =
         await Promise.all([
-          transaction.select({ value: count() }).from(resourceTranslations),
-          transaction.select({ value: count() }).from(resourceTranslationJobs),
+          transaction
+            .select({ value: count() })
+            .from(resourceTranslations)
+            .where(eq(resourceTranslations.organizationId, organizationId)),
+          transaction
+            .select({ value: count() })
+            .from(resourceTranslationJobs)
+            .where(eq(resourceTranslationJobs.organizationId, organizationId)),
         ]);
       if (translationCount > 0 || jobCount > 0) {
         throw new Error("DEFAULT_LANGUAGE_LOCKED");
@@ -70,11 +93,17 @@ export async function createTranslationLanguage(
       await transaction
         .update(translationLanguages)
         .set({ isDefault: false, updatedBy: actor, updatedAt: new Date() })
-        .where(eq(translationLanguages.isDefault, true));
+        .where(
+          and(
+            eq(translationLanguages.organizationId, organizationId),
+            eq(translationLanguages.isDefault, true),
+          ),
+        );
     }
     const [created] = await transaction
       .insert(translationLanguages)
       .values({
+        organizationId,
         code,
         label: input.label.trim(),
         isDefault: makeDefault,
@@ -90,6 +119,7 @@ export async function createTranslationLanguage(
 }
 
 export async function updateTranslationLanguage(
+  organizationId: string,
   codeInput: string,
   patch: Partial<
     Pick<
@@ -104,7 +134,12 @@ export async function updateTranslationLanguage(
     const [current] = await transaction
       .select()
       .from(translationLanguages)
-      .where(eq(translationLanguages.code, code))
+      .where(
+        and(
+          eq(translationLanguages.organizationId, organizationId),
+          eq(translationLanguages.code, code),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!current) throw new Error("LANGUAGE_NOT_FOUND");
@@ -117,8 +152,14 @@ export async function updateTranslationLanguage(
     if (patch.isDefault === true && !current.isDefault) {
       const [[{ value: translationCount }], [{ value: jobCount }]] =
         await Promise.all([
-          transaction.select({ value: count() }).from(resourceTranslations),
-          transaction.select({ value: count() }).from(resourceTranslationJobs),
+          transaction
+            .select({ value: count() })
+            .from(resourceTranslations)
+            .where(eq(resourceTranslations.organizationId, organizationId)),
+          transaction
+            .select({ value: count() })
+            .from(resourceTranslationJobs)
+            .where(eq(resourceTranslationJobs.organizationId, organizationId)),
         ]);
       if (translationCount > 0 || jobCount > 0) {
         throw new Error("DEFAULT_LANGUAGE_LOCKED");
@@ -126,7 +167,12 @@ export async function updateTranslationLanguage(
       await transaction
         .update(translationLanguages)
         .set({ isDefault: false, updatedBy: actor, updatedAt: new Date() })
-        .where(eq(translationLanguages.isDefault, true));
+        .where(
+          and(
+            eq(translationLanguages.organizationId, organizationId),
+            eq(translationLanguages.isDefault, true),
+          ),
+        );
     }
 
     const [updated] = await transaction
@@ -151,7 +197,12 @@ export async function updateTranslationLanguage(
         updatedBy: actor,
         updatedAt: new Date(),
       })
-      .where(eq(translationLanguages.code, code))
+      .where(
+        and(
+          eq(translationLanguages.organizationId, organizationId),
+          eq(translationLanguages.code, code),
+        ),
+      )
       .returning();
     return updated;
   });

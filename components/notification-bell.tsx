@@ -1,7 +1,7 @@
 "use client";
 
 import { Bell } from "lucide-react";
-import Link from "next/link";
+import { OrganizationLink as Link } from "@/components/organization-routing";
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
 

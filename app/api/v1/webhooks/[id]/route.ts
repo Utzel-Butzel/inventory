@@ -24,7 +24,10 @@ export async function GET(request: Request, context: Context) {
   if (authorization.response) return authorization.response;
   const id = await validId(context);
   if (!id) return Response.json({ error: "Invalid webhook id." }, { status: 422 });
-  const webhook = await getWebhookEndpoint(id);
+  const webhook = await getWebhookEndpoint(
+    authorization.identity.organizationId,
+    id,
+  );
   if (!webhook) return Response.json({ error: "Not found" }, { status: 404 });
   return Response.json({ webhook }, { headers: noStoreHeaders });
 }
@@ -49,6 +52,7 @@ export async function PATCH(request: Request, context: Context) {
   }
   try {
     const webhook = await updateWebhookEndpoint(
+      authorization.identity.organizationId,
       id,
       parsed.data,
       authorization.identity.subject,
@@ -72,7 +76,13 @@ export async function DELETE(request: Request, context: Context) {
   if (authorization.response) return authorization.response;
   const id = await validId(context);
   if (!id) return Response.json({ error: "Invalid webhook id." }, { status: 422 });
-  if (!(await revokeWebhookEndpoint(id, authorization.identity.subject))) {
+  if (
+    !(await revokeWebhookEndpoint(
+      authorization.identity.organizationId,
+      id,
+      authorization.identity.subject,
+    ))
+  ) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
   return new Response(null, { status: 204 });

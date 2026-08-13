@@ -17,10 +17,10 @@ type Props = { params: Promise<{ id: string }> };
 
 export default async function ResourceStockPage({ params }: Props) {
   const { id } = await params;
-  const [identity, resource] = await Promise.all([
-    getSessionIdentity(),
-    getResourceRecord(id),
-  ]);
+  const identity = await getSessionIdentity();
+  const resource = identity
+    ? await getResourceRecord(id, identity.organizationId)
+    : null;
   const [canManageStock, canManageCounts] =
     identity && resource
       ? await Promise.all([

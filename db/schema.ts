@@ -62,10 +62,46 @@ export const userRoles = ["admin", "editor", "viewer"] as const;
 export type BuiltinUserRole = (typeof userRoles)[number];
 export type UserRole = string;
 
+/**
+ * Stable tenant used to adopt databases created before organizations existed.
+ * New multi-organization writes always provide an explicit organization id.
+ */
+export const DEFAULT_ORGANIZATION_ID =
+  "00000000-0000-4000-8000-000000000001";
+
+const organizationIdColumn = () =>
+  uuid("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" });
+
+export const organizations = pgTable(
+  "organizations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 160 }).notNull(),
+    slug: varchar("slug", { length: 80 }).notNull(),
+    createdBy: varchar("created_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("organizations_slug_unique").on(table.slug),
+    check(
+      "organizations_slug_check",
+      sql`${table.slug} ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'`,
+    ),
+  ],
+);
+
 export const accessRoles = pgTable(
   "access_roles",
   {
-    key: varchar("key", { length: 64 }).primaryKey(),
+    organizationId: organizationIdColumn(),
+    key: varchar("key", { length: 64 }).notNull(),
     name: varchar("name", { length: 120 }).notNull(),
     description: text("description").notNull().default(""),
     permissions: text("permissions")
@@ -84,6 +120,10 @@ export const accessRoles = pgTable(
       .defaultNow(),
   },
   (table) => [
+    primaryKey({
+      name: "access_roles_organization_key_pk",
+      columns: [table.organizationId, table.key],
+    }),
     check(
       "access_roles_key_check",
       sql`${table.key} ~ '^[a-z][a-z0-9_-]{0,63}$'`,
@@ -101,11 +141,7 @@ export const users = pgTable(
     role: varchar("role", { length: 64 })
       .$type<UserRole>()
       .notNull()
-      .default("editor")
-      .references(() => accessRoles.key, {
-        onDelete: "restrict",
-        onUpdate: "cascade",
-      }),
+      .default("editor"),
     isActive: boolean("is_active").notNull().default(true),
     sessionVersion: integer("session_version").notNull().default(1),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
@@ -129,18 +165,56 @@ export const users = pgTable(
   ],
 );
 
+export const organizationMemberships = pgTable(
+  "organization_memberships",
+  {
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    roleKey: varchar("role_key", { length: 64 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdBy: varchar("created_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "organization_memberships_organization_user_pk",
+      columns: [table.organizationId, table.userId],
+    }),
+    foreignKey({
+      name: "organization_memberships_role_fk",
+      columns: [table.organizationId, table.roleKey],
+      foreignColumns: [accessRoles.organizationId, accessRoles.key],
+    })
+      .onDelete("restrict")
+      .onUpdate("cascade"),
+    index("organization_memberships_user_active_idx").on(
+      table.userId,
+      table.isActive,
+    ),
+    index("organization_memberships_role_idx").on(
+      table.organizationId,
+      table.roleKey,
+    ),
+  ],
+);
+
 export const inventoryAccessRules = pgTable(
   "inventory_access_rules",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 160 }).notNull(),
     description: text("description").notNull().default(""),
-    roleKey: varchar("role_key", { length: 64 })
-      .notNull()
-      .references(() => accessRoles.key, {
-        onDelete: "cascade",
-        onUpdate: "cascade",
-      }),
+    roleKey: varchar("role_key", { length: 64 }).notNull(),
     permissions: text("permissions")
       .array()
       .$type<ResourceRulePermission[]>()
@@ -162,7 +236,15 @@ export const inventoryAccessRules = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "inventory_access_rules_role_fk",
+      columns: [table.organizationId, table.roleKey],
+      foreignColumns: [accessRoles.organizationId, accessRoles.key],
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
     index("inventory_access_rules_role_enabled_idx").on(
+      table.organizationId,
       table.roleKey,
       table.enabled,
       table.priority,
@@ -278,7 +360,8 @@ export type ResourceMapFeature = ResourceMapFeatureBase &
 export const inventoryTypeDefinitions = pgTable(
   "inventory_type_definitions",
   {
-    key: varchar("key", { length: 64 }).primaryKey(),
+    organizationId: organizationIdColumn(),
+    key: varchar("key", { length: 64 }).notNull(),
     label: varchar("label", { length: 120 }).notNull(),
     description: text("description").notNull().default(""),
     color: varchar("color", { length: 32 }).notNull().default("#635bff"),
@@ -298,7 +381,12 @@ export const inventoryTypeDefinitions = pgTable(
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (table) => [
+    primaryKey({
+      name: "inventory_type_definitions_organization_key_pk",
+      columns: [table.organizationId, table.key],
+    }),
     index("inventory_type_definitions_active_position_idx").on(
+      table.organizationId,
       table.archivedAt,
       table.position,
     ),
@@ -316,7 +404,8 @@ export const inventoryTypeDefinitions = pgTable(
 export const relationTypeDefinitions = pgTable(
   "relation_type_definitions",
   {
-    key: varchar("key", { length: 64 }).primaryKey(),
+    organizationId: organizationIdColumn(),
+    key: varchar("key", { length: 64 }).notNull(),
     label: varchar("label", { length: 120 }).notNull(),
     inverseLabel: varchar("inverse_label", { length: 120 }).notNull(),
     description: text("description").notNull().default(""),
@@ -335,7 +424,12 @@ export const relationTypeDefinitions = pgTable(
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (table) => [
+    primaryKey({
+      name: "relation_type_definitions_organization_key_pk",
+      columns: [table.organizationId, table.key],
+    }),
     index("relation_type_definitions_active_position_idx").on(
+      table.organizationId,
       table.archivedAt,
       table.position,
     ),
@@ -353,7 +447,8 @@ export const relationTypeDefinitions = pgTable(
 export const translationLanguages = pgTable(
   "translation_languages",
   {
-    code: varchar("code", { length: 35 }).primaryKey(),
+    organizationId: organizationIdColumn(),
+    code: varchar("code", { length: 35 }).notNull(),
     label: varchar("label", { length: 120 }).notNull(),
     isDefault: boolean("is_default").notNull().default(false),
     autoTranslate: boolean("auto_translate").notNull().default(true),
@@ -370,10 +465,15 @@ export const translationLanguages = pgTable(
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (table) => [
+    primaryKey({
+      name: "translation_languages_organization_code_pk",
+      columns: [table.organizationId, table.code],
+    }),
     uniqueIndex("translation_languages_one_active_default")
-      .on(table.isDefault)
+      .on(table.organizationId, table.isDefault)
       .where(sql`${table.archivedAt} is null and ${table.isDefault} = true`),
     index("translation_languages_active_position_idx").on(
+      table.organizationId,
       table.archivedAt,
       table.position,
     ),
@@ -391,14 +491,14 @@ export const translationLanguages = pgTable(
 export const resources = pgTable(
   "resources",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 240 }).notNull(),
     description: text("description").notNull().default(""),
     type: varchar("type", { length: 64 })
       .$type<ResourceType>()
       .notNull()
-      .default("object")
-      .references(() => inventoryTypeDefinitions.key, { onDelete: "restrict", onUpdate: "cascade" }),
+      .default("object"),
     status: varchar("status", { length: 32 }).notNull().default("available"),
     sku: varchar("sku", { length: 80 }),
     quantity: integer("quantity").notNull().default(1),
@@ -437,14 +537,31 @@ export const resources = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("resources_sku_unique").on(table.sku),
+    uniqueIndex("resources_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    foreignKey({
+      name: "resources_inventory_type_fk",
+      columns: [table.organizationId, table.type],
+      foreignColumns: [
+        inventoryTypeDefinitions.organizationId,
+        inventoryTypeDefinitions.key,
+      ],
+    })
+      .onDelete("restrict")
+      .onUpdate("cascade"),
+    uniqueIndex("resources_sku_unique").on(
+      table.organizationId,
+      table.sku,
+    ),
     uniqueIndex("resources_barcode_unique")
-      .on(table.barcode)
+      .on(table.organizationId, table.barcode)
       .where(sql`${table.barcode} is not null`),
-    index("resources_name_idx").on(table.name),
-    index("resources_type_idx").on(table.type),
-    index("resources_status_idx").on(table.status),
-    index("resources_updated_at_idx").on(table.updatedAt),
+    index("resources_name_idx").on(table.organizationId, table.name),
+    index("resources_type_idx").on(table.organizationId, table.type),
+    index("resources_status_idx").on(table.organizationId, table.status),
+    index("resources_updated_at_idx").on(table.organizationId, table.updatedAt),
     check("resources_quantity_nonnegative", sql`${table.quantity} >= 0`),
     check("resources_content_revision_positive", sql`${table.contentRevision} > 0`),
     check(
@@ -466,6 +583,7 @@ export const resources = pgTable(
 export const resourceVariants = pgTable(
   "resource_variants",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     resourceId: uuid("resource_id")
       .notNull()
@@ -487,6 +605,11 @@ export const resourceVariants = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "resource_variants_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
     uniqueIndex("resource_variants_resource_name_unique").on(
       table.resourceId,
       table.name,
@@ -500,10 +623,10 @@ export const resourceVariants = pgTable(
       table.position,
     ),
     uniqueIndex("resource_variants_sku_unique")
-      .on(table.sku)
+      .on(table.organizationId, table.sku)
       .where(sql`${table.sku} is not null`),
     uniqueIndex("resource_variants_barcode_unique")
-      .on(table.barcode)
+      .on(table.organizationId, table.barcode)
       .where(sql`${table.barcode} is not null`),
     check("resource_variants_name_nonempty", sql`length(btrim(${table.name})) > 0`),
     check("resource_variants_price_nonnegative", sql`${table.priceCents} is null or ${table.priceCents} >= 0`),
@@ -516,15 +639,11 @@ export const resourceVariants = pgTable(
 export const resourceTranslations = pgTable(
   "resource_translations",
   {
+    organizationId: organizationIdColumn(),
     resourceId: uuid("resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "cascade" }),
-    languageCode: varchar("language_code", { length: 35 })
-      .notNull()
-      .references(() => translationLanguages.code, {
-        onDelete: "cascade",
-        onUpdate: "cascade",
-      }),
+    languageCode: varchar("language_code", { length: 35 }).notNull(),
     translatedFields: jsonb("translated_fields")
       .$type<Record<string, string>>()
       .notNull()
@@ -559,9 +678,19 @@ export const resourceTranslations = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "resource_translations_language_fk",
+      columns: [table.organizationId, table.languageCode],
+      foreignColumns: [
+        translationLanguages.organizationId,
+        translationLanguages.code,
+      ],
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
     primaryKey({
       name: "resource_translations_pk",
-      columns: [table.resourceId, table.languageCode],
+      columns: [table.organizationId, table.resourceId, table.languageCode],
     }),
     index("resource_translations_language_idx").on(table.languageCode),
     check(
@@ -598,15 +727,11 @@ export const resourceTranslations = pgTable(
 export const resourceTranslationJobs = pgTable(
   "resource_translation_jobs",
   {
+    organizationId: organizationIdColumn(),
     resourceId: uuid("resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "cascade" }),
-    languageCode: varchar("language_code", { length: 35 })
-      .notNull()
-      .references(() => translationLanguages.code, {
-        onDelete: "cascade",
-        onUpdate: "cascade",
-      }),
+    languageCode: varchar("language_code", { length: 35 }).notNull(),
     generation: integer("generation").notNull().default(1),
     sourceRevision: integer("source_revision").notNull().default(1),
     requestId: uuid("request_id").defaultRandom().notNull(),
@@ -637,9 +762,19 @@ export const resourceTranslationJobs = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "resource_translation_jobs_language_fk",
+      columns: [table.organizationId, table.languageCode],
+      foreignColumns: [
+        translationLanguages.organizationId,
+        translationLanguages.code,
+      ],
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
     primaryKey({
       name: "resource_translation_jobs_pk",
-      columns: [table.resourceId, table.languageCode],
+      columns: [table.organizationId, table.resourceId, table.languageCode],
     }),
     index("resource_translation_jobs_due_idx").on(
       table.status,
@@ -672,6 +807,7 @@ export const resourceTranslationJobs = pgTable(
 export const spatialStructures = pgTable(
   "spatial_structures",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 240 }).notNull(),
     description: text("description").notNull().default(""),
@@ -698,6 +834,7 @@ export const spatialStructures = pgTable(
 export const spatialCoordinateSpaces = pgTable(
   "spatial_coordinate_spaces",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").primaryKey(),
     structureId: uuid("structure_id")
       .notNull()
@@ -728,6 +865,7 @@ export const spatialCoordinateSpaces = pgTable(
 export const roomScans = pgTable(
   "room_scans",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").primaryKey(),
     roomResourceId: uuid("room_resource_id")
       .notNull()
@@ -757,6 +895,15 @@ export const roomScans = pgTable(
       .defaultNow(),
   },
   (table) => [
+    uniqueIndex("room_scans_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    foreignKey({
+      name: "room_scans_organization_resource_fk",
+      columns: [table.organizationId, table.roomResourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
     // The hand-written migration uses PostgreSQL's column-specific
     // ON DELETE SET NULL (coordinate_space_id), preserving structure-only
     // legacy scans. Drizzle currently models only the generic action.
@@ -804,6 +951,7 @@ export const roomScans = pgTable(
 export const roomScanAssets = pgTable(
   "room_scan_assets",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     roomScanId: uuid("room_scan_id")
       .notNull()
@@ -820,6 +968,11 @@ export const roomScanAssets = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "room_scan_assets_organization_scan_fk",
+      columns: [table.organizationId, table.roomScanId],
+      foreignColumns: [roomScans.organizationId, roomScans.id],
+    }).onDelete("cascade"),
     uniqueIndex("room_scan_assets_scan_kind_unique").on(
       table.roomScanId,
       table.kind,
@@ -836,6 +989,7 @@ export const roomScanAssets = pgTable(
 export const roomScanKeyframes = pgTable(
   "room_scan_keyframes",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").primaryKey(),
     roomScanId: uuid("room_scan_id")
       .notNull()
@@ -861,6 +1015,11 @@ export const roomScanKeyframes = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "room_scan_keyframes_organization_scan_fk",
+      columns: [table.organizationId, table.roomScanId],
+      foreignColumns: [roomScans.organizationId, roomScans.id],
+    }).onDelete("cascade"),
     index("room_scan_keyframes_scan_time_idx").on(
       table.roomScanId,
       table.frameTimestamp,
@@ -893,6 +1052,7 @@ export const roomScanKeyframes = pgTable(
 export const resourceSpatialPlacements = pgTable(
   "resource_spatial_placements",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     resourceId: uuid("resource_id")
       .notNull()
@@ -959,6 +1119,7 @@ export const resourceSpatialPlacements = pgTable(
 export const resourceRelations = pgTable(
   "resource_relations",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     sourceResourceId: uuid("source_resource_id")
       .notNull()
@@ -966,12 +1127,7 @@ export const resourceRelations = pgTable(
     targetResourceId: uuid("target_resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "cascade" }),
-    relationTypeKey: varchar("relation_type_key", { length: 64 })
-      .notNull()
-      .references(() => relationTypeDefinitions.key, {
-        onDelete: "restrict",
-        onUpdate: "cascade",
-      }),
+    relationTypeKey: varchar("relation_type_key", { length: 64 }).notNull(),
     origin: varchar("origin", { length: 16 })
       .$type<RelationOrigin>()
       .notNull()
@@ -984,6 +1140,16 @@ export const resourceRelations = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "resource_relations_relation_type_fk",
+      columns: [table.organizationId, table.relationTypeKey],
+      foreignColumns: [
+        relationTypeDefinitions.organizationId,
+        relationTypeDefinitions.key,
+      ],
+    })
+      .onDelete("restrict")
+      .onUpdate("cascade"),
     uniqueIndex("resource_relations_edge_unique").on(
       table.sourceResourceId,
       table.targetResourceId,
@@ -1011,6 +1177,7 @@ export const resourceRelations = pgTable(
 export const customFieldDefinitions = pgTable(
   "custom_field_definitions",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     entityType: varchar("entity_type", { length: 24 })
       .$type<CustomFieldEntityType>()
@@ -1064,6 +1231,7 @@ export const customFieldDefinitions = pgTable(
   },
   (table) => [
     uniqueIndex("custom_field_definitions_entity_key_unique").on(
+      table.organizationId,
       table.entityType,
       table.key,
     ),
@@ -1148,6 +1316,7 @@ export const customFieldDefinitions = pgTable(
 export const labelSetups = pgTable(
   "label_setups",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 160 }).notNull(),
     widthMm: doublePrecision("width_mm").notNull(),
@@ -1164,7 +1333,10 @@ export const labelSetups = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("label_setups_name_unique").on(sql`lower(${table.name})`),
+    uniqueIndex("label_setups_name_unique").on(
+      table.organizationId,
+      sql`lower(${table.name})`,
+    ),
     index("label_setups_name_idx").on(table.name),
     check(
       "label_setups_width_mm_check",
@@ -1185,20 +1357,32 @@ export const labelSetups = pgTable(
 export const resourceCreationRequests = pgTable(
   "resource_creation_requests",
   {
-    idempotencyKey: uuid("idempotency_key").primaryKey(),
+    organizationId: organizationIdColumn(),
+    idempotencyKey: uuid("idempotency_key").notNull(),
     requestHash: varchar("request_hash", { length: 64 }).notNull(),
-    resourceId: uuid("resource_id").notNull().unique(),
+    resourceId: uuid("resource_id").notNull(),
     response: jsonb("response").$type<Record<string, unknown>>().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("resource_creation_requests_resource_id_idx").on(table.resourceId)],
+  (table) => [
+    primaryKey({
+      name: "resource_creation_requests_pk",
+      columns: [table.organizationId, table.idempotencyKey],
+    }),
+    uniqueIndex("resource_creation_requests_resource_id_unique").on(
+      table.organizationId,
+      table.resourceId,
+    ),
+    index("resource_creation_requests_resource_id_idx").on(table.resourceId),
+  ],
 );
 
 export const bomLines = pgTable(
   "bom_lines",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     assemblyResourceId: uuid("assembly_resource_id")
       .notNull()
@@ -1217,6 +1401,16 @@ export const bomLines = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "bom_lines_organization_assembly_fk",
+      columns: [table.organizationId, table.assemblyResourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "bom_lines_organization_component_fk",
+      columns: [table.organizationId, table.componentResourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("restrict"),
     uniqueIndex("bom_lines_assembly_component_unique").on(
       table.assemblyResourceId,
       table.componentResourceId,
@@ -1238,6 +1432,7 @@ export const bomLines = pgTable(
 export const assemblyBuilds = pgTable(
   "assembly_builds",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     assemblyResourceId: uuid("assembly_resource_id")
       .notNull()
@@ -1261,6 +1456,7 @@ export const assemblyBuilds = pgTable(
   },
   (table) => [
     uniqueIndex("assembly_builds_idempotency_key_unique").on(
+      table.organizationId,
       table.idempotencyKey,
     ),
     index("assembly_builds_assembly_resource_id_idx").on(
@@ -1277,6 +1473,7 @@ export const assemblyBuilds = pgTable(
 export const purchaseOrders = pgTable(
   "purchase_orders",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     reference: varchar("reference", { length: 160 }),
     supplier: varchar("supplier", { length: 240 }).notNull(),
@@ -1305,6 +1502,7 @@ export const purchaseOrders = pgTable(
   },
   (table) => [
     uniqueIndex("purchase_orders_idempotency_key_unique").on(
+      table.organizationId,
       table.idempotencyKey,
     ),
     index("purchase_orders_status_idx").on(table.status),
@@ -1319,6 +1517,7 @@ export const purchaseOrders = pgTable(
 export const purchaseOrderLines = pgTable(
   "purchase_order_lines",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     purchaseOrderId: uuid("purchase_order_id")
       .notNull()
@@ -1364,6 +1563,7 @@ export const purchaseOrderLines = pgTable(
 export const purchaseReceipts = pgTable(
   "purchase_receipts",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     purchaseOrderLineId: uuid("purchase_order_line_id")
       .notNull()
@@ -1387,6 +1587,7 @@ export const purchaseReceipts = pgTable(
   },
   (table) => [
     uniqueIndex("purchase_receipts_idempotency_key_unique").on(
+      table.organizationId,
       table.idempotencyKey,
     ),
     index("purchase_receipts_purchase_order_line_id_idx").on(
@@ -1403,6 +1604,7 @@ export const purchaseReceipts = pgTable(
 export const stockSettings = pgTable(
   "stock_settings",
   {
+    organizationId: organizationIdColumn(),
     resourceId: uuid("resource_id")
       .primaryKey()
       .references(() => resources.id, { onDelete: "cascade" }),
@@ -1422,6 +1624,11 @@ export const stockSettings = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "stock_settings_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
     check(
       "stock_settings_tracking_mode_check",
       sql`${table.trackingMode} in ('bulk', 'serialized')`,
@@ -1444,6 +1651,7 @@ export const stockSettings = pgTable(
 export const stockLocationBalances = pgTable(
   "stock_location_balances",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     resourceId: uuid("resource_id")
       .notNull()
@@ -1457,6 +1665,16 @@ export const stockLocationBalances = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "stock_location_balances_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "stock_location_balances_organization_location_fk",
+      columns: [table.organizationId, table.locationResourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("restrict"),
     uniqueIndex("stock_location_balances_resource_location_unique").on(
       table.resourceId,
       table.locationResourceId,
@@ -1476,6 +1694,7 @@ export const stockLocationBalances = pgTable(
 export const inventoryCyclePolicies = pgTable(
   "inventory_cycle_policies",
   {
+    organizationId: organizationIdColumn(),
     resourceId: uuid("resource_id")
       .primaryKey()
       .references(() => resources.id, { onDelete: "cascade" }),
@@ -1493,6 +1712,11 @@ export const inventoryCyclePolicies = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "inventory_cycle_policies_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
     index("inventory_cycle_policies_due_idx").on(table.enabled, table.nextDueAt),
     check(
       "inventory_cycle_policies_interval_check",
@@ -1504,6 +1728,7 @@ export const inventoryCyclePolicies = pgTable(
 export const stockUnits = pgTable(
   "stock_units",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     resourceId: uuid("resource_id")
       .notNull()
@@ -1540,7 +1765,17 @@ export const stockUnits = pgTable(
       .defaultNow(),
   },
   (table) => [
+    uniqueIndex("stock_units_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    foreignKey({
+      name: "stock_units_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
     uniqueIndex("stock_units_resource_code_unique").on(
+      table.organizationId,
       table.resourceId,
       table.code,
     ),
@@ -1564,6 +1799,7 @@ export const stockUnits = pgTable(
 export const stockMovements = pgTable(
   "stock_movements",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     resourceId: uuid("resource_id")
       .notNull()
@@ -1608,6 +1844,11 @@ export const stockMovements = pgTable(
     createdBy: varchar("created_by", { length: 320 }),
   },
   (table) => [
+    foreignKey({
+      name: "stock_movements_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
     index("stock_movements_resource_id_idx").on(table.resourceId),
     index("stock_movements_variant_id_idx").on(table.variantId),
     foreignKey({
@@ -1656,6 +1897,7 @@ export const stockMovements = pgTable(
 export const inventoryCounts = pgTable(
   "inventory_counts",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     resourceId: uuid("resource_id")
       .notNull()
@@ -1682,6 +1924,7 @@ export const inventoryCounts = pgTable(
   },
   (table) => [
     uniqueIndex("inventory_counts_idempotency_key_unique").on(
+      table.organizationId,
       table.idempotencyKey,
     ),
     index("inventory_counts_resource_counted_idx").on(
@@ -1707,6 +1950,7 @@ export const inventoryCounts = pgTable(
 export const inventoryAssignments = pgTable(
   "inventory_assignments",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     resourceId: uuid("resource_id")
       .notNull()
@@ -1787,6 +2031,7 @@ export const inventoryAssignments = pgTable(
 export const assemblyBuildComponents = pgTable(
   "assembly_build_components",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     buildId: uuid("build_id")
       .notNull()
@@ -1842,7 +2087,8 @@ export const assemblyBuildComponents = pgTable(
 export const stockMovementRequests = pgTable(
   "stock_movement_requests",
   {
-    idempotencyKey: uuid("idempotency_key").primaryKey(),
+    organizationId: organizationIdColumn(),
+    idempotencyKey: uuid("idempotency_key").notNull(),
     resourceId: uuid("resource_id").notNull(),
     actor: varchar("actor", { length: 320 }).notNull(),
     requestHash: varchar("request_hash", { length: 64 }).notNull(),
@@ -1851,12 +2097,19 @@ export const stockMovementRequests = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("stock_movement_requests_resource_id_idx").on(table.resourceId)],
+  (table) => [
+    primaryKey({
+      name: "stock_movement_requests_pk",
+      columns: [table.organizationId, table.idempotencyKey],
+    }),
+    index("stock_movement_requests_resource_id_idx").on(table.resourceId),
+  ],
 );
 
 export const stockScanWorkflows = pgTable(
   "stock_scan_workflows",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 160 }).notNull(),
     description: text("description").notNull().default(""),
@@ -1916,6 +2169,7 @@ export const stockScanWorkflows = pgTable(
 export const stockScanExecutions = pgTable(
   "stock_scan_executions",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     idempotencyKey: uuid("idempotency_key").notNull(),
     workflowId: uuid("workflow_id").references(() => stockScanWorkflows.id, {
@@ -1943,6 +2197,7 @@ export const stockScanExecutions = pgTable(
   },
   (table) => [
     uniqueIndex("stock_scan_executions_idempotency_key_unique").on(
+      table.organizationId,
       table.idempotencyKey,
     ),
     index("stock_scan_executions_workflow_id_idx").on(table.workflowId),
@@ -1970,6 +2225,7 @@ export const stockScanExecutions = pgTable(
 export const media = pgTable(
   "media",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     resourceId: uuid("resource_id")
       .notNull()
@@ -1993,6 +2249,11 @@ export const media = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "media_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
     index("media_resource_id_idx").on(table.resourceId),
     index("media_resource_position_idx").on(table.resourceId, table.position),
   ],
@@ -2001,6 +2262,7 @@ export const media = pgTable(
 export const publicShares = pgTable(
   "public_shares",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 120 }).notNull(),
     scope: varchar("scope", { length: 16 }).$type<PublicShareScope>().notNull(),
@@ -2056,8 +2318,9 @@ export const publicShares = pgTable(
 export const mediaUploadBatches = pgTable(
   "media_upload_batches",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
-    idempotencyKey: uuid("idempotency_key").notNull().unique(),
+    idempotencyKey: uuid("idempotency_key").notNull(),
     resourceId: uuid("resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "cascade" }),
@@ -2065,12 +2328,19 @@ export const mediaUploadBatches = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("media_upload_batches_resource_id_idx").on(table.resourceId)],
+  (table) => [
+    uniqueIndex("media_upload_batches_idempotency_key_unique").on(
+      table.organizationId,
+      table.idempotencyKey,
+    ),
+    index("media_upload_batches_resource_id_idx").on(table.resourceId),
+  ],
 );
 
 export const mediaUploadBatchItems = pgTable(
   "media_upload_batch_items",
   {
+    organizationId: organizationIdColumn(),
     batchId: uuid("batch_id")
       .notNull()
       .references(() => mediaUploadBatches.id, { onDelete: "cascade" }),
@@ -2084,6 +2354,7 @@ export const mediaUploadBatchItems = pgTable(
 export const aiIdempotencyOperations = pgTable(
   "ai_idempotency_operations",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     operation: varchar("operation", { length: 24 })
       .$type<"analyze" | "recognize" | "count" | "cover" | "translate">()
@@ -2110,6 +2381,7 @@ export const aiIdempotencyOperations = pgTable(
   },
   (table) => [
     uniqueIndex("ai_idempotency_operations_operation_key_unique").on(
+      table.organizationId,
       table.operation,
       table.idempotencyKey,
     ),
@@ -2128,6 +2400,7 @@ export const aiIdempotencyOperations = pgTable(
 export const aiRateLimitBuckets = pgTable(
   "ai_rate_limit_buckets",
   {
+    organizationId: organizationIdColumn(),
     operation: varchar("operation", { length: 24 })
       .$type<PaidAiOperation>()
       .notNull(),
@@ -2141,7 +2414,7 @@ export const aiRateLimitBuckets = pgTable(
   (table) => [
     primaryKey({
       name: "ai_rate_limit_buckets_operation_subject_pk",
-      columns: [table.operation, table.subjectHash],
+      columns: [table.organizationId, table.operation, table.subjectHash],
     }),
     check(
       "ai_rate_limit_buckets_operation_check",
@@ -2161,7 +2434,8 @@ export const aiRateLimitBuckets = pgTable(
 export const notificationPreferences = pgTable(
   "notification_preferences",
   {
-    recipientKey: varchar("recipient_key", { length: 320 }).primaryKey(),
+    organizationId: organizationIdColumn(),
+    recipientKey: varchar("recipient_key", { length: 320 }).notNull(),
     recipientEmail: varchar("recipient_email", { length: 320 }),
     recipientName: varchar("recipient_name", { length: 160 }),
     enabledEventTypes: text("enabled_event_types")
@@ -2210,6 +2484,10 @@ export const notificationPreferences = pgTable(
       .defaultNow(),
   },
   (table) => [
+    primaryKey({
+      name: "notification_preferences_organization_recipient_pk",
+      columns: [table.organizationId, table.recipientKey],
+    }),
     check(
       "notification_preferences_event_types_check",
       sql`${table.enabledEventTypes} <@ array['low_stock', 'expiry', 'maintenance', 'return_due']::text[]`,
@@ -2252,12 +2530,9 @@ export const notificationPreferences = pgTable(
 export const notificationInbox = pgTable(
   "notification_inbox",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
-    recipientKey: varchar("recipient_key", { length: 320 })
-      .notNull()
-      .references(() => notificationPreferences.recipientKey, {
-        onDelete: "cascade",
-      }),
+    recipientKey: varchar("recipient_key", { length: 320 }).notNull(),
     eventType: varchar("event_type", { length: 32 })
       .$type<NotificationEventType>()
       .notNull(),
@@ -2283,7 +2558,16 @@ export const notificationInbox = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "notification_inbox_preference_fk",
+      columns: [table.organizationId, table.recipientKey],
+      foreignColumns: [
+        notificationPreferences.organizationId,
+        notificationPreferences.recipientKey,
+      ],
+    }).onDelete("cascade"),
     uniqueIndex("notification_inbox_dedupe_unique").on(
+      table.organizationId,
       table.recipientKey,
       table.eventType,
       table.sourceKey,
@@ -2311,12 +2595,9 @@ export const notificationInbox = pgTable(
 export const notificationDispatches = pgTable(
   "notification_dispatches",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
-    recipientKey: varchar("recipient_key", { length: 320 })
-      .notNull()
-      .references(() => notificationPreferences.recipientKey, {
-        onDelete: "cascade",
-      }),
+    recipientKey: varchar("recipient_key", { length: 320 }).notNull(),
     channel: varchar("channel", { length: 24 })
       .$type<NotificationChannel>()
       .notNull(),
@@ -2332,11 +2613,22 @@ export const notificationDispatches = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (table) => [
+    foreignKey({
+      name: "notification_dispatches_preference_fk",
+      columns: [table.organizationId, table.recipientKey],
+      foreignColumns: [
+        notificationPreferences.organizationId,
+        notificationPreferences.recipientKey,
+      ],
+    }).onDelete("cascade"),
     index("notification_dispatches_recipient_created_idx").on(
       table.recipientKey,
       table.createdAt,
     ),
-    uniqueIndex("notification_dispatches_dedupe_unique").on(table.dedupeKey),
+    uniqueIndex("notification_dispatches_dedupe_unique").on(
+      table.organizationId,
+      table.dedupeKey,
+    ),
     check(
       "notification_dispatches_channel_check",
       sql`${table.channel} in ('email', 'push', 'slack', 'teams', 'webhook')`,
@@ -2355,12 +2647,9 @@ export const notificationDispatches = pgTable(
 export const notificationPushSubscriptions = pgTable(
   "notification_push_subscriptions",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
-    recipientKey: varchar("recipient_key", { length: 320 })
-      .notNull()
-      .references(() => notificationPreferences.recipientKey, {
-        onDelete: "cascade",
-      }),
+    recipientKey: varchar("recipient_key", { length: 320 }).notNull(),
     endpointHash: varchar("endpoint_hash", { length: 64 }).notNull(),
     encryptedSubscription: text("encrypted_subscription").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -2372,7 +2661,16 @@ export const notificationPushSubscriptions = pgTable(
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
   (table) => [
+    foreignKey({
+      name: "notification_push_subscriptions_preference_fk",
+      columns: [table.organizationId, table.recipientKey],
+      foreignColumns: [
+        notificationPreferences.organizationId,
+        notificationPreferences.recipientKey,
+      ],
+    }).onDelete("cascade"),
     uniqueIndex("notification_push_subscriptions_endpoint_unique").on(
+      table.organizationId,
       table.endpointHash,
     ),
     index("notification_push_subscriptions_recipient_idx").on(
@@ -2398,6 +2696,7 @@ export type WebhookDeliveryStatus =
 export const webhookEndpoints = pgTable(
   "webhook_endpoints",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 120 }).notNull(),
     encryptedUrl: text("encrypted_url").notNull(),
@@ -2422,6 +2721,10 @@ export const webhookEndpoints = pgTable(
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
   (table) => [
+    uniqueIndex("webhook_endpoints_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
     index("webhook_endpoints_active_idx").on(table.enabled, table.revokedAt),
     index("webhook_endpoints_revoked_idx")
       .on(table.revokedAt)
@@ -2444,6 +2747,7 @@ export const webhookEndpoints = pgTable(
 export const webhookEvents = pgTable(
   "webhook_events",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").primaryKey(),
     type: varchar("type", { length: 80 }).$type<WebhookEventType>().notNull(),
     apiVersion: varchar("api_version", { length: 8 }).notNull().default("1"),
@@ -2460,6 +2764,10 @@ export const webhookEvents = pgTable(
       .defaultNow(),
   },
   (table) => [
+    uniqueIndex("webhook_events_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
     index("webhook_events_occurred_idx").on(table.occurredAt),
     index("webhook_events_created_idx").on(table.createdAt),
     index("webhook_events_aggregate_idx").on(
@@ -2481,6 +2789,7 @@ export const webhookEvents = pgTable(
 export const webhookDeliveries = pgTable(
   "webhook_deliveries",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     webhookId: uuid("webhook_id")
       .notNull()
@@ -2510,6 +2819,16 @@ export const webhookDeliveries = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "webhook_deliveries_organization_endpoint_fk",
+      columns: [table.organizationId, table.webhookId],
+      foreignColumns: [webhookEndpoints.organizationId, webhookEndpoints.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "webhook_deliveries_organization_event_fk",
+      columns: [table.organizationId, table.eventId],
+      foreignColumns: [webhookEvents.organizationId, webhookEvents.id],
+    }).onDelete("cascade"),
     uniqueIndex("webhook_deliveries_endpoint_event_unique").on(
       table.webhookId,
       table.eventId,
@@ -2541,6 +2860,7 @@ export const webhookDeliveries = pgTable(
 export const apiTokens = pgTable(
   "api_tokens",
   {
+    organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 120 }).notNull(),
     prefix: varchar("prefix", { length: 24 }).notNull(),
@@ -2561,7 +2881,7 @@ export const apiTokens = pgTable(
   (table) => [
     uniqueIndex("api_tokens_hash_unique").on(table.tokenHash),
     index("api_tokens_prefix_idx").on(table.prefix),
-    index("api_tokens_user_id_idx").on(table.userId),
+    index("api_tokens_user_id_idx").on(table.organizationId, table.userId),
     check(
       "api_tokens_user_binding_check",
       sql`(${table.userId} is null and ${table.userSessionVersion} is null) or (${table.userId} is not null and ${table.userSessionVersion} > 0)`,
@@ -2583,6 +2903,9 @@ export type CustomFieldDefinitionRecord =
 export type LabelSetupRecord = typeof labelSetups.$inferSelect;
 export type MediaRecord = typeof media.$inferSelect;
 export type ApiTokenRecord = typeof apiTokens.$inferSelect;
+export type OrganizationRecord = typeof organizations.$inferSelect;
+export type OrganizationMembershipRecord =
+  typeof organizationMemberships.$inferSelect;
 export type PublicShareRecord = typeof publicShares.$inferSelect;
 export type NotificationPreferenceRecord =
   typeof notificationPreferences.$inferSelect;

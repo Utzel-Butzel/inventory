@@ -66,7 +66,11 @@ export async function GET(request: Request, context: Context) {
   if (!allowedKinds.has(kind as RoomScanAssetKind)) {
     return Response.json({ error: "Unknown room scan asset." }, { status: 404 });
   }
-  const asset = await getRoomScanAsset(id, kind as RoomScanAssetKind);
+  const asset = await getRoomScanAsset(
+    authorization.identity.organizationId,
+    id,
+    kind as RoomScanAssetKind,
+  );
   if (!asset) return Response.json({ error: "Room scan asset not found." }, { status: 404 });
 
   try {
@@ -158,7 +162,12 @@ export async function PUT(request: Request, context: Context) {
   }
 
   try {
-    const result = await replaceRoomScanAsset({ scanId: id, kind: typedKind, stored });
+    const result = await replaceRoomScanAsset({
+      organizationId: authorization.identity.organizationId,
+      scanId: id,
+      kind: typedKind,
+      stored,
+    });
     if (result.kind === "scan-not-found") {
       await deleteStoredMedia(stored).catch(() => undefined);
       return Response.json({ error: "Room scan not found." }, { status: 404 });
@@ -178,7 +187,12 @@ export async function PUT(request: Request, context: Context) {
   } catch (error) {
     const settlement = await reconcileFailedRoomScanAssetReplacement({
       incoming: stored,
-      findCurrentAsset: () => getRoomScanAsset(id, typedKind),
+      findCurrentAsset: () =>
+        getRoomScanAsset(
+          authorization.identity.organizationId,
+          id,
+          typedKind,
+        ),
       cleanupUncommittedAsset: () =>
         deleteStoredMedia(stored).catch(() => undefined),
     });

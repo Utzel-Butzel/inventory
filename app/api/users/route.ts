@@ -1,7 +1,12 @@
 import { hash } from "bcryptjs";
 import { and, asc, desc, eq } from "drizzle-orm";
 
-import { accessRoles, inventoryAccessRules, users } from "@/db/schema";
+import {
+  accessRoles,
+  inventoryAccessRules,
+  organizationMemberships,
+  users,
+} from "@/db/schema";
 import { requireSessionPermission } from "@/lib/api-auth";
 import { listAccessRolesWithCounts } from "@/lib/access-control";
 import { db } from "@/lib/db";
@@ -13,24 +18,31 @@ const publicUser = {
   id: users.id,
   email: users.email,
   name: users.name,
-  role: users.role,
-  isActive: users.isActive,
+  role: organizationMemberships.roleKey,
+  isActive: organizationMemberships.isActive,
   lastLoginAt: users.lastLoginAt,
   passwordUpdatedAt: users.passwordUpdatedAt,
-  createdAt: users.createdAt,
-  updatedAt: users.updatedAt,
+  createdAt: organizationMemberships.createdAt,
+  updatedAt: organizationMemberships.updatedAt,
 };
 
 export async function GET(request: Request) {
   const authorization = await requireSessionPermission(request, "users.manage");
   if (authorization.response) return authorization.response;
+  const organizationId = authorization.identity.organizationId;
 
   const [rows, roles] = await Promise.all([
     db
       .select(publicUser)
-      .from(users)
-      .orderBy(desc(users.isActive), asc(users.name), asc(users.email)),
-    listAccessRolesWithCounts(),
+      .from(organizationMemberships)
+      .innerJoin(users, eq(organizationMemberships.userId, users.id))
+      .where(eq(organizationMemberships.organizationId, organizationId))
+      .orderBy(
+        desc(organizationMemberships.isActive),
+        asc(users.name),
+        asc(users.email),
+      ),
+    listAccessRolesWithCounts(organizationId),
   ]);
 
   return Response.json({
@@ -43,6 +55,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const authorization = await requireSessionPermission(request, "users.manage");
   if (authorization.response) return authorization.response;
+  const organizationId = authorization.identity.organizationId;
 
   let payload: unknown;
   try {
@@ -50,7 +63,6 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "Expected JSON." }, { status: 400 });
   }
-
   const parsed = userCreateInputSchema.safeParse(payload);
   if (!parsed.success) {
     return Response.json(
@@ -63,20 +75,29 @@ export async function POST(request: Request) {
     db
       .select({ key: accessRoles.key, permissions: accessRoles.permissions })
       .from(accessRoles)
-      .where(eq(accessRoles.key, parsed.data.role))
+      .where(
+        and(
+          eq(accessRoles.organizationId, organizationId),
+          eq(accessRoles.key, parsed.data.role),
+        ),
+      )
       .limit(1),
     db
       .select({ permissions: inventoryAccessRules.permissions })
       .from(inventoryAccessRules)
       .where(
         and(
+          eq(inventoryAccessRules.organizationId, organizationId),
           eq(inventoryAccessRules.roleKey, parsed.data.role),
           eq(inventoryAccessRules.enabled, true),
         ),
       ),
   ]);
   if (!selectedRole) {
-    return Response.json({ error: "The selected role does not exist." }, { status: 422 });
+    return Response.json(
+      { error: "The selected role does not exist." },
+      { status: 422 },
+    );
   }
   const selectedRoleGrants = new Set([
     ...selectedRole.permissions,
@@ -95,25 +116,76 @@ export async function POST(request: Request) {
   }
 
   const passwordHash = await hash(parsed.data.password, 12);
-  const [created] = await db
-    .insert(users)
-    .values({
-      email: parsed.data.email,
-      name: parsed.data.name,
-      passwordHash,
-      role: parsed.data.role,
-      createdBy: authorization.identity.subject,
-      updatedBy: authorization.identity.subject,
-    })
-    .onConflictDoNothing({ target: users.email })
-    .returning(publicUser);
+  const result = await db.transaction(async (transaction) => {
+    let [user] = await transaction
+      .select()
+      .from(users)
+      .where(eq(users.email, parsed.data.email))
+      .limit(1);
+    if (!user) {
+      [user] = await transaction
+        .insert(users)
+        .values({
+          email: parsed.data.email,
+          name: parsed.data.name,
+          passwordHash,
+          role: parsed.data.role,
+          createdBy: authorization.identity.subject,
+          updatedBy: authorization.identity.subject,
+        })
+        .returning();
+    }
 
-  if (!created) {
+    const [membership] = await transaction
+      .insert(organizationMemberships)
+      .values({
+        organizationId,
+        userId: user.id,
+        roleKey: parsed.data.role,
+        createdBy: authorization.identity.subject,
+      })
+      .onConflictDoNothing({
+        target: [
+          organizationMemberships.organizationId,
+          organizationMemberships.userId,
+        ],
+      })
+      .returning();
+    if (membership && !user.isActive) {
+      [user] = await transaction
+        .update(users)
+        .set({
+          isActive: true,
+          updatedBy: authorization.identity.subject,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id))
+        .returning();
+    }
+    return { user, membership };
+  });
+
+  if (!result.membership) {
     return Response.json(
-      { error: "A user with this email address already exists." },
+      { error: "This user already belongs to the organization." },
       { status: 409 },
     );
   }
 
-  return Response.json({ user: created }, { status: 201 });
+  return Response.json(
+    {
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        role: result.membership.roleKey,
+        isActive: result.membership.isActive,
+        lastLoginAt: result.user.lastLoginAt,
+        passwordUpdatedAt: result.user.passwordUpdatedAt,
+        createdAt: result.membership.createdAt,
+        updatedAt: result.membership.updatedAt,
+      },
+    },
+    { status: 201 },
+  );
 }

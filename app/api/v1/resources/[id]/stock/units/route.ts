@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-import {
-  requirePermission,
-  requireResourcePermission,
-} from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import { createStockUnits, listStockUnits, stockHttpError } from "@/lib/stock";
 import { customFieldValuesInputSchema } from "@/lib/validators";
 
@@ -61,15 +58,22 @@ const unitCreateSchema = z
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requirePermission(request, "stock.read");
-  if (authorization.response) return authorization.response;
   const { id } = await context.params;
   if (!z.string().uuid().safeParse(id).success) {
     return Response.json({ error: "Invalid resource id." }, { status: 422 });
   }
+  const authorization = await requireResourcePermission(
+    request,
+    "stock.read",
+    id,
+  );
+  if (authorization.response) return authorization.response;
 
   try {
-    const units = await listStockUnits(id);
+    const units = await listStockUnits(
+      authorization.identity.organizationId,
+      id,
+    );
     if (!units) return Response.json({ error: "Not found" }, { status: 404 });
     return Response.json({ units });
   } catch {
@@ -108,6 +112,7 @@ export async function POST(request: Request, context: Context) {
 
   try {
     const result = await createStockUnits(
+      authorization.identity.organizationId,
       id,
       {
         ...parsed.data,

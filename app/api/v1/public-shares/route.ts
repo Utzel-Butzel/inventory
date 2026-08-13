@@ -13,7 +13,9 @@ const noStoreHeaders = { "Cache-Control": "private, no-store" };
 export async function GET(request: Request) {
   const authorization = await requireSessionPermission(request, "sharing.manage");
   if (authorization.response) return authorization.response;
-  const shares = await listPublicShares();
+  const shares = await listPublicShares(
+    authorization.identity.organizationId,
+  );
   return Response.json({ shares }, { headers: noStoreHeaders });
 }
 
@@ -38,6 +40,7 @@ export async function POST(request: Request) {
   }
   try {
     const share = await createPublicShare(
+      authorization.identity.organizationId,
       parsed.data,
       authorization.identity.subject,
     );

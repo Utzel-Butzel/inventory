@@ -14,7 +14,11 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const authorization = await requirePermission(request, "spatial.read");
   if (authorization.response) return authorization.response;
-  return Response.json({ structures: await listSpatialStructures() });
+  return Response.json({
+    structures: await listSpatialStructures(
+      authorization.identity.organizationId,
+    ),
+  });
 }
 
 export async function POST(request: Request) {
@@ -37,11 +41,17 @@ export async function POST(request: Request) {
 
   try {
     const structure = await createSpatialStructure(
+      authorization.identity.organizationId,
       parsed.data,
       authorization.identity.subject,
     );
     return Response.json(
-      { structure: await getSpatialStructure(structure.id) },
+      {
+        structure: await getSpatialStructure(
+          authorization.identity.organizationId,
+          structure.id,
+        ),
+      },
       { status: 201 },
     );
   } catch (error) {

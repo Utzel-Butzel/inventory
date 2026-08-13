@@ -24,7 +24,10 @@ export async function GET(request: Request, context: Context) {
   const id = await readId(context);
   if (!id) return Response.json({ error: "Invalid definition id." }, { status: 422 });
 
-  const definition = await getCustomFieldDefinition(id);
+  const definition = await getCustomFieldDefinition(
+    authorization.identity.organizationId,
+    id,
+  );
   if (!definition) {
     return Response.json({ error: "Custom field definition not found." }, { status: 404 });
   }
@@ -53,6 +56,7 @@ export async function PATCH(request: Request, context: Context) {
 
   try {
     const definition = await updateCustomFieldDefinition(
+      authorization.identity.organizationId,
       id,
       parsed.data,
       authorization.identity.subject,
@@ -80,7 +84,11 @@ export async function DELETE(request: Request, context: Context) {
   if (!id) return Response.json({ error: "Invalid definition id." }, { status: 422 });
 
   try {
-    await archiveCustomFieldDefinition(id, authorization.identity.subject);
+    await archiveCustomFieldDefinition(
+      authorization.identity.organizationId,
+      id,
+      authorization.identity.subject,
+    );
     return new Response(null, { status: 204 });
   } catch (error) {
     const failure = customFieldHttpError(

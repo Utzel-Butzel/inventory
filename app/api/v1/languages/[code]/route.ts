@@ -40,6 +40,7 @@ export async function PATCH(request: Request, context: Context) {
   }
   try {
     const language = await updateTranslationLanguage(
+      authorization.identity.organizationId,
       (await context.params).code,
       parsed.data,
       authorization.identity.subject,
@@ -56,6 +57,7 @@ export async function DELETE(request: Request, context: Context) {
   if (authorization.response) return authorization.response;
   try {
     const language = await updateTranslationLanguage(
+      authorization.identity.organizationId,
       (await context.params).code,
       { archived: true },
       authorization.identity.subject,

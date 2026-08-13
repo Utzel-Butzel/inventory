@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { aiIdempotencyOperations, media, resources } from "@/db/schema";
 import {
@@ -59,6 +59,7 @@ export async function POST(request: Request, context: Context) {
   let operationId: string | null = null;
   if (idempotency.key) {
     const claim = await claimAiOperation({
+      organizationId: authorization.identity.organizationId,
       operation: "cover",
       idempotencyKey: idempotency.key,
       resourceId: id,
@@ -80,7 +81,13 @@ export async function POST(request: Request, context: Context) {
     headers?: Record<string, string>,
   ) => {
     if (operationId) {
-      await finishAiOperation({ operationId, body, status, headers });
+      await finishAiOperation({
+        organizationId: authorization.identity.organizationId,
+        operationId,
+        body,
+        status,
+        headers,
+      });
     }
     return respondToFinishedAiOperation({
       body,
@@ -96,7 +103,10 @@ export async function POST(request: Request, context: Context) {
   ) => {
     if (operationId) {
       try {
-        await releaseAiOperation(operationId);
+        await releaseAiOperation(
+          authorization.identity.organizationId,
+          operationId,
+        );
       } catch (error) {
         console.error("Unable to release the transient AI cover claim.", error);
       }
@@ -121,7 +131,10 @@ export async function POST(request: Request, context: Context) {
     );
   }
 
-  const resource = await getResource(id);
+  const resource = await getResource(
+    authorization.identity.organizationId,
+    id,
+  );
   if (!resource) return finish({ error: "Not found" }, 404);
   const source = parsed.data.sourceMediaId
     ? resource.media.find((item) => item.id === parsed.data.sourceMediaId)
@@ -151,6 +164,7 @@ export async function POST(request: Request, context: Context) {
   let limit;
   try {
     limit = await consumePaidAiRateLimit({
+      organizationId: authorization.identity.organizationId,
       operation: "cover",
       identity: authorization.identity,
     });
@@ -201,8 +215,14 @@ export async function POST(request: Request, context: Context) {
         await transaction
           .update(media)
           .set({ position: sql`${media.position} + 1` })
-          .where(eq(media.resourceId, resource.id));
+          .where(
+            and(
+              eq(media.organizationId, authorization.identity.organizationId),
+              eq(media.resourceId, resource.id),
+            ),
+          );
         await transaction.insert(media).values({
+          organizationId: authorization.identity.organizationId,
           resourceId: resource.id,
           ...stored,
           position: 0,
@@ -227,13 +247,23 @@ export async function POST(request: Request, context: Context) {
             },
             updatedAt: new Date(),
           })
-          .where(eq(resources.id, resource.id))
+          .where(
+            and(
+              eq(resources.organizationId, authorization.identity.organizationId),
+              eq(resources.id, resource.id),
+            ),
+          )
           .returning();
         if (!updated) throw new Error("Resource disappeared during cover generation.");
         const mediaRows = await transaction
           .select()
           .from(media)
-          .where(eq(media.resourceId, resource.id))
+          .where(
+            and(
+              eq(media.organizationId, authorization.identity.organizationId),
+              eq(media.resourceId, resource.id),
+            ),
+          )
           .orderBy(asc(media.position));
         const resourceSnapshot = {
           ...updated,
@@ -252,6 +282,7 @@ export async function POST(request: Request, context: Context) {
           },
         };
         await enqueueWebhookEvent(transaction, {
+          organizationId: authorization.identity.organizationId,
           type: "inventory.resource.updated",
           aggregateType: "resource",
           aggregateId: updated.id,
@@ -265,7 +296,15 @@ export async function POST(request: Request, context: Context) {
           await transaction
             .update(aiIdempotencyOperations)
             .set(aiOperationResponseValues({ body, status: 200 }))
-            .where(eq(aiIdempotencyOperations.id, operationId));
+            .where(
+              and(
+                eq(
+                  aiIdempotencyOperations.organizationId,
+                  authorization.identity.organizationId,
+                ),
+                eq(aiIdempotencyOperations.id, operationId),
+              ),
+            );
         }
         return body;
       });

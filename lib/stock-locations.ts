@@ -11,7 +11,7 @@ import {
 } from "@/db/schema";
 import { db } from "@/lib/db";
 
-export async function listStockLocationResources() {
+export async function listStockLocationResources(organizationId: string) {
   return db
     .select({
       id: resources.id,
@@ -26,6 +26,8 @@ export async function listStockLocationResources() {
     )
     .where(
       and(
+        eq(resources.organizationId, organizationId),
+        eq(inventoryTypeDefinitions.organizationId, organizationId),
         eq(inventoryTypeDefinitions.canContain, true),
         isNull(inventoryTypeDefinitions.archivedAt),
         ne(resources.status, "archived"),
@@ -34,7 +36,10 @@ export async function listStockLocationResources() {
     .orderBy(asc(resources.name));
 }
 
-export async function getStockLocationBreakdown(resourceId: string) {
+export async function getStockLocationBreakdown(
+  organizationId: string,
+  resourceId: string,
+) {
   return db.transaction(async (transaction) => {
     const [resource] = await transaction
       .select({
@@ -44,8 +49,19 @@ export async function getStockLocationBreakdown(resourceId: string) {
         trackingMode: stockSettings.trackingMode,
       })
       .from(resources)
-      .leftJoin(stockSettings, eq(stockSettings.resourceId, resources.id))
-      .where(eq(resources.id, resourceId))
+      .leftJoin(
+        stockSettings,
+        and(
+          eq(stockSettings.resourceId, resources.id),
+          eq(stockSettings.organizationId, organizationId),
+        ),
+      )
+      .where(
+        and(
+          eq(resources.id, resourceId),
+          eq(resources.organizationId, organizationId),
+        ),
+      )
       .limit(1);
     if (!resource) return null;
 
@@ -59,6 +75,7 @@ export async function getStockLocationBreakdown(resourceId: string) {
         .from(stockUnits)
         .where(
           and(
+            eq(stockUnits.organizationId, organizationId),
             eq(stockUnits.resourceId, resourceId),
             eq(stockUnits.status, "available"),
           ),
@@ -75,7 +92,12 @@ export async function getStockLocationBreakdown(resourceId: string) {
               type: resources.type,
             })
             .from(resources)
-            .where(inArray(resources.id, locationIds))
+            .where(
+              and(
+                eq(resources.organizationId, organizationId),
+                inArray(resources.id, locationIds),
+              ),
+            )
         : [];
       const names = new Map(locations.map((location) => [location.id, location]));
       return {
@@ -115,7 +137,13 @@ export async function getStockLocationBreakdown(resourceId: string) {
         resources,
         eq(resources.id, stockLocationBalances.locationResourceId),
       )
-      .where(eq(stockLocationBalances.resourceId, resourceId))
+      .where(
+        and(
+          eq(stockLocationBalances.organizationId, organizationId),
+          eq(resources.organizationId, organizationId),
+          eq(stockLocationBalances.resourceId, resourceId),
+        ),
+      )
       .orderBy(asc(resources.name));
     const assignedQuantity = rows.reduce((total, row) => total + row.quantity, 0);
     return {

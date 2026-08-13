@@ -54,7 +54,7 @@ export async function GET(request: Request) {
 
   try {
     return Response.json(
-      await listPurchaseOrders({
+      await listPurchaseOrders(authorization.identity.organizationId, {
         status: status?.success ? status.data : undefined,
         limit,
       }),
@@ -93,6 +93,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await createPurchaseOrder(
+      authorization.identity.organizationId,
       {
         ...parsed.data,
         orderedAt: parsed.data.orderedAt

@@ -33,7 +33,11 @@ export async function POST(request: Request) {
 
   try {
     return Response.json(
-      await resolveStockScan(parsed.data.workflowId, parsed.data.code),
+      await resolveStockScan(
+        authorization.identity.organizationId,
+        parsed.data.workflowId,
+        parsed.data.code,
+      ),
     );
   } catch (error) {
     const failure = scanWorkflowHttpError(error, "Unable to resolve this scan.");

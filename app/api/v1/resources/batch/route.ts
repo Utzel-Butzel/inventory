@@ -29,7 +29,10 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const selectedResources = await getResourceRecords(parsed.data.ids);
+  const selectedResources = await getResourceRecords(
+    parsed.data.ids,
+    authorization.identity.organizationId,
+  );
   if (selectedResources.length !== new Set(parsed.data.ids).size) {
     return Response.json(
       { error: "At least one selected inventory item no longer exists." },
@@ -50,10 +53,14 @@ export async function PATCH(request: Request) {
 
   try {
     if (parsed.data.changes.type) {
-      await assertActiveInventoryType(parsed.data.changes.type);
+      await assertActiveInventoryType(
+        authorization.identity.organizationId,
+        parsed.data.changes.type,
+      );
     }
     const result = await updateResourcesBatch({
       ...parsed.data,
+      organizationId: authorization.identity.organizationId,
       actor: authorization.identity.subject,
       authorize: async (current, proposed) =>
         (await canAccessResource(
@@ -68,7 +75,10 @@ export async function PATCH(request: Request) {
         )),
     });
     if (parsed.data.changes.type) {
-      await synchronizeSpatialContainment(authorization.identity.subject);
+      await synchronizeSpatialContainment(
+        authorization.identity.organizationId,
+        authorization.identity.subject,
+      );
     }
     return Response.json(result);
   } catch (error) {

@@ -18,7 +18,11 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const authorization = await requirePermission(request, "inventory.read");
   if (authorization.response) return authorization.response;
-  return Response.json({ duplicates: await findDuplicateResources() });
+  return Response.json({
+    duplicates: await findDuplicateResources(
+      authorization.identity.organizationId,
+    ),
+  });
 }
 
 export async function POST(request: Request) {
@@ -34,10 +38,10 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return Response.json({ error: "Invalid merge request." }, { status: 422 });
   }
-  const targets = await getResourceRecords([
-    parsed.data.keepResourceId,
-    parsed.data.removeResourceId,
-  ]);
+  const targets = await getResourceRecords(
+    [parsed.data.keepResourceId, parsed.data.removeResourceId],
+    authorization.identity.organizationId,
+  );
   if (targets.length !== 2) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
@@ -61,6 +65,7 @@ export async function POST(request: Request) {
   }
   try {
     const resource = await mergeResources(
+      authorization.identity.organizationId,
       parsed.data.keepResourceId,
       parsed.data.removeResourceId,
       authorization.identity.subject,

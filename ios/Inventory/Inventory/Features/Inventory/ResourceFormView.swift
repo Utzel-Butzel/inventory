@@ -212,6 +212,10 @@ struct ResourceFormView: View {
     }
 
     private func save() {
+        guard state.canWrite else {
+            errorMessage = "Dieses Konto hat nur Lesezugriff."
+            return
+        }
         guard let client = state.client else {
             errorMessage = "Keine Serververbindung eingerichtet."
             return

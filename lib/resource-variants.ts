@@ -81,12 +81,18 @@ export const resourceVariantDto = (
 
 const assertBulkTracking = async (
   executor: DbExecutor,
+  organizationId: string,
   resourceId: string,
 ) => {
   const [settings] = await executor
     .select({ trackingMode: stockSettings.trackingMode })
     .from(stockSettings)
-    .where(eq(stockSettings.resourceId, resourceId))
+    .where(
+      and(
+        eq(stockSettings.organizationId, organizationId),
+        eq(stockSettings.resourceId, resourceId),
+      ),
+    )
     .limit(1);
   if (settings?.trackingMode === "serialized") {
     throw new ResourceVariantError(
@@ -98,6 +104,7 @@ const assertBulkTracking = async (
 
 export const assertVariantIdentifiersAvailable = async (
   executor: DbExecutor,
+  organizationId: string,
   sku: string | null | undefined,
   barcode: string | null | undefined,
   resourceId: string,
@@ -106,19 +113,34 @@ export const assertVariantIdentifiersAvailable = async (
   const [parent] = await executor
     .select({ sku: resources.sku, barcode: resources.barcode })
     .from(resources)
-    .where(eq(resources.id, resourceId))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, resourceId),
+      ),
+    )
     .limit(1);
   if (sku) {
     const [parentWithSku, variantWithSku] = await Promise.all([
       executor
         .select({ id: resources.id })
         .from(resources)
-        .where(eq(resources.sku, sku))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.sku, sku),
+          ),
+        )
         .limit(1),
       executor
         .select({ id: resourceVariants.id })
         .from(resourceVariants)
-        .where(eq(resourceVariants.sku, sku))
+        .where(
+          and(
+            eq(resourceVariants.organizationId, organizationId),
+            eq(resourceVariants.sku, sku),
+          ),
+        )
         .limit(1),
     ]);
     if (
@@ -137,12 +159,22 @@ export const assertVariantIdentifiersAvailable = async (
       executor
         .select({ id: resources.id })
         .from(resources)
-        .where(eq(resources.barcode, barcode))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.barcode, barcode),
+          ),
+        )
         .limit(1),
       executor
         .select({ id: resourceVariants.id })
         .from(resourceVariants)
-        .where(eq(resourceVariants.barcode, barcode))
+        .where(
+          and(
+            eq(resourceVariants.organizationId, organizationId),
+            eq(resourceVariants.barcode, barcode),
+          ),
+        )
         .limit(1),
     ]);
     if (
@@ -158,11 +190,19 @@ export const assertVariantIdentifiersAvailable = async (
   }
 };
 
-export async function listResourceVariants(resourceId: string) {
+export async function listResourceVariants(
+  organizationId: string,
+  resourceId: string,
+) {
   const [resource] = await db
     .select({ id: resources.id, quantity: resources.quantity })
     .from(resources)
-    .where(eq(resources.id, resourceId))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, resourceId),
+      ),
+    )
     .limit(1);
   if (!resource) return null;
 
@@ -170,12 +210,22 @@ export async function listResourceVariants(resourceId: string) {
     db
       .select({ trackingMode: stockSettings.trackingMode })
       .from(stockSettings)
-      .where(eq(stockSettings.resourceId, resourceId))
+      .where(
+        and(
+          eq(stockSettings.organizationId, organizationId),
+          eq(stockSettings.resourceId, resourceId),
+        ),
+      )
       .limit(1),
     db
       .select()
       .from(resourceVariants)
-      .where(eq(resourceVariants.resourceId, resourceId))
+      .where(
+        and(
+          eq(resourceVariants.organizationId, organizationId),
+          eq(resourceVariants.resourceId, resourceId),
+        ),
+      )
       .orderBy(asc(resourceVariants.position), asc(resourceVariants.name)),
   ]);
   return {
@@ -189,6 +239,7 @@ export async function listResourceVariants(resourceId: string) {
 }
 
 export async function createResourceVariant(
+  organizationId: string,
   resourceId: string,
   input: ResourceVariantCreateInput,
   actor: string,
@@ -201,13 +252,19 @@ export async function createResourceVariant(
         currency: resources.currency,
       })
       .from(resources)
-      .where(eq(resources.id, resourceId))
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resourceId),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!resource) throw new ResourceVariantError("Not found", 404);
-    await assertBulkTracking(transaction, resourceId);
+    await assertBulkTracking(transaction, organizationId, resourceId);
     await assertVariantIdentifiersAvailable(
       transaction,
+      organizationId,
       input.sku,
       input.barcode,
       resourceId,
@@ -216,7 +273,12 @@ export async function createResourceVariant(
     const existingVariants = await transaction
       .select({ id: resourceVariants.id, quantity: resourceVariants.quantity })
       .from(resourceVariants)
-      .where(eq(resourceVariants.resourceId, resourceId))
+      .where(
+        and(
+          eq(resourceVariants.organizationId, organizationId),
+          eq(resourceVariants.resourceId, resourceId),
+        ),
+      )
       .orderBy(asc(resourceVariants.id))
       .for("update");
     const allocated = existingVariants.reduce(
@@ -236,11 +298,17 @@ export async function createResourceVariant(
         nextPosition: sql<number>`coalesce(max(${resourceVariants.position}), -1)::int + 1`,
       })
       .from(resourceVariants)
-      .where(eq(resourceVariants.resourceId, resourceId));
+      .where(
+        and(
+          eq(resourceVariants.organizationId, organizationId),
+          eq(resourceVariants.resourceId, resourceId),
+        ),
+      );
     const now = new Date();
     const [created] = await transaction
       .insert(resourceVariants)
       .values({
+        organizationId,
         resourceId,
         name: input.name,
         sku: input.sku,
@@ -260,6 +328,7 @@ export async function createResourceVariant(
       const [movement] = await transaction
         .insert(stockMovements)
         .values({
+          organizationId,
           resourceId,
           variantId: created.id,
           variantDelta: allocation,
@@ -281,6 +350,7 @@ export async function createResourceVariant(
 }
 
 export async function updateResourceVariant(
+  organizationId: string,
   resourceId: string,
   variantId: string,
   patch: ResourceVariantPatchInput,
@@ -292,6 +362,7 @@ export async function updateResourceVariant(
       .from(resourceVariants)
       .where(
         and(
+          eq(resourceVariants.organizationId, organizationId),
           eq(resourceVariants.id, variantId),
           eq(resourceVariants.resourceId, resourceId),
         ),
@@ -299,9 +370,10 @@ export async function updateResourceVariant(
       .limit(1)
       .for("update");
     if (!variant) throw new ResourceVariantError("Variant not found", 404);
-    await assertBulkTracking(transaction, resourceId);
+    await assertBulkTracking(transaction, organizationId, resourceId);
     await assertVariantIdentifiersAvailable(
       transaction,
+      organizationId,
       patch.sku === undefined ? undefined : patch.sku,
       patch.barcode === undefined ? undefined : patch.barcode,
       resourceId,
@@ -311,13 +383,19 @@ export async function updateResourceVariant(
     const [saved] = await transaction
       .update(resourceVariants)
       .set({ ...patch, updatedBy: actor, updatedAt: new Date() })
-      .where(eq(resourceVariants.id, variant.id))
+      .where(
+        and(
+          eq(resourceVariants.organizationId, organizationId),
+          eq(resourceVariants.id, variant.id),
+        ),
+      )
       .returning();
     return resourceVariantDto(saved);
   });
 }
 
 export async function deleteResourceVariant(
+  organizationId: string,
   resourceId: string,
   variantId: string,
 ) {
@@ -327,6 +405,7 @@ export async function deleteResourceVariant(
       .from(resourceVariants)
       .where(
         and(
+          eq(resourceVariants.organizationId, organizationId),
           eq(resourceVariants.id, variantId),
           eq(resourceVariants.resourceId, resourceId),
         ),
@@ -343,7 +422,12 @@ export async function deleteResourceVariant(
     const [movement] = await transaction
       .select({ id: stockMovements.id })
       .from(stockMovements)
-      .where(eq(stockMovements.variantId, variant.id))
+      .where(
+        and(
+          eq(stockMovements.organizationId, organizationId),
+          eq(stockMovements.variantId, variant.id),
+        ),
+      )
       .limit(1);
     if (movement) {
       throw new ResourceVariantError(
@@ -353,12 +437,18 @@ export async function deleteResourceVariant(
     }
     await transaction
       .delete(resourceVariants)
-      .where(eq(resourceVariants.id, variant.id));
+      .where(
+        and(
+          eq(resourceVariants.organizationId, organizationId),
+          eq(resourceVariants.id, variant.id),
+        ),
+      );
     return resourceVariantDto(variant);
   });
 }
 
 export async function bookResourceVariantMovement(
+  organizationId: string,
   resourceId: string,
   variantId: string,
   input: ResourceVariantMovementInput,
@@ -368,17 +458,23 @@ export async function bookResourceVariantMovement(
     const [resource] = await transaction
       .select({ id: resources.id, quantity: resources.quantity })
       .from(resources)
-      .where(eq(resources.id, resourceId))
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resourceId),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!resource) throw new ResourceVariantError("Not found", 404);
-    await assertBulkTracking(transaction, resourceId);
+    await assertBulkTracking(transaction, organizationId, resourceId);
 
     const [variant] = await transaction
       .select()
       .from(resourceVariants)
       .where(
         and(
+          eq(resourceVariants.organizationId, organizationId),
           eq(resourceVariants.id, variantId),
           eq(resourceVariants.resourceId, resourceId),
         ),
@@ -421,15 +517,26 @@ export async function bookResourceVariantMovement(
         updatedBy: actor,
         updatedAt: now,
       })
-      .where(eq(resourceVariants.id, variant.id))
+      .where(
+        and(
+          eq(resourceVariants.organizationId, organizationId),
+          eq(resourceVariants.id, variant.id),
+        ),
+      )
       .returning();
     await transaction
       .update(resources)
       .set({ quantity: nextResourceQuantity, updatedAt: now })
-      .where(eq(resources.id, resource.id));
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resource.id),
+        ),
+      );
     const [movement] = await transaction
       .insert(stockMovements)
       .values({
+        organizationId,
         resourceId,
         variantId: variant.id,
         variantDelta: input.delta,

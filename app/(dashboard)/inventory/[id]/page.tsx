@@ -9,10 +9,10 @@ type Props = { params: Promise<{ id: string }> };
 
 export default async function InventoryItemPage({ params }: Props) {
   const { id } = await params;
-  const [identity, resource] = await Promise.all([
-    getSessionIdentity(),
-    getResourceRecord(id),
-  ]);
+  const identity = await getSessionIdentity();
+  const resource = identity
+    ? await getResourceRecord(id, identity.organizationId)
+    : null;
   const [canEdit, canDelete, canManageAssignments, canManageStock] =
     identity && resource
       ? await Promise.all([

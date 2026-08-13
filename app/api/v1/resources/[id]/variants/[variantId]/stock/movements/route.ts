@@ -39,6 +39,7 @@ export async function POST(request: Request, context: Context) {
   try {
     return Response.json(
       await bookResourceVariantMovement(
+        authorization.identity.organizationId,
         id,
         variantId,
         parsed.data,

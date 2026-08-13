@@ -39,6 +39,7 @@ export async function PATCH(request: Request, context: Context) {
   }
   try {
     const variant = await updateResourceVariant(
+      authorization.identity.organizationId,
       id,
       variantId,
       parsed.data,
@@ -63,7 +64,11 @@ export async function DELETE(request: Request, context: Context) {
   );
   if (authorization.response) return authorization.response;
   try {
-    await deleteResourceVariant(id, variantId);
+    await deleteResourceVariant(
+      authorization.identity.organizationId,
+      id,
+      variantId,
+    );
     return new Response(null, { status: 204 });
   } catch (error) {
     const failure = resourceVariantHttpError(error, "Unable to delete variant.");

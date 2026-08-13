@@ -36,6 +36,7 @@ export async function requireNotificationRecipient(request: Request) {
     identity,
     response: null,
     recipient: {
+      organizationId: identity.organizationId,
       key: notificationRecipient(identity.subject, email),
       email,
       name: identity.name,

@@ -111,25 +111,37 @@ function normalizedTarget(url: string) {
   });
 }
 
-export async function listWebhookEndpoints() {
+export async function listWebhookEndpoints(organizationId: string) {
   const rows = await db
     .select()
     .from(webhookEndpoints)
-    .where(isNull(webhookEndpoints.revokedAt))
+    .where(
+      and(
+        eq(webhookEndpoints.organizationId, organizationId),
+        isNull(webhookEndpoints.revokedAt),
+      ),
+    )
     .orderBy(asc(webhookEndpoints.name), asc(webhookEndpoints.createdAt));
   return rows.map(endpointDto);
 }
 
-export async function getWebhookEndpoint(id: string) {
+export async function getWebhookEndpoint(organizationId: string, id: string) {
   const [row] = await db
     .select()
     .from(webhookEndpoints)
-    .where(and(eq(webhookEndpoints.id, id), isNull(webhookEndpoints.revokedAt)))
+    .where(
+      and(
+        eq(webhookEndpoints.organizationId, organizationId),
+        eq(webhookEndpoints.id, id),
+        isNull(webhookEndpoints.revokedAt),
+      ),
+    )
     .limit(1);
   return row ? endpointDto(row) : null;
 }
 
 export async function createWebhookEndpoint(
+  organizationId: string,
   input: WebhookEndpointCreate,
   actor: string,
 ) {
@@ -139,6 +151,7 @@ export async function createWebhookEndpoint(
   const [created] = await db
     .insert(webhookEndpoints)
     .values({
+      organizationId,
       name: input.name,
       encryptedUrl: encryptSecret(url, ENCRYPTION_VARIABLE),
       redactedUrl: redactWebhookTarget(url),
@@ -153,6 +166,7 @@ export async function createWebhookEndpoint(
 }
 
 export async function updateWebhookEndpoint(
+  organizationId: string,
   id: string,
   patch: WebhookEndpointPatch,
   actor: string,
@@ -176,7 +190,13 @@ export async function updateWebhookEndpoint(
         updatedBy: actor,
         updatedAt: now,
       })
-      .where(and(eq(webhookEndpoints.id, id), isNull(webhookEndpoints.revokedAt)))
+      .where(
+        and(
+          eq(webhookEndpoints.organizationId, organizationId),
+          eq(webhookEndpoints.id, id),
+          isNull(webhookEndpoints.revokedAt),
+        ),
+      )
       .returning();
     if (!updated) return null;
     if (patch.enabled === false) {
@@ -192,6 +212,7 @@ export async function updateWebhookEndpoint(
         .where(
           and(
             eq(webhookDeliveries.webhookId, id),
+            eq(webhookDeliveries.organizationId, organizationId),
             inArray(webhookDeliveries.status, ["pending", "processing"]),
           ),
         );
@@ -200,7 +221,11 @@ export async function updateWebhookEndpoint(
   });
 }
 
-export async function revokeWebhookEndpoint(id: string, actor: string) {
+export async function revokeWebhookEndpoint(
+  organizationId: string,
+  id: string,
+  actor: string,
+) {
   const now = new Date();
   return db.transaction(async (transaction) => {
     const [revoked] = await transaction
@@ -211,7 +236,13 @@ export async function revokeWebhookEndpoint(id: string, actor: string) {
         updatedAt: now,
         updatedBy: actor,
       })
-      .where(and(eq(webhookEndpoints.id, id), isNull(webhookEndpoints.revokedAt)))
+      .where(
+        and(
+          eq(webhookEndpoints.organizationId, organizationId),
+          eq(webhookEndpoints.id, id),
+          isNull(webhookEndpoints.revokedAt),
+        ),
+      )
       .returning({ id: webhookEndpoints.id });
     if (!revoked) return false;
     await transaction
@@ -226,6 +257,7 @@ export async function revokeWebhookEndpoint(id: string, actor: string) {
       .where(
         and(
           eq(webhookDeliveries.webhookId, id),
+          eq(webhookDeliveries.organizationId, organizationId),
           inArray(webhookDeliveries.status, ["pending", "processing"]),
         ),
       );
@@ -233,7 +265,11 @@ export async function revokeWebhookEndpoint(id: string, actor: string) {
   });
 }
 
-export async function rotateWebhookSecret(id: string, actor: string) {
+export async function rotateWebhookSecret(
+  organizationId: string,
+  id: string,
+  actor: string,
+) {
   assertEncryptionConfigured();
   const secret = `whsec_${randomBytes(32).toString("base64url")}`;
   const [updated] = await db
@@ -243,12 +279,19 @@ export async function rotateWebhookSecret(id: string, actor: string) {
       updatedAt: new Date(),
       updatedBy: actor,
     })
-    .where(and(eq(webhookEndpoints.id, id), isNull(webhookEndpoints.revokedAt)))
+    .where(
+      and(
+        eq(webhookEndpoints.organizationId, organizationId),
+        eq(webhookEndpoints.id, id),
+        isNull(webhookEndpoints.revokedAt),
+      ),
+    )
     .returning({ id: webhookEndpoints.id });
   return updated ? secret : null;
 }
 
 type WebhookEventInput = {
+  organizationId: string;
   type: WebhookEventType;
   aggregateType?: string;
   aggregateId?: string;
@@ -271,8 +314,10 @@ export async function enqueueWebhookEvents(
   inputs: WebhookEventInput[],
 ) {
   if (!inputs.length) return [];
+  const organizationIds = [...new Set(inputs.map((input) => input.organizationId))];
   const endpoints = await executor
     .select({
+      organizationId: webhookEndpoints.organizationId,
       id: webhookEndpoints.id,
       eventTypes: webhookEndpoints.eventTypes,
       encryptedSecret: webhookEndpoints.encryptedSecret,
@@ -280,6 +325,7 @@ export async function enqueueWebhookEvents(
     .from(webhookEndpoints)
     .where(
       and(
+        inArray(webhookEndpoints.organizationId, organizationIds),
         eq(webhookEndpoints.enabled, true),
         isNull(webhookEndpoints.revokedAt),
       ),
@@ -287,6 +333,7 @@ export async function enqueueWebhookEvents(
   if (!endpoints.length) return [];
   const subscribedInputs = inputs.filter((input) =>
     endpoints.some((endpoint) =>
+      endpoint.organizationId === input.organizationId &&
       (endpoint.eventTypes as readonly string[]).includes(input.type),
     ),
   );
@@ -305,6 +352,7 @@ export async function enqueueWebhookEvents(
       envelope,
       occurredAt,
       event: {
+        organizationId: input.organizationId,
         id: envelope.id,
         type: envelope.type,
         apiVersion: envelope.apiVersion,
@@ -320,12 +368,14 @@ export async function enqueueWebhookEvents(
   await insertInChunks(prepared.map(({ event }) => event), (chunk) =>
     executor.insert(webhookEvents).values(chunk),
   );
-  const deliveries = prepared.flatMap(({ envelope }) =>
+  const deliveries = prepared.flatMap(({ envelope, event }) =>
     endpoints
       .filter((endpoint) =>
+        endpoint.organizationId === event.organizationId &&
         (endpoint.eventTypes as readonly string[]).includes(envelope.type),
       )
       .map((endpoint) => ({
+        organizationId: endpoint.organizationId,
         webhookId: endpoint.id,
         eventId: envelope.id,
         encryptedSecret: endpoint.encryptedSecret,
@@ -353,6 +403,7 @@ export async function enqueueStockMovementWebhookEvents(
   return enqueueWebhookEvents(
     executor,
     movements.map((movement) => ({
+      organizationId: movement.organizationId,
       type: "inventory.stock.movement.created" as const,
       aggregateType: "resource",
       aggregateId: movement.resourceId,
@@ -363,16 +414,27 @@ export async function enqueueStockMovementWebhookEvents(
   );
 }
 
-export async function enqueueWebhookTest(id: string, actor: string) {
+export async function enqueueWebhookTest(
+  organizationId: string,
+  id: string,
+  actor: string,
+) {
   assertEncryptionConfigured();
   return db.transaction(async (transaction) => {
     const [endpoint] = await transaction
       .select({
+        organizationId: webhookEndpoints.organizationId,
         id: webhookEndpoints.id,
         encryptedSecret: webhookEndpoints.encryptedSecret,
       })
       .from(webhookEndpoints)
-      .where(and(eq(webhookEndpoints.id, id), isNull(webhookEndpoints.revokedAt)))
+      .where(
+        and(
+          eq(webhookEndpoints.organizationId, organizationId),
+          eq(webhookEndpoints.id, id),
+          isNull(webhookEndpoints.revokedAt),
+        ),
+      )
       .limit(1);
     if (!endpoint) return null;
     const occurredAt = new Date();
@@ -385,6 +447,7 @@ export async function enqueueWebhookTest(id: string, actor: string) {
       data: { test: true, message: "Inventory webhook test" },
     };
     await transaction.insert(webhookEvents).values({
+      organizationId,
       id: envelope.id,
       type: envelope.type,
       apiVersion: "1",
@@ -398,6 +461,7 @@ export async function enqueueWebhookTest(id: string, actor: string) {
     const [delivery] = await transaction
       .insert(webhookDeliveries)
       .values({
+        organizationId,
         webhookId: id,
         eventId: envelope.id,
         encryptedSecret: endpoint.encryptedSecret,
@@ -408,8 +472,12 @@ export async function enqueueWebhookTest(id: string, actor: string) {
   });
 }
 
-export async function listWebhookDeliveries(id: string, limit = 50) {
-  const endpoint = await getWebhookEndpoint(id);
+export async function listWebhookDeliveries(
+  organizationId: string,
+  id: string,
+  limit = 50,
+) {
+  const endpoint = await getWebhookEndpoint(organizationId, id);
   if (!endpoint) return null;
   const rows = await db
     .select({
@@ -421,14 +489,29 @@ export async function listWebhookDeliveries(id: string, limit = 50) {
       },
     })
     .from(webhookDeliveries)
-    .innerJoin(webhookEvents, eq(webhookDeliveries.eventId, webhookEvents.id))
-    .where(eq(webhookDeliveries.webhookId, id))
+    .innerJoin(
+      webhookEvents,
+      and(
+        eq(webhookDeliveries.eventId, webhookEvents.id),
+        eq(webhookDeliveries.organizationId, webhookEvents.organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(webhookDeliveries.organizationId, organizationId),
+        eq(webhookDeliveries.webhookId, id),
+      ),
+    )
     .orderBy(desc(webhookDeliveries.createdAt))
     .limit(Math.min(100, Math.max(1, limit)));
   return rows.map(({ delivery, event }) => deliveryDto(delivery, event));
 }
 
-export async function retryWebhookDelivery(webhookId: string, deliveryId: string) {
+export async function retryWebhookDelivery(
+  organizationId: string,
+  webhookId: string,
+  deliveryId: string,
+) {
   return db.transaction(async (transaction) => {
     const [endpoint] = await transaction
       .select({ id: webhookEndpoints.id })
@@ -436,6 +519,7 @@ export async function retryWebhookDelivery(webhookId: string, deliveryId: string
       .where(
         and(
           eq(webhookEndpoints.id, webhookId),
+          eq(webhookEndpoints.organizationId, organizationId),
           eq(webhookEndpoints.enabled, true),
           isNull(webhookEndpoints.revokedAt),
         ),
@@ -456,6 +540,7 @@ export async function retryWebhookDelivery(webhookId: string, deliveryId: string
       .where(
         and(
           eq(webhookDeliveries.id, deliveryId),
+          eq(webhookDeliveries.organizationId, organizationId),
           eq(webhookDeliveries.webhookId, webhookId),
           eq(webhookDeliveries.status, "failed"),
         ),
@@ -626,14 +711,30 @@ async function claimWebhookDelivery(): Promise<ClaimedDelivery | null> {
         error: null,
         updatedAt: now,
       })
-      .where(eq(webhookDeliveries.id, candidate.id))
+      .where(
+        and(
+          eq(webhookDeliveries.organizationId, candidate.organizationId),
+          eq(webhookDeliveries.id, candidate.id),
+        ),
+      )
       .returning();
     if (!claimed) return null;
     const [joined] = await transaction
       .select({ endpoint: webhookEndpoints, event: webhookEvents })
       .from(webhookEndpoints)
-      .innerJoin(webhookEvents, eq(webhookEvents.id, claimed.eventId))
-      .where(eq(webhookEndpoints.id, claimed.webhookId))
+      .innerJoin(
+        webhookEvents,
+        and(
+          eq(webhookEvents.organizationId, claimed.organizationId),
+          eq(webhookEvents.id, claimed.eventId),
+        ),
+      )
+      .where(
+        and(
+          eq(webhookEndpoints.organizationId, claimed.organizationId),
+          eq(webhookEndpoints.id, claimed.webhookId),
+        ),
+      )
       .limit(1);
     if (!joined) return null;
     return { ...claimed, ...joined };
@@ -656,6 +757,7 @@ async function markDeliverySuccess(delivery: ClaimedDelivery, status: number) {
       })
       .where(
         and(
+          eq(webhookDeliveries.organizationId, delivery.organizationId),
           eq(webhookDeliveries.id, delivery.id),
           eq(webhookDeliveries.leaseToken, delivery.leaseToken!),
         ),
@@ -665,7 +767,12 @@ async function markDeliverySuccess(delivery: ClaimedDelivery, status: number) {
       await transaction
         .update(webhookEndpoints)
         .set({ failureCount: 0, lastSuccessAt: now, updatedAt: now })
-        .where(eq(webhookEndpoints.id, delivery.webhookId));
+        .where(
+          and(
+            eq(webhookEndpoints.organizationId, delivery.organizationId),
+            eq(webhookEndpoints.id, delivery.webhookId),
+          ),
+        );
     }
   });
 }
@@ -692,6 +799,7 @@ async function markDeliveryFailure(
       })
       .where(
         and(
+          eq(webhookDeliveries.organizationId, delivery.organizationId),
           eq(webhookDeliveries.id, delivery.id),
           eq(webhookDeliveries.leaseToken, delivery.leaseToken!),
         ),
@@ -705,7 +813,12 @@ async function markDeliveryFailure(
           lastFailureAt: now,
           updatedAt: now,
         })
-        .where(eq(webhookEndpoints.id, delivery.webhookId));
+        .where(
+          and(
+            eq(webhookEndpoints.organizationId, delivery.organizationId),
+            eq(webhookEndpoints.id, delivery.webhookId),
+          ),
+        );
     }
   });
 }
@@ -803,6 +916,7 @@ export async function drainWebhookDeliveries(limit = 1) {
         sql`not exists (
           select 1 from ${webhookDeliveries}
           where ${webhookDeliveries.eventId} = ${webhookEvents.id}
+            and ${webhookDeliveries.organizationId} = ${webhookEvents.organizationId}
             and ${webhookDeliveries.status} in ('pending', 'processing')
         )`,
       ),
@@ -814,6 +928,7 @@ export async function drainWebhookDeliveries(limit = 1) {
         sql`not exists (
           select 1 from ${webhookDeliveries}
           where ${webhookDeliveries.webhookId} = ${webhookEndpoints.id}
+            and ${webhookDeliveries.organizationId} = ${webhookEndpoints.organizationId}
         )`,
       ),
     );

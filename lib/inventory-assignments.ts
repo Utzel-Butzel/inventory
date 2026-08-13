@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
   inventoryAssignments,
+  organizationMemberships,
   resources,
   stockMovementRequests,
   stockMovements,
@@ -178,12 +179,20 @@ const validateReplay = (
   return { response: replayResponse(existing.response), replayed: true } as const;
 };
 
-export async function listInventoryAssignments(resourceId: string) {
+export async function listInventoryAssignments(
+  organizationId: string,
+  resourceId: string,
+) {
   return db.transaction(async (transaction) => {
   const [resource] = await transaction
     .select({ id: resources.id, name: resources.name, quantity: resources.quantity })
     .from(resources)
-    .where(eq(resources.id, resourceId))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, resourceId),
+      ),
+    )
     .limit(1);
   if (!resource) return null;
 
@@ -192,7 +201,12 @@ export async function listInventoryAssignments(resourceId: string) {
       transaction
         .select()
         .from(inventoryAssignments)
-        .where(eq(inventoryAssignments.resourceId, resourceId))
+        .where(
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            eq(inventoryAssignments.resourceId, resourceId),
+          ),
+        )
         .orderBy(
           asc(inventoryAssignments.status),
           desc(inventoryAssignments.startsAt),
@@ -201,7 +215,12 @@ export async function listInventoryAssignments(resourceId: string) {
       transaction
         .select({ trackingMode: stockSettings.trackingMode })
         .from(stockSettings)
-        .where(eq(stockSettings.resourceId, resourceId))
+        .where(
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            eq(stockSettings.resourceId, resourceId),
+          ),
+        )
         .limit(1),
       transaction
         .select({
@@ -213,6 +232,7 @@ export async function listInventoryAssignments(resourceId: string) {
         .from(stockUnits)
         .where(
           and(
+            eq(stockUnits.organizationId, organizationId),
             eq(stockUnits.resourceId, resourceId),
             eq(stockUnits.status, "available"),
           ),
@@ -226,6 +246,7 @@ export async function listInventoryAssignments(resourceId: string) {
         .from(inventoryAssignments)
         .where(
           and(
+            eq(inventoryAssignments.organizationId, organizationId),
             eq(inventoryAssignments.resourceId, resourceId),
             eq(inventoryAssignments.status, "active"),
           ),
@@ -264,13 +285,23 @@ export async function listInventoryAssignments(resourceId: string) {
       ? transaction
           .select({ id: resources.id, name: resources.name })
           .from(resources)
-          .where(inArray(resources.id, assigneeResourceIds))
+          .where(
+            and(
+              eq(resources.organizationId, organizationId),
+              inArray(resources.id, assigneeResourceIds),
+            ),
+          )
       : Promise.resolve([]),
     assignedUnitIds.length
       ? transaction
           .select({ id: stockUnits.id, code: stockUnits.code, status: stockUnits.status })
           .from(stockUnits)
-          .where(inArray(stockUnits.id, assignedUnitIds))
+          .where(
+            and(
+              eq(stockUnits.organizationId, organizationId),
+              inArray(stockUnits.id, assignedUnitIds),
+            ),
+          )
       : Promise.resolve([]),
   ]);
   const userLabels = new Map(
@@ -308,6 +339,7 @@ export async function listInventoryAssignments(resourceId: string) {
 
 async function resolveRecipient(
   transaction: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  organizationId: string,
   resourceId: string,
   recipient: AssignmentRecipient,
 ) {
@@ -331,6 +363,14 @@ async function resolveRecipient(
     const [user] = await transaction
       .select({ id: users.id, name: users.name, email: users.email, isActive: users.isActive })
       .from(users)
+      .innerJoin(
+        organizationMemberships,
+        and(
+          eq(organizationMemberships.userId, users.id),
+          eq(organizationMemberships.organizationId, organizationId),
+          eq(organizationMemberships.isActive, true),
+        ),
+      )
       .where(eq(users.id, recipient.userId))
       .limit(1);
     if (!user || !user.isActive) {
@@ -351,7 +391,12 @@ async function resolveRecipient(
   const [assigneeResource] = await transaction
     .select({ id: resources.id, name: resources.name })
     .from(resources)
-    .where(eq(resources.id, recipient.resourceId))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, recipient.resourceId),
+      ),
+    )
     .limit(1);
   if (!assigneeResource) {
     throw new InventoryAssignmentError("The selected recipient item does not exist.", 422);
@@ -363,6 +408,7 @@ async function resolveRecipient(
 }
 
 export async function createInventoryAssignment(
+  organizationId: string,
   resourceId: string,
   input: CreateInventoryAssignmentInput,
   actor: string,
@@ -379,14 +425,24 @@ export async function createInventoryAssignment(
       const [earlyReplay] = await transaction
         .select()
         .from(stockMovementRequests)
-        .where(eq(stockMovementRequests.idempotencyKey, idempotency.key))
+        .where(
+          and(
+            eq(stockMovementRequests.organizationId, organizationId),
+            eq(stockMovementRequests.idempotencyKey, idempotency.key),
+          ),
+        )
         .limit(1);
       if (earlyReplay) return validateReplay(earlyReplay, replayExpected);
 
       const [resource] = await transaction
         .select({ id: resources.id, name: resources.name, quantity: resources.quantity })
         .from(resources)
-        .where(eq(resources.id, resourceId))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, resourceId),
+          ),
+        )
         .limit(1)
         .for("update");
       if (!resource) throw new InventoryAssignmentError("Not found", 404);
@@ -394,7 +450,12 @@ export async function createInventoryAssignment(
       const [lockedReplay] = await transaction
         .select()
         .from(stockMovementRequests)
-        .where(eq(stockMovementRequests.idempotencyKey, idempotency.key))
+        .where(
+          and(
+            eq(stockMovementRequests.organizationId, organizationId),
+            eq(stockMovementRequests.idempotencyKey, idempotency.key),
+          ),
+        )
         .limit(1);
       if (lockedReplay) return validateReplay(lockedReplay, replayExpected);
 
@@ -421,10 +482,20 @@ export async function createInventoryAssignment(
       const [settings] = await transaction
         .select({ trackingMode: stockSettings.trackingMode })
         .from(stockSettings)
-        .where(eq(stockSettings.resourceId, resourceId))
+        .where(
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            eq(stockSettings.resourceId, resourceId),
+          ),
+        )
         .limit(1);
       const trackingMode = settings?.trackingMode ?? "bulk";
-      const recipient = await resolveRecipient(transaction, resourceId, input.recipient);
+      const recipient = await resolveRecipient(
+        transaction,
+        organizationId,
+        resourceId,
+        input.recipient,
+      );
       const [{ allocated }] = await transaction
         .select({
           allocated: sql<number>`coalesce(sum(${inventoryAssignments.quantity}), 0)::int`,
@@ -432,6 +503,7 @@ export async function createInventoryAssignment(
         .from(inventoryAssignments)
         .where(
           and(
+            eq(inventoryAssignments.organizationId, organizationId),
             eq(inventoryAssignments.resourceId, resourceId),
             eq(inventoryAssignments.status, "active"),
             isNull(inventoryAssignments.stockUnitId),
@@ -458,6 +530,7 @@ export async function createInventoryAssignment(
           .from(stockUnits)
           .where(
             and(
+              eq(stockUnits.organizationId, organizationId),
               eq(stockUnits.id, input.stockUnitId),
               eq(stockUnits.resourceId, resourceId),
             ),
@@ -476,6 +549,7 @@ export async function createInventoryAssignment(
           .from(inventoryAssignments)
           .where(
             and(
+              eq(inventoryAssignments.organizationId, organizationId),
               eq(inventoryAssignments.stockUnitId, unit.id),
               eq(inventoryAssignments.status, "active"),
             ),
@@ -506,7 +580,12 @@ export async function createInventoryAssignment(
             located: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
           })
           .from(stockLocationBalances)
-          .where(eq(stockLocationBalances.resourceId, resourceId));
+          .where(
+            and(
+              eq(stockLocationBalances.organizationId, organizationId),
+              eq(stockLocationBalances.resourceId, resourceId),
+            ),
+          );
         const unassignedQuantity = resource.quantity - Number(located ?? 0);
         if (input.quantity > unassignedQuantity) {
           throw new InventoryAssignmentError(
@@ -520,6 +599,7 @@ export async function createInventoryAssignment(
       const [assignment] = await transaction
         .insert(inventoryAssignments)
         .values({
+          organizationId,
           resourceId,
           stockUnitId: unit?.id ?? null,
           kind: input.kind,
@@ -547,17 +627,28 @@ export async function createInventoryAssignment(
       await transaction
         .update(resources)
         .set({ quantity: balanceAfter, updatedAt: now })
-        .where(eq(resources.id, resourceId));
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, resourceId),
+          ),
+        );
       const unitStatus = input.kind === "reservation" ? "reserved" : "in-use";
       if (unit) {
         await transaction
           .update(stockUnits)
           .set({ status: unitStatus, lastMovedAt: now, updatedAt: now })
-          .where(eq(stockUnits.id, unit.id));
+          .where(
+            and(
+              eq(stockUnits.organizationId, organizationId),
+              eq(stockUnits.id, unit.id),
+            ),
+          );
       }
       const [movement] = await transaction
         .insert(stockMovements)
         .values({
+          organizationId,
           resourceId,
           unitId: unit?.id ?? null,
           delta: -input.quantity,
@@ -600,6 +691,7 @@ export async function createInventoryAssignment(
         movement: movementDto(movement),
       };
       await transaction.insert(stockMovementRequests).values({
+        organizationId,
         idempotencyKey: idempotency.key,
         resourceId,
         actor,
@@ -612,7 +704,12 @@ export async function createInventoryAssignment(
     const [winner] = await db
       .select()
       .from(stockMovementRequests)
-      .where(eq(stockMovementRequests.idempotencyKey, idempotency.key))
+      .where(
+        and(
+          eq(stockMovementRequests.organizationId, organizationId),
+          eq(stockMovementRequests.idempotencyKey, idempotency.key),
+        ),
+      )
       .limit(1);
     if (winner) return validateReplay(winner, replayExpected);
     throw error;
@@ -620,6 +717,7 @@ export async function createInventoryAssignment(
 }
 
 export async function completeInventoryAssignment(
+  organizationId: string,
   assignmentId: string,
   input: CompleteInventoryAssignmentInput,
   actor: string,
@@ -635,21 +733,36 @@ export async function completeInventoryAssignment(
       const [earlyReplay] = await transaction
         .select()
         .from(stockMovementRequests)
-        .where(eq(stockMovementRequests.idempotencyKey, idempotency.key))
+        .where(
+          and(
+            eq(stockMovementRequests.organizationId, organizationId),
+            eq(stockMovementRequests.idempotencyKey, idempotency.key),
+          ),
+        )
         .limit(1);
       if (earlyReplay) return validateReplay(earlyReplay, replayExpected);
 
       const [snapshot] = await transaction
         .select({ resourceId: inventoryAssignments.resourceId })
         .from(inventoryAssignments)
-        .where(eq(inventoryAssignments.id, assignmentId))
+        .where(
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            eq(inventoryAssignments.id, assignmentId),
+          ),
+        )
         .limit(1);
       if (!snapshot) throw new InventoryAssignmentError("Assignment not found", 404);
 
       const [resource] = await transaction
         .select({ id: resources.id, name: resources.name, quantity: resources.quantity })
         .from(resources)
-        .where(eq(resources.id, snapshot.resourceId))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, snapshot.resourceId),
+          ),
+        )
         .limit(1)
         .for("update");
       if (!resource) throw new InventoryAssignmentError("Inventory item not found", 404);
@@ -657,7 +770,12 @@ export async function completeInventoryAssignment(
       const [lockedReplay] = await transaction
         .select()
         .from(stockMovementRequests)
-        .where(eq(stockMovementRequests.idempotencyKey, idempotency.key))
+        .where(
+          and(
+            eq(stockMovementRequests.organizationId, organizationId),
+            eq(stockMovementRequests.idempotencyKey, idempotency.key),
+          ),
+        )
         .limit(1);
       if (lockedReplay) {
         return validateReplay(lockedReplay, {
@@ -669,7 +787,12 @@ export async function completeInventoryAssignment(
       const [assignment] = await transaction
         .select()
         .from(inventoryAssignments)
-        .where(eq(inventoryAssignments.id, assignmentId))
+        .where(
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            eq(inventoryAssignments.id, assignmentId),
+          ),
+        )
         .limit(1)
         .for("update");
       if (!assignment) throw new InventoryAssignmentError("Assignment not found", 404);
@@ -690,6 +813,7 @@ export async function completeInventoryAssignment(
           .from(stockUnits)
           .where(
             and(
+              eq(stockUnits.organizationId, organizationId),
               eq(stockUnits.id, assignment.stockUnitId),
               eq(stockUnits.resourceId, resource.id),
             ),
@@ -727,21 +851,37 @@ export async function completeInventoryAssignment(
           note: input.note ?? assignment.note,
           updatedAt: now,
         })
-        .where(eq(inventoryAssignments.id, assignment.id))
+        .where(
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            eq(inventoryAssignments.id, assignment.id),
+          ),
+        )
         .returning();
       if (unit) {
         await transaction
           .update(stockUnits)
           .set({ status: "available", lastMovedAt: completedAt, updatedAt: now })
-          .where(eq(stockUnits.id, unit.id));
+          .where(
+            and(
+              eq(stockUnits.organizationId, organizationId),
+              eq(stockUnits.id, unit.id),
+            ),
+          );
       }
       await transaction
         .update(resources)
         .set({ quantity: balanceAfter, updatedAt: now })
-        .where(eq(resources.id, resource.id));
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, resource.id),
+          ),
+        );
       const [movement] = await transaction
         .insert(stockMovements)
         .values({
+          organizationId,
           resourceId: resource.id,
           unitId: unit?.id ?? null,
           delta: quantityRestored,
@@ -775,6 +915,7 @@ export async function completeInventoryAssignment(
         movement: movementDto(movement),
       };
       await transaction.insert(stockMovementRequests).values({
+        organizationId,
         idempotencyKey: idempotency.key,
         resourceId: resource.id,
         actor,
@@ -787,7 +928,12 @@ export async function completeInventoryAssignment(
     const [winner] = await db
       .select()
       .from(stockMovementRequests)
-      .where(eq(stockMovementRequests.idempotencyKey, idempotency.key))
+      .where(
+        and(
+          eq(stockMovementRequests.organizationId, organizationId),
+          eq(stockMovementRequests.idempotencyKey, idempotency.key),
+        ),
+      )
       .limit(1);
     if (winner) return validateReplay(winner, replayExpected);
     throw error;

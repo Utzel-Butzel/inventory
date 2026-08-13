@@ -23,7 +23,10 @@ export async function GET(request: Request, context: Context) {
   if (!id.success) {
     return Response.json({ error: "Invalid spatial structure identifier." }, { status: 422 });
   }
-  const structure = await getSpatialStructure(id.data);
+  const structure = await getSpatialStructure(
+    authorization.identity.organizationId,
+    id.data,
+  );
   if (!structure) {
     return Response.json({ error: "Spatial structure not found." }, { status: 404 });
   }
@@ -52,6 +55,7 @@ export async function PATCH(request: Request, context: Context) {
   }
   try {
     const structure = await updateSpatialStructure(
+      authorization.identity.organizationId,
       id.data,
       parsed.data,
       authorization.identity.subject,
@@ -59,7 +63,12 @@ export async function PATCH(request: Request, context: Context) {
     if (!structure) {
       return Response.json({ error: "Spatial structure not found." }, { status: 404 });
     }
-    return Response.json({ structure: await getSpatialStructure(structure.id) });
+    return Response.json({
+      structure: await getSpatialStructure(
+        authorization.identity.organizationId,
+        structure.id,
+      ),
+    });
   } catch (error) {
     const failure = spatialStructureHttpError(
       error,

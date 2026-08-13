@@ -3,6 +3,125 @@ import XCTest
 @testable import Inventory
 
 final class IntakeQueueRecoveryTests: XCTestCase {
+    func testOrganizationSelectionSurvivesManifestRoundTrip() throws {
+        let organizationID = try XCTUnwrap(
+            UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        )
+        let job = makeJob(expectedFileCount: 0, organizationID: organizationID)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(IntakeJob.self, from: encoder.encode(job))
+
+        XCTAssertEqual(decoded.organizationID, organizationID)
+        XCTAssertEqual(decoded.principalIdentifier, "principal-a")
+    }
+
+    func testLegacyManifestWithoutOrganizationRemainsUnscoped() throws {
+        let job = makeJob(expectedFileCount: 0)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let encoded = try encoder.encode(job)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "organizationID")
+        let data = try JSONSerialization.data(withJSONObject: object)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(IntakeJob.self, from: data)
+
+        XCTAssertNil(decoded.organizationID)
+    }
+
+    func testQueueContextIncludesOrganizationOnSameServer() throws {
+        let firstOrganizationID = try XCTUnwrap(
+            UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        )
+        let secondOrganizationID = try XCTUnwrap(
+            UUID(uuidString: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+        )
+        let job = makeJob(expectedFileCount: 0, organizationID: firstOrganizationID)
+
+        XCTAssertTrue(IntakeQueue.matchesContext(
+            job,
+            serverOrigin: "https://inventory.example",
+            organizationID: firstOrganizationID,
+            principalIdentifier: "principal-a"
+        ))
+        XCTAssertFalse(IntakeQueue.matchesContext(
+            job,
+            serverOrigin: "https://inventory.example",
+            organizationID: secondOrganizationID,
+            principalIdentifier: "principal-a"
+        ))
+        XCTAssertFalse(IntakeQueue.matchesContext(
+            job,
+            serverOrigin: "https://other.example",
+            organizationID: firstOrganizationID,
+            principalIdentifier: "principal-a"
+        ))
+    }
+
+    func testQueueContextIncludesAuthenticatedPrincipal() throws {
+        let job = makeJob(expectedFileCount: 0, principalIdentifier: "principal-a")
+
+        XCTAssertTrue(IntakeQueue.matchesContext(
+            job,
+            serverOrigin: "https://inventory.example",
+            organizationID: job.organizationID,
+            principalIdentifier: "principal-a"
+        ))
+        XCTAssertFalse(IntakeQueue.matchesContext(
+            job,
+            serverOrigin: "https://inventory.example",
+            organizationID: job.organizationID,
+            principalIdentifier: "principal-b"
+        ))
+        XCTAssertFalse(IntakeQueue.matchesContext(
+            job,
+            serverOrigin: "https://inventory.example",
+            organizationID: job.organizationID,
+            principalIdentifier: nil
+        ))
+    }
+
+    func testInterruptedLegacyJobWithoutPrincipalIsQuarantined() {
+        var job = makeJob(expectedFileCount: 0, mediaUploaded: true)
+        job.principalIdentifier = nil
+
+        let recovered = IntakeQueue.recover(job, rootURL: temporaryRoot())
+
+        XCTAssertEqual(recovered.stage, .failed)
+        XCTAssertTrue(recovered.message?.contains("Konto") == true)
+    }
+
+    func testQueueVisibilityHidesOtherPrincipalsAndLoggedOutJobs() {
+        let first = makeJob(expectedFileCount: 0, principalIdentifier: "principal-a")
+        let second = makeJob(expectedFileCount: 0, principalIdentifier: "principal-b")
+
+        XCTAssertEqual(
+            IntakeQueue.jobs(
+                [first, second],
+                matchingServerOrigin: "https://inventory.example",
+                organizationID: first.organizationID,
+                principalIdentifier: "principal-a"
+            ).map(\.id),
+            [first.id]
+        )
+        XCTAssertTrue(
+            IntakeQueue.jobs(
+                [first, second],
+                matchingServerOrigin: nil,
+                organizationID: nil,
+                principalIdentifier: nil
+            ).isEmpty
+        )
+    }
+
     func testImageModelSelectionSurvivesManifestRoundTrip() throws {
         let job = makeJob(expectedFileCount: 0, imageModelID: "google-nano-banana-pro")
         let encoder = JSONEncoder()
@@ -92,7 +211,11 @@ final class IntakeQueueRecoveryTests: XCTestCase {
     private func makeJob(
         expectedFileCount: Int,
         mediaUploaded: Bool = false,
-        imageModelID: String? = nil
+        imageModelID: String? = nil,
+        organizationID: UUID? = UUID(
+            uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        ),
+        principalIdentifier: String? = "principal-a"
     ) -> IntakeJob {
         IntakeJob(
             id: UUID(),
@@ -102,6 +225,8 @@ final class IntakeQueueRecoveryTests: XCTestCase {
             sourceFilePaths: [],
             expectedFileCount: expectedFileCount,
             serverOrigin: "https://inventory.example",
+            organizationID: organizationID,
+            principalIdentifier: principalIdentifier,
             shouldAnalyze: false,
             shouldGenerateCover: false,
             imageModelID: imageModelID,

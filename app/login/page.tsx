@@ -14,6 +14,7 @@ import { LoginForm } from "@/components/login-form";
 import { LocalizedThemeToggle } from "@/components/theme-toggle";
 import { UiI18nProvider } from "@/components/ui-i18n-provider";
 import { getSessionIdentity } from "@/lib/api-auth";
+import { organizationPath } from "@/lib/organization-path";
 import { getResources, getT } from "@/lib/ui-i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -48,7 +49,7 @@ export default async function LoginPage({
     getT(["auth", "common"]),
     searchParams,
   ]);
-  if (identity) redirect("/dashboard");
+  if (identity) redirect(organizationPath(identity.organizationId, "/dashboard"));
   const callbackUrl = safeCallback(resolvedSearchParams.callbackUrl);
   const resources = getResources(translation.i18n, ["auth", "common"]);
   const { t } = translation;

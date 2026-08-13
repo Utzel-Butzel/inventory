@@ -43,6 +43,7 @@ export async function PATCH(request: Request, context: Context) {
   }
   try {
     const relationType = await updateRelationType(
+      authorization.identity.organizationId,
       key.data,
       parsed.data,
       authorization.identity.subject,

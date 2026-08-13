@@ -1,18 +1,16 @@
 import "server-only";
 
 import { and, eq, gt, isNull, or } from "drizzle-orm";
+import { cookies, headers } from "next/headers";
 import { createHash } from "node:crypto";
 
 import { auth } from "@/auth";
 import { apiTokens, users, type ResourceRecord, type UserRole } from "@/db/schema";
+import type { ApiScope } from "@/lib/auth-roles";
 import {
-  normalizeUserRole,
-  type ApiScope,
-} from "@/lib/auth-roles";
-import {
+  conditionalScopesForRole,
   getEffectiveRole,
   getResourceRecord,
-  conditionalScopesForRole,
   listRulesForRole,
   permissionsForStandaloneTokenScopes,
   roleScopesForPermissions,
@@ -22,11 +20,25 @@ import {
   isResourceRulePermission,
   permissionScope,
   type AppPermission,
-  type ResourceRulePermission,
 } from "@/lib/access-control-contract";
 import { db } from "@/lib/db";
+import {
+  getOrganization,
+  listOrganizationsForUser,
+  ORGANIZATION_COOKIE,
+  ORGANIZATION_HEADER,
+  organizationSummary,
+  selectOrganization,
+  type OrganizationMembershipSummary,
+  type OrganizationSummary,
+} from "@/lib/organizations";
 
 export type { ApiScope } from "@/lib/auth-roles";
+
+export type IdentityOrganization = OrganizationSummary & {
+  role: UserRole | null;
+  roleName: string | null;
+};
 
 export type RequestIdentity = {
   kind: "session" | "token";
@@ -36,6 +48,9 @@ export type RequestIdentity = {
   role: UserRole | null;
   roleName: string | null;
   permissions: AppPermission[];
+  organizationId: string;
+  organization: IdentityOrganization;
+  organizations: IdentityOrganization[];
   userId?: string;
   tokenId?: string;
 };
@@ -43,20 +58,90 @@ export type RequestIdentity = {
 export const hashApiToken = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 
-export const hashRequestIdentity = (identity: RequestIdentity) =>
-  createHash("sha256")
-    .update(
-      identity.userId
-        ? `user:${identity.userId}`
-        : identity.tokenId
-          ? `token:${identity.tokenId}`
-          : `subject:${identity.subject}`,
-    )
+export const hashRequestIdentity = (identity: RequestIdentity) => {
+  const principal = identity.userId
+    ? "user:" + identity.userId
+    : identity.tokenId
+      ? "token:" + identity.tokenId
+      : "subject:" + identity.subject;
+  return createHash("sha256")
+    .update(identity.organizationId + ":" + principal)
     .digest("hex");
+};
+
+const transportScopes = (scopes: readonly string[]) =>
+  scopes.filter((scope): scope is ApiScope =>
+    ["read", "write", "ai"].includes(scope),
+  );
+
+const identityOrganization = (
+  membership: OrganizationMembershipSummary,
+): IdentityOrganization => ({ ...membership });
+
+async function identityForUser(options: {
+  kind: "session" | "token";
+  user: typeof users.$inferSelect;
+  requestedOrganizationId?: string | null;
+  fallbackOrganizationId?: string | null;
+  allowRequestedFallback?: boolean;
+  tokenScopes?: ApiScope[];
+  tokenId?: string;
+}) {
+  const memberships = await listOrganizationsForUser(options.user.id);
+  let selected = selectOrganization(
+    memberships,
+    options.requestedOrganizationId,
+    options.fallbackOrganizationId,
+  );
+  if (!selected && options.allowRequestedFallback) {
+    selected = selectOrganization(memberships, null, options.fallbackOrganizationId);
+  }
+  if (!selected) return null;
+
+  const effectiveRole = await getEffectiveRole(selected.role, selected.id);
+  if (!effectiveRole) return null;
+  const conditionalScopes = await conditionalScopesForRole(
+    selected.role,
+    selected.id,
+  );
+  const roleScopes = Array.from(
+    new Set([
+      ...roleScopesForPermissions(effectiveRole.permissions),
+      ...conditionalScopes,
+    ]),
+  );
+  const scopes = options.tokenScopes
+    ? roleScopes.filter((scope) => options.tokenScopes?.includes(scope))
+    : roleScopes;
+  const permissions = options.tokenScopes
+    ? effectiveRole.permissions.filter((permission) =>
+        options.tokenScopes?.includes(permissionScope(permission)),
+      )
+    : effectiveRole.permissions;
+  const organization = identityOrganization(selected);
+
+  return {
+    kind: options.kind,
+    subject: options.user.email,
+    name: options.user.name,
+    scopes,
+    role: selected.role,
+    roleName: effectiveRole.name,
+    permissions,
+    organizationId: selected.id,
+    organization,
+    organizations: memberships.map(identityOrganization),
+    userId: options.user.id,
+    ...(options.tokenId ? { tokenId: options.tokenId } : {}),
+  } satisfies RequestIdentity;
+}
 
 export async function getRequestIdentity(
   request: Request,
 ): Promise<RequestIdentity | null> {
+  const requestedOrganizationId = request.headers
+    .get(ORGANIZATION_HEADER)
+    ?.trim();
   const authorization = request.headers.get("authorization");
   if (authorization?.toLowerCase().startsWith("bearer ")) {
     const rawToken = authorization.slice(7).trim();
@@ -74,7 +159,6 @@ export async function getRequestIdentity(
         ),
       )
       .limit(1);
-
     if (!token) return null;
 
     let linkedUser: typeof users.$inferSelect | null = null;
@@ -99,106 +183,116 @@ export async function getRequestIdentity(
       .set({ lastUsedAt: now })
       .where(eq(apiTokens.id, token.id));
 
-    const effectiveRole = linkedUser
-      ? await getEffectiveRole(linkedUser.role)
-      : null;
-    const permissions = effectiveRole
-      ? effectiveRole.permissions
-      : permissionsForStandaloneTokenScopes(
-          token.scopes.filter((scope): scope is ApiScope =>
-            ["read", "write", "ai"].includes(scope),
-          ),
-        );
-    const tokenScopes = token.scopes.filter((scope): scope is ApiScope =>
-      ["read", "write", "ai"].includes(scope),
-    );
+    const tokenScopes = transportScopes(token.scopes);
+    if (linkedUser) {
+      return identityForUser({
+        kind: "token",
+        user: linkedUser,
+        requestedOrganizationId,
+        fallbackOrganizationId: token.organizationId,
+        tokenScopes,
+        tokenId: token.id,
+      });
+    }
 
-    const roleScopes = effectiveRole
-      ? roleScopesForPermissions(effectiveRole.permissions)
-      : tokenScopes;
-    const conditionalScopes = linkedUser
-      ? await conditionalScopesForRole(linkedUser.role)
-      : [];
-    const effectiveScopes = effectiveRole
-      ? Array.from(new Set([...roleScopes, ...conditionalScopes]))
-      : tokenScopes;
+    // Standalone credentials are permanently pinned to their issuing
+    // organization; a header can repeat that id, never override it.
+    if (
+      requestedOrganizationId &&
+      requestedOrganizationId !== token.organizationId
+    ) {
+      return null;
+    }
+    const organizationRecord = await getOrganization(token.organizationId);
+    if (!organizationRecord) return null;
+    const organization: IdentityOrganization = {
+      ...organizationSummary(organizationRecord),
+      role: null,
+      roleName: null,
+    };
     return {
       kind: "token",
-      subject: linkedUser?.email ?? `token:${token.id}`,
-      name: linkedUser?.name ?? token.name,
-      scopes: linkedUser
-        ? effectiveScopes.filter((scope) => tokenScopes.includes(scope))
-        : tokenScopes,
-      role: linkedUser?.role ?? null,
-      roleName: effectiveRole?.name ?? null,
-      permissions: permissions.filter((permission) =>
-        tokenScopes.includes(permissionScope(permission)),
-      ),
-      userId: linkedUser?.id,
+      subject: "token:" + token.id,
+      name: token.name,
+      scopes: tokenScopes,
+      role: null,
+      roleName: null,
+      permissions: permissionsForStandaloneTokenScopes(tokenScopes),
+      organizationId: organization.id,
+      organization,
+      organizations: [organization],
       tokenId: token.id,
     };
   }
 
-  return getSessionIdentity();
+  return getSessionIdentity(requestedOrganizationId);
 }
 
-export async function getSessionIdentity(): Promise<RequestIdentity | null> {
+export async function getSessionIdentity(
+  requestedOrganizationId?: string | null,
+): Promise<RequestIdentity | null> {
   const session = await auth();
   if (!session?.user) return null;
 
-  if (session.user.authProvider === "local") {
-    const [user] = await db
+  let selectedOrganizationId = requestedOrganizationId?.trim();
+  let selectedFromCookie = false;
+  if (!selectedOrganizationId) {
+    selectedOrganizationId = (await headers()).get(ORGANIZATION_HEADER)?.trim();
+  }
+  if (!selectedOrganizationId) {
+    const cookieStore = await cookies();
+    selectedOrganizationId = cookieStore.get(ORGANIZATION_COOKIE)?.value.trim();
+    selectedFromCookie = Boolean(selectedOrganizationId);
+  }
+
+  let user: typeof users.$inferSelect | undefined;
+  const sessionUserId = session.user.id?.trim();
+  const localUserId =
+    session.user.authProvider === "local" &&
+    sessionUserId &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      sessionUserId,
+    )
+      ? sessionUserId
+      : null;
+  if (localUserId) {
+    [user] = await db
       .select()
       .from(users)
-      .where(eq(users.id, session.user.id))
+      .where(eq(users.id, localUserId))
       .limit(1);
+  }
+
+  // External identities are accepted only when Auth0 verified the email and
+  // an administrator already provisioned that email into an organization.
+  // This keeps the identity provider from becoming an implicit tenant invite.
+  const mayLinkByEmail =
+    session.user.authProvider === "local" || session.user.auth0EmailVerified;
+  if (!user && mayLinkByEmail && session.user.email) {
+    [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, session.user.email.trim().toLowerCase()))
+      .limit(1);
+  }
+
+  if (user) {
+    if (!user.isActive) return null;
     if (
-      !user ||
-      !user.isActive ||
+      session.user.authProvider === "local" &&
       user.sessionVersion !== session.user.sessionVersion
     ) {
       return null;
     }
-
-    const effectiveRole = await getEffectiveRole(user.role);
-    if (!effectiveRole) return null;
-    const conditionalScopes = await conditionalScopesForRole(user.role);
-    return {
+    return identityForUser({
       kind: "session",
-      subject: user.email,
-      name: user.name,
-      scopes: Array.from(
-        new Set([
-          ...roleScopesForPermissions(effectiveRole.permissions),
-          ...conditionalScopes,
-        ]),
-      ),
-      role: user.role,
-      roleName: effectiveRole.name,
-      permissions: effectiveRole.permissions,
-      userId: user.id,
-    };
+      user,
+      requestedOrganizationId: selectedOrganizationId,
+      allowRequestedFallback: selectedFromCookie,
+    });
   }
 
-  const role = normalizeUserRole(session.user.role, "viewer");
-  const effectiveRole = await getEffectiveRole(role);
-  if (!effectiveRole) return null;
-  const conditionalScopes = await conditionalScopesForRole(role);
-  return {
-    kind: "session",
-    subject: session.user.email ?? session.user.id,
-    name: session.user.name ?? session.user.email ?? "User",
-    scopes: Array.from(
-      new Set([
-        ...roleScopesForPermissions(effectiveRole.permissions),
-        ...conditionalScopes,
-      ]),
-    ),
-    role,
-    roleName: effectiveRole.name,
-    permissions: effectiveRole.permissions,
-    userId: session.user.id,
-  };
+  return null;
 }
 
 export async function requireIdentity(
@@ -216,7 +310,7 @@ export async function requireIdentity(
     return {
       identity: null,
       response: Response.json(
-        { error: `This token is missing the ${scope} scope.` },
+        { error: "This token is missing the " + scope + " scope." },
         { status: 403 },
       ),
     } as const;
@@ -224,10 +318,7 @@ export async function requireIdentity(
   return { identity, response: null } as const;
 }
 
-export async function requireSessionRole(
-  request: Request,
-  roles: UserRole[],
-) {
+export async function requireSessionRole(request: Request, roles: UserRole[]) {
   const authorization = await requireIdentity(request, "read");
   if (authorization.response) return authorization;
   if (
@@ -253,7 +344,10 @@ export async function requirePermission(
   request: Request,
   permission: AppPermission,
 ) {
-  const authorization = await requireIdentity(request, permissionScope(permission));
+  const authorization = await requireIdentity(
+    request,
+    permissionScope(permission),
+  );
   if (authorization.response) return authorization;
   if (!authorization.identity.permissions.includes(permission)) {
     return {
@@ -287,12 +381,16 @@ export async function requireSessionPermission(
 
 export async function canAccessResource(
   identity: RequestIdentity,
-  permission: ResourceRulePermission,
+  permission: AppPermission,
   resource: ResourceRecord,
 ) {
+  if (resource.organizationId !== identity.organizationId) return false;
   if (identity.permissions.includes(permission)) return true;
   if (!identity.role || !isResourceRulePermission(permission)) return false;
-  const rules = await listRulesForRole(identity.role);
+  const rules = await listRulesForRole(
+    identity.role,
+    identity.organizationId,
+  );
   return ruleGrantsResourcePermission({
     roleKey: identity.role,
     permission,
@@ -303,7 +401,7 @@ export async function canAccessResource(
 
 export async function requireResourcePermission(
   request: Request,
-  permission: ResourceRulePermission,
+  permission: AppPermission,
   resourceOrId: ResourceRecord | string,
 ) {
   const identity = await getRequestIdentity(request);
@@ -320,15 +418,17 @@ export async function requireResourcePermission(
       identity: null,
       resource: null,
       response: Response.json(
-        { error: `This token is missing the ${requiredScope} scope.` },
+        { error: "This token is missing the " + requiredScope + " scope." },
         { status: 403 },
       ),
     } as const;
   }
   const resource =
     typeof resourceOrId === "string"
-      ? await getResourceRecord(resourceOrId)
-      : resourceOrId;
+      ? await getResourceRecord(resourceOrId, identity.organizationId)
+      : resourceOrId.organizationId === identity.organizationId
+        ? resourceOrId
+        : null;
   if (!resource) {
     return {
       identity: null,

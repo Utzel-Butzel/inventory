@@ -8,6 +8,7 @@ declare module "next-auth" {
     role?: InventoryUserRole;
     authProvider?: InventoryAuthProvider;
     sessionVersion?: number;
+    auth0EmailVerified?: boolean;
   }
 
   interface Session {
@@ -16,6 +17,7 @@ declare module "next-auth" {
       role: InventoryUserRole;
       authProvider: InventoryAuthProvider;
       sessionVersion: number;
+      auth0EmailVerified: boolean;
       name?: string | null;
       email?: string | null;
       image?: string | null;
@@ -29,5 +31,6 @@ declare module "next-auth/jwt" {
     role?: InventoryUserRole;
     authProvider?: InventoryAuthProvider;
     sessionVersion?: number;
+    auth0EmailVerified?: boolean;
   }
 }

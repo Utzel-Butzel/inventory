@@ -60,7 +60,7 @@ struct RuntimeSettingsView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Systemstatus")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: client?.serverURL.absoluteString) {
+        .task(id: client?.contextIdentifier) {
             await load()
         }
         .refreshable {
@@ -135,7 +135,7 @@ struct PermissionsSettingsView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Berechtigungen")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: client?.serverURL.absoluteString) {
+        .task(id: client?.contextIdentifier) {
             await load()
         }
         .refreshable {
@@ -314,7 +314,7 @@ struct InventoryTypesSettingsView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Inventartypen")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: client?.serverURL.absoluteString) {
+        .task(id: client?.contextIdentifier) {
             await load()
         }
         .refreshable {
@@ -474,7 +474,7 @@ struct CustomFieldsSettingsView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Eigene Felder")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: client?.serverURL.absoluteString) {
+        .task(id: client?.contextIdentifier) {
             await load()
         }
         .refreshable {

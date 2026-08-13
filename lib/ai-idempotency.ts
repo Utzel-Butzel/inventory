@@ -26,6 +26,7 @@ export type AiOperationClaim =
   | { kind: "conflict" };
 
 export const findAiOperation = async (
+  organizationId: string,
   operation: AiOperationName,
   idempotencyKey: string,
 ) => {
@@ -34,6 +35,7 @@ export const findAiOperation = async (
     .from(aiIdempotencyOperations)
     .where(
       and(
+        eq(aiIdempotencyOperations.organizationId, organizationId),
         eq(aiIdempotencyOperations.operation, operation),
         eq(aiIdempotencyOperations.idempotencyKey, idempotencyKey),
       ),
@@ -81,6 +83,7 @@ const reclaimStaleOperation = async (
     .where(
       and(
         eq(aiIdempotencyOperations.id, existing.id),
+        eq(aiIdempotencyOperations.organizationId, existing.organizationId),
         eq(aiIdempotencyOperations.status, "processing"),
         // Compare against a server-side cutoff instead of round-tripping the
         // original timestamp through JavaScript milliseconds. PostgreSQL's
@@ -94,6 +97,7 @@ const reclaimStaleOperation = async (
 };
 
 export async function claimAiOperation(options: {
+  organizationId: string;
   operation: AiOperationName;
   idempotencyKey: string;
   resourceId: string;
@@ -104,6 +108,7 @@ export async function claimAiOperation(options: {
   // a now-free idempotency key is claimable instead of returning a false 409.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const existing = await findAiOperation(
+      options.organizationId,
       options.operation,
       options.idempotencyKey,
     );
@@ -117,6 +122,7 @@ export async function claimAiOperation(options: {
     const [claimed] = await db
       .insert(aiIdempotencyOperations)
       .values({
+        organizationId: options.organizationId,
         operation: options.operation,
         idempotencyKey: options.idempotencyKey,
         resourceId: options.resourceId,
@@ -124,6 +130,7 @@ export async function claimAiOperation(options: {
       })
       .onConflictDoNothing({
         target: [
+          aiIdempotencyOperations.organizationId,
           aiIdempotencyOperations.operation,
           aiIdempotencyOperations.idempotencyKey,
         ],
@@ -132,6 +139,7 @@ export async function claimAiOperation(options: {
     if (claimed) return { kind: "claimed", operationId: claimed.id };
 
     const winner = await findAiOperation(
+      options.organizationId,
       options.operation,
       options.idempotencyKey,
     );
@@ -156,6 +164,7 @@ export const aiOperationResponseValues = (options: {
 });
 
 export async function finishAiOperation(options: {
+  organizationId: string;
   operationId: string;
   body: Record<string, unknown>;
   status: number;
@@ -164,7 +173,12 @@ export async function finishAiOperation(options: {
   await db
     .update(aiIdempotencyOperations)
     .set(aiOperationResponseValues(options))
-    .where(eq(aiIdempotencyOperations.id, options.operationId));
+    .where(
+      and(
+        eq(aiIdempotencyOperations.organizationId, options.organizationId),
+        eq(aiIdempotencyOperations.id, options.operationId),
+      ),
+    );
 }
 
 /**
@@ -172,12 +186,16 @@ export async function finishAiOperation(options: {
  * Transient preflight failures such as rate limiting must remain retryable with
  * the same idempotency key after the condition clears.
  */
-export async function releaseAiOperation(operationId: string) {
+export async function releaseAiOperation(
+  organizationId: string,
+  operationId: string,
+) {
   await db
     .delete(aiIdempotencyOperations)
     .where(
       and(
         eq(aiIdempotencyOperations.id, operationId),
+        eq(aiIdempotencyOperations.organizationId, organizationId),
         eq(aiIdempotencyOperations.status, "processing"),
       ),
     );

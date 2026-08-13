@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
 
-export default function HomePage() {
-  redirect("/dashboard");
+import { getSessionIdentity } from "@/lib/api-auth";
+import { organizationPath } from "@/lib/organization-path";
+
+export default async function HomePage() {
+  const identity = await getSessionIdentity();
+  redirect(identity ? organizationPath(identity.organizationId, "/dashboard") : "/login");
 }

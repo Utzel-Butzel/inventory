@@ -36,6 +36,7 @@ export async function GET(request: Request) {
 
   try {
     const definitions = await listCustomFieldDefinitions({
+      organizationId: authorization.identity.organizationId,
       entityType: parsed.data.entityType,
       includeArchived: parsed.data.includeArchived === "true",
     });
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
 
   try {
     const definition = await createCustomFieldDefinition(
+      authorization.identity.organizationId,
       parsed.data,
       authorization.identity.subject,
     );

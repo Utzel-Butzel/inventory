@@ -3,6 +3,11 @@
     "eyebrow": "Einstellungen"
   },
   "pages": {
+    "organization": {
+      "title": "Organisation",
+      "metaDescription": "Die für Ihr Konto verfügbaren Organisationen verwalten.",
+      "description": "Prüfen Sie Ihre Organisationen, ändern Sie deren Namen oder erstellen Sie einen separaten Arbeitsbereich für ein anderes Team oder Inventar."
+    },
     "access": {
       "title": "Rollen & Zugriff",
       "metaDescription": "Detaillierte Rollen und bedingten Inventarzugriff verwalten.",
@@ -53,6 +58,50 @@
       "title": "Webhooks",
       "metaDescription": "Inventarereignisse über signierte Webhooks mit externen Systemen verbinden.",
       "description": "Senden Sie signierte Inventarereignisse an eigene HTTPS-Endpunkte, testen Sie Integrationen und prüfen Sie deren Zustellstatus."
+    }
+  },
+  "organizations": {
+    "list": {
+      "title": "Ihre Organisationen",
+      "description": "Jede Organisation trennt Inventar, Einstellungen, Mitglieder und Integrationen voneinander.",
+      "count_one": "{{count}} Organisation",
+      "count_other": "{{count}} Organisationen",
+      "active": "Aktiv",
+      "slug": "Kennung: {{slug}}",
+      "emptyTitle": "Keine Organisationen verfügbar",
+      "emptyDescription": "Erstellen Sie eine Organisation, um einen separaten Inventararbeitsbereich zu beginnen."
+    },
+    "create": {
+      "title": "Organisation erstellen",
+      "description": "Beginnen Sie einen separaten Arbeitsbereich für ein anderes Team, einen Standort oder ein Inventar.",
+      "hint": "Sie werden Mitglied der neuen Organisation. Organisationen wechseln Sie über die Hauptnavigation."
+    },
+    "form": {
+      "name": "Organisationsname",
+      "namePlaceholder": "Werkstatt Nord",
+      "slugHint": "Aus dem Namen wird automatisch eine stabile Kennung erzeugt."
+    },
+    "actions": {
+      "refresh": "Organisationen aktualisieren",
+      "retry": "Erneut versuchen",
+      "dismissNotice": "Meldung schließen",
+      "dismissError": "Fehler schließen",
+      "cancel": "Abbrechen",
+      "save": "Namen speichern",
+      "saving": "Wird gespeichert…",
+      "rename": "Umbenennen",
+      "create": "Erstellen",
+      "creating": "Wird erstellt…"
+    },
+    "notices": {
+      "created": "Organisation „{{name}}“ wurde erstellt.",
+      "updated": "Der Organisationsname wurde in „{{name}}“ geändert."
+    },
+    "errors": {
+      "loadTitle": "Organisationen konnten nicht geladen werden",
+      "load": "Organisationen konnten nicht geladen werden.",
+      "create": "Die Organisation konnte nicht erstellt werden.",
+      "update": "Die Organisation konnte nicht aktualisiert werden."
     }
   },
   "notifications": {

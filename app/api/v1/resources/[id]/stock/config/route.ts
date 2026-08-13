@@ -49,6 +49,7 @@ export async function PATCH(request: Request, context: Context) {
 
   try {
     const result = await updateStockConfig(
+      authorization.identity.organizationId,
       id,
       parsed.data,
       authorization.identity.subject,

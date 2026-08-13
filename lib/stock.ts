@@ -198,6 +198,7 @@ const timestampDto = (value: Date | string | null | undefined) => {
 
 async function changeLocationBalance(
   transaction: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  organizationId: string,
   resourceId: string,
   locationResourceId: string,
   delta: number,
@@ -207,6 +208,7 @@ async function changeLocationBalance(
     .from(stockLocationBalances)
     .where(
       and(
+        eq(stockLocationBalances.organizationId, organizationId),
         eq(stockLocationBalances.resourceId, resourceId),
         eq(stockLocationBalances.locationResourceId, locationResourceId),
       ),
@@ -225,9 +227,15 @@ async function changeLocationBalance(
     await transaction
       .update(stockLocationBalances)
       .set({ quantity, updatedAt: now })
-      .where(eq(stockLocationBalances.id, current.id));
+      .where(
+        and(
+          eq(stockLocationBalances.organizationId, organizationId),
+          eq(stockLocationBalances.id, current.id),
+        ),
+      );
   } else if (quantity > 0) {
     await transaction.insert(stockLocationBalances).values({
+      organizationId,
       resourceId,
       locationResourceId,
       quantity,
@@ -239,6 +247,7 @@ async function changeLocationBalance(
 
 async function assertStockLocationResources(
   transaction: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  organizationId: string,
   resourceId: string,
   locationResourceIds: Array<string | null | undefined>,
 ) {
@@ -259,10 +268,15 @@ async function assertStockLocationResources(
     .from(resources)
     .innerJoin(
       inventoryTypeDefinitions,
-      eq(resources.type, inventoryTypeDefinitions.key),
+      and(
+        eq(resources.type, inventoryTypeDefinitions.key),
+        eq(resources.organizationId, inventoryTypeDefinitions.organizationId),
+      ),
     )
     .where(
       and(
+        eq(resources.organizationId, organizationId),
+        eq(inventoryTypeDefinitions.organizationId, organizationId),
         inArray(resources.id, requestedLocationIds),
         ne(resources.status, "archived"),
         eq(inventoryTypeDefinitions.canContain, true),
@@ -330,7 +344,10 @@ const calculateForecast = (
 const usageSince = (now: Date) =>
   new Date(now.getTime() - FORECAST_WINDOW_DAYS * 24 * 60 * 60 * 1_000);
 
-export async function getStockDetail(resourceId: string) {
+export async function getStockDetail(
+  organizationId: string,
+  resourceId: string,
+) {
   return db.transaction(async (transaction) => {
   const now = new Date();
   const since = usageSince(now);
@@ -343,7 +360,12 @@ export async function getStockDetail(resourceId: string) {
       categories: resources.categories,
     })
     .from(resources)
-    .where(eq(resources.id, resourceId))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, resourceId),
+      ),
+    )
     .limit(1);
   if (!resource) return null;
 
@@ -358,18 +380,33 @@ export async function getStockDetail(resourceId: string) {
     transaction
       .select()
       .from(stockSettings)
-      .where(eq(stockSettings.resourceId, resourceId))
+      .where(
+        and(
+          eq(stockSettings.organizationId, organizationId),
+          eq(stockSettings.resourceId, resourceId),
+        ),
+      )
       .limit(1),
     transaction
       .select()
       .from(stockMovements)
-      .where(eq(stockMovements.resourceId, resourceId))
+      .where(
+        and(
+          eq(stockMovements.organizationId, organizationId),
+          eq(stockMovements.resourceId, resourceId),
+        ),
+      )
       .orderBy(desc(stockMovements.occurredAt), desc(stockMovements.createdAt))
       .limit(100),
     transaction
       .select()
       .from(stockUnits)
-      .where(eq(stockUnits.resourceId, resourceId))
+      .where(
+        and(
+          eq(stockUnits.organizationId, organizationId),
+          eq(stockUnits.resourceId, resourceId),
+        ),
+      )
       .orderBy(asc(stockUnits.code)),
     transaction
       .select({
@@ -378,6 +415,7 @@ export async function getStockDetail(resourceId: string) {
       .from(stockMovements)
       .where(
         and(
+          eq(stockMovements.organizationId, organizationId),
           eq(stockMovements.resourceId, resourceId),
           gte(stockMovements.occurredAt, since),
           lte(stockMovements.occurredAt, now),
@@ -396,10 +434,14 @@ export async function getStockDetail(resourceId: string) {
       .from(purchaseOrderLines)
       .innerJoin(
         purchaseOrders,
-        eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+        and(
+          eq(purchaseOrders.organizationId, organizationId),
+          eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+        ),
       )
       .where(
         and(
+          eq(purchaseOrderLines.organizationId, organizationId),
           eq(purchaseOrderLines.resourceId, resourceId),
           inArray(purchaseOrders.status, ["ordered", "partially-received"]),
           sql`${purchaseOrderLines.receivedQuantity} < ${purchaseOrderLines.orderedQuantity}`,
@@ -417,9 +459,17 @@ export async function getStockDetail(resourceId: string) {
       .from(assemblyBuildComponents)
       .innerJoin(
         assemblyBuilds,
-        eq(assemblyBuilds.id, assemblyBuildComponents.buildId),
+        and(
+          eq(assemblyBuilds.organizationId, organizationId),
+          eq(assemblyBuilds.id, assemblyBuildComponents.buildId),
+        ),
       )
-      .where(eq(assemblyBuildComponents.componentResourceId, resourceId)),
+      .where(
+        and(
+          eq(assemblyBuildComponents.organizationId, organizationId),
+          eq(assemblyBuildComponents.componentResourceId, resourceId),
+        ),
+      ),
   ]);
 
   const config = configDto(settingsRows[0]);
@@ -444,13 +494,23 @@ export async function getStockDetail(resourceId: string) {
       ? transaction
           .select({ id: resources.id, name: resources.name })
           .from(resources)
-          .where(inArray(resources.id, assemblyResourceIds))
+          .where(
+            and(
+              eq(resources.organizationId, organizationId),
+              inArray(resources.id, assemblyResourceIds),
+            ),
+          )
       : Promise.resolve([]),
     outputUnitIds.length
       ? transaction
           .select({ id: stockUnits.id, code: stockUnits.code })
           .from(stockUnits)
-          .where(inArray(stockUnits.id, outputUnitIds))
+          .where(
+            and(
+              eq(stockUnits.organizationId, organizationId),
+              inArray(stockUnits.id, outputUnitIds),
+            ),
+          )
       : Promise.resolve([]),
   ]);
   const assemblyNames = new Map(
@@ -503,7 +563,7 @@ export async function getStockDetail(resourceId: string) {
   }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
-export async function getStockOverview() {
+export async function getStockOverview(organizationId: string) {
   return db.transaction(async (transaction) => {
   const now = new Date();
   const since = usageSince(now);
@@ -521,6 +581,12 @@ export async function getStockOverview() {
     })
     .from(stockSettings)
     .innerJoin(resources, eq(resources.id, stockSettings.resourceId))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(stockSettings.organizationId, organizationId),
+      ),
+    )
     .orderBy(asc(resources.name));
 
   const ids = rows.map((row) => row.resourceId);
@@ -534,6 +600,7 @@ export async function getStockOverview() {
         .from(stockMovements)
         .where(
           and(
+            eq(stockMovements.organizationId, organizationId),
             inArray(stockMovements.resourceId, ids),
             gte(stockMovements.occurredAt, since),
             lte(stockMovements.occurredAt, now),
@@ -553,6 +620,8 @@ export async function getStockOverview() {
           )
           .where(
             and(
+              eq(purchaseOrderLines.organizationId, organizationId),
+              eq(purchaseOrders.organizationId, organizationId),
               inArray(purchaseOrderLines.resourceId, ids),
               inArray(purchaseOrders.status, ["ordered", "partially-received"]),
               sql`${purchaseOrderLines.receivedQuantity} < ${purchaseOrderLines.orderedQuantity}`,
@@ -635,17 +704,26 @@ export async function getStockOverview() {
 }
 
 export async function listStockMovements(
+  organizationId: string,
   resourceId: string,
   options: { limit?: number; before?: Date } = {},
 ) {
   const [resource] = await db
     .select({ id: resources.id })
     .from(resources)
-    .where(eq(resources.id, resourceId))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, resourceId),
+      ),
+    )
     .limit(1);
   if (!resource) return null;
 
-  const conditions = [eq(stockMovements.resourceId, resourceId)];
+  const conditions = [
+    eq(stockMovements.organizationId, organizationId),
+    eq(stockMovements.resourceId, resourceId),
+  ];
   if (options.before) conditions.push(lt(stockMovements.occurredAt, options.before));
   const rows = await db
     .select()
@@ -656,23 +734,37 @@ export async function listStockMovements(
   return rows.map(movementDto);
 }
 
-export async function listStockUnits(resourceId: string) {
+export async function listStockUnits(
+  organizationId: string,
+  resourceId: string,
+) {
   const [resource] = await db
     .select({ id: resources.id })
     .from(resources)
-    .where(eq(resources.id, resourceId))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, resourceId),
+      ),
+    )
     .limit(1);
   if (!resource) return null;
 
   const rows = await db
     .select()
     .from(stockUnits)
-    .where(eq(stockUnits.resourceId, resourceId))
+    .where(
+      and(
+        eq(stockUnits.organizationId, organizationId),
+        eq(stockUnits.resourceId, resourceId),
+      ),
+    )
     .orderBy(asc(stockUnits.code));
   return rows.map(unitDto);
 }
 
 export async function updateStockConfig(
+  organizationId: string,
   resourceId: string,
   patch: Partial<StockConfig>,
   actor: string,
@@ -685,7 +777,12 @@ export async function updateStockConfig(
         location: resources.location,
       })
       .from(resources)
-      .where(eq(resources.id, resourceId))
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resourceId),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!resource) throw new StockOperationError("Not found", 404);
@@ -693,7 +790,12 @@ export async function updateStockConfig(
     const [settings] = await transaction
       .select()
       .from(stockSettings)
-      .where(eq(stockSettings.resourceId, resourceId))
+      .where(
+        and(
+          eq(stockSettings.organizationId, organizationId),
+          eq(stockSettings.resourceId, resourceId),
+        ),
+      )
       .limit(1);
     const current = configDto(settings);
     const next: StockConfig = { ...current, ...patch };
@@ -703,7 +805,12 @@ export async function updateStockConfig(
       const [{ value: existingUnits }] = await transaction
         .select({ value: sql<number>`count(*)::int` })
         .from(stockUnits)
-        .where(eq(stockUnits.resourceId, resourceId));
+        .where(
+          and(
+            eq(stockUnits.organizationId, organizationId),
+            eq(stockUnits.resourceId, resourceId),
+          ),
+        );
 
       if (next.trackingMode === "bulk" && Number(existingUnits ?? 0) > 0) {
         throw new StockOperationError(
@@ -734,6 +841,7 @@ export async function updateStockConfig(
           .from(inventoryAssignments)
           .where(
             and(
+              eq(inventoryAssignments.organizationId, organizationId),
               eq(inventoryAssignments.resourceId, resourceId),
               eq(inventoryAssignments.status, "active"),
             ),
@@ -750,7 +858,12 @@ export async function updateStockConfig(
             located: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
           })
           .from(stockLocationBalances)
-          .where(eq(stockLocationBalances.resourceId, resourceId));
+          .where(
+            and(
+              eq(stockLocationBalances.organizationId, organizationId),
+              eq(stockLocationBalances.resourceId, resourceId),
+            ),
+          );
         if (Number(located ?? 0) > 0) {
           throw new StockOperationError(
             "Move all bulk stock to “Unassigned” before converting it to serialized tracking. You can then place each identified unit at its inventory location.",
@@ -772,6 +885,7 @@ export async function updateStockConfig(
             .insert(stockUnits)
             .values(
               Array.from({ length: resource.quantity }, (_, index) => ({
+                organizationId,
                 resourceId,
                 code: `${prefix}-${String(index + 1).padStart(width, "0")}`,
                 status: "available" as const,
@@ -787,6 +901,7 @@ export async function updateStockConfig(
             .insert(stockMovements)
             .values(
               createdUnits.map((unit) => ({
+                organizationId,
                 resourceId,
                 unitId: unit.id,
                 delta: 0,
@@ -809,10 +924,10 @@ export async function updateStockConfig(
     const now = new Date();
     const [saved] = await transaction
       .insert(stockSettings)
-      .values({ resourceId, ...next, updatedAt: now })
+      .values({ organizationId, resourceId, ...next, updatedAt: now })
       .onConflictDoUpdate({
         target: stockSettings.resourceId,
-        set: { ...next, updatedAt: now },
+        set: { organizationId, ...next, updatedAt: now },
       })
       .returning();
     return { config: configDto(saved), unitsCreated };
@@ -820,6 +935,7 @@ export async function updateStockConfig(
 }
 
 export async function bookStockMovement(
+  organizationId: string,
   resourceId: string,
   input: StockMovementInput,
   actor: string,
@@ -850,7 +966,12 @@ export async function bookStockMovement(
         const [existing] = await transaction
           .select()
           .from(stockMovementRequests)
-          .where(eq(stockMovementRequests.idempotencyKey, idempotency.key))
+          .where(
+            and(
+              eq(stockMovementRequests.organizationId, organizationId),
+              eq(stockMovementRequests.idempotencyKey, idempotency.key),
+            ),
+          )
           .limit(1);
         if (existing) return validateReplay(existing);
       }
@@ -858,7 +979,12 @@ export async function bookStockMovement(
       const [resource] = await transaction
         .select({ id: resources.id, name: resources.name, quantity: resources.quantity })
         .from(resources)
-        .where(eq(resources.id, resourceId))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, resourceId),
+          ),
+        )
         .limit(1)
         .for("update");
       if (!resource) throw new StockOperationError("Not found", 404);
@@ -869,7 +995,12 @@ export async function bookStockMovement(
         const [existing] = await transaction
           .select()
           .from(stockMovementRequests)
-          .where(eq(stockMovementRequests.idempotencyKey, idempotency.key))
+          .where(
+            and(
+              eq(stockMovementRequests.organizationId, organizationId),
+              eq(stockMovementRequests.idempotencyKey, idempotency.key),
+            ),
+          )
           .limit(1);
         if (existing) return validateReplay(existing);
       }
@@ -877,7 +1008,12 @@ export async function bookStockMovement(
       const [settings] = await transaction
         .select()
         .from(stockSettings)
-        .where(eq(stockSettings.resourceId, resourceId))
+        .where(
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            eq(stockSettings.resourceId, resourceId),
+          ),
+        )
         .limit(1);
       const config = configDto(settings);
       if (config.trackingMode === "serialized" && input.delta !== 0) {
@@ -957,7 +1093,7 @@ export async function bookStockMovement(
         }
       }
 
-      await assertStockLocationResources(transaction, resourceId, [
+      await assertStockLocationResources(transaction, organizationId, resourceId, [
         input.fromLocationResourceId,
         input.toLocationResourceId,
       ]);
@@ -988,7 +1124,7 @@ export async function bookStockMovement(
       if (!settings) {
         await transaction
           .insert(stockSettings)
-          .values({ resourceId })
+          .values({ organizationId, resourceId })
           .onConflictDoNothing();
       }
       const now = new Date();
@@ -1004,7 +1140,12 @@ export async function bookStockMovement(
             assigned: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
           })
           .from(stockLocationBalances)
-          .where(eq(stockLocationBalances.resourceId, resourceId));
+          .where(
+            and(
+              eq(stockLocationBalances.organizationId, organizationId),
+              eq(stockLocationBalances.resourceId, resourceId),
+            ),
+          );
         const unassigned = resource.quantity - Number(assigned ?? 0);
         const removedFromUnassigned = isTransfer
           ? movementQuantity
@@ -1019,6 +1160,7 @@ export async function bookStockMovement(
       if (input.fromLocationResourceId) {
         fromLocationBalanceAfter = await changeLocationBalance(
           transaction,
+          organizationId,
           resourceId,
           input.fromLocationResourceId,
           isTransfer ? -movementQuantity : Math.min(0, input.delta),
@@ -1027,6 +1169,7 @@ export async function bookStockMovement(
       if (input.toLocationResourceId) {
         toLocationBalanceAfter = await changeLocationBalance(
           transaction,
+          organizationId,
           resourceId,
           input.toLocationResourceId,
           isTransfer ? movementQuantity : Math.max(0, input.delta),
@@ -1035,10 +1178,16 @@ export async function bookStockMovement(
       await transaction
         .update(resources)
         .set({ quantity: balanceAfter, updatedAt: now })
-        .where(eq(resources.id, resourceId));
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, resourceId),
+          ),
+        );
       const [movement] = await transaction
         .insert(stockMovements)
         .values({
+          organizationId,
           resourceId,
           delta: input.delta,
           quantity: movementQuantity,
@@ -1063,6 +1212,7 @@ export async function bookStockMovement(
       };
       if (idempotency) {
         await transaction.insert(stockMovementRequests).values({
+          organizationId,
           idempotencyKey: idempotency.key,
           resourceId,
           actor,
@@ -1080,7 +1230,12 @@ export async function bookStockMovement(
       const [winner] = await db
         .select()
         .from(stockMovementRequests)
-        .where(eq(stockMovementRequests.idempotencyKey, idempotency.key))
+        .where(
+          and(
+            eq(stockMovementRequests.organizationId, organizationId),
+            eq(stockMovementRequests.idempotencyKey, idempotency.key),
+          ),
+        )
         .limit(1);
       if (winner) return validateReplay(winner);
     }
@@ -1100,6 +1255,7 @@ const resolveUnitCodes = (
 };
 
 export async function createStockUnits(
+  organizationId: string,
   resourceId: string,
   input: StockUnitCreateInput,
   actor: string,
@@ -1115,7 +1271,12 @@ export async function createStockUnits(
           categories: resources.categories,
         })
         .from(resources)
-        .where(eq(resources.id, resourceId))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, resourceId),
+          ),
+        )
         .limit(1)
         .for("update");
       if (!resource) throw new StockOperationError("Not found", 404);
@@ -1123,7 +1284,12 @@ export async function createStockUnits(
       const [settings] = await transaction
         .select()
         .from(stockSettings)
-        .where(eq(stockSettings.resourceId, resourceId))
+        .where(
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            eq(stockSettings.resourceId, resourceId),
+          ),
+        )
         .limit(1);
       if (configDto(settings).trackingMode !== "serialized") {
         throw new StockOperationError(
@@ -1141,21 +1307,26 @@ export async function createStockUnits(
       }
 
       const customFields = await validateCustomFieldValues({
+        organizationId,
         entityType: "stock_unit",
         target: { type: resource.type, categories: resource.categories },
         values: input.customFields ?? {},
         enforceRequired: input.customFields !== undefined,
         executor: transaction,
       });
-      await assertStockLocationResources(transaction, resourceId, [
-        input.locationResourceId,
-      ]);
+      await assertStockLocationResources(
+        transaction,
+        organizationId,
+        resourceId,
+        [input.locationResourceId],
+      );
 
       const occurredAt = input.acquiredAt ?? new Date();
       const createdUnits = await transaction
         .insert(stockUnits)
         .values(
           codes.map((code) => ({
+            organizationId,
             resourceId,
             code,
             status: "available" as const,
@@ -1179,11 +1350,17 @@ export async function createStockUnits(
       await transaction
         .update(resources)
         .set({ quantity: balanceAfter, updatedAt: now })
-        .where(eq(resources.id, resourceId));
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, resourceId),
+          ),
+        );
       const createdMovements = await transaction
         .insert(stockMovements)
         .values(
           createdUnits.map((unit, index) => ({
+            organizationId,
             resourceId,
             unitId: unit.id,
             delta: 1,
@@ -1223,6 +1400,7 @@ export async function createStockUnits(
 }
 
 export async function updateStockUnit(
+  organizationId: string,
   resourceId: string,
   unitId: string,
   input: StockUnitPatchInput,
@@ -1238,7 +1416,12 @@ export async function updateStockUnit(
         categories: resources.categories,
       })
       .from(resources)
-      .where(eq(resources.id, resourceId))
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resourceId),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!resource) throw new StockOperationError("Not found", 404);
@@ -1246,7 +1429,12 @@ export async function updateStockUnit(
     const [settings] = await transaction
       .select()
       .from(stockSettings)
-      .where(eq(stockSettings.resourceId, resourceId))
+      .where(
+        and(
+          eq(stockSettings.organizationId, organizationId),
+          eq(stockSettings.resourceId, resourceId),
+        ),
+      )
       .limit(1);
     if (configDto(settings).trackingMode !== "serialized") {
       throw new StockOperationError(
@@ -1258,7 +1446,13 @@ export async function updateStockUnit(
     const [unit] = await transaction
       .select()
       .from(stockUnits)
-      .where(and(eq(stockUnits.id, unitId), eq(stockUnits.resourceId, resourceId)))
+      .where(
+        and(
+          eq(stockUnits.organizationId, organizationId),
+          eq(stockUnits.id, unitId),
+          eq(stockUnits.resourceId, resourceId),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!unit) throw new StockOperationError("Unit not found", 404);
@@ -1267,6 +1461,7 @@ export async function updateStockUnit(
       input.customFields === undefined
         ? unit.customFields
         : await validateCustomFieldValues({
+            organizationId,
             entityType: "stock_unit",
             target: { type: resource.type, categories: resource.categories },
             values: input.customFields,
@@ -1277,9 +1472,12 @@ export async function updateStockUnit(
       input.locationResourceId === undefined
         ? unit.locationResourceId
         : input.locationResourceId;
-    await assertStockLocationResources(transaction, resourceId, [
-      nextLocationResourceId,
-    ]);
+    await assertStockLocationResources(
+      transaction,
+      organizationId,
+      resourceId,
+      [nextLocationResourceId],
+    );
 
     if (input.status !== undefined && input.status !== unit.status) {
       const [activeAssignment] = await transaction
@@ -1287,6 +1485,7 @@ export async function updateStockUnit(
         .from(inventoryAssignments)
         .where(
           and(
+            eq(inventoryAssignments.organizationId, organizationId),
             eq(inventoryAssignments.stockUnitId, unit.id),
             eq(inventoryAssignments.status, "active"),
           ),
@@ -1301,7 +1500,12 @@ export async function updateStockUnit(
       const [installation] = await transaction
         .select({ id: assemblyBuildComponents.id })
         .from(assemblyBuildComponents)
-        .where(eq(assemblyBuildComponents.componentUnitId, unit.id))
+        .where(
+          and(
+            eq(assemblyBuildComponents.organizationId, organizationId),
+            eq(assemblyBuildComponents.componentUnitId, unit.id),
+          ),
+        )
         .limit(1);
       if (installation) {
         throw new StockOperationError(
@@ -1344,18 +1548,29 @@ export async function updateStockUnit(
         lastMovedAt: occurredAt,
         updatedAt: now,
       })
-      .where(eq(stockUnits.id, unit.id))
+      .where(
+        and(
+          eq(stockUnits.organizationId, organizationId),
+          eq(stockUnits.id, unit.id),
+        ),
+      )
       .returning();
     await transaction
       .update(resources)
       .set({ quantity: balanceAfter, updatedAt: now })
-      .where(eq(resources.id, resourceId));
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resourceId),
+        ),
+      );
     const statusChanged = unit.status !== nextStatus;
     const structuredLocationChanged =
       unit.locationResourceId !== nextLocationResourceId;
     const [movement] = await transaction
       .insert(stockMovements)
       .values({
+        organizationId,
         resourceId,
         unitId: unit.id,
         delta,

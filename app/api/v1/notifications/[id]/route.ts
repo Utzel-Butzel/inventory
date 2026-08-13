@@ -19,7 +19,7 @@ export async function PATCH(
     );
   }
   const notification = await markNotificationRead(
-    authorization.recipient.key,
+    authorization.recipient,
     parsed.data,
   );
   if (!notification) {

@@ -2,7 +2,35 @@ import Foundation
 
 public struct CapabilitiesResponse: Codable, Equatable, Sendable {
     public let name: String
+    public let principal: String?
     public let scopes: [String]
+    public let organizations: [InventoryOrganization]?
+    public let activeOrganization: InventoryOrganization?
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case principal
+        case scopes
+        case organizations
+        case activeOrganization = "organization"
+    }
+}
+
+public struct InventoryOrganization: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let slug: String
+    public let role: String?
+    public let roleName: String?
+}
+
+public struct OrganizationListResponse: Codable, Equatable, Sendable {
+    public let organizations: [InventoryOrganization]
+    public let activeOrganizationId: UUID?
+}
+
+public struct OrganizationSelectionResponse: Codable, Equatable, Sendable {
+    public let organization: InventoryOrganization
 }
 
 public struct RuntimeSettingsResponse: Codable, Equatable, Sendable {
@@ -158,6 +186,17 @@ public struct LoginResponse: Codable, Equatable, Sendable {
     public let user: LoginUser
     public let scopes: [String]
     public let expiresAt: Date
+    public let organizations: [InventoryOrganization]?
+    public let activeOrganization: InventoryOrganization?
+
+    private enum CodingKeys: String, CodingKey {
+        case token
+        case user
+        case scopes
+        case expiresAt
+        case organizations
+        case activeOrganization = "organization"
+    }
 }
 
 public struct ResourcePagination: Codable, Equatable, Sendable {

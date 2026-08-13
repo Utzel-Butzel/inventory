@@ -103,11 +103,14 @@ const definitionDto = (
 });
 
 export async function listCustomFieldDefinitions(options: {
+  organizationId: string;
   entityType?: CustomFieldEntityType;
   includeArchived?: boolean;
   executor?: CustomFieldQueryExecutor;
-} = {}) {
-  const conditions = [];
+}) {
+  const conditions = [
+    eq(customFieldDefinitions.organizationId, options.organizationId),
+  ];
   if (options.entityType) {
     conditions.push(eq(customFieldDefinitions.entityType, options.entityType));
   }
@@ -127,16 +130,25 @@ export async function listCustomFieldDefinitions(options: {
   return rows.map(definitionDto);
 }
 
-export async function getCustomFieldDefinition(id: string) {
+export async function getCustomFieldDefinition(
+  organizationId: string,
+  id: string,
+) {
   const [row] = await db
     .select()
     .from(customFieldDefinitions)
-    .where(eq(customFieldDefinitions.id, id))
+    .where(
+      and(
+        eq(customFieldDefinitions.organizationId, organizationId),
+        eq(customFieldDefinitions.id, id),
+      ),
+    )
     .limit(1);
   return row ? definitionDto(row) : null;
 }
 
 export async function createCustomFieldDefinition(
+  organizationId: string,
   input: z.infer<typeof customFieldDefinitionCreateSchema>,
   actor: string,
 ) {
@@ -150,7 +162,13 @@ export async function createCustomFieldDefinition(
   try {
     const [created] = await db
       .insert(customFieldDefinitions)
-      .values({ ...input, key, createdBy: actor, updatedBy: actor })
+      .values({
+        ...input,
+        organizationId,
+        key,
+        createdBy: actor,
+        updatedBy: actor,
+      })
       .returning();
     return definitionDto(created);
   } catch (error) {
@@ -163,6 +181,7 @@ export async function createCustomFieldDefinition(
 }
 
 export async function updateCustomFieldDefinition(
+  organizationId: string,
   id: string,
   patch: CustomFieldDefinitionPatch,
   actor: string,
@@ -171,7 +190,12 @@ export async function updateCustomFieldDefinition(
     const [current] = await transaction
       .select()
       .from(customFieldDefinitions)
-      .where(eq(customFieldDefinitions.id, id))
+      .where(
+        and(
+          eq(customFieldDefinitions.organizationId, organizationId),
+          eq(customFieldDefinitions.id, id),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!current || current.archivedAt) {
@@ -246,6 +270,7 @@ export async function updateCustomFieldDefinition(
       .where(
         and(
           eq(customFieldDefinitions.id, id),
+          eq(customFieldDefinitions.organizationId, organizationId),
           eq(customFieldDefinitions.revision, revision),
         ),
       )
@@ -260,7 +285,11 @@ export async function updateCustomFieldDefinition(
   });
 }
 
-export async function archiveCustomFieldDefinition(id: string, actor: string) {
+export async function archiveCustomFieldDefinition(
+  organizationId: string,
+  id: string,
+  actor: string,
+) {
   const now = new Date();
   const [archived] = await db
     .update(customFieldDefinitions)
@@ -273,12 +302,13 @@ export async function archiveCustomFieldDefinition(id: string, actor: string) {
     .where(
       and(
         eq(customFieldDefinitions.id, id),
+        eq(customFieldDefinitions.organizationId, organizationId),
         isNull(customFieldDefinitions.archivedAt),
       ),
     )
     .returning({ id: customFieldDefinitions.id });
   if (!archived) {
-    const existing = await getCustomFieldDefinition(id);
+    const existing = await getCustomFieldDefinition(organizationId, id);
     if (!existing) throw new CustomFieldError("Custom field definition not found.", 404);
   }
   return Boolean(archived);
@@ -448,6 +478,7 @@ const normalizedListCondition = (
   )})`;
 
 async function queryReferenceOptions(options: {
+  organizationId: string;
   definition: CustomFieldDefinition;
   query?: string;
   ids?: string[];
@@ -458,7 +489,9 @@ async function queryReferenceOptions(options: {
   const { definition, executor } = options;
   const query = options.query?.trim();
   if (definition.referenceEntityType === "inventory") {
-    const conditions: SQL[] = [];
+    const conditions: SQL[] = [
+      eq(resources.organizationId, options.organizationId),
+    ];
     if (options.ids?.length) conditions.push(inArray(resources.id, options.ids));
     if (options.applyFilters) {
       if (definition.referenceResourceTypes.length) {
@@ -506,7 +539,10 @@ async function queryReferenceOptions(options: {
   }
 
   if (definition.referenceEntityType === "stock_unit") {
-    const conditions: SQL[] = [];
+    const conditions: SQL[] = [
+      eq(stockUnits.organizationId, options.organizationId),
+      eq(resources.organizationId, options.organizationId),
+    ];
     if (options.ids?.length) conditions.push(inArray(stockUnits.id, options.ids));
     if (options.applyFilters) {
       if (definition.referenceResourceTypes.length) {
@@ -560,6 +596,7 @@ async function queryReferenceOptions(options: {
 }
 
 export async function listCustomFieldReferenceOptions(options: {
+  organizationId: string;
   definitionId: string;
   query?: string;
   selectedIds?: string[];
@@ -573,6 +610,7 @@ export async function listCustomFieldReferenceOptions(options: {
     .where(
       and(
         eq(customFieldDefinitions.id, options.definitionId),
+        eq(customFieldDefinitions.organizationId, options.organizationId),
         isNull(customFieldDefinitions.archivedAt),
       ),
     )
@@ -594,6 +632,7 @@ export async function listCustomFieldReferenceOptions(options: {
   const [selected, matches] = await Promise.all([
     selectedIds.length
       ? queryReferenceOptions({
+          organizationId: options.organizationId,
           definition,
           ids: selectedIds,
           applyFilters: false,
@@ -602,6 +641,7 @@ export async function listCustomFieldReferenceOptions(options: {
         })
       : Promise.resolve([]),
     queryReferenceOptions({
+      organizationId: options.organizationId,
       definition,
       query: options.query,
       applyFilters: true,
@@ -615,6 +655,7 @@ export async function listCustomFieldReferenceOptions(options: {
 }
 
 async function validateReferenceValue(options: {
+  organizationId: string;
   definition: CustomFieldDefinition;
   value: CustomFieldValue;
   currentValue?: CustomFieldValue;
@@ -636,6 +677,7 @@ async function validateReferenceValue(options: {
   const added = references.filter((reference) => !currentReferences.has(reference));
   if (!added.length) return;
   const matches = await queryReferenceOptions({
+    organizationId: options.organizationId,
     definition: options.definition,
     ids: added,
     applyFilters: true,
@@ -655,6 +697,7 @@ const sameJsonValue = (left: unknown, right: unknown) =>
   JSON.stringify(left) === JSON.stringify(right);
 
 export async function validateCustomFieldValues(options: {
+  organizationId: string;
   entityType: CustomFieldEntityType;
   target: CustomFieldTarget;
   values: CustomFieldValues;
@@ -664,6 +707,7 @@ export async function validateCustomFieldValues(options: {
 }) {
   const definitions = (
     await listCustomFieldDefinitions({
+      organizationId: options.organizationId,
       entityType: options.entityType,
       executor: options.executor,
     })
@@ -692,6 +736,7 @@ export async function validateCustomFieldValues(options: {
     }
     const validated = validateValue(definition, value);
     await validateReferenceValue({
+      organizationId: options.organizationId,
       definition,
       value: validated,
       currentValue: options.currentValues?.[key],

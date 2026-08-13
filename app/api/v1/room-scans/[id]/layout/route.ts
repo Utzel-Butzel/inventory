@@ -30,7 +30,11 @@ export async function PATCH(request: Request, context: Context) {
     );
   }
 
-  const scan = await updateRoomLayoutTransform(id, parsed.data.transform);
+  const scan = await updateRoomLayoutTransform(
+    authorization.identity.organizationId,
+    id,
+    parsed.data.transform,
+  );
   if (!scan) return Response.json({ error: "Room scan not found." }, { status: 404 });
   return Response.json({ scan });
 }

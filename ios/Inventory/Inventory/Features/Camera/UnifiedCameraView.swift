@@ -147,7 +147,12 @@ struct UnifiedCameraView: View {
         }
         .statusBarHidden()
         .interactiveDismissDisabled(countModel.phase == .booking)
-        .onAppear(perform: configureCamera)
+        .onAppear {
+            if !availableCameraModes.contains(mode) {
+                mode = .scan
+            }
+            configureCamera()
+        }
         .task {
             if let client = state.client {
                 await countModel.loadCountModels(using: client)
@@ -486,7 +491,7 @@ struct UnifiedCameraView: View {
             cameraBottomControls(viewportAspectRatio: viewportAspectRatio)
                 .frame(minHeight: 88)
 
-            CameraModeBar(selection: $mode)
+            CameraModeBar(selection: $mode, modes: availableCameraModes)
                 .disabled(countModel.phase == .booking || pendingPhotoRequest != nil)
                 .opacity(
                     countModel.phase == .booking || pendingPhotoRequest != nil
@@ -750,26 +755,32 @@ struct UnifiedCameraView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
                         .textSelection(.enabled)
-                    Button {
-                        captureModel.applyScannedCode(code)
-                        unmatchedCode = nil
-                        mode = .capture
-                    } label: {
-                        Label("Mit Fotos erfassen", systemImage: "camera.fill")
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(InventoryTheme.ink)
+                    if state.canWrite {
+                        Button {
+                            captureModel.applyScannedCode(code)
+                            unmatchedCode = nil
+                            mode = .capture
+                        } label: {
+                            Label("Mit Fotos erfassen", systemImage: "camera.fill")
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(InventoryTheme.ink)
 
-                    Button {
-                        camera.scanningEnabled = false
-                        camera.stop()
-                        showCreateForm = true
-                    } label: {
-                        Label("Nur Stammdaten anlegen", systemImage: "doc.badge.plus")
-                            .frame(maxWidth: .infinity, minHeight: 42)
+                        Button {
+                            camera.scanningEnabled = false
+                            camera.stop()
+                            showCreateForm = true
+                        } label: {
+                            Label("Nur Stammdaten anlegen", systemImage: "doc.badge.plus")
+                                .frame(maxWidth: .infinity, minHeight: 42)
+                        }
+                        .buttonStyle(.bordered)
+                    } else {
+                        Label("Nur Lesezugriff", systemImage: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.bordered)
 
                     Button("Anderen Code scannen") {
                         unmatchedCode = nil
@@ -1575,14 +1586,14 @@ struct UnifiedCameraView: View {
                       countModel.phase != .booking,
                       abs(value.translation.width) > abs(value.translation.height),
                       abs(value.translation.width) >= 52,
-                      let currentIndex = CameraMode.allCases.firstIndex(of: mode) else {
+                      let currentIndex = availableCameraModes.firstIndex(of: mode) else {
                     return
                 }
                 let offset = value.translation.width < 0 ? 1 : -1
                 let nextIndex = currentIndex + offset
-                guard CameraMode.allCases.indices.contains(nextIndex) else { return }
+                guard availableCameraModes.indices.contains(nextIndex) else { return }
                 withAnimation(.easeInOut(duration: 0.18)) {
-                    mode = CameraMode.allCases[nextIndex]
+                    mode = availableCameraModes[nextIndex]
                 }
             }
     }
@@ -1849,7 +1860,9 @@ struct UnifiedCameraView: View {
     }
 
     private func submitCapture() {
-        guard captureModel.canSubmit, captureModel.processingCount == 0 else { return }
+        guard state.canWrite,
+              captureModel.canSubmit,
+              captureModel.processingCount == 0 else { return }
         let submission = captureModel.makeSubmission(imageModelID: state.selectedImageModelID)
         onSubmit(submission)
         withAnimation {
@@ -1859,7 +1872,9 @@ struct UnifiedCameraView: View {
     }
 
     private func applyCount(_ operation: StockCountOperation) {
-        guard let client = state.client, let resource = countResource else {
+        guard state.canWrite,
+              let client = state.client,
+              let resource = countResource else {
             countModel.errorMessage = "Keine Verbindung zum Inventarserver."
             return
         }
@@ -1881,14 +1896,19 @@ struct UnifiedCameraView: View {
     private func scanGuideEdge(in size: CGSize) -> CGFloat {
         min(245, min(size.width * 0.68, size.height * 0.68))
     }
+
+    private var availableCameraModes: [CameraMode] {
+        state.canWrite ? CameraMode.allCases : [.scan, .recognize]
+    }
 }
 
 private struct CameraModeBar: View {
     @Binding var selection: CameraMode
+    let modes: [CameraMode]
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(CameraMode.allCases) { mode in
+            ForEach(modes) { mode in
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         selection = mode
@@ -1920,14 +1940,14 @@ private struct CameraModeBar: View {
                 .onEnded { value in
                     guard abs(value.translation.width) > abs(value.translation.height),
                           abs(value.translation.width) >= 28,
-                          let currentIndex = CameraMode.allCases.firstIndex(of: selection) else {
+                          let currentIndex = modes.firstIndex(of: selection) else {
                         return
                     }
                     let offset = value.translation.width < 0 ? 1 : -1
                     let nextIndex = currentIndex + offset
-                    guard CameraMode.allCases.indices.contains(nextIndex) else { return }
+                    guard modes.indices.contains(nextIndex) else { return }
                     withAnimation(.easeInOut(duration: 0.18)) {
-                        selection = CameraMode.allCases[nextIndex]
+                        selection = modes[nextIndex]
                     }
                 }
         )

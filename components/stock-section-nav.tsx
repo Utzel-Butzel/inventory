@@ -1,8 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import {
+  OrganizationLink as Link,
+  useOrganizationPathname,
+} from "@/components/organization-routing";
 import { Boxes, QrCode, ShoppingCart, Workflow } from "lucide-react";
-import { usePathname } from "next/navigation";
 import { useT } from "next-i18next/client";
 
 import { cn } from "@/components/ui";
@@ -15,7 +17,7 @@ const stockSections = [
 ] as const;
 
 export function StockSectionNav() {
-  const pathname = usePathname();
+  const pathname = useOrganizationPathname();
   const { t } = useT("stock");
 
   return (

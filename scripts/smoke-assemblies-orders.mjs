@@ -15,6 +15,9 @@ const databaseUrl =
   process.env.DATABASE_URL ??
   "postgresql://inventory:inventory@localhost:5432/inventory";
 const baseUrl = process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:3000";
+const organizationId =
+  process.env.SMOKE_ORGANIZATION_ID ??
+  "00000000-0000-4000-8000-000000000001";
 const sql = postgres(databaseUrl, { max: 1 });
 const resourceIds = [];
 const orderIds = [];
@@ -32,6 +35,7 @@ async function api(path, options = {}) {
     method: options.method ?? "GET",
     headers: {
       Authorization: `Bearer ${token}`,
+      "X-Organization-ID": organizationId,
       ...(options.body ? { "Content-Type": "application/json" } : {}),
       ...(options.idempotencyKey
         ? { "Idempotency-Key": options.idempotencyKey }
@@ -121,8 +125,11 @@ async function cleanup() {
 
 try {
   const [tokenRow] = await sql`
-    INSERT INTO api_tokens (name, prefix, token_hash, scopes, created_by)
+    INSERT INTO api_tokens (
+      organization_id, name, prefix, token_hash, scopes, created_by
+    )
     VALUES (
+      ${organizationId},
       'Assembly/order smoke test',
       ${`${token.slice(0, 12)}…${token.slice(-4)}`},
       ${tokenHash},

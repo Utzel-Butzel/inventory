@@ -25,7 +25,12 @@ export async function GET(request: Request) {
   const includeArchived =
     authorization.identity.permissions.includes("settings.inventory-types.manage") &&
     new URL(request.url).searchParams.get("includeArchived") === "true";
-  return Response.json({ relationTypes: await listRelationTypes(includeArchived) });
+  return Response.json({
+    relationTypes: await listRelationTypes(
+      authorization.identity.organizationId,
+      includeArchived,
+    ),
+  });
 }
 
 export async function POST(request: Request) {
@@ -46,6 +51,7 @@ export async function POST(request: Request) {
   }
   try {
     const relationType = await createRelationType(
+      authorization.identity.organizationId,
       parsed.data,
       authorization.identity.subject,
     );

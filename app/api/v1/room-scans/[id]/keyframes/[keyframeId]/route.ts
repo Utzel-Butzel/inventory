@@ -25,6 +25,7 @@ export async function GET(request: Request, context: Context) {
     );
   }
   const keyframe = await getRoomScanKeyframe(
+    authorization.identity.organizationId,
     identifiers.data.id,
     identifiers.data.keyframeId,
   );

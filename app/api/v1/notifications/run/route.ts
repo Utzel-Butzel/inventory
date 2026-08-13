@@ -14,10 +14,14 @@ function cronAuthorized(request: Request) {
 }
 
 export async function POST(request: Request) {
+  let organizationId: string | undefined;
   if (!cronAuthorized(request)) {
     const authorization = await requireSessionPermission(request, "tokens.manage");
     if (authorization.response) return authorization.response;
+    organizationId = authorization.identity.organizationId;
   }
-  const result = await runNotificationCycle();
+  // Deployment cron credentials operate the global worker. A tenant admin can
+  // only run and observe their active organization's notification cycle.
+  const result = await runNotificationCycle(new Date(), organizationId);
   return Response.json(result, { headers: notificationNoStoreHeaders });
 }

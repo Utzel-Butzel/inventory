@@ -22,6 +22,7 @@ export class ResourceIdentifierConflictError extends Error {
 }
 
 export async function assertResourceIdentifiersAvailable(
+  organizationId: string,
   identifiers: ResourceIdentifiers,
   excludingResourceId?: string,
 ) {
@@ -31,7 +32,12 @@ export async function assertResourceIdentifiersAvailable(
       db
         .select({ id: resourceVariants.id })
         .from(resourceVariants)
-        .where(eq(resourceVariants.sku, identifiers.sku))
+        .where(
+          and(
+            eq(resourceVariants.organizationId, organizationId),
+            eq(resourceVariants.sku, identifiers.sku),
+          ),
+        )
         .limit(1)
         .then((rows) => {
           if (rows[0]) throw new ResourceIdentifierConflictError("sku");
@@ -42,10 +48,14 @@ export async function assertResourceIdentifiersAvailable(
         .where(
           excludingResourceId
             ? and(
+                eq(resources.organizationId, organizationId),
                 eq(resources.sku, identifiers.sku),
                 ne(resources.id, excludingResourceId),
               )
-            : eq(resources.sku, identifiers.sku),
+            : and(
+                eq(resources.organizationId, organizationId),
+                eq(resources.sku, identifiers.sku),
+              ),
         )
         .limit(1)
         .then((rows) => {
@@ -58,7 +68,12 @@ export async function assertResourceIdentifiersAvailable(
       db
         .select({ id: resourceVariants.id })
         .from(resourceVariants)
-        .where(eq(resourceVariants.barcode, identifiers.barcode))
+        .where(
+          and(
+            eq(resourceVariants.organizationId, organizationId),
+            eq(resourceVariants.barcode, identifiers.barcode),
+          ),
+        )
         .limit(1)
         .then((rows) => {
           if (rows[0]) throw new ResourceIdentifierConflictError("barcode");
@@ -69,10 +84,14 @@ export async function assertResourceIdentifiersAvailable(
         .where(
           excludingResourceId
             ? and(
+                eq(resources.organizationId, organizationId),
                 eq(resources.barcode, identifiers.barcode),
                 ne(resources.id, excludingResourceId),
               )
-            : eq(resources.barcode, identifiers.barcode),
+            : and(
+                eq(resources.organizationId, organizationId),
+                eq(resources.barcode, identifiers.barcode),
+              ),
         )
         .limit(1)
         .then((rows) => {

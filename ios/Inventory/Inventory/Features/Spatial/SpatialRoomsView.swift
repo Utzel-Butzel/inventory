@@ -203,15 +203,17 @@ struct SpatialRoomsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("Räume")
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Raum scannen", systemImage: "plus") {
-                        presentation = RoomScanPresentation(mode: .newStructure)
+                if state.canWrite {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Raum scannen", systemImage: "plus") {
+                            presentation = RoomScanPresentation(mode: .newStructure)
+                        }
+                        .disabled(!RoomCaptureSession.isSupported)
                     }
-                    .disabled(!RoomCaptureSession.isSupported)
                 }
             }
             .refreshable { await loadScans() }
-            .task(id: state.client?.serverURL) { await loadScans() }
+            .task(id: state.client?.contextIdentifier) { await loadScans() }
             .sheet(item: $presentation) { presentation in
                 RoomScanFlowView(mode: presentation.mode) {
                     self.presentation = nil
@@ -244,7 +246,7 @@ struct SpatialRoomsView: View {
                     : "Dieses iPhone unterstützt RoomPlan nicht. Dafür ist ein LiDAR-fähiges iPhone erforderlich."
             )
         } actions: {
-            if RoomCaptureSession.isSupported {
+            if state.canWrite && RoomCaptureSession.isSupported {
                 Button("Ersten Raum scannen") {
                     presentation = RoomScanPresentation(mode: .newStructure)
                 }
@@ -296,11 +298,13 @@ struct SpatialRoomsView: View {
                 }
             }
 
-            Button("Raum oder Etage hinzufügen", systemImage: "plus") {
-                guard let seed = structure.appendSeed else { return }
-                presentation = RoomScanPresentation(mode: .appendToStructure(seed))
+            if state.canWrite {
+                Button("Raum oder Etage hinzufügen", systemImage: "plus") {
+                    guard let seed = structure.appendSeed else { return }
+                    presentation = RoomScanPresentation(mode: .appendToStructure(seed))
+                }
+                .disabled(structure.appendSeed == nil || !RoomCaptureSession.isSupported)
             }
-            .disabled(structure.appendSeed == nil || !RoomCaptureSession.isSupported)
         } header: {
             Label(structure.structureName, systemImage: "building.2")
         } footer: {
@@ -331,10 +335,12 @@ struct SpatialRoomsView: View {
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button("Neu scannen", systemImage: "viewfinder") {
-                presentation = RoomScanPresentation(mode: .replaceRoom(scan))
+            if state.canWrite {
+                Button("Neu scannen", systemImage: "viewfinder") {
+                    presentation = RoomScanPresentation(mode: .replaceRoom(scan))
+                }
+                .disabled(!RoomCaptureSession.isSupported)
             }
-            .disabled(!RoomCaptureSession.isSupported)
         }
     }
 
@@ -861,7 +867,7 @@ private struct RoomScanFlowView: View {
 
     @MainActor
     private func uploadDrafts() async {
-        guard !drafts.isEmpty, let client = state.client else { return }
+        guard state.canWrite, !drafts.isEmpty, let client = state.client else { return }
         phase = .uploading
         uploadProgress = 0
         do {

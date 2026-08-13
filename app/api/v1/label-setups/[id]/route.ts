@@ -29,7 +29,10 @@ export async function GET(request: Request, context: Context) {
     return Response.json({ error: "Invalid label setup id." }, { status: 422 });
   }
 
-  const labelSetup = await getLabelSetup(id);
+  const labelSetup = await getLabelSetup(
+    authorization.identity.organizationId,
+    id,
+  );
   if (!labelSetup) {
     return Response.json({ error: "Label setup not found." }, { status: 404 });
   }
@@ -60,6 +63,7 @@ export async function PATCH(request: Request, context: Context) {
 
   try {
     const labelSetup = await updateLabelSetup(
+      authorization.identity.organizationId,
       id,
       parsed.data,
       authorization.identity.subject,
@@ -98,7 +102,11 @@ export async function DELETE(request: Request, context: Context) {
   }
 
   try {
-    await deleteLabelSetup(id, parsed.data.revision);
+    await deleteLabelSetup(
+      authorization.identity.organizationId,
+      id,
+      parsed.data.revision,
+    );
     return new Response(null, { status: 204 });
   } catch (error) {
     const failure = labelSetupHttpError(

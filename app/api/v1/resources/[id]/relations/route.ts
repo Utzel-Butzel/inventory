@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-import {
-  requirePermission,
-  requireResourcePermission,
-} from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import {
   createResourceRelation,
   inventoryStructureHttpError,
@@ -22,11 +19,20 @@ const createSchema = z
   .strict();
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requirePermission(request, "inventory.read");
-  if (authorization.response) return authorization.response;
   const id = z.string().uuid().safeParse((await context.params).id);
   if (!id.success) return Response.json({ error: "Invalid resource id." }, { status: 422 });
-  return Response.json({ relations: await listResourceRelations(id.data) });
+  const authorization = await requireResourcePermission(
+    request,
+    "inventory.read",
+    id.data,
+  );
+  if (authorization.response) return authorization.response;
+  return Response.json({
+    relations: await listResourceRelations(
+      authorization.identity.organizationId,
+      id.data,
+    ),
+  });
 }
 
 export async function POST(request: Request, context: Context) {
@@ -59,6 +65,7 @@ export async function POST(request: Request, context: Context) {
   }
   try {
     const relation = await createResourceRelation(
+      authorization.identity.organizationId,
       parsed.data,
       authorization.identity.subject,
     );

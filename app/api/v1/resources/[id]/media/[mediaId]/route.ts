@@ -20,21 +20,38 @@ export async function DELETE(request: Request, context: Context) {
     const [resource] = await transaction
       .select()
       .from(resources)
-      .where(eq(resources.id, id))
+      .where(
+        and(
+          eq(resources.organizationId, authorization.identity.organizationId),
+          eq(resources.id, id),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!resource) throw new Error("Resource disappeared while deleting media.");
     const [deleted] = await transaction
       .delete(media)
-      .where(and(eq(media.id, mediaId), eq(media.resourceId, id)))
+      .where(
+        and(
+          eq(media.organizationId, authorization.identity.organizationId),
+          eq(media.id, mediaId),
+          eq(media.resourceId, id),
+        ),
+      )
       .returning();
     if (!deleted) return null;
     const remainingMedia = await transaction
       .select()
       .from(media)
-      .where(eq(media.resourceId, id))
+      .where(
+        and(
+          eq(media.organizationId, authorization.identity.organizationId),
+          eq(media.resourceId, id),
+        ),
+      )
       .orderBy(asc(media.position));
     await enqueueWebhookEvent(transaction, {
+      organizationId: authorization.identity.organizationId,
       type: "inventory.resource.updated",
       aggregateType: "resource",
       aggregateId: id,

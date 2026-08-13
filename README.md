@@ -61,6 +61,8 @@ native iOS app.
   tags, alt text, and confidence output
 - OpenAI or Google image editing for clean square studio covers
 - Local persistent file storage or Openinary
+- Multiple isolated organizations per account, with organization-specific
+  roles, settings, inventory, workflows, notifications, and integrations
 - Database-backed custom roles, granular permissions, conditional item rules,
   and optional Auth0
 - Hashed, scoped, expiring, revocable API tokens
@@ -381,7 +383,8 @@ reset an existing account.
 
 That administrator can then create, disable, re-enable, reset, and assign roles
 to additional accounts under **Settings → Users**. Roles are configured under
-**Settings → Roles & access**. All accounts share the same inventory workspace:
+**Settings → Roles & access**. A user may belong to multiple organizations and
+can have a different role in each one:
 
 - `admin` manages users, API tokens, and integration webhooks and has full
   inventory and AI access.
@@ -392,6 +395,22 @@ These built-in roles preserve the original defaults. You can also create custom
 roles and select individual inventory, stock, assignment, count, spatial,
 purchasing, workflow, label, AI, settings, user, sharing, token, and webhook
 permissions.
+
+Create, rename, and switch organizations under **Settings → Organization**.
+Each organization is an isolation boundary for inventory, stock, spatial data,
+configuration, notifications, public shares, and webhooks. New organizations
+start with the built-in roles, immutable system inventory/relation templates,
+and English as the default content language. Existing installations are
+migrated into one default organization without changing their records or
+account access.
+
+Authenticated Webapp pages use the organization UUID as their first URL
+segment, for example
+`https://inventory.example.com/11111111-1111-4111-8111-111111111111/inventory`.
+The URL selects the active organization, so tenant-scoped links are safe to
+bookmark and share with another member. Existing unprefixed Webapp URLs redirect
+to the current organization. API, authentication, and public-share paths remain
+unprefixed; API and iOS clients continue to use `X-Organization-ID`.
 
 Conditional inventory rules provide additive access to matching items. For
 example, a role without global item-update access can be allowed to update only
@@ -418,9 +437,6 @@ Set all three values to enable the Auth0 button:
 AUTH0_CLIENT_ID=...
 AUTH0_CLIENT_SECRET=...
 AUTH0_DOMAIN=your-tenant.eu.auth0.com
-AUTH0_DEFAULT_ROLE=editor
-# Optional custom claim containing a built-in or custom role key:
-AUTH0_ROLE_CLAIM=https://inventory.example.com/role
 ```
 
 Use this callback URL in Auth0:
@@ -432,10 +448,12 @@ https://your-inventory.example/api/auth/callback/auth0
 For local development, use
 `http://localhost:3000/api/auth/callback/auth0`.
 
-Auth0 identities are managed in Auth0 rather than the local user list. Restrict
-the enabled Auth0 connections or invitations at the tenant level; every
-successful Auth0 login receives `AUTH0_DEFAULT_ROLE`, unless the configured role
-claim contains an existing role key. Unknown role keys fail closed.
+Auth0 must return a verified email address. Before that person signs in, add the
+same email under **Settings → Users** in every organization they should access.
+Organization memberships and their roles remain authoritative; an Auth0 login
+never creates an implicit account or default-organization membership. Keep the
+enabled Auth0 connections or invitations restricted at the tenant level as an
+additional safeguard.
 
 ## Notifications
 
@@ -1041,6 +1059,12 @@ curl "http://localhost:3000/api/v1/resources?pageSize=25" \
   -H "Authorization: Bearer inv_your_token"
 ```
 
+User-bound tokens can select any active organization membership by adding
+`X-Organization-ID: ORGANIZATION_UUID`. Without the header, they use the
+organization that issued the token. Standalone API tokens are permanently
+pinned to their issuing organization and reject a different header value. Use
+`GET /api/v1/organizations` to discover available memberships.
+
 Create a record:
 
 ```bash
@@ -1116,8 +1140,9 @@ scans QR and common retail/industrial barcodes, resolves existing records, and
 runs the same create → upload → AI analysis → cover workflow as the browser's
 batch capture screen.
 
-The app signs in with a local workspace account and stores the resulting bearer
-token in the iOS Keychain. Photos are resized to 2,200-pixel JPEGs
+The app signs in with a local account, stores the resulting bearer token in the
+iOS Keychain, and lets users switch among their organizations in Settings.
+Photos are resized to 2,200-pixel JPEGs
 and copied to a persistent, origin-bound outbox before upload. Resource, media,
 analysis, and cover operations use server-side idempotency keys so network
 retries do not duplicate data or AI work. See the iOS README for Xcode, device,

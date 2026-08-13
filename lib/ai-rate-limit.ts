@@ -46,6 +46,7 @@ const subjectHash = (
 export async function consumePaidAiRateLimit(options: {
   operation: PaidAiOperation;
   identity: Pick<RequestIdentity, "subject" | "userId" | "tokenId">;
+  organizationId: string;
 }): Promise<PaidAiRateLimitResult> {
   const policy = paidAiRateLimitPolicy(options.operation);
 
@@ -67,6 +68,7 @@ export async function consumePaidAiRateLimit(options: {
     ),
     "upserted" AS (
       INSERT INTO "ai_rate_limit_buckets" (
+        "organization_id",
         "operation",
         "subject_hash",
         "request_count",
@@ -74,13 +76,14 @@ export async function consumePaidAiRateLimit(options: {
         "updated_at"
       )
       SELECT
+        ${options.organizationId},
         ${options.operation},
         ${subjectHash(options.identity)},
         1,
         "attempted_at" + (${policy.windowMs} * INTERVAL '1 millisecond'),
         "attempted_at"
       FROM "attempt"
-      ON CONFLICT ("operation", "subject_hash")
+      ON CONFLICT ("organization_id", "operation", "subject_hash")
       DO UPDATE SET
         "request_count" = CASE
           WHEN "ai_rate_limit_buckets"."resets_at" <= EXCLUDED."updated_at"

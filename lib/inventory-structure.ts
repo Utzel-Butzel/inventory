@@ -62,11 +62,21 @@ const relationTypeDto = (row: typeof relationTypeDefinitions.$inferSelect) => ({
   archivedAt: iso(row.archivedAt),
 });
 
-export async function listInventoryTypes(includeArchived = false) {
+export async function listInventoryTypes(
+  organizationId: string,
+  includeArchived = false,
+) {
   const rows = await db
     .select()
     .from(inventoryTypeDefinitions)
-    .where(includeArchived ? undefined : isNull(inventoryTypeDefinitions.archivedAt))
+    .where(
+      and(
+        eq(inventoryTypeDefinitions.organizationId, organizationId),
+        ...(includeArchived
+          ? []
+          : [isNull(inventoryTypeDefinitions.archivedAt)]),
+      ),
+    )
     .orderBy(
       asc(inventoryTypeDefinitions.position),
       asc(inventoryTypeDefinitions.label),
@@ -74,12 +84,16 @@ export async function listInventoryTypes(includeArchived = false) {
   return rows.map(typeDto);
 }
 
-export async function assertActiveInventoryType(key: string) {
+export async function assertActiveInventoryType(
+  organizationId: string,
+  key: string,
+) {
   const [row] = await db
     .select({ key: inventoryTypeDefinitions.key })
     .from(inventoryTypeDefinitions)
     .where(
       and(
+        eq(inventoryTypeDefinitions.organizationId, organizationId),
         eq(inventoryTypeDefinitions.key, key),
         isNull(inventoryTypeDefinitions.archivedAt),
       ),
@@ -92,6 +106,7 @@ export async function assertActiveInventoryType(key: string) {
 }
 
 export async function createInventoryType(
+  organizationId: string,
   input: {
     key: string;
     label: string;
@@ -111,12 +126,19 @@ export async function createInventoryType(
   }
   const [created] = await db
     .insert(inventoryTypeDefinitions)
-    .values({ ...input, isSystem: false, createdBy: actor, updatedBy: actor })
+    .values({
+      ...input,
+      organizationId,
+      isSystem: false,
+      createdBy: actor,
+      updatedBy: actor,
+    })
     .returning();
   return typeDto(created);
 }
 
 export async function updateInventoryType(
+  organizationId: string,
   key: string,
   patch: Partial<{
     label: string;
@@ -133,7 +155,12 @@ export async function updateInventoryType(
   const [current] = await db
     .select()
     .from(inventoryTypeDefinitions)
-    .where(eq(inventoryTypeDefinitions.key, key))
+    .where(
+      and(
+        eq(inventoryTypeDefinitions.organizationId, organizationId),
+        eq(inventoryTypeDefinitions.key, key),
+      ),
+    )
     .limit(1);
   if (!current) throw new InventoryStructureError("Inventory type not found.", 404);
 
@@ -156,7 +183,12 @@ export async function updateInventoryType(
     const [usedByResource] = await db
       .select({ id: resources.id })
       .from(resources)
-      .where(eq(resources.type, key))
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.type, key),
+        ),
+      )
       .limit(1);
     if (usedByResource) {
       throw new InventoryStructureError(
@@ -176,6 +208,7 @@ export async function updateInventoryType(
         )
         .where(
           and(
+            eq(resources.organizationId, organizationId),
             eq(resources.type, key),
             eq(resourceRelations.relationTypeKey, "contains"),
             eq(resourceRelations.origin, "manual"),
@@ -191,6 +224,7 @@ export async function updateInventoryType(
         )
         .where(
           and(
+            eq(resources.organizationId, organizationId),
             eq(resources.type, key),
             gt(stockLocationBalances.quantity, 0),
           ),
@@ -200,7 +234,12 @@ export async function updateInventoryType(
         .select({ id: stockUnits.id })
         .from(stockUnits)
         .innerJoin(resources, eq(resources.id, stockUnits.locationResourceId))
-        .where(eq(resources.type, key))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.type, key),
+          ),
+        )
         .limit(1),
     ]);
     const [manualChild] = manualChildren;
@@ -235,17 +274,32 @@ export async function updateInventoryType(
       updatedBy: actor,
       updatedAt: new Date(),
     })
-    .where(eq(inventoryTypeDefinitions.key, key))
+    .where(
+      and(
+        eq(inventoryTypeDefinitions.organizationId, organizationId),
+        eq(inventoryTypeDefinitions.key, key),
+      ),
+    )
     .returning();
-  await synchronizeSpatialContainment(actor);
+  await synchronizeSpatialContainment(organizationId, actor);
   return typeDto(updated);
 }
 
-export async function listRelationTypes(includeArchived = false) {
+export async function listRelationTypes(
+  organizationId: string,
+  includeArchived = false,
+) {
   const rows = await db
     .select()
     .from(relationTypeDefinitions)
-    .where(includeArchived ? undefined : isNull(relationTypeDefinitions.archivedAt))
+    .where(
+      and(
+        eq(relationTypeDefinitions.organizationId, organizationId),
+        ...(includeArchived
+          ? []
+          : [isNull(relationTypeDefinitions.archivedAt)]),
+      ),
+    )
     .orderBy(
       asc(relationTypeDefinitions.position),
       asc(relationTypeDefinitions.label),
@@ -254,6 +308,7 @@ export async function listRelationTypes(includeArchived = false) {
 }
 
 export async function createRelationType(
+  organizationId: string,
   input: {
     key: string;
     label: string;
@@ -268,6 +323,7 @@ export async function createRelationType(
     .insert(relationTypeDefinitions)
     .values({
       ...input,
+      organizationId,
       spatial: false,
       isSystem: false,
       createdBy: actor,
@@ -278,6 +334,7 @@ export async function createRelationType(
 }
 
 export async function updateRelationType(
+  organizationId: string,
   key: string,
   patch: Partial<{
     label: string;
@@ -292,7 +349,12 @@ export async function updateRelationType(
   const [current] = await db
     .select()
     .from(relationTypeDefinitions)
-    .where(eq(relationTypeDefinitions.key, key))
+    .where(
+      and(
+        eq(relationTypeDefinitions.organizationId, organizationId),
+        eq(relationTypeDefinitions.key, key),
+      ),
+    )
     .limit(1);
   if (!current) throw new InventoryStructureError("Relationship type not found.", 404);
   if (current.isSystem && patch.archived) {
@@ -317,19 +379,30 @@ export async function updateRelationType(
       updatedBy: actor,
       updatedAt: new Date(),
     })
-    .where(eq(relationTypeDefinitions.key, key))
+    .where(
+      and(
+        eq(relationTypeDefinitions.organizationId, organizationId),
+        eq(relationTypeDefinitions.key, key),
+      ),
+    )
     .returning();
   return relationTypeDto(updated);
 }
 
-export async function listResourceRelations(resourceId: string) {
+export async function listResourceRelations(
+  organizationId: string,
+  resourceId: string,
+) {
   const rows = await db
     .select()
     .from(resourceRelations)
     .where(
-      or(
-        eq(resourceRelations.sourceResourceId, resourceId),
-        eq(resourceRelations.targetResourceId, resourceId),
+      and(
+        eq(resourceRelations.organizationId, organizationId),
+        or(
+          eq(resourceRelations.sourceResourceId, resourceId),
+          eq(resourceRelations.targetResourceId, resourceId),
+        ),
       ),
     )
     .orderBy(asc(resourceRelations.createdAt));
@@ -348,9 +421,14 @@ export async function listResourceRelations(resourceId: string) {
             status: resources.status,
           })
           .from(resources)
-          .where(inArray(resources.id, ids))
+          .where(
+            and(
+              eq(resources.organizationId, organizationId),
+              inArray(resources.id, ids),
+            ),
+          )
       : Promise.resolve([]),
-    listRelationTypes(true),
+    listRelationTypes(organizationId, true),
   ]);
   const resourcesById = new Map(resourceRows.map((row) => [row.id, row]));
   const relationTypesByKey = new Map(
@@ -389,6 +467,7 @@ function graphWouldCycle(
 }
 
 export async function createResourceRelation(
+  organizationId: string,
   input: {
     sourceResourceId: string;
     targetResourceId: string;
@@ -408,6 +487,7 @@ export async function createResourceRelation(
       .from(relationTypeDefinitions)
       .where(
         and(
+          eq(relationTypeDefinitions.organizationId, organizationId),
           eq(relationTypeDefinitions.key, input.relationTypeKey),
           isNull(relationTypeDefinitions.archivedAt),
         ),
@@ -425,7 +505,10 @@ export async function createResourceRelation(
       })
       .from(resources)
       .where(
-        inArray(resources.id, [input.sourceResourceId, input.targetResourceId]),
+        and(
+          eq(resources.organizationId, organizationId),
+          inArray(resources.id, [input.sourceResourceId, input.targetResourceId]),
+        ),
       );
     if (endpoints.length !== 2) {
       throw new InventoryStructureError("One of the inventory items was not found.", 404);
@@ -435,7 +518,12 @@ export async function createResourceRelation(
       const [sourceType] = await transaction
         .select({ canContain: inventoryTypeDefinitions.canContain })
         .from(inventoryTypeDefinitions)
-        .where(eq(inventoryTypeDefinitions.key, source.type))
+        .where(
+          and(
+            eq(inventoryTypeDefinitions.organizationId, organizationId),
+            eq(inventoryTypeDefinitions.key, source.type),
+          ),
+        )
         .limit(1);
       if (!sourceType?.canContain) {
         throw new InventoryStructureError(
@@ -448,7 +536,12 @@ export async function createResourceRelation(
           targetResourceId: resourceRelations.targetResourceId,
         })
         .from(resourceRelations)
-        .where(eq(resourceRelations.relationTypeKey, "contains"));
+        .where(
+          and(
+            eq(resourceRelations.organizationId, organizationId),
+            eq(resourceRelations.relationTypeKey, "contains"),
+          ),
+        );
       if (
         graphWouldCycle(
           edges,
@@ -471,6 +564,7 @@ export async function createResourceRelation(
           eq(resourceRelations.sourceResourceId, input.sourceResourceId),
           eq(resourceRelations.targetResourceId, input.targetResourceId),
           eq(resourceRelations.relationTypeKey, input.relationTypeKey),
+          eq(resourceRelations.organizationId, organizationId),
         ),
       )
       .limit(1);
@@ -485,13 +579,19 @@ export async function createResourceRelation(
     }
     const [created] = await transaction
       .insert(resourceRelations)
-      .values({ ...input, origin: "manual", createdBy: actor })
+      .values({
+        ...input,
+        organizationId,
+        origin: "manual",
+        createdBy: actor,
+      })
       .returning();
     return created;
   });
 }
 
 export async function deleteManualResourceRelation(
+  organizationId: string,
   relationId: string,
   resourceId: string,
   actor: string,
@@ -501,6 +601,7 @@ export async function deleteManualResourceRelation(
     .where(
       and(
         eq(resourceRelations.id, relationId),
+        eq(resourceRelations.organizationId, organizationId),
         eq(resourceRelations.origin, "manual"),
         or(
           eq(resourceRelations.sourceResourceId, resourceId),
@@ -515,7 +616,7 @@ export async function deleteManualResourceRelation(
       404,
     );
   }
-  await synchronizeSpatialContainment(actor);
+  await synchronizeSpatialContainment(organizationId, actor);
   return deleted;
 }
 
@@ -529,7 +630,10 @@ function polygonArea(polygon: ResourceMapCoordinate[]) {
   return Math.abs(area / 2);
 }
 
-export async function synchronizeSpatialContainment(actor = "system:spatial") {
+export async function synchronizeSpatialContainment(
+  organizationId: string,
+  actor = "system:spatial",
+) {
   return db.transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(${RELATION_GRAPH_LOCK_ID})`,
@@ -543,12 +647,14 @@ export async function synchronizeSpatialContainment(actor = "system:spatial") {
           gpsLatitude: resources.gpsLatitude,
           gpsLongitude: resources.gpsLongitude,
         })
-        .from(resources),
+        .from(resources)
+        .where(eq(resources.organizationId, organizationId)),
       transaction
         .select({ key: inventoryTypeDefinitions.key })
         .from(inventoryTypeDefinitions)
         .where(
           and(
+            eq(inventoryTypeDefinitions.organizationId, organizationId),
             eq(inventoryTypeDefinitions.canContain, true),
             eq(inventoryTypeDefinitions.spatialContainment, true),
             isNull(inventoryTypeDefinitions.archivedAt),
@@ -562,6 +668,7 @@ export async function synchronizeSpatialContainment(actor = "system:spatial") {
         .from(resourceRelations)
         .where(
           and(
+            eq(resourceRelations.organizationId, organizationId),
             eq(resourceRelations.relationTypeKey, "contains"),
             eq(resourceRelations.origin, "manual"),
           ),
@@ -585,6 +692,7 @@ export async function synchronizeSpatialContainment(actor = "system:spatial") {
       );
     });
     const nextEdges: Array<{
+      organizationId: string;
       sourceResourceId: string;
       targetResourceId: string;
       relationTypeKey: string;
@@ -624,6 +732,7 @@ export async function synchronizeSpatialContainment(actor = "system:spatial") {
         );
       if (!containing) continue;
       nextEdges.push({
+        organizationId,
         sourceResourceId: containing.resourceId,
         targetResourceId: target.id,
         relationTypeKey: "contains",
@@ -637,6 +746,7 @@ export async function synchronizeSpatialContainment(actor = "system:spatial") {
       .delete(resourceRelations)
       .where(
         and(
+          eq(resourceRelations.organizationId, organizationId),
           eq(resourceRelations.relationTypeKey, "contains"),
           eq(resourceRelations.origin, "spatial"),
         ),

@@ -133,13 +133,15 @@ test("UI catalogs use i18next plural rules", async () => {
   assert.equal(i18n.t("submit.photoCount", { count: 3 }), "3 Fotos");
 });
 
-test("the locale proxy is scoped to application routes", async () => {
+test("the locale and organization proxy is scoped to application routes", async () => {
   const source = await readFile(
     fileURLToPath(new URL("../proxy.ts", import.meta.url)),
     "utf8",
   );
   const applicationPaths = [
+    "/",
     "/login",
+    "/share/:path*",
     "/dashboard/:path*",
     "/inventory/:path*",
     "/stock/:path*",
@@ -150,7 +152,7 @@ test("the locale proxy is scoped to application routes", async () => {
     "/duplicates/:path*",
     "/notifications/:path*",
     "/settings/:path*",
-    "/share/:path*",
+    "/:organizationId/:path*",
   ];
   const matcherBlock = source.match(/matcher:\s*\[([\s\S]*?)\]/)?.[1];
   assert.ok(matcherBlock, "proxy matcher is missing");

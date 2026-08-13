@@ -94,11 +94,16 @@ const translationDocument = (
       }
     : emptyTranslationDocument();
 
-async function activeLanguages() {
+async function activeLanguages(organizationId: string) {
   return db
     .select()
     .from(translationLanguages)
-    .where(isNull(translationLanguages.archivedAt))
+    .where(
+      and(
+        eq(translationLanguages.organizationId, organizationId),
+        isNull(translationLanguages.archivedAt),
+      ),
+    )
     .orderBy(
       asc(translationLanguages.position),
       asc(translationLanguages.label),
@@ -131,9 +136,11 @@ function resolveRequestedLanguage(
 }
 
 async function translationDefinitions(
+  organizationId: string,
   executor: Pick<typeof db, "select"> = db,
 ) {
   const definitions = await listCustomFieldDefinitions({
+    organizationId,
     entityType: "inventory",
     executor,
   });
@@ -143,19 +150,30 @@ async function translationDefinitions(
 }
 
 async function resourceBundle(
+  organizationId: string,
   resourceId: string,
   executor: Pick<typeof db, "select"> = db,
 ) {
   const [resource] = await executor
     .select()
     .from(resources)
-    .where(eq(resources.id, resourceId))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, resourceId),
+      ),
+    )
     .limit(1);
   if (!resource) return null;
   const mediaRows = await executor
     .select()
     .from(media)
-    .where(eq(media.resourceId, resourceId))
+    .where(
+      and(
+        eq(media.organizationId, organizationId),
+        eq(media.resourceId, resourceId),
+      ),
+    )
     .orderBy(asc(media.position));
   return {
     ...resource,
@@ -203,6 +221,7 @@ function safeInventoryTranslationContext(
 }
 
 export async function enqueueResourceTranslations(options: {
+  organizationId: string;
   resourceId: string;
   requestedBy: string;
   languageCodes?: string[];
@@ -213,7 +232,12 @@ export async function enqueueResourceTranslations(options: {
     const [resource] = await transaction
       .select({ id: resources.id, contentRevision: resources.contentRevision })
       .from(resources)
-      .where(eq(resources.id, options.resourceId))
+      .where(
+        and(
+          eq(resources.organizationId, options.organizationId),
+          eq(resources.id, options.resourceId),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!resource) return { status: "not_found" as const, languageCodes: [] };
@@ -222,6 +246,7 @@ export async function enqueueResourceTranslations(options: {
       .from(translationLanguages)
       .where(
         and(
+          eq(translationLanguages.organizationId, options.organizationId),
           isNull(translationLanguages.archivedAt),
           normalizedCodes?.length
             ? inArray(translationLanguages.code, normalizedCodes)
@@ -258,6 +283,7 @@ export async function enqueueResourceTranslations(options: {
 }
 
 export async function enqueueTranslationBackfill(options: {
+  organizationId: string;
   requestedBy: string;
   languageCodes?: string[];
   force?: boolean;
@@ -269,6 +295,7 @@ export async function enqueueTranslationBackfill(options: {
       .from(translationLanguages)
       .where(
         and(
+          eq(translationLanguages.organizationId, options.organizationId),
           isNull(translationLanguages.archivedAt),
           eq(translationLanguages.isDefault, false),
           normalizedCodes?.length
@@ -287,7 +314,8 @@ export async function enqueueTranslationBackfill(options: {
     }
     const [{ value: resourceCount }] = await transaction
       .select({ value: sql<number>`count(*)::int` })
-      .from(resources);
+      .from(resources)
+      .where(eq(resources.organizationId, options.organizationId));
     for (const language of languages) {
       await transaction.execute(sql`
         SELECT "enqueue_resource_translation_job"(
@@ -299,6 +327,7 @@ export async function enqueueTranslationBackfill(options: {
           'manual'::varchar
         )
         FROM "resources" AS "resource"
+        WHERE "resource"."organization_id" = ${options.organizationId}::uuid
       `);
     }
     return {
@@ -311,12 +340,13 @@ export async function enqueueTranslationBackfill(options: {
 }
 
 export async function localizeResource<T extends ResourceWithMedia>(
+  organizationId: string,
   resource: T,
   requestedLanguageCode?: string | null,
 ) {
   const [languages, definitions] = await Promise.all([
-    activeLanguages(),
-    translationDefinitions(),
+    activeLanguages(organizationId),
+    translationDefinitions(organizationId),
   ]);
   const sourceLanguage = canonicalLanguage(languages);
   const availableLanguages = languages.map(languageSummary);
@@ -359,6 +389,7 @@ export async function localizeResource<T extends ResourceWithMedia>(
     .from(resourceTranslations)
     .where(
       and(
+        eq(resourceTranslations.organizationId, organizationId),
         eq(resourceTranslations.resourceId, resource.id),
         eq(resourceTranslations.languageCode, language.code),
       ),
@@ -390,6 +421,7 @@ export async function localizeResource<T extends ResourceWithMedia>(
 }
 
 export async function localizeResourceList<T extends ResourceWithMedia>(
+  organizationId: string,
   resourceList: T[],
   requestedLanguageCode?: string | null,
 ) {
@@ -397,8 +429,8 @@ export async function localizeResourceList<T extends ResourceWithMedia>(
     return { resources: resourceList, localization: null };
   }
   const [languages, definitions] = await Promise.all([
-    activeLanguages(),
-    translationDefinitions(),
+    activeLanguages(organizationId),
+    translationDefinitions(organizationId),
   ]);
   const sourceLanguage = canonicalLanguage(languages);
   let language: TranslationLanguageRecord;
@@ -424,6 +456,7 @@ export async function localizeResourceList<T extends ResourceWithMedia>(
     .from(resourceTranslations)
     .where(
       and(
+        eq(resourceTranslations.organizationId, organizationId),
         inArray(
           resourceTranslations.resourceId,
           resourceList.map((resource) => resource.id),
@@ -452,19 +485,32 @@ export async function localizeResourceList<T extends ResourceWithMedia>(
   };
 }
 
-export async function getResourceTranslationOverview(resourceId: string) {
+export async function getResourceTranslationOverview(
+  organizationId: string,
+  resourceId: string,
+) {
   const [resource, languages, definitions, rows, jobs] = await Promise.all([
-    resourceBundle(resourceId),
-    activeLanguages(),
-    translationDefinitions(),
+    resourceBundle(organizationId, resourceId),
+    activeLanguages(organizationId),
+    translationDefinitions(organizationId),
     db
       .select()
       .from(resourceTranslations)
-      .where(eq(resourceTranslations.resourceId, resourceId)),
+      .where(
+        and(
+          eq(resourceTranslations.organizationId, organizationId),
+          eq(resourceTranslations.resourceId, resourceId),
+        ),
+      ),
     db
       .select()
       .from(resourceTranslationJobs)
-      .where(eq(resourceTranslationJobs.resourceId, resourceId)),
+      .where(
+        and(
+          eq(resourceTranslationJobs.organizationId, organizationId),
+          eq(resourceTranslationJobs.resourceId, resourceId),
+        ),
+      ),
   ]);
   if (!resource) return null;
   const sourceLanguage = canonicalLanguage(languages);
@@ -587,6 +633,7 @@ function pruneDocument(
 }
 
 export async function updateManualResourceTranslation(options: {
+  organizationId: string;
   resourceId: string;
   languageCode: string;
   expectedRevision: number;
@@ -598,16 +645,22 @@ export async function updateManualResourceTranslation(options: {
     await transaction.execute(sql`
       SELECT ${resources.id}
       FROM ${resources}
-      WHERE ${resources.id} = ${options.resourceId}
+      WHERE ${resources.organizationId} = ${options.organizationId}
+        AND ${resources.id} = ${options.resourceId}
       FOR UPDATE
     `);
-    const resource = await resourceBundle(options.resourceId, transaction);
+    const resource = await resourceBundle(
+      options.organizationId,
+      options.resourceId,
+      transaction,
+    );
     if (!resource) return { status: "not_found" as const };
     const [targetLanguage] = await transaction
       .select()
       .from(translationLanguages)
       .where(
         and(
+          eq(translationLanguages.organizationId, options.organizationId),
           eq(translationLanguages.code, languageCode),
           isNull(translationLanguages.archivedAt),
         ),
@@ -625,6 +678,7 @@ export async function updateManualResourceTranslation(options: {
       .from(resourceTranslationJobs)
       .where(
         and(
+          eq(resourceTranslationJobs.organizationId, options.organizationId),
           eq(resourceTranslationJobs.resourceId, options.resourceId),
           eq(resourceTranslationJobs.languageCode, languageCode),
         ),
@@ -636,6 +690,7 @@ export async function updateManualResourceTranslation(options: {
       .from(resourceTranslations)
       .where(
         and(
+          eq(resourceTranslations.organizationId, options.organizationId),
           eq(resourceTranslations.resourceId, options.resourceId),
           eq(resourceTranslations.languageCode, languageCode),
         ),
@@ -645,7 +700,10 @@ export async function updateManualResourceTranslation(options: {
     if ((row?.revision ?? 0) !== options.expectedRevision) {
       throw new TranslationRevisionConflictError();
     }
-    const definitions = await translationDefinitions(transaction);
+    const definitions = await translationDefinitions(
+      options.organizationId,
+      transaction,
+    );
     const applicable = applicableDefinitions(resource, definitions);
     const fields = resourceTranslationFields(resource, applicable);
     const currentKeys = new Set(Object.keys(fields));
@@ -705,6 +763,7 @@ export async function updateManualResourceTranslation(options: {
     const [saved] = await transaction
       .insert(resourceTranslations)
       .values({
+        organizationId: options.organizationId,
         resourceId: resource.id,
         languageCode,
         ...document,
@@ -713,6 +772,7 @@ export async function updateManualResourceTranslation(options: {
       })
       .onConflictDoUpdate({
         target: [
+          resourceTranslations.organizationId,
           resourceTranslations.resourceId,
           resourceTranslations.languageCode,
         ],
@@ -811,6 +871,10 @@ async function claimTranslationJob() {
       })
       .where(
         and(
+          eq(
+            resourceTranslationJobs.organizationId,
+            candidate.organizationId,
+          ),
           eq(resourceTranslationJobs.resourceId, candidate.resourceId),
           eq(resourceTranslationJobs.languageCode, candidate.languageCode),
         ),
@@ -825,6 +889,7 @@ async function discardClaim(job: ResourceTranslationJobRecord) {
     .delete(resourceTranslationJobs)
     .where(
       and(
+        eq(resourceTranslationJobs.organizationId, job.organizationId),
         eq(resourceTranslationJobs.resourceId, job.resourceId),
         eq(resourceTranslationJobs.languageCode, job.languageCode),
         eq(resourceTranslationJobs.generation, job.generation),
@@ -846,6 +911,10 @@ async function saveJobTranslations(options: {
       .from(resourceTranslationJobs)
       .where(
         and(
+          eq(
+            resourceTranslationJobs.organizationId,
+            options.job.organizationId,
+          ),
           eq(resourceTranslationJobs.resourceId, options.job.resourceId),
           eq(resourceTranslationJobs.languageCode, options.job.languageCode),
         ),
@@ -860,12 +929,17 @@ async function saveJobTranslations(options: {
     ) {
       return "superseded" as const;
     }
-    const resource = await resourceBundle(options.job.resourceId, transaction);
+    const resource = await resourceBundle(
+      options.job.organizationId,
+      options.job.resourceId,
+      transaction,
+    );
     const [language] = await transaction
       .select()
       .from(translationLanguages)
       .where(
         and(
+          eq(translationLanguages.organizationId, options.job.organizationId),
           eq(translationLanguages.code, options.job.languageCode),
           isNull(translationLanguages.archivedAt),
         ),
@@ -876,13 +950,20 @@ async function saveJobTranslations(options: {
         .delete(resourceTranslationJobs)
         .where(
           and(
+            eq(
+              resourceTranslationJobs.organizationId,
+              options.job.organizationId,
+            ),
             eq(resourceTranslationJobs.resourceId, options.job.resourceId),
             eq(resourceTranslationJobs.languageCode, options.job.languageCode),
           ),
         );
       return "discarded" as const;
     }
-    const definitions = await translationDefinitions(transaction);
+    const definitions = await translationDefinitions(
+      options.job.organizationId,
+      transaction,
+    );
     const currentPolicyHash = translationPolicyHash(language);
     const applicable = applicableDefinitions(resource, definitions);
     const currentFields = resourceTranslationFields(resource, applicable);
@@ -912,6 +993,7 @@ async function saveJobTranslations(options: {
       .from(resourceTranslations)
       .where(
         and(
+          eq(resourceTranslations.organizationId, options.job.organizationId),
           eq(resourceTranslations.resourceId, resource.id),
           eq(resourceTranslations.languageCode, language.code),
         ),
@@ -946,6 +1028,7 @@ async function saveJobTranslations(options: {
     await transaction
       .insert(resourceTranslations)
       .values({
+        organizationId: options.job.organizationId,
         resourceId: resource.id,
         languageCode: language.code,
         ...document,
@@ -955,6 +1038,7 @@ async function saveJobTranslations(options: {
       })
       .onConflictDoUpdate({
         target: [
+          resourceTranslations.organizationId,
           resourceTranslations.resourceId,
           resourceTranslations.languageCode,
         ],
@@ -977,6 +1061,10 @@ async function saveJobTranslations(options: {
       .delete(resourceTranslationJobs)
       .where(
         and(
+          eq(
+            resourceTranslationJobs.organizationId,
+            lockedJob.organizationId,
+          ),
           eq(resourceTranslationJobs.resourceId, lockedJob.resourceId),
           eq(resourceTranslationJobs.languageCode, lockedJob.languageCode),
           eq(resourceTranslationJobs.generation, lockedJob.generation),
@@ -1037,6 +1125,7 @@ async function failClaim(job: ResourceTranslationJobRecord, error: unknown) {
       })
       .where(
         and(
+          eq(resourceTranslationJobs.organizationId, job.organizationId),
           eq(resourceTranslationJobs.resourceId, job.resourceId),
           eq(resourceTranslationJobs.languageCode, job.languageCode),
           eq(resourceTranslationJobs.generation, job.generation),
@@ -1048,6 +1137,7 @@ async function failClaim(job: ResourceTranslationJobRecord, error: unknown) {
       await transaction
         .insert(resourceTranslations)
         .values({
+          organizationId: job.organizationId,
           resourceId: job.resourceId,
           languageCode: job.languageCode,
           status: "failed",
@@ -1056,6 +1146,7 @@ async function failClaim(job: ResourceTranslationJobRecord, error: unknown) {
         })
         .onConflictDoUpdate({
           target: [
+            resourceTranslations.organizationId,
             resourceTranslations.resourceId,
             resourceTranslations.languageCode,
           ],
@@ -1073,14 +1164,15 @@ async function failClaim(job: ResourceTranslationJobRecord, error: unknown) {
 async function processTranslationJob(job: ResourceTranslationJobRecord) {
   try {
     const [resource, languages, definitions, rows] = await Promise.all([
-      resourceBundle(job.resourceId),
-      activeLanguages(),
-      translationDefinitions(),
+      resourceBundle(job.organizationId, job.resourceId),
+      activeLanguages(job.organizationId),
+      translationDefinitions(job.organizationId),
       db
         .select()
         .from(resourceTranslations)
         .where(
           and(
+            eq(resourceTranslations.organizationId, job.organizationId),
             eq(resourceTranslations.resourceId, job.resourceId),
             eq(resourceTranslations.languageCode, job.languageCode),
           ),
@@ -1118,6 +1210,7 @@ async function processTranslationJob(job: ResourceTranslationJobRecord) {
     let model: string | null = null;
     if (Object.keys(aiFields).length) {
       const limit = await consumePaidAiRateLimit({
+        organizationId: job.organizationId,
         operation: "translate",
         identity: { subject: job.requestedBy },
       });

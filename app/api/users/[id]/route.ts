@@ -6,6 +6,7 @@ import {
   accessRoles,
   apiTokens,
   inventoryAccessRules,
+  organizationMemberships,
   users,
 } from "@/db/schema";
 import { requireSessionPermission } from "@/lib/api-auth";
@@ -23,21 +24,10 @@ class UserUpdateError extends Error {
   }
 }
 
-const publicUser = {
-  id: users.id,
-  email: users.email,
-  name: users.name,
-  role: users.role,
-  isActive: users.isActive,
-  lastLoginAt: users.lastLoginAt,
-  passwordUpdatedAt: users.passwordUpdatedAt,
-  createdAt: users.createdAt,
-  updatedAt: users.updatedAt,
-};
-
 export async function PATCH(request: Request, context: Context) {
   const authorization = await requireSessionPermission(request, "users.manage");
   if (authorization.response) return authorization.response;
+  const organizationId = authorization.identity.organizationId;
 
   const id = z.string().uuid().safeParse((await context.params).id);
   if (!id.success) {
@@ -64,18 +54,31 @@ export async function PATCH(request: Request, context: Context) {
 
   try {
     const saved = await db.transaction(async (transaction) => {
+      // Serialize membership administration per organization. Without this,
+      // two admins could concurrently demote each other after both observed a
+      // count of two, leaving the organization with no active administrator.
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${organizationId}, 0))`,
+      );
+
       const loadRoleGrant = async (roleKey: string) => {
         const [[definition], rules] = await Promise.all([
           transaction
             .select({ permissions: accessRoles.permissions })
             .from(accessRoles)
-            .where(eq(accessRoles.key, roleKey))
+            .where(
+              and(
+                eq(accessRoles.organizationId, organizationId),
+                eq(accessRoles.key, roleKey),
+              ),
+            )
             .limit(1),
           transaction
             .select({ permissions: inventoryAccessRules.permissions })
             .from(inventoryAccessRules)
             .where(
               and(
+                eq(inventoryAccessRules.organizationId, organizationId),
                 eq(inventoryAccessRules.roleKey, roleKey),
                 eq(inventoryAccessRules.enabled, true),
               ),
@@ -90,20 +93,26 @@ export async function PATCH(request: Request, context: Context) {
       };
 
       const [existing] = await transaction
-        .select()
-        .from(users)
-        .where(eq(users.id, id.data))
+        .select({ user: users, membership: organizationMemberships })
+        .from(organizationMemberships)
+        .innerJoin(users, eq(organizationMemberships.userId, users.id))
+        .where(
+          and(
+            eq(organizationMemberships.organizationId, organizationId),
+            eq(organizationMemberships.userId, id.data),
+          ),
+        )
         .limit(1)
         .for("update");
       if (!existing) throw new UserUpdateError("User not found.", 404);
 
-      const existingRoleGrant = await loadRoleGrant(existing.role);
+      const existingRoleGrant = await loadRoleGrant(existing.membership.roleKey);
       if (
         !existingRoleGrant ||
-        (existing.role !== authorization.identity.role &&
+        (existing.membership.roleKey !== authorization.identity.role &&
           Array.from(existingRoleGrant).some(
-          (permission) =>
-            !authorization.identity.permissions.includes(permission),
+            (permission) =>
+              !authorization.identity.permissions.includes(permission),
           ))
       ) {
         throw new UserUpdateError(
@@ -112,8 +121,9 @@ export async function PATCH(request: Request, context: Context) {
         );
       }
 
-      const nextRole = parsed.data.role ?? existing.role;
-      const nextActive = parsed.data.isActive ?? existing.isActive;
+      const nextRole = parsed.data.role ?? existing.membership.roleKey;
+      const nextActive =
+        parsed.data.isActive ?? existing.membership.isActive;
       const nextRoleGrant = await loadRoleGrant(nextRole);
       if (!nextRoleGrant) {
         throw new UserUpdateError("The selected role does not exist.", 422);
@@ -130,29 +140,41 @@ export async function PATCH(request: Request, context: Context) {
           403,
         );
       }
-      const changesOwnAccess =
-        authorization.identity.userId === existing.id &&
-        (!nextActive ||
-          !nextRoleGrant.has("users.manage"));
-      if (changesOwnAccess) {
+      if (
+        authorization.identity.userId === existing.user.id &&
+        (!nextActive || !nextRoleGrant.has("users.manage"))
+      ) {
         throw new UserUpdateError(
-          "You cannot disable your own account or remove your own user-management permission.",
+          "You cannot disable your own membership or remove your own user-management permission.",
           409,
         );
       }
 
+      if (
+        authorization.identity.userId !== existing.user.id &&
+        (parsed.data.name !== undefined || nextPasswordHash)
+      ) {
+        throw new UserUpdateError(
+          "Only the account owner can change their global profile or password.",
+          403,
+        );
+      }
+
       const removesActiveAdmin =
-        existing.isActive &&
-        existing.role === "admin" &&
+        existing.membership.isActive &&
+        existing.membership.roleKey === "admin" &&
         (!nextActive || nextRole !== "admin");
       if (removesActiveAdmin) {
-        await transaction.execute(
-          sql`select "id" from "users" where "role" = 'admin' and "is_active" = true for update`,
-        );
         const [{ value }] = await transaction
           .select({ value: count() })
-          .from(users)
-          .where(and(eq(users.role, "admin"), eq(users.isActive, true)));
+          .from(organizationMemberships)
+          .where(
+            and(
+              eq(organizationMemberships.organizationId, organizationId),
+              eq(organizationMemberships.roleKey, "admin"),
+              eq(organizationMemberships.isActive, true),
+            ),
+          );
         if (value <= 1) {
           throw new UserUpdateError(
             "At least one active administrator must remain.",
@@ -161,39 +183,90 @@ export async function PATCH(request: Request, context: Context) {
         }
       }
 
-      const invalidatesSessions = Boolean(
-        nextPasswordHash ||
-          parsed.data.role !== undefined ||
-          parsed.data.isActive !== undefined,
-      );
-      const [updated] = await transaction
-        .update(users)
-        .set({
-          ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
-          ...(parsed.data.role !== undefined ? { role: parsed.data.role } : {}),
-          ...(parsed.data.isActive !== undefined
-            ? { isActive: parsed.data.isActive }
-            : {}),
-          ...(nextPasswordHash
-            ? { passwordHash: nextPasswordHash, passwordUpdatedAt: new Date() }
-            : {}),
-          ...(invalidatesSessions
-            ? { sessionVersion: sql`${users.sessionVersion} + 1` }
-            : {}),
-          updatedBy: authorization.identity.subject,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, existing.id))
-        .returning(publicUser);
+      if (
+        parsed.data.role !== undefined ||
+        parsed.data.isActive !== undefined
+      ) {
+        await transaction
+          .update(organizationMemberships)
+          .set({
+            ...(parsed.data.role !== undefined
+              ? { roleKey: parsed.data.role }
+              : {}),
+            ...(parsed.data.isActive !== undefined
+              ? { isActive: parsed.data.isActive }
+              : {}),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(organizationMemberships.organizationId, organizationId),
+              eq(organizationMemberships.userId, existing.user.id),
+            ),
+          );
+      }
 
-      if (!updated) throw new UserUpdateError("User not found.", 404);
-      if (invalidatesSessions) {
+      let globallyActive = existing.user.isActive;
+      if (parsed.data.isActive !== undefined) {
+        const [{ value: activeMemberships }] = await transaction
+          .select({ value: count() })
+          .from(organizationMemberships)
+          .where(
+            and(
+              eq(organizationMemberships.userId, existing.user.id),
+              eq(organizationMemberships.isActive, true),
+            ),
+          );
+        globallyActive = activeMemberships > 0;
+      }
+
+      let updatedUser = existing.user;
+      if (
+        parsed.data.name !== undefined ||
+        nextPasswordHash ||
+        globallyActive !== existing.user.isActive
+      ) {
+        [updatedUser] = await transaction
+          .update(users)
+          .set({
+            ...(parsed.data.name !== undefined
+              ? { name: parsed.data.name }
+              : {}),
+            ...(nextPasswordHash
+              ? {
+                  passwordHash: nextPasswordHash,
+                  passwordUpdatedAt: new Date(),
+                  sessionVersion: sql.raw('"session_version" + 1'),
+                }
+              : {}),
+            ...(globallyActive !== existing.user.isActive
+              ? { isActive: globallyActive }
+              : {}),
+            updatedBy: authorization.identity.subject,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, existing.user.id))
+          .returning();
+      }
+
+      if (nextPasswordHash) {
         await transaction
           .update(apiTokens)
           .set({ revokedAt: new Date() })
-          .where(eq(apiTokens.userId, existing.id));
+          .where(eq(apiTokens.userId, existing.user.id));
       }
-      return updated;
+
+      return {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        role: nextRole,
+        isActive: nextActive,
+        lastLoginAt: updatedUser.lastLoginAt,
+        passwordUpdatedAt: updatedUser.passwordUpdatedAt,
+        createdAt: existing.membership.createdAt,
+        updatedAt: new Date(),
+      };
     });
 
     return Response.json({ user: saved });

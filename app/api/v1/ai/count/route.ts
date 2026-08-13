@@ -254,6 +254,7 @@ export async function POST(request: Request) {
   let claim;
   try {
     claim = await claimAiOperation({
+      organizationId: authorization.identity.organizationId,
       operation: "count",
       idempotencyKey: idempotency.key,
       resourceId: itemId ?? idempotency.key,
@@ -285,7 +286,11 @@ export async function POST(request: Request) {
       await new Promise((resolve) => setTimeout(resolve, 250));
       let current;
       try {
-        current = await findAiOperation("count", idempotency.key);
+        current = await findAiOperation(
+          authorization.identity.organizationId,
+          "count",
+          idempotency.key,
+        );
       } catch (error) {
         console.error("Unable to reload an idempotent count request.", error);
         return json(
@@ -318,11 +323,17 @@ export async function POST(request: Request) {
   let limit;
   try {
     limit = await consumePaidAiRateLimit({
+      organizationId: authorization.identity.organizationId,
       operation: "count",
       identity: authorization.identity,
     });
   } catch (error) {
-    if (operationId) await releaseAiOperation(operationId).catch(() => undefined);
+    if (operationId) {
+      await releaseAiOperation(
+        authorization.identity.organizationId,
+        operationId,
+      ).catch(() => undefined);
+    }
     console.error("Unable to check the AI counting rate limit.", error);
     return json(
       { error: "AI rate limiting is temporarily unavailable." },
@@ -330,7 +341,12 @@ export async function POST(request: Request) {
     );
   }
   if (!limit.allowed) {
-    if (operationId) await releaseAiOperation(operationId).catch(() => undefined);
+    if (operationId) {
+      await releaseAiOperation(
+        authorization.identity.organizationId,
+        operationId,
+      ).catch(() => undefined);
+    }
     return json(
       {
         error: limit.disabled
@@ -345,7 +361,12 @@ export async function POST(request: Request) {
   try {
     preparedImage = await prepareInventoryCountImage(imageBytes);
   } catch {
-    if (operationId) await releaseAiOperation(operationId).catch(() => undefined);
+    if (operationId) {
+      await releaseAiOperation(
+        authorization.identity.organizationId,
+        operationId,
+      ).catch(() => undefined);
+    }
     return json(
       { error: "The uploaded file is not a readable, supported image." },
       { status: 422 },
@@ -359,7 +380,13 @@ export async function POST(request: Request) {
   ) => {
     if (operationId) {
       try {
-        await finishAiOperation({ operationId, body, status, headers });
+        await finishAiOperation({
+          organizationId: authorization.identity.organizationId,
+          operationId,
+          body,
+          status,
+          headers,
+        });
       } catch (error) {
         console.error("Unable to persist the count response for replay.", error);
         // If Replicate already accepted a prediction, still return its signed
@@ -432,7 +459,10 @@ export async function POST(request: Request) {
     }
     if (operationId) {
       try {
-        await releaseAiOperation(operationId);
+        await releaseAiOperation(
+          authorization.identity.organizationId,
+          operationId,
+        );
       } catch (releaseError) {
         console.error("Unable to release the transient count claim.", releaseError);
       }

@@ -1,4 +1,4 @@
-import { asc, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { resourceVariants } from "@/db/schema";
 import { requirePermission } from "@/lib/api-auth";
@@ -45,7 +45,11 @@ export async function GET(request: Request) {
     );
   }
 
-  const firstPage = await listResources({ page: 1, pageSize: PAGE_SIZE });
+  const firstPage = await listResources({
+    organizationId: authorization.identity.organizationId,
+    page: 1,
+    pageSize: PAGE_SIZE,
+  });
   if (firstPage.pagination.total > MAX_EXPORT_ROWS) {
     return Response.json(
       {
@@ -57,7 +61,11 @@ export async function GET(request: Request) {
 
   const exportedResources = [...firstPage.resources];
   for (let page = 2; page <= firstPage.pagination.pages; page += 1) {
-    const result = await listResources({ page, pageSize: PAGE_SIZE });
+    const result = await listResources({
+      organizationId: authorization.identity.organizationId,
+      page,
+      pageSize: PAGE_SIZE,
+    });
     exportedResources.push(...result.resources);
   }
 
@@ -75,7 +83,15 @@ export async function GET(request: Request) {
     const chunkVariants = await db
       .select()
       .from(resourceVariants)
-      .where(inArray(resourceVariants.resourceId, resourceIdChunk))
+      .where(
+        and(
+          eq(
+            resourceVariants.organizationId,
+            authorization.identity.organizationId,
+          ),
+          inArray(resourceVariants.resourceId, resourceIdChunk),
+        ),
+      )
       .orderBy(
         asc(resourceVariants.resourceId),
         asc(resourceVariants.position),

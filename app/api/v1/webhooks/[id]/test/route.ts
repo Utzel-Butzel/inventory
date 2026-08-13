@@ -16,7 +16,11 @@ export async function POST(request: Request, context: Context) {
     return Response.json({ error: "Invalid webhook id." }, { status: 422 });
   }
   try {
-    const result = await enqueueWebhookTest(id, authorization.identity.subject);
+    const result = await enqueueWebhookTest(
+      authorization.identity.organizationId,
+      id,
+      authorization.identity.subject,
+    );
     if (!result) return Response.json({ error: "Not found" }, { status: 404 });
     return Response.json(result, {
       status: 202,

@@ -40,6 +40,7 @@ export async function GET(request: Request, context: Context) {
 
   try {
     const result = await listCustomFieldReferenceOptions({
+      organizationId: authorization.identity.organizationId,
       definitionId: id.data,
       query: parsed.data.query,
       selectedIds: parsed.data.selectedIds,

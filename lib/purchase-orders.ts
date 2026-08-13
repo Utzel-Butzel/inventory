@@ -224,6 +224,7 @@ const deriveStatus = (
 type PurchaseOrderReader = Pick<typeof db, "select">;
 
 async function loadOrderLines(
+  organizationId: string,
   orderIds: string[],
   database: PurchaseOrderReader = db,
 ) {
@@ -246,15 +247,36 @@ async function loadOrderLines(
     .from(purchaseOrderLines)
     .innerJoin(
       purchaseOrders,
-      eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+      and(
+        eq(purchaseOrders.organizationId, organizationId),
+        eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+      ),
     )
-    .innerJoin(resources, eq(resources.id, purchaseOrderLines.resourceId))
-    .leftJoin(stockSettings, eq(stockSettings.resourceId, resources.id))
-    .where(inArray(purchaseOrderLines.purchaseOrderId, orderIds))
+    .innerJoin(
+      resources,
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, purchaseOrderLines.resourceId),
+      ),
+    )
+    .leftJoin(
+      stockSettings,
+      and(
+        eq(stockSettings.organizationId, organizationId),
+        eq(stockSettings.resourceId, resources.id),
+      ),
+    )
+    .where(
+      and(
+        eq(purchaseOrderLines.organizationId, organizationId),
+        inArray(purchaseOrderLines.purchaseOrderId, orderIds),
+      ),
+    )
     .orderBy(asc(purchaseOrderLines.createdAt), asc(purchaseOrderLines.id));
 }
 
 export async function listPurchaseOrders(
+  organizationId: string,
   options: { status?: PurchaseOrderStatus; limit?: number } = {},
 ) {
   return db.transaction(async (transaction) => {
@@ -263,15 +285,22 @@ export async function listPurchaseOrders(
       ? await transaction
           .select()
           .from(purchaseOrders)
-          .where(eq(purchaseOrders.status, options.status))
+          .where(
+            and(
+              eq(purchaseOrders.organizationId, organizationId),
+              eq(purchaseOrders.status, options.status),
+            ),
+          )
           .orderBy(desc(purchaseOrders.orderedAt), desc(purchaseOrders.createdAt))
           .limit(limit)
       : await transaction
           .select()
           .from(purchaseOrders)
+          .where(eq(purchaseOrders.organizationId, organizationId))
           .orderBy(desc(purchaseOrders.orderedAt), desc(purchaseOrders.createdAt))
           .limit(limit);
     const lineRows = await loadOrderLines(
+      organizationId,
       orders.map((order) => order.id),
       transaction,
     );
@@ -289,20 +318,26 @@ export async function listPurchaseOrders(
   }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
-export async function getPurchaseOrder(id: string) {
+export async function getPurchaseOrder(organizationId: string, id: string) {
   return db.transaction(async (transaction) => {
     const [order] = await transaction
       .select()
       .from(purchaseOrders)
-      .where(eq(purchaseOrders.id, id))
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, organizationId),
+          eq(purchaseOrders.id, id),
+        ),
+      )
       .limit(1);
     if (!order) return null;
-    const lineRows = await loadOrderLines([id], transaction);
+    const lineRows = await loadOrderLines(organizationId, [id], transaction);
     return orderDto(order, lineRows);
   }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
 export async function createPurchaseOrder(
+  organizationId: string,
   input: PurchaseOrderCreateInput,
   actor: string,
   idempotency: IdempotencyInput,
@@ -344,7 +379,12 @@ export async function createPurchaseOrder(
   const [existing] = await db
     .select()
     .from(purchaseOrders)
-    .where(eq(purchaseOrders.idempotencyKey, idempotency.key))
+    .where(
+      and(
+        eq(purchaseOrders.organizationId, organizationId),
+        eq(purchaseOrders.idempotencyKey, idempotency.key),
+      ),
+    )
     .limit(1);
   if (existing) return validateReplay(existing);
 
@@ -353,7 +393,12 @@ export async function createPurchaseOrder(
       const existingResources = await transaction
         .select({ id: resources.id, name: resources.name, sku: resources.sku })
         .from(resources)
-        .where(inArray(resources.id, [...resourceIds].sort()))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            inArray(resources.id, [...resourceIds].sort()),
+          ),
+        )
         .orderBy(asc(resources.id))
         .for("update");
       if (existingResources.length !== resourceIds.length) {
@@ -368,7 +413,12 @@ export async function createPurchaseOrder(
       const [replayAfterLock] = await transaction
         .select()
         .from(purchaseOrders)
-        .where(eq(purchaseOrders.idempotencyKey, idempotency.key))
+        .where(
+          and(
+            eq(purchaseOrders.organizationId, organizationId),
+            eq(purchaseOrders.idempotencyKey, idempotency.key),
+          ),
+        )
         .limit(1);
       if (replayAfterLock) return validateReplay(replayAfterLock);
 
@@ -378,7 +428,12 @@ export async function createPurchaseOrder(
           trackingMode: stockSettings.trackingMode,
         })
         .from(stockSettings)
-        .where(inArray(stockSettings.resourceId, resourceIds));
+        .where(
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            inArray(stockSettings.resourceId, resourceIds),
+          ),
+        );
       const committedRows = await transaction
         .select({
           resourceId: purchaseOrderLines.resourceId,
@@ -387,10 +442,14 @@ export async function createPurchaseOrder(
         .from(purchaseOrderLines)
         .innerJoin(
           purchaseOrders,
-          eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+          and(
+            eq(purchaseOrders.organizationId, organizationId),
+            eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+          ),
         )
         .where(
           and(
+            eq(purchaseOrderLines.organizationId, organizationId),
             inArray(purchaseOrderLines.resourceId, resourceIds),
             inArray(purchaseOrders.status, [
               "draft",
@@ -428,6 +487,7 @@ export async function createPurchaseOrder(
       const [order] = await transaction
         .insert(purchaseOrders)
         .values({
+          organizationId,
           reference: input.reference || null,
           supplier: input.supplier ?? "",
           status: input.status ?? "ordered",
@@ -444,6 +504,7 @@ export async function createPurchaseOrder(
         .insert(purchaseOrderLines)
         .values(
           input.lines.map((line) => ({
+            organizationId,
             purchaseOrderId: order.id,
             resourceId: line.resourceId,
             orderedQuantity: line.orderedQuantity,
@@ -475,14 +536,24 @@ export async function createPurchaseOrder(
       await transaction
         .update(purchaseOrders)
         .set({ response })
-        .where(eq(purchaseOrders.id, order.id));
+        .where(
+          and(
+            eq(purchaseOrders.organizationId, organizationId),
+            eq(purchaseOrders.id, order.id),
+          ),
+        );
       return { response, replayed: false } as const;
     });
   } catch (error) {
     const [winner] = await db
       .select()
       .from(purchaseOrders)
-      .where(eq(purchaseOrders.idempotencyKey, idempotency.key))
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, organizationId),
+          eq(purchaseOrders.idempotencyKey, idempotency.key),
+        ),
+      )
       .limit(1);
     if (winner) return validateReplay(winner);
     throw error;
@@ -490,6 +561,7 @@ export async function createPurchaseOrder(
 }
 
 export async function updatePurchaseOrder(
+  organizationId: string,
   id: string,
   patch: PurchaseOrderPatchInput,
 ) {
@@ -497,7 +569,12 @@ export async function updatePurchaseOrder(
     const [order] = await transaction
       .select()
       .from(purchaseOrders)
-      .where(eq(purchaseOrders.id, id))
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, organizationId),
+          eq(purchaseOrders.id, id),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!order) return false;
@@ -508,7 +585,12 @@ export async function updatePurchaseOrder(
         receivedQuantity: purchaseOrderLines.receivedQuantity,
       })
       .from(purchaseOrderLines)
-      .where(eq(purchaseOrderLines.purchaseOrderId, id));
+      .where(
+        and(
+          eq(purchaseOrderLines.organizationId, organizationId),
+          eq(purchaseOrderLines.purchaseOrderId, id),
+        ),
+      );
     if (order.status === "received" && patch.status !== undefined) {
       throw new PurchaseOrderOperationError(
         "A fully received purchase order cannot be reopened or cancelled without reversing its receipts.",
@@ -541,13 +623,19 @@ export async function updatePurchaseOrder(
         status: nextStatus,
         updatedAt: new Date(),
       })
-      .where(eq(purchaseOrders.id, id));
+      .where(
+        and(
+          eq(purchaseOrders.organizationId, organizationId),
+          eq(purchaseOrders.id, id),
+        ),
+      );
     return true;
   });
-  return found ? getPurchaseOrder(id) : null;
+  return found ? getPurchaseOrder(organizationId, id) : null;
 }
 
 export async function receivePurchaseOrderLine(
+  organizationId: string,
   purchaseOrderId: string,
   lineId: string,
   input: PurchaseReceiptInput,
@@ -577,7 +665,12 @@ export async function receivePurchaseOrderLine(
   const [existing] = await db
     .select()
     .from(purchaseReceipts)
-    .where(eq(purchaseReceipts.idempotencyKey, idempotency.key))
+    .where(
+      and(
+        eq(purchaseReceipts.organizationId, organizationId),
+        eq(purchaseReceipts.idempotencyKey, idempotency.key),
+      ),
+    )
     .limit(1);
   if (existing) return validateReplay(existing);
 
@@ -592,6 +685,7 @@ export async function receivePurchaseOrderLine(
         .from(purchaseOrderLines)
         .where(
           and(
+            eq(purchaseOrderLines.organizationId, organizationId),
             eq(purchaseOrderLines.id, lineId),
             eq(purchaseOrderLines.purchaseOrderId, purchaseOrderId),
           ),
@@ -604,14 +698,24 @@ export async function receivePurchaseOrderLine(
       const [order] = await transaction
         .select()
         .from(purchaseOrders)
-        .where(eq(purchaseOrders.id, purchaseOrderId))
+        .where(
+          and(
+            eq(purchaseOrders.organizationId, organizationId),
+            eq(purchaseOrders.id, purchaseOrderId),
+          ),
+        )
         .limit(1)
         .for("update");
       if (!order) throw new PurchaseOrderOperationError("Not found", 404);
       const [resource] = await transaction
         .select()
         .from(resources)
-        .where(eq(resources.id, initialLine.resourceId))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, initialLine.resourceId),
+          ),
+        )
         .limit(1)
         .for("update");
       if (!resource) {
@@ -625,6 +729,7 @@ export async function receivePurchaseOrderLine(
         .from(purchaseOrderLines)
         .where(
           and(
+            eq(purchaseOrderLines.organizationId, organizationId),
             eq(purchaseOrderLines.id, lineId),
             eq(purchaseOrderLines.purchaseOrderId, purchaseOrderId),
           ),
@@ -638,7 +743,12 @@ export async function receivePurchaseOrderLine(
       const [replayAfterLock] = await transaction
         .select()
         .from(purchaseReceipts)
-        .where(eq(purchaseReceipts.idempotencyKey, idempotency.key))
+        .where(
+          and(
+            eq(purchaseReceipts.organizationId, organizationId),
+            eq(purchaseReceipts.idempotencyKey, idempotency.key),
+          ),
+        )
         .limit(1);
       if (replayAfterLock) return validateReplay(replayAfterLock);
 
@@ -670,7 +780,12 @@ export async function receivePurchaseOrderLine(
       const [settings] = await transaction
         .select({ trackingMode: stockSettings.trackingMode })
         .from(stockSettings)
-        .where(eq(stockSettings.resourceId, resource.id))
+        .where(
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            eq(stockSettings.resourceId, resource.id),
+          ),
+        )
         .limit(1);
       const mode = settings?.trackingMode ?? "bulk";
       if (mode === "bulk" && input.unitCodes?.length) {
@@ -697,6 +812,7 @@ export async function receivePurchaseOrderLine(
       const [receipt] = await transaction
         .insert(purchaseReceipts)
         .values({
+          organizationId,
           purchaseOrderLineId: line.id,
           quantity: input.quantity,
           occurredAt,
@@ -720,6 +836,7 @@ export async function receivePurchaseOrderLine(
           .insert(stockUnits)
           .values(
             codes.map((code) => ({
+              organizationId,
               resourceId: resource.id,
               code,
               status: "available" as const,
@@ -736,13 +853,19 @@ export async function receivePurchaseOrderLine(
       await transaction
         .update(resources)
         .set({ quantity: balanceAfter, updatedAt: now })
-        .where(eq(resources.id, resource.id));
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, resource.id),
+          ),
+        );
       let movements: StockMovementRecord[];
       if (units.length) {
         movements = await transaction
           .insert(stockMovements)
           .values(
             units.map((unit, index) => ({
+              organizationId,
               resourceId: resource.id,
               unitId: unit.id,
               purchaseReceiptId: receipt.id,
@@ -764,6 +887,7 @@ export async function receivePurchaseOrderLine(
         const [movement] = await transaction
           .insert(stockMovements)
           .values({
+            organizationId,
             resourceId: resource.id,
             purchaseReceiptId: receipt.id,
             delta: input.quantity,
@@ -787,7 +911,12 @@ export async function receivePurchaseOrderLine(
       await transaction
         .update(purchaseOrderLines)
         .set({ receivedQuantity, updatedAt: now })
-        .where(eq(purchaseOrderLines.id, line.id));
+        .where(
+          and(
+            eq(purchaseOrderLines.organizationId, organizationId),
+            eq(purchaseOrderLines.id, line.id),
+          ),
+        );
 
       const rawLines = await transaction
         .select({
@@ -805,15 +934,37 @@ export async function receivePurchaseOrderLine(
           updatedAt: purchaseOrderLines.updatedAt,
         })
         .from(purchaseOrderLines)
-        .innerJoin(resources, eq(resources.id, purchaseOrderLines.resourceId))
-        .leftJoin(stockSettings, eq(stockSettings.resourceId, resources.id))
-        .where(eq(purchaseOrderLines.purchaseOrderId, purchaseOrderId))
+        .innerJoin(
+          resources,
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, purchaseOrderLines.resourceId),
+          ),
+        )
+        .leftJoin(
+          stockSettings,
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            eq(stockSettings.resourceId, resources.id),
+          ),
+        )
+        .where(
+          and(
+            eq(purchaseOrderLines.organizationId, organizationId),
+            eq(purchaseOrderLines.purchaseOrderId, purchaseOrderId),
+          ),
+        )
         .orderBy(asc(purchaseOrderLines.createdAt), asc(purchaseOrderLines.id));
       const nextStatus = deriveStatus(order.status, rawLines);
       const [savedOrder] = await transaction
         .update(purchaseOrders)
         .set({ status: nextStatus, updatedAt: now })
-        .where(eq(purchaseOrders.id, order.id))
+        .where(
+          and(
+            eq(purchaseOrders.organizationId, organizationId),
+            eq(purchaseOrders.id, order.id),
+          ),
+        )
         .returning();
       const savedOrderDto = orderDto(savedOrder, rawLines);
       const savedLineDto = savedOrderDto.lines.find(
@@ -842,14 +993,24 @@ export async function receivePurchaseOrderLine(
       await transaction
         .update(purchaseReceipts)
         .set({ response: storedResponse })
-        .where(eq(purchaseReceipts.id, receipt.id));
+        .where(
+          and(
+            eq(purchaseReceipts.organizationId, organizationId),
+            eq(purchaseReceipts.id, receipt.id),
+          ),
+        );
       return { response: storedResponse, replayed: false } as const;
     });
   } catch (error) {
     const [winner] = await db
       .select()
       .from(purchaseReceipts)
-      .where(eq(purchaseReceipts.idempotencyKey, idempotency.key))
+      .where(
+        and(
+          eq(purchaseReceipts.organizationId, organizationId),
+          eq(purchaseReceipts.idempotencyKey, idempotency.key),
+        ),
+      )
       .limit(1);
     if (winner) return validateReplay(winner);
     throw error;

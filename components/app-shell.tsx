@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { useT } from "next-i18next/client";
@@ -27,10 +26,23 @@ import {
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { NotificationBell } from "@/components/notification-bell";
+import {
+  OrganizationLink as Link,
+  OrganizationRoutingProvider,
+} from "@/components/organization-routing";
+import {
+  OrganizationSwitcher,
+  type ActiveOrganization,
+  type OrganizationMembershipSummary,
+} from "@/components/organization-switcher";
 import { LocalizedThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/components/ui";
 import type { UserRole } from "@/db/schema";
 import type { ApiScope, AppPermission } from "@/lib/access-control-contract";
+import {
+  organizationPath,
+  stripOrganizationPathname,
+} from "@/lib/organization-path";
 
 type ShellUser = {
   name?: string | null;
@@ -116,6 +128,7 @@ const pageNames: Record<string, string> = {
 };
 
 const settingsPageNames: Record<string, string> = {
+  organization: "settings.items.organization.label",
   data: "settings.items.data.label",
   languages: "settings.items.languages.label",
   "inventory-types": "settings.items.inventoryTypes.label",
@@ -145,10 +158,14 @@ function initials(
 function SidebarContent({
   pathname,
   user,
+  organization,
+  organizations,
   onNavigate,
 }: {
   pathname: string;
   user: ShellUser;
+  organization: ActiveOrganization;
+  organizations: OrganizationMembershipSummary[];
   onNavigate?: () => void;
 }) {
   const { t } = useT(["shell", "common"]);
@@ -174,6 +191,13 @@ function SidebarContent({
         </Link>
       </div>
 
+      <div className="px-3.5 pt-2">
+        <OrganizationSwitcher
+          organization={organization}
+          organizations={organizations}
+        />
+      </div>
+
       {canCreate ? (
         <div className="px-3.5 pt-2">
           <Link
@@ -187,7 +211,10 @@ function SidebarContent({
         </div>
       ) : null}
 
-      <nav className="mt-6 flex-1 px-3" aria-label={t("navigation.mainLabel")}>
+      <nav
+        className="scrollbar-thin mt-6 min-h-0 flex-1 overflow-y-auto px-3 pb-3"
+        aria-label={t("navigation.mainLabel")}
+      >
         <p className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-sidebar-muted">
           {t("sections.workspace")}
         </p>
@@ -310,14 +337,19 @@ function SidebarContent({
 export function AppShell({
   children,
   user,
+  organization,
+  organizations,
 }: {
   children: React.ReactNode;
   user: ShellUser;
+  organization: ActiveOrganization;
+  organizations: OrganizationMembershipSummary[];
 }) {
   const pathname = usePathname();
+  const scopedPathname = stripOrganizationPathname(pathname);
   const { t } = useT("shell");
   const [mobileOpen, setMobileOpen] = useState(false);
-  const pathSegments = pathname.split("/").filter(Boolean);
+  const pathSegments = scopedPathname.split("/").filter(Boolean);
   const section = pathSegments[0] ?? "dashboard";
   const pageName = t(pageNames[section] ?? "navigation.inventory");
   const settingsPageKey =
@@ -338,9 +370,15 @@ export function AppShell({
   }, [mobileOpen]);
 
   return (
+    <OrganizationRoutingProvider organizationId={organization.id}>
     <div className="min-h-dvh bg-background">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[244px] border-r border-border lg:block">
-        <SidebarContent pathname={pathname} user={user} />
+        <SidebarContent
+          pathname={scopedPathname}
+          user={user}
+          organization={organization}
+          organizations={organizations}
+        />
       </aside>
 
       {mobileOpen ? (
@@ -361,8 +399,10 @@ export function AppShell({
               <X className="size-4" aria-hidden="true" />
             </button>
             <SidebarContent
-              pathname={pathname}
+              pathname={scopedPathname}
               user={user}
+              organization={organization}
+              organizations={organizations}
               onNavigate={() => setMobileOpen(false)}
             />
           </aside>
@@ -381,8 +421,8 @@ export function AppShell({
           </button>
 
           <div className="flex min-w-0 items-center gap-2 text-sm">
-            <span className="hidden text-muted sm:inline">
-              {t("breadcrumb.workspace")}
+            <span className="hidden max-w-40 truncate text-muted sm:inline">
+              {organization.name}
             </span>
             <ChevronRight
               className="hidden size-3.5 text-muted sm:block"
@@ -406,7 +446,7 @@ export function AppShell({
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             <form
-              action="/inventory"
+              action={organizationPath(organization.id, "/inventory")}
               className="relative hidden md:block"
               role="search"
             >
@@ -453,5 +493,6 @@ export function AppShell({
         <main className="min-h-[calc(100dvh-68px)]">{children}</main>
       </div>
     </div>
+    </OrganizationRoutingProvider>
   );
 }
