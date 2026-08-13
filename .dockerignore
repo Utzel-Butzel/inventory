@@ -8,6 +8,7 @@ npm-debug.log*
 data/uploads/*
 screenshots
 coverage
+video
 dist
 .wrangler
 .vinext
