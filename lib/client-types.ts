@@ -9,6 +9,10 @@ import type {
   SpatialVector3,
 } from "@/lib/room-scene-contract";
 import type { SpatialGeoreference } from "@/lib/spatial-georeference";
+import type {
+  RoomCameraIntrinsics,
+  RoomKeyframeFeatureDescriptor,
+} from "@/lib/room-keyframe-contract";
 
 export type ClientMedia = Omit<MediaRecord, "createdAt"> & {
   createdAt: string;
@@ -51,13 +55,44 @@ export type ClientApiToken = Omit<
 
 export type ClientRoomScanAsset = {
   id: string;
-  kind: "world_map" | "model_usdz" | "structure_model" | "guide_image";
+  kind:
+    | "world_map"
+    | "model_usdz"
+    | "structure_model"
+    | "guide_image"
+    | "textured_mesh"
+    | "gaussian_splat";
   name: string;
   mimeType: string;
   size: number;
   checksumSha256: string;
   url: string;
   createdAt: string;
+};
+
+export type ClientRoomKeyframe = {
+  id: string;
+  capturedAt: string;
+  timestamp: number;
+  cameraTransform: number[];
+  intrinsics: RoomCameraIntrinsics;
+  width: number;
+  height: number;
+  orientation:
+    | "up"
+    | "up-mirrored"
+    | "down"
+    | "down-mirrored"
+    | "left-mirrored"
+    | "right"
+    | "right-mirrored"
+    | "left";
+  quality: number;
+  featureDescriptor: RoomKeyframeFeatureDescriptor | null;
+  mimeType: "image/jpeg";
+  size: number;
+  checksumSha256: string;
+  url: string;
 };
 
 export type ClientRoomScanSummary = {
@@ -72,6 +107,7 @@ export type ClientRoomScanSummary = {
   updatedAt: string;
   placementCount: number;
   assets: ClientRoomScanAsset[];
+  keyframes?: ClientRoomKeyframe[];
   structureId?: string | null;
   structureName?: string | null;
   floorIdentifier?: string | null;
@@ -98,6 +134,12 @@ export type ClientRoomPlacement = {
   confidence: number;
   method: "scene-depth" | "mesh-raycast" | "plane-raycast" | "manual";
   anchorIdentifier: string | null;
+  localizationEvidence?: {
+    matchedKeyframeId: string;
+    distance: number;
+    confidence: number;
+    cameraPositionError?: number;
+  } | null;
   capturedAt: string;
   updatedAt: string;
 };
@@ -110,6 +152,7 @@ export type ClientRoomSceneScan = {
   capturedAt: string;
   deviceModel: string | null;
   assets: ClientRoomScanAsset[];
+  keyframes?: ClientRoomKeyframe[];
   structureId?: string | null;
   structureName?: string | null;
   floorIdentifier?: string | null;

@@ -19,6 +19,11 @@ final class ObjectCaptureSupportTests: XCTestCase {
         XCTAssertEqual(workspace.modelURL.lastPathComponent, "object.usdz")
         XCTAssertTrue(FileManager.default.fileExists(atPath: workspace.imagesDirectory.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: workspace.checkpointDirectory.path))
+        XCTAssertEqual(
+            try workspace.rootURL.resourceValues(forKeys: [.isExcludedFromBackupKey])
+                .isExcludedFromBackup,
+            true
+        )
 
         try workspace.remove()
         XCTAssertFalse(FileManager.default.fileExists(atPath: workspace.rootURL.path))

@@ -31,6 +31,10 @@ struct ObjectCaptureWorkspace: Equatable, Sendable {
 
         try fileManager.createDirectory(at: images, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: checkpoints, withIntermediateDirectories: true)
+        var rootForBackup = root
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        try rootForBackup.setResourceValues(resourceValues)
 
         return ObjectCaptureWorkspace(
             id: id,
@@ -216,16 +220,17 @@ private final class ObjectCaptureFlowModel: ObservableObject {
     func transferResult() -> CapturedObjectModel? {
         guard let result else { return nil }
         ownsWorkspace = false
+        stopCaptureWork()
         return result
     }
 
     func cancelAndCleanup() {
-        cancelWork()
+        stopCaptureWork()
         cleanupWorkspaceIfOwned()
     }
 
     private func startFreshCapture() {
-        cancelWork()
+        stopCaptureWork()
         cleanupWorkspaceIfOwned()
 
         session = ObjectCaptureSession()
@@ -408,7 +413,9 @@ private final class ObjectCaptureFlowModel: ObservableObject {
             warningMessage = "Mindestens eine Aufnahme wurde übersprungen: \(reason)"
         case .skippedSample:
             warningMessage = "Mindestens eine Aufnahme konnte nicht für das Modell verwendet werden."
-        case .inputComplete, .processingCancelled, .requestProgress,
+        case .processingCancelled:
+            fail("Die Erstellung des 3D-Modells wurde unerwartet abgebrochen.", reconstructionCanRetry: true)
+        case .inputComplete, .requestProgress,
              .requestProgressInfo, .requestComplete, .requestError:
             break
         @unknown default:
@@ -434,6 +441,8 @@ private final class ObjectCaptureFlowModel: ObservableObject {
             shotCount: shotCount,
             byteCount: Int64(size)
         )
+        try? FileManager.default.removeItem(at: workspace.imagesDirectory)
+        try? FileManager.default.removeItem(at: workspace.checkpointDirectory)
         phase = .complete
         photogrammetrySession = nil
     }
@@ -446,7 +455,7 @@ private final class ObjectCaptureFlowModel: ObservableObject {
         }
     }
 
-    private func cancelWork() {
+    private func stopCaptureWork() {
         captureTasks.forEach { $0.cancel() }
         captureTasks = []
         reconstructionTask?.cancel()

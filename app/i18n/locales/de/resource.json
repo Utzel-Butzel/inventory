@@ -107,6 +107,8 @@
     "safety": "Die KI läuft erst, nachdem die Originaldateien sicher gespeichert wurden. Das Ergebnis kann jederzeit bearbeitet werden.",
     "rewrite": "Felder analysieren und neu schreiben",
     "coverDirection": "Vorgabe für das Titelbild",
+    "referenceImage": "Referenzbild",
+    "referenceImageDescription": "Wähle, auf welchem Bild das Titelbild basieren soll.",
     "transparentBackground": "Transparenter Hintergrund",
     "transparentBackgroundDescription": "Das erstellte Titelbild als transparentes PNG freistellen.",
     "transparencyMethod": "Transparenzmethode",

@@ -87,6 +87,25 @@ test("greenscreen keying removes clean green while preserving opaque colors", ()
   assert.deepEqual([...result.subarray(12, 16)], [255, 255, 255, 255]);
 });
 
+test("greenscreen keying removes yellow-green edge spill beside the matte", () => {
+  const result = extractGreenScreenPixels(
+    Buffer.from([
+      0, 255, 0, 255,
+      128, 128, 0, 255,
+      255, 0, 0, 255,
+    ]),
+    3,
+    1,
+  );
+
+  assert.equal(result[3], 0);
+  assert.ok(result[7] >= 126 && result[7] <= 129);
+  assert.ok(result[4] >= 250);
+  assert.ok(result[5] <= 5);
+  assert.equal(result[6], 0);
+  assert.deepEqual([...result.subarray(8, 12)], [255, 0, 0, 255]);
+});
+
 test("greenscreen output is encoded as a PNG with an alpha channel", async () => {
   const input = await sharp({
     create: {

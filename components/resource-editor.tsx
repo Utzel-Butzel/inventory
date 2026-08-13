@@ -43,7 +43,11 @@ import {
   defaultCoverPrompt,
   defaultTransparentCoverPrompt,
 } from "@/lib/ai-prompts";
-import { fetchJson, type ClientResource } from "@/lib/client-types";
+import {
+  fetchJson,
+  type ClientMedia,
+  type ClientResource,
+} from "@/lib/client-types";
 import { prepareUpload, readImageGps } from "@/lib/client-media";
 import { AssemblyManager } from "@/components/assembly-manager";
 import { CustomFieldInputs } from "@/components/custom-field-inputs";
@@ -156,6 +160,85 @@ const customFieldDefinitionsFromResponse = (payload: unknown) => {
   const candidate = (payload as { definitions?: unknown }).definitions;
   return Array.isArray(candidate) ? (candidate as CustomFieldDefinition[]) : [];
 };
+
+const defaultCoverSourceMediaId = (media: ClientMedia[]) =>
+  media.find((item) => item.kind === "image" && item.source !== "ai")?.id ??
+  media.find((item) => item.kind === "image")?.id ??
+  null;
+
+function CoverReferencePicker({
+  name,
+  options,
+  selectedId,
+  disabled,
+  onSelect,
+}: {
+  name: string;
+  options: Array<{ id: string; url: string; label: string; isAi?: boolean }>;
+  selectedId: string | null;
+  disabled: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const { t } = useT("resource");
+  if (!options.length) return null;
+
+  return (
+    <fieldset className="mt-3" disabled={disabled}>
+      <legend className="text-[11px] font-semibold text-muted-strong">
+        {t("ai.referenceImage")}
+      </legend>
+      <p className="mt-0.5 text-[10px] leading-4 text-muted">
+        {t("ai.referenceImageDescription")}
+      </p>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {options.map((option) => {
+          const selected = option.id === selectedId;
+          return (
+            <label
+              key={option.id}
+              className={`relative min-w-0 cursor-pointer overflow-hidden rounded-lg border-2 bg-surface transition ${
+                selected
+                  ? "border-brand-solid ring-2 ring-brand-border"
+                  : "border-border hover:border-border-strong"
+              }`}
+              title={option.label}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={option.id}
+                checked={selected}
+                onChange={() => onSelect(option.id)}
+                className="sr-only"
+              />
+              <span className="block aspect-square overflow-hidden bg-surface-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={option.url}
+                  alt=""
+                  className="size-full object-cover"
+                />
+              </span>
+              <span className="flex min-w-0 items-center gap-1 px-1.5 py-1">
+                {selected ? (
+                  <Check className="size-3 shrink-0 text-brand" aria-hidden="true" />
+                ) : null}
+                <span className="truncate text-[9px] font-medium text-muted-strong">
+                  {option.label}
+                </span>
+              </span>
+              {option.isAi ? (
+                <span className="absolute right-1 top-1 rounded bg-brand-solid px-1 py-0.5 text-[8px] font-bold text-on-brand">
+                  {t("media.ai")}
+                </span>
+              ) : null}
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
 
 function CoverTransparencyOptions({
   transparentBackground,
@@ -279,6 +362,12 @@ export function ResourceEditor({
   const [autoCover, setAutoCover] = useState(false);
   const [coverPrompt, setCoverPrompt] = useState("");
   const [coverPromptCustomized, setCoverPromptCustomized] = useState(false);
+  const [coverSourceMediaId, setCoverSourceMediaId] = useState<string | null>(
+    null,
+  );
+  const [coverSourceFileIndex, setCoverSourceFileIndex] = useState<number | null>(
+    null,
+  );
   const [transparentCover, setTransparentCover] = useState(false);
   const [coverTransparencyMethod, setCoverTransparencyMethod] =
     useState<CoverTransparencyMethod>("difference-matting");
@@ -298,6 +387,11 @@ export function ResourceEditor({
       setCustomFields(response.resource.customFields ?? {});
       setCoverPrompt(defaultCoverPrompt(response.resource.name));
       setCoverPromptCustomized(false);
+      setCoverSourceMediaId((current) =>
+        current && response.resource.media.some((item) => item.id === current)
+          ? current
+          : defaultCoverSourceMediaId(response.resource.media),
+      );
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : t("errors.load"));
     } finally {
@@ -360,6 +454,18 @@ export function ResourceEditor({
     const urls = files.map((file) => URL.createObjectURL(file));
     setPreviews(urls);
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [files]);
+
+  useEffect(() => {
+    setCoverSourceFileIndex((current) => {
+      if (current !== null && files[current]?.type.startsWith("image/")) {
+        return current;
+      }
+      const firstImageIndex = files.findIndex((file) =>
+        file.type.startsWith("image/"),
+      );
+      return firstImageIndex >= 0 ? firstImageIndex : null;
+    });
   }, [files]);
 
   const setField = (field: keyof FormState, value: string) =>
@@ -491,10 +597,13 @@ export function ResourceEditor({
   });
 
   const uploadMedia = async (id: string) => {
-    if (!files.length) return;
+    if (!files.length) return null;
     const body = new FormData();
     files.forEach((file) => body.append("files", file, file.name));
-    await fetchJson(`/api/v1/resources/${id}/media`, { method: "POST", body });
+    return fetchJson<{ media: ClientMedia[]; uploaded: ClientMedia[] }>(
+      `/api/v1/resources/${id}/media`,
+      { method: "POST", body },
+    );
   };
 
   const runAnalysis = async (id = resourceId, overwrite = true) => {
@@ -533,7 +642,10 @@ export function ResourceEditor({
     }
   };
 
-  const runCover = async (id = resourceId) => {
+  const runCover = async (
+    id = resourceId,
+    sourceMediaId = coverSourceMediaId ?? undefined,
+  ) => {
     if (!id) return null;
     setAiAction("cover");
     setError(null);
@@ -545,6 +657,7 @@ export function ResourceEditor({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             prompt: coverPrompt || undefined,
+            sourceMediaId,
             transparentBackground: transparentCover,
             ...(transparentCover
               ? { transparencyMethod: coverTransparencyMethod }
@@ -598,7 +711,13 @@ export function ResourceEditor({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload()),
         });
-        await uploadMedia(created.resource.id);
+        const uploadResult = await uploadMedia(created.resource.id);
+        const selectedUpload =
+          coverSourceFileIndex === null
+            ? null
+            : uploadResult?.uploaded[coverSourceFileIndex] ?? null;
+        const uploadedCoverSourceId =
+          selectedUpload?.kind === "image" ? selectedUpload.id : undefined;
         let latest = created.resource;
         if (
           canUseAi &&
@@ -612,7 +731,9 @@ export function ResourceEditor({
           autoCover &&
           files.some((file) => file.type.startsWith("image/"))
         ) {
-          latest = (await runCover(created.resource.id)) ?? latest;
+          latest =
+            (await runCover(created.resource.id, uploadedCoverSourceId)) ??
+            latest;
         }
         router.push(`/inventory/${latest.id}`);
         router.refresh();
@@ -652,6 +773,17 @@ export function ResourceEditor({
         removeError instanceof Error ? removeError.message : t("errors.removeFile"),
       );
     }
+  };
+
+  const removePendingFile = (index: number) => {
+    setFiles((current) =>
+      current.filter((_, fileIndex) => fileIndex !== index),
+    );
+    setCoverSourceFileIndex((current) => {
+      if (current === null) return null;
+      if (current === index) return null;
+      return current > index ? current - 1 : current;
+    });
   };
 
   const moveMedia = async (mediaId: string, direction: -1 | 1) => {
@@ -1031,7 +1163,7 @@ export function ResourceEditor({
                     ) : (
                       <div className="grid h-full place-items-center text-success"><Paperclip size={24} /></div>
                     )}
-                    <button type="button" onClick={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))} className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-slate-950/75 text-white" aria-label={t("media.removePending")}><X size={12} /></button>
+                    <button type="button" onClick={() => removePendingFile(index)} className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-slate-950/75 text-white" aria-label={t("media.removePending")}><X size={12} /></button>
                   </div>
                 ))}
               </div>
@@ -1097,6 +1229,27 @@ export function ResourceEditor({
                 <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-surface/80 p-3"><input type="checkbox" checked={autoCover} onChange={(event) => setAutoCover(event.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.coverDescription")}</span></span></label>
                 {autoCover ? (
                   <div className="rounded-xl border border-brand-border bg-surface/80 p-3">
+                    <CoverReferencePicker
+                      name="new-cover-reference"
+                      options={previews.flatMap((url, index) =>
+                        files[index]?.type.startsWith("image/")
+                          ? [
+                              {
+                                id: String(index),
+                                url,
+                                label: files[index]!.name,
+                              },
+                            ]
+                          : [],
+                      )}
+                      selectedId={
+                        coverSourceFileIndex === null
+                          ? null
+                          : String(coverSourceFileIndex)
+                      }
+                      disabled={Boolean(aiAction)}
+                      onSelect={(id) => setCoverSourceFileIndex(Number(id))}
+                    />
                     <CoverTransparencyOptions
                       transparentBackground={transparentCover}
                       transparencyMethod={coverTransparencyMethod}
@@ -1117,7 +1270,25 @@ export function ResourceEditor({
               <div className="space-y-3">
                 <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runAnalysis(resourceId, true)} className="flex w-full items-center justify-between rounded-xl bg-brand-solid px-3.5 py-3 text-left text-xs font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover disabled:bg-muted disabled:text-background disabled:opacity-100"><span className="flex items-center gap-2">{aiAction === "analyze" ? <LoaderCircle size={15} className="animate-spin" /> : <Bot size={15} />}{t("ai.rewrite")}</span><ChevronRight size={15} /></button>
                 <div className="rounded-xl border border-brand-border bg-surface/80 p-3">
-                  <label className="text-[11px] font-semibold text-muted">
+                  <CoverReferencePicker
+                    name="existing-cover-reference"
+                    options={itemMedia.flatMap((item) =>
+                      item.kind === "image"
+                        ? [
+                            {
+                              id: item.id,
+                              url: item.url,
+                              label: item.name,
+                              isAi: item.source === "ai",
+                            },
+                          ]
+                        : [],
+                    )}
+                    selectedId={coverSourceMediaId}
+                    disabled={Boolean(aiAction)}
+                    onSelect={setCoverSourceMediaId}
+                  />
+                  <label className="mt-3 block text-[11px] font-semibold text-muted">
                     {t("ai.coverDirection")}
                     <textarea value={coverPrompt} onChange={(event) => { setCoverPrompt(event.target.value); setCoverPromptCustomized(true); }} rows={5} className="mt-2 w-full resize-none rounded-lg border border-border bg-surface p-2.5 text-xs leading-5 text-muted-strong outline-none focus:border-focus" />
                   </label>

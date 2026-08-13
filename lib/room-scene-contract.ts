@@ -105,15 +105,27 @@ export const roomSceneSchema = z
     { message: "Scene bounds are inverted.", path: ["bounds"] },
   );
 
-export const spatialPlacementInputSchema = z.object({
-  position: spatialVector3Schema,
-  orientation: spatialQuaternionSchema,
-  extent: dimensionsSchema.optional(),
-  confidence: z.number().finite().min(0).max(1),
-  method: z.enum(["scene-depth", "mesh-raycast", "plane-raycast", "manual"]),
-  anchorIdentifier: z.uuid().optional(),
-  capturedAt: z.iso.datetime({ offset: true }),
-});
+export const photoLocalizationEvidenceSchema = z
+  .object({
+    matchedKeyframeId: z.uuid(),
+    distance: z.number().finite().min(0).max(1_000_000),
+    confidence: z.number().finite().min(0).max(1),
+    cameraPositionError: z.number().finite().min(0).max(100).optional(),
+  })
+  .strict();
+
+export const spatialPlacementInputSchema = z
+  .object({
+    position: spatialVector3Schema,
+    orientation: spatialQuaternionSchema,
+    extent: dimensionsSchema.optional(),
+    confidence: z.number().finite().min(0).max(1),
+    method: z.enum(["scene-depth", "mesh-raycast", "plane-raycast", "manual"]),
+    anchorIdentifier: z.uuid().optional(),
+    capturedAt: z.iso.datetime({ offset: true }),
+    localizationEvidence: photoLocalizationEvidenceSchema.optional(),
+  })
+  .strict();
 
 export type SpatialVector3 = z.infer<typeof spatialVector3Schema>;
 export type SpatialQuaternion = z.infer<typeof spatialQuaternionSchema>;
@@ -122,6 +134,9 @@ export type RoomSurface = z.infer<typeof roomSurfaceSchema>;
 export type RoomObject = z.infer<typeof roomObjectSchema>;
 export type RoomScene = z.infer<typeof roomSceneSchema>;
 export type SpatialPlacementInput = z.infer<typeof spatialPlacementInputSchema>;
+export type PhotoLocalizationEvidence = z.infer<
+  typeof photoLocalizationEvidenceSchema
+>;
 
 export const identitySpatialMatrix: SpatialMatrix4 = [
   1, 0, 0, 0,

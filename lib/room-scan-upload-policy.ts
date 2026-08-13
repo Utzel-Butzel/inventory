@@ -1,5 +1,9 @@
 import type { RoomScanAssetKind } from "@/db/schema";
 import type { RoomScene } from "@/lib/room-scene-contract";
+import type {
+  RoomKeyframeFeatureDescriptor,
+  RoomKeyframeInput,
+} from "@/lib/room-keyframe-contract";
 import {
   spatialGeoreferenceFramesApproximatelyEqual,
   type RoomScanSpatialMetadata,
@@ -11,6 +15,8 @@ export const roomScanAssetMimeTypes = {
   model_usdz: "model/vnd.usdz+zip",
   structure_model: "model/vnd.usdz+zip",
   guide_image: "image/jpeg",
+  textured_mesh: "model/gltf-binary",
+  gaussian_splat: "application/octet-stream",
 } as const satisfies Record<RoomScanAssetKind, string>;
 
 export const roomScanAssetMimeType = (kind: RoomScanAssetKind) =>
@@ -59,6 +65,15 @@ export type RoomScanAssetFingerprint = {
   checksumSha256: string;
 };
 
+export type RoomScanKeyframeFingerprint = Omit<
+  RoomKeyframeInput,
+  "fileField" | "capturedAt" | "featureDescriptor"
+> & {
+  capturedAt: Date;
+  featureDescriptor?: RoomKeyframeFeatureDescriptor | null;
+  checksumSha256: string;
+};
+
 export type ExistingRoomScanReplayIdentity = {
   id: string;
   roomResourceId: string;
@@ -72,6 +87,7 @@ export type ExistingRoomScanReplayIdentity = {
   deviceModel: string | null;
   coordinateSpaceGeoreference: SpatialGeoreference | null;
   assets: RoomScanAssetFingerprint[];
+  keyframes?: RoomScanKeyframeFingerprint[];
 };
 
 export type RoomScanReplayRequest = {
@@ -81,6 +97,7 @@ export type RoomScanReplayRequest = {
   deviceModel?: string;
   spatial?: RoomScanSpatialMetadata;
   assets: RoomScanAssetFingerprint[];
+  keyframes?: RoomScanKeyframeFingerprint[];
 };
 
 export const roomScanMatchesSpatialMetadata = (
@@ -129,8 +146,16 @@ const assetFingerprintsMatch = (
   left: RoomScanAssetFingerprint[],
   right: RoomScanAssetFingerprint[],
 ) => {
+  // Photorealistic derivatives are mutable enrichment products that can be
+  // attached or regenerated after the immutable RoomPlan capture. They do not
+  // change the identity of the original idempotent scan upload.
+  const mutableKinds = new Set<RoomScanAssetKind>([
+    "textured_mesh",
+    "gaussian_splat",
+  ]);
   const normalize = (assets: RoomScanAssetFingerprint[]) =>
     assets
+      .filter(({ kind }) => !mutableKinds.has(kind))
       .map(({ kind, checksumSha256 }) => `${kind}:${checksumSha256}`)
       .sort();
   const normalizedLeft = normalize(left);
@@ -139,6 +164,29 @@ const assetFingerprintsMatch = (
     normalizedLeft.length === normalizedRight.length &&
     normalizedLeft.every((value, index) => value === normalizedRight[index])
   );
+};
+
+const keyframeFingerprintsMatch = (
+  left: RoomScanKeyframeFingerprint[] = [],
+  right: RoomScanKeyframeFingerprint[] = [],
+) => {
+  const normalize = (frames: RoomScanKeyframeFingerprint[]) =>
+    [...frames]
+      .sort((first, second) => first.id.localeCompare(second.id))
+      .map((frame) => ({
+        id: frame.id,
+        capturedAt: frame.capturedAt.toISOString(),
+        timestamp: frame.timestamp,
+        cameraTransform: frame.cameraTransform,
+        intrinsics: frame.intrinsics,
+        width: frame.width,
+        height: frame.height,
+        orientation: frame.orientation,
+        quality: frame.quality,
+        featureDescriptor: frame.featureDescriptor ?? null,
+        checksumSha256: frame.checksumSha256,
+      }));
+  return canonicalJson(normalize(left)) === canonicalJson(normalize(right));
 };
 
 export const roomScanWorldMapChecksumMatches = (
@@ -161,6 +209,7 @@ export const roomScanMatchesReplayIdentity = (
   scan.capturedAt.getTime() === request.capturedAt.getTime() &&
   scan.deviceModel === (request.deviceModel ?? null) &&
   assetFingerprintsMatch(scan.assets, request.assets) &&
+  keyframeFingerprintsMatch(scan.keyframes, request.keyframes) &&
   (request.spatial?.georeference === undefined ||
     (scan.coordinateSpaceGeoreference !== null &&
       spatialGeoreferenceFramesApproximatelyEqual(
@@ -193,5 +242,44 @@ export async function reconcileFailedRoomScanCreation(options: {
   await options.cleanupUncommittedAssets();
   return existing
     ? ({ kind: "conflict" } as const)
+    : ({ kind: "not-committed" } as const);
+}
+
+export type RoomScanAssetReplacementIdentity = {
+  storageKey: string;
+  checksumSha256: string;
+};
+
+/**
+ * Resolves an ambiguous asset-replacement error without ever deleting bytes
+ * that a successfully committed database row may reference.
+ */
+export async function reconcileFailedRoomScanAssetReplacement<
+  TAsset extends RoomScanAssetReplacementIdentity,
+>(options: {
+  incoming: RoomScanAssetReplacementIdentity;
+  findCurrentAsset: () => Promise<TAsset | null>;
+  cleanupUncommittedAsset: () => Promise<void>;
+}) {
+  let current: TAsset | null;
+  try {
+    current = await options.findCurrentAsset();
+  } catch {
+    // The replacement COMMIT and its verification read are both ambiguous.
+    // Preserve the new bytes; a storage reaper can remove an orphan later,
+    // whereas deleting a committed object would corrupt the room scene.
+    return { kind: "unknown" } as const;
+  }
+
+  if (
+    current?.storageKey === options.incoming.storageKey &&
+    current.checksumSha256 === options.incoming.checksumSha256
+  ) {
+    return { kind: "committed", asset: current } as const;
+  }
+
+  await options.cleanupUncommittedAsset();
+  return current
+    ? ({ kind: "different-current-asset", asset: current } as const)
     : ({ kind: "not-committed" } as const);
 }

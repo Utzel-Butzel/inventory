@@ -21,7 +21,9 @@ WebRTC is not required for app-to-server uploads.
 - Manual API token as an optional expert login
 - Optional GPS coordinates for new captures
 - Continuous LiDAR multi-room capture with RoomPlan `CapturedStructure` USDZ models
+- Bounded RGB room keyframes with ARKit pose, intrinsics, and shared coordinates
 - Relocalized item capture with automatic room detection and scene-depth/plane measurement
+- Vision-assisted photo matching against stored room views as localization evidence
 - Spatial placement persisted in the crash-safe item upload pipeline before media analysis
 
 ## Run it
@@ -49,6 +51,13 @@ the same `structureId`, `coordinateSpaceId`, byte-identical `ARWorldMap`, floor
 metadata, and optional georeference. The combined structure USDZ is attached to
 the first room upload so it is not uploaded repeatedly.
 
+While RoomPlan is running, the app samples RGB keyframes from that same
+`ARSession` without replacing RoomPlan's delegate. It keeps only normal-tracking,
+sufficiently sharp views separated by time plus camera translation/rotation,
+with a hard limit of 32 images and 24 MB per room. Each JPEG carries its ARKit
+timestamp, native image orientation, scaled pinhole intrinsics, and the
+column-major `worldFromCamera` transform in the scan's `coordinateSpaceId`.
+
 The optional map anchor pairs a fresh GPS/true-heading observation with the
 current AR camera pose. `headingDegrees` is the clockwise true-north bearing of
 the local ARKit `-Z` axis; `localReferencePosition` records the camera position
@@ -73,6 +82,17 @@ depth is used first, with a detected/estimated plane as fallback. The resulting
 photo continues through the normal create → placement → media → analysis →
 cover queue. A partial rescan intentionally receives a new `coordinateSpaceId`,
 so scans from unrelated AR origins are never mixed for automatic room detection.
+
+For item photos, the app downloads at most eight high-quality keyframes per
+room (24 per connected structure), immediately converts them to Vision feature
+prints, and releases the JPEG bytes. A new upright item photo is compared only
+with references belonging to the room selected by the relocalized AR session.
+A distinctive match and camera-position agreement are saved as coarse
+`localizationEvidence`; the ARWorldMap and live AR pose remain authoritative.
+Without a live AR pose, the matcher can return the best reference keyframe's
+stored `worldFromCamera` as a coarse room/place estimate. Global feature-print
+similarity alone is deliberately not presented as a new six-degree-of-freedom
+pose estimate.
 
 RoomPlan availability is checked at runtime. The simulator can exercise API and
 SwiftUI behavior, but room scanning, relocalization, scene depth, and positional

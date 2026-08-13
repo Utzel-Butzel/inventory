@@ -321,7 +321,12 @@ and recognized furniture; rooms captured in one uninterrupted capture batch
 share a `coordinateSpaceId`. Inventory stores each room as a
 versioned normalized scene together with its original USDZ model, an optional
 combined structure USDZ and guide image, and an archived `ARWorldMap` used only
-by the native app.
+by the native app. During the same ARKit session the app also samples up to 32
+bounded RGB JPEG keyframes. Every keyframe stores the `worldFromCamera`
+transform, pinhole intrinsics, encoded native-raster pixel dimensions, display orientation, capture
+time, and quality in the scan's `coordinateSpaceId`. The authenticated scene
+API exposes this calibrated set for camera-frustum previews and later visual
+feature matching without introducing a second coordinate system.
 
 **Add room/floor** keeps the building identity but starts a deliberately new
 coordinate space, while **Rescan room** replaces only that room's active
@@ -349,14 +354,32 @@ relocalize. Independently captured or unrelocalized frames are never overlaid:
 local room bounds are combined only when all involved scans have the same
 explicit `coordinateSpaceId`.
 
+An item photo can optionally record `localizationEvidence` referencing a
+keyframe from that exact room scan. The backend checks this relationship before
+saving the placement, so a Vision feature-print match can corroborate ARWorldMap
+relocalization without allowing evidence from another coordinate frame.
+
+Photorealistic derivatives are optional. `textured_mesh` accepts a
+self-contained GLB v2, while `gaussian_splat` accepts a bounded binary
+little-endian, vertex-only PLY. Their vertex coordinates must already be in the
+scan's shared ARKit world frame (metres, right-handed, Y-up); the server does
+not guess or align a reconstruction transform. Both can be included in the original multipart
+scan or attached/replaced later with `PUT
+/api/v1/room-scans/{scanId}/assets/{kind}` for an external reconstruction
+pipeline. Upload validation rejects external GLB resources, variable-length or
+extra PLY elements, malformed headers, and files above 80 MB. The web viewer
+uses these derivatives when present and keeps the measured RoomPlan scene as
+the authoritative geometry and placement frame.
+
 RoomPlan is a measured parametric model rather than a photorealistic scan, and
 small tools are represented by location markers rather than automatically
 generated 3D meshes. A new room revision intentionally supersedes the previous
 room scan. A new rescan receives a new `coordinateSpaceId` instead of being
 assumed compatible with an older AR origin; old placements stay attached to the
-old revision until each item is captured again. `MAX_ROOM_SCAN_UPLOAD_MB` limits the
-combined world map, room/structure USDZ, and guide image for one upload and
-defaults to 100 MB.
+old revision until each item is captured again. `MAX_ROOM_SCAN_UPLOAD_MB` limits
+the combined world map, room/structure USDZ, guide image, RGB keyframes, and
+photorealistic derivatives for one upload and defaults to 100 MB. Each keyframe
+is additionally limited to 6 MiB and 4096×4096 encoded pixels.
 
 ### Assignments and reservations
 
@@ -517,14 +540,15 @@ media size selected and page scaling disabled.
 STORAGE_PROVIDER=local
 STORAGE_LOCAL_PATH=./data/uploads
 MAX_UPLOAD_MB=25
+MAX_USDZ_UPLOAD_MB=100
 MAX_ROOM_SCAN_UPLOAD_MB=100
 ```
 
 Files are kept outside the application bundle and streamed through an
 authenticated same-origin route. In Docker, `/app/data/uploads` is backed by the
 `inventory_uploads` volume. Apple Object Capture models are stored as `.usdz`
-files with the registered `model/vnd.usdz+zip` media type and use the same
-per-file `MAX_UPLOAD_MB` limit as other inventory media.
+files with the registered `model/vnd.usdz+zip` media type and use the separate
+`MAX_USDZ_UPLOAD_MB` limit, which defaults to 100 MB for realistic captures.
 
 ### Openinary
 

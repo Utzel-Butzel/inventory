@@ -13,6 +13,7 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
 
     private let worldMapData: Data
     private let roomCandidates: [SpatialRoomDetectionCandidate]
+    private let keyframeMatcher: SpatialPhotoKeyframeMatcher?
     private var activeRoomScan: SpatialRoomScanSummary?
     private var containmentTracker: SpatialRoomContainmentTracker
     private var arView: ARView!
@@ -31,13 +32,15 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
     init(
         worldMapData: Data,
         roomScan: SpatialRoomScanSummary,
-        roomCandidates: [SpatialRoomDetectionCandidate]
+        roomCandidates: [SpatialRoomDetectionCandidate],
+        keyframeMatcher: SpatialPhotoKeyframeMatcher?
     ) {
         self.worldMapData = worldMapData
         let normalizedCandidates = roomCandidates.filter {
             $0.scan.coordinateSpaceID == roomScan.coordinateSpaceID || roomScan.coordinateSpaceID == nil
         }
         self.roomCandidates = normalizedCandidates
+        self.keyframeMatcher = keyframeMatcher
         activeRoomScan = normalizedCandidates.count <= 1 ? roomScan : nil
         var tracker = SpatialRoomContainmentTracker(candidates: normalizedCandidates)
         if normalizedCandidates.count <= 1 {
@@ -172,7 +175,38 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
                         if let error { throw error }
                         guard let frame else { throw SpatialCaptureError.imageUnavailable }
                         let data = try Self.jpegData(from: frame)
-                        self.onCaptured?(.success((draft, data)))
+                        let localization = await self.keyframeMatcher?.match(
+                            imageData: data,
+                            currentCameraTransform: Self.matrixValues(frame.camera.transform),
+                            roomScanID: draft.roomScanID
+                        )
+                        let evidence: SpatialPlacementDraft.LocalizationEvidence? =
+                            localization.flatMap { match in
+                                guard match.confidence >= 0.55,
+                                      (match.cameraPositionError ?? .infinity) <= 4
+                                else { return nil }
+                                return SpatialPlacementDraft.LocalizationEvidence(
+                                    matchedKeyframeID: match.keyframeID,
+                                    distance: match.featureDistance,
+                                    confidence: match.confidence,
+                                    cameraPositionError: match.cameraPositionError
+                                )
+                            }
+                        let adjustedDraft = SpatialPlacementDraft(
+                            roomScanID: draft.roomScanID,
+                            roomName: draft.roomName,
+                            position: draft.position,
+                            orientation: draft.orientation,
+                            extent: draft.extent,
+                            confidence: evidence.map {
+                                min(0.99, draft.confidence + $0.confidence * 0.04)
+                            } ?? draft.confidence,
+                            method: draft.method,
+                            anchorIdentifier: draft.anchorIdentifier,
+                            capturedAt: draft.capturedAt,
+                            localizationEvidence: evidence
+                        )
+                        self.onCaptured?(.success((adjustedDraft, data)))
                     } catch {
                         self.onCaptured?(.failure(error))
                     }
@@ -502,12 +536,19 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
         }
         return data
     }
+
+    private static func matrixValues(_ matrix: simd_float4x4) -> SpatialMatrix4 {
+        (0 ..< 4).flatMap { column in
+            (0 ..< 4).map { row in Double(matrix[column, row]) }
+        }
+    }
 }
 
 struct ItemPlacementControllerView: UIViewControllerRepresentable {
     let worldMapData: Data
     let roomScan: SpatialRoomScanSummary
     let roomCandidates: [SpatialRoomDetectionCandidate]
+    let keyframeMatcher: SpatialPhotoKeyframeMatcher?
     let captureRequest: Int
     let manualRoomScanID: UUID?
     let manualRoomRequest: Int
@@ -519,7 +560,8 @@ struct ItemPlacementControllerView: UIViewControllerRepresentable {
         let controller = ItemPlacementController(
             worldMapData: worldMapData,
             roomScan: roomScan,
-            roomCandidates: roomCandidates
+            roomCandidates: roomCandidates,
+            keyframeMatcher: keyframeMatcher
         )
         controller.onTracking = onTracking
         controller.onRoomChanged = onRoomChanged

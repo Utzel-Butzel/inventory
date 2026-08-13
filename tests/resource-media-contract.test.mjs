@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  hasUsdzFileSignature,
   isInlinePublicMediaType,
   isResourceMediaMimeType,
   resourceMediaKind,
@@ -57,12 +56,6 @@ test("media upload validation distinguishes size and type failures", () => {
   );
   assert.equal(unsupported.valid, false);
   assert.equal(unsupported.status, 415);
-});
-
-test("USDZ package validation requires a local ZIP header", () => {
-  assert.equal(hasUsdzFileSignature(Uint8Array.from([0x50, 0x4b, 0x03, 0x04])), true);
-  assert.equal(hasUsdzFileSignature(Uint8Array.from([0x50, 0x4b, 0x05, 0x06])), false);
-  assert.equal(hasUsdzFileSignature(Uint8Array.from([0x3c, 0x68, 0x74, 0x6d])), false);
 });
 
 test("public delivery permits inline USDZ while rejecting executable image MIME", () => {

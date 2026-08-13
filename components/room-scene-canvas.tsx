@@ -1,6 +1,17 @@
 "use client";
 
-import { Maximize2, ScanSearch } from "lucide-react";
+import {
+  Camera,
+  Cuboid,
+  Image as ImageIcon,
+  LoaderCircle,
+  Maximize2,
+  ScanSearch,
+  Sparkles,
+  TriangleAlert,
+  X,
+} from "lucide-react";
+import Image from "next/image";
 import { useT } from "next-i18next/client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -9,8 +20,24 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import type { ClientRoomSceneManifest } from "@/lib/client-types";
 import { createRoomObjectModel } from "@/components/room-object-models";
+import { cn } from "@/components/ui";
+import {
+  hasPlyHeader,
+  maximumGaussianSplatBytes,
+  maximumGaussianSplatPoints,
+  maximumTexturedMeshBytes,
+  parseSampledGaussianSplat,
+  roomKeyframeDisplayOrientation,
+  sampleRoomKeyframes,
+  type SampledGaussianSplat,
+  type RoomCameraKeyframe,
+  type RoomPhotorealAssetKind,
+  validateEmbeddedGlb,
+} from "@/lib/room-scene-visualization";
 
 type CameraCommand = "reset" | "top";
+type SceneMode = "roomplan" | RoomPhotorealAssetKind;
+type AssetLoadState = "idle" | "loading" | "ready" | "error" | "too-large";
 
 type RoomSurface =
   ClientRoomSceneManifest["scan"]["scene"]["surfaces"][number];
@@ -132,6 +159,93 @@ function setMatrix(object: THREE.Object3D, values: number[]) {
   object.matrixAutoUpdate = false;
   object.matrix.fromArray(values);
   object.matrixWorldNeedsUpdate = true;
+}
+
+type RoomSceneAsset = ClientRoomSceneManifest["scan"]["assets"][number];
+
+const keyframesForManifest = (manifest: ClientRoomSceneManifest) =>
+  manifest.scan.keyframes ?? [];
+
+const photorealAsset = (
+  manifest: ClientRoomSceneManifest,
+  kind: RoomPhotorealAssetKind,
+) => manifest.scan.assets.find((asset) => String(asset.kind) === kind);
+
+function keyframeFrustumGeometry(frame: RoomCameraKeyframe) {
+  const depth = 0.22;
+  const fx = Math.max(frame.intrinsics[0] ?? 1, 1);
+  const fy = Math.max(frame.intrinsics[4] ?? 1, 1);
+  const cx = frame.intrinsics[6] ?? frame.width / 2;
+  const cy = frame.intrinsics[7] ?? frame.height / 2;
+  const corner = (u: number, v: number) =>
+    new THREE.Vector3(
+      ((u - cx) / fx) * depth,
+      -((v - cy) / fy) * depth,
+      -depth,
+    );
+  const corners = [
+    corner(0, 0),
+    corner(frame.width, 0),
+    corner(frame.width, frame.height),
+    corner(0, frame.height),
+  ];
+  const origin = new THREE.Vector3();
+  const points: THREE.Vector3[] = [];
+  for (const item of corners) points.push(origin, item);
+  for (let index = 0; index < corners.length; index += 1) {
+    points.push(corners[index]!, corners[(index + 1) % corners.length]!);
+  }
+  return new THREE.BufferGeometry().setFromPoints(points);
+}
+
+function createSampledSplatGeometry(sampled: SampledGaussianSplat) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(sampled.positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(sampled.colors, 3));
+  geometry.setAttribute("splatOpacity", new THREE.BufferAttribute(sampled.opacity, 1));
+  geometry.setAttribute("splatScale", new THREE.BufferAttribute(sampled.scale, 1));
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function createSplatMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    vertexColors: true,
+    uniforms: {
+      viewportHeight: { value: 720 },
+    },
+    vertexShader: `
+      attribute float splatOpacity;
+      attribute float splatScale;
+      varying vec3 vColor;
+      varying float vOpacity;
+      uniform float viewportHeight;
+      void main() {
+        vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * viewPosition;
+        gl_PointSize = clamp(
+          splatScale * viewportHeight / max(0.01, -viewPosition.z),
+          1.25,
+          28.0
+        );
+        vColor = color;
+        vOpacity = splatOpacity;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vOpacity;
+      void main() {
+        vec2 centered = gl_PointCoord - vec2(0.5);
+        float radiusSquared = dot(centered, centered);
+        if (radiusSquared > 0.25) discard;
+        float gaussian = exp(-radiusSquared * 15.0);
+        gl_FragColor = vec4(vColor, gaussian * vOpacity);
+      }
+    `,
+  });
 }
 
 function subtractRect(source: SurfaceRect, cutout: SurfaceRect) {
@@ -287,9 +401,43 @@ export function RoomSceneCanvas({
   const selectionCommandRef = useRef<(resourceId: string | null) => void>(
     () => undefined,
   );
+  const keyframeCommandRef = useRef<
+    (visible: boolean, selectedId: string | null) => void
+  >(() => undefined);
   const selectedResourceRef = useRef(selectedResourceId);
+  const keyframesVisibleRef = useRef(false);
+  const selectedKeyframeRef = useRef<string | null>(null);
   const onSelectRef = useRef(onSelectResource);
   const [rendererError, setRendererError] = useState<string | null>(null);
+  const [sceneMode, setSceneMode] = useState<SceneMode>("roomplan");
+  const [assetLoadState, setAssetLoadState] = useState<AssetLoadState>("idle");
+  const [showKeyframes, setShowKeyframes] = useState(false);
+  const [selectedKeyframeId, setSelectedKeyframeId] = useState<string | null>(null);
+  const visibleManifests = useMemo(
+    () => [manifest, ...linkedManifests],
+    [linkedManifests, manifest],
+  );
+  const visibleKeyframes = useMemo(
+    () => sampleRoomKeyframes(visibleManifests.flatMap(keyframesForManifest)),
+    [visibleManifests],
+  );
+  const selectedKeyframe = visibleKeyframes.find(
+    (frame) => frame.id === selectedKeyframeId,
+  ) ?? null;
+  const selectedKeyframeDisplay = selectedKeyframe
+    ? roomKeyframeDisplayOrientation(selectedKeyframe.orientation)
+    : null;
+  const availableModes = useMemo(
+    () => ({
+      textured_mesh: visibleManifests.some((item) =>
+        Boolean(photorealAsset(item, "textured_mesh")),
+      ),
+      gaussian_splat: visibleManifests.some((item) =>
+        Boolean(photorealAsset(item, "gaussian_splat")),
+      ),
+    }),
+    [visibleManifests],
+  );
 
   useEffect(() => {
     onSelectRef.current = onSelectResource;
@@ -299,6 +447,25 @@ export function RoomSceneCanvas({
     selectedResourceRef.current = selectedResourceId;
     selectionCommandRef.current(selectedResourceId);
   }, [selectedResourceId]);
+
+  useEffect(() => {
+    if (sceneMode !== "roomplan" && !availableModes[sceneMode]) {
+      setSceneMode("roomplan");
+    }
+  }, [availableModes, sceneMode]);
+
+  useEffect(() => {
+    keyframesVisibleRef.current = showKeyframes;
+    selectedKeyframeRef.current = selectedKeyframeId;
+    if (
+      selectedKeyframeId &&
+      !visibleKeyframes.some((frame) => frame.id === selectedKeyframeId)
+    ) {
+      setSelectedKeyframeId(null);
+      return;
+    }
+    keyframeCommandRef.current(showKeyframes, selectedKeyframeId);
+  }, [selectedKeyframeId, showKeyframes, visibleKeyframes]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -323,11 +490,11 @@ export function RoomSceneCanvas({
     renderer.domElement.className = "block size-full touch-none";
     renderer.domElement.setAttribute(
       "aria-label",
-      linkedManifests.length
+      visibleManifests.length > 1
         ? t("canvas.aria.multiple", {
             room: manifest.room.name,
-            count: linkedManifests.length,
-            value: integer.format(linkedManifests.length),
+            count: visibleManifests.length - 1,
+            value: integer.format(visibleManifests.length - 1),
           })
         : t("canvas.aria.single", { room: manifest.room.name }),
     );
@@ -560,10 +727,13 @@ export function RoomSceneCanvas({
     const rimLight = new THREE.DirectionalLight(0xffe2c2, 0.7);
     scene.add(sun, sun.target, fillLight, fillLight.target, rimLight, rimLight.target);
 
-    const visibleManifests = [manifest, ...linkedManifests];
     const webRoot = new THREE.Group();
     setMatrix(webRoot, manifest.scan.scene.webFromWorld);
     scene.add(webRoot);
+    const assetAbortController = new AbortController();
+    const roomPlanRoots = new Map<string, THREE.Object3D>();
+    const splatMaterials = new Set<THREE.ShaderMaterial>();
+    let disposed = false;
 
     const addBox = ({
       parent,
@@ -838,6 +1008,7 @@ export function RoomSceneCanvas({
       const modelRoot = new THREE.Group();
       setMatrix(modelRoot, roomManifest.scan.scene.worldFromModel);
       webRoot.add(modelRoot);
+      roomPlanRoots.set(roomManifest.scan.id, modelRoot);
 
       const aperturesByWall = wallApertures(roomManifest.scan.scene.surfaces);
 
@@ -880,6 +1051,266 @@ export function RoomSceneCanvas({
         modelRoot.add(objectModel);
       }
     }
+
+    const loadPhotorealAsset = async (
+      roomManifest: ClientRoomSceneManifest,
+      asset: RoomSceneAsset,
+      mode: RoomPhotorealAssetKind,
+    ) => {
+      const limit = mode === "textured_mesh"
+        ? maximumTexturedMeshBytes
+        : maximumGaussianSplatBytes;
+      if (asset.size > limit) throw new RangeError("asset-too-large");
+
+      const response = await fetch(asset.url, {
+        cache: "force-cache",
+        credentials: "same-origin",
+        signal: assetAbortController.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`Room asset request failed (HTTP ${response.status}).`);
+      }
+      const advertisedSize = Number(response.headers.get("content-length"));
+      if (Number.isFinite(advertisedSize) && advertisedSize > limit) {
+        throw new RangeError("asset-too-large");
+      }
+      const bytes = await response.arrayBuffer();
+      if (bytes.byteLength > limit) throw new RangeError("asset-too-large");
+
+      let object: THREE.Object3D;
+      if (mode === "textured_mesh") {
+        const validation = validateEmbeddedGlb(bytes);
+        if (!validation.valid) throw new Error(validation.error);
+        const { GLTFLoader } = await import(
+          "three/examples/jsm/loaders/GLTFLoader.js"
+        );
+        const gltf = await new GLTFLoader().parseAsync(bytes, "");
+        object = gltf.scene;
+        object.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.castShadow = false;
+            child.receiveShadow = true;
+          }
+        });
+      } else {
+        if (!hasPlyHeader(bytes)) throw new Error("The point cloud is not PLY.");
+        const sampled = parseSampledGaussianSplat(
+          bytes,
+          maximumGaussianSplatPoints,
+        );
+        const geometry = createSampledSplatGeometry(sampled);
+        const material = createSplatMaterial();
+        splatMaterials.add(material);
+        object = new THREE.Points(geometry, material);
+        object.frustumCulled = true;
+      }
+
+      if (disposed) {
+        object.traverse((child) => {
+          if (child instanceof THREE.Mesh || child instanceof THREE.Points) {
+            child.geometry.dispose();
+          }
+        });
+        return false;
+      }
+      object.userData.photorealAsset = mode;
+      object.userData.roomScanId = roomManifest.scan.id;
+      webRoot.add(object);
+      roomPlanRoots.get(roomManifest.scan.id)!.visible = false;
+      return true;
+    };
+
+    if (sceneMode === "roomplan") {
+      setAssetLoadState("idle");
+    } else {
+      const assets = visibleManifests.flatMap((roomManifest) => {
+        const asset = photorealAsset(roomManifest, sceneMode);
+        return asset ? [{ roomManifest, asset }] : [];
+      });
+      const limit = sceneMode === "textured_mesh"
+        ? maximumTexturedMeshBytes
+        : maximumGaussianSplatBytes;
+      const loadable = assets.filter(({ asset }) => asset.size <= limit);
+      setAssetLoadState(loadable.length ? "loading" : "too-large");
+      if (loadable.length) {
+        void Promise.allSettled(
+          loadable.map(({ roomManifest, asset }) =>
+            loadPhotorealAsset(roomManifest, asset, sceneMode),
+          ),
+        ).then((results) => {
+          if (disposed) return;
+          const loaded = results.some(
+            (result) => result.status === "fulfilled" && result.value,
+          );
+          const tooLarge = results.some(
+            (result) =>
+              result.status === "rejected" && result.reason instanceof RangeError,
+          );
+          setAssetLoadState(loaded ? "ready" : tooLarge ? "too-large" : "error");
+        });
+      }
+    }
+
+    const keyframeRoot = new THREE.Group();
+    keyframeRoot.visible = keyframesVisibleRef.current;
+    webRoot.add(keyframeRoot);
+    const keyframeMeshes: THREE.Object3D[] = [];
+    const keyframeStyles = new Map<
+      string,
+      { line: THREE.LineBasicMaterial; body: THREE.MeshBasicMaterial }
+    >();
+    for (const frame of visibleKeyframes) {
+      const pose = new THREE.Group();
+      setMatrix(pose, frame.cameraTransform);
+      pose.userData.keyframeId = frame.id;
+
+      const lineMaterial = new THREE.LineBasicMaterial({
+        color: 0x15a4b8,
+        transparent: true,
+        opacity: 0.72,
+        depthTest: false,
+      });
+      const frustum = new THREE.LineSegments(
+        keyframeFrustumGeometry(frame),
+        lineMaterial,
+      );
+      frustum.renderOrder = 25;
+      frustum.userData.keyframeId = frame.id;
+      pose.add(frustum);
+
+      const bodyMaterial = new THREE.MeshBasicMaterial({
+        color: 0x137b8a,
+        depthTest: false,
+      });
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(0.052, 0.035, 0.024),
+        bodyMaterial,
+      );
+      body.renderOrder = 25;
+      body.userData.keyframeId = frame.id;
+      pose.add(body);
+
+      keyframeStyles.set(frame.id, {
+        line: lineMaterial,
+        body: bodyMaterial,
+      });
+      keyframeMeshes.push(pose, frustum, body);
+      keyframeRoot.add(pose);
+    }
+
+    const photoPose = new THREE.Group();
+    photoPose.visible = false;
+    const photoPlaneMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.96,
+      side: THREE.DoubleSide,
+      depthTest: true,
+    });
+    const photoPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      photoPlaneMaterial,
+    );
+    photoPlane.position.z = -0.34;
+    photoPlane.renderOrder = 18;
+    photoPose.add(photoPlane);
+    webRoot.add(photoPose);
+
+    let photoRequestController: AbortController | null = null;
+    let photoTexture: THREE.Texture | null = null;
+    let photoBitmap: ImageBitmap | null = null;
+    let loadedPhotoFrameId: string | null = null;
+    let photoGeneration = 0;
+    const loadPhotoPlane = async (frame: RoomCameraKeyframe) => {
+      photoRequestController?.abort();
+      const request = new AbortController();
+      photoRequestController = request;
+      const generation = ++photoGeneration;
+      try {
+        const response = await fetch(frame.url, {
+          cache: "force-cache",
+          credentials: "same-origin",
+          signal: request.signal,
+        });
+        if (!response.ok) return;
+        const blob = await response.blob();
+        if (!blob.type.startsWith("image/jpeg") || blob.size > 8 * 1024 * 1024) return;
+        // ImageBitmap uploads ignore THREE.Texture.flipY. Flip here so the
+        // native camera raster aligns with PlaneGeometry's WebGL UV origin;
+        // its stored orientation is intentionally only used by the 2D preview.
+        const bitmap = await createImageBitmap(blob, {
+          imageOrientation: "flipY",
+        });
+        if (disposed || generation !== photoGeneration) {
+          bitmap.close();
+          return;
+        }
+        photoTexture?.dispose();
+        photoBitmap?.close();
+        photoBitmap = bitmap;
+        photoTexture = new THREE.Texture(bitmap);
+        photoTexture.colorSpace = THREE.SRGBColorSpace;
+        photoTexture.minFilter = THREE.LinearMipmapLinearFilter;
+        photoTexture.magFilter = THREE.LinearFilter;
+        photoTexture.generateMipmaps = true;
+        photoTexture.needsUpdate = true;
+        photoPlaneMaterial.map = photoTexture;
+        photoPlaneMaterial.needsUpdate = true;
+        loadedPhotoFrameId = frame.id;
+        photoPose.visible = keyframeRoot.visible;
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          photoPose.visible = false;
+        }
+      }
+    };
+
+    const applyKeyframeSelection = (
+      visible: boolean,
+      selectedId: string | null,
+    ) => {
+      keyframeRoot.visible = visible;
+      for (const [id, style] of keyframeStyles) {
+        const selected = id === selectedId;
+        style.line.color.setHex(selected ? 0xff7a2f : 0x15a4b8);
+        style.line.opacity = selected ? 1 : 0.72;
+        style.body.color.setHex(selected ? 0xff7a2f : 0x137b8a);
+      }
+      const frame = visibleKeyframes.find((item) => item.id === selectedId);
+      photoPose.visible = Boolean(
+        visible && frame && photoPlaneMaterial.map && loadedPhotoFrameId === frame.id,
+      );
+      if (!visible || !frame) {
+        photoRequestController?.abort();
+        photoGeneration += 1;
+        return;
+      }
+      setMatrix(photoPose, frame.cameraTransform);
+      const depth = 0.34;
+      const fx = Math.max(frame.intrinsics[0] ?? 1, 1);
+      const fy = Math.max(frame.intrinsics[4] ?? 1, 1);
+      const cx = frame.intrinsics[6] ?? frame.width / 2;
+      const cy = frame.intrinsics[7] ?? frame.height / 2;
+      const planeWidth = (frame.width / fx) * depth;
+      const planeHeight = (frame.height / fy) * depth;
+      // ARKit intrinsics describe the native camera raster. Keep that raster
+      // unrotated on the 3D plane so every texel follows the pinhole projection;
+      // `orientation` is applied only by the separate 2D preview below.
+      // Preserve a potentially off-center principal point instead of centering
+      // a merely aspect-correct rectangle in front of the camera.
+      photoPlane.position.set(
+        ((frame.width / 2 - cx) / fx) * depth,
+        ((cy - frame.height / 2) / fy) * depth,
+        -depth,
+      );
+      photoPlane.scale.set(planeWidth, planeHeight, 1);
+      if (loadedPhotoFrameId !== frame.id) void loadPhotoPlane(frame);
+    };
+    keyframeCommandRef.current = applyKeyframeSelection;
+    applyKeyframeSelection(
+      keyframesVisibleRef.current,
+      selectedKeyframeRef.current,
+    );
 
     const markerMeshes: THREE.Object3D[] = [];
     const markerStyles = new Map<
@@ -1029,6 +1460,7 @@ export function RoomSceneCanvas({
     resetCamera();
 
     const raycaster = new THREE.Raycaster();
+    raycaster.params.Line.threshold = 0.065;
     const pointer = new THREE.Vector2();
     let pointerStart: { x: number; y: number } | null = null;
     const onPointerDown = (event: PointerEvent) => {
@@ -1051,11 +1483,30 @@ export function RoomSceneCanvas({
         while (candidate && !candidate.userData.resourceId) candidate = candidate.parent;
         return Boolean(candidate?.userData.resourceId);
       });
-      if (!hit) return;
-      let candidate: THREE.Object3D | null = hit.object;
-      while (candidate && !candidate.userData.resourceId) candidate = candidate.parent;
-      if (typeof candidate?.userData.resourceId === "string") {
-        onSelectRef.current(candidate.userData.resourceId);
+      if (hit) {
+        let candidate: THREE.Object3D | null = hit.object;
+        while (candidate && !candidate.userData.resourceId) candidate = candidate.parent;
+        if (typeof candidate?.userData.resourceId === "string") {
+          onSelectRef.current(candidate.userData.resourceId);
+          return;
+        }
+      }
+      if (!keyframeRoot.visible) return;
+      const frameHit = raycaster
+        .intersectObjects(keyframeMeshes, true)
+        .find((intersection) => {
+          let candidate: THREE.Object3D | null = intersection.object;
+          while (candidate && !candidate.userData.keyframeId) {
+            candidate = candidate.parent;
+          }
+          return Boolean(candidate?.userData.keyframeId);
+        });
+      if (frameHit) {
+        let candidate: THREE.Object3D | null = frameHit.object;
+        while (candidate && !candidate.userData.keyframeId) candidate = candidate.parent;
+        if (typeof candidate?.userData.keyframeId === "string") {
+          setSelectedKeyframeId(candidate.userData.keyframeId);
+        }
       }
     };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
@@ -1065,6 +1516,9 @@ export function RoomSceneCanvas({
       const width = Math.max(1, host.clientWidth);
       const height = Math.max(1, host.clientHeight);
       renderer.setSize(width, height, false);
+      splatMaterials.forEach((material) => {
+        material.uniforms.viewportHeight!.value = height * renderer.getPixelRatio();
+      });
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
     };
@@ -1081,6 +1535,9 @@ export function RoomSceneCanvas({
     draw();
 
     return () => {
+      disposed = true;
+      assetAbortController.abort();
+      photoRequestController?.abort();
       cancelAnimationFrame(animationFrame);
       observer.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
@@ -1105,24 +1562,36 @@ export function RoomSceneCanvas({
         objectWarmMaterial,
         ...objectMaterials.values(),
       ]);
+      const textures = new Set<THREE.Texture>(materialTextures);
       scene.traverse((object) => {
-        if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
+        if (
+          object instanceof THREE.Mesh ||
+          object instanceof THREE.LineSegments ||
+          object instanceof THREE.Points
+        ) {
           object.geometry.dispose();
           const meshMaterials = Array.isArray(object.material)
             ? object.material
             : [object.material];
-          meshMaterials.forEach((material) => materials.add(material));
+          meshMaterials.forEach((material) => {
+            materials.add(material);
+            Object.values(material).forEach((value) => {
+              if (value instanceof THREE.Texture) textures.add(value);
+            });
+          });
         }
       });
       materials.forEach((material) => material.dispose());
-      materialTextures.forEach((texture) => texture.dispose());
+      textures.forEach((texture) => texture.dispose());
+      photoBitmap?.close();
       environmentTarget.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       commandRef.current = () => undefined;
       selectionCommandRef.current = () => undefined;
+      keyframeCommandRef.current = () => undefined;
     };
-  }, [integer, linkedManifests, manifest, t]);
+  }, [integer, manifest, sceneMode, t, visibleKeyframes, visibleManifests]);
 
   return (
     <div ref={hostRef} className="relative size-full overflow-hidden bg-surface-muted">
@@ -1131,6 +1600,123 @@ export function RoomSceneCanvas({
           {rendererError}
         </div>
       ) : null}
+      <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%_-_7rem)] flex-col items-start gap-2">
+        <div
+          className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-surface/92 p-1 shadow-sm backdrop-blur"
+          role="group"
+          aria-label={t("canvas.visualMode")}
+        >
+          <button
+            type="button"
+            onClick={() => setSceneMode("roomplan")}
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+              sceneMode === "roomplan"
+                ? "bg-brand-solid text-on-brand"
+                : "text-muted hover:bg-surface-hover hover:text-foreground",
+            )}
+            aria-pressed={sceneMode === "roomplan"}
+          >
+            <Cuboid className="size-3.5" aria-hidden="true" />
+            {t("canvas.modes.roomplan")}
+          </button>
+          {availableModes.textured_mesh ? (
+            <button
+              type="button"
+              onClick={() => setSceneMode("textured_mesh")}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+                sceneMode === "textured_mesh"
+                  ? "bg-brand-solid text-on-brand"
+                  : "text-muted hover:bg-surface-hover hover:text-foreground",
+              )}
+              aria-pressed={sceneMode === "textured_mesh"}
+            >
+              <ImageIcon className="size-3.5" aria-hidden="true" />
+              {t("canvas.modes.textured")}
+            </button>
+          ) : null}
+          {availableModes.gaussian_splat ? (
+            <button
+              type="button"
+              onClick={() => setSceneMode("gaussian_splat")}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+                sceneMode === "gaussian_splat"
+                  ? "bg-brand-solid text-on-brand"
+                  : "text-muted hover:bg-surface-hover hover:text-foreground",
+              )}
+              aria-pressed={sceneMode === "gaussian_splat"}
+            >
+              <Sparkles className="size-3.5" aria-hidden="true" />
+              {t("canvas.modes.splat")}
+            </button>
+          ) : null}
+        </div>
+
+        {sceneMode !== "roomplan" && assetLoadState !== "ready" ? (
+          <div
+            className={cn(
+              "pointer-events-none inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-medium shadow-sm backdrop-blur",
+              assetLoadState === "loading"
+                ? "border-border bg-surface/90 text-muted"
+                : "border-warning-border bg-warning-soft/95 text-warning-strong",
+            )}
+            role="status"
+          >
+            {assetLoadState === "loading" ? (
+              <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+            ) : (
+              <TriangleAlert className="size-3" aria-hidden="true" />
+            )}
+            {assetLoadState === "loading"
+              ? t("canvas.asset.loading")
+              : assetLoadState === "too-large"
+                ? t("canvas.asset.tooLarge")
+                : t("canvas.asset.failed")}
+          </div>
+        ) : null}
+
+        {visibleKeyframes.length ? (
+          <div className="pointer-events-auto flex max-w-full items-center gap-1 rounded-xl border border-border bg-surface/92 p-1 shadow-sm backdrop-blur">
+            <button
+              type="button"
+              onClick={() => setShowKeyframes((current) => !current)}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+                showKeyframes
+                  ? "bg-brand-soft text-brand-strong"
+                  : "text-muted hover:bg-surface-hover hover:text-foreground",
+              )}
+              aria-pressed={showKeyframes}
+            >
+              <Camera className="size-3.5" aria-hidden="true" />
+              {t("canvas.keyframes.toggle", {
+                count: visibleKeyframes.length,
+                value: integer.format(visibleKeyframes.length),
+              })}
+            </button>
+            {showKeyframes ? (
+              <select
+                value={selectedKeyframeId ?? ""}
+                onChange={(event) => setSelectedKeyframeId(event.target.value || null)}
+                className="h-8 min-w-0 max-w-44 rounded-lg border-0 bg-surface-muted px-2 text-[10px] font-medium text-foreground outline-none focus:ring-2 focus:ring-focus/30"
+                aria-label={t("canvas.keyframes.select")}
+              >
+                <option value="">{t("canvas.keyframes.select")}</option>
+                {visibleKeyframes.map((frame, index) => (
+                  <option key={frame.id} value={frame.id}>
+                    {t("canvas.keyframes.option", {
+                      index: integer.format(index + 1),
+                      quality: integer.format(Math.round(frame.quality * 100)),
+                    })}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
       <div className="pointer-events-none absolute right-3 top-3 z-10 flex gap-2">
         <button
           type="button"
@@ -1154,6 +1740,61 @@ export function RoomSceneCanvas({
       <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-surface/78 px-2.5 py-1.5 text-[10px] font-medium text-muted shadow-sm backdrop-blur">
         {t("canvas.controlsHint")}
       </div>
+      {showKeyframes && selectedKeyframe ? (
+        <div className="absolute bottom-12 right-3 z-10 w-56 overflow-hidden rounded-xl border border-border bg-surface/95 shadow-lg backdrop-blur">
+          <div
+            className="relative bg-surface-muted"
+            style={{
+              aspectRatio: selectedKeyframeDisplay?.quarterTurn
+                ? selectedKeyframe.height / Math.max(selectedKeyframe.width, 1)
+                : selectedKeyframe.width / Math.max(selectedKeyframe.height, 1),
+            }}
+          >
+            <Image
+              src={selectedKeyframe.url}
+              alt={t("canvas.keyframes.imageAlt", {
+                room: manifest.room.name,
+              })}
+              width={selectedKeyframe.width}
+              height={selectedKeyframe.height}
+              sizes="224px"
+              unoptimized
+              className="max-w-none object-contain"
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                width: selectedKeyframeDisplay?.quarterTurn
+                  ? `${(100 * selectedKeyframe.width) / Math.max(selectedKeyframe.height, 1)}%`
+                  : "100%",
+                height: selectedKeyframeDisplay?.quarterTurn
+                  ? `${(100 * selectedKeyframe.height) / Math.max(selectedKeyframe.width, 1)}%`
+                  : "100%",
+                transform: `translate(-50%, -50%) ${selectedKeyframeDisplay?.transform ?? ""}`,
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setSelectedKeyframeId(null)}
+              className="absolute right-2 top-2 grid size-7 place-items-center rounded-lg bg-foreground/65 text-background backdrop-blur transition hover:bg-foreground/80"
+              aria-label={t("canvas.keyframes.close")}
+            >
+              <X className="size-3.5" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-2 px-3 py-2 text-[10px] text-muted">
+            <span>{new Intl.DateTimeFormat(locale, {
+              dateStyle: "short",
+              timeStyle: "medium",
+            }).format(new Date(selectedKeyframe.capturedAt))}</span>
+            <span className="shrink-0 font-semibold text-foreground">
+              {t("canvas.keyframes.quality", {
+                value: integer.format(Math.round(selectedKeyframe.quality * 100)),
+              })}
+            </span>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

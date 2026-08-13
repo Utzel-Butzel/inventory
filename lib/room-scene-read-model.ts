@@ -3,6 +3,7 @@ import type {
   resources,
   resourceSpatialPlacements,
   roomScanAssets,
+  roomScanKeyframes,
   roomScans,
   spatialCoordinateSpaces,
   spatialStructures,
@@ -13,6 +14,7 @@ type ResourceRow = typeof resources.$inferSelect;
 type StructureRow = typeof spatialStructures.$inferSelect;
 type CoordinateSpaceRow = typeof spatialCoordinateSpaces.$inferSelect;
 type RoomScanAssetRow = typeof roomScanAssets.$inferSelect;
+type RoomScanKeyframeRow = typeof roomScanKeyframes.$inferSelect;
 type PlacementRow = typeof resourceSpatialPlacements.$inferSelect;
 type MediaRow = typeof media.$inferSelect;
 
@@ -45,6 +47,23 @@ export const serializeRoomScanAsset = (asset: RoomScanAssetRow) => ({
   createdAt: asset.createdAt,
 });
 
+export const serializeRoomScanKeyframe = (frame: RoomScanKeyframeRow) => ({
+  id: frame.id,
+  capturedAt: frame.capturedAt,
+  timestamp: frame.frameTimestamp,
+  cameraTransform: frame.cameraTransform,
+  intrinsics: frame.intrinsics,
+  width: frame.imageWidth,
+  height: frame.imageHeight,
+  orientation: frame.orientation,
+  quality: frame.quality,
+  featureDescriptor: frame.featureDescriptor,
+  mimeType: frame.mimeType,
+  size: frame.size,
+  checksumSha256: frame.checksumSha256,
+  url: `/api/v1/room-scans/${encodeURIComponent(frame.roomScanId)}/keyframes/${encodeURIComponent(frame.id)}`,
+});
+
 /**
  * Builds room-scene manifests from rows fetched in batches. The indexes keep
  * assets and placements isolated by scan without repeating a query (or a full
@@ -53,6 +72,7 @@ export const serializeRoomScanAsset = (asset: RoomScanAssetRow) => ({
 export function assembleRoomSceneManifests(
   rows: readonly RoomSceneReadRow[],
   assetRows: readonly RoomScanAssetRow[],
+  keyframeRows: readonly RoomScanKeyframeRow[],
   placementRows: readonly RoomScenePlacementReadRow[],
   coverRows: readonly MediaRow[],
 ) {
@@ -68,6 +88,11 @@ export function assembleRoomSceneManifests(
       placement.placement.roomScanId,
       placement,
     );
+  }
+
+  const keyframesByScan = new Map<string, RoomScanKeyframeRow[]>();
+  for (const keyframe of keyframeRows) {
+    appendByKey(keyframesByScan, keyframe.roomScanId, keyframe);
   }
 
   // coverRows are ordered by media position by the caller. Preserve the first
@@ -107,6 +132,9 @@ export function assembleRoomSceneManifests(
       capturedAt: scan.capturedAt,
       deviceModel: scan.deviceModel,
       assets: (assetsByScan.get(scan.id) ?? []).map(serializeRoomScanAsset),
+      keyframes: (keyframesByScan.get(scan.id) ?? []).map(
+        serializeRoomScanKeyframe,
+      ),
     },
     placements: (placementsByScan.get(scan.id) ?? []).map(
       ({ placement, resource }) => {
@@ -148,6 +176,7 @@ export function assembleRoomSceneManifests(
           confidence: placement.confidence,
           method: placement.method,
           anchorIdentifier: placement.anchorIdentifier,
+          localizationEvidence: placement.localizationEvidence,
           capturedAt: placement.capturedAt,
           updatedAt: placement.updatedAt,
         };

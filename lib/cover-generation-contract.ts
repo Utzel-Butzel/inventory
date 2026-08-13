@@ -13,7 +13,8 @@ const backgroundInstructions: Record<CoverTransparencyMethod, string> = {
   greenscreen: `Transparency extraction requirements:
 - Place the isolated subject on a pure, perfectly uniform chroma-green #00FF00 background.
 - The green background must fill every pixel outside the subject, with no texture, gradient, horizon, vignette, border, or backdrop detail.
-- Keep the subject's original colors unchanged and do not add green reflections, green rim light, or green color casts.
+- Keep the subject's original colors unchanged and light its outline neutrally.
+- Do not add green reflections, green rim light, green glow, color spill, or green color casts on the subject or its shadow.
 - Keep the full subject separate from the image edges.`,
   "difference-matting": `Transparency extraction requirements:
 - Place the isolated subject on a pure, perfectly uniform white #FFFFFF background.
