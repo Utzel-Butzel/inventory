@@ -1,0 +1,678 @@
+{
+  "nav": {
+    "label": "Stock sections",
+    "overview": "Overview",
+    "orders": "Orders",
+    "scan": "Scan",
+    "workflows": "Workflows"
+  },
+  "overview": {
+    "metadata": {
+      "title": "Stock",
+      "description": "Monitor inventory levels, runway, and reorder risk."
+    },
+    "eyebrow": "Stock control",
+    "title": "Stock overview",
+    "description": "Monitor inventory levels, incoming stock, and estimated runway across all tracked items.",
+    "actions": {
+      "scanCode": "Scan code",
+      "scanWorkflows": "Scan workflows",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing…",
+      "refreshingLabel": "Refreshing stock",
+      "tryAgain": "Try again",
+      "browseInventory": "Browse inventory",
+      "clearFilters": "Clear filters"
+    },
+    "errors": {
+      "load": "Unable to load stock overview.",
+      "unexpectedResponse": "The stock service returned an unexpected response."
+    },
+    "empty": {
+      "unavailableTitle": "Stock overview is unavailable",
+      "noStockTitle": "No stock is being tracked yet",
+      "noStockDescription": "Open an inventory item to configure stock tracking and start recording movements.",
+      "noMatchesTitle": "No matching stock items",
+      "noMatchesDescription": "Try another search or clear the active filter."
+    },
+    "metrics": {
+      "trackedItems": "Tracked items",
+      "unitsOnHand_one": "{{value}} unit on hand",
+      "unitsOnHand_other": "{{value}} units on hand",
+      "incoming": "Incoming",
+      "itemsOnOrder_one": "{{value}} item on order",
+      "itemsOnOrder_other": "{{value}} items on order",
+      "healthyStock": "Healthy stock",
+      "aboveThresholds": "Above configured thresholds",
+      "lowStock": "Low stock",
+      "reorderSuggestions_one": "{{value}} reorder suggestion",
+      "reorderSuggestions_other": "{{value}} reorder suggestions",
+      "outOfStock": "Out of stock",
+      "immediateAction": "Immediate action required",
+      "nothingBlocked": "Nothing currently blocked"
+    },
+    "attention": {
+      "title_one": "{{value}} item needs attention",
+      "title_other": "{{value}} items need attention",
+      "outAndLow": "{{out}} out of stock · {{low}} low on stock",
+      "lowOnly": "These items are at or below their configured minimum.",
+      "viewOut": "View out of stock",
+      "viewLow": "View low stock"
+    },
+    "counts": {
+      "due_one": "{{value}} inventory count is due",
+      "due_other": "{{value}} inventory counts are due",
+      "description": "Review the physical quantity and reconcile any discrepancy.",
+      "schedule_one": "Every {{interval}} day · due {{date}}",
+      "schedule_other": "Every {{interval}} days · due {{date}}",
+      "now": "now",
+      "action": "Count {{quantity}}"
+    },
+    "search": {
+      "label": "Search stock",
+      "placeholder": "Search items, types, or tracking modes…",
+      "clear": "Clear stock search"
+    },
+    "filters": {
+      "all": "All",
+      "low": "Low",
+      "out": "Out",
+      "healthy": "Healthy",
+      "incoming": "Incoming"
+    },
+    "table": {
+      "item": "Item",
+      "onHand": "On hand",
+      "incoming": "Incoming",
+      "minimum": "Minimum",
+      "dailyUsage": "Daily usage",
+      "runway": "Runway",
+      "status": "Status",
+      "open": "Open",
+      "openFor": "Open stock settings for {{name}}",
+      "expected": "Expected {{date}}",
+      "projected": "Projected {{quantity}}",
+      "notSet": "Not set",
+      "estimatedRunway": "Estimated runway"
+    },
+    "runway": {
+      "outNow": "Out now",
+      "since": "Since {{date}}",
+      "notForecast": "Not forecast",
+      "addUsage": "Add usage history to estimate runway.",
+      "lessThanDay": "Less than 1 day",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days",
+      "runsOut": "Runs out {{date}}"
+    },
+    "status": {
+      "out": "Out of stock",
+      "replenishNow": "Replenish now",
+      "low": "Low stock",
+      "belowMinimum": "{{quantity}} below minimum",
+      "reorderSuggested": "Reorder suggested",
+      "healthy": "Healthy"
+    },
+    "usage": {
+      "none": "No usage yet",
+      "perDay": "{{value}} {{unit}} / day",
+      "units": "units"
+    },
+    "footer": {
+      "showing": "Showing {{shown}} of {{total}} tracked items",
+      "runwayBasis": "Runway is based on average daily usage"
+    },
+    "values": {
+      "bulk": "Bulk",
+      "serialized": "Serialized",
+      "object": "Object",
+      "tool": "Tool",
+      "furniture": "Furniture",
+      "clothing": "Clothing",
+      "vehicle": "Vehicle",
+      "place": "Place",
+      "person": "Person",
+      "project": "Project",
+      "other": "Other"
+    }
+  },
+  "resource": {
+    "metadata": {
+      "title": "Stock management"
+    },
+    "loading": "Loading stock…",
+    "unavailable": {
+      "title": "Stock is unavailable",
+      "description": "Stock data could not be loaded for this item."
+    },
+    "inventory": "Inventory",
+    "stock": "Stock",
+    "title": "Stock",
+    "description": "Book movements, configure reorder rules, and manage individual units.",
+    "system": "System",
+    "unit": "unit",
+    "optional": "optional",
+    "actions": {
+      "retry": "Try again",
+      "backToItem": "Back to item",
+      "itemDetails": "Item details",
+      "scanCode": "Scan code",
+      "refresh": "Refresh stock",
+      "dismissError": "Dismiss error",
+      "dismissMessage": "Dismiss message",
+      "bookStockIn": "Book stock in",
+      "reviewStockOut": "Review stock out",
+      "prepareSerialized": "Prepare serialized movement",
+      "saveSettings": "Save settings",
+      "manageOrders": "Manage orders",
+      "registerUnits": "Register units",
+      "registerCustomIds": "Register custom IDs",
+      "copyUnitId": "Copy unit ID",
+      "copyUnitIdWithCode": "Copy unit ID {{code}}",
+      "close": "Close",
+      "update": "Update",
+      "saveUnit": "Save unit",
+      "goBack": "Go back",
+      "confirmStockOut": "Confirm stock out"
+    },
+    "errors": {
+      "missingResource": "No resource ID was provided.",
+      "load": "Unable to load stock data.",
+      "customFields": "Unable to load custom field definitions.",
+      "minimumStock": "Minimum stock must be zero or greater.",
+      "reorderQuantity": "Reorder quantity must be zero or greater.",
+      "leadTime": "Lead time must be a non-negative whole number.",
+      "unitName": "Enter a unit name.",
+      "saveSettings": "Unable to save stock settings.",
+      "validQuantity": "Enter a quantity greater than zero.",
+      "validMovementDate": "Choose a valid movement date and time.",
+      "serializedBooking": "Serialized stock movements must be recorded against individual units.",
+      "bookMovement": "Unable to book the stock movement.",
+      "checkBooking": "Check the booking details and try again.",
+      "generatedUnitRange": "Enter between 1 and 100 units.",
+      "customUnitRange": "Enter between 1 and 100 custom unit IDs.",
+      "uniqueUnitIds": "Each unit ID must be unique.",
+      "unitIdLength": "Unit IDs must be 160 characters or fewer.",
+      "validAcquisitionDate": "Choose a valid acquisition date and time.",
+      "metadataObject": "Advanced metadata must be a JSON object.",
+      "createUnits": "Unable to register the units.",
+      "onlyAvailable": "Only available units can be moved into another status.",
+      "validBookingDate": "Choose a valid effective date and time.",
+      "updateUnit": "Unable to update the unit."
+    },
+    "notices": {
+      "settingsSaved": "Stock settings saved.",
+      "bookedIn": "Booked {{quantity}} into stock.",
+      "bookedOut": "Booked {{quantity}} out of stock.",
+      "unitsCreated_one": "{{value}} unit registered.",
+      "unitsCreated_other": "{{value}} units registered.",
+      "unitUpdated": "Unit {{code}} updated."
+    },
+    "confirm": {
+      "switchSerialized": "Switching to serialized tracking requires registering individual unit IDs. Continue?",
+      "switchBulk": "Switching to bulk tracking removes individual-unit controls. Continue?",
+      "leaveAvailable": "Move unit {{code}} from Available to {{status}}? This creates a stock-out movement.",
+      "outgoingTitle": "Confirm outgoing stock",
+      "outgoingDescription": "You are about to remove {{quantity}} from available stock.",
+      "before": "Before",
+      "change": "Change",
+      "after": "After",
+      "minimumWarning": "This leaves stock at or below the configured minimum of {{minimum}}."
+    },
+    "tracking": {
+      "bulk": "Bulk",
+      "serialized": "Serialized"
+    },
+    "metrics": {
+      "available": "Available",
+      "readyToUse": "{{quantity}} ready to use",
+      "incoming": "Incoming",
+      "nothingOnOrder": "Nothing on order",
+      "afterReceipt": "{{quantity}} after receipt{{date}}",
+      "minimum": "Minimum",
+      "aboveThreshold": "Above threshold",
+      "thresholdReached": "Threshold reached",
+      "averageUsage": "Average usage",
+      "usedPerDay": "{{unit}} used per day",
+      "stable": "Stable",
+      "runway": "Runway",
+      "estimated": "Estimated {{date}}",
+      "noStockout": "No stockout forecast",
+      "daysShort": "{{value}} d"
+    },
+    "booking": {
+      "title": "Book a movement",
+      "description": "Record stock coming in or going out with a dated audit trail.",
+      "stockIn": "Stock in",
+      "stockOut": "Stock out",
+      "quantity": "Quantity",
+      "movementType": "Movement type",
+      "date": "Date and time",
+      "reason": "Reason",
+      "reasonInPlaceholder": "e.g. Supplier delivery",
+      "reasonOutPlaceholder": "e.g. Issued to workshop",
+      "location": "Location",
+      "locationPlaceholder": "e.g. Main store · Shelf B2",
+      "note": "Internal note",
+      "notePlaceholder": "Optional context for the audit trail",
+      "projectedBalance": "Projected balance",
+      "unitControlsBelow": "unit controls below",
+      "available": "{{quantity}} available",
+      "serializedBeforeLink": "For serialized stock, update an individual unit or",
+      "serializedAfterLink": " or scan its code."
+    },
+    "movements": {
+      "title": "Movement history",
+      "description": "A dated audit trail of every quantity change.",
+      "filterLabel": "Filter movements",
+      "filters": {
+        "all": "All",
+        "in": "Stock in",
+        "out": "Stock out",
+        "audit": "Audit"
+      },
+      "types": {
+        "receipt": "Receipt",
+        "issue": "Issue",
+        "adjustment": "Adjustment",
+        "return": "Return",
+        "waste": "Waste",
+        "transfer": "Transfer"
+      },
+      "date": "Date",
+      "reason": "Reason",
+      "change": "Change",
+      "balance": "Balance",
+      "photoAssisted": "Photo-assisted count",
+      "stockUpdate": "Stock update",
+      "locationUnit": "Location / unit",
+      "emptyTitle": "No movements yet",
+      "noMovements": "Book the first stock movement to start the audit trail.",
+      "noMatches": "No movements match this filter."
+    },
+    "settings": {
+      "title": "Stock settings",
+      "description": "Configure tracking, thresholds, and purchasing defaults.",
+      "trackingMode": "Tracking mode",
+      "bulkHelp": "Track the total quantity without individual IDs.",
+      "serializedHelp": "Track every physical unit with its own ID and status.",
+      "minimumStock": "Minimum stock",
+      "reorderQuantity": "Reorder quantity",
+      "leadTime": "Lead time",
+      "days_one": "{{value}} day",
+      "days_other": "{{value}} days",
+      "dayUnit": "d",
+      "unitName": "Unit name",
+      "unitNamePlaceholder": "e.g. pieces, rolls, litres",
+      "cannotReturnBulk": "Installed serialized units must be removed from their assemblies before switching back to bulk tracking."
+    },
+    "forecast": {
+      "title": "Reorder forecast",
+      "description": "Planning signals based on usage, minimum stock, and lead time.",
+      "minimum": "Minimum {{quantity}}",
+      "suggestedOrder": "Suggested order",
+      "alreadyOrdered": "Already ordered",
+      "belowThreshold": "Stock is at or below the configured minimum."
+    },
+    "quantity": {
+      "units_one": "{{value}} unit",
+      "units_other": "{{value}} units"
+    },
+    "units": {
+      "title": "Serialized units",
+      "availableCount_one": "{{value}} available unit",
+      "availableCount_other": "{{value}} available units",
+      "description": "Manage IDs, locations, status, and metadata for every physical unit.",
+      "descriptionDisabled": "Enable serialized tracking to register and manage individual units.",
+      "notEnabledTitle": "Serialized tracking is not enabled",
+      "notEnabledDescription": "Choose Serialized in stock settings to manage individual unit IDs.",
+      "registerTitle": "Register units",
+      "registerDescription": "Generate IDs or enter the identifiers already on your assets.",
+      "generateIds": "Generate IDs",
+      "customIds": "Custom IDs",
+      "numberOfUnits": "Number of units",
+      "unitIds": "Unit IDs",
+      "onePerLine": "one per line",
+      "inventoryLocation": "Inventory location",
+      "notAssigned": "Not assigned",
+      "locationNote": "Location note",
+      "locationNotePlaceholder": "e.g. Shelf B2 or vehicle 4",
+      "acquiredOn": "Acquired on",
+      "customFields": "Custom fields",
+      "customFieldsBatchHelp": "These values will be applied to every unit in this batch.",
+      "customFieldsEditHelp": "Structured details configured for this inventory type or category.",
+      "customFieldsUnavailable": "Custom fields are temporarily unavailable.",
+      "advancedMetadata": "Advanced metadata",
+      "noLocation": "No location",
+      "acquired": "Acquired {{date}}",
+      "moved": "Moved {{date}}",
+      "installedIn": "Installed in {{assembly}}",
+      "installedManagedHelp": "Installed units are managed through their assembly history.",
+      "editHelp": "Moving between Available and any other status automatically creates a dated ±1 stock movement. Location, custom field, or metadata edits create a zero-value audit entry.",
+      "statusLabel": "Status",
+      "status": {
+        "available": "Available",
+        "reserved": "Reserved",
+        "inUse": "In use",
+        "maintenance": "Maintenance",
+        "consumed": "Consumed",
+        "lost": "Lost",
+        "retired": "Retired"
+      },
+      "effectiveDate": "Effective date",
+      "reason": "Reason",
+      "reasonPlaceholder": "e.g. Assigned to project North",
+      "internalNote": "Internal note",
+      "registeredUpdated": "Registered {{registered}} · updated {{updated}}",
+      "emptyTitle": "No unit records yet",
+      "emptyDescription": "Register generated IDs or enter the asset codes already attached to your physical inventory.",
+      "record": "unit"
+    },
+    "locationTypes": {
+      "place": "Place",
+      "room": "Room",
+      "storage": "Storage",
+      "building": "Building",
+      "vehicle": "Vehicle",
+      "other": "Other"
+    }
+  },
+  "locations": {
+    "title": "Stock locations",
+    "description": "See where available quantity is assigned and transfer bulk stock between locations.",
+    "readOnly": "You need write access to transfer stock.",
+    "unit": "unit",
+    "locationFallback": "Location",
+    "unassigned": "Unassigned",
+    "transferReason": "Stock location transfer",
+    "actions": {
+      "refresh": "Refresh locations",
+      "tryAgain": "Try again",
+      "dismissError": "Dismiss error",
+      "dismissMessage": "Dismiss message"
+    },
+    "errors": {
+      "load": "Unable to load stock locations.",
+      "validTransfer": "Choose different source and destination locations and enter a valid quantity.",
+      "move": "Unable to transfer stock."
+    },
+    "notices": {
+      "moved": "Moved {{quantity}} from {{source}} to {{destination}}."
+    },
+    "unavailable": {
+      "title": "Location breakdown is unavailable",
+      "description": "Location data could not be loaded."
+    },
+    "metrics": {
+      "total": "Total stock",
+      "assigned": "Assigned to locations"
+    },
+    "empty": {
+      "title": "No location assignments yet",
+      "description": "Stock that is not assigned to a location appears as unassigned."
+    },
+    "move": {
+      "title": "Move stock",
+      "description": "Transfer available bulk quantity without changing the total stock.",
+      "serializedHelp": "Move serialized stock by updating each unit’s inventory location above.",
+      "noStock": "There is no available stock to move.",
+      "noDestination": "Add another active location before transferring stock.",
+      "from": "From",
+      "to": "To",
+      "quantity": "Quantity",
+      "noneAtSource": "No stock at this source",
+      "availableAtSource": "{{quantity}} available at source",
+      "action": "Move stock"
+    },
+    "tracking": {
+      "bulk": "Bulk",
+      "serialized": "Serialized"
+    },
+    "types": {
+      "place": "Place",
+      "room": "Room",
+      "storage": "Storage",
+      "building": "Building",
+      "vehicle": "Vehicle",
+      "other": "Other"
+    }
+  },
+  "cycle": {
+    "title": "Inventory cycle",
+    "description": "Schedule recurring physical counts and reconcile discrepancies.",
+    "currentSchedule": "Current schedule",
+    "lastCompleted": "Last completed",
+    "noPhysicalCounts": "No physical counts yet",
+    "recentCount_one": "{{value}} recent count",
+    "recentCount_other": "{{value}} recent counts",
+    "unit": "unit",
+    "optional": "optional",
+    "actions": {
+      "refresh": "Refresh inventory cycle",
+      "tryAgain": "Try again",
+      "dismissError": "Dismiss error",
+      "dismissMessage": "Dismiss message",
+      "saveSchedule": "Save schedule",
+      "cancel": "Cancel",
+      "countNow": "Count now",
+      "completeReview": "Complete review",
+      "recordCount": "Record count"
+    },
+    "errors": {
+      "load": "Unable to load the inventory cycle.",
+      "intervalRange": "The cycle must be between 1 and 3,650 whole days.",
+      "save": "Unable to save the inventory cycle.",
+      "validCount": "Enter a non-negative whole-number count.",
+      "validDate": "Choose a valid count date and time.",
+      "record": "Unable to record this inventory count.",
+      "serializedReview": "Unable to complete the serialized inventory review."
+    },
+    "notices": {
+      "saved": "Inventory cycle saved.",
+      "paused": "Inventory cycle paused.",
+      "recorded": "Count recorded for {{target}}.",
+      "serializedCompleted": "Serialized unit review completed."
+    },
+    "serialized": {
+      "completedNote": "Serialized unit review completed",
+      "description": "Serialized stock is reconciled by reviewing the individual unit records."
+    },
+    "targets": {
+      "entireInventory": "Entire inventory",
+      "entireInventorySentence": "the entire inventory",
+      "selectedLocation": "the selected location"
+    },
+    "schedule": {
+      "notScheduled": "Not scheduled",
+      "notScheduledDetail": "Choose a cadence to make physical checks routine.",
+      "paused": "Paused",
+      "pausedDetail_one": "The saved cadence is every {{value}} day.",
+      "pausedDetail_other": "The saved cadence is every {{value}} days.",
+      "countDue": "Count due",
+      "dueDate": "Due {{date}}.",
+      "dueIn_one": "Due tomorrow",
+      "dueIn_other": "Due in {{value}} days"
+    },
+    "state": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "policy": {
+      "enabled": "Recurring counts enabled",
+      "paused": "Recurring counts paused",
+      "pausedHelp": "Counts can still be recorded while the reminder is paused.",
+      "weeks_one": "{{value}} week",
+      "weeks_other": "{{value}} weeks",
+      "custom": "Custom",
+      "customDaysLabel": "Custom interval in days",
+      "days": "days",
+      "writeRequired": "Write access is required to change the schedule."
+    },
+    "count": {
+      "title": "Physical count",
+      "description": "Record the observed quantity and automatically reconcile any variance.",
+      "readOnly": "You need write access to record inventory counts.",
+      "scope": "Count scope",
+      "entireExpected": "Entire inventory · expected {{quantity}}",
+      "locationExpected": "{{name}} · expected {{quantity}}",
+      "expected": "Expected",
+      "countedQuantity": "Counted quantity",
+      "variance": "Variance",
+      "countedAt": "Counted at",
+      "note": "Note",
+      "notePlaceholder": "Optional context for this count",
+      "totalHelp": "Recording the entire inventory reconciles the item’s total quantity."
+    },
+    "history": {
+      "title": "Count history",
+      "system": "System",
+      "unknownLocation": "Unknown location",
+      "quantities": "Expected {{expected}} · counted {{counted}}",
+      "emptyTitle": "No counts recorded yet",
+      "emptyDescription": "Complete the first physical count to create a reconciliation history."
+    },
+    "unavailable": {
+      "title": "Inventory cycle is unavailable",
+      "description": "Cycle data could not be loaded."
+    }
+  },
+  "orders": {
+    "metadata": {
+      "title": "Purchase orders | Inventree",
+      "description": "Track incoming inventory and receive partial deliveries into stock."
+    },
+    "eyebrow": "Procurement",
+    "title": "Purchase orders",
+    "titleForItem": "Purchase orders for this item",
+    "description": "Track incoming inventory and receive partial deliveries directly into stock.",
+    "optional": "optional",
+    "noSku": "No SKU",
+    "inTransit": "In transit",
+    "actions": {
+      "refresh": "Refresh orders",
+      "refreshing": "Refreshing…",
+      "newOrder": "New order",
+      "closeForm": "Close order form",
+      "dismissError": "Dismiss error",
+      "dismissMessage": "Dismiss message",
+      "cancel": "Cancel",
+      "createOrder": "Create order",
+      "creating": "Creating…",
+      "receive": "Receive",
+      "receiveIntoStock": "Receive into stock",
+      "receiving": "Receiving…",
+      "close": "Close",
+      "createFirstOrder": "Create first order",
+      "clearFilters": "Clear filters"
+    },
+    "errors": {
+      "loadOrders": "Unable to load purchase orders.",
+      "loadItem": "Unable to load item details.",
+      "addLine": "Add at least one item to the order.",
+      "wholeQuantity": "Enter a positive whole-number quantity for {{name}}.",
+      "validOrderDate": "Choose a valid order date.",
+      "create": "Unable to create the purchase order.",
+      "receiptRange": "Enter a whole-number receipt quantity within the open amount.",
+      "validReceiptDate": "Choose a valid receipt date and time.",
+      "unitCodeCount": "Enter exactly one unit code for every serialized unit received.",
+      "uniqueCodes": "Each received unit code must be unique.",
+      "receive": "Unable to receive this delivery."
+    },
+    "notices": {
+      "created": "Purchase order created.",
+      "received_one": "Received {{value}} unit of {{name}} into stock.",
+      "received_other": "Received {{value}} units of {{name}} into stock."
+    },
+    "metrics": {
+      "openOrders": "Open orders",
+      "openOrdersDetail": "Awaiting delivery",
+      "unitsIncoming": "Units incoming",
+      "unitsIncomingDetail": "Across open order lines",
+      "overdue": "Overdue",
+      "overdueDetail": "Past expected arrival"
+    },
+    "create": {
+      "title": "Create purchase order",
+      "description": "Add one or more inventory items and their expected quantities.",
+      "reference": "Reference",
+      "supplier": "Supplier",
+      "supplierPlaceholder": "e.g. Northline Industrial",
+      "orderedAt": "Ordered at",
+      "expectedArrival": "Expected arrival",
+      "orderNote": "Order note",
+      "orderNotePlaceholder": "Optional notes for this order",
+      "addLineTitle": "Add inventory items",
+      "addLineDescription": "Search by name or SKU.",
+      "searchItemsLabel": "Search inventory items",
+      "searchItemsPlaceholder": "Search inventory…",
+      "searching": "Searching…",
+      "noItemsFound": "No items found",
+      "available": "{{quantity}} available",
+      "orderQuantity": "Order quantity",
+      "lineEta": "Line ETA",
+      "lineNote": "Line note",
+      "lineNotePlaceholder": "Optional line note",
+      "removeLine": "Remove {{name}} from order",
+      "summary": "{{items}} items · {{units}} units"
+    },
+    "search": {
+      "label": "Search purchase orders",
+      "placeholder": "Search supplier, reference, or item…",
+      "clear": "Clear order search"
+    },
+    "filters": {
+      "open": "Open",
+      "all": "All",
+      "received": "Received",
+      "cancelled": "Cancelled"
+    },
+    "status": {
+      "draft": "Draft",
+      "ordered": "Ordered",
+      "partiallyReceived": "Partially received",
+      "received": "Received",
+      "cancelled": "Cancelled",
+      "pending": "Pending",
+      "complete": "Complete"
+    },
+    "tracking": {
+      "bulk": "Bulk",
+      "serialized": "Serialized"
+    },
+    "list": {
+      "supplierNotSet": "Supplier not set",
+      "orderFallback": "Order {{id}}",
+      "orderedDate": "Ordered {{date}}",
+      "progress": "{{received}} received · {{open}} open · {{ordered}} ordered",
+      "ordered": "Ordered",
+      "open": "Open",
+      "expected": "Expected {{date}}",
+      "eta": "ETA",
+      "noEta": "No ETA",
+      "lines_one": "{{value}} line",
+      "lines_other": "{{value}} lines",
+      "system": "System"
+    },
+    "receipt": {
+      "description": "Receive {{name}} into available stock.",
+      "maximum": "Maximum {{maximum}}",
+      "quantity": "Quantity received",
+      "receivedAt": "Received at",
+      "location": "Location",
+      "locationPlaceholder": "e.g. Receiving bay",
+      "note": "Receipt note",
+      "notePlaceholder": "Optional delivery context",
+      "unitCodes": "Unit codes",
+      "exactCodes_one": "Enter exactly {{value}} code.",
+      "exactCodes_other": "Enter exactly {{value}} codes.",
+      "unitCodesPlaceholder": "One unit code per line"
+    },
+    "empty": {
+      "noOrdersTitle": "No purchase orders yet",
+      "noOrdersDescription": "Create the first purchase order to start tracking incoming stock.",
+      "noItemOrdersTitle": "No purchase orders for this item",
+      "noMatchesTitle": "No matching purchase orders",
+      "noMatchesDescription": "Try another search or clear the active filter."
+    }
+  }
+}

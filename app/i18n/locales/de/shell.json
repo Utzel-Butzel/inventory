@@ -1,0 +1,93 @@
+{
+  "brand": "Inventory",
+  "metadata": {
+    "title": "Inventar",
+    "template": "%s · Inventar",
+    "description": "Inventar, Bestand, Standorte und Abläufe verwalten."
+  },
+  "sections": {
+    "workspace": "Arbeitsbereich",
+    "manage": "Verwalten"
+  },
+  "navigation": {
+    "mainLabel": "Hauptnavigation",
+    "overview": "Übersicht",
+    "inventory": "Inventar",
+    "stock": "Bestand",
+    "locations": "Standorte",
+    "rooms": "3D-Räume",
+    "batch": "Stapelstudio",
+    "labels": "Etiketten",
+    "duplicates": "Duplikate",
+    "settings": "Einstellungen"
+  },
+  "badges": {
+    "ai": "KI"
+  },
+  "actions": {
+    "addInventoryItem": "Inventar hinzufügen",
+    "addItem": "Eintrag hinzufügen",
+    "signOut": "Abmelden",
+    "openNavigation": "Navigation öffnen",
+    "closeNavigation": "Navigation schließen",
+    "helpAndConfiguration": "Hilfe und Konfiguration"
+  },
+  "user": {
+    "generic": "Benutzer",
+    "fallbackName": "Inventaradministrator",
+    "signedIn": "Angemeldet"
+  },
+  "breadcrumb": {
+    "workspace": "Arbeitsbereich"
+  },
+  "search": {
+    "label": "Inventar durchsuchen",
+    "placeholder": "Inventar durchsuchen…",
+    "submit": "Inventarsuche absenden",
+    "action": "Suchen"
+  },
+  "settings": {
+    "eyebrow": "Arbeitsbereich",
+    "title": "Einstellungen",
+    "description": "Daten, Zugriffe und Integrationen konfigurieren.",
+    "navigationLabel": "Einstellungsnavigation",
+    "groups": {
+      "workspace": "Arbeitsbereich",
+      "developer": "Entwicklung"
+    },
+    "items": {
+      "data": {
+        "label": "Datentransfer",
+        "description": "Inventar importieren und exportieren"
+      },
+      "languages": {
+        "label": "Inhaltssprachen",
+        "description": "Inventarinhalte mit KI übersetzen"
+      },
+      "inventoryTypes": {
+        "label": "Inventartypen",
+        "description": "Arten der erfassten Einträge festlegen"
+      },
+      "customFields": {
+        "label": "Benutzerdefinierte Felder",
+        "description": "Strukturierte Arbeitsbereichsdaten hinzufügen"
+      },
+      "users": {
+        "label": "Benutzer",
+        "description": "Personen und Berechtigungen verwalten"
+      },
+      "access": {
+        "label": "Rollen & Zugriff",
+        "description": "Rollen und Regeln auf Eintragsebene definieren"
+      },
+      "sharing": {
+        "label": "Öffentliche Freigaben",
+        "description": "Inventar über Freigabelinks veröffentlichen"
+      },
+      "api": {
+        "label": "API & Dienste",
+        "description": "Token und Laufzeitkonfiguration"
+      }
+    }
+  }
+}

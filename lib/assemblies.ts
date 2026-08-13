@@ -21,6 +21,7 @@ import {
   stockUnits,
   type AssemblyBuildComponentRecord,
   type AssemblyBuildRecord,
+  type ResourceRecord,
   type StockMovementRecord,
   type StockTrackingMode,
   type StockUnitRecord,
@@ -51,7 +52,7 @@ type IdempotencyInput = { key: string; requestHash: string };
 export class AssemblyOperationError extends Error {
   constructor(
     message: string,
-    readonly status: 404 | 409 | 422 = 409,
+    readonly status: 403 | 404 | 409 | 422 = 409,
   ) {
     super(message);
     this.name = "AssemblyOperationError";
@@ -461,7 +462,10 @@ export async function buildAssembly(
   input: AssemblyBuildInput,
   actor: string,
   idempotency: IdempotencyInput,
+  authorize: (resource: ResourceRecord) => boolean | Promise<boolean>,
 ) {
+  let lockedResourcesAuthorized = false;
+
   const validateReplay = (existing: AssemblyBuildRecord) => {
     if (
       existing.assemblyResourceId !== assemblyResourceId ||
@@ -476,13 +480,6 @@ export async function buildAssembly(
     return { response: existing.response, replayed: true } as const;
   };
 
-  const [existing] = await db
-    .select()
-    .from(assemblyBuilds)
-    .where(eq(assemblyBuilds.idempotencyKey, idempotency.key))
-    .limit(1);
-  if (existing) return validateReplay(existing);
-
   try {
     return await db.transaction(async (transaction) => {
       const initialBom = await transaction
@@ -493,18 +490,6 @@ export async function buildAssembly(
         })
         .from(bomLines)
         .where(eq(bomLines.assemblyResourceId, assemblyResourceId));
-      if (!initialBom.length) {
-        const [assembly] = await transaction
-          .select({ id: resources.id })
-          .from(resources)
-          .where(eq(resources.id, assemblyResourceId))
-          .limit(1);
-        if (!assembly) throw new AssemblyOperationError("Not found", 404);
-        throw new AssemblyOperationError(
-          "Define at least one component before building this assembly.",
-          409,
-        );
-      }
 
       const resourceIds = Array.from(
         new Set([
@@ -518,12 +503,24 @@ export async function buildAssembly(
         .where(inArray(resources.id, resourceIds))
         .orderBy(asc(resources.id))
         .for("update");
+      if (!lockedResources.some((resource) => resource.id === assemblyResourceId)) {
+        throw new AssemblyOperationError("Not found", 404);
+      }
       if (lockedResources.length !== resourceIds.length) {
         throw new AssemblyOperationError(
           "The assembly or one of its components no longer exists.",
           409,
         );
       }
+      for (const resource of lockedResources) {
+        if (!(await authorize(resource))) {
+          throw new AssemblyOperationError(
+            "You do not have permission to manage stock for every item in this assembly.",
+            403,
+          );
+        }
+      }
+      lockedResourcesAuthorized = true;
 
       const [replayAfterLock] = await transaction
         .select()
@@ -531,6 +528,13 @@ export async function buildAssembly(
         .where(eq(assemblyBuilds.idempotencyKey, idempotency.key))
         .limit(1);
       if (replayAfterLock) return validateReplay(replayAfterLock);
+
+      if (!initialBom.length) {
+        throw new AssemblyOperationError(
+          "Define at least one component before building this assembly.",
+          409,
+        );
+      }
 
       const currentBom = await transaction
         .select({
@@ -943,12 +947,14 @@ export async function buildAssembly(
       return { response: storedResponse, replayed: false } as const;
     });
   } catch (error) {
-    const [winner] = await db
-      .select()
-      .from(assemblyBuilds)
-      .where(eq(assemblyBuilds.idempotencyKey, idempotency.key))
-      .limit(1);
-    if (winner) return validateReplay(winner);
+    if (lockedResourcesAuthorized) {
+      const [winner] = await db
+        .select()
+        .from(assemblyBuilds)
+        .where(eq(assemblyBuilds.idempotencyKey, idempotency.key))
+        .limit(1);
+      if (winner) return validateReplay(winner);
+    }
     throw error;
   }
 }

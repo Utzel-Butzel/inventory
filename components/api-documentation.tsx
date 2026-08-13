@@ -13,11 +13,11 @@ const ApiReference = dynamic(
     ssr: false,
     loading: () => (
       <div
-        className="grid min-h-[520px] place-items-center bg-white"
+        className="grid min-h-[520px] place-items-center bg-surface"
         aria-live="polite"
       >
-        <div className="flex items-center gap-3 text-sm font-medium text-zinc-600">
-          <span className="size-4 animate-spin rounded-full border-2 border-zinc-200 border-t-indigo-500" />
+        <div className="flex items-center gap-3 text-sm font-medium text-muted">
+          <span className="size-4 animate-spin rounded-full border-2 border-border border-t-brand" />
           Loading API reference…
         </div>
       </div>
@@ -27,28 +27,43 @@ const ApiReference = dynamic(
 
 const customCss = `
   :root {
-    --scalar-color-accent: #5147d9;
-    --scalar-color-1: #1f2937;
-    --scalar-color-2: #4b5563;
-    --scalar-color-3: #5f6672;
-    --scalar-background-1: #ffffff;
-    --scalar-background-2: #f8f9fb;
-    --scalar-background-3: #f0f2f5;
-    --scalar-border-color: #e4e7eb;
+    --scalar-color-accent: var(--color-brand);
+    --scalar-color-1: var(--color-foreground);
+    --scalar-color-2: var(--color-muted-strong);
+    --scalar-color-3: var(--color-muted);
+    --scalar-background-1: var(--color-surface);
+    --scalar-background-2: var(--color-surface-subtle);
+    --scalar-background-3: var(--color-surface-muted);
+    --scalar-border-color: var(--color-border);
     --scalar-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --scalar-font-code: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
     --scalar-radius: 12px;
   }
 
-  .dark-mode {
-    --scalar-color-accent: #8b85ff;
-  }
-
   .scalar-app {
-    --scalar-color-accent: #5147d9;
-    --scalar-color-1: #1f2937;
-    --scalar-color-2: #4b5563;
-    --scalar-color-3: #5f6672;
+    --scalar-color-accent: var(--color-brand);
+    --scalar-color-1: var(--color-foreground);
+    --scalar-color-2: var(--color-muted-strong);
+    --scalar-color-3: var(--color-muted);
+    --scalar-background-1: var(--color-surface);
+    --scalar-background-2: var(--color-surface-subtle);
+    --scalar-background-3: var(--color-surface-muted);
+    --scalar-border-color: var(--color-border);
+    --scalar-sidebar-background-1: var(--color-surface);
+    --scalar-sidebar-color-1: var(--color-foreground);
+    --scalar-sidebar-color-2: var(--color-muted-strong);
+    --scalar-sidebar-border-color: var(--color-border);
+    --scalar-sidebar-item-hover-background: var(--color-surface-hover);
+    --scalar-sidebar-item-hover-color: var(--color-foreground);
+    --scalar-sidebar-item-active-background: var(--color-surface-muted);
+    --scalar-sidebar-color-active: var(--color-foreground);
+    --scalar-sidebar-indent-border: var(--color-border);
+    --scalar-sidebar-indent-border-hover: var(--color-border-strong);
+    --scalar-sidebar-indent-border-active: var(--color-brand);
+    --scalar-sidebar-search-background: var(--color-surface-subtle);
+    --scalar-sidebar-search-color: var(--color-muted);
+    --scalar-sidebar-search-border-color: var(--color-border);
+    color-scheme: inherit;
   }
 
   .references-layout {
@@ -56,7 +71,7 @@ const customCss = `
   }
 
   .sidebar-search-placeholder {
-    color: #5f6672;
+    color: var(--color-muted);
   }
 `;
 
@@ -74,7 +89,6 @@ export function ApiDocumentation() {
         hideTestRequestButton: false,
         documentDownloadType: "none",
         hideDarkModeToggle: true,
-        forceDarkModeState: "light",
         persistAuth: false,
         showDeveloperTools: "never",
         operationTitleSource: "summary",

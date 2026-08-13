@@ -1,4 +1,4 @@
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import {
   hashIdempotentPayload,
   idempotencyResponseHeaders,
@@ -13,7 +13,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const authorization = await requireIdentity(request, "write");
+  const authorization = await requirePermission(request, "workflows.manage");
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;

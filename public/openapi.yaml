@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Inventory API
-  version: 1.10.0
-  description: Scoped API for configurable inventory structures, indoor 3D room scans, location-aware stock, cycle counts, assignments, CSV exchange, typed custom fields, media, AI, and data quality.
+  version: 1.13.0
+  description: Scoped API for configurable inventory structures, localized content, indoor 3D room scans, location-aware stock, cycle counts, assignments, CSV exchange, typed custom fields, label setups, media, AI, and data quality.
   license:
     name: MIT License
     identifier: MIT
@@ -13,6 +13,8 @@ security:
 tags:
   - name: Authentication
     description: Native sign-in, token revocation, and scope discovery.
+  - name: Access control
+    description: Session-administered roles, granular permissions, and conditional inventory-item access rules.
   - name: Resources
     description: Inventory item creation, lookup, retrieval, and lifecycle.
   - name: Inventory structure
@@ -20,7 +22,11 @@ tags:
   - name: Data exchange
     description: Idempotent CSV import and complete CSV export.
   - name: Custom fields
-    description: Typed field definitions for inventory items and serialized stock units.
+    description: Typed field definitions, including filtered record references, for inventory items and serialized stock units.
+  - name: Content translations
+    description: Canonical content languages and field-aware AI translations.
+  - name: Label setups
+    description: Reusable physical dimensions and positioned content for printed inventory labels.
   - name: Stock
     description: Stock health, configuration, movements, and serialized units.
   - name: Inventory cycles
@@ -300,13 +306,206 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [name, scopes]
+                required: [name, scopes, role, roleName, permissions]
                 properties:
                   name: { type: string }
                   scopes:
                     type: array
                     items: { type: string, enum: [read, write, ai] }
+                  role:
+                    type: [string, "null"]
+                    pattern: '^[a-z][a-z0-9_-]{0,63}$'
+                    description: Stable role key for user-bound identities; null for standalone API tokens.
+                  roleName:
+                    type: [string, "null"]
+                    description: Human-readable role name for user-bound identities; null for standalone API tokens.
+                  permissions:
+                    type: array
+                    description: Granular workspace-wide permissions available through this token.
+                    items: { $ref: "#/components/schemas/AppPermission" }
         "401": { description: Missing or invalid token }
+  /api/access/roles:
+    servers:
+      - url: /
+    get:
+      tags: [Access control]
+      summary: List roles, inventory access rules, and permission metadata
+      description: Requires an authenticated browser session with the roles.manage permission. Rules grant additional item-specific permissions when every condition matches.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Roles, rules, and metadata used to administer granular access
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [roles, rules, permissionGroups, resourceRulePermissions]
+                properties:
+                  roles:
+                    type: array
+                    items: { $ref: "#/components/schemas/AccessRole" }
+                  rules:
+                    type: array
+                    items: { $ref: "#/components/schemas/InventoryAccessRule" }
+                  permissionGroups:
+                    type: array
+                    items: { $ref: "#/components/schemas/PermissionGroup" }
+                  resourceRulePermissions:
+                    type: array
+                    items: { $ref: "#/components/schemas/InventoryRulePermission" }
+        "401": { description: Missing or invalid authenticated session }
+        "403": { description: A browser session with the roles.manage permission is required }
+    post:
+      tags: [Access control]
+      summary: Create an access role
+      description: Requires an authenticated browser session with the roles.manage permission. Role keys are stable identifiers used by users and conditional rules.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccessRoleInput" }
+      responses:
+        "201":
+          description: Role created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [role]
+                properties:
+                  role: { $ref: "#/components/schemas/AccessRole" }
+        "400": { description: Request body is not valid JSON }
+        "401": { description: Missing or invalid authenticated session }
+        "403": { description: A browser session with the roles.manage permission is required }
+        "409": { description: A role with the requested key already exists }
+        "422": { description: Invalid role }
+  /api/access/roles/{key}:
+    servers:
+      - url: /
+    parameters:
+      - name: key
+        in: path
+        required: true
+        description: Stable role key.
+        schema: { $ref: "#/components/schemas/AccessRoleKey" }
+    patch:
+      tags: [Access control]
+      summary: Update an access role
+      description: Requires an authenticated browser session with the roles.manage permission. Changing permissions revokes user-bound API tokens for members of this role. The built-in Admin role must retain every permission.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccessRolePatch" }
+      responses:
+        "200":
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [role]
+                properties:
+                  role: { $ref: "#/components/schemas/AccessRole" }
+        "400": { description: Request body is not valid JSON }
+        "401": { description: Missing or invalid authenticated session }
+        "403": { description: A browser session with the roles.manage permission is required }
+        "404": { description: Role not found }
+        "409": { description: The built-in Admin role would lose one or more permissions }
+        "422": { description: Invalid or empty role update }
+    delete:
+      tags: [Access control]
+      summary: Delete an access role
+      description: Requires an authenticated browser session with the roles.manage permission. Built-in roles and roles assigned to users cannot be deleted; deleting a role also deletes its conditional inventory rules.
+      security:
+        - adminSession: []
+      responses:
+        "204": { description: Role and its conditional inventory rules deleted }
+        "401": { description: Missing or invalid authenticated session }
+        "403": { description: A browser session with the roles.manage permission is required }
+        "404": { description: Role not found }
+        "409": { description: Built-in role or role still assigned to one or more users }
+  /api/access/rules:
+    servers:
+      - url: /
+    post:
+      tags: [Access control]
+      summary: Create a conditional inventory access rule
+      description: Requires an authenticated browser session with the roles.manage permission. The rule grants its permissions to members of the selected role only for inventory items that match every condition.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryAccessRuleInput" }
+      responses:
+        "201":
+          description: Inventory access rule created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rule]
+                properties:
+                  rule: { $ref: "#/components/schemas/InventoryAccessRule" }
+        "400": { description: Request body is not valid JSON }
+        "401": { description: Missing or invalid authenticated session }
+        "403": { description: A browser session with the roles.manage permission is required }
+        "422": { description: Invalid rule or selected role does not exist }
+  /api/access/rules/{id}:
+    servers:
+      - url: /
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Inventory access rule identifier.
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Access control]
+      summary: Update a conditional inventory access rule
+      description: Requires an authenticated browser session with the roles.manage permission. Changing a rule revokes user-bound API tokens for its previous and current roles.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryAccessRulePatch" }
+      responses:
+        "200":
+          description: Inventory access rule updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rule]
+                properties:
+                  rule: { $ref: "#/components/schemas/InventoryAccessRule" }
+        "400": { description: Invalid rule id or request body is not valid JSON }
+        "401": { description: Missing or invalid authenticated session }
+        "403": { description: A browser session with the roles.manage permission is required }
+        "404": { description: Inventory access rule not found }
+        "422": { description: Invalid or empty inventory access rule update }
+    delete:
+      tags: [Access control]
+      summary: Delete a conditional inventory access rule
+      description: Requires an authenticated browser session with the roles.manage permission. Deleting a rule revokes user-bound API tokens for its role.
+      security:
+        - adminSession: []
+      responses:
+        "204": { description: Inventory access rule deleted }
+        "400": { description: Invalid inventory access rule id }
+        "401": { description: Missing or invalid authenticated session }
+        "403": { description: A browser session with the roles.manage permission is required }
+        "404": { description: Inventory access rule not found }
   /custom-fields:
     get:
       tags: [Custom fields]
@@ -433,6 +632,156 @@ paths:
         "403": { description: A browser session with the admin role is required }
         "404": { description: Custom-field definition not found }
         "422": { description: Invalid definition id }
+  /custom-fields/{id}/options:
+    parameters:
+      - { $ref: "#/components/parameters/CustomFieldId" }
+    get:
+      tags: [Custom fields]
+      summary: Search or resolve reference-field choices
+      description: Requires the read scope. The definition must be an active reference field. Search results enforce its target type, category, and status filters; explicitly selected IDs are also resolved so previously saved values remain readable after filter changes.
+      parameters:
+        - name: q
+          in: query
+          description: Case-insensitive name, SKU, stock-unit code, or UUID search.
+          schema: { type: string, maxLength: 120 }
+        - name: selected
+          in: query
+          description: A saved target ID to resolve. Repeat for multiple IDs.
+          schema:
+            type: array
+            maxItems: 100
+            items: { type: string, format: uuid }
+          style: form
+          explode: true
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 25 }
+      responses:
+        "200":
+          description: Matching and explicitly selected reference options
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [options]
+                properties:
+                  options:
+                    type: array
+                    items: { $ref: "#/components/schemas/CustomFieldReferenceOption" }
+        "401": { description: Missing or invalid session or bearer token }
+        "403": { description: Authenticated identity does not have the read scope }
+        "404": { description: Custom-field definition not found }
+        "422": { description: Invalid query or the definition is not a reference field }
+  /label-setups:
+    get:
+      tags: [Label setups]
+      summary: List reusable label setups
+      description: Requires the read scope. Setups are ordered by name and contain the complete print layout.
+      responses:
+        "200":
+          description: Label setups
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [labelSetups]
+                properties:
+                  labelSetups:
+                    type: array
+                    items: { $ref: "#/components/schemas/LabelSetup" }
+        "401": { description: Missing or invalid session or bearer token }
+        "403": { description: Authenticated identity does not have the read scope }
+    post:
+      tags: [Label setups]
+      summary: Create a label setup
+      description: Requires the write scope. Setup names are unique case-insensitively.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LabelSetupInput" }
+      responses:
+        "201":
+          description: Label setup created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [labelSetup]
+                properties:
+                  labelSetup: { $ref: "#/components/schemas/LabelSetup" }
+        "400": { description: Request body is not valid JSON }
+        "401": { description: Missing or invalid session or bearer token }
+        "403": { description: Authenticated identity does not have the write scope }
+        "409": { description: A label setup with that name already exists }
+        "422": { description: Invalid label setup }
+  /label-setups/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Label setup identifier.
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Label setups]
+      summary: Retrieve a label setup
+      description: Requires the read scope.
+      responses:
+        "200":
+          description: Label setup
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [labelSetup]
+                properties:
+                  labelSetup: { $ref: "#/components/schemas/LabelSetup" }
+        "401": { description: Missing or invalid session or bearer token }
+        "403": { description: Authenticated identity does not have the read scope }
+        "404": { description: Label setup not found }
+        "422": { description: Invalid label setup id }
+    patch:
+      tags: [Label setups]
+      summary: Update a label setup using its current revision
+      description: Requires the write scope. Send the last observed revision to prevent overwriting a concurrent edit; a successful update increments it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LabelSetupPatch" }
+      responses:
+        "200":
+          description: Label setup updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [labelSetup]
+                properties:
+                  labelSetup: { $ref: "#/components/schemas/LabelSetup" }
+        "400": { description: Request body is not valid JSON }
+        "401": { description: Missing or invalid session or bearer token }
+        "403": { description: Authenticated identity does not have the write scope }
+        "404": { description: Label setup not found }
+        "409": { description: Revision conflict or case-insensitive setup-name conflict }
+        "422": { description: Invalid or empty label setup update }
+    delete:
+      tags: [Label setups]
+      summary: Delete a label setup
+      description: Requires the write scope and the last observed revision so a stale editor cannot delete newer work.
+      parameters:
+        - name: revision
+          in: query
+          required: true
+          description: Current setup revision, preventing deletion from a stale editor.
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "204": { description: Label setup deleted }
+        "401": { description: Missing or invalid session or bearer token }
+        "403": { description: Authenticated identity does not have the write scope }
+        "404": { description: Label setup not found }
+        "409": { description: Setup revision changed; reload before deleting }
+        "422": { description: Invalid label setup id or revision }
   /inventory-types:
     get:
       tags: [Inventory structure]
@@ -762,6 +1111,72 @@ paths:
                     type: [string, "null"]
         "401": { description: Missing or invalid token }
         "403": { description: Token is missing the ai scope }
+  /languages:
+    get:
+      tags: [Content translations]
+      summary: List active content languages
+      responses:
+        "200":
+          description: Canonical and target languages
+    post:
+      tags: [Content translations]
+      summary: Add a content language
+      description: Requires an administrator browser session. The first language becomes the canonical default.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, label]
+              properties:
+                code: { type: string, minLength: 2, maxLength: 35, examples: [de] }
+                label: { type: string, minLength: 1, maxLength: 120, examples: [German] }
+                isDefault: { type: boolean, default: false }
+                autoTranslate: { type: boolean, default: true }
+                instructions: { type: string, maxLength: 5000 }
+                position: { type: integer, minimum: 0, maximum: 100000 }
+      responses:
+        "201": { description: Language added }
+        "409": { description: Duplicate code or unsafe default-language change }
+        "422": { description: Invalid language }
+  /languages/{code}:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string, maxLength: 35 } }
+    patch:
+      tags: [Content translations]
+      summary: Update a content language
+      description: Requires an administrator browser session. The canonical default cannot change after translations exist.
+      responses:
+        "200": { description: Language updated }
+        "404": { description: Language not found }
+        "409": { description: Unsafe default-language change }
+    delete:
+      tags: [Content translations]
+      summary: Archive a target content language
+      description: Requires an administrator browser session. Saved translations are retained.
+      responses:
+        "200": { description: Language archived }
+        "409": { description: The default language cannot be archived }
+  /translations/regenerate:
+    post:
+      tags: [Content translations, AI]
+      summary: Queue a durable translation backfill
+      description: Requires an administrator browser session. All selected resource-locale jobs are persisted before the response; processing continues in the background.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                languageCodes:
+                  type: array
+                  maxItems: 20
+                  items: { type: string, maxLength: 35 }
+                force: { type: boolean, default: false }
+      responses:
+        "200": { description: No target-language jobs were needed }
+        "202": { description: Durable translation jobs queued }
   /resources:
     get:
       tags: [Resources]
@@ -772,6 +1187,7 @@ paths:
         - { name: status, in: query, schema: { type: string } }
         - { name: page, in: query, schema: { type: integer, minimum: 1 } }
         - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: language, in: query, description: Active BCP 47 content locale. Missing or stale fields fall back individually to canonical content., schema: { type: string, maxLength: 35 } }
       responses:
         "200":
           description: Paginated inventory
@@ -898,6 +1314,11 @@ paths:
     get:
       tags: [Resources]
       summary: Retrieve an inventory item
+      parameters:
+        - name: language
+          in: query
+          description: Enabled BCP 47 content language. Missing or stale translated fields fall back to canonical content.
+          schema: { type: string, maxLength: 35, examples: [de] }
       responses:
         "200":
           description: Inventory item
@@ -925,6 +1346,69 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
+  /resources/{id}/translations:
+    parameters:
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Content translations]
+      summary: Inspect field-level translation freshness
+      responses:
+        "200": { description: Per-language current, stale, and missing fields }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Content translations, AI]
+      summary: Queue stale fields for background translation
+      description: Requires ai scope. Omit languageCodes to queue every active target language. Jobs are coalesced per resource and locale and survive restarts.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                languageCodes:
+                  type: array
+                  maxItems: 20
+                  items: { type: string, maxLength: 35 }
+                force: { type: boolean, default: false }
+      responses:
+        "200": { description: No target-language jobs were needed }
+        "202": { description: Durable translation jobs queued }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Invalid or inactive target language }
+  /resources/{id}/translations/{languageCode}:
+    parameters:
+      - { $ref: "#/components/parameters/ResourceId" }
+      - { name: languageCode, in: path, required: true, schema: { type: string, maxLength: 35 } }
+    patch:
+      tags: [Content translations]
+      summary: Edit, approve, or unlock translated fields
+      description: Requires write scope and the current locale-document revision. Human edits are protected from AI overwrite; accepting a suggestion keeps the field human-managed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedRevision, operations]
+              properties:
+                expectedRevision: { type: integer, minimum: 0 }
+                operations:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [action, fieldKey]
+                    properties:
+                      action: { type: string, enum: [set, accept_suggestion, use_ai] }
+                      fieldKey: { type: string, maxLength: 96 }
+                      translatedText: { type: string, maxLength: 100000 }
+      responses:
+        "200": { description: Translation document updated }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Translation revision changed or suggestion became stale }
+        "422": { description: Invalid language, field, or operation }
   /resources/{id}/relations:
     parameters:
       - { $ref: "#/components/parameters/ResourceId" }
@@ -1770,7 +2254,7 @@ components:
       type: apiKey
       in: cookie
       name: authjs.session-token
-      description: Auth.js browser session cookie for an administrator; HTTPS deployments use the secure-prefixed cookie variant.
+      description: Auth.js browser session cookie; each operation declares its required administrative permission. HTTPS deployments use the secure-prefixed cookie variant.
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
@@ -1798,6 +2282,230 @@ components:
     NotFound:
       description: Resource not found
   schemas:
+    AccessRoleKey:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[a-z][a-z0-9_-]{0,63}$'
+      description: Stable lowercase identifier for a built-in or custom role.
+      examples: [editor, warehouse_team]
+    AppPermission:
+      type: string
+      description: Granular workspace-wide capability assigned to a role.
+      enum:
+        - inventory.read
+        - inventory.create
+        - inventory.update
+        - inventory.delete
+        - inventory.import
+        - inventory.export
+        - stock.read
+        - stock.manage
+        - assignments.read
+        - assignments.manage
+        - counts.read
+        - counts.manage
+        - spatial.read
+        - spatial.manage
+        - orders.read
+        - orders.manage
+        - workflows.read
+        - workflows.manage
+        - labels.read
+        - labels.manage
+        - ai.use
+        - settings.inventory-types.manage
+        - settings.custom-fields.manage
+        - settings.languages.manage
+        - users.manage
+        - roles.manage
+        - sharing.manage
+        - tokens.manage
+        - tokens.delegate
+    InventoryRulePermission:
+      type: string
+      description: Permission that a conditional rule may grant for matching inventory items.
+      enum:
+        - inventory.update
+        - inventory.delete
+        - stock.manage
+        - assignments.manage
+        - counts.manage
+        - spatial.manage
+        - ai.use
+    PermissionDefinition:
+      type: object
+      additionalProperties: false
+      required: [key, label, description]
+      properties:
+        key: { $ref: "#/components/schemas/AppPermission" }
+        label: { type: string }
+        description: { type: string }
+    PermissionGroup:
+      type: object
+      additionalProperties: false
+      required: [key, label, description, permissions]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        description: { type: string }
+        permissions:
+          type: array
+          items: { $ref: "#/components/schemas/PermissionDefinition" }
+    AccessRoleInput:
+      type: object
+      additionalProperties: false
+      required: [key, name]
+      properties:
+        key: { $ref: "#/components/schemas/AccessRoleKey" }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000, default: "" }
+        permissions:
+          type: array
+          maxItems: 29
+          default: []
+          items: { $ref: "#/components/schemas/AppPermission" }
+    AccessRolePatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        permissions:
+          type: array
+          maxItems: 29
+          items: { $ref: "#/components/schemas/AppPermission" }
+    AccessRole:
+      type: object
+      additionalProperties: false
+      required: [key, name, description, permissions, isSystem]
+      properties:
+        key: { $ref: "#/components/schemas/AccessRoleKey" }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        permissions:
+          type: array
+          maxItems: 29
+          items: { $ref: "#/components/schemas/AppPermission" }
+        isSystem:
+          type: boolean
+          description: Whether the role is built in and cannot be deleted.
+        memberCount:
+          type: integer
+          minimum: 0
+          description: Number of active users assigned to the role; included in role-list and create responses.
+        createdBy: { type: [string, "null"], maxLength: 320 }
+        updatedBy: { type: [string, "null"], maxLength: 320 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AccessRuleCondition:
+      type: object
+      additionalProperties: false
+      required: [field, operator]
+      description: One condition in a rule. Every condition in the same rule must match; comparisons are case-insensitive for strings.
+      properties:
+        field:
+          type: string
+          pattern: '^(id|name|type|status|sku|location|serialNumber|priority|tags|categories|createdBy|customFields\.[A-Za-z0-9_-]{1,120})$'
+          description: Built-in inventory field or a custom field addressed as customFields.KEY.
+          examples: [status, categories, customFields.department]
+        operator:
+          type: string
+          enum: [equals, not_equals, contains, starts_with, exists, not_exists]
+        value:
+          description: Comparison value. Required except for exists and not_exists, where it is ignored.
+          oneOf:
+            - { type: string, maxLength: 500 }
+            - { type: number }
+            - { type: boolean }
+            - { type: "null" }
+    InventoryAccessRuleInput:
+      type: object
+      additionalProperties: false
+      required: [name, roleKey, permissions, conditions]
+      description: Additive item-specific access grant. Multiple enabled rules are ORed; all conditions inside this rule are ANDed.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 1000, default: "" }
+        roleKey: { $ref: "#/components/schemas/AccessRoleKey" }
+        permissions:
+          type: array
+          minItems: 1
+          maxItems: 7
+          items: { $ref: "#/components/schemas/InventoryRulePermission" }
+        conditions:
+          type: array
+          minItems: 1
+          maxItems: 12
+          description: Conditions combined with logical AND.
+          items: { $ref: "#/components/schemas/AccessRuleCondition" }
+        enabled: { type: boolean, default: true }
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 10000
+          default: 100
+          description: Display and evaluation order; lower values come first and do not override other matching rules.
+      examples:
+        - name: Update XYZ items
+          description: Let members of the ABC role update items whose name contains xyz.
+          roleKey: abc
+          permissions: [inventory.update]
+          conditions:
+            - field: name
+              operator: contains
+              value: xyz
+          enabled: true
+          priority: 100
+    InventoryAccessRulePatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 1000 }
+        roleKey: { $ref: "#/components/schemas/AccessRoleKey" }
+        permissions:
+          type: array
+          minItems: 1
+          maxItems: 7
+          items: { $ref: "#/components/schemas/InventoryRulePermission" }
+        conditions:
+          type: array
+          minItems: 1
+          maxItems: 12
+          description: Conditions combined with logical AND.
+          items: { $ref: "#/components/schemas/AccessRuleCondition" }
+        enabled: { type: boolean }
+        priority: { type: integer, minimum: 0, maximum: 10000 }
+    InventoryAccessRule:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, roleKey, permissions, conditions, enabled, priority, createdAt, updatedAt]
+      description: Additive permission grant for matching inventory items. Rules never deny permissions already granted by a role; any matching enabled rule may grant access.
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 1000 }
+        roleKey: { $ref: "#/components/schemas/AccessRoleKey" }
+        permissions:
+          type: array
+          minItems: 1
+          maxItems: 7
+          items: { $ref: "#/components/schemas/InventoryRulePermission" }
+        conditions:
+          type: array
+          minItems: 1
+          maxItems: 12
+          description: Conditions combined with logical AND.
+          items: { $ref: "#/components/schemas/AccessRuleCondition" }
+        enabled: { type: boolean }
+        priority: { type: integer, minimum: 0, maximum: 10000 }
+        createdBy: { type: [string, "null"], maxLength: 320 }
+        updatedBy: { type: [string, "null"], maxLength: 320 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     SpatialVector3:
       type: array
       minItems: 3
@@ -2237,6 +2945,16 @@ components:
         value: { type: string, minLength: 1, maxLength: 120, description: Stable value stored in customFields. }
         label: { type: string, minLength: 1, maxLength: 120 }
         color: { type: string, minLength: 1, maxLength: 32 }
+    CustomFieldReferenceOption:
+      type: object
+      required: [id, entityType, label, description, status]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        entityType: { type: string, enum: [inventory, stock_unit] }
+        label: { type: string }
+        description: { type: string }
+        status: { type: string }
     CustomFieldValues:
       type: object
       maxProperties: 100
@@ -2267,7 +2985,7 @@ components:
         placeholder: { type: string, maxLength: 240, default: "" }
         fieldType:
           type: string
-          enum: [text, textarea, number, boolean, date, datetime, select, multi_select, email, url]
+          enum: [text, textarea, number, boolean, date, datetime, select, multi_select, reference, email, url]
         required: { type: boolean, default: false }
         minValue:
           type: [number, "null"]
@@ -2302,6 +3020,36 @@ components:
           description: Required and non-empty for select and multi_select fields; empty for every other field type.
           items: { $ref: "#/components/schemas/CustomFieldOption" }
           default: []
+        referenceEntityType:
+          type: [string, "null"]
+          enum: [inventory, stock_unit, null]
+          default: null
+          description: Required for reference fields and null for all other field types.
+        referenceMultiple:
+          type: boolean
+          default: false
+          description: Whether a reference field stores an array of target UUIDs instead of one UUID.
+        referenceResourceTypes:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/InventoryTypeKey" }
+          default: []
+          description: Allowed target or parent inventory types; empty matches every type.
+        referenceCategories:
+          type: array
+          maxItems: 40
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 120 }
+          default: []
+          description: Allowed target or parent inventory categories; empty matches every category.
+        referenceStatuses:
+          type: array
+          maxItems: 40
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 32 }
+          default: []
+          description: Allowed target statuses; empty matches every status.
         position: { type: integer, minimum: 0, maximum: 100000, default: 0 }
     CustomFieldDefinitionPatch:
       type: object
@@ -2314,7 +3062,7 @@ components:
         label: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 5000 }
         placeholder: { type: string, maxLength: 240 }
-        fieldType: { type: string, enum: [text, textarea, number, boolean, date, datetime, select, multi_select, email, url] }
+        fieldType: { type: string, enum: [text, textarea, number, boolean, date, datetime, select, multi_select, reference, email, url] }
         required: { type: boolean }
         minValue: { type: [number, "null"] }
         maxValue: { type: [number, "null"] }
@@ -2333,10 +3081,27 @@ components:
           type: array
           maxItems: 100
           items: { $ref: "#/components/schemas/CustomFieldOption" }
+        referenceEntityType: { type: [string, "null"], enum: [inventory, stock_unit, null] }
+        referenceMultiple: { type: boolean }
+        referenceResourceTypes:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/InventoryTypeKey" }
+        referenceCategories:
+          type: array
+          maxItems: 40
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 120 }
+        referenceStatuses:
+          type: array
+          maxItems: 40
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 32 }
         position: { type: integer, minimum: 0, maximum: 100000 }
     CustomFieldDefinition:
       type: object
-      required: [id, entityType, key, label, description, placeholder, fieldType, required, minValue, maxValue, step, resourceTypes, categories, options, position, revision, createdBy, updatedBy, createdAt, updatedAt, archivedAt]
+      required: [id, entityType, key, label, description, placeholder, fieldType, required, minValue, maxValue, step, resourceTypes, categories, options, referenceEntityType, referenceMultiple, referenceResourceTypes, referenceCategories, referenceStatuses, position, revision, createdBy, updatedBy, createdAt, updatedAt, archivedAt]
       additionalProperties: false
       properties:
         id: { type: string, format: uuid }
@@ -2345,7 +3110,7 @@ components:
         label: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 5000 }
         placeholder: { type: string, maxLength: 240 }
-        fieldType: { type: string, enum: [text, textarea, number, boolean, date, datetime, select, multi_select, email, url] }
+        fieldType: { type: string, enum: [text, textarea, number, boolean, date, datetime, select, multi_select, reference, email, url] }
         required: { type: boolean }
         minValue: { type: [number, "null"] }
         maxValue: { type: [number, "null"] }
@@ -2364,6 +3129,23 @@ components:
           type: array
           maxItems: 100
           items: { $ref: "#/components/schemas/CustomFieldOption" }
+        referenceEntityType: { type: [string, "null"], enum: [inventory, stock_unit, null] }
+        referenceMultiple: { type: boolean }
+        referenceResourceTypes:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/InventoryTypeKey" }
+        referenceCategories:
+          type: array
+          maxItems: 40
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 120 }
+        referenceStatuses:
+          type: array
+          maxItems: 40
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 32 }
         position: { type: integer, minimum: 0, maximum: 100000 }
         revision: { type: integer, minimum: 1, description: Incremented by every update and soft deletion. }
         createdBy: { type: [string, "null"], maxLength: 320 }
@@ -2371,6 +3153,84 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         archivedAt: { type: [string, "null"], format: date-time }
+    LabelElement:
+      oneOf:
+        - type: object
+          title: QR or barcode element
+          required: [type, x, y, width, height, visible]
+          additionalProperties: false
+          properties:
+            type: { type: string, enum: [qr, barcode] }
+            x: { type: number, minimum: 0, maximum: 100 }
+            y: { type: number, minimum: 0, maximum: 100 }
+            width: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            height: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            visible: { type: boolean }
+        - type: object
+          title: Object image element
+          required: [type, x, y, width, height, visible]
+          additionalProperties: false
+          properties:
+            type: { type: string, const: image }
+            x: { type: number, minimum: 0, maximum: 100 }
+            y: { type: number, minimum: 0, maximum: 100 }
+            width: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            height: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            visible: { type: boolean }
+            fit: { type: string, enum: [cover, contain], default: cover }
+        - type: object
+          title: Text element
+          required: [type, x, y, width, height, visible]
+          additionalProperties: false
+          properties:
+            type: { type: string, enum: [name, identifier, url, location] }
+            x: { type: number, minimum: 0, maximum: 100 }
+            y: { type: number, minimum: 0, maximum: 100 }
+            width: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            height: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            visible: { type: boolean }
+            fontSizeMm: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            align: { type: string, enum: [left, center, right], default: left }
+      description: A normalized percentage box. The element must fit entirely inside the label; options are restricted by element type.
+    LabelElements:
+      type: array
+      maxItems: 7
+      description: At most one element of each type. A visible object image may not overlap a visible QR code. The image element prints the resource cover image; QR and URL elements use the compact resource link.
+      items: { $ref: "#/components/schemas/LabelElement" }
+    LabelSetupInput:
+      type: object
+      required: [name, widthMm, heightMm, elements]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        widthMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
+        heightMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
+        elements: { $ref: "#/components/schemas/LabelElements" }
+    LabelSetupPatch:
+      type: object
+      required: [revision]
+      minProperties: 2
+      additionalProperties: false
+      description: The last observed revision plus at least one changed setup property.
+      properties:
+        revision: { type: integer, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        widthMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
+        heightMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
+        elements: { $ref: "#/components/schemas/LabelElements" }
+    LabelSetup:
+      type: object
+      required: [id, name, widthMm, heightMm, elements, revision, createdAt, updatedAt]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        widthMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
+        heightMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
+        elements: { $ref: "#/components/schemas/LabelElements" }
+        revision: { type: integer, minimum: 1, description: Incremented by every successful update. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     InventoryCount:
       type: object
       required: [count, confidence, detectedItem, isExact, explanation, warnings, markers, model]
@@ -2609,7 +3469,7 @@ components:
             id: { type: string, format: uuid }
             name: { type: string }
             email: { type: string, format: email }
-            role: { type: string, enum: [admin, editor, viewer] }
+            role: { $ref: "#/components/schemas/AccessRoleKey" }
         scopes:
           type: array
           items: { type: string, enum: [read, write, ai] }

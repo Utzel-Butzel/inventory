@@ -32,6 +32,10 @@ const RS_BLOCKS_M: RsBlockGroup[][] = [
   ],
 ];
 
+export function canEncodeQr(value: string) {
+  return new TextEncoder().encode(value).length <= 213;
+}
+
 const ALIGNMENT_POSITIONS: number[][] = [
   [],
   [6, 18],
@@ -470,9 +474,11 @@ function qrPath(matrix: QrMatrix, quietZone: number) {
 export function QrCode({
   value,
   className,
+  ariaLabel,
 }: {
   value: string;
   className?: string;
+  ariaLabel?: string;
 }) {
   const quietZone = 4;
   const matrix = useMemo(() => makeQrMatrix(value), [value]);
@@ -483,7 +489,7 @@ export function QrCode({
       className={className}
       viewBox={`0 0 ${size} ${size}`}
       role="img"
-      aria-label={`QR code for ${value}`}
+      aria-label={ariaLabel ?? `QR code for ${value}`}
       shapeRendering="crispEdges"
     >
       <rect width={size} height={size} fill="#fff" />
@@ -561,9 +567,11 @@ function code128Bars(value: string) {
 export function Code128Barcode({
   value,
   className,
+  ariaLabel,
 }: {
   value: string;
   className?: string;
+  ariaLabel?: string;
 }) {
   const { bars, modules } = useMemo(() => code128Bars(value), [value]);
   return (
@@ -571,7 +579,7 @@ export function Code128Barcode({
       className={className}
       viewBox={`0 0 ${modules} 48`}
       role="img"
-      aria-label={`Code 128 barcode for ${value}`}
+      aria-label={ariaLabel ?? `Code 128 barcode for ${value}`}
       preserveAspectRatio="none"
       shapeRendering="crispEdges"
     >

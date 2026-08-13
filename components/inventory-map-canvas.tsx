@@ -11,6 +11,7 @@ import {
   NavigationControl,
 } from "maplibre-gl";
 import type { Feature, FeatureCollection, Geometry, Point, Polygon } from "geojson";
+import { useT } from "next-i18next/client";
 import { useEffect, useRef } from "react";
 
 import type {
@@ -480,6 +481,8 @@ function installLayers(map: MapLibreMap) {
 }
 
 export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
+  const { t, i18n } = useT("spatial");
+  const language = i18n.resolvedLanguage ?? i18n.language;
   const {
     resources,
     featuresByResource,
@@ -523,6 +526,13 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
       center: firstCoordinate ?? [13.7373, 51.0504],
       zoom: firstCoordinate ? 18 : 13,
       attributionControl: { compact: true },
+      locale: {
+        "AttributionControl.ToggleAttribution": t("map.controls.toggleAttribution"),
+        "Map.Title": t("map.controls.mapTitle"),
+        "NavigationControl.ResetBearing": t("map.controls.resetBearing"),
+        "NavigationControl.ZoomIn": t("map.controls.zoomIn"),
+        "NavigationControl.ZoomOut": t("map.controls.zoomOut"),
+      },
     });
     mapRef.current = map;
     map.addControl(new NavigationControl({ visualizePitch: true }), "top-right");
@@ -752,7 +762,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
     };
     // MapLibre owns the map lifecycle; live prop values are read through latestRef.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [language, t]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -867,7 +877,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
     <div
       ref={containerRef}
       className="h-full min-h-[560px] w-full"
-      aria-label="Inventory map"
+      aria-label={t("map.canvasLabel")}
     />
   );
 }

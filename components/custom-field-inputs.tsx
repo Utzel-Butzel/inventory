@@ -1,10 +1,14 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import { LoaderCircle, Search, X } from "lucide-react";
+import { useT } from "next-i18next/client";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 
 import { cn } from "@/components/ui";
+import { fetchJson } from "@/lib/client-types";
 import type {
   CustomFieldDefinition,
+  CustomFieldReferenceOption,
   CustomFieldValue,
   CustomFieldValues,
 } from "@/lib/custom-field-contract";
@@ -19,8 +23,106 @@ export type CustomFieldInputsProps = {
 };
 
 const inputClass =
-  "mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-600 hover:border-slate-300 focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600";
-const labelClass = "block text-xs font-semibold text-slate-700";
+  "mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-4 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:text-muted";
+const labelClass = "block text-xs font-semibold text-muted-strong";
+
+type ReferenceOptionsResponse = { options: CustomFieldReferenceOption[] };
+
+const referenceOptionCache = new Map<string, CustomFieldReferenceOption>();
+type ReferenceResolutionRequest = {
+  ids: string[];
+  resolve: (options: CustomFieldReferenceOption[]) => void;
+  reject: (error: unknown) => void;
+};
+const pendingReferenceResolutions = new Map<
+  string,
+  { ids: Set<string>; requests: ReferenceResolutionRequest[]; timer: number }
+>();
+
+function referenceCacheKey(definitionId: string, optionId: string) {
+  return `${definitionId}:${optionId}`;
+}
+
+function cacheReferenceOptions(
+  definitionId: string,
+  options: CustomFieldReferenceOption[],
+) {
+  for (const option of options) {
+    referenceOptionCache.set(referenceCacheKey(definitionId, option.id), option);
+  }
+}
+
+async function fetchReferenceOptions(
+  definitionId: string,
+  query: string,
+  selectedIds: string[],
+  signal?: AbortSignal,
+) {
+  const parameters = new URLSearchParams();
+  if (query.trim()) parameters.set("q", query.trim());
+  for (const id of selectedIds) parameters.append("selected", id);
+  const response = await fetchJson<ReferenceOptionsResponse>(
+    `/api/v1/custom-fields/${definitionId}/options?${parameters.toString()}`,
+    { cache: "no-store", signal },
+  );
+  cacheReferenceOptions(definitionId, response.options);
+  return response.options;
+}
+
+function resolveReferenceOptions(definitionId: string, ids: string[]) {
+  const cached = ids
+    .map((id) => referenceOptionCache.get(referenceCacheKey(definitionId, id)))
+    .filter((option): option is CustomFieldReferenceOption => Boolean(option));
+  if (cached.length === ids.length) return Promise.resolve(cached);
+
+  return new Promise<CustomFieldReferenceOption[]>((resolve, reject) => {
+    let batch = pendingReferenceResolutions.get(definitionId);
+    if (!batch) {
+      batch = {
+        ids: new Set<string>(),
+        requests: [],
+        timer: window.setTimeout(() => {
+          const queued = pendingReferenceResolutions.get(definitionId);
+          if (!queued) return;
+          pendingReferenceResolutions.delete(definitionId);
+          const queuedIds = [...queued.ids];
+          const chunks = Array.from(
+            { length: Math.ceil(queuedIds.length / 100) },
+            (_, index) => queuedIds.slice(index * 100, index * 100 + 100),
+          );
+          void Promise.all(
+            chunks.map((chunk) =>
+              fetchReferenceOptions(definitionId, "", chunk),
+            ),
+          )
+            .then(() => {
+              for (const request of queued.requests) {
+                request.resolve(
+                  request.ids
+                    .map((id) =>
+                      referenceOptionCache.get(referenceCacheKey(definitionId, id)),
+                    )
+                    .filter(
+                      (option): option is CustomFieldReferenceOption => Boolean(option),
+                    ),
+                );
+              }
+            })
+            .catch((error: unknown) => {
+              for (const request of queued.requests) request.reject(error);
+            });
+        }, 0),
+      };
+      pendingReferenceResolutions.set(definitionId, batch);
+    }
+    for (const id of ids) {
+      if (!referenceOptionCache.has(referenceCacheKey(definitionId, id))) {
+        batch.ids.add(id);
+      }
+    }
+    batch.requests.push({ ids, resolve, reject });
+  });
+}
 
 function hasOwnValue(values: CustomFieldValues, key: string) {
   return Object.prototype.hasOwnProperty.call(values, key);
@@ -59,10 +161,10 @@ function fromDateTimeLocal(value: string) {
   return Number.isNaN(date.getTime()) ? value : date.toISOString();
 }
 
-function formatDate(value: string, includeTime = false) {
+function formatDate(value: string, includeTime = false, locale?: string) {
   const date = includeTime ? new Date(value) : new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     ...(includeTime ? { timeStyle: "short" as const } : {}),
   }).format(date);
@@ -71,17 +173,22 @@ function formatDate(value: string, includeTime = false) {
 export function formatCustomFieldValue(
   definition: CustomFieldDefinition,
   value: CustomFieldValue | undefined,
+  options: { locale?: string; yesLabel?: string; noLabel?: string } = {},
 ) {
   if (value === undefined || value === null || value === "") return "—";
-  if (definition.fieldType === "boolean") return value === true ? "Yes" : "No";
+  if (definition.fieldType === "boolean") {
+    return value === true
+      ? options.yesLabel ?? String(true)
+      : options.noLabel ?? String(false);
+  }
   if (definition.fieldType === "number" && typeof value === "number") {
-    return new Intl.NumberFormat(undefined, { maximumFractionDigits: 8 }).format(value);
+    return new Intl.NumberFormat(options.locale, { maximumFractionDigits: 8 }).format(value);
   }
   if (definition.fieldType === "date" && typeof value === "string") {
-    return formatDate(value);
+    return formatDate(value, false, options.locale);
   }
   if (definition.fieldType === "datetime" && typeof value === "string") {
-    return formatDate(value, true);
+    return formatDate(value, true, options.locale);
   }
   if (definition.fieldType === "select" && typeof value === "string") {
     return definition.options.find((option) => option.value === value)?.label ?? value;
@@ -97,6 +204,224 @@ export function formatCustomFieldValue(
   return Array.isArray(value) ? value.join(", ") : String(value);
 }
 
+function ReferenceFieldInput({
+  definition,
+  value,
+  inputId,
+  descriptionId,
+  disabled,
+  onChange,
+}: {
+  definition: CustomFieldDefinition;
+  value: CustomFieldValue | undefined;
+  inputId: string;
+  descriptionId?: string;
+  disabled: boolean;
+  onChange: (value: CustomFieldValue | undefined) => void;
+}) {
+  const { t } = useT(["settings", "common"]);
+  const selectedIds = useMemo(
+    () =>
+      definition.referenceMultiple
+        ? Array.isArray(value)
+          ? value
+          : []
+        : typeof value === "string"
+          ? [value]
+          : [],
+    [definition.referenceMultiple, value],
+  );
+  const selectedKey = selectedIds.join(",");
+  const [query, setQuery] = useState("");
+  const [options, setOptions] = useState<CustomFieldReferenceOption[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      void fetchReferenceOptions(
+        definition.id,
+        query,
+        selectedKey ? selectedKey.split(",") : [],
+        controller.signal,
+      )
+        .then(setOptions)
+        .catch((loadError: unknown) => {
+          if (controller.signal.aborted) return;
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : t("settings:customInputs.errors.referenceChoices"),
+          );
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false);
+        });
+    }, query ? 200 : 0);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [definition.id, query, selectedKey, t]);
+
+  const byId = new Map(options.map((option) => [option.id, option]));
+  const selectedOptions = selectedIds.map(
+    (id) =>
+      byId.get(id) ?? referenceOptionCache.get(referenceCacheKey(definition.id, id)),
+  );
+
+  const remove = (id: string) => {
+    if (definition.referenceMultiple) {
+      onChange(selectedIds.filter((selectedId) => selectedId !== id));
+    } else {
+      onChange(undefined);
+    }
+  };
+  const choose = (id: string) => {
+    if (definition.referenceMultiple) {
+      onChange(
+        selectedIds.includes(id)
+          ? selectedIds.filter((selectedId) => selectedId !== id)
+          : [...selectedIds, id],
+      );
+    } else {
+      onChange(id);
+      setOpen(false);
+    }
+    setQuery("");
+  };
+
+  return (
+    <div>
+      {selectedIds.length ? (
+        <div className="mb-1.5 flex flex-wrap gap-1.5">
+          {selectedIds.map((id, index) => {
+            const option = selectedOptions[index];
+            return (
+              <span
+                key={id}
+                className="inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-brand-border bg-brand-soft px-2.5 text-xs font-medium text-brand"
+                title={option?.description || id}
+              >
+                <span className="truncate">
+                  {option?.label ?? t("settings:customInputs.unavailable", { id: id.slice(0, 8) })}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => remove(id)}
+                  disabled={disabled}
+                  aria-label={t("settings:customInputs.removeReference", {
+                    label: option?.label ?? t("settings:customInputs.reference"),
+                  })}
+                  className="grid size-5 shrink-0 place-items-center rounded text-brand hover:bg-brand-soft disabled:cursor-not-allowed"
+                >
+                  <X className="size-3" aria-hidden="true" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-3.5 -translate-y-1/2 text-muted"
+          aria-hidden="true"
+        />
+        <input
+          id={inputId}
+          role="combobox"
+          value={query}
+          disabled={disabled}
+          required={definition.required && selectedIds.length === 0}
+          aria-describedby={descriptionId}
+          aria-controls={`${inputId}-options`}
+          aria-expanded={open}
+          aria-autocomplete="list"
+          autoComplete="off"
+          placeholder={
+            definition.placeholder ||
+            t("settings:customInputs.searchReference", {
+              target:
+                definition.referenceEntityType === "stock_unit"
+                  ? t("settings:customInputs.serializedStock")
+                  : t("settings:customInputs.inventory"),
+            })
+          }
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          className={`${inputClass} pl-9 pr-9`}
+        />
+        {loading ? (
+          <LoaderCircle
+            className="pointer-events-none absolute right-3.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-brand"
+            aria-label={t("settings:customInputs.loadingReferenceChoices")}
+          />
+        ) : null}
+        {open ? (
+          <div
+            id={`${inputId}-options`}
+            role="listbox"
+            aria-multiselectable={definition.referenceMultiple}
+            className="absolute z-30 mt-1.5 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-xl"
+          >
+            {error ? (
+              <p className="px-3 py-2 text-xs leading-5 text-danger">{error}</p>
+            ) : options.length ? (
+              options.map((option) => {
+                const selected = selectedIds.includes(option.id);
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => choose(option.id)}
+                    className={cn(
+                      "block w-full rounded-lg px-3 py-2 text-left transition",
+                      selected ? "bg-brand-soft" : "hover:bg-surface-subtle",
+                    )}
+                  >
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="truncate text-xs font-semibold text-foreground">
+                        {option.label}
+                      </span>
+                      {selected ? (
+                        <span className="text-[10px] font-semibold text-brand">
+                          {t("settings:customInputs.selected")}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[10px] text-muted">
+                      {option.description}
+                    </span>
+                  </button>
+                );
+              })
+            ) : loading ? (
+              <p className="px-3 py-2 text-xs text-muted">
+                {t("settings:customInputs.loading")}
+              </p>
+            ) : (
+              <p className="px-3 py-2 text-xs text-muted">
+                {t("settings:customInputs.noMatches")}
+              </p>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function CustomFieldInputs({
   definitions,
   values,
@@ -105,6 +430,7 @@ export function CustomFieldInputs({
   className,
   emptyState,
 }: CustomFieldInputsProps) {
+  const { t } = useT(["settings", "common"]);
   const generatedId = useId().replaceAll(":", "");
   const sortedDefinitions = [...definitions].sort(
     (left, right) => left.position - right.position || left.label.localeCompare(right.label),
@@ -132,14 +458,31 @@ export function CustomFieldInputs({
         const fieldLabel = (
           <>
             {definition.label}
-            {definition.required ? <span className="ml-1 text-rose-500">*</span> : null}
+            {definition.required ? <span className="ml-1 text-danger">*</span> : null}
           </>
         );
         const description = definition.description ? (
-          <span id={descriptionId} className="mt-1.5 block text-[11px] font-normal leading-4 text-slate-600">
+          <span id={descriptionId} className="mt-1.5 block text-[11px] font-normal leading-4 text-muted">
             {definition.description}
           </span>
         ) : null;
+
+        if (definition.fieldType === "reference") {
+          return (
+            <div key={definition.id} className={labelClass}>
+              <label htmlFor={inputId}>{fieldLabel}</label>
+              <ReferenceFieldInput
+                definition={definition}
+                value={value}
+                inputId={inputId}
+                descriptionId={descriptionId}
+                disabled={disabled}
+                onChange={(nextValue) => update(definition.key, nextValue)}
+              />
+              {description}
+            </div>
+          );
+        }
 
         if (definition.fieldType === "textarea") {
           return (
@@ -173,9 +516,11 @@ export function CustomFieldInputs({
                 }
                 className={inputClass}
               >
-                <option value="">{definition.placeholder || "Choose…"}</option>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
+                <option value="">
+                  {definition.placeholder || t("settings:customInputs.choose")}
+                </option>
+                <option value="true">{t("common:boolean.yes")}</option>
+                <option value="false">{t("common:boolean.no")}</option>
               </select>
               {description}
             </label>
@@ -192,7 +537,9 @@ export function CustomFieldInputs({
                 onChange={(event) => update(definition.key, event.target.value || undefined)}
                 className={inputClass}
               >
-                <option value="">{definition.placeholder || "Choose…"}</option>
+                <option value="">
+                  {definition.placeholder || t("settings:customInputs.choose")}
+                </option>
                 {definition.options.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -215,7 +562,7 @@ export function CustomFieldInputs({
               disabled={disabled}
             >
               <legend className={labelClass}>{fieldLabel}</legend>
-              <div className="mt-1.5 flex min-h-11 flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2">
+              <div className="mt-1.5 flex min-h-11 flex-wrap gap-2 rounded-xl border border-border bg-surface p-2">
                 {definition.options.map((option) => {
                   const checked = selected.includes(option.value);
                   return (
@@ -224,8 +571,8 @@ export function CustomFieldInputs({
                       className={cn(
                         "inline-flex min-h-8 cursor-pointer items-center gap-2 rounded-lg border px-2.5 text-xs font-medium transition",
                         checked
-                          ? "border-violet-200 bg-violet-50 text-violet-800"
-                          : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100",
+                          ? "border-brand-border bg-brand-soft text-brand"
+                          : "border-border bg-surface-subtle text-muted hover:bg-surface-muted",
                         disabled && "cursor-not-allowed opacity-60",
                       )}
                     >
@@ -244,7 +591,7 @@ export function CustomFieldInputs({
                       />
                       {option.color ? (
                         <span
-                          className="size-2.5 rounded-full border border-black/10"
+                          className="size-2.5 rounded-full border border-border-strong"
                           style={{ backgroundColor: option.color }}
                         />
                       ) : null}
@@ -337,13 +684,83 @@ export function CustomFieldValueSummary({
       {visible.map((definition) => (
         <span
           key={definition.id}
-          className="rounded-md bg-slate-100 px-2 py-1 text-[9px] text-slate-600"
+          className="rounded-md bg-surface-muted px-2 py-1 text-[9px] text-muted"
           title={definition.description || undefined}
         >
           <span className="font-semibold">{definition.label}:</span>{" "}
-          {formatCustomFieldValue(definition, values[definition.key])}
+          <CustomFieldValueDisplay
+            definition={definition}
+            value={values[definition.key]}
+          />
         </span>
       ))}
     </div>
+  );
+}
+
+export function CustomFieldValueDisplay({
+  definition,
+  value,
+}: {
+  definition: CustomFieldDefinition;
+  value: CustomFieldValue | undefined;
+}) {
+  const { t, i18n } = useT(["settings", "common"]);
+  const ids = useMemo(
+    () =>
+      definition.fieldType === "reference"
+        ? Array.isArray(value)
+          ? value
+          : typeof value === "string"
+            ? [value]
+            : []
+        : [],
+    [definition.fieldType, value],
+  );
+  const idsKey = ids.join(",");
+  const [resolved, setResolved] = useState<CustomFieldReferenceOption[]>([]);
+
+  useEffect(() => {
+    if (definition.fieldType !== "reference" || !idsKey) return;
+    const requestedIds = idsKey.split(",");
+    const cached = requestedIds
+      .map((id) => referenceOptionCache.get(referenceCacheKey(definition.id, id)))
+      .filter((option): option is CustomFieldReferenceOption => Boolean(option));
+    if (cached.length) setResolved(cached);
+    if (cached.length === requestedIds.length) return;
+    let active = true;
+    void resolveReferenceOptions(definition.id, requestedIds)
+      .then((options) => {
+        if (active) setResolved(options);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [definition.fieldType, definition.id, idsKey]);
+
+  if (definition.fieldType !== "reference") {
+    return (
+      <>
+        {formatCustomFieldValue(definition, value, {
+          locale: i18n.resolvedLanguage ?? i18n.language,
+          yesLabel: t("common:boolean.yes"),
+          noLabel: t("common:boolean.no"),
+        })}
+      </>
+    );
+  }
+  if (!ids.length) return <>—</>;
+  const labels = new Map(resolved.map((option) => [option.id, option.label]));
+  return (
+    <>
+      {ids
+        .map(
+          (id) =>
+            labels.get(id) ??
+            t("settings:customInputs.unavailable", { id: id.slice(0, 8) }),
+        )
+        .join(", ")}
+    </>
   );
 }

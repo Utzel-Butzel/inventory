@@ -1,0 +1,285 @@
+{
+  "fallback": {
+    "untitled": "Unbenanntes Element"
+  },
+  "types": {
+    "tool": "Werkzeug",
+    "object": "Objekt",
+    "furniture": "Möbel",
+    "vehicle": "Fahrzeug",
+    "place": "Ort",
+    "clothing": "Kleidung",
+    "person": "Person",
+    "project": "Projekt",
+    "other": "Sonstiges"
+  },
+  "statuses": {
+    "available": "Verfügbar",
+    "inUse": "In Verwendung",
+    "maintenance": "Wartung",
+    "archived": "Archiviert"
+  },
+  "header": {
+    "inventory": "Inventar",
+    "newItem": "Neues Element",
+    "edit": "Bearbeiten",
+    "addItem": "Inventarelement hinzufügen",
+    "updated": "Aktualisiert {{date}} · ID {{id}}",
+    "description": "Manuell erstellen oder Bilder den ersten Entwurf liefern lassen.",
+    "stock": "Bestand"
+  },
+  "actions": {
+    "deleteItem": "Element löschen",
+    "saving": "Wird gespeichert…",
+    "createItem": "Element erstellen",
+    "saveChanges": "Änderungen speichern",
+    "dismissError": "Fehler schließen",
+    "dismissMessage": "Meldung schließen",
+    "retry": "Erneut versuchen"
+  },
+  "details": {
+    "title": "Kerndaten",
+    "description": "Identität, Kategorie und Verfügbarkeit",
+    "name": "Elementname",
+    "nameAiPlaceholder": "Leer lassen, um ihn aus Bildern zu erzeugen",
+    "namePlaceholder": "z. B. Festool Tauchsäge TS 55",
+    "type": "Typ",
+    "status": "Status",
+    "itemDescription": "Beschreibung",
+    "descriptionPlaceholder": "Was ist es, was gehört dazu und was sollte man vor der Verwendung wissen?",
+    "tags": "Tags",
+    "tagsPlaceholder": "holzarbeiten, elektrowerkzeug, 230v",
+    "categories": "Kategorien",
+    "categoriesPlaceholder": "Werkstatt, Produktion",
+    "commaSeparated": "durch Kommas getrennt"
+  },
+  "customFields": {
+    "title": "Benutzerdefinierte Felder",
+    "description": "Felder, die für diesen Inventartyp und seine Kategorien konfiguriert sind",
+    "count_one": "{{count}} Feld",
+    "count_other": "{{count}} Felder",
+    "loading": "Benutzerdefinierte Felder werden geladen",
+    "empty": "Für dieses Element gelten keine benutzerdefinierten Felder",
+    "emptyDescription": "Administratoren können in den Einstellungen Felder für Datensätze des Typs {{type}} oder passende Kategorien konfigurieren."
+  },
+  "media": {
+    "title": "Medien",
+    "description_one": "Bilder, Video und PDFs · {{count}} Datei",
+    "description_other": "Bilder, Video und PDFs · {{count}} Dateien",
+    "cover": "Titelbild",
+    "ai": "KI",
+    "moveEarlier": "Datei nach vorn verschieben",
+    "moveLater": "Datei nach hinten verschieben",
+    "remove": "Datei entfernen",
+    "pendingUpload": "Ausstehender Upload",
+    "removePending": "Ausstehende Datei entfernen",
+    "drop": "Dateien hier ablegen oder auswählen",
+    "formats": "JPG, PNG, WebP, HEIC, MP4, MOV oder PDF · bis zu 12 Dateien"
+  },
+  "operations": {
+    "title": "Betrieb",
+    "description": "Nachverfolgung, Wert und interne Notizen",
+    "serialNumber": "Seriennummer",
+    "sku": "SKU",
+    "skuPlaceholder": "WERKZEUG-0042",
+    "openingQuantity": "Anfangsmenge",
+    "currentStock": "Aktueller Bestand",
+    "units_one": "{{count}} Einheit",
+    "units_other": "{{count}} Einheiten",
+    "manageStock": "Bestand verwalten",
+    "location": "Standort",
+    "locationPlaceholder": "Werkstatt · Regal A3",
+    "priority": "Priorität",
+    "priorityLow": "Niedrig",
+    "priorityNormal": "Normal",
+    "priorityHigh": "Hoch",
+    "value": "Wert",
+    "currency": "Währung",
+    "notes": "Interne Notizen"
+  },
+  "ai": {
+    "title": "KI-Katalogstudio",
+    "description": "Bildanalyse + Bildbearbeitung",
+    "analyzeImages": "Bilder analysieren",
+    "analyzeDescription": "Titel, Beschreibung, Typ, Tags und Alt-Text erzeugen.",
+    "generateCover": "Studio-Titelbild erstellen",
+    "coverDescription": "Aus dem ersten Foto ein sauberes quadratisches Hauptbild erstellen.",
+    "safety": "Die KI läuft erst, nachdem die Originaldateien sicher gespeichert wurden. Das Ergebnis kann jederzeit bearbeitet werden.",
+    "rewrite": "Felder analysieren und neu schreiben",
+    "coverDirection": "Vorgabe für das Titelbild",
+    "generateNewCover": "Neues Titelbild erstellen",
+    "imageRequired": "Lade ein Bild hoch und speichere es, um KI-Aktionen zu aktivieren.",
+    "lastModel": "Letztes Modell"
+  },
+  "position": {
+    "title": "Position",
+    "editMap": "Punkt oder Umriss auf der Karte bearbeiten",
+    "saveFirst": "Speichere das Element zuerst, um seinen Punkt oder Umriss im Karteneditor zu zeichnen.",
+    "geometryNotice": "Die Koordinaten werden aus der gespeicherten Kartengeometrie abgeleitet. Bearbeite sie auf der Karte, damit beide Ansichten synchron bleiben.",
+    "latitude": "Breitengrad",
+    "longitude": "Längengrad",
+    "altitude": "Höhe",
+    "metres": "Meter",
+    "openMap": "Auf Karte öffnen",
+    "gpsHelp": "GPS-Daten können aus den Bildmetadaten gelesen oder manuell eingegeben werden."
+  },
+  "record": {
+    "title": "Datensatz",
+    "id": "Ressourcen-ID",
+    "reload": "Vom Server neu laden"
+  },
+  "translations": {
+    "title": "Übersetzungen",
+    "description": "Übersetzte Kataloginhalte synchron halten",
+    "actions": {
+      "translateStale": "Fehlende & veraltete übersetzen",
+      "regenerate": "Übersetzung für {{language}} neu erzeugen",
+      "saveHuman": "Manuelle Bearbeitung speichern",
+      "useAi": "An KI zurückgeben",
+      "acceptSuggestion": "Vorschlag übernehmen"
+    },
+    "empty": "Es sind keine weiteren Inhaltssprachen konfiguriert.",
+    "progress": "{{current}} von {{total}} Feldern aktuell",
+    "automaticSuffix": " · automatisch",
+    "manualSuffix": " · manuell",
+    "status": {
+      "current": "Aktuell",
+      "complete": "Aktuell",
+      "missing": "Fehlend",
+      "stale": "Veraltet",
+      "pending": "Eingereiht",
+      "processing": "Wird übersetzt",
+      "failed": "Fehlgeschlagen",
+      "needs_review": "Prüfung erforderlich"
+    },
+    "notTranslated": "Nicht übersetzt",
+    "humanLocked": "Geschützte manuelle Bearbeitung",
+    "suggestion": "KI-Vorschlag für die geänderte Quelle",
+    "notices": {
+      "updated_one": "{{count}} übersetztes Feld aktualisiert.",
+      "updated_other": "{{count}} übersetzte Felder aktualisiert.",
+      "current": "Alle Übersetzungen sind bereits aktuell.",
+      "queued": "Übersetzung wurde eingereiht und wird im Hintergrund fortgesetzt.",
+      "savedHuman": "Die manuelle Übersetzung wurde gespeichert und vor Überschreiben durch die KI geschützt."
+    },
+    "errors": {
+      "load": "Übersetzungen konnten nicht geladen werden.",
+      "ai": "KI-Übersetzung konnte nicht eingereiht werden.",
+      "save": "Die Übersetzung konnte nicht gespeichert werden."
+    }
+  },
+  "relations": {
+    "title": "Beziehungen",
+    "description": "Dieses Element mit Behältern und zugehörigem Inventar verbinden",
+    "refresh": "Beziehungen aktualisieren",
+    "locatedIn": "Befindet sich in",
+    "noParent": "Kein übergeordneter Ort",
+    "noParentDescription": "Wähle einen Behälter oder Ort für dieses Element.",
+    "chooseParent": "Übergeordnetes Element wählen",
+    "add": "Hinzufügen",
+    "contains": "Enthält",
+    "noChildren": "Dieses Element enthält kein weiteres Inventar.",
+    "other_one": "{{count}} weitere Beziehung",
+    "other_other": "{{count}} weitere Beziehungen",
+    "chooseItem": "Element wählen",
+    "link": "Verknüpfen",
+    "missingItem": "Fehlendes Element",
+    "unknown": "Unbekannter Typ",
+    "automatic": "Automatisch",
+    "manual": "Manuell",
+    "removeWith": "Beziehung mit {{name}} entfernen",
+    "item": "Element",
+    "errors": {
+      "load": "Beziehungen konnten nicht geladen werden.",
+      "save": "Beziehung konnte nicht gespeichert werden.",
+      "remove": "Beziehung konnte nicht entfernt werden."
+    }
+  },
+  "assignments": {
+    "title": "Zuweisungen & Reservierungen",
+    "description": "Verfügbares Inventar ausgeben, reservieren oder dauerhaft zuweisen – mit vollständiger Bestandsverfolgung.",
+    "refresh": "Zuweisungen aktualisieren",
+    "sections": {
+      "active": "Aktiv",
+      "history": "Verlauf",
+      "new": "Neue Zuordnung"
+    },
+    "availability": {
+      "available_one": "{{count}} verfügbar",
+      "available_other": "{{count}} verfügbar",
+      "allocated_one": "{{count}} zugeordnet",
+      "allocated_other": "{{count}} zugeordnet"
+    },
+    "loading": "Zuweisungen werden geladen",
+    "empty": {
+      "title": "Derzeit ist nichts zugeordnet",
+      "description": "Neue Ausgaben, Zuweisungen und Reservierungen erscheinen hier."
+    },
+    "readOnly": "Du hast nur Lesezugriff auf Zuweisungen.",
+    "kinds": {
+      "checkout": "Ausgabe",
+      "assignment": "Zuweisung",
+      "reservation": "Reservierung"
+    },
+    "statuses": {
+      "active": "Aktiv",
+      "returned": "Zurückgegeben",
+      "cancelled": "Storniert"
+    },
+    "form": {
+      "action": "Aktion",
+      "recipient": "Empfänger",
+      "recipientPlaceholder": "Person, Team oder Projekt",
+      "serializedUnit": "Serialisierte Einheit",
+      "chooseUnit": "Einheit wählen",
+      "quantity": "Menge",
+      "starts": "Beginn",
+      "due": "Fällig",
+      "note": "Notiz",
+      "create": {
+        "checkout": "Ausgabe erstellen",
+        "assignment": "Zuweisung erstellen",
+        "reservation": "Reservierung erstellen"
+      }
+    },
+    "units_one": "{{count}} Einheit",
+    "units_other": "{{count}} Einheiten",
+    "dueDate": "Fällig {{date}}",
+    "actions": {
+      "return": "Zurückgeben",
+      "cancel": "Stornieren"
+    },
+    "errors": {
+      "load": "Zuweisungen konnten nicht geladen werden.",
+      "create": "Zuweisung konnte nicht erstellt werden.",
+      "complete": "Zuweisung konnte nicht abgeschlossen werden."
+    }
+  },
+  "notices": {
+    "locationRead": "Der Standort wurde aus den Bildmetadaten gelesen. Bitte überprüfe ihn.",
+    "analysisComplete": "Die KI-Analyse hat Titel, Beschreibung, Tags und Typ aktualisiert.",
+    "coverComplete": "Ein neues Studio-Titelbild wurde erstellt und als erstes Bild festgelegt.",
+    "savedTranslationStale": "Änderungen gespeichert. Die Übersetzung ist noch veraltet: {{reason}}",
+    "savedTranslations": "Änderungen gespeichert. Die Übersetzungen werden im Hintergrund aktualisiert.",
+    "saved": "Änderungen gespeichert.",
+    "idCopied": "Datensatz-ID kopiert."
+  },
+  "confirm": {
+    "removeFile": "Diese Datei vom Element entfernen?",
+    "delete": "„{{name}}“ löschen? Dies kann nicht rückgängig gemacht werden."
+  },
+  "errors": {
+    "load": "Element konnte nicht geladen werden.",
+    "loadCustomFields": "Definitionen der benutzerdefinierten Felder konnten nicht geladen werden.",
+    "unsupportedFiles": "Einige Dateien wurden übersprungen. Unterstützt werden Bilder, Videos und PDF-Dateien.",
+    "analysis": "KI-Analyse fehlgeschlagen.",
+    "cover": "Titelbilderstellung fehlgeschlagen.",
+    "requiredCustomField": "Fülle das erforderliche benutzerdefinierte Feld „{{label}}“ aus.",
+    "nameOrImage": "Füge einen Namen oder mindestens ein Bild für die KI-Analyse hinzu.",
+    "translation": "KI-Übersetzung fehlgeschlagen.",
+    "save": "Element konnte nicht gespeichert werden.",
+    "removeFile": "Datei konnte nicht entfernt werden.",
+    "reorderMedia": "Medien konnten nicht neu sortiert werden.",
+    "delete": "Element konnte nicht gelöscht werden."
+  }
+}

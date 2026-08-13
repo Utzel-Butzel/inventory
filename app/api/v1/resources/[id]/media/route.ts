@@ -7,7 +7,7 @@ import {
   resources,
   type MediaRecord,
 } from "@/db/schema";
-import { requireIdentity } from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
   idempotencyResponseHeaders,
@@ -73,11 +73,15 @@ async function cleanupStoredBatch(items: StoredMedia[]) {
 }
 
 export async function POST(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
+  const { id } = await context.params;
+  const authorization = await requireResourcePermission(
+    request,
+    "inventory.update",
+    id,
+  );
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
-  const { id } = await context.params;
   const resource = await getResource(id);
   if (!resource) return Response.json({ error: "Not found" }, { status: 404 });
 
@@ -271,9 +275,13 @@ export async function POST(request: Request, context: Context) {
 }
 
 export async function PATCH(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
-  if (authorization.response) return authorization.response;
   const { id } = await context.params;
+  const authorization = await requireResourcePermission(
+    request,
+    "inventory.update",
+    id,
+  );
+  if (authorization.response) return authorization.response;
   const resource = await getResource(id);
   if (!resource) return Response.json({ error: "Not found" }, { status: 404 });
 

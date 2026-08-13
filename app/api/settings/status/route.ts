@@ -1,6 +1,6 @@
 import { auth0Enabled } from "@/auth";
 import { users } from "@/db/schema";
-import { requireIdentity } from "@/lib/api-auth";
+import { getRequestIdentity } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
   getConfiguredDefaultImageGenerationModel,
@@ -10,8 +10,10 @@ import {
 import { getStorageProvider } from "@/lib/storage";
 
 export async function GET(request: Request) {
-  const authorization = await requireIdentity(request, "read");
-  if (authorization.response) return authorization.response;
+  const identity = await getRequestIdentity(request);
+  if (!identity) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const [localUser] = await db.select({ id: users.id }).from(users).limit(1);
   const imageCatalog = getImageGenerationModelCatalog();
   const defaultImageModel =
@@ -41,7 +43,9 @@ export async function GET(request: Request) {
       auth0: auth0Enabled,
     },
     user: {
-      role: authorization.identity.role,
+      role: identity.role,
+      roleName: identity.roleName,
+      permissions: identity.permissions,
     },
   });
 }

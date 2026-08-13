@@ -3,23 +3,25 @@
 import Link from "next/link";
 import { Boxes, QrCode, ShoppingCart, Workflow } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { useT } from "next-i18next/client";
 
 import { cn } from "@/components/ui";
 
 const stockSections = [
-  { href: "/stock", label: "Overview", icon: Boxes },
-  { href: "/stock/orders", label: "Orders", icon: ShoppingCart },
-  { href: "/stock/scan", label: "Scan", icon: QrCode },
-  { href: "/stock/workflows", label: "Workflows", icon: Workflow },
+  { href: "/stock", labelKey: "nav.overview", icon: Boxes },
+  { href: "/stock/orders", labelKey: "nav.orders", icon: ShoppingCart },
+  { href: "/stock/scan", labelKey: "nav.scan", icon: QrCode },
+  { href: "/stock/workflows", labelKey: "nav.workflows", icon: Workflow },
 ] as const;
 
 export function StockSectionNav() {
   const pathname = usePathname();
+  const { t } = useT("stock");
 
   return (
     <nav
-      aria-label="Stock sections"
-      className="mb-6 overflow-x-auto rounded-2xl border border-[#e4e7eb] bg-white p-1.5 shadow-[var(--shadow-sm)]"
+      aria-label={t("nav.label")}
+      className="mb-6 overflow-x-auto rounded-2xl border border-border bg-surface p-1.5 shadow-[var(--shadow-sm)]"
     >
       <div className="grid min-w-[500px] grid-cols-4 gap-1">
         {stockSections.map((section) => {
@@ -37,15 +39,15 @@ export function StockSectionNav() {
               className={cn(
                 "flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-[12px] font-semibold transition",
                 active
-                  ? "bg-[#eeedff] text-[#5147d9] shadow-sm"
-                  : "text-[#5f6672] hover:bg-[#f5f6f8] hover:text-[#34383e]",
+                  ? "bg-brand-soft text-brand shadow-sm"
+                  : "text-muted hover:bg-surface-hover hover:text-foreground",
               )}
             >
               <Icon
-                className={cn("size-4", active ? "text-[#5147d9]" : "text-[#5f6672]")}
+                className={cn("size-4", active ? "text-brand" : "text-muted")}
                 aria-hidden="true"
               />
-              {section.label}
+              {t(section.labelKey)}
             </Link>
           );
         })}

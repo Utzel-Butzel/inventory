@@ -1,7 +1,8 @@
 "use client";
 
 import { Maximize2, ScanSearch } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useT } from "next-i18next/client";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -129,6 +130,9 @@ export function RoomSceneCanvas({
   selectedResourceId: string | null;
   onSelectResource: (resourceId: string) => void;
 }) {
+  const { t, i18n } = useT("spatial");
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const hostRef = useRef<HTMLDivElement>(null);
   const commandRef = useRef<(command: CameraCommand) => void>(() => undefined);
   const selectionCommandRef = useRef<(resourceId: string | null) => void>(
@@ -156,7 +160,7 @@ export function RoomSceneCanvas({
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     } catch {
-      setRendererError("3D-Darstellung wird von diesem Browser nicht unterstützt.");
+      setRendererError(t("canvas.unsupported"));
       return;
     }
 
@@ -171,8 +175,12 @@ export function RoomSceneCanvas({
     renderer.domElement.setAttribute(
       "aria-label",
       linkedManifests.length
-        ? `3D-Modell von ${manifest.room.name} und ${linkedManifests.length} verbundenen Räumen`
-        : `3D-Modell von ${manifest.room.name}`,
+        ? t("canvas.aria.multiple", {
+            room: manifest.room.name,
+            count: linkedManifests.length,
+            value: integer.format(linkedManifests.length),
+          })
+        : t("canvas.aria.single", { room: manifest.room.name }),
     );
     host.appendChild(renderer.domElement);
 
@@ -621,12 +629,12 @@ export function RoomSceneCanvas({
       commandRef.current = () => undefined;
       selectionCommandRef.current = () => undefined;
     };
-  }, [linkedManifests, manifest]);
+  }, [integer, linkedManifests, manifest, t]);
 
   return (
-    <div ref={hostRef} className="relative size-full overflow-hidden bg-[#f3f5f7]">
+    <div ref={hostRef} className="relative size-full overflow-hidden bg-surface-muted">
       {rendererError ? (
-        <div className="absolute inset-0 z-10 grid place-items-center p-8 text-center text-sm text-slate-500">
+        <div className="absolute inset-0 z-10 grid place-items-center p-8 text-center text-sm text-muted">
           {rendererError}
         </div>
       ) : null}
@@ -634,24 +642,24 @@ export function RoomSceneCanvas({
         <button
           type="button"
           onClick={() => commandRef.current("top")}
-          className="pointer-events-auto grid size-9 place-items-center rounded-xl border border-white/70 bg-white/90 text-slate-600 shadow-sm backdrop-blur transition hover:text-violet-600"
-          title="Draufsicht"
-          aria-label="Draufsicht"
+          className="pointer-events-auto grid size-9 place-items-center rounded-xl border border-border bg-surface/90 text-muted shadow-sm backdrop-blur transition hover:text-brand"
+          title={t("canvas.topView")}
+          aria-label={t("canvas.topView")}
         >
           <ScanSearch className="size-4" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={() => commandRef.current("reset")}
-          className="pointer-events-auto grid size-9 place-items-center rounded-xl border border-white/70 bg-white/90 text-slate-600 shadow-sm backdrop-blur transition hover:text-violet-600"
-          title="Ansicht zurücksetzen"
-          aria-label="Ansicht zurücksetzen"
+          className="pointer-events-auto grid size-9 place-items-center rounded-xl border border-border bg-surface/90 text-muted shadow-sm backdrop-blur transition hover:text-brand"
+          title={t("canvas.resetView")}
+          aria-label={t("canvas.resetView")}
         >
           <Maximize2 className="size-4" aria-hidden="true" />
         </button>
       </div>
-      <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-white/78 px-2.5 py-1.5 text-[10px] font-medium text-slate-500 shadow-sm backdrop-blur">
-        Ziehen: drehen · Zwei Finger: verschieben · Scrollen: zoomen
+      <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-surface/78 px-2.5 py-1.5 text-[10px] font-medium text-muted shadow-sm backdrop-blur">
+        {t("canvas.controlsHint")}
       </div>
     </div>
   );

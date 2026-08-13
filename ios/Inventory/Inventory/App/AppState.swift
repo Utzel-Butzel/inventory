@@ -650,6 +650,7 @@ enum RootTab: Hashable {
     case map
     case rooms
     case settings
+    case search
 }
 
 enum PresentedTool: String, Identifiable {

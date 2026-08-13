@@ -1,0 +1,102 @@
+{
+  "metadata": {
+    "title": "Overview"
+  },
+  "eyebrow": "Workspace overview",
+  "greeting": {
+    "morning": "Good morning",
+    "afternoon": "Good afternoon",
+    "evening": "Good evening"
+  },
+  "subtitle": "Here’s what’s happening across your inventory.",
+  "actions": {
+    "batchUpload": "Batch upload",
+    "addItem": "Add item",
+    "addFirstItem": "Add first item",
+    "retry": "Try again",
+    "viewAll": "View all"
+  },
+  "errors": {
+    "load": "The dashboard data could not be loaded.",
+    "title": "Dashboard data is unavailable",
+    "description": "{{error}} Make sure Postgres is running and the database has been migrated."
+  },
+  "metrics": {
+    "items": {
+      "label": "Inventory items",
+      "detail_one": "{{value}} total unit",
+      "detail_other": "{{value}} total units"
+    },
+    "value": {
+      "label": "Tracked value",
+      "detail": "Across all inventory"
+    },
+    "available": {
+      "label": "Available now",
+      "detail": "{{value}} of all items",
+      "empty": "No items yet"
+    },
+    "attention": {
+      "label": "Needs attention",
+      "detail_one": "{{value}} maintenance item",
+      "detail_other": "{{value}} maintenance items"
+    }
+  },
+  "recent": {
+    "title": "Recent inventory",
+    "subtitle": "Latest additions and updates",
+    "quantity": "Qty {{value}}",
+    "empty": {
+      "title": "Your inventory is ready",
+      "description": "Add your first item manually, or upload a group of images and let AI do the repetitive work."
+    }
+  },
+  "mix": {
+    "title": "Inventory mix",
+    "subtitle": "Items by type",
+    "empty": "Item types will appear here."
+  },
+  "batchCard": {
+    "title": "Turn photos into records",
+    "description": "Upload images in batches, then generate titles, details, tags, and polished covers with AI.",
+    "action": "Open batch studio"
+  },
+  "relative": {
+    "recently": "Recently",
+    "justNow": "Just now",
+    "minutesAgo_one": "{{count}}m ago",
+    "minutesAgo_other": "{{count}}m ago",
+    "hoursAgo_one": "{{count}}h ago",
+    "hoursAgo_other": "{{count}}h ago",
+    "daysAgo_one": "{{count}}d ago",
+    "daysAgo_other": "{{count}}d ago"
+  },
+  "statuses": {
+    "available": "Available",
+    "in-use": "In use",
+    "maintenance": "Maintenance",
+    "archived": "Archived"
+  },
+  "types": {
+    "place": "Place",
+    "person": "Person",
+    "vehicle": "Vehicle",
+    "tool": "Tool",
+    "project": "Project",
+    "clothing": "Clothing",
+    "furniture": "Furniture",
+    "object": "Object",
+    "other": "Other"
+  },
+  "typeGroups": {
+    "place": "Places",
+    "person": "People",
+    "vehicle": "Vehicles",
+    "tool": "Tools",
+    "project": "Projects",
+    "clothing": "Clothing",
+    "furniture": "Furniture",
+    "object": "Objects",
+    "other": "Other"
+  }
+}

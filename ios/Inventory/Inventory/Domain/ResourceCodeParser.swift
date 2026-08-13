@@ -50,9 +50,16 @@ public enum ResourceCodeParser {
 
     private static func resourceID(in segments: [String]) -> UUID? {
         let resourceSegments = Set(["inventory", "resource", "resources"])
-        for index in segments.indices where resourceSegments.contains(segments[index].lowercased()) {
+        for index in segments.indices {
             let nextIndex = segments.index(after: index)
             guard nextIndex < segments.endIndex else { continue }
+
+            let segment = segments[index].lowercased()
+            if segment == "r", let resourceID = shortResourceID(segments[nextIndex]) {
+                return resourceID
+            }
+
+            guard resourceSegments.contains(segment) else { continue }
             if let resourceID = validResourceID(segments[nextIndex]) {
                 return resourceID
             }
@@ -72,6 +79,40 @@ public enum ResourceCodeParser {
             remainder.removeFirst("resource/".count)
         }
         return validResourceID(remainder)
+    }
+
+    /// Decode an unpadded, canonical base64url UUID. Compact ids are only
+    /// considered by `resourceID(in:)` after an `r` URL segment so a scanned
+    /// 22-character SKU or serial number remains available for exact lookup.
+    private static func shortResourceID(_ value: String) -> UUID? {
+        let characters = Array(value.utf8)
+        guard characters.count == 22, characters.allSatisfy(isBase64URL) else {
+            return nil
+        }
+
+        let base64 = value
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/") + "=="
+        guard let data = Data(base64Encoded: base64), data.count == 16 else {
+            return nil
+        }
+
+        let canonical = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        guard canonical == value else { return nil }
+
+        let hexBytes: [String] = data.map { byte -> String in
+            String(format: "%02x", Int(byte))
+        }
+        let hex = hexBytes.joined()
+        var resourceID = hex
+        for offset in [20, 16, 12, 8] {
+            let index = resourceID.index(resourceID.startIndex, offsetBy: offset)
+            resourceID.insert("-", at: index)
+        }
+        return validResourceID(resourceID)
     }
 
     /// The backend accepts RFC 4122 variants with versions one through five.
@@ -100,6 +141,15 @@ public enum ResourceCodeParser {
     private static func isHexadecimal(_ value: UInt8) -> Bool {
         switch value {
         case 48 ... 57, 97 ... 102, 65 ... 70:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func isBase64URL(_ value: UInt8) -> Bool {
+        switch value {
+        case 48 ... 57, 65 ... 90, 97 ... 122, 45, 95:
             return true
         default:
             return false

@@ -1,0 +1,102 @@
+{
+  "metadata": {
+    "title": "Übersicht"
+  },
+  "eyebrow": "Arbeitsbereich im Überblick",
+  "greeting": {
+    "morning": "Guten Morgen",
+    "afternoon": "Guten Tag",
+    "evening": "Guten Abend"
+  },
+  "subtitle": "Das passiert gerade in deinem Inventar.",
+  "actions": {
+    "batchUpload": "Stapel-Upload",
+    "addItem": "Eintrag hinzufügen",
+    "addFirstItem": "Ersten Eintrag hinzufügen",
+    "retry": "Erneut versuchen",
+    "viewAll": "Alle anzeigen"
+  },
+  "errors": {
+    "load": "Die Dashboard-Daten konnten nicht geladen werden.",
+    "title": "Dashboard-Daten sind nicht verfügbar",
+    "description": "{{error}} Prüfe, ob Postgres läuft und die Datenbank migriert wurde."
+  },
+  "metrics": {
+    "items": {
+      "label": "Inventareinträge",
+      "detail_one": "{{value}} Einheit insgesamt",
+      "detail_other": "{{value}} Einheiten insgesamt"
+    },
+    "value": {
+      "label": "Erfasster Wert",
+      "detail": "Im gesamten Inventar"
+    },
+    "available": {
+      "label": "Jetzt verfügbar",
+      "detail": "{{value}} aller Einträge",
+      "empty": "Noch keine Einträge"
+    },
+    "attention": {
+      "label": "Handlungsbedarf",
+      "detail_one": "{{value}} Eintrag in Wartung",
+      "detail_other": "{{value}} Einträge in Wartung"
+    }
+  },
+  "recent": {
+    "title": "Zuletzt bearbeitet",
+    "subtitle": "Neueste Einträge und Änderungen",
+    "quantity": "Menge {{value}}",
+    "empty": {
+      "title": "Dein Inventar ist bereit",
+      "description": "Füge den ersten Eintrag manuell hinzu oder lade mehrere Bilder hoch und überlasse die Routinearbeit der KI."
+    }
+  },
+  "mix": {
+    "title": "Inventarverteilung",
+    "subtitle": "Einträge nach Typ",
+    "empty": "Hier werden künftig Inventartypen angezeigt."
+  },
+  "batchCard": {
+    "title": "Fotos in Einträge verwandeln",
+    "description": "Lade Bilder stapelweise hoch und erzeuge mit KI Titel, Details, Schlagwörter und optimierte Titelbilder.",
+    "action": "Stapelstudio öffnen"
+  },
+  "relative": {
+    "recently": "Vor Kurzem",
+    "justNow": "Gerade eben",
+    "minutesAgo_one": "vor {{count}} Min.",
+    "minutesAgo_other": "vor {{count}} Min.",
+    "hoursAgo_one": "vor {{count}} Std.",
+    "hoursAgo_other": "vor {{count}} Std.",
+    "daysAgo_one": "vor {{count}} Tag",
+    "daysAgo_other": "vor {{count}} Tagen"
+  },
+  "statuses": {
+    "available": "Verfügbar",
+    "in-use": "In Benutzung",
+    "maintenance": "Wartung",
+    "archived": "Archiviert"
+  },
+  "types": {
+    "place": "Ort",
+    "person": "Person",
+    "vehicle": "Fahrzeug",
+    "tool": "Werkzeug",
+    "project": "Projekt",
+    "clothing": "Kleidung",
+    "furniture": "Möbelstück",
+    "object": "Objekt",
+    "other": "Sonstiges"
+  },
+  "typeGroups": {
+    "place": "Orte",
+    "person": "Personen",
+    "vehicle": "Fahrzeuge",
+    "tool": "Werkzeuge",
+    "project": "Projekte",
+    "clothing": "Kleidung",
+    "furniture": "Möbel",
+    "object": "Objekte",
+    "other": "Sonstiges"
+  }
+}

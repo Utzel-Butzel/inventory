@@ -323,6 +323,12 @@ public final class APIClient: Sendable {
         return response.resource
     }
 
+    public func deleteResource(id: UUID) async throws {
+        let url = try makeAPIURL(path: ["resources", id.uuidString.lowercased()])
+        let request = try await authorizedRequest(url: url, method: "DELETE")
+        try await executeWithoutResponse(request)
+    }
+
     public func lookupResource(code: String) async throws -> ResourceLookupResponse {
         let parsed = ResourceCodeParser.parse(code)
         guard !parsed.code.isEmpty else {

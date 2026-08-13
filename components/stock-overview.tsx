@@ -1,5 +1,6 @@
 "use client";
 
+import type { TFunction } from "i18next";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -23,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useT } from "next-i18next/client";
 
 import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
 import { StockSectionNav } from "@/components/stock-section-nav";
@@ -77,16 +79,12 @@ type DueInventoryCount = {
   lastCompletedAt: string | null;
 };
 
-const compactNumber = new Intl.NumberFormat(undefined, {
-  maximumFractionDigits: 1,
-});
-
-const filterLabels: Record<StockFilter, string> = {
-  all: "All stock",
-  low: "Low stock",
-  out: "Out of stock",
-  healthy: "Healthy",
-  incoming: "Incoming",
+const filterLabelKeys: Record<StockFilter, string> = {
+  all: "overview.filters.all",
+  low: "overview.filters.low",
+  out: "overview.filters.out",
+  healthy: "overview.filters.healthy",
+  incoming: "overview.filters.incoming",
 };
 
 function finiteNumber(value: unknown) {
@@ -148,28 +146,44 @@ function titleCase(value: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function formatQuantity(value: number, unitName: string) {
-  const quantity = compactNumber.format(value);
+function stockValueLabel(value: string, t: TFunction) {
+  return t(`overview.values.${value}`, { defaultValue: titleCase(value) });
+}
+
+function formatQuantity(
+  value: number,
+  unitName: string,
+  numberFormat: Intl.NumberFormat,
+) {
+  const quantity = numberFormat.format(value);
   return unitName ? `${quantity} ${unitName}` : quantity;
 }
 
-function formatUsage(value: number | null, unitName: string) {
-  if (value === null || value <= 0) return "No usage data";
-  return `${compactNumber.format(value)} ${unitName || "units"}/day`;
+function formatUsage(
+  value: number | null,
+  unitName: string,
+  numberFormat: Intl.NumberFormat,
+  t: TFunction,
+) {
+  if (value === null || value <= 0) return t("overview.usage.none");
+  return t("overview.usage.perDay", {
+    value: numberFormat.format(value),
+    unit: unitName || t("overview.usage.units"),
+  });
 }
 
-function formatDate(value: string | null) {
+function formatDate(value: string | null, locale: string) {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
   }).format(date);
 }
 
-function getErrorMessage(payload: unknown) {
+function getErrorMessage(payload: unknown, t: TFunction) {
   if (
     payload &&
     typeof payload === "object" &&
@@ -178,22 +192,26 @@ function getErrorMessage(payload: unknown) {
   ) {
     return payload.error;
   }
-  return "Stock data could not be loaded.";
+  return t("overview.errors.load");
 }
 
 function Runway({ item, compact = false }: { item: StockItem; compact?: boolean }) {
+  const { t, i18n } = useT("stock");
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const days = item.daysUntilStockout;
-  const predictedDate = formatDate(item.predictedStockoutAt);
+  const predictedDate = formatDate(item.predictedStockoutAt, locale);
 
   if (item.quantity <= 0) {
     return (
       <div className={cn("flex items-center gap-2", compact && "justify-between")}>
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#b83243]">
+        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-danger">
           <CircleAlert className="size-3.5" aria-hidden="true" />
-          Out now
+          {t("overview.runway.outNow")}
         </span>
         {predictedDate ? (
-          <span className="text-[10px] text-[#a06b72]">Since {predictedDate}</span>
+          <span className="text-[10px] text-danger">
+            {t("overview.runway.since", { date: predictedDate })}
+          </span>
         ) : null}
       </div>
     );
@@ -202,9 +220,13 @@ function Runway({ item, compact = false }: { item: StockItem; compact?: boolean 
   if (days === null || !Number.isFinite(days)) {
     return (
       <div className={cn(compact && "flex items-center justify-between")}>
-        <p className="text-[12px] font-medium text-[#5f6672]">Not forecast</p>
+        <p className="text-[12px] font-medium text-muted">
+          {t("overview.runway.notForecast")}
+        </p>
         {!compact ? (
-          <p className="mt-0.5 text-[10px] text-[#5f6672]">Add usage to calculate runway</p>
+          <p className="mt-0.5 text-[10px] text-muted">
+            {t("overview.runway.addUsage")}
+          </p>
         ) : null}
       </div>
     );
@@ -213,9 +235,12 @@ function Runway({ item, compact = false }: { item: StockItem; compact?: boolean 
   const roundedDays = Math.max(0, Math.ceil(days));
   const urgent = days <= 7;
   const warning = days > 7 && days <= 30;
-  const label = days < 1 ? "Less than a day" : `${roundedDays} ${roundedDays === 1 ? "day" : "days"}`;
-  const color = urgent ? "text-[#b83243]" : warning ? "text-[#9b5300]" : "text-[#11734d]";
-  const dot = urgent ? "bg-[#dd5262]" : warning ? "bg-[#e99b2d]" : "bg-[#20a36d]";
+  const label =
+    days < 1
+      ? t("overview.runway.lessThanDay")
+      : t("overview.runway.days", { count: roundedDays });
+  const color = urgent ? "text-danger" : warning ? "text-warning" : "text-success";
+  const dot = urgent ? "bg-danger" : warning ? "bg-warning" : "bg-success";
 
   return (
     <div className={cn(compact && "flex items-center justify-between gap-3")}>
@@ -224,19 +249,31 @@ function Runway({ item, compact = false }: { item: StockItem; compact?: boolean 
         {label}
       </p>
       {predictedDate ? (
-        <p className={cn("text-[10px] text-[#5f6672]", !compact && "mt-0.5")}>Runs out {predictedDate}</p>
+        <p className={cn("text-[10px] text-muted", !compact && "mt-0.5")}>
+          {t("overview.runway.runsOut", { date: predictedDate })}
+        </p>
       ) : null}
     </div>
   );
 }
 
 function StockStatus({ item }: { item: StockItem }) {
+  const { t, i18n } = useT("stock");
+  const numberFormat = useMemo(
+    () =>
+      new Intl.NumberFormat(i18n.resolvedLanguage ?? i18n.language ?? "en", {
+        maximumFractionDigits: 1,
+      }),
+    [i18n.language, i18n.resolvedLanguage],
+  );
   const state = itemState(item);
   if (state === "out") {
     return (
       <div>
-        <Badge tone="danger">Out of stock</Badge>
-        <p className="mt-1 text-[10px] font-medium text-[#b05b66]">Replenish now</p>
+        <Badge tone="danger">{t("overview.status.out")}</Badge>
+        <p className="mt-1 text-[10px] font-medium text-danger">
+          {t("overview.status.replenishNow")}
+        </p>
       </div>
     );
   }
@@ -245,16 +282,18 @@ function StockStatus({ item }: { item: StockItem }) {
       item.minimumStock === null ? null : Math.max(0, item.minimumStock - item.quantity);
     return (
       <div>
-        <Badge tone="warning">Low stock</Badge>
-        <p className="mt-1 text-[10px] font-medium text-[#9b6a30]">
+        <Badge tone="warning">{t("overview.status.low")}</Badge>
+        <p className="mt-1 text-[10px] font-medium text-warning">
           {shortage && shortage > 0
-            ? `${compactNumber.format(shortage)} below minimum`
-            : "Reorder suggested"}
+            ? t("overview.status.belowMinimum", {
+                quantity: numberFormat.format(shortage),
+              })
+            : t("overview.status.reorderSuggested")}
         </p>
       </div>
     );
   }
-  return <Badge tone="success">Healthy</Badge>;
+  return <Badge tone="success">{t("overview.status.healthy")}</Badge>;
 }
 
 function StockLoading() {
@@ -285,6 +324,12 @@ function StockLoading() {
 }
 
 export function StockOverview() {
+  const { t, i18n } = useT("stock");
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
+  const compactNumber = useMemo(
+    () => new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }),
+    [locale],
+  );
   const [items, setItems] = useState<StockItem[]>([]);
   const [apiMetrics, setApiMetrics] = useState<StockMetrics>({});
   const [loading, setLoading] = useState(true);
@@ -311,9 +356,9 @@ export function StockOverview() {
         }).catch(() => null),
       ]);
       const payload = (await response.json().catch(() => null)) as StockPayload | null;
-      if (!response.ok || !payload) throw new Error(getErrorMessage(payload));
+      if (!response.ok || !payload) throw new Error(getErrorMessage(payload, t));
       if (!Array.isArray(payload.items)) {
-        throw new Error("The stock service returned an unexpected response.");
+        throw new Error(t("overview.errors.unexpectedResponse"));
       }
       setItems(payload.items);
       setApiMetrics(normalizeMetrics(payload));
@@ -327,14 +372,16 @@ export function StockOverview() {
       }
     } catch (loadError) {
       if (loadError instanceof DOMException && loadError.name === "AbortError") return;
-      setError(loadError instanceof Error ? loadError.message : "Stock data could not be loaded.");
+      setError(
+        loadError instanceof Error ? loadError.message : t("overview.errors.load"),
+      );
     } finally {
       if (!options?.signal?.aborted) {
         setLoading(false);
         setRefreshing(false);
       }
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -379,7 +426,7 @@ export function StockOverview() {
   };
 
   const filteredItems = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
+    const normalizedQuery = query.trim().toLocaleLowerCase(locale);
     return items
       .filter((item) =>
         filter === "all"
@@ -392,7 +439,7 @@ export function StockOverview() {
         if (!normalizedQuery) return true;
         return [item.name, item.type, item.trackingMode, item.unitName]
           .join(" ")
-          .toLocaleLowerCase()
+          .toLocaleLowerCase(locale)
           .includes(normalizedQuery);
       })
       .sort((left, right) => {
@@ -401,9 +448,9 @@ export function StockOverview() {
         if (stateDifference) return stateDifference;
         const leftDays = left.daysUntilStockout ?? Number.POSITIVE_INFINITY;
         const rightDays = right.daysUntilStockout ?? Number.POSITIVE_INFINITY;
-        return leftDays - rightDays || left.name.localeCompare(right.name);
+        return leftDays - rightDays || left.name.localeCompare(right.name, locale);
       });
-  }, [filter, items, query]);
+  }, [filter, items, locale, query]);
 
   const needsAttention = metrics.low + metrics.out;
 
@@ -412,42 +459,48 @@ export function StockOverview() {
       <StockSectionNav />
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="animate-fade-up">
-          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#5f6672]">
-            <Warehouse className="size-3.5 text-[#5147d9]" aria-hidden="true" />
-            Stock planning
+          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
+            <Warehouse className="size-3.5 text-brand" aria-hidden="true" />
+            {t("overview.eyebrow")}
           </div>
-          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-[#1e2126] sm:text-[32px]">
-            Stock health, at a glance.
+          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-foreground sm:text-[32px]">
+            {t("overview.title")}
           </h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#5f6672]">
-            See what is running low, understand available runway, and replenish before work stops.
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted">
+            {t("overview.description")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/stock/scan"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#5147d9] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5147f5]"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-brand-solid px-4 text-sm font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover"
           >
             <QrCode className="size-4" aria-hidden="true" />
-            Scan code
+            {t("overview.actions.scanCode")}
           </Link>
           <Link
             href="/stock/workflows"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#dfe2e7] bg-white px-4 text-sm font-semibold text-[#282b31] shadow-sm transition hover:bg-[#fafafa]"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-foreground shadow-sm transition hover:bg-surface-hover"
           >
             <Workflow className="size-4" aria-hidden="true" />
-            Scan workflows
+            {t("overview.actions.scanWorkflows")}
           </Link>
           <Button
             variant="secondary"
             onClick={() => void loadStock({ quiet: true })}
             disabled={loading || refreshing}
-            aria-label={refreshing ? "Refreshing stock" : "Refresh stock"}
+            aria-label={
+              refreshing
+                ? t("overview.actions.refreshingLabel")
+                : t("overview.actions.refresh")
+            }
             className="px-3 sm:px-4"
           >
             <RefreshCw className={cn("size-4", refreshing && "animate-spin")} aria-hidden="true" />
             <span className="hidden sm:inline">
-              {refreshing ? "Refreshing…" : "Refresh stock"}
+              {refreshing
+                ? t("overview.actions.refreshing")
+                : t("overview.actions.refresh")}
             </span>
           </Button>
         </div>
@@ -456,15 +509,15 @@ export function StockOverview() {
       {loading ? <StockLoading /> : null}
 
       {!loading && error ? (
-        <Card className="border-[#efd6d9] bg-[#fffafa]">
+        <Card className="border-danger-border bg-danger-soft">
           <EmptyState
-            icon={<AlertTriangle className="size-5 text-[#c34755]" aria-hidden="true" />}
-            title="Stock overview is unavailable"
+            icon={<AlertTriangle className="size-5 text-danger" aria-hidden="true" />}
+            title={t("overview.empty.unavailableTitle")}
             description={error}
             action={
               <Button variant="secondary" onClick={() => void loadStock()}>
                 <RefreshCw className="size-4" aria-hidden="true" />
-                Try again
+                {t("overview.actions.tryAgain")}
               </Button>
             }
           />
@@ -476,52 +529,63 @@ export function StockOverview() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {[
               {
-                label: "Tracked items",
+                label: t("overview.metrics.trackedItems"),
                 value: compactNumber.format(metrics.trackedItems),
-                detail: `${compactNumber.format(metrics.totalQuantity)} units on hand`,
+                detail: t("overview.metrics.unitsOnHand", {
+                  count: metrics.totalQuantity,
+                  value: compactNumber.format(metrics.totalQuantity),
+                }),
                 icon: Boxes,
-                iconClass: "bg-[#eeedff] text-[#5147d9]",
+                iconClass: "bg-brand-soft text-brand",
               },
               {
-                label: "Incoming",
+                label: t("overview.metrics.incoming"),
                 value: compactNumber.format(metrics.totalOnOrder),
-                detail: `${compactNumber.format(metrics.incomingItems)} items on order`,
+                detail: t("overview.metrics.itemsOnOrder", {
+                  count: metrics.incomingItems,
+                  value: compactNumber.format(metrics.incomingItems),
+                }),
                 icon: ShoppingCart,
-                iconClass: "bg-[#eaf4ff] text-[#2670b8]",
+                iconClass: "bg-info-soft text-info",
               },
               {
-                label: "Healthy stock",
+                label: t("overview.metrics.healthyStock"),
                 value: compactNumber.format(metrics.healthy),
-                detail: "Above reorder thresholds",
+                detail: t("overview.metrics.aboveThresholds"),
                 icon: CheckCircle2,
-                iconClass: "bg-[#e8f7f0] text-[#138a5b]",
+                iconClass: "bg-success-soft text-success",
               },
               {
-                label: "Low stock",
+                label: t("overview.metrics.lowStock"),
                 value: compactNumber.format(metrics.low),
-                detail: `${compactNumber.format(metrics.reorderSuggested)} reorder suggestions`,
+                detail: t("overview.metrics.reorderSuggestions", {
+                  count: metrics.reorderSuggested,
+                  value: compactNumber.format(metrics.reorderSuggested),
+                }),
                 icon: PackageMinus,
-                iconClass: "bg-[#fff2e2] text-[#b56b0c]",
+                iconClass: "bg-warning-soft text-warning",
               },
               {
-                label: "Out of stock",
+                label: t("overview.metrics.outOfStock"),
                 value: compactNumber.format(metrics.out),
-                detail: metrics.out ? "Immediate action needed" : "Nothing blocked",
+                detail: metrics.out
+                  ? t("overview.metrics.immediateAction")
+                  : t("overview.metrics.nothingBlocked"),
                 icon: PackageX,
-                iconClass: "bg-[#fff0f2] text-[#c34755]",
+                iconClass: "bg-danger-soft text-danger",
               },
             ].map((metric) => {
               const Icon = metric.icon;
               return (
                 <Card key={metric.label} className="p-5">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[12px] font-semibold text-[#5f6672]">{metric.label}</p>
+                    <p className="text-[12px] font-semibold text-muted">{metric.label}</p>
                     <span className={cn("grid size-9 place-items-center rounded-xl", metric.iconClass)}>
                       <Icon className="size-[17px]" aria-hidden="true" />
                     </span>
                   </div>
-                  <p className="mt-5 text-[28px] font-semibold tracking-[-0.04em] text-[#24272c]">{metric.value}</p>
-                  <p className="mt-1 text-[11px] text-[#5f6672]">{metric.detail}</p>
+                  <p className="mt-5 text-[28px] font-semibold tracking-[-0.04em] text-foreground">{metric.value}</p>
+                  <p className="mt-1 text-[11px] text-muted">{metric.detail}</p>
                 </Card>
               );
             })}
@@ -532,27 +596,35 @@ export function StockOverview() {
               className={cn(
                 "flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5",
                 metrics.out
-                  ? "border-[#efcfd3] bg-[linear-gradient(100deg,#fff7f8,#fff)]"
-                  : "border-[#f0ddbd] bg-[linear-gradient(100deg,#fffaf2,#fff)]",
+                  ? "border-danger-border bg-[linear-gradient(100deg,var(--color-danger-soft),var(--color-surface))]"
+                  : "border-warning-border bg-[linear-gradient(100deg,var(--color-warning-soft),var(--color-surface))]",
               )}
             >
               <div className="flex items-start gap-3">
                 <span
                   className={cn(
                     "grid size-10 shrink-0 place-items-center rounded-xl",
-                    metrics.out ? "bg-[#fff0f2] text-[#c34755]" : "bg-[#fff2e2] text-[#b56b0c]",
+                    metrics.out ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning",
                   )}
                 >
                   <AlertTriangle className="size-[18px]" aria-hidden="true" />
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-[#292c31]">
-                    {needsAttention} {needsAttention === 1 ? "item needs" : "items need"} attention
+                  <p className="text-sm font-semibold text-foreground">
+                    {t("overview.attention.title", {
+                      count: needsAttention,
+                      value: compactNumber.format(needsAttention),
+                    })}
                   </p>
-                  <p className="mt-1 text-[12px] leading-5 text-[#5f6672]">
+                  <p className="mt-1 text-[12px] leading-5 text-muted">
                     {metrics.out
-                      ? `${metrics.out} ${metrics.out === 1 ? "item is" : "items are"} out of stock and ${metrics.low} ${metrics.low === 1 ? "is" : "are"} below the desired level.`
-                      : "These items have reached their minimum level or are forecast to run out soon."}
+                      ? t("overview.attention.outAndLow", {
+                          out: compactNumber.format(metrics.out),
+                          outCount: metrics.out,
+                          low: compactNumber.format(metrics.low),
+                          lowCount: metrics.low,
+                        })
+                      : t("overview.attention.lowOnly")}
                   </p>
                 </div>
               </div>
@@ -562,46 +634,59 @@ export function StockOverview() {
                 onClick={() => setFilter(metrics.out ? "out" : "low")}
                 className="self-start sm:self-auto"
               >
-                {metrics.out ? "View out of stock" : "View low stock"}
+                {metrics.out
+                  ? t("overview.attention.viewOut")
+                  : t("overview.attention.viewLow")}
                 <ArrowRight className="size-3.5" aria-hidden="true" />
               </Button>
             </Card>
           ) : null}
 
           {dueCounts.length ? (
-            <Card className="overflow-hidden border-[#d8d4ff]">
-              <div className="flex items-center gap-3 border-b border-[#e8e6ff] bg-[#f8f7ff] px-4 py-3.5 sm:px-5">
-                <span className="grid size-9 place-items-center rounded-xl bg-[#eeedff] text-[#5147d9]">
+            <Card className="overflow-hidden border-brand-border">
+              <div className="flex items-center gap-3 border-b border-brand-border bg-brand-soft px-4 py-3.5 sm:px-5">
+                <span className="grid size-9 place-items-center rounded-xl bg-brand-soft text-brand">
                   <CalendarClock className="size-4" aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-[#30343a]">
-                    {dueCounts.length} physical {dueCounts.length === 1 ? "count is" : "counts are"} due
+                  <p className="text-sm font-semibold text-foreground">
+                    {t("overview.counts.due", {
+                      count: dueCounts.length,
+                      value: compactNumber.format(dueCounts.length),
+                    })}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-[#5f6672]">
-                    Open an item to reconcile its actual quantity.
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    {t("overview.counts.description")}
                   </p>
                 </div>
               </div>
-              <div className="divide-y divide-[#eceef1]">
+              <div className="divide-y divide-border">
                 {dueCounts.slice(0, 8).map((item) => (
                   <Link
                     key={item.resourceId}
                     href={`/inventory/${item.resourceId}/stock`}
-                    className="flex items-center gap-3 px-4 py-3 transition hover:bg-[#fafbfc] sm:px-5"
+                    className="flex items-center gap-3 px-4 py-3 transition hover:bg-surface-hover sm:px-5"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold text-[#34383e]">
+                      <p className="truncate text-[13px] font-semibold text-foreground">
                         {item.name}
                       </p>
-                      <p className="mt-0.5 text-[10px] text-[#5f6672]">
-                        Every {item.intervalDays} days · due {formatDate(item.nextDueAt) ?? "now"}
+                      <p className="mt-0.5 text-[10px] text-muted">
+                        {t("overview.counts.schedule", {
+                          count: item.intervalDays,
+                          interval: compactNumber.format(item.intervalDays),
+                          date:
+                            formatDate(item.nextDueAt, locale) ??
+                            t("overview.counts.now"),
+                        })}
                       </p>
                     </div>
-                    <span className="text-[11px] font-semibold text-[#5147d9]">
-                      Count {compactNumber.format(item.quantity)}
+                    <span className="text-[11px] font-semibold text-brand">
+                      {t("overview.counts.action", {
+                        quantity: compactNumber.format(item.quantity),
+                      })}
                     </span>
-                    <ChevronRight className="size-4 text-[#5f6672]" aria-hidden="true" />
+                    <ChevronRight className="size-4 text-muted" aria-hidden="true" />
                   </Link>
                 ))}
               </div>
@@ -609,31 +694,31 @@ export function StockOverview() {
           ) : null}
 
           <Card className="overflow-hidden">
-            <div className="border-b border-[#e8eaed] p-3 sm:p-4">
+            <div className="border-b border-border p-3 sm:p-4">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <label className="relative min-w-0 flex-1 xl:max-w-md">
-                  <span className="sr-only">Search stock</span>
-                  <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#5f6672]" aria-hidden="true" />
+                  <span className="sr-only">{t("overview.search.label")}</span>
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
                   <input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search item, type, tracking mode…"
-                    className="h-10 w-full rounded-xl border border-[#dfe2e7] bg-[#f8f9fa] pl-10 pr-10 text-[13px] text-[#33373d] outline-none transition placeholder:text-[#5f6672] focus:border-[#776fff] focus:bg-white focus:ring-3 focus:ring-[#635bff]/10"
+                    placeholder={t("overview.search.placeholder")}
+                    className="h-10 w-full rounded-xl border border-border bg-surface-subtle pl-10 pr-10 text-[13px] text-foreground outline-none transition placeholder:text-muted focus:border-focus focus:bg-surface focus:ring-3 focus:ring-focus/10"
                   />
                   {query ? (
                     <button
                       type="button"
                       onClick={() => setQuery("")}
-                      className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-[#5f6672] transition hover:bg-[#eceef1] hover:text-[#555c67]"
-                      aria-label="Clear search"
+                      className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-muted transition hover:bg-surface-hover hover:text-muted-strong"
+                      aria-label={t("overview.search.clear")}
                     >
                       <X className="size-3.5" aria-hidden="true" />
                     </button>
                   ) : null}
                 </label>
 
-                <div className="grid grid-cols-2 gap-1 rounded-xl bg-[#f0f2f4] p-1 sm:flex">
-                  {(Object.keys(filterLabels) as StockFilter[]).map((value) => {
+                <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-muted p-1 sm:flex">
+                  {(Object.keys(filterLabelKeys) as StockFilter[]).map((value) => {
                     const count =
                       value === "all"
                         ? metrics.trackedItems
@@ -653,12 +738,12 @@ export function StockOverview() {
                         className={cn(
                           "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[11px] font-semibold transition",
                           filter === value
-                            ? "bg-white text-[#34383e] shadow-sm"
-                            : "text-[#5f6672] hover:text-[#34383e]",
+                            ? "bg-surface text-foreground shadow-sm"
+                            : "text-muted hover:text-foreground",
                         )}
                       >
-                        {filterLabels[value]}
-                        <span className={cn("tabular-nums", filter === value ? "text-[#5147d9]" : "text-[#5f6672]")}>
+                        {t(filterLabelKeys[value])}
+                        <span className={cn("tabular-nums", filter === value ? "text-brand" : "text-muted")}>
                           {compactNumber.format(count)}
                         </span>
                       </button>
@@ -671,14 +756,14 @@ export function StockOverview() {
             {items.length === 0 ? (
               <EmptyState
                 icon={<Package className="size-5" aria-hidden="true" />}
-                title="No stock is being tracked yet"
-                description="Configure stock tracking on an inventory item to see quantities, thresholds, and runway here."
+                title={t("overview.empty.noStockTitle")}
+                description={t("overview.empty.noStockDescription")}
                 action={
                   <Link
                     href="/inventory"
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#dfe2e7] bg-white px-4 text-sm font-semibold text-[#282b31] shadow-sm transition hover:bg-[#fafafa]"
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-foreground shadow-sm transition hover:bg-surface-hover"
                   >
-                    Browse inventory
+                    {t("overview.actions.browseInventory")}
                     <ArrowRight className="size-4" aria-hidden="true" />
                   </Link>
                 }
@@ -686,8 +771,8 @@ export function StockOverview() {
             ) : filteredItems.length === 0 ? (
               <EmptyState
                 icon={<Search className="size-5" aria-hidden="true" />}
-                title="No stock matches these filters"
-                description="Try a different search or return to the complete stock list."
+                title={t("overview.empty.noMatchesTitle")}
+                description={t("overview.empty.noMatchesDescription")}
                 action={
                   <Button
                     variant="secondary"
@@ -696,7 +781,7 @@ export function StockOverview() {
                       setFilter("all");
                     }}
                   >
-                    Clear filters
+                    {t("overview.actions.clearFilters")}
                   </Button>
                 }
               />
@@ -705,27 +790,29 @@ export function StockOverview() {
                 <div className="hidden overflow-x-auto lg:block">
                   <table className="w-full min-w-[960px] border-collapse text-left">
                     <thead>
-                      <tr className="border-b border-[#eceef1] bg-[#fafbfc] text-[10px] font-semibold uppercase tracking-[0.09em] text-[#5f6672]">
-                        <th className="px-5 py-3">Item</th>
-                        <th className="px-4 py-3">On hand</th>
-                        <th className="px-4 py-3">Incoming</th>
-                        <th className="px-4 py-3">Minimum</th>
-                        <th className="px-4 py-3">Daily usage</th>
-                        <th className="px-4 py-3">Runway</th>
-                        <th className="px-4 py-3">Status</th>
-                        <th className="w-14 px-4 py-3"><span className="sr-only">Open</span></th>
+                      <tr className="border-b border-border bg-surface-subtle text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">
+                        <th className="px-5 py-3">{t("overview.table.item")}</th>
+                        <th className="px-4 py-3">{t("overview.table.onHand")}</th>
+                        <th className="px-4 py-3">{t("overview.table.incoming")}</th>
+                        <th className="px-4 py-3">{t("overview.table.minimum")}</th>
+                        <th className="px-4 py-3">{t("overview.table.dailyUsage")}</th>
+                        <th className="px-4 py-3">{t("overview.table.runway")}</th>
+                        <th className="px-4 py-3">{t("overview.table.status")}</th>
+                        <th className="w-14 px-4 py-3">
+                          <span className="sr-only">{t("overview.table.open")}</span>
+                        </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#eceef1]">
+                    <tbody className="divide-y divide-border">
                       {filteredItems.map((item) => {
                         const state = itemState(item);
                         return (
                           <tr
                             key={item.resourceId}
                             className={cn(
-                              "group transition hover:bg-[#fafbfc]",
-                              state === "out" && "bg-[#fffafa]",
-                              state === "low" && "bg-[#fffdf9]",
+                              "group transition hover:bg-surface-hover",
+                              state === "out" && "bg-danger-soft",
+                              state === "low" && "bg-warning-soft",
                             )}
                           >
                             <td className="px-5 py-4">
@@ -734,56 +821,80 @@ export function StockOverview() {
                                   className={cn(
                                     "grid size-9 shrink-0 place-items-center rounded-xl",
                                     state === "out"
-                                      ? "bg-[#fff0f2] text-[#c34755]"
+                                      ? "bg-danger-soft text-danger"
                                       : state === "low"
-                                        ? "bg-[#fff2e2] text-[#b56b0c]"
-                                        : "bg-[#f0f2f4] text-[#5f6672]",
+                                        ? "bg-warning-soft text-warning"
+                                        : "bg-surface-muted text-muted",
                                   )}
                                 >
                                   {state === "healthy" ? <Package className="size-4" aria-hidden="true" /> : <TrendingDown className="size-4" aria-hidden="true" />}
                                 </span>
                                 <div className="min-w-0">
-                                  <Link href={`/inventory/${item.resourceId}/stock`} className="block max-w-[260px] truncate text-[13px] font-semibold text-[#30343a] transition hover:text-[#5147d9]">
+                                  <Link href={`/inventory/${item.resourceId}/stock`} className="block max-w-[260px] truncate text-[13px] font-semibold text-foreground transition hover:text-brand">
                                     {item.name}
                                   </Link>
-                                  <p className="mt-0.5 text-[10px] text-[#5f6672]">{titleCase(item.type)} · {titleCase(item.trackingMode)}</p>
+                                  <p className="mt-0.5 text-[10px] text-muted">
+                                    {stockValueLabel(item.type, t)} ·{" "}
+                                    {stockValueLabel(item.trackingMode, t)}
+                                  </p>
                                 </div>
                               </div>
                             </td>
                             <td className="px-4 py-4">
-                              <p className={cn("text-[13px] font-semibold tabular-nums", state === "out" ? "text-[#b83243]" : "text-[#30343a]")}>
-                                {formatQuantity(item.quantity, item.unitName)}
+                              <p className={cn("text-[13px] font-semibold tabular-nums", state === "out" ? "text-danger" : "text-foreground")}>
+                                {formatQuantity(item.quantity, item.unitName, compactNumber)}
                               </p>
                             </td>
                             <td className="px-4 py-4">
                               {item.onOrder > 0 ? (
                                 <div>
-                                  <p className="text-[12px] font-semibold tabular-nums text-[#2670b8]">
-                                    +{formatQuantity(item.onOrder, item.unitName)}
+                                  <p className="text-[12px] font-semibold tabular-nums text-info">
+                                    +{formatQuantity(item.onOrder, item.unitName, compactNumber)}
                                   </p>
-                                  <p className="mt-0.5 text-[10px] text-[#5f6672]">
-                                    {formatDate(item.nextExpectedAt)
-                                      ? `Expected ${formatDate(item.nextExpectedAt)}`
-                                      : `Projected ${formatQuantity(item.projectedQuantity, item.unitName)}`}
+                                  <p className="mt-0.5 text-[10px] text-muted">
+                                    {formatDate(item.nextExpectedAt, locale)
+                                      ? t("overview.table.expected", {
+                                          date: formatDate(item.nextExpectedAt, locale),
+                                        })
+                                      : t("overview.table.projected", {
+                                          quantity: formatQuantity(
+                                            item.projectedQuantity,
+                                            item.unitName,
+                                            compactNumber,
+                                          ),
+                                        })}
                                   </p>
                                 </div>
                               ) : (
-                                <span className="text-[12px] text-[#5f6672]">—</span>
+                                <span className="text-[12px] text-muted">—</span>
                               )}
                             </td>
-                            <td className="px-4 py-4 text-[12px] font-medium tabular-nums text-[#5f6672]">
-                              {item.minimumStock === null ? "Not set" : formatQuantity(item.minimumStock, item.unitName)}
+                            <td className="px-4 py-4 text-[12px] font-medium tabular-nums text-muted">
+                              {item.minimumStock === null
+                                ? t("overview.table.notSet")
+                                : formatQuantity(
+                                    item.minimumStock,
+                                    item.unitName,
+                                    compactNumber,
+                                  )}
                             </td>
-                            <td className="px-4 py-4 text-[12px] font-medium text-[#5f6672]">
-                              {formatUsage(item.averageDailyUsage, item.unitName)}
+                            <td className="px-4 py-4 text-[12px] font-medium text-muted">
+                              {formatUsage(
+                                item.averageDailyUsage,
+                                item.unitName,
+                                compactNumber,
+                                t,
+                              )}
                             </td>
                             <td className="px-4 py-4"><Runway item={item} /></td>
                             <td className="px-4 py-4"><StockStatus item={item} /></td>
                             <td className="px-4 py-4">
                               <Link
                                 href={`/inventory/${item.resourceId}/stock`}
-                                aria-label={`Open stock settings for ${item.name}`}
-                                className="grid size-8 place-items-center rounded-lg text-[#5f6672] transition group-hover:bg-[#eeedff] group-hover:text-[#5147d9]"
+                                aria-label={t("overview.table.openFor", {
+                                  name: item.name,
+                                })}
+                                className="grid size-8 place-items-center rounded-lg text-muted transition group-hover:bg-brand-soft group-hover:text-brand"
                               >
                                 <ChevronRight className="size-4" aria-hidden="true" />
                               </Link>
@@ -795,7 +906,7 @@ export function StockOverview() {
                   </table>
                 </div>
 
-                <div className="divide-y divide-[#e8eaed] lg:hidden">
+                <div className="divide-y divide-border lg:hidden">
                   {filteredItems.map((item) => {
                     const state = itemState(item);
                     return (
@@ -803,9 +914,9 @@ export function StockOverview() {
                         key={item.resourceId}
                         href={`/inventory/${item.resourceId}/stock`}
                         className={cn(
-                          "group block p-4 transition hover:bg-[#fafbfc] sm:p-5",
-                          state === "out" && "bg-[#fffafa]",
-                          state === "low" && "bg-[#fffdf9]",
+                          "group block p-4 transition hover:bg-surface-hover sm:p-5",
+                          state === "out" && "bg-danger-soft",
+                          state === "low" && "bg-warning-soft",
                         )}
                       >
                         <div className="flex items-start gap-3">
@@ -813,10 +924,10 @@ export function StockOverview() {
                             className={cn(
                               "grid size-10 shrink-0 place-items-center rounded-xl",
                               state === "out"
-                                ? "bg-[#fff0f2] text-[#c34755]"
+                                ? "bg-danger-soft text-danger"
                                 : state === "low"
-                                  ? "bg-[#fff2e2] text-[#b56b0c]"
-                                  : "bg-[#f0f2f4] text-[#5f6672]",
+                                  ? "bg-warning-soft text-warning"
+                                  : "bg-surface-muted text-muted",
                             )}
                           >
                             <Package className="size-[18px]" aria-hidden="true" />
@@ -824,42 +935,70 @@ export function StockOverview() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <h3 className="truncate text-[13px] font-semibold text-[#30343a]">{item.name}</h3>
-                                <p className="mt-0.5 text-[10px] text-[#5f6672]">{titleCase(item.type)} · {titleCase(item.trackingMode)}</p>
+                                <h3 className="truncate text-[13px] font-semibold text-foreground">{item.name}</h3>
+                                <p className="mt-0.5 text-[10px] text-muted">
+                                  {stockValueLabel(item.type, t)} ·{" "}
+                                  {stockValueLabel(item.trackingMode, t)}
+                                </p>
                               </div>
-                              <ChevronRight className="mt-0.5 size-4 shrink-0 text-[#5f6672] transition group-hover:translate-x-0.5 group-hover:text-[#5147d9]" aria-hidden="true" />
+                              <ChevronRight className="mt-0.5 size-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-brand" aria-hidden="true" />
                             </div>
 
-                            <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-white/80 p-3 ring-1 ring-inset ring-[#e8eaed]">
+                            <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-surface/80 p-3 ring-1 ring-inset ring-border">
                               <div>
-                                <p className="text-[9px] font-semibold uppercase tracking-wider text-[#5f6672]">On hand</p>
-                                <p className={cn("mt-1 text-[13px] font-semibold tabular-nums", state === "out" ? "text-[#b83243]" : "text-[#30343a]")}>
-                                  {formatQuantity(item.quantity, item.unitName)}
+                                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted">
+                                  {t("overview.table.onHand")}
+                                </p>
+                                <p className={cn("mt-1 text-[13px] font-semibold tabular-nums", state === "out" ? "text-danger" : "text-foreground")}>
+                                  {formatQuantity(item.quantity, item.unitName, compactNumber)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[9px] font-semibold uppercase tracking-wider text-[#5f6672]">Minimum</p>
-                                <p className="mt-1 text-[13px] font-semibold tabular-nums text-[#4d535c]">
-                                  {item.minimumStock === null ? "Not set" : formatQuantity(item.minimumStock, item.unitName)}
+                                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted">
+                                  {t("overview.table.minimum")}
+                                </p>
+                                <p className="mt-1 text-[13px] font-semibold tabular-nums text-muted-strong">
+                                  {item.minimumStock === null
+                                    ? t("overview.table.notSet")
+                                    : formatQuantity(
+                                        item.minimumStock,
+                                        item.unitName,
+                                        compactNumber,
+                                      )}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[9px] font-semibold uppercase tracking-wider text-[#5f6672]">Incoming</p>
-                                <p className="mt-1 text-[13px] font-semibold tabular-nums text-[#2670b8]">
-                                  {item.onOrder > 0 ? `+${formatQuantity(item.onOrder, item.unitName)}` : "—"}
+                                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted">
+                                  {t("overview.table.incoming")}
+                                </p>
+                                <p className="mt-1 text-[13px] font-semibold tabular-nums text-info">
+                                  {item.onOrder > 0
+                                    ? `+${formatQuantity(
+                                        item.onOrder,
+                                        item.unitName,
+                                        compactNumber,
+                                      )}`
+                                    : "—"}
                                 </p>
                               </div>
-                              <div className="col-span-2 border-t border-[#eceef1] pt-3">
-                                <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-[#5f6672]">Estimated runway</p>
+                              <div className="col-span-2 border-t border-border pt-3">
+                                <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-muted">
+                                  {t("overview.table.estimatedRunway")}
+                                </p>
                                 <Runway item={item} compact />
                               </div>
                             </div>
 
                             <div className="mt-3 flex items-center justify-between gap-3">
                               <StockStatus item={item} />
-                              <span className="flex items-center gap-1 text-[10px] font-medium text-[#5f6672]">
+                              <span className="flex items-center gap-1 text-[10px] font-medium text-muted">
                                 <Clock3 className="size-3" aria-hidden="true" />
-                                {formatUsage(item.averageDailyUsage, item.unitName)}
+                                {formatUsage(
+                                  item.averageDailyUsage,
+                                  item.unitName,
+                                  compactNumber,
+                                  t,
+                                )}
                               </span>
                             </div>
                           </div>
@@ -872,13 +1011,16 @@ export function StockOverview() {
             )}
 
             {filteredItems.length ? (
-              <div className="flex flex-col gap-2 border-t border-[#e8eaed] bg-[#fafbfc] px-4 py-3 text-[11px] text-[#5f6672] sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="flex flex-col gap-2 border-t border-border bg-surface-subtle px-4 py-3 text-[11px] text-muted sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <span>
-                  Showing {filteredItems.length} of {metrics.trackedItems} tracked items
+                  {t("overview.footer.showing", {
+                    shown: compactNumber.format(filteredItems.length),
+                    total: compactNumber.format(metrics.trackedItems),
+                  })}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <CalendarClock className="size-3.5" aria-hidden="true" />
-                  Runway is based on average daily usage
+                  {t("overview.footer.runwayBasis")}
                 </span>
               </div>
             ) : null}

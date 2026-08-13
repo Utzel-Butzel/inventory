@@ -1,0 +1,65 @@
+{
+  "launch": {
+    "title": "Count pieces from a photo",
+    "description": "Take a photo and let AI fill the quantity.",
+    "action": "Try it"
+  },
+  "header": {
+    "title": "Photo piece counter",
+    "description": "Spread pieces out, shoot from above, and avoid overlaps where possible."
+  },
+  "upload": {
+    "preparing": "Preparing photo…",
+    "choose": "Take or choose a photo",
+    "privacy": "The photo is analyzed for this count and is not attached to the item."
+  },
+  "capture": {
+    "countHint": "AI will count visible {{unit}} matching “{{item}}”. You can correct the quantity before booking."
+  },
+  "actions": {
+    "close": "Close photo counter",
+    "removePhoto": "Remove counting photo",
+    "stopWaiting": "Stop waiting",
+    "countPieces": "Count pieces",
+    "replacePhoto": "Replace photo",
+    "dismissError": "Dismiss error",
+    "countAgain": "Count again",
+    "useAnotherPhoto": "Use another photo"
+  },
+  "preview": {
+    "altHighlighted_one": "Photo with {{value}} highlighted counted piece",
+    "altHighlighted_other": "Photo with {{value}} highlighted counted pieces",
+    "altSelected": "Photo selected for piece counting",
+    "highlighted_one": "{{value}} highlighted",
+    "highlighted_other": "{{value}} highlighted"
+  },
+  "result": {
+    "confidence": "{{value}}% confidence",
+    "filled": "Quantity filled in automatically — verify it before booking.",
+    "noneFound": "No matching pieces were found. Try a clearer photo.",
+    "estimateWarning": "This is an estimate. Check hidden or overlapping pieces carefully.",
+    "analyzedWith": "Analyzed with {{model}}",
+    "exceedsAvailable": "The selected quantity exceeds the {{quantity}} currently available. Correct it or switch to stock in."
+  },
+  "notices": {
+    "waitingStopped": "Stopped waiting. You can resume the same count."
+  },
+  "errors": {
+    "imageFormat": "Choose a photo in JPG, PNG, WebP, or HEIC format.",
+    "preparePhoto": "The photo could not be prepared for counting.",
+    "invalidQuantity": "The counter returned an invalid quantity. Please try another photo.",
+    "markerMismatch": "The counter could not place one highlight on every piece. Please try another photo.",
+    "invalidProcessingResponse": "The counter returned an invalid processing response.",
+    "requestFailed": "Request failed (HTTP {{status}}).",
+    "invalidResult": "The counter returned an invalid result.",
+    "invalidJobDeadline": "The counter returned an invalid job deadline.",
+    "expired": "Counting took too long and expired. Please try again.",
+    "stoppedTimeout": "Counting took too long and was stopped. Please try another photo.",
+    "countPhoto": "The objects could not be counted from this photo."
+  },
+  "fallback": {
+    "cameraPhoto": "Camera photo",
+    "detectedItem": "objects",
+    "model": "AI vision"
+  }
+}

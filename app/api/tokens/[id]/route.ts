@@ -1,13 +1,13 @@
 import { and, eq, isNull } from "drizzle-orm";
 
 import { apiTokens } from "@/db/schema";
-import { requireAdminSession } from "@/lib/api-auth";
+import { requireSessionPermission } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 
 type Context = { params: Promise<{ id: string }> };
 
 export async function DELETE(request: Request, context: Context) {
-  const authorization = await requireAdminSession(request);
+  const authorization = await requireSessionPermission(request, "tokens.manage");
   if (authorization.response) return authorization.response;
   const { id } = await context.params;
   const [revoked] = await db

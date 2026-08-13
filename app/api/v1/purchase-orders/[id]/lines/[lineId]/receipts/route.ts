@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import {
   hashIdempotentPayload,
   idempotencyResponseHeaders,
@@ -46,7 +46,7 @@ const receiptSchema = z
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
+  const authorization = await requirePermission(request, "orders.manage");
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;

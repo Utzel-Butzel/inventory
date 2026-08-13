@@ -1,0 +1,114 @@
+{
+  "errors": {
+    "invalidBom": "The BOM response is missing its resource.",
+    "loadBom": "Unable to load the bill of materials.",
+    "loadBuilds": "Unable to load recent builds.",
+    "componentQuantity": "Every component quantity must be a whole number of at least one.",
+    "saveBom": "Unable to save the BOM.",
+    "invalidDate": "Choose a valid build date and time.",
+    "build": "Unable to build assembly."
+  },
+  "notices": {
+    "bomSaved": "Bill of materials saved.",
+    "built_one": "{{count}} {{name}} built successfully.",
+    "built_other": "{{count}} {{name}} built successfully."
+  },
+  "unavailable": {
+    "title": "Assembly data is unavailable",
+    "description": "The bill of materials could not be loaded."
+  },
+  "aria": {
+    "dismissError": "Dismiss error",
+    "dismissMessage": "Dismiss message",
+    "moveUp": "Move {{name}} up",
+    "moveDown": "Move {{name}} down",
+    "remove": "Remove {{name}}"
+  },
+  "actions": {
+    "refresh": "Refresh assembly",
+    "refreshing": "Refreshing…",
+    "saveBom": "Save BOM",
+    "saveChanges": "Save changes",
+    "building": "Building…",
+    "build": "Build {{count}}"
+  },
+  "bom": {
+    "title": "Components & bill of materials",
+    "description": "Define the exact inventory consumed by one finished item.",
+    "emptyTitle": "No components yet",
+    "emptyDescription": "Search inventory above to define what one finished item consumes.",
+    "unsavedDescription": "Unsaved BOM changes do not affect stock or builds."
+  },
+  "buildableNow_one": "{{count}} buildable now",
+  "buildableNow_other": "{{count}} buildable now",
+  "buildable_one": "{{count}} buildable",
+  "buildable_other": "{{count}} buildable",
+  "availableCount_one": "{{count}} available",
+  "availableCount_other": "{{count}} available",
+  "perFinishedCount_one": "{{count}} per finished item",
+  "perFinishedCount_other": "{{count}} per finished item",
+  "search": {
+    "label": "Search inventory components",
+    "placeholder": "Search inventory to add a component…",
+    "clear": "Clear component search",
+    "searching": "Searching inventory…",
+    "empty": "No unselected items found."
+  },
+  "tracking": {
+    "bulk": "bulk",
+    "serialized": "serialized"
+  },
+  "labels": {
+    "noSku": "No SKU",
+    "perFinishedItem": "Per finished item",
+    "available": "Available",
+    "ready": "Ready",
+    "short": "Short",
+    "assemblyNote": "Assembly note",
+    "optional": "optional",
+    "buildQuantity": "Build quantity",
+    "buildDate": "Build date",
+    "finishedLocation": "Finished-stock location",
+    "buildNote": "Build note",
+    "finishedCodes": "Finished unit codes",
+    "component": "Component",
+    "required": "Required",
+    "afterBuild": "After build",
+    "noLocation": "No location",
+    "system": "System",
+    "deletedComponent": "Deleted component"
+  },
+  "placeholders": {
+    "assemblyNote": "Placement, revision, or preparation detail",
+    "location": "Workshop · Finished goods",
+    "buildNote": "Batch, work order, or quality note",
+    "codes": "One code per line"
+  },
+  "build": {
+    "title": "Build finished stock",
+    "description": "Consume every required component and receive the finished item in one audited transaction.",
+    "missingBomTitle": "A bill of materials is required",
+    "missingBomDescription": "Add and save components before finished stock can be built.",
+    "codeHint_one": "Optional. Leave blank to generate codes, or enter exactly {{count}} unique code.",
+    "codeHint_other": "Optional. Leave blank to generate codes, or enter exactly {{count}} unique codes.",
+    "selectUnits": "Select {{name}} units",
+    "selectedCount": "{{selected}} of {{required}} selected",
+    "saveFirst": "Save BOM changes before building.",
+    "insufficientStock": "Not enough available stock for this build.",
+    "summary_one": "{{count}} finished · {{components}} component units consumed",
+    "summary_other": "{{count}} finished · {{components}} component units consumed",
+    "confirm_one": "Build {{count}} {{name}} and consume the listed components?",
+    "confirm_other": "Build {{count}} {{name}} and consume the listed components?"
+  },
+  "history": {
+    "title": "Recent builds",
+    "description": "Audited assembly transactions and their consumed components.",
+    "shown_one": "{{count}} shown",
+    "shown_other": "{{count}} shown",
+    "built_one": "Built {{count}} {{name}}",
+    "built_other": "Built {{count}} {{name}}",
+    "emptyTitle": "No builds recorded",
+    "emptyDescription": "Completed assembly builds will appear here with their component audit trail.",
+    "openStock": "Open stock history"
+  }
+}

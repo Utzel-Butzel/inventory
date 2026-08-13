@@ -2,7 +2,7 @@ import {
   getReplicateCountOutcome,
   InventoryCountLocalizationError,
 } from "@/lib/ai";
-import { hashRequestIdentity, requireIdentity } from "@/lib/api-auth";
+import { hashRequestIdentity, requirePermission } from "@/lib/api-auth";
 import {
   readReplicateCountJobToken,
   validateReplicateCountJobSigningSecret,
@@ -27,7 +27,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const authorization = await requireIdentity(request, "ai");
+  const authorization = await requirePermission(request, "ai.use");
   if (authorization.response) return authorization.response;
 
   const contentLengthValue = request.headers.get("content-length");

@@ -1,6 +1,6 @@
 import "next-auth";
 
-type InventoryUserRole = "admin" | "editor" | "viewer";
+type InventoryUserRole = string;
 type InventoryAuthProvider = "local" | "auth0";
 
 declare module "next-auth" {

@@ -1,4 +1,9 @@
-export const paidAiOperations = ["analyze", "count", "cover"] as const;
+export const paidAiOperations = [
+  "analyze",
+  "count",
+  "cover",
+  "translate",
+] as const;
 
 export type PaidAiOperation = (typeof paidAiOperations)[number];
 
@@ -36,6 +41,11 @@ const operationPolicies: Record<
     environmentVariable: "AI_IMAGE_RATE_LIMIT_PER_HOUR",
     defaultLimit: 12,
     windowMs: 60 * 60_000,
+  },
+  translate: {
+    environmentVariable: "AI_TRANSLATION_RATE_LIMIT_PER_MINUTE",
+    defaultLimit: 30,
+    windowMs: 60_000,
   },
 };
 

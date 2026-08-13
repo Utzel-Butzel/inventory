@@ -89,6 +89,7 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     private let scanningStateLock = NSLock()
     private var scanningEnabledStorage = true
     private var videoRotationAngle: CGFloat = 90
+    private var pinchStartZoomFactor: CGFloat?
     private let photoCaptureStateLock = NSLock()
     private var processedPhotoCaptureIDs: Set<Int64> = []
 
@@ -142,6 +143,7 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     func selectZoom(_ preset: ZoomPreset) {
         sessionQueue.async { [weak self] in
             guard let self, let device = self.cameraDevice else { return }
+            self.pinchStartZoomFactor = nil
             let factor = min(
                 max(preset.deviceFactor, device.minAvailableVideoZoomFactor),
                 device.maxAvailableVideoZoomFactor
@@ -156,6 +158,18 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
             } catch {
                 // Keep the current lens/zoom if the device is temporarily unavailable.
             }
+        }
+    }
+
+    func updatePinchZoom(magnification: CGFloat) {
+        sessionQueue.async { [weak self] in
+            self?.applyPinchZoom(magnification: magnification, ending: false)
+        }
+    }
+
+    func endPinchZoom(magnification: CGFloat) {
+        sessionQueue.async { [weak self] in
+            self?.applyPinchZoom(magnification: magnification, ending: true)
         }
     }
 
@@ -328,6 +342,13 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     private func configureDevice(_ device: AVCaptureDevice) throws {
         try device.lockForConfiguration()
         defer { device.unlockForConfiguration() }
+        if device.isVirtualDevice,
+           device.primaryConstituentDeviceSwitchingBehavior != .unsupported {
+            device.setPrimaryConstituentDeviceSwitchingBehavior(
+                .auto,
+                restrictedSwitchingBehaviorConditions: []
+            )
+        }
         if device.isFocusModeSupported(.continuousAutoFocus) {
             device.focusMode = .continuousAutoFocus
         }
@@ -342,6 +363,39 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
             max(oneTimesFactor, device.minAvailableVideoZoomFactor),
             device.maxAvailableVideoZoomFactor
         )
+    }
+
+    private func applyPinchZoom(magnification: CGFloat, ending: Bool) {
+        guard
+            magnification.isFinite,
+            magnification > 0,
+            let device = cameraDevice
+        else {
+            if ending { pinchStartZoomFactor = nil }
+            return
+        }
+        let startFactor = pinchStartZoomFactor ?? device.videoZoomFactor
+        if pinchStartZoomFactor == nil {
+            pinchStartZoomFactor = startFactor
+        }
+
+        let factor = min(
+            max(startFactor * magnification, device.minAvailableVideoZoomFactor),
+            device.maxAvailableVideoZoomFactor
+        )
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = factor
+            device.unlockForConfiguration()
+
+            let displayFactor = factor * Self.zoomDisplayMultiplier(for: device)
+            DispatchQueue.main.async { [weak self] in
+                self?.selectedZoomFactor = displayFactor
+            }
+        } catch {
+            // Keep the last valid zoom if the device is temporarily unavailable.
+        }
+        if ending { pinchStartZoomFactor = nil }
     }
 
     private func turnOffTorch(on device: AVCaptureDevice) {

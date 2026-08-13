@@ -1,0 +1,285 @@
+{
+  "fallback": {
+    "untitled": "Untitled item"
+  },
+  "types": {
+    "tool": "Tool",
+    "object": "Object",
+    "furniture": "Furniture",
+    "vehicle": "Vehicle",
+    "place": "Place",
+    "clothing": "Clothing",
+    "person": "Person",
+    "project": "Project",
+    "other": "Other"
+  },
+  "statuses": {
+    "available": "Available",
+    "inUse": "In use",
+    "maintenance": "Maintenance",
+    "archived": "Archived"
+  },
+  "header": {
+    "inventory": "Inventory",
+    "newItem": "New item",
+    "edit": "Edit",
+    "addItem": "Add inventory item",
+    "updated": "Updated {{date}} · ID {{id}}",
+    "description": "Create manually or let images do the first draft.",
+    "stock": "Stock"
+  },
+  "actions": {
+    "deleteItem": "Delete item",
+    "saving": "Saving…",
+    "createItem": "Create item",
+    "saveChanges": "Save changes",
+    "dismissError": "Dismiss error",
+    "dismissMessage": "Dismiss message",
+    "retry": "Try again"
+  },
+  "details": {
+    "title": "Core details",
+    "description": "Identity, category and availability",
+    "name": "Item name",
+    "nameAiPlaceholder": "Leave blank to generate from images",
+    "namePlaceholder": "e.g. Festool track saw TS 55",
+    "type": "Type",
+    "status": "Status",
+    "itemDescription": "Description",
+    "descriptionPlaceholder": "What is it, what comes with it, and what should someone know before using it?",
+    "tags": "Tags",
+    "tagsPlaceholder": "woodworking, power-tool, 230v",
+    "categories": "Categories",
+    "categoriesPlaceholder": "Workshop, Production",
+    "commaSeparated": "comma separated"
+  },
+  "customFields": {
+    "title": "Custom fields",
+    "description": "Fields configured for this inventory type and its categories",
+    "count_one": "{{count}} field",
+    "count_other": "{{count}} fields",
+    "loading": "Loading custom fields",
+    "empty": "No custom fields apply to this item",
+    "emptyDescription": "Administrators can configure fields for {{type}} records or matching categories in Settings."
+  },
+  "media": {
+    "title": "Media",
+    "description_one": "Images, video and PDFs · {{count}} file",
+    "description_other": "Images, video and PDFs · {{count}} files",
+    "cover": "Cover",
+    "ai": "AI",
+    "moveEarlier": "Move file earlier",
+    "moveLater": "Move file later",
+    "remove": "Remove file",
+    "pendingUpload": "Pending upload",
+    "removePending": "Remove pending file",
+    "drop": "Drop files here or browse",
+    "formats": "JPG, PNG, WebP, HEIC, MP4, MOV or PDF · up to 12 files"
+  },
+  "operations": {
+    "title": "Operations",
+    "description": "Tracking, value and internal notes",
+    "serialNumber": "Serial number",
+    "sku": "SKU",
+    "skuPlaceholder": "TOOL-0042",
+    "openingQuantity": "Opening quantity",
+    "currentStock": "Current stock",
+    "units_one": "{{count}} unit",
+    "units_other": "{{count}} units",
+    "manageStock": "Manage stock",
+    "location": "Location",
+    "locationPlaceholder": "Workshop · Shelf A3",
+    "priority": "Priority",
+    "priorityLow": "Low",
+    "priorityNormal": "Normal",
+    "priorityHigh": "High",
+    "value": "Value",
+    "currency": "Currency",
+    "notes": "Internal notes"
+  },
+  "ai": {
+    "title": "AI catalogue studio",
+    "description": "Vision analysis + image editing",
+    "analyzeImages": "Analyze images",
+    "analyzeDescription": "Generate title, description, type, tags and alt text.",
+    "generateCover": "Generate studio cover",
+    "coverDescription": "Create a clean square hero image from the first photo.",
+    "safety": "AI runs only after the original files are safely stored. You can always edit the result.",
+    "rewrite": "Analyze & rewrite fields",
+    "coverDirection": "Cover direction",
+    "generateNewCover": "Generate new cover",
+    "imageRequired": "Upload and save an image to enable AI actions.",
+    "lastModel": "Last model"
+  },
+  "position": {
+    "title": "Position",
+    "editMap": "Edit point or outline on map",
+    "saveFirst": "Save the item first to draw its point or outline in the map editor.",
+    "geometryNotice": "Coordinates are derived from the saved map geometry. Edit them on the map to keep both views in sync.",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "altitude": "Altitude",
+    "metres": "metres",
+    "openMap": "Open on map",
+    "gpsHelp": "GPS can be read from image metadata, or entered manually."
+  },
+  "record": {
+    "title": "Record",
+    "id": "Resource ID",
+    "reload": "Reload from server"
+  },
+  "translations": {
+    "title": "Translations",
+    "description": "Keep translated catalogue content in sync",
+    "actions": {
+      "translateStale": "Translate missing & stale",
+      "regenerate": "Regenerate {{language}} translation",
+      "saveHuman": "Save human edit",
+      "useAi": "Return to AI",
+      "acceptSuggestion": "Accept suggestion"
+    },
+    "empty": "No additional content languages are configured.",
+    "progress": "{{current}} of {{total}} fields current",
+    "automaticSuffix": " · automatic",
+    "manualSuffix": " · manual",
+    "status": {
+      "current": "Current",
+      "complete": "Current",
+      "missing": "Missing",
+      "stale": "Stale",
+      "pending": "Queued",
+      "processing": "Translating",
+      "failed": "Failed",
+      "needs_review": "Needs review"
+    },
+    "notTranslated": "Not translated",
+    "humanLocked": "Protected human edit",
+    "suggestion": "AI suggestion for the changed source",
+    "notices": {
+      "updated_one": "Updated {{count}} translated field.",
+      "updated_other": "Updated {{count}} translated fields.",
+      "current": "All translations are already current.",
+      "queued": "Translation queued. It will continue in the background.",
+      "savedHuman": "Human translation saved and protected from AI overwrite."
+    },
+    "errors": {
+      "load": "Unable to load translations.",
+      "ai": "Unable to queue AI translation.",
+      "save": "Unable to save the translation."
+    }
+  },
+  "relations": {
+    "title": "Relationships",
+    "description": "Connect this item to containers and related inventory",
+    "refresh": "Refresh relationships",
+    "locatedIn": "Located in",
+    "noParent": "No parent location",
+    "noParentDescription": "Choose a container or place for this item.",
+    "chooseParent": "Choose a parent",
+    "add": "Add",
+    "contains": "Contains",
+    "noChildren": "This item does not contain any other inventory.",
+    "other_one": "{{count}} other relationship",
+    "other_other": "{{count}} other relationships",
+    "chooseItem": "Choose an item",
+    "link": "Link",
+    "missingItem": "Missing item",
+    "unknown": "Unknown type",
+    "automatic": "Automatic",
+    "manual": "Manual",
+    "removeWith": "Remove relationship with {{name}}",
+    "item": "item",
+    "errors": {
+      "load": "Unable to load relationships.",
+      "save": "Unable to save relationship.",
+      "remove": "Unable to remove relationship."
+    }
+  },
+  "assignments": {
+    "title": "Assignments & reservations",
+    "description": "Check out, reserve, or permanently assign available inventory with a complete stock trail.",
+    "refresh": "Refresh assignments",
+    "sections": {
+      "active": "Active",
+      "history": "History",
+      "new": "New allocation"
+    },
+    "availability": {
+      "available_one": "{{count}} available",
+      "available_other": "{{count}} available",
+      "allocated_one": "{{count}} allocated",
+      "allocated_other": "{{count}} allocated"
+    },
+    "loading": "Loading assignments",
+    "empty": {
+      "title": "Nothing is currently allocated",
+      "description": "New checkouts, assignments, and reservations will appear here."
+    },
+    "readOnly": "You have read-only access to assignments.",
+    "kinds": {
+      "checkout": "Checkout",
+      "assignment": "Assignment",
+      "reservation": "Reservation"
+    },
+    "statuses": {
+      "active": "Active",
+      "returned": "Returned",
+      "cancelled": "Cancelled"
+    },
+    "form": {
+      "action": "Action",
+      "recipient": "Recipient",
+      "recipientPlaceholder": "Person, team, or project",
+      "serializedUnit": "Serialized unit",
+      "chooseUnit": "Choose a unit",
+      "quantity": "Quantity",
+      "starts": "Starts",
+      "due": "Due",
+      "note": "Note",
+      "create": {
+        "checkout": "Create checkout",
+        "assignment": "Create assignment",
+        "reservation": "Create reservation"
+      }
+    },
+    "units_one": "{{count}} unit",
+    "units_other": "{{count}} units",
+    "dueDate": "Due {{date}}",
+    "actions": {
+      "return": "Return",
+      "cancel": "Cancel"
+    },
+    "errors": {
+      "load": "Unable to load assignments.",
+      "create": "Unable to create assignment.",
+      "complete": "Unable to complete assignment."
+    }
+  },
+  "notices": {
+    "locationRead": "Location was read from the image metadata. Please verify it.",
+    "analysisComplete": "AI analysis updated the title, description, tags and type.",
+    "coverComplete": "A new studio cover was generated and set as the first image.",
+    "savedTranslationStale": "Changes saved. Translation is still stale: {{reason}}",
+    "savedTranslations": "Changes saved. Translation refresh is queued in the background.",
+    "saved": "Changes saved.",
+    "idCopied": "Record ID copied."
+  },
+  "confirm": {
+    "removeFile": "Remove this file from the item?",
+    "delete": "Delete “{{name}}”? This cannot be undone."
+  },
+  "errors": {
+    "load": "Unable to load item.",
+    "loadCustomFields": "Unable to load custom field definitions.",
+    "unsupportedFiles": "Some files were skipped. Supported formats are images, video, and PDF.",
+    "analysis": "AI analysis failed.",
+    "cover": "Cover generation failed.",
+    "requiredCustomField": "Complete the required custom field “{{label}}”.",
+    "nameOrImage": "Add a name or at least one image for AI analysis.",
+    "translation": "AI translation failed.",
+    "save": "Unable to save item.",
+    "removeFile": "Unable to remove file.",
+    "reorderMedia": "Unable to reorder media.",
+    "delete": "Unable to delete item."
+  }
+}

@@ -39,14 +39,73 @@ struct SettingsView: View {
     }
 
     private var connectionPage: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                hero
-                connectionForm
+        Form {
+            if onboarding {
+                Section {
+                    Label("Inventory", systemImage: "viewfinder.circle")
+                        .font(.title2.bold())
+                }
             }
-            .padding(16)
+
+            Section("Server") {
+                TextField("Server-URL", text: $server)
+                    .textContentType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+
+                if server.lowercased().hasPrefix("http://") {
+                    Label("HTTP nur lokal verwenden.", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            Section("Konto") {
+                TextField("E-Mail", text: $email)
+                    .textContentType(.username)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                SecureField("Passwort", text: $password)
+                    .textContentType(.password)
+            }
+
+            Section {
+                DisclosureGroup("API-Token", isExpanded: $showTokenLogin) {
+                    SecureField("API-Token", text: $token)
+                        .textContentType(.password)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+                .onChange(of: showTokenLogin) { _, isExpanded in
+                    if !isExpanded { token = "" }
+                }
+            } header: {
+                Text("Alternative Anmeldung")
+            } footer: {
+                Text("Verwende alternativ einen persönlichen API-Token.")
+            }
+
+            Section {
+                Button {
+                    saveAndTest()
+                } label: {
+                    HStack {
+                        Spacer()
+                        if saving {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Text(saveButtonTitle)
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(saving || !canSubmit)
+            }
         }
-        .background(InventoryTheme.canvas)
         .navigationTitle(onboarding ? "Anmelden" : "Verbindung & Konto")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -162,10 +221,7 @@ struct SettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(InventoryTheme.canvas)
         .navigationTitle("Einstellungen")
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var webSettingsURL: URL? {
@@ -194,7 +250,6 @@ struct SettingsView: View {
             }
         } icon: {
             Image(systemName: systemImage)
-                .foregroundStyle(InventoryTheme.accent)
         }
     }
 
@@ -233,89 +288,6 @@ struct SettingsView: View {
             return "\(selected.provider) · \(selected.model). Die Auswahl gilt für neue Uploads."
         }
         return "Neue Cover verwenden das vom Server festgelegte Standardmodell."
-    }
-
-    private var hero: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(InventoryTheme.ink)
-                    .frame(width: 56, height: 56)
-                Image(systemName: "viewfinder.circle.fill")
-                    .font(.system(size: 30, weight: .medium))
-                    .foregroundStyle(InventoryTheme.lime)
-            }
-            Text("Inventory")
-                .font(.title2.bold())
-            Spacer()
-        }
-    }
-
-    private var connectionForm: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            TextField("Server-URL", text: $server)
-                .textContentType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
-                .padding(13)
-                .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
-
-            TextField("E-Mail", text: $email)
-                .textContentType(.username)
-                .keyboardType(.emailAddress)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .padding(13)
-                .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
-
-            SecureField("Passwort", text: $password)
-                .textContentType(.password)
-                .padding(13)
-                .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
-
-            DisclosureGroup(isExpanded: $showTokenLogin) {
-                SecureField("API-Token", text: $token)
-                    .textContentType(.password)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .padding(13)
-                    .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
-                    .padding(.top, 10)
-            } label: {
-                Label("API-Token", systemImage: "key.fill")
-                    .font(.subheadline.weight(.semibold))
-            }
-            .tint(InventoryTheme.ink)
-            .onChange(of: showTokenLogin) { _, isExpanded in
-                if !isExpanded { token = "" }
-            }
-
-            if server.lowercased().hasPrefix("http://") {
-                Label(
-                    "HTTP nur lokal.",
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(InventoryTheme.warning)
-            }
-
-            Button {
-                saveAndTest()
-            } label: {
-                HStack {
-                    if saving { ProgressView().tint(.white) }
-                    Text(saveButtonTitle)
-                }
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 52)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(InventoryTheme.ink)
-            .disabled(saving || !canSubmit)
-
-        }
-        .inventoryCard()
     }
 
     private var disconnectButton: some View {
@@ -409,11 +381,8 @@ private struct UploadSettingsLabel: View {
                 Spacer()
                 if activeCount > 0 {
                     Text("\(activeCount)")
-                        .font(.caption.monospacedDigit().bold())
-                        .foregroundStyle(InventoryTheme.ink)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(InventoryTheme.lime, in: Capsule())
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
                 } else if !queue.jobs.isEmpty {
                     Text("\(queue.jobs.count)")
                         .font(.caption.monospacedDigit())
@@ -421,8 +390,7 @@ private struct UploadSettingsLabel: View {
                 }
             }
         } icon: {
-            Image(systemName: "arrow.up.circle.fill")
-                .foregroundStyle(InventoryTheme.accent)
+            Image(systemName: "arrow.up.circle")
         }
     }
 

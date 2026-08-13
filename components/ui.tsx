@@ -20,13 +20,13 @@ export function Button({
 }: ButtonProps) {
   const variants = {
     primary:
-      "border-transparent bg-[#5147d9] text-white shadow-sm hover:bg-[#5147f5] active:bg-[#443be0]",
+      "border-transparent bg-brand-solid text-on-brand shadow-sm hover:bg-brand-hover active:bg-brand-active",
     secondary:
-      "border-[#dfe2e7] bg-white text-[#282b31] shadow-sm hover:border-[#cfd3da] hover:bg-[#fafafa] active:bg-[#f3f4f6]",
+      "border-border bg-surface text-foreground shadow-sm hover:border-border-strong hover:bg-surface-subtle active:bg-surface-muted",
     ghost:
-      "border-transparent bg-transparent text-[#555c67] hover:bg-[#f0f2f4] hover:text-[#25282d]",
+      "border-transparent bg-transparent text-muted-strong hover:bg-surface-muted hover:text-foreground",
     danger:
-      "border-[#f1c7cc] bg-white text-[#b83243] shadow-sm hover:bg-[#fff5f6]",
+      "border-danger-border bg-surface text-danger shadow-sm hover:bg-danger-soft",
   };
   const sizes = {
     sm: "h-8 gap-1.5 rounded-lg px-3 text-[13px] font-medium",
@@ -58,11 +58,11 @@ export function Badge({
   className?: string;
 }) {
   const tones = {
-    neutral: "bg-[#f0f2f4] text-[#555c67]",
-    brand: "bg-[#eeedff] text-[#5147d9]",
-    success: "bg-[#e8f7f0] text-[#11734d]",
-    warning: "bg-[#fff2e2] text-[#9b5300]",
-    danger: "bg-[#fff0f2] text-[#b83243]",
+    neutral: "bg-surface-muted text-muted-strong",
+    brand: "bg-brand-soft text-brand",
+    success: "bg-success-soft text-success",
+    warning: "bg-warning-soft text-warning",
+    danger: "bg-danger-soft text-danger",
   };
 
   return (
@@ -82,7 +82,7 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        "rounded-2xl border border-[#e4e7eb] bg-white shadow-[var(--shadow-sm)]",
+        "rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]",
         className,
       )}
       {...props}
@@ -95,7 +95,7 @@ export function Skeleton({ className }: { className?: string }) {
     <div
       aria-hidden="true"
       className={cn(
-        "relative overflow-hidden rounded-lg bg-[#eceef1] before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/70 before:to-transparent",
+        "relative overflow-hidden rounded-lg bg-surface-muted before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-surface/70 before:to-transparent",
         className,
       )}
     />
@@ -122,11 +122,11 @@ export function EmptyState({
         className,
       )}
     >
-      <div className="mb-4 grid size-11 place-items-center rounded-xl border border-[#e1e4e8] bg-[#f8f9fa] text-[#5f6672] shadow-sm">
+      <div className="mb-4 grid size-11 place-items-center rounded-xl border border-border bg-surface-subtle text-muted shadow-sm">
         {icon ?? <Inbox className="size-5" aria-hidden="true" />}
       </div>
-      <h3 className="text-sm font-semibold text-[#292c31]">{title}</h3>
-      <p className="mt-1.5 max-w-sm text-[13px] leading-5 text-[#5f6672]">
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      <p className="mt-1.5 max-w-sm text-[13px] leading-5 text-muted">
         {description}
       </p>
       {action ? <div className="mt-5">{action}</div> : null}

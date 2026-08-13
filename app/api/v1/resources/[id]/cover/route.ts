@@ -14,7 +14,7 @@ import {
   consumePaidAiRateLimit,
   paidAiRateLimitHeaders,
 } from "@/lib/ai-rate-limit";
-import { requireIdentity } from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { hashIdempotentPayload, readIdempotencyKey } from "@/lib/idempotency";
 import { resolveImageGenerationModel } from "@/lib/image-generation-models";
@@ -32,12 +32,12 @@ export const runtime = "nodejs";
 export const maxDuration = 180;
 
 export async function POST(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "ai");
+  const { id } = await context.params;
+  const authorization = await requireResourcePermission(request, "ai.use", id);
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
 
-  const { id } = await context.params;
   let body: unknown = {};
   try {
     body = await request.json();

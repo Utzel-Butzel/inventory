@@ -16,6 +16,10 @@ test("paid AI operations have bounded defaults", () => {
     limit: 12,
     windowMs: 3_600_000,
   });
+  assert.deepEqual(paidAiRateLimitPolicy("translate", {}), {
+    limit: 30,
+    windowMs: 60_000,
+  });
 });
 
 test("analysis and counting retain the legacy shared env fallback", () => {
@@ -30,10 +34,12 @@ test("operation-specific env values take precedence", () => {
     AI_ANALYSIS_RATE_LIMIT_PER_MINUTE: "3",
     AI_COUNT_RATE_LIMIT_PER_MINUTE: "2",
     AI_IMAGE_RATE_LIMIT_PER_HOUR: "4",
+    AI_TRANSLATION_RATE_LIMIT_PER_MINUTE: "9",
   };
   assert.equal(paidAiRateLimitPolicy("analyze", environment).limit, 3);
   assert.equal(paidAiRateLimitPolicy("count", environment).limit, 2);
   assert.equal(paidAiRateLimitPolicy("cover", environment).limit, 4);
+  assert.equal(paidAiRateLimitPolicy("translate", environment).limit, 9);
 });
 
 test("blank specific values still use the legacy fallback", () => {

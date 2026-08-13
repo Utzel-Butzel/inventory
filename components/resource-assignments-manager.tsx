@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useT } from "next-i18next/client";
 
 import { Badge, Button, Card, EmptyState } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
@@ -81,14 +82,8 @@ const emptyForm: AssignmentForm = {
 };
 
 const inputClass =
-  "mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-100 disabled:text-slate-600";
-const labelClass = "block text-xs font-semibold text-slate-700";
-
-const kindLabels: Record<AssignmentKind, string> = {
-  checkout: "Checkout",
-  assignment: "Assignment",
-  reservation: "Reservation",
-};
+  "mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition focus:border-success focus:ring-4 focus:ring-success-border disabled:bg-surface-muted disabled:text-muted";
+const labelClass = "block text-xs font-semibold text-muted-strong";
 
 const statusTone = (status: AssignmentStatus) => {
   if (status === "active") return "brand" as const;
@@ -96,9 +91,9 @@ const statusTone = (status: AssignmentStatus) => {
   return "neutral" as const;
 };
 
-const formatDate = (value: string | null) =>
+const formatDate = (value: string | null, locale: string) =>
   value
-    ? new Intl.DateTimeFormat(undefined, {
+    ? new Intl.DateTimeFormat(locale, {
         dateStyle: "medium",
         timeStyle: "short",
       }).format(new Date(value))
@@ -120,6 +115,8 @@ export function ResourceAssignmentsManager({
   resourceId: string;
   canEdit: boolean;
 }) {
+  const { t, i18n } = useT("resource");
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const [data, setData] = useState<AssignmentData | null>(null);
   const [form, setForm] = useState<AssignmentForm>(emptyForm);
   const [loading, setLoading] = useState(true);
@@ -140,11 +137,15 @@ export function ResourceAssignmentsManager({
         ),
       );
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load assignments.");
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : t("assignments.errors.load"),
+      );
     } finally {
       setLoading(false);
     }
-  }, [resourceId]);
+  }, [resourceId, t]);
 
   useEffect(() => {
     void load();
@@ -201,7 +202,11 @@ export function ResourceAssignmentsManager({
       setForm(emptyForm);
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to create assignment.");
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : t("assignments.errors.create"),
+      );
     } finally {
       setSaving(false);
     }
@@ -231,7 +236,7 @@ export function ResourceAssignmentsManager({
       setError(
         completeError instanceof Error
           ? completeError.message
-          : "Unable to complete assignment.",
+          : t("assignments.errors.complete"),
       );
     } finally {
       setCompletingId(null);
@@ -241,15 +246,17 @@ export function ResourceAssignmentsManager({
   return (
     <section className="mx-auto w-full max-w-[1450px] px-4 pb-8 sm:px-6 lg:px-8">
       <Card className="overflow-hidden p-0">
-        <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-violet-600 text-white">
+            <span className="grid size-10 place-items-center rounded-xl bg-brand-solid text-on-brand">
               <HandCoins className="size-5" aria-hidden="true" />
             </span>
             <div>
-              <h2 className="font-semibold text-slate-950">Assignments & reservations</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Check out, reserve, or permanently assign available inventory with a complete stock trail.
+              <h2 className="font-semibold text-foreground">
+                {t("assignments.title")}
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                {t("assignments.description")}
               </p>
             </div>
           </div>
@@ -257,15 +264,15 @@ export function ResourceAssignmentsManager({
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-            aria-label="Refresh assignments"
+            className="grid size-10 place-items-center rounded-xl border border-border text-muted transition hover:bg-surface-subtle disabled:opacity-50"
+            aria-label={t("assignments.refresh")}
           >
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
 
         {error ? (
-          <div role="alert" className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm text-red-700">
+          <div role="alert" className="border-b border-danger-border bg-danger-soft px-5 py-3 text-sm text-danger">
             {error}
           </div>
         ) : null}
@@ -273,18 +280,31 @@ export function ResourceAssignmentsManager({
         <div className="grid gap-6 p-5 sm:p-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-slate-900">Active</h3>
+              <h3 className="text-sm font-semibold text-foreground">
+                {t("assignments.sections.active")}
+              </h3>
               {data ? (
-                <div className="flex items-center gap-2 text-xs text-slate-600">
-                  <Badge tone="success">{data.availability.availableQuantity} available</Badge>
-                  <span>{data.availability.activeQuantity} allocated</span>
+                <div className="flex items-center gap-2 text-xs text-muted">
+                  <Badge tone="success">
+                    {t("assignments.availability.available", {
+                      count: data.availability.availableQuantity,
+                    })}
+                  </Badge>
+                  <span>
+                    {t("assignments.availability.allocated", {
+                      count: data.availability.activeQuantity,
+                    })}
+                  </span>
                 </div>
               ) : null}
             </div>
 
             {loading && !data ? (
-              <div className="grid min-h-48 place-items-center text-slate-600">
-                <LoaderCircle className="size-5 animate-spin" aria-label="Loading assignments" />
+              <div className="grid min-h-48 place-items-center text-muted">
+                <LoaderCircle
+                  className="size-5 animate-spin"
+                  aria-label={t("assignments.loading")}
+                />
               </div>
             ) : activeAssignments.length ? (
               <div className="space-y-2">
@@ -295,21 +315,24 @@ export function ResourceAssignmentsManager({
                     canEdit={canEdit}
                     completing={completingId === assignment.id}
                     onComplete={(status) => void completeAssignment(assignment, status)}
+                    locale={locale}
                   />
                 ))}
               </div>
             ) : (
               <EmptyState
-                className="min-h-48 rounded-xl border border-dashed border-slate-200"
+                className="min-h-48 rounded-xl border border-dashed border-border"
                 icon={<PackageCheck className="size-5" aria-hidden="true" />}
-                title="Nothing is currently allocated"
-                description="New checkouts, assignments, and reservations will appear here."
+                title={t("assignments.empty.title")}
+                description={t("assignments.empty.description")}
               />
             )}
 
             {history.length ? (
               <div className="mt-7">
-                <h3 className="mb-3 text-sm font-semibold text-slate-900">History</h3>
+                <h3 className="mb-3 text-sm font-semibold text-foreground">
+                  {t("assignments.sections.history")}
+                </h3>
                 <div className="space-y-2">
                   {history.map((assignment) => (
                     <AssignmentRow
@@ -318,6 +341,7 @@ export function ResourceAssignmentsManager({
                       canEdit={false}
                       completing={false}
                       onComplete={() => undefined}
+                      locale={locale}
                     />
                   ))}
                 </div>
@@ -325,38 +349,40 @@ export function ResourceAssignmentsManager({
             ) : null}
           </div>
 
-          <aside className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-            <h3 className="text-sm font-semibold text-slate-950">New allocation</h3>
+          <aside className="rounded-2xl border border-border bg-surface-subtle/60 p-4">
+            <h3 className="text-sm font-semibold text-foreground">
+              {t("assignments.sections.new")}
+            </h3>
             {!canEdit ? (
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                You have read-only access to assignments.
+              <p className="mt-2 text-sm leading-6 text-muted">
+                {t("assignments.readOnly")}
               </p>
             ) : (
               <form className="mt-4 space-y-4" onSubmit={(event) => void submitAssignment(event)}>
                 <label className={labelClass}>
-                  Action
+                  {t("assignments.form.action")}
                   <select
                     value={form.kind}
                     onChange={(event) => setField("kind", event.target.value)}
                     className={inputClass}
                     disabled={saving}
                   >
-                    <option value="checkout">Checkout</option>
-                    <option value="assignment">Assignment</option>
-                    <option value="reservation">Reservation</option>
+                    <option value="checkout">{t("assignments.kinds.checkout")}</option>
+                    <option value="assignment">{t("assignments.kinds.assignment")}</option>
+                    <option value="reservation">{t("assignments.kinds.reservation")}</option>
                   </select>
                 </label>
 
                 <label className={labelClass}>
-                  Recipient
+                  {t("assignments.form.recipient")}
                   <div className="relative">
-                    <UserRound className="pointer-events-none absolute left-3 top-1/2 mt-0.5 size-4 -translate-y-1/2 text-slate-600" />
+                    <UserRound className="pointer-events-none absolute left-3 top-1/2 mt-0.5 size-4 -translate-y-1/2 text-muted" />
                     <input
                       required
                       maxLength={240}
                       value={form.recipient}
                       onChange={(event) => setField("recipient", event.target.value)}
-                      placeholder="Person, team, or project"
+                      placeholder={t("assignments.form.recipientPlaceholder")}
                       className={`${inputClass} pl-9`}
                       disabled={saving}
                     />
@@ -365,7 +391,7 @@ export function ResourceAssignmentsManager({
 
                 {data?.trackingMode === "serialized" ? (
                   <label className={labelClass}>
-                    Serialized unit
+                    {t("assignments.form.serializedUnit")}
                     <select
                       required
                       value={form.stockUnitId}
@@ -373,7 +399,7 @@ export function ResourceAssignmentsManager({
                       className={inputClass}
                       disabled={saving || !data.availableUnits.length}
                     >
-                      <option value="">Choose a unit</option>
+                      <option value="">{t("assignments.form.chooseUnit")}</option>
                       {data.availableUnits.map((unit) => (
                         <option key={unit.id} value={unit.id}>
                           {unit.code}{unit.location ? ` · ${unit.location}` : ""}
@@ -383,7 +409,7 @@ export function ResourceAssignmentsManager({
                   </label>
                 ) : (
                   <label className={labelClass}>
-                    Quantity
+                    {t("assignments.form.quantity")}
                     <input
                       required
                       type="number"
@@ -400,7 +426,7 @@ export function ResourceAssignmentsManager({
 
                 <div className="grid grid-cols-2 gap-3">
                   <label className={labelClass}>
-                    Starts
+                    {t("assignments.form.starts")}
                     <input
                       type="datetime-local"
                       value={form.startsAt}
@@ -410,7 +436,7 @@ export function ResourceAssignmentsManager({
                     />
                   </label>
                   <label className={labelClass}>
-                    Due
+                    {t("assignments.form.due")}
                     <input
                       type="datetime-local"
                       min={form.startsAt || undefined}
@@ -423,13 +449,13 @@ export function ResourceAssignmentsManager({
                 </div>
 
                 <label className={labelClass}>
-                  Note
+                  {t("assignments.form.note")}
                   <textarea
                     rows={3}
                     maxLength={20_000}
                     value={form.note}
                     onChange={(event) => setField("note", event.target.value)}
-                    className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-100"
+                    className="mt-1.5 w-full resize-y rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground outline-none transition focus:border-success focus:ring-4 focus:ring-success-border disabled:bg-surface-muted"
                     disabled={saving}
                   />
                 </label>
@@ -449,7 +475,7 @@ export function ResourceAssignmentsManager({
                   ) : (
                     <HandCoins className="size-4" aria-hidden="true" />
                   )}
-                  Create {kindLabels[form.kind].toLowerCase()}
+                  {t(`assignments.form.create.${form.kind}`)}
                 </Button>
               </form>
             )}
@@ -465,40 +491,49 @@ function AssignmentRow({
   canEdit,
   completing,
   onComplete,
+  locale,
 }: {
   assignment: Assignment;
   canEdit: boolean;
   completing: boolean;
   onComplete: (status: "returned" | "cancelled") => void;
+  locale: string;
 }) {
+  const { t } = useT("resource");
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className="rounded-xl border border-border bg-surface p-4 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-slate-950">
+            <span className="text-sm font-semibold text-foreground">
               {assignment.assignee.label}
             </span>
-            <Badge tone={statusTone(assignment.status)}>{assignment.status}</Badge>
-            <Badge>{kindLabels[assignment.kind]}</Badge>
+            <Badge tone={statusTone(assignment.status)}>
+              {t(`assignments.statuses.${assignment.status}`)}
+            </Badge>
+            <Badge>{t(`assignments.kinds.${assignment.kind}`)}</Badge>
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
             <span className="inline-flex items-center gap-1">
               <PackageCheck className="size-3.5" aria-hidden="true" />
-              {assignment.stockUnit?.code ?? `${assignment.quantity} unit${assignment.quantity === 1 ? "" : "s"}`}
+              {assignment.stockUnit?.code ??
+                t("assignments.units", { count: assignment.quantity })}
             </span>
             <span className="inline-flex items-center gap-1">
               <CalendarDays className="size-3.5" aria-hidden="true" />
-              {formatDate(assignment.startsAt)}
+              {formatDate(assignment.startsAt, locale)}
             </span>
             {assignment.dueAt ? (
               <span className="inline-flex items-center gap-1">
-                <Clock3 className="size-3.5" aria-hidden="true" /> Due {formatDate(assignment.dueAt)}
+                <Clock3 className="size-3.5" aria-hidden="true" />
+                {t("assignments.dueDate", {
+                  date: formatDate(assignment.dueAt, locale),
+                })}
               </span>
             ) : null}
           </div>
           {assignment.note ? (
-            <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">
+            <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted">
               {assignment.note}
             </p>
           ) : null}
@@ -518,7 +553,7 @@ function AssignmentRow({
                 ) : (
                   <Undo2 className="size-3.5" aria-hidden="true" />
                 )}
-                Return
+                {t("assignments.actions.return")}
               </Button>
             ) : null}
             <Button
@@ -527,12 +562,13 @@ function AssignmentRow({
               onClick={() => onComplete("cancelled")}
               disabled={completing}
             >
-              <XCircle className="size-3.5" aria-hidden="true" /> Cancel
+              <XCircle className="size-3.5" aria-hidden="true" />
+              {t("assignments.actions.cancel")}
             </Button>
           </div>
         ) : assignment.completedAt ? (
-          <span className="shrink-0 text-xs text-slate-600">
-            {formatDate(assignment.completedAt)}
+          <span className="shrink-0 text-xs text-muted">
+            {formatDate(assignment.completedAt, locale)}
           </span>
         ) : null}
       </div>

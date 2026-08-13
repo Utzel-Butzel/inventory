@@ -16,6 +16,7 @@ import {
   Settings2,
   Warehouse,
 } from "lucide-react";
+import { useT } from "next-i18next/client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CodeScannerCamera } from "@/components/code-scanner-camera";
@@ -190,7 +191,7 @@ function normalizeWorkflow(value: unknown): Workflow | null {
   if (!id) return null;
   return {
     id,
-    name: firstString(record, ["name", "label"], "Untitled workflow"),
+    name: firstString(record, ["name", "label"]),
     description: firstString(record, ["description"]) || null,
     revision: readRevision(record.revision),
     enabled: asBoolean(record.enabled),
@@ -282,7 +283,7 @@ function normalizeResource(value: unknown): ResourceSummary {
   const resource = asRecord(value);
   return {
     id: firstString(resource, ["id", "resourceId"]),
-    name: firstString(resource, ["name", "resourceName", "label"], "Unknown resource"),
+    name: firstString(resource, ["name", "resourceName", "label"]),
     quantity: asFiniteNumber(resource?.quantity),
     trackingMode: firstString(resource, ["trackingMode"]) || null,
     updatedAt: firstString(resource, ["updatedAt"]) || null,
@@ -406,33 +407,26 @@ function titleCase(value: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function displayValue(value: unknown) {
-  if (value === null || value === undefined || value === "") return "—";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
+function displayValue(
+  value: unknown,
+  t: (key: string, options?: Record<string, unknown>) => string,
+  number: Intl.NumberFormat,
+) {
+  if (value === null || value === undefined || value === "") return t("values.empty");
+  if (typeof value === "boolean") return t(value ? "values.yes" : "values.no");
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase().replaceAll("_", "-");
     if (normalized === "finished-assembled" || normalized === "fully-assembled") {
-      return "Fully assembled";
+      return t("values.fullyAssembled");
     }
     return value;
   }
-  if (typeof value === "number") return String(value);
+  if (typeof value === "number") return number.format(value);
   try {
     return JSON.stringify(value);
   } catch {
     return String(value);
   }
-}
-
-function apiError(payload: unknown, fallback: string) {
-  const root = asRecord(payload);
-  if (!root) return fallback;
-  const nested = asRecord(root.error);
-  return (
-    firstString(root, ["message", "error"]) ||
-    firstString(nested, ["message", "detail"]) ||
-    fallback
-  );
 }
 
 function makeIdempotencyKey() {
@@ -472,17 +466,23 @@ function swatchColor(option: FieldOption) {
 }
 
 function MetadataRows({ metadata }: { metadata: JsonRecord | null }) {
+  const { t, i18n } = useT("scanner");
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const number = useMemo(
+    () => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }),
+    [locale],
+  );
   const entries = metadata ? Object.entries(metadata) : [];
-  if (!entries.length) return <p className="text-xs text-[#5f6672]">No metadata</p>;
+  if (!entries.length) return <p className="text-xs text-muted">{t("scan.metadata.none")}</p>;
   return (
     <dl className="grid gap-x-5 gap-y-2 sm:grid-cols-2">
       {entries.map(([key, value]) => (
         <div key={key} className="min-w-0">
-          <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#5f6672]">
+          <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
             {titleCase(key)}
           </dt>
-          <dd className="mt-0.5 break-words text-xs font-medium text-[#34383f]">
-            {displayValue(value)}
+          <dd className="mt-0.5 break-words text-xs font-medium text-foreground">
+            {displayValue(value, t, number)}
           </dd>
         </div>
       ))}
@@ -503,6 +503,7 @@ function ScannerLoading() {
 }
 
 export function StockScanner({ canExecute }: StockScannerProps) {
+  const { t } = useT("scanner");
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
   const [workflowsLoading, setWorkflowsLoading] = useState(true);
@@ -530,9 +531,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
         signal,
       });
       const payload = (await response.json().catch(() => null)) as unknown;
-      if (!response.ok) {
-        throw new Error(apiError(payload, "Scan workflows could not be loaded."));
-      }
+      if (!response.ok) throw new Error(t("scan.errors.workflowsLoad"));
       const enabledWorkflows = workflowArray(payload)
         .map(normalizeWorkflow)
         .filter((workflow): workflow is Workflow => Boolean(workflow?.enabled));
@@ -544,13 +543,11 @@ export function StockScanner({ canExecute }: StockScannerProps) {
       );
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      setWorkflowsError(
-        error instanceof Error ? error.message : "Scan workflows could not be loaded.",
-      );
+      setWorkflowsError(t("scan.errors.workflowsLoad"));
     } finally {
       if (!signal?.aborted) setWorkflowsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -588,13 +585,11 @@ export function StockScanner({ canExecute }: StockScannerProps) {
         });
         const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          throw new Error(
-            apiError(payload, "This code could not be resolved with the selected workflow."),
-          );
+          throw new Error(t("scan.errors.resolve"));
         }
         const nextResolution = normalizeResolution(payload, selectedWorkflow);
         if (!nextResolution) {
-          throw new Error("The scan service returned an unexpected resolution.");
+          throw new Error(t("scan.errors.resolveUnexpected"));
         }
         setResolution(nextResolution);
         setInputs(
@@ -607,12 +602,12 @@ export function StockScanner({ canExecute }: StockScannerProps) {
         setPhase("review");
       } catch (error) {
         setRequestError(
-          error instanceof Error ? error.message : "The scanned code could not be resolved.",
+          error instanceof Error ? error.message : t("scan.errors.resolveFallback"),
         );
         setPhase("scan");
       }
     },
-    [phase, selectedWorkflow],
+    [phase, selectedWorkflow, t],
   );
 
   const executeResolution = async () => {
@@ -630,7 +625,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
     for (const field of resolution.inputFields) {
       const value = (inputs[field.key] ?? "").trim();
       if (field.required && !value) {
-        validationErrors[field.key] = `${field.label} is required.`;
+        validationErrors[field.key] = t("scan.validation.required", { field: field.label });
       } else if (value) {
         cleanedInputs[field.key] = value;
       }
@@ -659,15 +654,15 @@ export function StockScanner({ canExecute }: StockScannerProps) {
       });
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
-        throw new Error(apiError(payload, "The stock update could not be completed."));
+        throw new Error(t("scan.errors.update"));
       }
       const nextResult = normalizeExecuteResult(payload, resolution);
-      if (!nextResult) throw new Error("The stock service returned an unexpected result.");
+      if (!nextResult) throw new Error(t("scan.errors.updateUnexpected"));
       setResult(nextResult);
       setPhase("success");
     } catch (error) {
       setRequestError(
-        error instanceof Error ? error.message : "The stock update could not be completed.",
+        error instanceof Error ? error.message : t("scan.errors.update"),
       );
       setPhase("review");
     }
@@ -691,22 +686,21 @@ export function StockScanner({ canExecute }: StockScannerProps) {
   return (
     <main className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <div className="mb-7">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-600">
-          Stock automation
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand">
+          {t("scan.header.eyebrow")}
         </p>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-3xl">
-            <h1 className="text-3xl font-semibold tracking-[-0.035em] text-zinc-950 sm:text-4xl">
-              Scan into stock
+            <h1 className="text-3xl font-semibold tracking-[-0.035em] text-foreground sm:text-4xl">
+              {t("scan.header.title")}
             </h1>
-            <p className="mt-3 text-sm leading-6 text-zinc-600 sm:text-base">
-              Scan the complete QR content, let the selected workflow extract its
-              identifier, and review every change before it reaches inventory.
+            <p className="mt-3 text-sm leading-6 text-muted sm:text-base">
+              {t("scan.header.description")}
             </p>
           </div>
           {selectedWorkflow ? (
             <Badge tone="brand" className="self-start sm:self-auto">
-              {selectedWorkflow.name}
+              {selectedWorkflow.name || t("scan.fallbacks.untitledWorkflow")}
             </Badge>
           ) : null}
         </div>
@@ -721,11 +715,11 @@ export function StockScanner({ canExecute }: StockScannerProps) {
           <Card>
             <EmptyState
               icon={<AlertTriangle className="size-5" aria-hidden="true" />}
-              title="Scanner setup could not be loaded"
+              title={t("scan.setup.errorTitle")}
               description={workflowsError}
               action={
                 <Button variant="secondary" onClick={() => void loadWorkflows()}>
-                  <RefreshCw className="size-4" aria-hidden="true" /> Retry
+                  <RefreshCw className="size-4" aria-hidden="true" /> {t("scan.setup.retry")}
                 </Button>
               }
             />
@@ -734,8 +728,8 @@ export function StockScanner({ canExecute }: StockScannerProps) {
           <Card>
             <EmptyState
               icon={<Settings2 className="size-5" aria-hidden="true" />}
-              title="No enabled scan workflow"
-              description="Create and enable a workflow first. It defines how QR content maps to an EPD number, stock state, and editable properties."
+              title={t("scan.setup.emptyTitle")}
+              description={t("scan.setup.emptyDescription")}
             />
           </Card>
         ) : (
@@ -744,87 +738,89 @@ export function StockScanner({ canExecute }: StockScannerProps) {
               <Card className="p-4 sm:p-5">
                 <label
                   htmlFor="scan-workflow"
-                  className="text-xs font-semibold uppercase tracking-[0.08em] text-[#5f6672]"
+                  className="text-xs font-semibold uppercase tracking-[0.08em] text-muted"
                 >
-                  Scan workflow
+                  {t("scan.setup.workflowLabel")}
                 </label>
                 <select
                   id="scan-workflow"
                   value={selectedWorkflowId}
                   disabled={phase === "resolving" || phase === "executing"}
                   onChange={(event) => changeWorkflow(event.target.value)}
-                  className="mt-2 h-11 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-sm font-semibold text-[#292c31] shadow-sm"
+                  className="mt-2 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-foreground shadow-sm"
                 >
                   {workflows.map((workflow) => (
                     <option key={workflow.id} value={workflow.id}>
-                      {workflow.name}
+                      {workflow.name || t("scan.fallbacks.untitledWorkflow")}
                     </option>
                   ))}
                 </select>
                 {selectedWorkflow?.description ? (
-                  <p className="mt-2 text-xs leading-5 text-[#5f6672]">
+                  <p className="mt-2 text-xs leading-5 text-muted">
                     {selectedWorkflow.description}
                   </p>
                 ) : null}
               </Card>
 
               {phase === "success" && result ? (
-                <Card className="overflow-hidden border-emerald-200">
-                  <div className="bg-emerald-50 px-5 py-6 sm:px-6">
+                <Card className="overflow-hidden border-success-border">
+                  <div className="bg-success-soft px-5 py-6 sm:px-6">
                     <div className="flex items-start gap-3">
-                      <div className="grid size-10 shrink-0 place-items-center rounded-full bg-emerald-600 text-white">
+                      <div className="grid size-10 shrink-0 place-items-center rounded-full bg-success text-on-strong">
                         <Check className="size-5" aria-hidden="true" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
-                          Stock updated
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-success">
+                          {t("scan.success.eyebrow")}
                         </p>
-                        <h2 className="mt-1 text-xl font-semibold text-emerald-950">
-                          {result.resource.name}
+                        <h2 className="mt-1 text-xl font-semibold text-success">
+                          {result.resource.name || t("scan.fallbacks.unknownResource")}
                         </h2>
-                        <p className="mt-1 text-sm text-emerald-800">
+                        <p className="mt-1 text-sm text-success">
                           {result.created === true
-                            ? "A new stock unit was assembled and added."
-                            : "The existing stock unit was updated."}
+                            ? t("scan.success.created")
+                            : t("scan.success.updated")}
                         </p>
                       </div>
                     </div>
                   </div>
                   <div className="space-y-5 p-5 sm:p-6">
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl bg-[#f8f9fa] p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5f6672]">
-                          Unit
+                      <div className="rounded-xl bg-surface-subtle p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          {t("scan.success.unit")}
                         </p>
-                        <p className="mt-1 break-all font-mono text-sm font-semibold text-[#292c31]">
-                          {result.unit?.code ?? result.unit?.id ?? "—"}
+                        <p className="mt-1 break-all font-mono text-sm font-semibold text-foreground">
+                          {result.unit?.code ?? result.unit?.id ?? t("values.empty")}
                         </p>
                         {result.unit?.status ? (
                           <Badge tone="success" className="mt-2">
-                            {titleCase(result.unit.status)}
+                            {t(`statuses.${result.unit.status}`, {
+                              defaultValue: titleCase(result.unit.status),
+                            })}
                           </Badge>
                         ) : null}
                       </div>
-                      <div className="rounded-xl bg-[#f8f9fa] p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5f6672]">
-                          Resource
+                      <div className="rounded-xl bg-surface-subtle p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          {t("scan.success.resource")}
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-[#292c31]">
-                          {result.resource.name}
+                        <p className="mt-1 text-sm font-semibold text-foreground">
+                          {result.resource.name || t("scan.fallbacks.unknownResource")}
                         </p>
-                        <p className="mt-1 truncate font-mono text-[11px] text-[#5f6672]">
+                        <p className="mt-1 truncate font-mono text-[11px] text-muted">
                           {result.resource.id}
                         </p>
                       </div>
                     </div>
                     <div>
-                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#5f6672]">
-                        Saved metadata
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+                        {t("scan.success.metadata")}
                       </h3>
                       <MetadataRows metadata={result.metadataAfter} />
                     </div>
                     <Button size="lg" className="w-full sm:w-auto" onClick={resetScan}>
-                      <RotateCcw className="size-4" aria-hidden="true" /> Scan next item
+                      <RotateCcw className="size-4" aria-hidden="true" /> {t("scan.success.next")}
                     </Button>
                   </div>
                 </Card>
@@ -863,21 +859,21 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                     <div
                       role="status"
                       aria-live="polite"
-                      className="mt-5 flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-900"
+                      className="mt-5 flex items-center gap-3 rounded-xl border border-brand-border bg-brand-soft px-4 py-3 text-sm font-medium text-brand-strong"
                     >
                       <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-                      Resolving EPD number and workflow…
+                      {t("scan.resolving")}
                     </div>
                   ) : null}
                   {requestError ? (
                     <div
                       role="alert"
-                      className="mt-5 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+                      className="mt-5 flex items-start gap-2 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger"
                     >
                       <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                       <div>
-                        <p className="font-semibold">Code could not be resolved</p>
-                        <p className="mt-0.5 text-xs leading-5 text-red-800">{requestError}</p>
+                        <p className="font-semibold">{t("scan.resolveErrorTitle")}</p>
+                        <p className="mt-0.5 text-xs leading-5 text-danger">{requestError}</p>
                       </div>
                     </div>
                   ) : null}
@@ -887,24 +883,20 @@ export function StockScanner({ canExecute }: StockScannerProps) {
 
             <aside className="space-y-4 lg:sticky lg:top-6">
               <Card className="p-5">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-[#292c31]">
-                  <ScanLine className="size-4 text-[#5147d9]" aria-hidden="true" />
-                  How this scan works
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <ScanLine className="size-4 text-brand" aria-hidden="true" />
+                  {t("scan.how.title")}
                 </h2>
                 <ol className="mt-4 space-y-4">
-                  {[
-                    ["1", "Scan", "Read a QR code or enter its complete content."],
-                    ["2", "Enrich", "Choose configured properties such as color."],
-                    ["3", "Review", "Confirm the unit and stock status before saving."],
-                  ].map(([number, title, detail]) => (
-                    <li key={number} className="flex gap-3">
-                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[#eeedff] text-[11px] font-bold text-[#5147d9]">
-                        {number}
+                  {(["scan", "enrich", "review"] as const).map((step) => (
+                    <li key={step} className="flex gap-3">
+                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand">
+                        {t(`scan.how.steps.${step}.number`)}
                       </span>
                       <span>
-                        <span className="block text-xs font-semibold text-[#34383f]">{title}</span>
-                        <span className="mt-0.5 block text-xs leading-5 text-[#5f6672]">
-                          {detail}
+                        <span className="block text-xs font-semibold text-foreground">{t(`scan.how.steps.${step}.title`)}</span>
+                        <span className="mt-0.5 block text-xs leading-5 text-muted">
+                          {t(`scan.how.steps.${step}.description`)}
                         </span>
                       </span>
                     </li>
@@ -912,14 +904,13 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                 </ol>
               </Card>
               {!canExecute ? (
-                <Card className="border-amber-200 bg-amber-50 p-4">
+                <Card className="border-warning-border bg-warning-soft p-4">
                   <div className="flex gap-3">
-                    <LockKeyhole className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden="true" />
+                    <LockKeyhole className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
                     <div>
-                      <p className="text-xs font-semibold text-amber-950">Read-only access</p>
-                      <p className="mt-1 text-xs leading-5 text-amber-800">
-                        You can scan and review a result, but only members and admins can apply
-                        it to stock.
+                      <p className="text-xs font-semibold text-warning">{t("scan.readOnly.title")}</p>
+                      <p className="mt-1 text-xs leading-5 text-warning">
+                        {t("scan.readOnly.description")}
                       </p>
                     </div>
                   </div>
@@ -954,92 +945,113 @@ function ReviewForm({
   onCancel: () => void;
   onExecute: () => void;
 }) {
+  const { t, i18n } = useT("scanner");
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const number = useMemo(
+    () => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }),
+    [locale],
+  );
+  const defaultColorOptions = useMemo(
+    () => DEFAULT_COLOR_OPTIONS.map((option) => ({
+      ...option,
+      label: t(`colors.${option.value}`, { defaultValue: option.label }),
+    })),
+    [t],
+  );
   const unitUnavailable = !resolution.unit && !resolution.willCreateUnit;
 
   return (
     <Card className="overflow-hidden">
-      <div className="border-b border-[#e4e7eb] bg-[#f9fafb] px-5 py-4 sm:px-6">
+      <div className="border-b border-border bg-surface-subtle px-5 py-4 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#5147d9]">
-              Review scan
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-brand">
+              {t("scan.review.eyebrow")}
             </p>
-            <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-[#25282d]">
-              {resolution.resource.name}
+            <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-foreground">
+              {resolution.resource.name || t("scan.fallbacks.unknownResource")}
             </h2>
           </div>
           <Badge tone={resolution.unit ? "neutral" : unitUnavailable ? "danger" : "success"}>
             {resolution.unit
-              ? "Existing unit"
+              ? t("scan.review.existingUnit")
               : unitUnavailable
-                ? "Unit not found"
-                : "New unit"}
+                ? t("scan.review.unitNotFound")
+                : t("scan.review.newUnit")}
           </Badge>
         </div>
       </div>
 
       <div className="space-y-6 p-5 sm:p-6">
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-[#e4e7eb] p-4">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5f6672]">
-              <QrCode className="size-3" aria-hidden="true" /> Extracted EPD / code
+          <div className="rounded-xl border border-border p-4">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+              <QrCode className="size-3" aria-hidden="true" /> {t("scan.review.extractedCode")}
             </p>
-            <p className="mt-2 break-all font-mono text-sm font-semibold text-[#292c31]">
+            <p className="mt-2 break-all font-mono text-sm font-semibold text-foreground">
               {resolution.extractedCode}
             </p>
           </div>
-          <div className="rounded-xl border border-[#e4e7eb] p-4">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5f6672]">
-              <Warehouse className="size-3" aria-hidden="true" /> Target stock unit
+          <div className="rounded-xl border border-border p-4">
+            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+              <Warehouse className="size-3" aria-hidden="true" /> {t("scan.review.targetUnit")}
             </p>
-            <p className="mt-2 text-sm font-semibold text-[#292c31]">
+            <p className="mt-2 text-sm font-semibold text-foreground">
               {resolution.unit?.code ?? resolution.extractedCode}
             </p>
-            <p className="mt-1 text-xs text-[#5f6672]">
+            <p className="mt-1 text-xs text-muted">
               {resolution.unit
-                ? `Current status: ${titleCase(resolution.unit.status ?? "unknown")}`
+                ? t("scan.review.currentStatus", {
+                    status: t(`statuses.${resolution.unit.status ?? "unknown"}`, {
+                      defaultValue: titleCase(resolution.unit.status ?? "unknown"),
+                    }),
+                  })
                 : resolution.willCreateUnit
-                  ? "Will be created when you confirm"
-                  : "No unit will be created"}
+                  ? t("scan.review.willCreate")
+                  : t("scan.review.willNotCreate")}
             </p>
           </div>
         </div>
 
         <section
           aria-labelledby="stock-impact-title"
-          className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4"
+          className="rounded-xl border border-brand-border bg-brand-soft/60 p-4"
         >
           <h3
             id="stock-impact-title"
-            className="text-xs font-semibold uppercase tracking-[0.08em] text-indigo-800"
+            className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-strong"
           >
-            Inventory impact on confirmation
+            {t("scan.review.impactTitle")}
           </h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-white/80 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#5f6672]">
-                Lifecycle status
+            <div className="rounded-lg bg-surface/80 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                {t("scan.review.lifecycleStatus")}
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-[#292c31]">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
                 <span>
                   {resolution.statusBefore
-                    ? titleCase(resolution.statusBefore)
-                    : "Unit does not exist yet"}
+                    ? t(`statuses.${resolution.statusBefore}`, {
+                        defaultValue: titleCase(resolution.statusBefore),
+                      })
+                    : t("scan.review.unitDoesNotExist")}
                 </span>
-                <ArrowRight className="size-4 shrink-0 text-indigo-600" aria-hidden="true" />
-                <span className="text-indigo-800">{titleCase(resolution.statusAfter)}</span>
+                <ArrowRight className="size-4 shrink-0 text-brand" aria-hidden="true" />
+                <span className="text-brand-strong">{t(`statuses.${resolution.statusAfter}`, {
+                  defaultValue: titleCase(resolution.statusAfter),
+                })}</span>
               </div>
             </div>
-            <div className="rounded-lg bg-white/80 p-3">
+            <div className="rounded-lg bg-surface/80 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#5f6672]">
-                    Available stock
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                    {t("scan.review.availableStock")}
                   </p>
-                  <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-[#292c31]">
-                    <span>{resolution.quantityBefore}</span>
-                    <ArrowRight className="size-4 text-indigo-600" aria-hidden="true" />
-                    <span className="text-indigo-800">{resolution.quantityAfter}</span>
+                  <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <span>{number.format(resolution.quantityBefore)}</span>
+                    <ArrowRight className="size-4 text-brand" aria-hidden="true" />
+                    <span className="text-brand-strong">{number.format(resolution.quantityAfter)}</span>
                   </div>
                 </div>
                 <Badge
@@ -1052,14 +1064,13 @@ function ReviewForm({
                   }
                 >
                   {resolution.delta > 0 ? "+" : ""}
-                  {resolution.delta}
+                  {number.format(resolution.delta)}
                 </Badge>
               </div>
             </div>
           </div>
-          <p className="mt-2 text-[11px] leading-5 text-indigo-900/75">
-            Available stock counts only units whose lifecycle status is Available. A
-            transition away from Available therefore reduces this quantity.
+          <p className="mt-2 text-[11px] leading-5 text-brand-strong/75">
+            {t("scan.review.availableHelp")}
           </p>
         </section>
 
@@ -1067,16 +1078,16 @@ function ReviewForm({
           <section aria-labelledby="fixed-properties-title">
             <h3
               id="fixed-properties-title"
-              className="text-xs font-semibold uppercase tracking-[0.08em] text-[#5f6672]"
+              className="text-xs font-semibold uppercase tracking-[0.08em] text-muted"
             >
-              Set by workflow
+              {t("scan.review.fixedProperties")}
             </h3>
             <dl className="mt-3 grid gap-2 sm:grid-cols-2">
               {resolution.fixedProperties.map((property) => (
-                <div key={property.key} className="rounded-xl bg-[#f4f5f7] px-3 py-2.5">
-                  <dt className="text-[10px] font-medium text-[#5f6672]">{property.label}</dt>
-                  <dd className="mt-0.5 text-sm font-semibold text-[#34383f]">
-                    {displayValue(property.value)}
+                <div key={property.key} className="rounded-xl bg-surface-muted px-3 py-2.5">
+                  <dt className="text-[10px] font-medium text-muted">{property.label}</dt>
+                  <dd className="mt-0.5 text-sm font-semibold text-foreground">
+                    {displayValue(property.value, t, number)}
                   </dd>
                 </div>
               ))}
@@ -1088,15 +1099,15 @@ function ReviewForm({
           <section aria-labelledby="scan-properties-title">
             <h3
               id="scan-properties-title"
-              className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#5f6672]"
+              className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted"
             >
-              <Palette className="size-3.5" aria-hidden="true" /> Complete scan properties
+              <Palette className="size-3.5" aria-hidden="true" /> {t("scan.review.completeProperties")}
             </h3>
             <div className="mt-3 space-y-5">
               {resolution.inputFields.map((field) => {
                 const options =
                   isColorField(field) && field.options.length === 0
-                    ? DEFAULT_COLOR_OPTIONS
+                    ? defaultColorOptions
                     : field.options;
                 const colorField = isColorField({ ...field, options });
                 const errorId = errors[field.key] ? `${field.key}-error` : undefined;
@@ -1104,10 +1115,10 @@ function ReviewForm({
                   <div key={field.key}>
                     <label
                       htmlFor={`scan-field-${field.key}`}
-                      className="text-sm font-semibold text-[#34383f]"
+                      className="text-sm font-semibold text-foreground"
                     >
                       {field.label}
-                      {field.required ? <span className="ml-1 text-[#c83d4d]">*</span> : null}
+                      {field.required ? <span className="ml-1 text-danger">*</span> : null}
                     </label>
                     {colorField && options.length ? (
                       <div
@@ -1127,14 +1138,14 @@ function ReviewForm({
                               disabled={executing}
                               onClick={() => onInput(field.key, option.value)}
                               className={cn(
-                                "flex min-h-11 items-center gap-2 rounded-xl border bg-white px-3 text-left text-xs font-semibold transition",
+                                "flex min-h-11 items-center gap-2 rounded-xl border bg-surface px-3 text-left text-xs font-semibold transition",
                                 checked
-                                  ? "border-[#635bff] text-[#4139c8] shadow-[0_0_0_2px_rgb(99_91_255/0.12)]"
-                                  : "border-[#dfe2e7] text-[#4c535e] hover:border-[#c7cad1]",
+                                  ? "border-focus text-brand-strong ring-2 ring-focus/10"
+                                  : "border-border text-muted-strong hover:border-border-strong",
                               )}
                             >
                               <span
-                                className="size-5 shrink-0 rounded-full border border-black/15 shadow-sm"
+                                className="size-5 shrink-0 rounded-full border border-border-strong shadow-sm"
                                 style={{ backgroundColor: swatchColor(option) }}
                                 aria-hidden="true"
                               />
@@ -1155,9 +1166,9 @@ function ReviewForm({
                         aria-invalid={Boolean(errors[field.key])}
                         aria-describedby={errorId}
                         onChange={(event) => onInput(field.key, event.target.value)}
-                        className="mt-2 h-11 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-sm text-[#292c31] shadow-sm"
+                        className="mt-2 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground shadow-sm"
                       >
-                        <option value="">Select {field.label.toLowerCase()}</option>
+                        <option value="">{t("scan.review.selectField", { field: field.label })}</option>
                         {options.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
@@ -1174,11 +1185,11 @@ function ReviewForm({
                         aria-invalid={Boolean(errors[field.key])}
                         aria-describedby={errorId}
                         onChange={(event) => onInput(field.key, event.target.value)}
-                        className="mt-2 h-11 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-sm text-[#292c31] shadow-sm"
+                        className="mt-2 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground shadow-sm"
                       />
                     )}
                     {errors[field.key] ? (
-                      <p id={errorId} role="alert" className="mt-1.5 text-xs text-[#b83243]">
+                      <p id={errorId} role="alert" className="mt-1.5 text-xs text-danger">
                         {errors[field.key]}
                       </p>
                     ) : null}
@@ -1190,12 +1201,12 @@ function ReviewForm({
         ) : null}
 
         {resolution.metadataPreview ? (
-          <section aria-labelledby="metadata-preview-title" className="rounded-xl bg-[#f8f9fa] p-4">
+          <section aria-labelledby="metadata-preview-title" className="rounded-xl bg-surface-subtle p-4">
             <h3
               id="metadata-preview-title"
-              className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#5f6672]"
+              className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted"
             >
-              Metadata preview
+              {t("scan.review.metadataPreview")}
             </h3>
             <MetadataRows metadata={resolution.metadataPreview} />
           </section>
@@ -1204,37 +1215,36 @@ function ReviewForm({
         {requestError ? (
           <div
             role="alert"
-            className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+            className="flex items-start gap-2 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger"
           >
             <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <div>
-              <p className="font-semibold">Update was not completed</p>
-              <p className="mt-0.5 text-xs leading-5 text-red-800">{requestError}</p>
-              <p className="mt-1 text-[11px] text-red-700">
-                You can retry safely; the same idempotency key is reused.
+              <p className="font-semibold">{t("scan.review.updateErrorTitle")}</p>
+              <p className="mt-0.5 text-xs leading-5 text-danger">{requestError}</p>
+              <p className="mt-1 text-[11px] text-danger">
+                {t("scan.review.retryHelp")}
               </p>
             </div>
           </div>
         ) : null}
 
         {unitUnavailable ? (
-          <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs leading-5 text-red-900">
+          <div className="flex items-start gap-2 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-xs leading-5 text-danger">
             <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            No unit with this EPD number exists, and this workflow is not allowed to create
-            one. Change the workflow or create the unit before trying again.
+            {t("scan.review.unitUnavailable")}
           </div>
         ) : null}
 
         {!canExecute ? (
-          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+          <div className="flex items-start gap-2 rounded-xl border border-warning-border bg-warning-soft px-4 py-3 text-xs leading-5 text-warning">
             <LockKeyhole className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            This is a read-only preview. Your role cannot execute stock changes.
+            {t("scan.review.readOnly")}
           </div>
         ) : null}
 
-        <div className="flex flex-col-reverse gap-2 border-t border-[#e4e7eb] pt-5 sm:flex-row sm:justify-end">
+        <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
           <Button variant="secondary" disabled={executing} onClick={onCancel}>
-            Scan again
+            {t("scan.review.scanAgain")}
           </Button>
           <Button
             size="lg"
@@ -1247,10 +1257,10 @@ function ReviewForm({
               <PackageCheck className="size-4" aria-hidden="true" />
             )}
             {executing
-              ? "Updating stock…"
+              ? t("scan.review.updating")
               : unitUnavailable
-                ? "Unit cannot be updated"
-                : "Confirm and update stock"}
+                ? t("scan.review.cannotUpdate")
+                : t("scan.review.confirm")}
             {!executing ? <ArrowRight className="size-4" aria-hidden="true" /> : null}
           </Button>
         </div>

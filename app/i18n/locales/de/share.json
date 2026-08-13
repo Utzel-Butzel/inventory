@@ -1,0 +1,75 @@
+{
+  "metadata": {
+    "collection": "Geteiltes Inventar",
+    "collectionDescription": "Inventar über einen öffentlichen Link mit Lesezugriff ansehen.",
+    "item": "Geteiltes Inventarelement",
+    "itemDescription": "Ein über einen öffentlichen Link mit Lesezugriff geteiltes Inventarelement ansehen."
+  },
+  "header": {
+    "sharedInventory": "Geteiltes Inventar",
+    "viewOnly": "Nur ansehen"
+  },
+  "collection": {
+    "eyebrow": "Öffentliche Sammlung",
+    "count_one": "{{count}} geteiltes Element",
+    "count_other": "{{count}} geteilte Elemente",
+    "filtered": "Gefilterte Sammlung",
+    "searchPlaceholder": "Geteiltes Inventar durchsuchen…",
+    "searchLabel": "Geteiltes Inventar durchsuchen",
+    "empty": {
+      "title": "Derzeit keine geteilten Elemente",
+      "search": "Versuche eine andere Suche.",
+      "default": "Elemente erscheinen hier, sobald sie zu dieser Freigabe passen."
+    }
+  },
+  "pagination": {
+    "label": "Seitennavigation",
+    "position": "Seite {{page}} von {{pages}}",
+    "previous": "Zurück",
+    "next": "Weiter"
+  },
+  "statuses": {
+    "available": "Verfügbar",
+    "in-use": "In Verwendung",
+    "maintenance": "Wartung",
+    "archived": "Archiviert"
+  },
+  "types": {
+    "tool": "Werkzeug",
+    "object": "Objekt",
+    "furniture": "Möbel",
+    "vehicle": "Fahrzeug",
+    "place": "Ort",
+    "clothing": "Kleidung",
+    "person": "Person",
+    "project": "Projekt",
+    "other": "Sonstiges"
+  },
+  "resource": {
+    "back": "Zurück zum geteilten Inventar",
+    "overview": "Übersicht",
+    "media": "Medien",
+    "details": "Elementdetails",
+    "classification": "Klassifizierung",
+    "customFields": "Benutzerdefinierte Felder",
+    "noDescriptionShort": "Keine Beschreibung",
+    "noDescription": "Es wurde keine Beschreibung hinzugefügt.",
+    "noLocation": "Kein Standort",
+    "units_one": "{{count}} Einheit",
+    "units_other": "{{count}} Einheiten",
+    "fields": {
+      "type": "Typ",
+      "quantity": "Menge",
+      "sku": "SKU",
+      "location": "Standort"
+    }
+  },
+  "boolean": {
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "unavailable": {
+    "title": "Dieses geteilte Inventar ist nicht verfügbar",
+    "description": "Der Link ist möglicherweise ungültig, abgelaufen oder die Freigabe wurde beendet."
+  }
+}

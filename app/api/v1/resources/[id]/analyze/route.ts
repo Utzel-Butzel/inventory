@@ -19,7 +19,10 @@ import {
   consumePaidAiRateLimit,
   paidAiRateLimitHeaders,
 } from "@/lib/ai-rate-limit";
-import { requireIdentity } from "@/lib/api-auth";
+import {
+  canAccessResource,
+  requireResourcePermission,
+} from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { hashIdempotentPayload, readIdempotencyKey } from "@/lib/idempotency";
 import { getResource } from "@/lib/resources";
@@ -31,12 +34,12 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "ai");
+  const { id } = await context.params;
+  const authorization = await requireResourcePermission(request, "ai.use", id);
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
 
-  const { id } = await context.params;
   let overwrite = true;
   try {
     const body = (await request.json()) as { overwrite?: unknown };
@@ -175,6 +178,20 @@ export async function POST(request: Request, context: Context) {
       values.type = result.type;
       generatedFields.push("type");
     }
+    if (
+      !(await canAccessResource(authorization.identity, "ai.use", {
+        ...resource,
+        ...values,
+      }))
+    ) {
+      return finish(
+        {
+          error:
+            "This analysis would move the item outside the inventory rule that grants your access.",
+        },
+        403,
+      );
+    }
     const responseBody = await db.transaction(async (transaction) => {
       await transaction
         .update(media)
@@ -208,7 +225,7 @@ export async function POST(request: Request, context: Context) {
       return body;
     });
     return respondToFinishedAiOperation({
-      body: responseBody,
+      body: { ...responseBody, translation: { status: "queued" } },
       status: 200,
       idempotencyKey: idempotency.key,
     });

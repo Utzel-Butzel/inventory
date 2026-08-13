@@ -2,16 +2,24 @@ import type { Metadata } from "next";
 
 import { StockScanner } from "@/components/stock-scanner";
 import { getSessionIdentity } from "@/lib/api-auth";
+import { getT } from "@/lib/ui-i18n/server";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Scan stock | Inventory",
-  description: "Scan QR codes and apply configured properties to stock units.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT("scanner");
+  return {
+    title: t("metadata.scanTitle"),
+    description: t("metadata.scanDescription"),
+  };
+}
 
 export default async function StockScanPage() {
   const identity = await getSessionIdentity();
 
-  return <StockScanner canExecute={Boolean(identity && identity.role !== "viewer")} />;
+  return (
+    <StockScanner
+      canExecute={Boolean(identity?.permissions.includes("workflows.manage"))}
+    />
+  );
 }

@@ -1,4 +1,4 @@
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import { stockScanResolveSchema } from "@/lib/scan-workflow-contract";
 import {
   resolveStockScan,
@@ -8,7 +8,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "workflows.read");
   if (authorization.response) return authorization.response;
 
   let payload: unknown;

@@ -1,0 +1,386 @@
+{
+  "metadata": {
+    "scanTitle": "Bestand scannen | Inventory",
+    "scanDescription": "QR-Codes scannen und konfigurierte Eigenschaften auf Bestandseinheiten anwenden.",
+    "workflowsTitle": "Scan-Workflows | Inventory",
+    "workflowsDescription": "QR-Code-gesteuerte Bestands-Workflows visuell konfigurieren."
+  },
+  "statuses": {
+    "available": "Verfügbar",
+    "reserved": "Reserviert",
+    "in-use": "In Verwendung",
+    "maintenance": "Wartung",
+    "consumed": "Verbraucht",
+    "lost": "Verloren",
+    "retired": "Ausgemustert",
+    "unknown": "Unbekannt"
+  },
+  "colors": {
+    "wood": "Holz",
+    "black": "Schwarz",
+    "white": "Weiß",
+    "pink": "Pink",
+    "green": "Grün",
+    "oak": "Eiche"
+  },
+  "values": {
+    "yes": "Ja",
+    "no": "Nein",
+    "fullyAssembled": "Vollständig montiert",
+    "empty": "—"
+  },
+  "camera": {
+    "errors": {
+      "blocked": "Der Kamerazugriff wurde blockiert. Erlaube den Zugriff in den Browsereinstellungen und versuche es erneut.",
+      "notFound": "Auf diesem Gerät wurde keine Kamera gefunden. Du kannst ein Foto hochladen oder den Code manuell eingeben.",
+      "inUse": "Die Kamera wird bereits verwendet oder konnte nicht gestartet werden. Schließe andere Kamera-Apps und versuche es erneut.",
+      "unavailable": "Die ausgewählte Kamera ist nicht verfügbar. Wähle eine andere Kamera oder versuche es erneut.",
+      "generic": "Die Kamera konnte nicht gestartet werden. Du kannst weiterhin ein Foto hochladen oder den Code manuell eingeben.",
+      "secureContext": "Der Kamerazugriff erfordert eine sichere HTTPS-Verbindung. Öffne diese Seite über HTTPS oder nutze unten den Foto-Upload beziehungsweise die manuelle Eingabe.",
+      "unsupported": "Dieser Browser bietet keinen Kamerazugriff. Nutze unten den Foto-Upload oder die manuelle Eingabe.",
+      "noQr": "Es wurde kein QR-Code gefunden. Versuche es mit einem näheren, schärferen Foto, auf dem der gesamte Code sichtbar ist, oder gib den Code manuell ein.",
+      "imageUnreadable": "Dieses Bild konnte nicht gelesen werden. Versuche es mit einem anderen Foto oder gib den Code manuell ein.",
+      "manualRequired": "Gib den vollständigen Inhalt ein, den der ausgewählte Workflow erwartet."
+    },
+    "deviceFallback": "Kamera {{value}}",
+    "title": "Mit Kamera scannen",
+    "description": "Halte den vollständigen QR-Code innerhalb des Rahmens.",
+    "cameraLabel": "Kamera",
+    "previewLabel": "Live-Kameravorschau zum Scannen von QR-Codes",
+    "status": {
+      "paused": "Scanner nach Erkennung pausiert",
+      "unavailable": "Kamera nicht verfügbar",
+      "waiting": "Kameraberechtigung wird erwartet…",
+      "off": "Kamera ist ausgeschaltet"
+    },
+    "stop": "Kamera stoppen",
+    "scanAnother": "Weiteren Code scannen",
+    "start": "Kamera starten",
+    "privacy": "Der Kamerazugriff funktioniert über HTTPS oder localhost. Das Video verbleibt auf diesem Gerät und wird ausschließlich nach QR-Codes durchsucht.",
+    "separator": "oder",
+    "photo": {
+      "title": "QR-Foto hochladen",
+      "description": "Hilfreich, wenn der Kamerazugriff blockiert oder das Etikett schwer erreichbar ist.",
+      "reading": "Foto wird gelesen…",
+      "choose": "Foto auswählen oder aufnehmen"
+    },
+    "manual": {
+      "title": "Code manuell eingeben",
+      "label": "Vollständiger QR-Code-Inhalt",
+      "placeholder": "Vollständiger QR-Code-Inhalt",
+      "use": "Code verwenden",
+      "help": "Gib genau den Inhalt des QR-Codes ein. Je nach ausgewähltem Workflow kann eine URL oder ein Wert mit Präfix erforderlich sein; eine reine EPD-Nummer reicht nicht immer aus."
+    },
+    "detected": "Code erkannt: {{code}}"
+  },
+  "scan": {
+    "fallbacks": {
+      "untitledWorkflow": "Unbenannter Workflow",
+      "unknownResource": "Unbekanntes Inventarobjekt"
+    },
+    "errors": {
+      "workflowsLoad": "Die Scan-Workflows konnten nicht geladen werden.",
+      "resolve": "Dieser Code konnte mit dem ausgewählten Workflow nicht aufgelöst werden.",
+      "resolveUnexpected": "Der Scan-Dienst hat eine unerwartete Auflösung zurückgegeben.",
+      "resolveFallback": "Der gescannte Code konnte nicht aufgelöst werden.",
+      "update": "Die Bestandsänderung konnte nicht abgeschlossen werden.",
+      "updateUnexpected": "Der Bestandsdienst hat ein unerwartetes Ergebnis zurückgegeben."
+    },
+    "validation": {
+      "required": "{{field}} ist erforderlich."
+    },
+    "metadata": {
+      "none": "Keine Metadaten"
+    },
+    "header": {
+      "eyebrow": "Bestandsautomatisierung",
+      "title": "In den Bestand scannen",
+      "description": "Scanne den vollständigen QR-Inhalt, lass den ausgewählten Workflow die Kennung extrahieren und prüfe jede Änderung, bevor sie in das Inventar übernommen wird."
+    },
+    "setup": {
+      "errorTitle": "Scanner-Einrichtung konnte nicht geladen werden",
+      "retry": "Erneut versuchen",
+      "emptyTitle": "Kein aktivierter Scan-Workflow",
+      "emptyDescription": "Erstelle und aktiviere zuerst einen Workflow. Er legt fest, wie QR-Inhalte einer EPD-Nummer, einem Bestandsstatus und bearbeitbaren Eigenschaften zugeordnet werden.",
+      "workflowLabel": "Scan-Workflow"
+    },
+    "success": {
+      "eyebrow": "Bestand aktualisiert",
+      "created": "Eine neue Bestandseinheit wurde montiert und hinzugefügt.",
+      "updated": "Die vorhandene Bestandseinheit wurde aktualisiert.",
+      "unit": "Einheit",
+      "resource": "Inventarobjekt",
+      "metadata": "Gespeicherte Metadaten",
+      "next": "Nächstes Objekt scannen"
+    },
+    "resolving": "EPD-Nummer und Workflow werden aufgelöst…",
+    "resolveErrorTitle": "Code konnte nicht aufgelöst werden",
+    "how": {
+      "title": "So funktioniert dieser Scan",
+      "steps": {
+        "scan": {
+          "number": "1",
+          "title": "Scannen",
+          "description": "Lies einen QR-Code oder gib seinen vollständigen Inhalt ein."
+        },
+        "enrich": {
+          "number": "2",
+          "title": "Ergänzen",
+          "description": "Wähle konfigurierte Eigenschaften wie etwa eine Farbe."
+        },
+        "review": {
+          "number": "3",
+          "title": "Prüfen",
+          "description": "Bestätige die Einheit und den Bestandsstatus vor dem Speichern."
+        }
+      }
+    },
+    "readOnly": {
+      "title": "Schreibgeschützter Zugriff",
+      "description": "Du kannst ein Ergebnis scannen und prüfen, aber nur Mitglieder und Administratoren können es auf den Bestand anwenden."
+    },
+    "review": {
+      "eyebrow": "Scan prüfen",
+      "existingUnit": "Vorhandene Einheit",
+      "unitNotFound": "Einheit nicht gefunden",
+      "newUnit": "Neue Einheit",
+      "extractedCode": "Extrahierte EPD / Code",
+      "targetUnit": "Ziel-Bestandseinheit",
+      "currentStatus": "Aktueller Status: {{status}}",
+      "willCreate": "Wird beim Bestätigen erstellt",
+      "willNotCreate": "Es wird keine Einheit erstellt",
+      "impactTitle": "Auswirkung auf das Inventar nach Bestätigung",
+      "lifecycleStatus": "Lebenszyklusstatus",
+      "unitDoesNotExist": "Einheit existiert noch nicht",
+      "availableStock": "Verfügbarer Bestand",
+      "availableHelp": "Zum verfügbaren Bestand zählen nur Einheiten mit dem Lebenszyklusstatus „Verfügbar“. Ein Wechsel von „Verfügbar“ zu einem anderen Status reduziert daher diese Menge.",
+      "fixedProperties": "Durch Workflow festgelegt",
+      "completeProperties": "Scan-Eigenschaften vervollständigen",
+      "selectField": "{{field}} auswählen",
+      "metadataPreview": "Metadatenvorschau",
+      "updateErrorTitle": "Aktualisierung wurde nicht abgeschlossen",
+      "retryHelp": "Du kannst den Vorgang sicher wiederholen; derselbe Idempotenzschlüssel wird erneut verwendet.",
+      "unitUnavailable": "Es existiert keine Einheit mit dieser EPD-Nummer und dieser Workflow darf keine erstellen. Ändere den Workflow oder erstelle die Einheit, bevor du es erneut versuchst.",
+      "readOnly": "Dies ist eine schreibgeschützte Vorschau. Deine Rolle darf keine Bestandsänderungen ausführen.",
+      "scanAgain": "Erneut scannen",
+      "updating": "Bestand wird aktualisiert…",
+      "cannotUpdate": "Einheit kann nicht aktualisiert werden",
+      "confirm": "Bestätigen und Bestand aktualisieren"
+    }
+  },
+  "workflows": {
+    "fallbacks": {
+      "resourceUnavailable": "Inventarobjekt nicht verfügbar",
+      "untitled": "Unbenannter Workflow",
+      "input": "Eingabe",
+      "identifier": "Kennung",
+      "notSelected": "Nicht ausgewählt"
+    },
+    "template": {
+      "name": "Paperless-Paper-Montage",
+      "description": "Lies eine EPD-Nummer aus dem Produkt-QR-Code, registriere die montierte Einheit und erfasse ihre Farbe.",
+      "assemblyStatus": "Montagestatus",
+      "color": "Farbe",
+      "colors": {
+        "wood": "Holz",
+        "black": "Schwarz",
+        "white": "Weiß",
+        "pink": "Pink",
+        "green": "Grün",
+        "oak": "Eiche"
+      }
+    },
+    "validation": {
+      "name": "Gib diesem Workflow einen Namen.",
+      "resource": "Wähle ein serialisiertes Inventarobjekt aus.",
+      "identifier": "Lege einen Eigenschaftsschlüssel für die Kennung fest.",
+      "propertyKey": "Eigenschaftsschlüssel dürfen nur Buchstaben, Zahlen, Unterstriche, Bindestriche und Punkte enthalten.",
+      "queryParameter": "Lege den zu extrahierenden URL-Abfrageparameter fest.",
+      "sourceOriginOnly": "Der Quellursprung darf nur Schema und Host enthalten, zum Beispiel https://example.com.",
+      "sourceOriginInvalid": "Der Quellursprung muss ein gültiger URL-Ursprung sein.",
+      "sourcePath": "Der Quellpfad muss mit / beginnen und darf weder Abfrage noch Fragment enthalten.",
+      "prefix": "Lege das Präfix fest, das aus Scans entfernt werden soll.",
+      "fixedProperty": "Jede feste Eigenschaft benötigt Schlüssel, Bezeichnung und Wert.",
+      "uniqueKeys": "Kennung, feste Eigenschaften und Scan-Eingaben müssen jeweils eindeutige Schlüssel besitzen.",
+      "input": "Jede Scan-Eingabe benötigt einen Schlüssel und eine Bezeichnung.",
+      "optionRequired": "{{field}} benötigt eine Option.",
+      "optionValues": "Jede Option in {{field}} benötigt einen Wert und eine Bezeichnung.",
+      "optionUnique": "Optionswerte in {{field}} müssen eindeutig sein.",
+      "eachInput": "Jede Scan-Eingabe",
+      "anInput": "einer Scan-Eingabe"
+    },
+    "extractionErrors": {
+      "empty": "Füge einen Wert ein oder scanne ihn, um die Extraktion zu testen.",
+      "prefixMismatch": "Der Scan beginnt nicht mit „{{prefix}}“.",
+      "prefixEmpty": "Nach dem Entfernen des Präfixes bleibt nichts übrig.",
+      "invalidUrl": "Der gescannte Wert ist keine gültige URL.",
+      "originMismatch": "Es wurde ein QR-Code von {{origin}} erwartet.",
+      "originInvalid": "Der konfigurierte Quellursprung ist ungültig.",
+      "pathMismatch": "Der Pfad {{path}} wurde erwartet.",
+      "queryCount": "Der Scan muss genau einen Abfragewert „{{parameter}}“ enthalten.",
+      "queryEmpty": "Der Abfrageparameter „{{parameter}}“ ist leer."
+    },
+    "errors": {
+      "load": "Die Workflows konnten nicht geladen werden.",
+      "unexpected": "Der Workflow-Dienst hat eine unerwartete Antwort zurückgegeben.",
+      "save": "Der Workflow konnte nicht gespeichert werden.",
+      "update": "Der Workflow konnte nicht aktualisiert werden.",
+      "delete": "Der Workflow konnte nicht gelöscht werden."
+    },
+    "confirmDiscard": "Ungespeicherte Workflow-Änderungen verwerfen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "notices": {
+      "templateLoaded": "Paperless-Paper-Vorlage geladen. Wähle das Inventarobjekt aus und speichere anschließend.",
+      "viewerReadOnly": "Der Betrachterzugriff ist schreibgeschützt.",
+      "updated": "Workflow aktualisiert.",
+      "created": "Workflow erstellt und zum Scannen bereit.",
+      "enabled": "Workflow aktiviert.",
+      "paused": "Workflow pausiert.",
+      "deleted": "Workflow gelöscht."
+    },
+    "header": {
+      "eyebrow": "Scan-Automatisierung",
+      "title": "Scan-Workflows visuell erstellen.",
+      "description": "Verwandle einen QR-Code mit geführten Eingaben und einheitlichen Eigenschaften in eine identifizierte Bestandseinheit – ganz ohne Code.",
+      "readOnly": "Schreibgeschützt",
+      "refresh": "Aktualisieren",
+      "newTemplate": "Neu aus Vorlage"
+    },
+    "sidebar": {
+      "title": "Workflows",
+      "configured_one": "{{value}} konfiguriert",
+      "configured_other": "{{value}} konfiguriert",
+      "createAria": "Workflow aus der Vorlage erstellen",
+      "resourceRevision": "{{resource}} · v{{revision}}",
+      "emptyTitle": "Keine gespeicherten Workflows",
+      "emptyManager": "Die Paperless-Paper-Vorlage steht im Editor bereit.",
+      "emptyViewer": "Ein Manager kann hier den ersten Scan-Workflow erstellen.",
+      "safeTitle": "Sicher konzipiert",
+      "safeDescription": "Nach einem Scan werden nur konfigurierte Felder und erlaubte Bestandsaktionen ausgeführt."
+    },
+    "editor": {
+      "newWorkflow": "Neuer Workflow",
+      "enabled": "Aktiviert",
+      "paused": "Pausiert",
+      "unsaved": "Ungespeicherte Änderungen",
+      "template": "Vorlage",
+      "revision": "Revision {{value}}",
+      "basedOnTemplate": "Basiert auf dem beigefügten Paperless-Paper-QR-Code-Anwendungsfall",
+      "pause": "Pausieren",
+      "enable": "Aktivieren",
+      "delete": "Löschen",
+      "saving": "Wird gespeichert…",
+      "update": "Aktualisieren",
+      "save": "Workflow speichern",
+      "confirmDelete": "{{name}} löschen? Vorhandene Bestandseinheiten sind nicht betroffen.",
+      "cancel": "Abbrechen",
+      "deleting": "Wird gelöscht…",
+      "deleteWorkflow": "Workflow löschen",
+      "name": "Workflow-Name",
+      "namePlaceholder": "Montage-Scan",
+      "enabledLabel": "Workflow aktiviert",
+      "enabledDescription": "Auf der Scan-Seite verfügbar.",
+      "description": "Beschreibung",
+      "descriptionPlaceholder": "Erkläre, wann dieser Workflow verwendet werden soll.",
+      "viewerDescription": "Du kannst diesen Workflow ansehen und lokal als Vorschau testen. Zum Bearbeiten, Aktivieren und Löschen ist Editorzugriff erforderlich."
+    },
+    "steps": {
+      "trigger": {
+        "title": "Auslöser",
+        "description": "Dieser Workflow startet, wenn eine Kamera oder ein Handscanner einen QR-Code liest.",
+        "event": "QR-Code gescannt",
+        "eventDescription": "Dekodierten Text an diesen Workflow übergeben",
+        "badge": "Scan-Auslöser"
+      },
+      "extract": {
+        "title": "EPD-Nummer extrahieren",
+        "description": "Wähle eine sichere, vordefinierte Regel, die gescannten Text in die Einheitenkennung umwandelt.",
+        "modes": {
+          "full": "Vollständiger Wert",
+          "url-query": "URL-Parameter",
+          "prefix": "Präfix entfernen"
+        },
+      "queryParameter": "Abfrageparameter",
+      "queryParameterPlaceholder": "d",
+      "sourceOrigin": "Erlaubter Quellursprung",
+      "sourceOriginPlaceholder": "https://paperlesspaper.de",
+      "sourcePath": "Erlaubter Pfad",
+      "sourcePathPlaceholder": "/b",
+      "identifierKey": "Eigenschaftsschlüssel der Kennung",
+      "identifierKeyPlaceholder": "epdNumber",
+      "prefix": "Zu entfernendes Präfix",
+      "prefixPlaceholder": "EPD-"
+      },
+      "target": {
+        "title": "Ziel-Inventarobjekt auswählen",
+        "description": "Nur Inventar mit serialisierter Bestandserfassung kann identifizierte Einheiten aufnehmen.",
+        "field": "Serialisiertes Inventarobjekt",
+        "select": "Inventarobjekt auswählen…",
+        "resourceQuantity": "{{name}} · {{quantity}} {{unit}}",
+        "units_one": "Einheit",
+        "units_other": "Einheiten",
+        "none": "Noch keine serialisierten Inventarobjekte verfügbar.",
+        "configure": "Inventar konfigurieren",
+        "selected": "{{name}} verwendet serialisierte Erfassung."
+      },
+      "inputs": {
+        "title": "Eingaben während des Scans abfragen",
+        "description": "Erstelle geführte Auswahlfelder für Informationen, die sich von Einheit zu Einheit unterscheiden.",
+        "selectField": "Auswahlfeld",
+        "removeField": "{{field}} entfernen",
+        "scanInput": "Scan-Eingabe",
+      "propertyKey": "Eigenschaftsschlüssel",
+      "propertyKeyPlaceholder": "color",
+        "visibleLabel": "Sichtbare Bezeichnung",
+        "required": "Vor dem Anwenden des Scans erforderlich",
+        "options": "Optionen",
+        "addOption": "Option hinzufügen",
+        "newOption": "Option {{value}}",
+        "chooseColor": "Farbe auswählen",
+        "colorFor": "Farbe für {{label}}",
+        "label": "Bezeichnung",
+        "storedValue": "Gespeicherter Wert",
+        "removeOption": "{{label}} entfernen",
+        "none": "Dieser Workflow stellt während des Scans keine Fragen.",
+        "addField": "Auswahlfeld hinzufügen",
+        "newProperty": "Eigenschaft {{value}}"
+      },
+      "actions": {
+        "title": "Bestandsaktionen anwenden",
+        "description": "Lege fest, was mit der gefundenen EPD-Einheit geschieht und welche Werte immer geschrieben werden.",
+        "createMissing": "Fehlende Einheit erstellen",
+        "createMissingDescription": "Diese EPD-Nummer registrieren, wenn sie neu ist.",
+        "createMissingAria": "Fehlende serialisierte Einheit erstellen",
+        "status": "Lebenszyklusstatus nach Scan",
+        "keepStatus": "Standard- / aktuellen Status beibehalten",
+        "fixedTitle": "Feste Eigenschaften",
+        "fixedDescription": "Diese Werte werden bei jedem erfolgreichen Scan angewendet.",
+        "addProperty": "Eigenschaft hinzufügen",
+      "key": "Schlüssel",
+      "keyPlaceholder": "assemblyStatus",
+        "visibleLabel": "Sichtbare Bezeichnung",
+      "storedValue": "Gespeicherter Wert",
+      "storedValuePlaceholder": "finished-assembled",
+        "visibleAs": "Sichtbar als {{value}}",
+        "remove": "Entfernen",
+        "none": "Keine festen Eigenschaften.",
+        "newProperty": "Eigenschaft {{value}}",
+        "defaultValue": "Wert"
+      }
+    },
+    "preview": {
+      "title": "Lokale Scan-Vorschau",
+      "description": "Extraktion und Auswahl testen, ohne das Inventar zu verändern.",
+      "noWrite": "Keine Änderung",
+      "scannedValue": "Gescannter QR-Wert",
+      "placeholder": "Dekodierten QR-Wert einfügen…",
+      "inputFallback": "Eingabe",
+      "result": "Ergebnis",
+      "identifier": "Kennung",
+      "target": "Ziel",
+      "unit": "Einheit",
+      "findOrCreate": "Suchen oder erstellen",
+      "findExisting": "Nur vorhandene suchen",
+      "notSelected": "Nicht ausgewählt"
+    }
+  }
+}

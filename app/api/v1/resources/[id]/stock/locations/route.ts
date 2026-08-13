@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import {
   getStockLocationBreakdown,
   listStockLocationResources,
@@ -9,7 +9,7 @@ import {
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "stock.read");
   if (authorization.response) return authorization.response;
   const id = z.string().uuid().safeParse((await context.params).id);
   if (!id.success) return Response.json({ error: "Invalid resource id." }, { status: 422 });

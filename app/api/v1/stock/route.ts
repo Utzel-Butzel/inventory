@@ -1,10 +1,10 @@
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import { getStockOverview } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "stock.read");
   if (authorization.response) return authorization.response;
 
   try {

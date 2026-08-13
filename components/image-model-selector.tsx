@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useT } from "next-i18next/client";
 
 const storageKey = "inventory.image-generation-model";
 
@@ -148,7 +149,7 @@ export function useImageModelPreference(): ImageModelPreference {
 export function ImageModelSelector({
   preference,
   disabled = false,
-  label = "Image model",
+  label,
   description,
   className = "",
 }: {
@@ -158,6 +159,7 @@ export function ImageModelSelector({
   description?: string;
   className?: string;
 }) {
+  const { t } = useT("common");
   const selectId = useId();
   const descriptionId = useId();
 
@@ -171,8 +173,8 @@ export function ImageModelSelector({
 
   return (
     <div className={className}>
-      <label htmlFor={selectId} className="block text-[11px] font-semibold text-slate-600">
-        {label}
+      <label htmlFor={selectId} className="block text-[11px] font-semibold text-muted">
+        {label ?? t("models.image")}
       </label>
       <select
         id={selectId}
@@ -182,10 +184,11 @@ export function ImageModelSelector({
         }
         disabled={disabled}
         aria-describedby={description ? descriptionId : undefined}
-        className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600"
+        className="mt-1.5 h-10 w-full rounded-lg border border-border bg-surface px-2.5 text-xs text-muted-strong outline-none transition focus:border-focus focus:ring-4 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:text-muted"
       >
         <option value="">
-          Server default{defaultModel ? ` (${defaultModel.label})` : ""}
+          {t("models.serverDefault")}
+          {defaultModel ? ` (${defaultModel.label})` : ""}
         </option>
         {preference.models.map((model) => (
           <option key={model.id} value={model.id}>
@@ -194,7 +197,7 @@ export function ImageModelSelector({
         ))}
       </select>
       {description ? (
-        <p id={descriptionId} className="mt-1 text-[10px] leading-4 text-slate-600">
+        <p id={descriptionId} className="mt-1 text-[10px] leading-4 text-muted">
           {description}
         </p>
       ) : null}

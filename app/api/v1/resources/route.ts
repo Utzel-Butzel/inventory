@@ -6,7 +6,7 @@ import {
   listResources,
   replayResourceCreation,
 } from "@/lib/resources";
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import {
   hashIdempotentPayload,
   idempotencyResponseHeaders,
@@ -18,6 +18,10 @@ import {
   validateCustomFieldValues,
 } from "@/lib/custom-fields";
 import {
+  TranslationLanguageError,
+  localizeResourceList,
+} from "@/lib/content-translations";
+import {
   assertActiveInventoryType,
   inventoryStructureHttpError,
   synchronizeSpatialContainment,
@@ -26,7 +30,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "inventory.read");
   if (authorization.response) return authorization.response;
 
   const url = new URL(request.url);
@@ -39,11 +43,28 @@ export async function GET(request: Request) {
     page: Number.isFinite(page) ? page : 1,
     pageSize: Number.isFinite(pageSize) ? pageSize : 24,
   });
-  return Response.json(result);
+  try {
+    const localized = await localizeResourceList(
+      result.resources,
+      url.searchParams.get("language"),
+    );
+    return Response.json({
+      ...result,
+      resources: localized.resources,
+      ...(localized.localization
+        ? { localization: localized.localization }
+        : {}),
+    });
+  } catch (error) {
+    if (error instanceof TranslationLanguageError) {
+      return Response.json({ error: error.message }, { status: 422 });
+    }
+    throw error;
+  }
 }
 
 export async function POST(request: Request) {
-  const authorization = await requireIdentity(request, "write");
+  const authorization = await requirePermission(request, "inventory.create");
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
@@ -59,6 +80,23 @@ export async function POST(request: Request) {
     return Response.json(
       { error: "Invalid inventory item.", details: parsed.error.flatten() },
       { status: 422 },
+    );
+  }
+  const createsSpatialData =
+    parsed.data.mapFeatures.length > 0 ||
+    (parsed.data.gpsLatitude !== undefined &&
+      parsed.data.gpsLatitude !== null) ||
+    (parsed.data.gpsLongitude !== undefined &&
+      parsed.data.gpsLongitude !== null) ||
+    (parsed.data.gpsAltitude !== undefined &&
+      parsed.data.gpsAltitude !== null);
+  if (
+    createsSpatialData &&
+    !authorization.identity.permissions.includes("spatial.manage")
+  ) {
+    return Response.json(
+      { error: "You do not have permission to add spatial data." },
+      { status: 403 },
     );
   }
 
@@ -111,13 +149,21 @@ export async function POST(request: Request) {
       ) {
         await synchronizeSpatialContainment(authorization.identity.subject);
       }
-      return Response.json(result.response, {
-        status: result.replayed ? 200 : 201,
-        headers: idempotencyResponseHeaders(
-          idempotency.key,
-          result.replayed,
-        ),
-      });
+      return Response.json(
+        {
+          ...result.response,
+          ...(!result.replayed
+            ? { translation: { status: "queued" as const } }
+            : {}),
+        },
+        {
+          status: result.replayed ? 200 : 201,
+          headers: idempotencyResponseHeaders(
+            idempotency.key,
+            result.replayed,
+          ),
+        },
+      );
     }
 
     const resource = await createResource(values);
@@ -130,7 +176,10 @@ export async function POST(request: Request) {
     ) {
       await synchronizeSpatialContainment(authorization.identity.subject);
     }
-    return Response.json({ resource }, { status: 201 });
+    return Response.json(
+      { resource, translation: { status: "queued" as const } },
+      { status: 201 },
+    );
   } catch (error) {
     const structureFailure = inventoryStructureHttpError(error, "");
     if (structureFailure.status !== 500) {

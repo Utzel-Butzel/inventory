@@ -1,0 +1,65 @@
+{
+  "launch": {
+    "title": "Stücke anhand eines Fotos zählen",
+    "description": "Nehmen Sie ein Foto auf und lassen Sie die Menge von der KI eintragen.",
+    "action": "Ausprobieren"
+  },
+  "header": {
+    "title": "Stückzähler per Foto",
+    "description": "Verteilen Sie die Stücke, fotografieren Sie von oben und vermeiden Sie nach Möglichkeit Überlappungen."
+  },
+  "upload": {
+    "preparing": "Foto wird vorbereitet…",
+    "choose": "Foto aufnehmen oder auswählen",
+    "privacy": "Das Foto wird nur für diese Zählung analysiert und nicht an den Artikel angehängt."
+  },
+  "capture": {
+    "countHint": "Die KI zählt sichtbare {{unit}}, die zu „{{item}}“ passen. Sie können die Menge vor der Buchung korrigieren."
+  },
+  "actions": {
+    "close": "Fotozähler schließen",
+    "removePhoto": "Zählfoto entfernen",
+    "stopWaiting": "Warten beenden",
+    "countPieces": "Stücke zählen",
+    "replacePhoto": "Foto ersetzen",
+    "dismissError": "Fehler schließen",
+    "countAgain": "Erneut zählen",
+    "useAnotherPhoto": "Anderes Foto verwenden"
+  },
+  "preview": {
+    "altHighlighted_one": "Foto mit {{value}} markiertem gezählten Stück",
+    "altHighlighted_other": "Foto mit {{value}} markierten gezählten Stücken",
+    "altSelected": "Für die Stückzählung ausgewähltes Foto",
+    "highlighted_one": "{{value}} markiert",
+    "highlighted_other": "{{value}} markiert"
+  },
+  "result": {
+    "confidence": "{{value}} % Konfidenz",
+    "filled": "Menge automatisch eingetragen — prüfen Sie sie vor der Buchung.",
+    "noneFound": "Keine passenden Stücke gefunden. Versuchen Sie es mit einem deutlicheren Foto.",
+    "estimateWarning": "Dies ist eine Schätzung. Prüfen Sie verdeckte oder überlappende Stücke sorgfältig.",
+    "analyzedWith": "Analysiert mit {{model}}",
+    "exceedsAvailable": "Die ausgewählte Menge überschreitet die derzeit verfügbaren {{quantity}}. Korrigieren Sie sie oder wechseln Sie zum Bestandszugang."
+  },
+  "notices": {
+    "waitingStopped": "Warten beendet. Sie können dieselbe Zählung fortsetzen."
+  },
+  "errors": {
+    "imageFormat": "Wählen Sie ein Foto im Format JPG, PNG, WebP oder HEIC.",
+    "preparePhoto": "Das Foto konnte nicht für die Zählung vorbereitet werden.",
+    "invalidQuantity": "Der Zähler hat eine ungültige Menge zurückgegeben. Versuchen Sie es mit einem anderen Foto.",
+    "markerMismatch": "Der Zähler konnte nicht jedes Stück markieren. Versuchen Sie es mit einem anderen Foto.",
+    "invalidProcessingResponse": "Der Zähler hat eine ungültige Verarbeitungsantwort zurückgegeben.",
+    "requestFailed": "Anfrage fehlgeschlagen (HTTP {{status}}).",
+    "invalidResult": "Der Zähler hat ein ungültiges Ergebnis zurückgegeben.",
+    "invalidJobDeadline": "Der Zähler hat eine ungültige Auftragsfrist zurückgegeben.",
+    "expired": "Die Zählung hat zu lange gedauert und ist abgelaufen. Versuchen Sie es erneut.",
+    "stoppedTimeout": "Die Zählung hat zu lange gedauert und wurde beendet. Versuchen Sie es mit einem anderen Foto.",
+    "countPhoto": "Die Objekte auf diesem Foto konnten nicht gezählt werden."
+  },
+  "fallback": {
+    "cameraPhoto": "Kamerafoto",
+    "detectedItem": "Objekte",
+    "model": "KI-Bilderkennung"
+  }
+}

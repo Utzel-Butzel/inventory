@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { NewResource } from "@/db/schema";
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import {
   customFieldHttpError,
   validateCustomFieldValues,
@@ -383,8 +383,36 @@ const validationDetails = (
     return field ? `${field}: ${message}` : message;
   });
 
+const csvContainsSpatialData = (headers: string[], rows: CsvRow[]) => {
+  for (const header of ["gps_latitude", "gps_longitude", "gps_altitude"]) {
+    const index = headers.indexOf(header);
+    if (
+      index >= 0 &&
+      rows.some((row) => removeSpreadsheetGuard(row.cells[index] ?? "").trim())
+    ) {
+      return true;
+    }
+  }
+
+  const mapFeaturesIndex = headers.indexOf("map_features");
+  if (mapFeaturesIndex < 0) return false;
+  return rows.some((row) => {
+    const value = removeSpreadsheetGuard(
+      row.cells[mapFeaturesIndex] ?? "",
+    ).trim();
+    if (!value) return false;
+    try {
+      return parseMapFeatures(value).length > 0;
+    } catch {
+      // Malformed non-empty spatial data remains protected. Validation later
+      // reports the row-level syntax error to authorized importers.
+      return true;
+    }
+  });
+};
+
 export async function POST(request: Request) {
-  const authorization = await requireIdentity(request, "write");
+  const authorization = await requirePermission(request, "inventory.import");
   if (authorization.response) return authorization.response;
 
   const idempotency = readIdempotencyKey(request);
@@ -507,6 +535,15 @@ export async function POST(request: Request) {
     return Response.json(
       { error: `One import may contain at most ${MAX_DATA_ROWS} rows.` },
       { status: 413 },
+    );
+  }
+  if (
+    csvContainsSpatialData(headers, dataRows) &&
+    !authorization.identity.permissions.includes("spatial.manage")
+  ) {
+    return Response.json(
+      { error: "You do not have permission to import spatial data." },
+      { status: 403 },
     );
   }
 

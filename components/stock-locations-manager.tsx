@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useT } from "next-i18next/client";
 
 import { Button, Card, Skeleton } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
@@ -61,17 +62,25 @@ export type StockLocationsManagerProps = {
 
 const UNASSIGNED = "unassigned";
 
-function quantityLabel(quantity: number, unitName: string) {
-  const unit = unitName.trim() || "unit";
-  return `${quantity.toLocaleString()} ${unit}${quantity === 1 ? "" : "s"}`;
+function quantityLabel(
+  quantity: number,
+  unitName: string,
+  numberFormat: Intl.NumberFormat,
+  fallbackUnit: string,
+) {
+  const unit = unitName.trim() || fallbackUnit;
+  return `${numberFormat.format(quantity)} ${unit}`;
 }
 
 export function StockLocationsManager({
   resourceId,
   canEdit,
-  unitName = "unit",
+  unitName = "",
   onStockChanged,
 }: StockLocationsManagerProps) {
+  const { t, i18n } = useT("stock");
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
+  const numberFormat = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const [data, setData] = useState<LocationsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -96,14 +105,14 @@ export function StockLocationsManager({
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Unable to load stock locations.",
+            : t("locations.errors.load"),
         );
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [resourceId],
+    [resourceId, t],
   );
 
   useEffect(() => {
@@ -117,7 +126,7 @@ export function StockLocationsManager({
         ? [
             {
               id: UNASSIGNED,
-              name: "Unassigned",
+              name: t("locations.unassigned"),
               quantity: data.breakdown.unassignedQuantity,
             },
           ]
@@ -130,12 +139,12 @@ export function StockLocationsManager({
           quantity: location.quantity,
         })),
     ];
-  }, [data]);
+  }, [data, t]);
 
   const destinationOptions = useMemo(() => {
     if (!data) return [];
     return [
-      { id: UNASSIGNED, name: "Unassigned" },
+      { id: UNASSIGNED, name: t("locations.unassigned") },
       ...data.availableLocations
         .filter(
           (location) =>
@@ -143,7 +152,7 @@ export function StockLocationsManager({
         )
         .map((location) => ({ id: location.id, name: location.name })),
     ];
-  }, [data, resourceId]);
+  }, [data, resourceId, t]);
 
   useEffect(() => {
     if (!sourceOptions.length) {
@@ -176,10 +185,10 @@ export function StockLocationsManager({
 
   const nameForLocation = (id: string) =>
     id === UNASSIGNED
-      ? "Unassigned"
+      ? t("locations.unassigned")
       : destinationOptions.find((option) => option.id === id)?.name ??
         sourceOptions.find((option) => option.id === id)?.name ??
-        "Location";
+        t("locations.locationFallback");
 
   const submitTransfer = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -192,7 +201,7 @@ export function StockLocationsManager({
       !destination ||
       destination === source
     ) {
-      setError("Choose two different locations and a valid whole-number quantity.");
+      setError(t("locations.errors.validTransfer"));
       return;
     }
 
@@ -213,7 +222,7 @@ export function StockLocationsManager({
           delta: 0,
           quantity: parsedQuantity,
           type: "transfer",
-          reason: "Stock location transfer",
+          reason: t("locations.transferReason"),
           location: movementLocation,
           fromLocationResourceId: source === UNASSIGNED ? null : source,
           toLocationResourceId:
@@ -221,7 +230,16 @@ export function StockLocationsManager({
         }),
       });
       setNotice(
-        `Moved ${quantityLabel(parsedQuantity, unitName)} from ${sourceName} to ${destinationName}.`,
+        t("locations.notices.moved", {
+          quantity: quantityLabel(
+            parsedQuantity,
+            unitName,
+            numberFormat,
+            t("locations.unit"),
+          ),
+          source: sourceName,
+          destination: destinationName,
+        }),
       );
       setQuantity("1");
       await loadLocations(true);
@@ -230,7 +248,7 @@ export function StockLocationsManager({
       setError(
         transferError instanceof Error
           ? transferError.message
-          : "Unable to move this stock.",
+          : t("locations.errors.move"),
       );
     } finally {
       setPosting(false);
@@ -240,7 +258,7 @@ export function StockLocationsManager({
   if (loading && !data) {
     return (
       <Card className="overflow-hidden">
-        <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+        <div className="border-b border-border px-5 py-4 sm:px-6">
           <Skeleton className="h-10 w-56" />
         </div>
         <div className="space-y-3 p-5 sm:p-6">
@@ -255,12 +273,12 @@ export function StockLocationsManager({
   if (!data) {
     return (
       <Card className="p-6">
-        <div className="flex items-start gap-3 text-sm text-rose-700">
+        <div className="flex items-start gap-3 text-sm text-danger">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div>
-            <p className="font-semibold">Stock locations are unavailable</p>
-            <p className="mt-1 text-xs leading-5 text-rose-600">
-              {error || "The location breakdown could not be loaded."}
+            <p className="font-semibold">{t("locations.unavailable.title")}</p>
+            <p className="mt-1 text-xs leading-5 text-danger">
+              {error || t("locations.unavailable.description")}
             </p>
             <Button
               size="sm"
@@ -268,7 +286,7 @@ export function StockLocationsManager({
               className="mt-4"
               onClick={() => void loadLocations()}
             >
-              Try again
+              {t("locations.actions.tryAgain")}
             </Button>
           </div>
         </div>
@@ -289,15 +307,15 @@ export function StockLocationsManager({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
+      <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-700">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
             <Warehouse className="size-4" aria-hidden="true" />
           </span>
           <div>
-            <h2 className="text-sm font-semibold text-slate-950">Stock by location</h2>
-            <p className="mt-0.5 text-xs leading-4 text-slate-600">
-              The total stays simple; expand it only when placement matters.
+            <h2 className="text-sm font-semibold text-foreground">{t("locations.title")}</h2>
+            <p className="mt-0.5 text-xs leading-4 text-muted">
+              {t("locations.description")}
             </p>
           </div>
         </div>
@@ -305,9 +323,9 @@ export function StockLocationsManager({
           type="button"
           onClick={() => void loadLocations(true)}
           disabled={refreshing}
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
-          aria-label="Refresh stock locations"
-          title="Refresh stock locations"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-surface-hover hover:text-muted-strong disabled:opacity-50"
+          aria-label={t("locations.actions.refresh")}
+          title={t("locations.actions.refresh")}
         >
           <RefreshCw
             className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
@@ -317,73 +335,73 @@ export function StockLocationsManager({
       </div>
 
       {error ? (
-        <div className="mx-5 mt-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 sm:mx-6">
+        <div className="mx-5 mt-4 flex items-start justify-between gap-3 rounded-xl border border-danger-border bg-danger-soft px-3 py-2.5 text-xs text-danger sm:mx-6">
           <span className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             {error}
           </span>
-          <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
+          <button type="button" onClick={() => setError(null)} aria-label={t("locations.actions.dismissError")}>
             <X className="size-3.5" aria-hidden="true" />
           </button>
         </div>
       ) : null}
       {notice ? (
-        <div className="mx-5 mt-4 flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800 sm:mx-6">
+        <div className="mx-5 mt-4 flex items-start justify-between gap-3 rounded-xl border border-success-border bg-success-soft px-3 py-2.5 text-xs text-success sm:mx-6">
           <span className="flex items-center gap-2">
             <Check className="size-3.5 shrink-0" aria-hidden="true" /> {notice}
           </span>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">
+          <button type="button" onClick={() => setNotice(null)} aria-label={t("locations.actions.dismissMessage")}>
             <X className="size-3.5" aria-hidden="true" />
           </button>
         </div>
       ) : null}
 
       <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">
-        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Total</p>
-          <p className="mt-1.5 text-xl font-semibold tracking-tight text-slate-950">
-            {totalQuantity.toLocaleString()}
+        <div className="rounded-xl border border-border bg-surface-subtle p-3.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{t("locations.metrics.total")}</p>
+          <p className="mt-1.5 text-xl font-semibold tracking-tight text-foreground">
+            {numberFormat.format(totalQuantity)}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Assigned</p>
-          <p className="mt-1.5 text-xl font-semibold tracking-tight text-slate-950">
-            {data.breakdown.assignedQuantity.toLocaleString()}
+        <div className="rounded-xl border border-border bg-surface-subtle p-3.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{t("locations.metrics.assigned")}</p>
+          <p className="mt-1.5 text-xl font-semibold tracking-tight text-foreground">
+            {numberFormat.format(data.breakdown.assignedQuantity)}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Unassigned</p>
-          <p className="mt-1.5 text-xl font-semibold tracking-tight text-slate-950">
-            {data.breakdown.unassignedQuantity.toLocaleString()}
+        <div className="rounded-xl border border-border bg-surface-subtle p-3.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{t("locations.unassigned")}</p>
+          <p className="mt-1.5 text-xl font-semibold tracking-tight text-foreground">
+            {numberFormat.format(data.breakdown.unassignedQuantity)}
           </p>
         </div>
       </div>
 
-      <div className="border-y border-slate-100">
+      <div className="border-y border-border">
         {!hasStock ? (
           <div className="px-6 py-10 text-center">
-            <PackageOpen className="mx-auto size-6 text-slate-600" aria-hidden="true" />
-            <p className="mt-3 text-sm font-semibold text-slate-700">No stock to place</p>
-            <p className="mt-1 text-xs text-slate-600">
-              Book stock in first, then assign it to a location.
+            <PackageOpen className="mx-auto size-6 text-muted" aria-hidden="true" />
+            <p className="mt-3 text-sm font-semibold text-muted-strong">{t("locations.empty.title")}</p>
+            <p className="mt-1 text-xs text-muted">
+              {t("locations.empty.description")}
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-border">
             <div className="flex items-center gap-3 px-5 py-3.5 sm:px-6">
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-muted text-muted">
                 <Boxes className="size-3.5" aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="truncate text-xs font-semibold text-slate-800">Unassigned</p>
-                  <p className="shrink-0 text-xs font-semibold tabular-nums text-slate-700">
-                    {data.breakdown.unassignedQuantity.toLocaleString()}
+                  <p className="truncate text-xs font-semibold text-foreground">{t("locations.unassigned")}</p>
+                  <p className="shrink-0 text-xs font-semibold tabular-nums text-muted-strong">
+                    {numberFormat.format(data.breakdown.unassignedQuantity)}
                   </p>
                 </div>
-                <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100">
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-muted">
                   <div
-                    className="h-full rounded-full bg-slate-400"
+                    className="h-full rounded-full bg-border-strong"
                     style={{
                       width: `${Math.min(100, (data.breakdown.unassignedQuantity / Math.max(1, totalQuantity)) * 100)}%`,
                     }}
@@ -398,26 +416,28 @@ export function StockLocationsManager({
                   key={location.locationResourceId}
                   className="flex items-center gap-3 px-5 py-3.5 sm:px-6"
                 >
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-600">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
                     <MapPin className="size-3.5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-slate-800">
+                        <p className="truncate text-xs font-semibold text-foreground">
                           {location.name}
                         </p>
-                        <p className="mt-0.5 text-[10px] capitalize text-slate-600">
-                          {location.type}
+                        <p className="mt-0.5 text-[10px] capitalize text-muted">
+                          {t(`locations.types.${location.type}`, {
+                            defaultValue: location.type,
+                          })}
                         </p>
                       </div>
-                      <p className="shrink-0 text-xs font-semibold tabular-nums text-slate-700">
-                        {location.quantity.toLocaleString()}
+                      <p className="shrink-0 text-xs font-semibold tabular-nums text-muted-strong">
+                        {numberFormat.format(location.quantity)}
                       </p>
                     </div>
-                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100">
+                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-muted">
                       <div
-                        className="h-full rounded-full bg-violet-500"
+                        className="h-full rounded-full bg-brand-soft0"
                         style={{
                           width: `${Math.min(100, (location.quantity / Math.max(1, totalQuantity)) * 100)}%`,
                         }}
@@ -434,59 +454,56 @@ export function StockLocationsManager({
         <form onSubmit={submitTransfer} className="p-5 sm:p-6">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-xs font-semibold text-slate-900">Move stock</h3>
-              <p className="mt-1 text-[11px] leading-4 text-slate-600">
-                Transfers change only where stock is stored, never the total.
+              <h3 className="text-xs font-semibold text-foreground">{t("locations.move.title")}</h3>
+              <p className="mt-1 text-[11px] leading-4 text-muted">
+                {t("locations.move.description")}
               </p>
             </div>
-            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold capitalize text-slate-600">
-              {data.breakdown.trackingMode}
+            <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-semibold capitalize text-muted">
+              {t(`locations.tracking.${data.breakdown.trackingMode}`)}
             </span>
           </div>
 
           {data.breakdown.trackingMode === "serialized" ? (
-            <div className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-3 text-[11px] leading-4 text-blue-700">
+            <div className="flex items-start gap-2 rounded-xl border border-info-border bg-info-soft px-3.5 py-3 text-[11px] leading-4 text-info">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              Move serialized stock by editing the individual unit. This keeps each
-              physical item and its location history in sync.
+              {t("locations.move.serializedHelp")}
             </div>
           ) : sourceOptions.length === 0 ? (
-            <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-[11px] leading-4 text-slate-600">
+            <div className="flex items-start gap-2 rounded-xl border border-border bg-surface-subtle px-3.5 py-3 text-[11px] leading-4 text-muted">
               <PackageOpen className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              There is no stock available to move. Book stock in before assigning a
-              structured location.
+              {t("locations.move.noStock")}
             </div>
           ) : !hasTransferDestination ? (
-            <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-3.5 py-3 text-[11px] leading-4 text-amber-700">
+            <div className="flex items-start gap-2 rounded-xl border border-warning-border bg-warning-soft px-3.5 py-3 text-[11px] leading-4 text-warning">
               <Warehouse className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              Create an inventory item whose type can contain stock before assigning a
-              structured location.
+              {t("locations.move.noDestination")}
             </div>
           ) : (
             <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_100px]">
-              <label className="block text-[11px] font-semibold text-slate-600">
-                From
+              <label className="block text-[11px] font-semibold text-muted">
+                {t("locations.move.from")}
                 <select
                   value={source}
                   onChange={(event) => setSource(event.target.value)}
                   disabled={transferDisabled}
-                  className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:bg-slate-50"
+                  className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs text-foreground outline-none focus:border-focus focus:ring-4 focus:ring-focus/10 disabled:bg-surface-subtle"
                 >
                   {sourceOptions.map((option) => (
                     <option key={option.id} value={option.id}>
-                      {option.name} · {option.quantity}
+                      {option.name} · {numberFormat.format(option.quantity)}
                     </option>
                   ))}
                 </select>
               </label>
-              <MoveRight className="mb-3 hidden size-4 text-slate-600 sm:block" aria-hidden="true" />
-              <label className="block text-[11px] font-semibold text-slate-600">
-                To
+              <MoveRight className="mb-3 hidden size-4 text-muted sm:block" aria-hidden="true" />
+              <label className="block text-[11px] font-semibold text-muted">
+                {t("locations.move.to")}
                 <select
                   value={destination}
                   onChange={(event) => setDestination(event.target.value)}
                   disabled={transferDisabled}
-                  className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:bg-slate-50"
+                  className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs text-foreground outline-none focus:border-focus focus:ring-4 focus:ring-focus/10 disabled:bg-surface-subtle"
                 >
                   {destinationOptions
                     .filter((option) => option.id !== source)
@@ -497,8 +514,8 @@ export function StockLocationsManager({
                     ))}
                 </select>
               </label>
-              <label className="block text-[11px] font-semibold text-slate-600">
-                Quantity
+              <label className="block text-[11px] font-semibold text-muted">
+                {t("locations.move.quantity")}
                 <input
                   type="number"
                   min="1"
@@ -508,7 +525,7 @@ export function StockLocationsManager({
                   value={quantity}
                   onChange={(event) => setQuantity(event.target.value)}
                   disabled={transferDisabled}
-                  className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:bg-slate-50"
+                  className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs text-foreground outline-none focus:border-focus focus:ring-4 focus:ring-focus/10 disabled:bg-surface-subtle"
                 />
               </label>
             </div>
@@ -517,11 +534,18 @@ export function StockLocationsManager({
           {data.breakdown.trackingMode === "bulk" &&
           sourceOptions.length > 0 &&
           hasTransferDestination ? (
-            <div className="mt-4 flex items-center justify-between gap-4 border-t border-slate-100 pt-4">
-              <p className="text-[10px] text-slate-600">
+            <div className="mt-4 flex items-center justify-between gap-4 border-t border-border pt-4">
+              <p className="text-[10px] text-muted">
                 {sourceQuantity > 0
-                  ? `${quantityLabel(sourceQuantity, unitName)} available at source`
-                  : "No stock available at the source"}
+                  ? t("locations.move.availableAtSource", {
+                      quantity: quantityLabel(
+                        sourceQuantity,
+                        unitName,
+                        numberFormat,
+                        t("locations.unit"),
+                      ),
+                    })
+                  : t("locations.move.noneAtSource")}
               </p>
               <Button type="submit" size="sm" disabled={transferDisabled || posting}>
                 {posting ? (
@@ -529,14 +553,14 @@ export function StockLocationsManager({
                 ) : (
                   <ArrowRight className="size-3.5" aria-hidden="true" />
                 )}
-                Move stock
+                {t("locations.move.action")}
               </Button>
             </div>
           ) : null}
         </form>
       ) : (
-        <div className="px-5 py-4 text-[11px] leading-5 text-slate-600 sm:px-6">
-          You can review location balances. Editing requires inventory write access.
+        <div className="px-5 py-4 text-[11px] leading-5 text-muted sm:px-6">
+          {t("locations.readOnly")}
         </div>
       )}
     </Card>

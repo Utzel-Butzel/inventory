@@ -43,4 +43,44 @@ final class APIClientConfigurationTests: XCTestCase {
             )
         )
     }
+
+    func testDeleteResourceUsesResourceDeleteEndpoint() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [DeleteResourceURLProtocol.self]
+        let client = try APIClient(
+            serverURL: try XCTUnwrap(URL(string: "https://inventory.example")),
+            credentialStore: InMemoryCredentialStore(token: "delete-test-token"),
+            session: URLSession(configuration: configuration)
+        )
+        let resourceID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+
+        try await client.deleteResource(id: resourceID)
+    }
+}
+
+private final class DeleteResourceURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard request.httpMethod == "DELETE",
+              request.url?.path == "/api/v1/resources/11111111-1111-1111-1111-111111111111",
+              request.value(forHTTPHeaderField: "Authorization") == "Bearer delete-test-token",
+              let url = request.url,
+              let response = HTTPURLResponse(
+                  url: url,
+                  statusCode: 204,
+                  httpVersion: "HTTP/1.1",
+                  headerFields: nil
+              ) else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() { }
 }

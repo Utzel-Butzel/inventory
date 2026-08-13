@@ -1,4 +1,4 @@
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import { listResources, type ResourceWithMedia } from "@/lib/resources";
 
 export const dynamic = "force-dynamic";
@@ -80,7 +80,7 @@ const resourceRow = (
 });
 
 export async function GET(request: Request) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "inventory.export");
   if (authorization.response) return authorization.response;
 
   const firstPage = await listResources({ page: 1, pageSize: PAGE_SIZE });

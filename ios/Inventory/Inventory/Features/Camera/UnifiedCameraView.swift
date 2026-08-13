@@ -57,6 +57,7 @@ struct UnifiedCameraView: View {
     @State private var countResource: InventoryResource?
     @State private var pendingPhotoRequest: CameraPhotoRequest?
     @State private var shutterFlash = false
+    @State private var isPinchingZoom = false
 
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showCaptureDetails = false
@@ -109,6 +110,13 @@ struct UnifiedCameraView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, geometry.safeAreaInsets.top + 8)
 
+                    if mode == .capture, !captureModel.photos.isEmpty {
+                        captureQuickBar
+                            .padding(.horizontal, 16)
+                            .padding(.top, 10)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
                     Spacer(minLength: 12)
 
                     cameraControlDeck(
@@ -119,9 +127,14 @@ struct UnifiedCameraView: View {
                     )
                     .padding(.bottom, max(8, geometry.safeAreaInsets.bottom))
                 }
+                .animation(.easeInOut(duration: 0.2), value: captureModel.photos.count)
             }
             .background(.black)
             .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                cameraDetailsSwipe(viewHeight: geometry.size.height)
+            )
         }
         .statusBarHidden()
         .interactiveDismissDisabled(countModel.phase == .booking)
@@ -311,6 +324,7 @@ struct UnifiedCameraView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .simultaneousGesture(cameraModeSwipe)
+        .simultaneousGesture(cameraZoomGesture)
     }
 
     private var cameraTopBar: some View {
@@ -324,17 +338,6 @@ struct UnifiedCameraView: View {
             .foregroundStyle(.white)
             .disabled(countModel.phase == .booking)
             .accessibilityLabel("Kamera schließen")
-
-            Spacer()
-
-            Label(cameraLabel, systemImage: "circle.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(.black.opacity(0.48), in: Capsule())
 
             Spacer()
 
@@ -377,6 +380,49 @@ struct UnifiedCameraView: View {
         }
     }
 
+    private var captureQuickBar: some View {
+        HStack(spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(captureModel.photos) { photo in
+                        Button(action: openCaptureDetails) {
+                            LocalThumbnail(url: photo.fileURL, size: 48)
+                                .clipShape(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                )
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .stroke(.white.opacity(0.55), lineWidth: 1)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Aufgenommenes Foto anzeigen")
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(action: submitCapture) {
+                Image(systemName: "arrow.up")
+                    .font(.headline.bold())
+                    .foregroundStyle(InventoryTheme.ink)
+                    .frame(width: 48, height: 48)
+                    .background(InventoryTheme.lime, in: Circle())
+                    .overlay {
+                        Circle().stroke(.white.opacity(0.35), lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .disabled(!captureModel.canSubmit || captureModel.processingCount > 0)
+            .opacity(captureModel.processingCount == 0 ? 1 : 0.55)
+            .accessibilityLabel("Inventar hochladen")
+            .accessibilityHint(
+                "Lädt \(captureModel.photos.count) aufgenommene Fotos hoch"
+            )
+        }
+        .frame(height: 48)
+    }
+
     private func cameraControlDeck(viewportAspectRatio: CGFloat) -> some View {
         VStack(spacing: 14) {
             if !showingCountPhoto {
@@ -403,7 +449,7 @@ struct UnifiedCameraView: View {
     }
 
     private var zoomSelector: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             ForEach(camera.zoomPresets) { preset in
                 let selected = abs(camera.selectedZoomFactor - preset.displayFactor) < 0.05
                 Button {
@@ -412,18 +458,19 @@ struct UnifiedCameraView: View {
                     Text(preset.label)
                         .font(.subheadline.monospacedDigit().weight(.semibold))
                         .foregroundStyle(selected ? .yellow : .white)
-                        .frame(width: selected ? 52 : 38, height: selected ? 52 : 38)
+                        .frame(width: selected ? 46 : 34, height: selected ? 46 : 34)
                         .background(
                             selected ? Color.black.opacity(0.52) : Color.black.opacity(0.22),
                             in: Circle()
                         )
+                        .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Zoom \(preset.label)")
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 54)
+        .frame(maxWidth: .infinity, minHeight: 48)
         .animation(.easeInOut(duration: 0.16), value: camera.selectedZoomFactor)
     }
 
@@ -1131,24 +1178,6 @@ struct UnifiedCameraView: View {
         return true
     }
 
-    private var cameraLabel: String {
-        switch mode {
-        case .capture:
-            return captureModel.processingCount > 0 ? "Foto wird vorbereitet" : "Inventarfoto"
-        case .scan:
-            return isResolvingCode ? "Wird gesucht …" : "Code ins Quadrat halten"
-        case .count:
-            if !state.canUseAI { return "Fotozählung gesperrt" }
-            if countResource == nil {
-                return isResolvingCode ? "Artikel wird gesucht …" : "Artikelcode scannen"
-            }
-            if countModel.phase == .preparingPhoto { return "Foto wird vorbereitet" }
-            if countModel.phase == .analyzing { return "KI zählt" }
-            if countModel.photoURL != nil { return "Zählfoto" }
-            return "Bereit zum Zählen"
-        }
-    }
-
     private var detailsBadgeText: String? {
         switch mode {
         case .capture:
@@ -1163,7 +1192,8 @@ struct UnifiedCameraView: View {
     private var cameraModeSwipe: some Gesture {
         DragGesture(minimumDistance: 32)
             .onEnded { value in
-                guard countModel.phase != .booking,
+                guard !isPinchingZoom,
+                      countModel.phase != .booking,
                       abs(value.translation.width) > abs(value.translation.height),
                       abs(value.translation.width) >= 52,
                       let currentIndex = CameraMode.allCases.firstIndex(of: mode) else {
@@ -1175,6 +1205,35 @@ struct UnifiedCameraView: View {
                 withAnimation(.easeInOut(duration: 0.18)) {
                     mode = CameraMode.allCases[nextIndex]
                 }
+            }
+    }
+
+    private var cameraZoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { magnification in
+                isPinchingZoom = true
+                camera.updatePinchZoom(magnification: magnification)
+            }
+            .onEnded { magnification in
+                camera.endPinchZoom(magnification: magnification)
+                DispatchQueue.main.async {
+                    isPinchingZoom = false
+                }
+            }
+    }
+
+    private func cameraDetailsSwipe(viewHeight: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                let horizontalDistance = abs(value.translation.width)
+                let verticalDistance = value.translation.height
+                guard !isPinchingZoom,
+                      value.startLocation.y >= viewHeight * 0.6,
+                      verticalDistance <= -56,
+                      abs(verticalDistance) > horizontalDistance else {
+                    return
+                }
+                openCaptureDetails()
             }
     }
 

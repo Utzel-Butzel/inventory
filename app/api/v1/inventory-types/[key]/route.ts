@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requireAdminSession } from "@/lib/api-auth";
+import { requireSessionPermission } from "@/lib/api-auth";
 import {
   inventoryStructureHttpError,
   updateInventoryType,
@@ -30,7 +30,7 @@ async function parsedKey(context: Context) {
 }
 
 export async function PATCH(request: Request, context: Context) {
-  const authorization = await requireAdminSession(request);
+  const authorization = await requireSessionPermission(request, "settings.inventory-types.manage");
   if (authorization.response) return authorization.response;
   const key = await parsedKey(context);
   if (!key.success) return Response.json({ error: "Invalid type key." }, { status: 422 });
@@ -64,7 +64,7 @@ export async function PATCH(request: Request, context: Context) {
 }
 
 export async function DELETE(request: Request, context: Context) {
-  const authorization = await requireAdminSession(request);
+  const authorization = await requireSessionPermission(request, "settings.inventory-types.manage");
   if (authorization.response) return authorization.response;
   const key = await parsedKey(context);
   if (!key.success) return Response.json({ error: "Invalid type key." }, { status: 422 });

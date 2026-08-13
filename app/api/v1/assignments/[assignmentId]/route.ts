@@ -1,6 +1,12 @@
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { requireIdentity } from "@/lib/api-auth";
+import { inventoryAssignments } from "@/db/schema";
+import {
+  requireIdentity,
+  requireResourcePermission,
+} from "@/lib/api-auth";
+import { db } from "@/lib/db";
 import {
   completeInventoryAssignment,
   inventoryAssignmentHttpError,
@@ -24,8 +30,8 @@ const completionSchema = z
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
-  if (authorization.response) return authorization.response;
+  const authentication = await requireIdentity(request, "write");
+  if (authentication.response) return authentication.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
   if (!idempotency.key) {
@@ -41,6 +47,20 @@ export async function PATCH(request: Request, context: Context) {
   if (!assignmentId.success) {
     return Response.json({ error: "Invalid assignment id." }, { status: 422 });
   }
+  const [assignment] = await db
+    .select({ resourceId: inventoryAssignments.resourceId })
+    .from(inventoryAssignments)
+    .where(eq(inventoryAssignments.id, assignmentId.data))
+    .limit(1);
+  if (!assignment) {
+    return Response.json({ error: "Assignment not found" }, { status: 404 });
+  }
+  const authorization = await requireResourcePermission(
+    request,
+    "assignments.manage",
+    assignment.resourceId,
+  );
+  if (authorization.response) return authorization.response;
 
   let payload: unknown;
   try {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requireAdminSession, requireIdentity } from "@/lib/api-auth";
+import { requirePermission, requireSessionPermission } from "@/lib/api-auth";
 import {
   createCustomFieldDefinition,
   customFieldHttpError,
@@ -19,7 +19,7 @@ const querySchema = z
   .strict();
 
 export async function GET(request: Request) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "inventory.read");
   if (authorization.response) return authorization.response;
 
   const url = new URL(request.url);
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const authorization = await requireAdminSession(request);
+  const authorization = await requireSessionPermission(request, "settings.custom-fields.manage");
   if (authorization.response) return authorization.response;
 
   let payload: unknown;

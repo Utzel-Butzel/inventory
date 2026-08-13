@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { userRoles } from "@/db/schema";
+import { stockUnitStatuses } from "@/db/schema";
+import {
+  accessRuleOperators,
+  appPermissions,
+  resourceRulePermissions,
+} from "@/lib/access-control-contract";
 import {
   customFieldEntityTypes,
   customFieldTypes,
@@ -65,6 +70,11 @@ const customFieldDefinitionShape = {
   resourceTypes: z.array(inventoryTypeKeySchema).max(100),
   categories: z.array(z.string().trim().min(1).max(120)).max(40),
   options: z.array(customFieldOptionSchema).max(100),
+  referenceEntityType: z.enum(customFieldEntityTypes).nullable(),
+  referenceMultiple: z.boolean(),
+  referenceResourceTypes: z.array(inventoryTypeKeySchema).max(100),
+  referenceCategories: z.array(z.string().trim().min(1).max(120)).max(40),
+  referenceStatuses: z.array(z.string().trim().min(1).max(32)).max(40),
   position: z.number().int().min(0).max(100_000),
 };
 
@@ -77,6 +87,11 @@ const validateCustomFieldDefinition = (
     resourceTypes?: string[];
     categories?: string[];
     options?: Array<{ value: string }>;
+    referenceEntityType?: (typeof customFieldEntityTypes)[number] | null;
+    referenceMultiple?: boolean;
+    referenceResourceTypes?: string[];
+    referenceCategories?: string[];
+    referenceStatuses?: string[];
   },
   context: z.RefinementCtx,
 ) => {
@@ -107,6 +122,21 @@ const validateCustomFieldDefinition = (
         code: "custom",
         path: ["categories"],
         message: "Categories must be unique (case-insensitive).",
+      });
+    }
+  }
+  for (const [path, entries] of [
+    ["referenceResourceTypes", value.referenceResourceTypes],
+    ["referenceCategories", value.referenceCategories],
+    ["referenceStatuses", value.referenceStatuses],
+  ] as const) {
+    if (!entries) continue;
+    const normalized = entries.map((entry) => entry.toLowerCase());
+    if (new Set(normalized).size !== normalized.length) {
+      context.addIssue({
+        code: "custom",
+        path: [path],
+        message: "Reference filters must be unique (case-insensitive).",
       });
     }
   }
@@ -148,6 +178,43 @@ const validateCustomFieldDefinition = (
         message: "Number limits are only supported by number fields.",
       });
     }
+    if (value.fieldType === "reference") {
+      if (!value.referenceEntityType) {
+        context.addIssue({
+          code: "custom",
+          path: ["referenceEntityType"],
+          message: "Reference fields require a target collection.",
+        });
+      }
+      if (
+        value.referenceEntityType === "stock_unit" &&
+        value.referenceStatuses?.some(
+          (status) =>
+            !stockUnitStatuses.includes(
+              status.toLowerCase() as (typeof stockUnitStatuses)[number],
+            ),
+        )
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["referenceStatuses"],
+          message: "Stock-unit status filters must use a supported stock status.",
+        });
+      }
+    } else if (
+      value.referenceEntityType !== undefined &&
+      (value.referenceEntityType !== null ||
+        value.referenceMultiple === true ||
+        (value.referenceResourceTypes?.length ?? 0) > 0 ||
+        (value.referenceCategories?.length ?? 0) > 0 ||
+        (value.referenceStatuses?.length ?? 0) > 0)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["referenceEntityType"],
+        message: "Reference settings are only supported by reference fields.",
+      });
+    }
   }
 };
 
@@ -166,6 +233,21 @@ export const customFieldDefinitionCreateSchema = z
     resourceTypes: customFieldDefinitionShape.resourceTypes.optional().default([]),
     categories: customFieldDefinitionShape.categories.optional().default([]),
     options: customFieldDefinitionShape.options.optional().default([]),
+    referenceEntityType: customFieldDefinitionShape.referenceEntityType
+      .optional()
+      .default(null),
+    referenceMultiple: customFieldDefinitionShape.referenceMultiple
+      .optional()
+      .default(false),
+    referenceResourceTypes: customFieldDefinitionShape.referenceResourceTypes
+      .optional()
+      .default([]),
+    referenceCategories: customFieldDefinitionShape.referenceCategories
+      .optional()
+      .default([]),
+    referenceStatuses: customFieldDefinitionShape.referenceStatuses
+      .optional()
+      .default([]),
     position: customFieldDefinitionShape.position.optional().default(0),
   })
   .strict()
@@ -185,6 +267,11 @@ export const customFieldDefinitionPatchSchema = z
     resourceTypes: customFieldDefinitionShape.resourceTypes.optional(),
     categories: customFieldDefinitionShape.categories.optional(),
     options: customFieldDefinitionShape.options.optional(),
+    referenceEntityType: customFieldDefinitionShape.referenceEntityType.optional(),
+    referenceMultiple: customFieldDefinitionShape.referenceMultiple.optional(),
+    referenceResourceTypes: customFieldDefinitionShape.referenceResourceTypes.optional(),
+    referenceCategories: customFieldDefinitionShape.referenceCategories.optional(),
+    referenceStatuses: customFieldDefinitionShape.referenceStatuses.optional(),
     position: customFieldDefinitionShape.position.optional(),
   })
   .strict()
@@ -357,16 +444,97 @@ export const userCreateInputSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(320),
   name: z.string().trim().min(1).max(160),
   password: passwordSchema,
-  role: z.enum(userRoles).default("editor"),
+  role: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/).default("editor"),
 });
 
 export const userUpdateInputSchema = z
   .object({
     name: z.string().trim().min(1).max(160).optional(),
-    role: z.enum(userRoles).optional(),
+    role: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/).optional(),
     isActive: z.boolean().optional(),
     password: passwordSchema.optional(),
   })
   .refine((value) => Object.values(value).some((entry) => entry !== undefined), {
     message: "Provide at least one user change.",
+  });
+
+export const accessRoleInputSchema = z.object({
+  key: z.string().trim().toLowerCase().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(1_000).default(""),
+  permissions: z.array(z.enum(appPermissions)).max(appPermissions.length).default([]),
+});
+
+export const accessRolePatchSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(1_000).optional(),
+    permissions: z
+      .array(z.enum(appPermissions))
+      .max(appPermissions.length)
+      .optional(),
+  })
+  .refine((value) => Object.values(value).some((entry) => entry !== undefined), {
+    message: "Provide at least one role change.",
+  });
+
+const accessRuleConditionSchema = z
+  .object({
+    field: z
+      .string()
+      .trim()
+      .regex(
+        /^(id|name|type|status|sku|location|serialNumber|priority|tags|categories|createdBy|customFields\.[A-Za-z0-9_-]{1,120})$/,
+      ),
+    operator: z.enum(accessRuleOperators),
+    value: z.union([z.string().max(500), z.number(), z.boolean(), z.null()]).optional(),
+  })
+  .superRefine((condition, context) => {
+    const unary = condition.operator === "exists" || condition.operator === "not_exists";
+    if (!unary && condition.value === undefined) {
+      context.addIssue({
+        code: "custom",
+        path: ["value"],
+        message: "This operator requires a comparison value.",
+      });
+    }
+    if (
+      (condition.operator === "contains" || condition.operator === "starts_with") &&
+      typeof condition.value === "string" &&
+      !condition.value.trim()
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["value"],
+        message: "Contains and starts-with values cannot be empty.",
+      });
+    }
+  });
+
+export const inventoryAccessRuleInputSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  description: z.string().trim().max(1_000).default(""),
+  roleKey: z.string().trim().regex(/^[a-z][a-z0-9_-]{0,63}$/),
+  permissions: z.array(z.enum(resourceRulePermissions)).min(1).max(resourceRulePermissions.length),
+  conditions: z.array(accessRuleConditionSchema).min(1).max(12),
+  enabled: z.boolean().default(true),
+  priority: z.number().int().min(0).max(10_000).default(100),
+});
+
+export const inventoryAccessRulePatchSchema = z
+  .object({
+    name: z.string().trim().min(1).max(160).optional(),
+    description: z.string().trim().max(1_000).optional(),
+    roleKey: z.string().trim().regex(/^[a-z][a-z0-9_-]{0,63}$/).optional(),
+    permissions: z
+      .array(z.enum(resourceRulePermissions))
+      .min(1)
+      .max(resourceRulePermissions.length)
+      .optional(),
+    conditions: z.array(accessRuleConditionSchema).min(1).max(12).optional(),
+    enabled: z.boolean().optional(),
+    priority: z.number().int().min(0).max(10_000).optional(),
+  })
+  .refine((value) => Object.values(value).some((entry) => entry !== undefined), {
+    message: "Provide at least one access-rule change.",
   });

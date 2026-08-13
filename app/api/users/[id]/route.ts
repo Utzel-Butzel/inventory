@@ -2,8 +2,13 @@ import { hash } from "bcryptjs";
 import { and, count, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { apiTokens, users } from "@/db/schema";
-import { requireAdminSession } from "@/lib/api-auth";
+import {
+  accessRoles,
+  apiTokens,
+  inventoryAccessRules,
+  users,
+} from "@/db/schema";
+import { requireSessionPermission } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { userUpdateInputSchema } from "@/lib/validators";
 
@@ -31,7 +36,7 @@ const publicUser = {
 };
 
 export async function PATCH(request: Request, context: Context) {
-  const authorization = await requireAdminSession(request);
+  const authorization = await requireSessionPermission(request, "users.manage");
   if (authorization.response) return authorization.response;
 
   const id = z.string().uuid().safeParse((await context.params).id);
@@ -59,21 +64,79 @@ export async function PATCH(request: Request, context: Context) {
 
   try {
     const saved = await db.transaction(async (transaction) => {
+      const loadRoleGrant = async (roleKey: string) => {
+        const [[definition], rules] = await Promise.all([
+          transaction
+            .select({ permissions: accessRoles.permissions })
+            .from(accessRoles)
+            .where(eq(accessRoles.key, roleKey))
+            .limit(1),
+          transaction
+            .select({ permissions: inventoryAccessRules.permissions })
+            .from(inventoryAccessRules)
+            .where(
+              and(
+                eq(inventoryAccessRules.roleKey, roleKey),
+                eq(inventoryAccessRules.enabled, true),
+              ),
+            ),
+        ]);
+        return definition
+          ? new Set([
+              ...definition.permissions,
+              ...rules.flatMap((rule) => rule.permissions),
+            ])
+          : null;
+      };
+
       const [existing] = await transaction
         .select()
         .from(users)
         .where(eq(users.id, id.data))
-        .limit(1);
+        .limit(1)
+        .for("update");
       if (!existing) throw new UserUpdateError("User not found.", 404);
+
+      const existingRoleGrant = await loadRoleGrant(existing.role);
+      if (
+        !existingRoleGrant ||
+        (existing.role !== authorization.identity.role &&
+          Array.from(existingRoleGrant).some(
+          (permission) =>
+            !authorization.identity.permissions.includes(permission),
+          ))
+      ) {
+        throw new UserUpdateError(
+          "You cannot manage a user whose role has permissions beyond your own.",
+          403,
+        );
+      }
 
       const nextRole = parsed.data.role ?? existing.role;
       const nextActive = parsed.data.isActive ?? existing.isActive;
+      const nextRoleGrant = await loadRoleGrant(nextRole);
+      if (!nextRoleGrant) {
+        throw new UserUpdateError("The selected role does not exist.", 422);
+      }
+      if (
+        nextRole !== authorization.identity.role &&
+        Array.from(nextRoleGrant).some(
+          (permission) =>
+            !authorization.identity.permissions.includes(permission),
+        )
+      ) {
+        throw new UserUpdateError(
+          "You cannot assign a role with permissions beyond your own.",
+          403,
+        );
+      }
       const changesOwnAccess =
         authorization.identity.userId === existing.id &&
-        (!nextActive || nextRole !== "admin");
+        (!nextActive ||
+          !nextRoleGrant.has("users.manage"));
       if (changesOwnAccess) {
         throw new UserUpdateError(
-          "You cannot disable or remove the admin role from your own account.",
+          "You cannot disable your own account or remove your own user-management permission.",
           409,
         );
       }

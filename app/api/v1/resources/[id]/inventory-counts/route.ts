@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { requireIdentity } from "@/lib/api-auth";
+import {
+  requirePermission,
+  requireResourcePermission,
+} from "@/lib/api-auth";
 import { readIdempotencyKey } from "@/lib/idempotency";
 import {
   getInventoryCycle,
@@ -20,7 +23,7 @@ const countSchema = z
   .strict();
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "counts.read");
   if (authorization.response) return authorization.response;
   const id = z.string().uuid().safeParse((await context.params).id);
   if (!id.success) return Response.json({ error: "Invalid resource id." }, { status: 422 });
@@ -30,12 +33,16 @@ export async function GET(request: Request, context: Context) {
 }
 
 export async function POST(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
-  if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
   const id = z.string().uuid().safeParse((await context.params).id);
   if (!id.success) return Response.json({ error: "Invalid resource id." }, { status: 422 });
+  const authorization = await requireResourcePermission(
+    request,
+    "counts.manage",
+    id.data,
+  );
+  if (authorization.response) return authorization.response;
   let payload: unknown;
   try {
     payload = await request.json();

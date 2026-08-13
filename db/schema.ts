@@ -30,11 +30,51 @@ import {
   type CustomFieldType,
   type CustomFieldValues,
 } from "@/lib/custom-field-contract";
+import type { LabelElement } from "@/lib/label-setup-contract";
 import type { RoomScene } from "@/lib/room-scene-contract";
 import type { SpatialGeoreference } from "@/lib/spatial-structure-contract";
+import type {
+  AccessRuleCondition,
+  AppPermission,
+  ResourceRulePermission,
+} from "@/lib/access-control-contract";
+import type {
+  PublicShareFilter,
+  PublicShareScope,
+} from "@/lib/public-share-contract";
 
 export const userRoles = ["admin", "editor", "viewer"] as const;
-export type UserRole = (typeof userRoles)[number];
+export type BuiltinUserRole = (typeof userRoles)[number];
+export type UserRole = string;
+
+export const accessRoles = pgTable(
+  "access_roles",
+  {
+    key: varchar("key", { length: 64 }).primaryKey(),
+    name: varchar("name", { length: 120 }).notNull(),
+    description: text("description").notNull().default(""),
+    permissions: text("permissions")
+      .array()
+      .$type<AppPermission[]>()
+      .notNull()
+      .default([]),
+    isSystem: boolean("is_system").notNull().default(false),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      "access_roles_key_check",
+      sql`${table.key} ~ '^[a-z][a-z0-9_-]{0,63}$'`,
+    ),
+  ],
+);
 
 export const users = pgTable(
   "users",
@@ -43,10 +83,14 @@ export const users = pgTable(
     email: varchar("email", { length: 320 }).notNull(),
     name: varchar("name", { length: 160 }).notNull(),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
-    role: varchar("role", { length: 16 })
+    role: varchar("role", { length: 64 })
       .$type<UserRole>()
       .notNull()
-      .default("editor"),
+      .default("editor")
+      .references(() => accessRoles.key, {
+        onDelete: "restrict",
+        onUpdate: "cascade",
+      }),
     isActive: boolean("is_active").notNull().default(true),
     sessionVersion: integer("session_version").notNull().default(1),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
@@ -66,11 +110,60 @@ export const users = pgTable(
     uniqueIndex("users_email_unique").on(table.email),
     index("users_role_active_idx").on(table.role, table.isActive),
     check("users_email_lowercase", sql`${table.email} = lower(${table.email})`),
-    check(
-      "users_role_check",
-      sql`${table.role} in ('admin', 'editor', 'viewer')`,
-    ),
     check("users_session_version_positive", sql`${table.sessionVersion} > 0`),
+  ],
+);
+
+export const inventoryAccessRules = pgTable(
+  "inventory_access_rules",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 160 }).notNull(),
+    description: text("description").notNull().default(""),
+    roleKey: varchar("role_key", { length: 64 })
+      .notNull()
+      .references(() => accessRoles.key, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    permissions: text("permissions")
+      .array()
+      .$type<ResourceRulePermission[]>()
+      .notNull()
+      .default([]),
+    conditions: jsonb("conditions")
+      .$type<AccessRuleCondition[]>()
+      .notNull()
+      .default([]),
+    enabled: boolean("enabled").notNull().default(true),
+    priority: integer("priority").notNull().default(100),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inventory_access_rules_role_enabled_idx").on(
+      table.roleKey,
+      table.enabled,
+      table.priority,
+    ),
+    check(
+      "inventory_access_rules_permissions_nonempty",
+      sql`cardinality(${table.permissions}) > 0`,
+    ),
+    check(
+      "inventory_access_rules_conditions_array",
+      sql`jsonb_typeof(${table.conditions}) = 'array' and jsonb_array_length(${table.conditions}) > 0`,
+    ),
+    check(
+      "inventory_access_rules_priority_nonnegative",
+      sql`${table.priority} >= 0`,
+    ),
   ],
 );
 
@@ -231,6 +324,44 @@ export const relationTypeDefinitions = pgTable(
   ],
 );
 
+export const translationLanguages = pgTable(
+  "translation_languages",
+  {
+    code: varchar("code", { length: 35 }).primaryKey(),
+    label: varchar("label", { length: 120 }).notNull(),
+    isDefault: boolean("is_default").notNull().default(false),
+    autoTranslate: boolean("auto_translate").notNull().default(true),
+    instructions: text("instructions").notNull().default(""),
+    position: integer("position").notNull().default(0),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("translation_languages_one_active_default")
+      .on(table.isDefault)
+      .where(sql`${table.archivedAt} is null and ${table.isDefault} = true`),
+    index("translation_languages_active_position_idx").on(
+      table.archivedAt,
+      table.position,
+    ),
+    check(
+      "translation_languages_code_check",
+      sql`${table.code} ~ '^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$'`,
+    ),
+    check(
+      "translation_languages_position_nonnegative",
+      sql`${table.position} >= 0`,
+    ),
+  ],
+);
+
 export const resources = pgTable(
   "resources",
   {
@@ -269,6 +400,7 @@ export const resources = pgTable(
       .default([]),
     notes: text("notes").notNull().default(""),
     aiMetadata: jsonb("ai_metadata").$type<AiMetadata>(),
+    contentRevision: integer("content_revision").notNull().default(1),
     createdBy: varchar("created_by", { length: 320 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -284,9 +416,166 @@ export const resources = pgTable(
     index("resources_status_idx").on(table.status),
     index("resources_updated_at_idx").on(table.updatedAt),
     check("resources_quantity_nonnegative", sql`${table.quantity} >= 0`),
+    check("resources_content_revision_positive", sql`${table.contentRevision} > 0`),
     check(
       "resources_custom_fields_object",
       sql`jsonb_typeof(${table.customFields}) = 'object'`,
+    ),
+  ],
+);
+
+export const resourceTranslations = pgTable(
+  "resource_translations",
+  {
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    languageCode: varchar("language_code", { length: 35 })
+      .notNull()
+      .references(() => translationLanguages.code, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    translatedFields: jsonb("translated_fields")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
+    sourceHashes: jsonb("source_hashes")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
+    manualFields: text("manual_fields").array().notNull().default([]),
+    suggestedFields: jsonb("suggested_fields")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
+    suggestionSourceHashes: jsonb("suggestion_source_hashes")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
+    policyHash: varchar("policy_hash", { length: 64 }).notNull().default(""),
+    status: varchar("status", { length: 24 })
+      .$type<"current" | "stale" | "needs_review" | "failed">()
+      .notNull()
+      .default("stale"),
+    model: varchar("model", { length: 120 }),
+    lastError: text("last_error"),
+    revision: integer("revision").notNull().default(1),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "resource_translations_pk",
+      columns: [table.resourceId, table.languageCode],
+    }),
+    index("resource_translations_language_idx").on(table.languageCode),
+    check(
+      "resource_translations_translated_fields_object",
+      sql`jsonb_typeof(${table.translatedFields}) = 'object'`,
+    ),
+    check(
+      "resource_translations_source_hashes_object",
+      sql`jsonb_typeof(${table.sourceHashes}) = 'object'`,
+    ),
+    check(
+      "resource_translations_suggested_fields_object",
+      sql`jsonb_typeof(${table.suggestedFields}) = 'object'`,
+    ),
+    check(
+      "resource_translations_suggestion_hashes_object",
+      sql`jsonb_typeof(${table.suggestionSourceHashes}) = 'object'`,
+    ),
+    check(
+      "resource_translations_policy_hash_check",
+      sql`${table.policyHash} = '' or ${table.policyHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "resource_translations_status_check",
+      sql`${table.status} in ('current', 'stale', 'needs_review', 'failed')`,
+    ),
+    check(
+      "resource_translations_revision_positive",
+      sql`${table.revision} > 0`,
+    ),
+  ],
+);
+
+export const resourceTranslationJobs = pgTable(
+  "resource_translation_jobs",
+  {
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    languageCode: varchar("language_code", { length: 35 })
+      .notNull()
+      .references(() => translationLanguages.code, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    generation: integer("generation").notNull().default(1),
+    sourceRevision: integer("source_revision").notNull().default(1),
+    requestId: uuid("request_id").defaultRandom().notNull(),
+    mode: varchar("mode", { length: 16 })
+      .$type<"automatic" | "manual">()
+      .notNull()
+      .default("automatic"),
+    force: boolean("force").notNull().default(false),
+    status: varchar("status", { length: 16 })
+      .$type<"pending" | "processing" | "failed">()
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    runAfter: timestamp("run_after", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    leaseToken: uuid("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    requestedBy: varchar("requested_by", { length: 320 })
+      .notNull()
+      .default("system:translation"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "resource_translation_jobs_pk",
+      columns: [table.resourceId, table.languageCode],
+    }),
+    index("resource_translation_jobs_due_idx").on(
+      table.status,
+      table.runAfter,
+    ),
+    index("resource_translation_jobs_lease_idx").on(table.leaseExpiresAt),
+    check(
+      "resource_translation_jobs_generation_positive",
+      sql`${table.generation} > 0`,
+    ),
+    check(
+      "resource_translation_jobs_source_revision_positive",
+      sql`${table.sourceRevision} > 0`,
+    ),
+    check(
+      "resource_translation_jobs_mode_check",
+      sql`${table.mode} in ('automatic', 'manual')`,
+    ),
+    check(
+      "resource_translation_jobs_status_check",
+      sql`${table.status} in ('pending', 'processing', 'failed')`,
+    ),
+    check(
+      "resource_translation_jobs_attempts_nonnegative",
+      sql`${table.attempts} >= 0`,
     ),
   ],
 );
@@ -585,6 +874,21 @@ export const customFieldDefinitions = pgTable(
       .$type<CustomFieldOption[]>()
       .notNull()
       .default([]),
+    referenceEntityType: varchar("reference_entity_type", { length: 24 })
+      .$type<CustomFieldEntityType>(),
+    referenceMultiple: boolean("reference_multiple").notNull().default(false),
+    referenceResourceTypes: jsonb("reference_resource_types")
+      .$type<CustomFieldResourceType[]>()
+      .notNull()
+      .default([]),
+    referenceCategories: jsonb("reference_categories")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    referenceStatuses: jsonb("reference_statuses")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     position: integer("position").notNull().default(0),
     revision: integer("revision").notNull().default(1),
     createdBy: varchar("created_by", { length: 320 }),
@@ -613,7 +917,7 @@ export const customFieldDefinitions = pgTable(
     ),
     check(
       "custom_field_definitions_field_type_check",
-      sql`${table.fieldType} in ('text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'multi_select', 'email', 'url')`,
+      sql`${table.fieldType} in ('text', 'textarea', 'number', 'boolean', 'date', 'datetime', 'select', 'multi_select', 'reference', 'email', 'url')`,
     ),
     check(
       "custom_field_definitions_key_check",
@@ -632,6 +936,36 @@ export const customFieldDefinitions = pgTable(
       sql`jsonb_typeof(${table.options}) = 'array'`,
     ),
     check(
+      "custom_field_definitions_reference_entity_type_check",
+      sql`${table.referenceEntityType} is null or ${table.referenceEntityType} in ('inventory', 'stock_unit')`,
+    ),
+    check(
+      "custom_field_definitions_reference_resource_types_array",
+      sql`jsonb_typeof(${table.referenceResourceTypes}) = 'array'`,
+    ),
+    check(
+      "custom_field_definitions_reference_categories_array",
+      sql`jsonb_typeof(${table.referenceCategories}) = 'array'`,
+    ),
+    check(
+      "custom_field_definitions_reference_statuses_array",
+      sql`jsonb_typeof(${table.referenceStatuses}) = 'array'`,
+    ),
+    check(
+      "custom_field_definitions_reference_configuration_check",
+      sql`(
+        ${table.fieldType} = 'reference'
+        and ${table.referenceEntityType} is not null
+      ) or (
+        ${table.fieldType} <> 'reference'
+        and ${table.referenceEntityType} is null
+        and ${table.referenceMultiple} = false
+        and ${table.referenceResourceTypes} = '[]'::jsonb
+        and ${table.referenceCategories} = '[]'::jsonb
+        and ${table.referenceStatuses} = '[]'::jsonb
+      )`,
+    ),
+    check(
       "custom_field_definitions_position_nonnegative",
       sql`${table.position} >= 0`,
     ),
@@ -647,6 +981,43 @@ export const customFieldDefinitions = pgTable(
       "custom_field_definitions_step_positive",
       sql`${table.step} is null or ${table.step} > 0`,
     ),
+  ],
+);
+
+export const labelSetups = pgTable(
+  "label_setups",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 160 }).notNull(),
+    widthMm: doublePrecision("width_mm").notNull(),
+    heightMm: doublePrecision("height_mm").notNull(),
+    elements: jsonb("elements").$type<LabelElement[]>().notNull(),
+    revision: integer("revision").notNull().default(1),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("label_setups_name_unique").on(sql`lower(${table.name})`),
+    index("label_setups_name_idx").on(table.name),
+    check(
+      "label_setups_width_mm_check",
+      sql`${table.widthMm} > 0 and ${table.widthMm} <= 1000`,
+    ),
+    check(
+      "label_setups_height_mm_check",
+      sql`${table.heightMm} > 0 and ${table.heightMm} <= 1000`,
+    ),
+    check(
+      "label_setups_elements_array",
+      sql`jsonb_typeof(${table.elements}) = 'array'`,
+    ),
+    check("label_setups_revision_positive", sql`${table.revision} > 0`),
   ],
 );
 
@@ -1446,6 +1817,61 @@ export const media = pgTable(
   ],
 );
 
+export const publicShares = pgTable(
+  "public_shares",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 120 }).notNull(),
+    scope: varchar("scope", { length: 16 }).$type<PublicShareScope>().notNull(),
+    resourceId: uuid("resource_id").references(() => resources.id, {
+      onDelete: "cascade",
+    }),
+    filter: jsonb("filter").$type<PublicShareFilter>(),
+    createdBy: varchar("created_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("public_shares_active_created_at_idx").on(
+      table.revokedAt,
+      table.createdAt,
+    ),
+    index("public_shares_resource_id_idx").on(table.resourceId),
+    check(
+      "public_shares_scope_check",
+      sql`${table.scope} in ('inventory', 'item')`,
+    ),
+    check(
+      "public_shares_scope_target_check",
+      sql`(
+        ${table.scope} = 'inventory'
+        and ${table.resourceId} is null
+      ) or (
+        ${table.scope} = 'item'
+        and ${table.resourceId} is not null
+        and ${table.filter} is null
+      )`,
+    ),
+    check(
+      "public_shares_filter_object",
+      sql`${table.filter} is null or jsonb_typeof(${table.filter}) = 'object'`,
+    ),
+    check(
+      "public_shares_filter_shape",
+      sql`${table.filter} is null or (
+        ${table.filter} ? 'fieldKey'
+        and ${table.filter} ? 'value'
+        and (${table.filter} - 'fieldKey' - 'value') = '{}'::jsonb
+        and jsonb_typeof(${table.filter} -> 'fieldKey') = 'string'
+        and (${table.filter} ->> 'fieldKey') ~ '^[a-z][a-z0-9_]{0,63}$'
+        and jsonb_typeof(${table.filter} -> 'value') in ('string', 'number', 'boolean', 'array')
+      )`,
+    ),
+  ],
+);
+
 export const mediaUploadBatches = pgTable(
   "media_upload_batches",
   {
@@ -1479,7 +1905,7 @@ export const aiIdempotencyOperations = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     operation: varchar("operation", { length: 24 })
-      .$type<"analyze" | "count" | "cover">()
+      .$type<"analyze" | "count" | "cover" | "translate">()
       .notNull(),
     idempotencyKey: uuid("idempotency_key").notNull(),
     resourceId: uuid("resource_id").notNull(),
@@ -1509,7 +1935,7 @@ export const aiIdempotencyOperations = pgTable(
     index("ai_idempotency_operations_resource_id_idx").on(table.resourceId),
     check(
       "ai_idempotency_operations_operation_check",
-      sql`${table.operation} in ('analyze', 'count', 'cover')`,
+      sql`${table.operation} in ('analyze', 'count', 'cover', 'translate')`,
     ),
     check(
       "ai_idempotency_operations_status_check",
@@ -1538,7 +1964,7 @@ export const aiRateLimitBuckets = pgTable(
     }),
     check(
       "ai_rate_limit_buckets_operation_check",
-      sql`${table.operation} in ('analyze', 'count', 'cover')`,
+      sql`${table.operation} in ('analyze', 'count', 'cover', 'translate')`,
     ),
     check(
       "ai_rate_limit_buckets_request_count_positive",
@@ -1584,10 +2010,17 @@ export const apiTokens = pgTable(
 
 export type ResourceRecord = typeof resources.$inferSelect;
 export type NewResource = typeof resources.$inferInsert;
+export type TranslationLanguageRecord =
+  typeof translationLanguages.$inferSelect;
+export type ResourceTranslationRecord = typeof resourceTranslations.$inferSelect;
+export type ResourceTranslationJobRecord =
+  typeof resourceTranslationJobs.$inferSelect;
 export type CustomFieldDefinitionRecord =
   typeof customFieldDefinitions.$inferSelect;
+export type LabelSetupRecord = typeof labelSetups.$inferSelect;
 export type MediaRecord = typeof media.$inferSelect;
 export type ApiTokenRecord = typeof apiTokens.$inferSelect;
+export type PublicShareRecord = typeof publicShares.$inferSelect;
 export type StockSettingsRecord = typeof stockSettings.$inferSelect;
 export type StockMovementRecord = typeof stockMovements.$inferSelect;
 export type StockUnitRecord = typeof stockUnits.$inferSelect;
@@ -1613,6 +2046,9 @@ export type PurchaseReceiptRecord = typeof purchaseReceipts.$inferSelect;
 export type StockScanWorkflowRecord = typeof stockScanWorkflows.$inferSelect;
 export type StockScanExecutionRecord = typeof stockScanExecutions.$inferSelect;
 export type UserRecord = typeof users.$inferSelect;
+export type AccessRoleRecord = typeof accessRoles.$inferSelect;
+export type InventoryAccessRuleRecord =
+  typeof inventoryAccessRules.$inferSelect;
 export type RoomScanRecord = typeof roomScans.$inferSelect;
 export type RoomScanAssetRecord = typeof roomScanAssets.$inferSelect;
 export type ResourceSpatialPlacementRecord =

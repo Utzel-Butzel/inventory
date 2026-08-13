@@ -9,12 +9,25 @@ import {
 } from "lucide-react";
 
 import { auth0Enabled } from "@/auth";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { LoginForm } from "@/components/login-form";
+import { LocalizedThemeToggle } from "@/components/theme-toggle";
+import { UiI18nProvider } from "@/components/ui-i18n-provider";
 import { getSessionIdentity } from "@/lib/api-auth";
+import { getResources, getT } from "@/lib/ui-i18n/server";
 
-export const metadata: Metadata = {
-  title: "Sign in",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT("auth");
+  const title = t("meta.title");
+  const description = t("meta.description");
+  return {
+    title,
+    description,
+    robots: { index: false, follow: false },
+    openGraph: { title, description, type: "website" },
+    twitter: { card: "summary", title, description },
+  };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -30,33 +43,46 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ callbackUrl?: string | string[] }>;
 }) {
-  const identity = await getSessionIdentity();
+  const [identity, translation, resolvedSearchParams] = await Promise.all([
+    getSessionIdentity(),
+    getT(["auth", "common"]),
+    searchParams,
+  ]);
   if (identity) redirect("/dashboard");
-  const callbackUrl = safeCallback((await searchParams).callbackUrl);
+  const callbackUrl = safeCallback(resolvedSearchParams.callbackUrl);
+  const resources = getResources(translation.i18n, ["auth", "common"]);
+  const { t } = translation;
+  const analysisTags = ["workshop", "powerTool", "voltage"] as const;
 
   return (
-    <main className="min-h-dvh bg-white lg:grid lg:grid-cols-[minmax(460px,0.94fr)_minmax(520px,1.06fr)]">
+    <UiI18nProvider language={translation.lng} resources={resources}>
+      <main className="min-h-dvh bg-surface lg:grid lg:grid-cols-[minmax(460px,0.94fr)_minmax(520px,1.06fr)]">
       <section className="flex min-h-dvh flex-col px-6 py-7 sm:px-10 lg:px-14 xl:px-20">
-        <div className="flex items-center gap-2.5 text-[#1f2227]">
-          <span className="grid size-8 place-items-center rounded-[10px] bg-[#5147d9] text-white shadow-[0_6px_16px_rgba(99,91,255,0.24)]">
-            <Boxes className="size-[18px]" strokeWidth={2.2} aria-hidden="true" />
-          </span>
-          <span className="text-[15px] font-semibold tracking-[-0.02em]">
-            Inventory
-          </span>
+        <div className="flex items-center justify-between gap-4 text-foreground">
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-8 place-items-center rounded-[10px] bg-brand-solid text-on-brand shadow-[0_6px_16px_rgba(99,91,255,0.24)]">
+              <Boxes className="size-[18px]" strokeWidth={2.2} aria-hidden="true" />
+            </span>
+            <span className="text-[15px] font-semibold tracking-[-0.02em]">
+              {t("brand")}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <LocalizedThemeToggle />
+            <LanguageSwitcher />
+          </div>
         </div>
 
         <div className="mx-auto flex w-full max-w-[420px] flex-1 flex-col justify-center py-16">
           <div className="animate-fade-up">
-            <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.14em] text-[#5147d9]">
-              Welcome back
+            <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
+              {t("hero.eyebrow")}
             </p>
-            <h1 className="text-[32px] font-semibold tracking-[-0.045em] text-[#1d2025] sm:text-[36px]">
-              Sign in to your workspace
+            <h1 className="text-[32px] font-semibold tracking-[-0.045em] text-foreground sm:text-[36px]">
+              {t("hero.title")}
             </h1>
-            <p className="mt-3 text-[15px] leading-6 text-[#747b86]">
-              Keep your inventory organized, searchable, and ready for the work
-              ahead.
+            <p className="mt-3 text-[15px] leading-6 text-muted">
+              {t("hero.description")}
             </p>
           </div>
 
@@ -68,9 +94,7 @@ export default async function LoginPage({
           </div>
         </div>
 
-        <p className="text-xs text-[#9aa0a9]">
-          Private by default · Your data stays in your infrastructure
-        </p>
+        <p className="text-xs text-muted">{t("hero.privacy")}</p>
       </section>
 
       <section className="subtle-grid relative hidden min-h-dvh overflow-hidden bg-[#171821] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
@@ -78,20 +102,19 @@ export default async function LoginPage({
         <div className="pointer-events-none absolute -bottom-44 left-[-80px] size-[480px] rounded-full bg-[#3b82f6]/15 blur-[110px]" />
 
         <div className="relative flex items-center justify-between text-xs text-white/55">
-          <span>Inventory, without the busywork</span>
+          <span>{t("showcase.eyebrow")}</span>
           <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] font-medium text-white/75">
-            AI assisted
+            {t("showcase.badge")}
           </span>
         </div>
 
         <div className="relative mx-auto w-full max-w-[620px]">
           <div className="mb-8 max-w-lg">
             <h2 className="text-3xl font-semibold leading-[1.15] tracking-[-0.04em] xl:text-[40px]">
-              From a photo to a useful inventory record in seconds.
+              {t("showcase.title")}
             </h2>
             <p className="mt-4 max-w-md text-[15px] leading-6 text-white/55">
-              Capture equipment, enrich details with AI, and keep every file in
-              one calm workspace.
+              {t("showcase.description")}
             </p>
           </div>
 
@@ -101,12 +124,12 @@ export default async function LoginPage({
                 <div className="flex items-center gap-2">
                   <span className="size-2 rounded-full bg-[#6ee7b7]" />
                   <span className="text-xs font-medium text-white/75">
-                    New item analysis
+                    {t("showcase.analysis.title")}
                   </span>
                 </div>
                 <span className="flex items-center gap-1.5 text-[10px] font-medium text-[#a9a4ff]">
                   <Sparkles className="size-3" aria-hidden="true" />
-                  AI ready
+                  {t("showcase.analysis.ready")}
                 </span>
               </div>
 
@@ -120,34 +143,42 @@ export default async function LoginPage({
                 </div>
                 <div className="space-y-3 py-1">
                   <div>
-                    <p className="text-[10px] text-white/35">Detected item</p>
+                    <p className="text-[10px] text-white/35">
+                      {t("showcase.analysis.detectedItem")}
+                    </p>
                     <p className="mt-1 text-sm font-medium text-white/85">
-                      Cordless impact driver
+                      {t("showcase.analysis.itemName")}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded-lg bg-white/[0.055] p-2.5">
-                      <p className="text-[9px] text-white/30">Type</p>
-                      <p className="mt-1 text-[11px] text-white/70">Tool</p>
+                      <p className="text-[9px] text-white/30">
+                        {t("showcase.analysis.type")}
+                      </p>
+                      <p className="mt-1 text-[11px] text-white/70">
+                        {t("showcase.analysis.tool")}
+                      </p>
                     </div>
                     <div className="rounded-lg bg-white/[0.055] p-2.5">
-                      <p className="text-[9px] text-white/30">Confidence</p>
+                      <p className="text-[9px] text-white/30">
+                        {t("showcase.analysis.confidence")}
+                      </p>
                       <p className="mt-1 text-[11px] text-[#6ee7b7]">96%</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {["workshop", "power tool", "18V"].map((tag) => (
+                    {analysisTags.map((tag) => (
                       <span
                         key={tag}
                         className="rounded-md bg-[#5147d9]/15 px-2 py-1 text-[9px] text-[#b9b5ff]"
                       >
-                        {tag}
+                        {t(`showcase.analysis.tags.${tag}`)}
                       </span>
                     ))}
                   </div>
                   <div className="flex items-center gap-1.5 text-[10px] text-white/40">
                     <Check className="size-3 text-[#6ee7b7]" aria-hidden="true" />
-                    Description and alt text generated
+                    {t("showcase.analysis.generated")}
                   </div>
                 </div>
               </div>
@@ -157,23 +188,24 @@ export default async function LoginPage({
           <div className="mt-5 grid grid-cols-3 gap-3 text-[11px] text-white/45">
             <span className="flex items-center gap-2">
               <ScanSearch className="size-3.5 text-white/70" aria-hidden="true" />
-              Smart analysis
+              {t("showcase.features.smartAnalysis")}
             </span>
             <span className="flex items-center gap-2">
               <ImageIcon className="size-3.5 text-white/70" aria-hidden="true" />
-              Image generation
+              {t("showcase.features.imageGeneration")}
             </span>
             <span className="flex items-center gap-2">
               <Boxes className="size-3.5 text-white/70" aria-hidden="true" />
-              Batch workflows
+              {t("showcase.features.batchWorkflows")}
             </span>
           </div>
         </div>
 
         <p className="relative text-[11px] text-white/30">
-          Self-hosted · API-ready · Built for teams
+          {t("showcase.footer")}
         </p>
       </section>
-    </main>
+      </main>
+    </UiI18nProvider>
   );
 }

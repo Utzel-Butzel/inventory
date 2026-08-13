@@ -67,21 +67,21 @@ const aiFeatures: Feature[] = [
     label: "Recognize",
     title: "Photo to record",
     copy: "AI suggests the title, description, type, tags, and alt text. You review the draft.",
-    tone: "bg-[#eae7ff] text-[#5c50e4]",
+    tone: "bg-brand-soft text-brand",
   },
   {
     icon: WandSparkles,
     label: "Generate",
     title: "Studio-style covers",
     copy: "Create a clean, square product cover with OpenAI or Google while keeping the original photo.",
-    tone: "bg-[#dcf8eb] text-[#157d59]",
+    tone: "bg-success-soft text-success",
   },
   {
     icon: Camera,
     label: "Count",
     title: "Parts from one photo",
     copy: "AI proposes the quantity and confidence before you receive or issue the reviewed stock.",
-    tone: "bg-[#fff0d8] text-[#9e5e08]",
+    tone: "bg-warning-soft text-warning",
   },
 ];
 
@@ -110,17 +110,17 @@ function AutomationPreview() {
           </span>
         </div>
 
-        <div className="overflow-hidden rounded-[20px] bg-[#f6f7f9] p-4 sm:p-5">
+        <div className="overflow-hidden rounded-[20px] bg-background p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-[#5147d9]">
+              <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-brand">
                 AI capture
               </p>
-              <p className="mt-1 text-lg font-semibold tracking-[-0.04em] text-[#25262a]">
+              <p className="mt-1 text-lg font-semibold tracking-[-0.04em] text-foreground">
                 From photo to inventory
               </p>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e4f8ef] px-2.5 py-1.5 text-[8px] font-semibold text-[#177c59]">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1.5 text-[8px] font-semibold text-success">
               <CircleDot className="size-2.5" />
               Ready to review
             </span>
@@ -145,38 +145,38 @@ function AutomationPreview() {
               </span>
             </div>
 
-            <div className="rounded-2xl border border-[#e2e4e8] bg-white p-3.5">
+            <div className="rounded-2xl border border-border bg-surface p-3.5">
               <div className="space-y-2">
                 {[
                   ["Item recognized", "Cordless impact driver"],
                   ["Details suggested", "Title, type, and tags"],
                   ["Product cover", "Studio-style draft"],
                 ].map(([label, value]) => (
-                  <div key={label} className="flex items-center gap-2.5 rounded-xl bg-[#f7f7f8] p-2.5">
-                    <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-[#e4f8ef] text-[#17805c]">
+                  <div key={label} className="flex items-center gap-2.5 rounded-xl bg-surface-subtle p-2.5">
+                    <span className="grid size-6 shrink-0 place-items-center rounded-lg bg-success-soft text-success">
                       <Check className="size-3" />
                     </span>
                     <div className="min-w-0">
-                      <p className="text-[8px] font-semibold text-[#3d3f44]">{label}</p>
-                      <p className="mt-0.5 truncate text-[7px] text-[#5f6672]">{value}</p>
+                      <p className="text-[8px] font-semibold text-foreground">{label}</p>
+                      <p className="mt-0.5 truncate text-[7px] text-muted">{value}</p>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-3 rounded-xl border border-[#e5e6ea] p-3">
+              <div className="mt-3 rounded-xl border border-border p-3">
                 <div className="flex items-start gap-3">
                   <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[linear-gradient(145deg,#26282f,#41444e)] text-[#9a92ff]">
                     <ImageIcon className="size-4" />
                   </span>
                   <div className="min-w-0">
-                    <p className="truncate text-[9px] font-semibold text-[#34363b]">Cordless impact driver</p>
-                    <p className="mt-1 text-[7px] text-[#5f6672]">Tool · Workshop · TOOL-0042</p>
+                    <p className="truncate text-[9px] font-semibold text-foreground">Cordless impact driver</p>
+                    <p className="mt-1 text-[7px] text-muted">Tool · Workshop · TOOL-0042</p>
                   </div>
                 </div>
                 <div className="mt-3 flex gap-1.5">
                   {["18V", "power tool", "workshop"].map((tag) => (
-                    <span key={tag} className="rounded-full bg-[#efedff] px-2 py-1 text-[6px] font-medium text-[#5d52df]">{tag}</span>
+                    <span key={tag} className="rounded-full bg-brand-soft px-2 py-1 text-[6px] font-medium text-brand">{tag}</span>
                   ))}
                 </div>
               </div>
@@ -191,27 +191,27 @@ function AutomationPreview() {
 
 export default function HomePage() {
   return (
-    <div className="min-h-dvh bg-[#f7f5ef] text-[#18191c]">
+    <div className="min-h-dvh bg-background text-foreground">
       <MarketingHeader />
 
       <main>
-        <section className="relative overflow-hidden border-b border-black/[0.07]">
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(29,30,34,0.045)_1px,transparent_1px),linear-gradient(to_bottom,rgba(29,30,34,0.045)_1px,transparent_1px)] bg-[size:56px_56px] [mask-image:linear-gradient(to_bottom,black,transparent_84%)]" />
+        <section className="relative overflow-hidden border-b border-border">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] bg-[size:56px_56px] opacity-60 [mask-image:linear-gradient(to_bottom,black,transparent_84%)]" />
           <div className="pointer-events-none absolute left-[4%] top-28 size-[340px] rounded-full bg-[#8ff0cc]/30 blur-[110px]" />
           <div className="pointer-events-none absolute right-[4%] top-20 size-[430px] rounded-full bg-[#8175ff]/20 blur-[130px]" />
 
           <div className="relative mx-auto max-w-[1240px] px-5 pb-24 pt-16 sm:px-8 sm:pb-32 sm:pt-24 lg:pt-28">
             <div className="grid items-center gap-16 lg:grid-cols-[0.86fr_1.14fr] lg:gap-10">
               <div className="relative z-10 max-w-[650px] animate-fade-up">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5147d9]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand">
                   AI-native inventory · MIT open source
                 </p>
 
-                <h1 className="mt-5 text-[clamp(3.35rem,6.7vw,6.25rem)] font-semibold leading-[0.91] tracking-[-0.07em] text-[#17181b]">
+                <h1 className="mt-5 text-[clamp(3.35rem,6.7vw,6.25rem)] font-semibold leading-[0.91] tracking-[-0.07em] text-foreground">
                   Take a photo.
-                  <span className="block text-[#5147d9]">AI builds the record.</span>
+                  <span className="block text-brand">AI builds the record.</span>
                 </h1>
-                <p className="mt-7 max-w-[570px] text-[17px] leading-7 text-[#65676d] sm:text-[19px] sm:leading-8">
+                <p className="mt-7 max-w-[570px] text-[17px] leading-7 text-muted sm:text-[19px] sm:leading-8">
                   Open Inventory recognizes the item, writes the details, and
                   creates a clean product cover. You review the result.
                 </p>
@@ -219,7 +219,7 @@ export default function HomePage() {
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <Link
                     href="/docs#docker"
-                    className="inline-flex h-12 items-center justify-center gap-2 rounded-[14px] bg-[#665cff] px-5 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(102,92,255,0.25)] transition hover:-translate-y-0.5 hover:bg-[#564beb]"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-[14px] bg-brand-solid px-5 text-sm font-semibold text-on-brand shadow-[0_12px_30px_rgba(102,92,255,0.25)] transition hover:-translate-y-0.5 hover:bg-brand-hover"
                   >
                     <Container className="size-[17px]" />
                     Install with Docker
@@ -228,17 +228,17 @@ export default function HomePage() {
                     href={githubUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex h-12 items-center justify-center gap-2 rounded-[14px] border border-black/10 bg-white/80 px-5 text-sm font-semibold text-[#2d2f33] shadow-sm transition hover:-translate-y-0.5 hover:border-black/20 hover:bg-white"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-[14px] border border-border bg-surface/80 px-5 text-sm font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-border-strong hover:bg-surface"
                   >
                     <Github className="size-[17px]" />
                     View on GitHub
                   </a>
                 </div>
 
-                <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-[11px] font-semibold text-[#5f6672]">
+                <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-[11px] font-semibold text-muted">
                   {["MIT licensed", "Self-hosted", "Native iOS app"].map((item) => (
                     <span key={item} className="flex items-center gap-1.5">
-                      <Check className="size-3 text-[#17815c]" strokeWidth={2.5} />
+                      <Check className="size-3 text-success" strokeWidth={2.5} />
                       {item}
                     </span>
                   ))}
@@ -252,13 +252,13 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="ai" className="scroll-mt-24 bg-[#f7f5ef] py-24 sm:py-32">
+        <section id="ai" className="scroll-mt-24 bg-background py-24 sm:py-32">
           <div className="mx-auto max-w-[1240px] px-5 sm:px-8">
             <div className="max-w-3xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5147d9]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand">
                 Three AI jobs
               </p>
-              <h2 className="mt-4 text-[42px] font-semibold leading-[0.98] tracking-[-0.06em] text-[#1b1c20] sm:text-[60px]">
+              <h2 className="mt-4 text-[42px] font-semibold leading-[0.98] tracking-[-0.06em] text-foreground sm:text-[60px]">
                 Recognize. Generate. Count.
               </h2>
             </div>
@@ -267,15 +267,15 @@ export default function HomePage() {
               {aiFeatures.map((feature) => {
                 const Icon = feature.icon;
                 return (
-                  <article key={feature.title} className="rounded-[26px] border border-black/[0.08] bg-white p-6 transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(35,30,50,0.1)] sm:p-8">
+                  <article key={feature.title} className="rounded-[26px] border border-border bg-surface p-6 transition duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-md)] sm:p-8">
                     <div className="flex items-center justify-between">
                       <span className={`grid size-11 place-items-center rounded-2xl ${feature.tone}`}>
                         <Icon className="size-5" strokeWidth={1.9} />
                       </span>
-                      <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#5f6672]">{feature.label}</span>
+                      <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted">{feature.label}</span>
                     </div>
-                    <h3 className="mt-16 text-[26px] font-semibold tracking-[-0.045em] text-[#222327]">{feature.title}</h3>
-                    <p className="mt-3 text-[15px] leading-6 text-[#6f7177]">{feature.copy}</p>
+                    <h3 className="mt-16 text-[26px] font-semibold tracking-[-0.045em] text-foreground">{feature.title}</h3>
+                    <p className="mt-3 text-[15px] leading-6 text-muted">{feature.copy}</p>
                   </article>
                 );
               })}
@@ -326,10 +326,10 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="app" className="scroll-mt-20 border-b border-black/[0.07] bg-[#ece9e1] py-24 sm:py-32">
+        <section id="app" className="scroll-mt-20 border-b border-border bg-surface-muted py-24 sm:py-32">
           <div className="mx-auto grid max-w-[1120px] gap-14 px-5 sm:px-8 lg:grid-cols-[0.75fr_1.25fr] lg:items-center">
             <div className="relative mx-auto w-full max-w-[360px] pb-8" aria-hidden="true">
-              <div className="overflow-hidden rounded-[38px] border border-black/10 bg-[#f8f2e7] p-3 shadow-[0_35px_80px_rgba(29,25,40,0.2)]">
+              <div className="overflow-hidden rounded-[38px] border border-border bg-surface-subtle p-3 shadow-[var(--shadow-md)]">
                 <Image
                   src="/marketing/ios-app-icon.png"
                   width={1024}
@@ -338,28 +338,28 @@ export default function HomePage() {
                   className="h-auto w-full rounded-[29px]"
                 />
               </div>
-              <div className="absolute -bottom-1 -right-4 w-[210px] rounded-2xl border border-black/[0.08] bg-white p-3.5 shadow-[0_18px_45px_rgba(28,25,40,0.16)]">
+              <div className="absolute -bottom-1 -right-4 w-[210px] rounded-2xl border border-border bg-surface p-3.5 shadow-[var(--shadow-md)]">
                 <div className="flex items-center gap-2.5">
-                  <span className="grid size-9 place-items-center rounded-xl bg-[#e7e4ff] text-[#5a4fdd]">
+                  <span className="grid size-9 place-items-center rounded-xl bg-brand-soft text-brand">
                     <UploadCloud className="size-4" />
                   </span>
                   <div>
-                    <p className="text-[9px] font-semibold text-[#303238]">Capture queue ready</p>
-                    <p className="mt-0.5 text-[8px] text-[#5f6672]">Upload · analyze · cover</p>
+                    <p className="text-[9px] font-semibold text-foreground">Capture queue ready</p>
+                    <p className="mt-0.5 text-[8px] text-muted">Upload · analyze · cover</p>
                   </div>
                 </div>
               </div>
             </div>
 
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-black/[0.08] bg-white/70 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#5c5f65]">
-                <Smartphone className="size-3.5 text-[#5147d9]" />
+              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-strong">
+                <Smartphone className="size-3.5 text-brand" />
                 Native iOS app
               </span>
               <h2 className="mt-5 max-w-2xl text-[44px] font-semibold leading-[0.97] tracking-[-0.06em] sm:text-[62px]">
                 Inventory from the camera in your pocket.
               </h2>
-              <p className="mt-6 max-w-xl text-[16px] leading-7 text-[#676970]">
+              <p className="mt-6 max-w-xl text-[16px] leading-7 text-muted">
                 Capture photos, scan QR and common barcodes, find or create an
                 item, and let the upload queue run analysis and optional cover
                 generation.
@@ -374,8 +374,8 @@ export default function HomePage() {
                 ].map((item) => {
                   const Icon = item.icon;
                   return (
-                    <div key={item.text} className="flex items-center gap-3 rounded-2xl bg-white/70 p-4 text-sm font-medium text-[#4e5056]">
-                      <Icon className="size-4 shrink-0 text-[#5147d9]" />
+                    <div key={item.text} className="flex items-center gap-3 rounded-2xl bg-surface/70 p-4 text-sm font-medium text-muted-strong">
+                      <Icon className="size-4 shrink-0 text-brand" />
                       {item.text}
                     </div>
                   );
@@ -386,35 +386,35 @@ export default function HomePage() {
                 href={`${githubUrl}/tree/main/ios/Inventory`}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-[#5146d9] hover:text-[#3f35c3]"
+                className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-brand hover:text-brand-strong"
               >
                 Explore the iOS app
                 <ArrowRight className="size-4" />
               </a>
-              <p className="mt-3 text-xs text-[#5f6672]">Included in the repository · iOS 17 or newer</p>
+              <p className="mt-3 text-xs text-muted">Included in the repository · iOS 17 or newer</p>
             </div>
           </div>
         </section>
 
-        <section id="docker" className="scroll-mt-20 bg-[#f7f5ef] py-24 sm:py-32">
+        <section id="docker" className="scroll-mt-20 bg-background py-24 sm:py-32">
           <div className="mx-auto grid max-w-[1240px] gap-14 px-5 sm:px-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-center">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5147d9]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand">
                 MIT licensed · self-hosted
               </p>
               <h2 className="mt-4 text-[44px] font-semibold leading-[0.97] tracking-[-0.06em] sm:text-[60px]">
                 Open source. Yours to run.
               </h2>
-              <p className="mt-6 max-w-lg text-[16px] leading-7 text-[#686a70]">
+              <p className="mt-6 max-w-lg text-[16px] leading-7 text-muted">
                 Web app, PostgreSQL migrations, OpenAPI, Docker setup, and the
                 native iOS app — all in one MIT-licensed repository.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/docs#docker" className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#18191d] px-4 text-sm font-semibold text-white transition hover:bg-[#303136]">
+                <Link href="/docs#docker" className="inline-flex h-11 items-center gap-2 rounded-xl bg-strong px-4 text-sm font-semibold text-on-strong transition hover:opacity-90">
                   Read the setup docs
                   <ArrowRight className="size-4" />
                 </Link>
-                <a href={githubUrl} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl border border-black/10 bg-white px-4 text-sm font-semibold text-[#34363a] transition hover:border-black/20">
+                <a href={githubUrl} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-foreground transition hover:border-border-strong">
                   <Github className="size-4" />
                   View the source
                 </a>
@@ -453,7 +453,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="bg-[#665cff] px-5 py-8 sm:px-8 sm:py-12">
+        <section className="bg-brand-solid px-5 py-8 sm:px-8 sm:py-12">
           <div className="relative mx-auto max-w-[1180px] overflow-hidden rounded-[30px] bg-[#17181d] px-6 py-16 text-center text-white sm:px-12 sm:py-20">
             <div className="pointer-events-none absolute left-1/2 top-0 h-60 w-[620px] -translate-x-1/2 bg-[radial-gradient(ellipse_at_top,rgba(143,240,204,0.24),transparent_68%)]" />
             <div className="relative">

@@ -1,14 +1,20 @@
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import {
+  isResourceId,
+  resourceIdFromShortCode,
+} from "@/lib/resource-short-link";
 
 const resourceIdFromPath = (segments: string[]) => {
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index]?.toLowerCase();
+    if (segment === "r") {
+      const shortResourceId = resourceIdFromShortCode(segments[index + 1] ?? "");
+      if (shortResourceId) return shortResourceId;
+    }
     if (!segment || !["inventory", "resource", "resources"].includes(segment)) {
       continue;
     }
     const candidate = segments[index + 1];
-    if (candidate && UUID_PATTERN.test(candidate)) return candidate.toLowerCase();
+    if (candidate && isResourceId(candidate)) return candidate.toLowerCase();
   }
   return null;
 };
@@ -26,7 +32,7 @@ export type ParsedResourceCode = {
 export function parseResourceCode(value: string): ParsedResourceCode {
   const code = value.trim();
   if (!code) return { code: "", resourceId: null };
-  if (UUID_PATTERN.test(code)) {
+  if (isResourceId(code)) {
     return { code, resourceId: code.toLowerCase() };
   }
 
@@ -34,7 +40,7 @@ export function parseResourceCode(value: string): ParsedResourceCode {
     /^inventory:(?:\/\/)?(?:resource\/)?([0-9a-f-]{36})$/i,
   );
   const compactCandidate = compactMatch?.[1];
-  if (compactCandidate && UUID_PATTERN.test(compactCandidate)) {
+  if (compactCandidate && isResourceId(compactCandidate)) {
     return { code, resourceId: compactCandidate.toLowerCase() };
   }
 
@@ -47,7 +53,7 @@ export function parseResourceCode(value: string): ParsedResourceCode {
     const queryResourceId = [
       url.searchParams.get("resourceId"),
       url.searchParams.get("id"),
-    ].find((candidate) => candidate && UUID_PATTERN.test(candidate));
+    ].find((candidate) => candidate && isResourceId(candidate));
     return {
       code,
       resourceId: pathResourceId ?? queryResourceId?.toLowerCase() ?? null,

@@ -1,0 +1,130 @@
+{
+  "header": {
+    "inventory": "Inventar",
+    "eyebrow": "Schnellerfassung",
+    "title": "Serienerfassung",
+    "processing_one": "{{count}} Element wird verarbeitet",
+    "processing_other": "{{count}} Elemente werden verarbeitet",
+    "ready": "Bereit für das nächste Element"
+  },
+  "types": {
+    "object": "Objekt",
+    "tool": "Werkzeug",
+    "furniture": "Möbel",
+    "clothing": "Kleidung",
+    "vehicle": "Fahrzeug",
+    "place": "Ort",
+    "person": "Person",
+    "project": "Projekt",
+    "other": "Sonstiges"
+  },
+  "camera": {
+    "heading": "Kameraaufnahme",
+    "preview": "Live-Kameravorschau",
+    "ready": "Kamera bereit",
+    "opening": "Kamera wird geöffnet",
+    "off": "Kamera aus",
+    "device": "Kameragerät",
+    "numbered": "Kamera {{number}}",
+    "unavailable": "Kamera nicht verfügbar",
+    "permission": "Warten auf Berechtigung…",
+    "prompt": "Element an seinem Standort fotografieren",
+    "description": "Die rückseitige Kamera wird bevorzugt. Du kannst jederzeit vorhandene Bilder hochladen.",
+    "retry": "Kamera erneut versuchen",
+    "allow": "Kamera erlauben",
+    "upload": "Hochladen",
+    "takePhoto": "Foto aufnehmen",
+    "stop": "Stoppen"
+  },
+  "photos": {
+    "title": "Fotoablage",
+    "description": "Mehrere Blickwinkel verbessern das KI-Ergebnis.",
+    "clear": "Leeren",
+    "selected": "Ausgewählte Fotos",
+    "alt": "Ausgewählte Ansicht {{number}} des Elements",
+    "primary": "Hauptbild",
+    "remove": "Foto {{number}} entfernen",
+    "addMore": "Weitere Fotos hinzufügen",
+    "empty": "Noch keine Fotos",
+    "emptyDescription": "Nimm ein Foto auf oder wähle Bilder von diesem Gerät aus."
+  },
+  "defaults": {
+    "eyebrow": "Vorgaben",
+    "title": "Serie beschreiben",
+    "optional": "Optional",
+    "itemType": "Elementtyp",
+    "locationLabel": "Standortbezeichnung",
+    "locationPlaceholder": "z. B. Werkstatt · Regal B2",
+    "coordinates": "GPS-Koordinaten",
+    "clear": "Leeren",
+    "findingLocation": "Standort wird ermittelt…",
+    "useLocation": "Aktuellen Standort verwenden",
+    "accuracy": "Auf etwa {{meters}} m genau · Zum Aktualisieren tippen",
+    "locationPrivacy": "Wird vertraulich mit diesem Inventarelement gespeichert",
+    "generateCover": "KI-Titelbild erstellen",
+    "generateCoverDescription": "Element erkennen und anschließend aus dem ersten Foto ein sauberes Studio-Titelbild erstellen."
+  },
+  "submit": {
+    "create": "Mit KI erstellen",
+    "photoCount_one": "{{count}} Foto",
+    "photoCount_other": "{{count}} Fotos",
+    "addPhotos": "Fotos hinzufügen",
+    "description": "Die Ablage wird sofort geleert, damit du das nächste Element erfassen kannst, während die KI arbeitet."
+  },
+  "jobs": {
+    "eyebrow": "Hintergrundwarteschlange",
+    "title": "Letzte Aufnahmen",
+    "clearFinished": "Abgeschlossene entfernen",
+    "captureName_one": "Aufnahme mit {{count}} Foto",
+    "captureName_other": "Aufnahme mit {{count}} Fotos",
+    "openItem": "Element öffnen",
+    "empty": "Noch nichts in der Warteschlange",
+    "emptyDescription": "Abgeschlossene und laufende Elemente bleiben hier sichtbar.",
+    "stage": {
+      "ready": "Bereit",
+      "warning": "Mit Warnung gespeichert",
+      "attention": "Aktion erforderlich",
+      "creating": "Element wird erstellt",
+      "uploading": "Fotos werden hochgeladen",
+      "analyzing": "KI identifiziert das Element",
+      "cover": "Titelbild wird erstellt",
+      "processing": "Wird verarbeitet"
+    },
+    "steps": {
+      "save": "Element speichern",
+      "upload": "Hochladen",
+      "analyze": "Analysieren",
+      "cover": "Titelbild"
+    },
+    "messages": {
+      "analysisFailed": "Element und Fotos wurden gespeichert, aber die KI-Analyse ist fehlgeschlagen: {{reason}}",
+      "coverFailed": "Das Element wurde analysiert, aber das KI-Titelbild ist fehlgeschlagen: {{reason}}",
+      "readyWithCover": "Element, Metadaten und KI-Titelbild sind bereit.",
+      "ready": "Element und KI-Metadaten sind bereit."
+    }
+  },
+  "errors": {
+    "cameraBlocked": "Der Kamerazugriff wurde blockiert. Erlaube ihn in den Browsereinstellungen oder lade stattdessen Fotos hoch.",
+    "cameraMissing": "Auf diesem Gerät wurde keine Kamera gefunden.",
+    "cameraInUse": "Die Kamera wird bereits von einer anderen App verwendet.",
+    "cameraOpen": "Die Kamera konnte nicht geöffnet werden.",
+    "cameraUnsupported": "Live-Kameraaufnahmen werden hier nicht unterstützt. Öffne diese Seite über HTTPS oder lade stattdessen Fotos hoch.",
+    "cameraWarming": "Die Kamera startet noch. Versuche es gleich erneut.",
+    "filesUnsupported_one": "{{count}} nicht unterstützte Datei wurde übersprungen.",
+    "filesUnsupported_other": "{{count}} nicht unterstützte Dateien wurden übersprungen.",
+    "filesOverLimit_one": "{{count}} Datei über dem Limit von {{max}} Fotos wurde übersprungen.",
+    "filesOverLimit_other": "{{count}} Dateien über dem Limit von {{max}} Fotos wurden übersprungen.",
+    "filesSkippedBoth": "{{unsupportedCount}} nicht unterstützte Datei(en) und {{limitCount}} über dem Limit von {{max}} Fotos wurden übersprungen.",
+    "photoLimit": "Ein Element kann bis zu {{max}} Fotos enthalten.",
+    "frameNotReady": "Das Kamerabild ist noch nicht bereit.",
+    "frameUnsupported": "Dieser Browser kann das Kamerabild nicht aufnehmen.",
+    "photoProcess": "Das Foto konnte nicht verarbeitet werden.",
+    "photoCapture": "Das Foto konnte nicht aufgenommen werden.",
+    "geolocationUnsupported": "Dieser Browser unterstützt keine Standortbestimmung.",
+    "locationBlocked": "Der Standortzugriff wurde blockiert. Du kannst das Element trotzdem ohne Koordinaten speichern.",
+    "locationUnknown": "Dein aktueller Standort konnte nicht bestimmt werden.",
+    "unknownReason": "Unbekannter Fehler",
+    "batchSave": "Diese Serie konnte nicht gespeichert werden.",
+    "photoRequired": "Nimm zuerst mindestens ein Foto auf oder lade eines hoch."
+  }
+}

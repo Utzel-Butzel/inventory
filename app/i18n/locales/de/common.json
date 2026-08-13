@@ -1,0 +1,55 @@
+{
+  "language": {
+    "label": "Sprache der Benutzeroberfläche",
+    "english": "Englisch",
+    "german": "Deutsch"
+  },
+  "actions": {
+    "add": "Hinzufügen",
+    "back": "Zurück",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "continue": "Weiter",
+    "create": "Erstellen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "refresh": "Aktualisieren",
+    "remove": "Entfernen",
+    "reset": "Zurücksetzen",
+    "retry": "Erneut versuchen",
+    "save": "Speichern",
+    "saving": "Wird gespeichert…",
+    "search": "Suchen",
+    "select": "Auswählen",
+    "upload": "Hochladen"
+  },
+  "state": {
+    "active": "Aktiv",
+    "complete": "Abgeschlossen",
+    "disabled": "Deaktiviert",
+    "error": "Fehler",
+    "loading": "Wird geladen…",
+    "none": "Keine",
+    "ready": "Bereit",
+    "unknown": "Unbekannt"
+  },
+  "roles": {
+    "admin": "Administrator",
+    "editor": "Bearbeiter",
+    "viewer": "Betrachter"
+  },
+  "boolean": {
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "models": {
+    "image": "Bildmodell",
+    "counting": "Zählmodell",
+    "serverDefault": "Serverstandard"
+  },
+  "theme": {
+    "toggle": "Farbmodus wechseln",
+    "light": "Zum hellen Modus wechseln",
+    "dark": "Zum dunklen Modus wechseln"
+  }
+}
