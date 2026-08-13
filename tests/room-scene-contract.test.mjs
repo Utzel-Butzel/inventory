@@ -36,6 +36,23 @@ test("accepts the shared ARKit/RoomPlan scene contract", () => {
   assert.equal(roomSceneSchema.safeParse(validScene).success, true);
 });
 
+test("normalizes RoomPlan's empty optional surface polygon", () => {
+  const withoutPolygon = structuredClone(validScene);
+  withoutPolygon.surfaces[0].polygonCorners = [];
+
+  const parsed = roomSceneSchema.safeParse(withoutPolygon);
+
+  assert.equal(parsed.success, true);
+  assert.equal(parsed.data.surfaces[0].polygonCorners, undefined);
+});
+
+test("rejects partial RoomPlan surface polygons", () => {
+  const partialPolygon = structuredClone(validScene);
+  partialPolygon.surfaces[0].polygonCorners = [[0, 0, 0], [1, 0, 0]];
+
+  assert.equal(roomSceneSchema.safeParse(partialPolygon).success, false);
+});
+
 test("rejects inverted bounds and row-major affine transforms", () => {
   const inverted = structuredClone(validScene);
   inverted.bounds = { min: [1, 0, 0], max: [0, 1, 1] };
