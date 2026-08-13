@@ -12,36 +12,20 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = requestHeaders.get("x-forwarded-proto") ?? "http";
   const fallback = process.env.AUTH_URL ?? "http://localhost:3000";
   const metadataBase = new URL(host ? `${protocol}://${host}` : fallback);
-  const description =
-    "Inventarisieren in Sekunden statt Stunden: Foto aufnehmen, KI-Vorschlag prüfen und speichern. MIT Open Source, selbst hostbar und mit nativer iOS-App.";
+  const locale = requestHeaders.get(UI_LANGUAGE_HEADER) === "de" ? "de" : "en";
+  const description = locale === "de"
+    ? "Die selbst gehostete Open-Inventory-Web-App."
+    : "The self-hosted Open Inventory web app.";
 
   return {
     metadataBase,
     title: {
-      default: "Open Inventory — Inventarisieren in Sekunden",
+      default: "Open Inventory",
       template: "%s · Open Inventory",
     },
     description,
     applicationName: "Open Inventory",
-    openGraph: {
-      type: "website",
-      title: "Open Inventory — Inventarisieren in Sekunden statt Stunden",
-      description,
-      images: [
-        {
-          url: "/og.png",
-          width: 1731,
-          height: 909,
-          alt: "Open Inventory — Inventarisieren in Sekunden statt Stunden",
-        },
-      ],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: "Open Inventory — Inventarisieren in Sekunden statt Stunden",
-      description,
-      images: ["/og.png"],
-    },
+    robots: { index: false, follow: false },
   };
 }
 

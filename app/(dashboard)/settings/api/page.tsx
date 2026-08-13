@@ -16,6 +16,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ApiSettingsPage() {
+  const websiteUrl = process.env.WEBSITE_URL?.trim();
+  const documentationHref = websiteUrl
+    ? new URL("/api-docs", websiteUrl).toString()
+    : "https://github.com/Utzel-Butzel/open-inventory-website#api-documentation";
   const [identity, { t }] = await Promise.all([
     getSessionIdentity(),
     getT("settings"),
@@ -28,7 +32,9 @@ export default async function ApiSettingsPage() {
         description={t("pages.api.description")}
         action={
           <Link
-            href="/api-docs"
+            href={documentationHref}
+            target="_blank"
+            rel="noreferrer"
             className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-border-strong hover:bg-surface-subtle"
           >
             <FileCode2 className="size-4" aria-hidden="true" />

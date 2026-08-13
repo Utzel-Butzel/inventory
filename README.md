@@ -8,6 +8,12 @@ bearer-token API.
 
 Open Inventory is released under the [MIT License](LICENSE).
 
+The public German/English website, blog, feature pages, use cases, and visual
+assets live in the separate
+[open-inventory-website](https://github.com/Utzel-Butzel/open-inventory-website)
+repository. This repository contains the web app, API, database migrations, and
+native iOS app.
+
 ## Included
 
 - Responsive dashboard, searchable grid/table inventory, and item editor
@@ -1135,8 +1141,9 @@ curl -X POST "http://localhost:3000/api/v1/resources/RESOURCE_ID/analyze" \
 
 The checked-in [OpenAPI YAML specification](./public/openapi.yaml) documents
 the complete bearer-token surface. A running deployment also serves the same
-contract as JSON at `/openapi.json`. Anyone can browse the interactive API
-reference at `/api-docs`; authenticated requests still require a browser
+contract as JSON at `/openapi.json`. The separate public website renders the
+interactive API reference. Set `WEBSITE_URL` to its deployed origin so the API
+settings page links there; authenticated requests still require a browser
 session or scoped API token.
 
 ## Commands
