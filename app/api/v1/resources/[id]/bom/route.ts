@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { requireIdentity } from "@/lib/api-auth";
+import {
+  requirePermission,
+  requireResourcePermission,
+} from "@/lib/api-auth";
 import {
   assemblyHttpError,
   getBom,
@@ -42,7 +45,7 @@ const bomSchema = z
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "inventory.read");
   if (authorization.response) return authorization.response;
   const { id } = await context.params;
   if (!z.string().uuid().safeParse(id).success) {
@@ -60,12 +63,16 @@ export async function GET(request: Request, context: Context) {
 }
 
 export async function PUT(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
-  if (authorization.response) return authorization.response;
   const { id } = await context.params;
   if (!z.string().uuid().safeParse(id).success) {
     return Response.json({ error: "Invalid resource id." }, { status: 422 });
   }
+  const authorization = await requireResourcePermission(
+    request,
+    "inventory.update",
+    id,
+  );
+  if (authorization.response) return authorization.response;
 
   let payload: unknown;
   try {

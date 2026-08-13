@@ -12,11 +12,13 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import jsQR from "jsqr";
+import { useT } from "next-i18next/client";
 import {
   FormEvent,
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -42,22 +44,22 @@ const CAMERA_MAX_EDGE = 1_280;
 const PHOTO_MAX_EDGE = 2_048;
 const PHOTO_THRESHOLDS = [128, 160, 190] as const;
 
-function cameraErrorMessage(error: unknown) {
+function cameraErrorKey(error: unknown) {
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError" || error.name === "SecurityError") {
-      return "Camera access was blocked. Allow camera access in your browser settings, then try again.";
+      return "camera.errors.blocked";
     }
     if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
-      return "No camera was found on this device. You can upload a photo or enter the code manually.";
+      return "camera.errors.notFound";
     }
     if (error.name === "NotReadableError" || error.name === "TrackStartError") {
-      return "The camera is already in use or could not be started. Close other camera apps and try again.";
+      return "camera.errors.inUse";
     }
     if (error.name === "OverconstrainedError") {
-      return "The selected camera is not available. Choose another camera or try again.";
+      return "camera.errors.unavailable";
     }
   }
-  return "The camera could not be started. You can still upload a photo or enter the code manually.";
+  return "camera.errors.generic";
 }
 
 function decodePixels(data: Uint8ClampedArray, width: number, height: number) {
@@ -121,6 +123,9 @@ export function CodeScannerCamera({
   onDetected,
   disabled = false,
 }: CodeScannerCameraProps) {
+  const { t, i18n } = useT("scanner");
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -183,14 +188,14 @@ export function CodeScannerCamera({
       if (!window.isSecureContext && window.location.hostname !== "localhost") {
         setCameraStatus("error");
         setCameraError(
-          "Camera access requires a secure HTTPS connection. Open this page over HTTPS, or use photo upload/manual entry below.",
+          t("camera.errors.secureContext"),
         );
         return;
       }
       if (!navigator.mediaDevices?.getUserMedia) {
         setCameraStatus("error");
         setCameraError(
-          "This browser does not provide camera access. Use photo upload or manual entry below.",
+          t("camera.errors.unsupported"),
         );
         return;
       }
@@ -235,7 +240,9 @@ export function CodeScannerCamera({
             .filter((device) => device.kind === "videoinput")
             .map((device, index) => ({
               id: device.deviceId,
-              label: device.label || `Camera ${index + 1}`,
+              label: device.label || t("camera.deviceFallback", {
+                value: integer.format(index + 1),
+              }),
             }));
           if (generation !== cameraGenerationRef.current) return;
           setDevices(availableDevices);
@@ -288,10 +295,10 @@ export function CodeScannerCamera({
         if (generation !== cameraGenerationRef.current) return;
         stopCamera();
         setCameraStatus("error");
-        setCameraError(cameraErrorMessage(error));
+        setCameraError(t(cameraErrorKey(error)));
       }
     },
-    [invalidatePhoto, stopCamera],
+    [integer, invalidatePhoto, stopCamera, t],
   );
 
   const handleDeviceChange = (deviceId: string) => {
@@ -313,7 +320,7 @@ export function CodeScannerCamera({
       if (generation !== photoGenerationRef.current) return;
       if (!code) {
         setPhotoError(
-          "No QR code was found. Try a closer, sharper photo with the whole code visible, or enter the code manually.",
+          t("camera.errors.noQr"),
         );
         return;
       }
@@ -323,7 +330,7 @@ export function CodeScannerCamera({
     } catch {
       if (generation !== photoGenerationRef.current) return;
       setPhotoError(
-        "This image could not be read. Try another photo or enter the code manually.",
+        t("camera.errors.imageUnreadable"),
       );
     } finally {
       if (generation === photoGenerationRef.current) setPhotoBusy(false);
@@ -335,7 +342,7 @@ export function CodeScannerCamera({
     if (disabled || photoBusy) return;
     const code = manualCode.trim();
     if (!code) {
-      setManualError("Enter the complete content expected by the selected workflow.");
+      setManualError(t("camera.errors.manualRequired"));
       return;
     }
     invalidatePhoto();
@@ -357,24 +364,24 @@ export function CodeScannerCamera({
           <div>
             <h2
               id="camera-scanner-title"
-              className="flex items-center gap-2 text-sm font-semibold text-[#292c31]"
+              className="flex items-center gap-2 text-sm font-semibold text-foreground"
             >
-              <Camera className="size-4 text-[#5147d9]" aria-hidden="true" />
-              Scan with camera
+              <Camera className="size-4 text-brand" aria-hidden="true" />
+              {t("camera.title")}
             </h2>
-            <p className="mt-1 text-xs leading-5 text-[#5f6672]">
-              Hold the complete QR code inside the frame.
+            <p className="mt-1 text-xs leading-5 text-muted">
+              {t("camera.description")}
             </p>
           </div>
           {devices.length > 1 ? (
-            <label className="text-xs font-medium text-[#555c67]">
-              <span className="sr-only">Camera</span>
+            <label className="text-xs font-medium text-muted-strong">
+              <span className="sr-only">{t("camera.cameraLabel")}</span>
               <select
-                aria-label="Camera"
+                aria-label={t("camera.cameraLabel")}
                 value={selectedDeviceId}
                 disabled={disabled || isCameraBusy || photoBusy}
                 onChange={(event) => handleDeviceChange(event.target.value)}
-                className="h-9 max-w-52 rounded-lg border border-[#dfe2e7] bg-white px-3 text-xs text-[#34383f] shadow-sm"
+                className="h-9 max-w-52 rounded-lg border border-border bg-surface px-3 text-xs text-foreground shadow-sm"
               >
                 {devices.map((device) => (
                   <option key={device.id} value={device.id}>
@@ -391,7 +398,7 @@ export function CodeScannerCamera({
             ref={videoRef}
             muted
             playsInline
-            aria-label="Live camera preview for QR-code scanning"
+            aria-label={t("camera.previewLabel")}
             className={cn(
               "size-full object-cover transition-opacity",
               isCameraActive ? "opacity-100" : "opacity-20",
@@ -411,9 +418,9 @@ export function CodeScannerCamera({
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-5 text-center text-white">
               {cameraStatus === "paused" ? (
-                <CheckCircle2 className="size-10 text-emerald-400" aria-hidden="true" />
+                <CheckCircle2 className="size-10 text-success" aria-hidden="true" />
               ) : cameraStatus === "error" ? (
-                <CameraOff className="size-10 text-amber-300" aria-hidden="true" />
+                <CameraOff className="size-10 text-warning" aria-hidden="true" />
               ) : isCameraBusy ? (
                 <LoaderCircle className="size-10 animate-spin text-white" aria-hidden="true" />
               ) : (
@@ -421,12 +428,12 @@ export function CodeScannerCamera({
               )}
               <p className="mt-3 text-sm font-semibold">
                 {cameraStatus === "paused"
-                  ? "Scanner paused after detection"
+                  ? t("camera.status.paused")
                   : cameraStatus === "error"
-                    ? "Camera unavailable"
+                    ? t("camera.status.unavailable")
                     : isCameraBusy
-                      ? "Waiting for camera permission…"
-                      : "Camera is off"}
+                      ? t("camera.status.waiting")
+                      : t("camera.status.off")}
               </p>
               {lastDetectedCode ? (
                 <p className="mt-1 max-w-full truncate font-mono text-xs text-white/65">
@@ -449,7 +456,7 @@ export function CodeScannerCamera({
               }}
             >
               <CameraOff className="size-3.5" aria-hidden="true" />
-              Stop camera
+              {t("camera.stop")}
             </Button>
           ) : (
             <Button
@@ -462,7 +469,7 @@ export function CodeScannerCamera({
               ) : (
                 <Play className="size-3.5" aria-hidden="true" />
               )}
-              {cameraStatus === "paused" ? "Scan another code" : "Start camera"}
+              {t(cameraStatus === "paused" ? "camera.scanAnother" : "camera.start")}
             </Button>
           )}
         </div>
@@ -470,41 +477,40 @@ export function CodeScannerCamera({
         {cameraError ? (
           <div
             role="alert"
-            className="mt-3 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900"
+            className="mt-3 flex gap-2 rounded-xl border border-warning-border bg-warning-soft px-3 py-2.5 text-xs leading-5 text-warning"
           >
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <span>{cameraError}</span>
           </div>
         ) : (
-          <p className="mt-2 text-[11px] leading-4 text-[#5f6672]">
-            Camera access works on HTTPS or localhost. The video stays on this device and is
-            only inspected for QR codes.
+          <p className="mt-2 text-[11px] leading-4 text-muted">
+            {t("camera.privacy")}
           </p>
         )}
       </section>
 
       <div className="flex items-center gap-3" aria-hidden="true">
-        <span className="h-px flex-1 bg-[#e4e7eb]" />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#5f6672]">
-          or
+        <span className="h-px flex-1 bg-border" />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+          {t("camera.separator")}
         </span>
-        <span className="h-px flex-1 bg-[#e4e7eb]" />
+        <span className="h-px flex-1 bg-border" />
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <section className="rounded-xl border border-[#e4e7eb] bg-[#f9fafb] p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-[#34383f]">
-            <FileImage className="size-4 text-[#5f6672]" aria-hidden="true" />
-            Upload a QR photo
+        <section className="rounded-xl border border-border bg-surface-subtle p-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <FileImage className="size-4 text-muted" aria-hidden="true" />
+            {t("camera.photo.title")}
           </h3>
-          <p className="mt-1 text-xs leading-5 text-[#5f6672]">
-            Useful when camera access is blocked or the label is hard to reach.
+          <p className="mt-1 text-xs leading-5 text-muted">
+            {t("camera.photo.description")}
           </p>
           <label
             htmlFor={uploadInputId}
             aria-disabled={disabled || photoBusy}
             className={cn(
-              "mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#dfe2e7] bg-white px-3 text-xs font-semibold text-[#34383f] shadow-sm transition hover:bg-[#f4f5f7]",
+              "mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 text-xs font-semibold text-foreground shadow-sm transition hover:bg-surface-hover",
               (disabled || photoBusy) && "pointer-events-none opacity-50",
             )}
           >
@@ -513,7 +519,7 @@ export function CodeScannerCamera({
             ) : (
               <FileImage className="size-3.5" aria-hidden="true" />
             )}
-            {photoBusy ? "Reading photo…" : "Choose or take photo"}
+            {t(photoBusy ? "camera.photo.reading" : "camera.photo.choose")}
           </label>
           <input
             id={uploadInputId}
@@ -530,20 +536,20 @@ export function CodeScannerCamera({
             }}
           />
           {photoError ? (
-            <p role="alert" className="mt-2 text-xs leading-5 text-[#b83243]">
+            <p role="alert" className="mt-2 text-xs leading-5 text-danger">
               {photoError}
             </p>
           ) : null}
         </section>
 
-        <section className="rounded-xl border border-[#e4e7eb] bg-[#f9fafb] p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-[#34383f]">
-            <Keyboard className="size-4 text-[#5f6672]" aria-hidden="true" />
-            Enter code manually
+        <section className="rounded-xl border border-border bg-surface-subtle p-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Keyboard className="size-4 text-muted" aria-hidden="true" />
+            {t("camera.manual.title")}
           </h3>
           <form className="mt-3" onSubmit={submitManualCode} noValidate>
             <label htmlFor={`${uploadInputId}-manual`} className="sr-only">
-              Complete QR-code content
+              {t("camera.manual.label")}
             </label>
             <div className="flex flex-col gap-2 sm:flex-row md:flex-col lg:flex-row">
               <input
@@ -552,12 +558,12 @@ export function CodeScannerCamera({
                 disabled={disabled || photoBusy}
                 autoComplete="off"
                 spellCheck={false}
-                placeholder="Complete QR-code content"
+                placeholder={t("camera.manual.placeholder")}
                 onChange={(event) => {
                   setManualCode(event.target.value);
                   if (manualError) setManualError(null);
                 }}
-                className="h-9 min-w-0 flex-1 rounded-lg border border-[#dfe2e7] bg-white px-3 font-mono text-xs text-[#292c31] shadow-sm placeholder:font-sans placeholder:text-[#5f6672]"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 font-mono text-xs text-foreground shadow-sm placeholder:font-sans placeholder:text-muted"
               />
               <Button
                 type="submit"
@@ -565,15 +571,14 @@ export function CodeScannerCamera({
                 size="sm"
                 disabled={disabled || photoBusy}
               >
-                Use code
+                {t("camera.manual.use")}
               </Button>
             </div>
-            <p className="mt-2 text-[11px] leading-4 text-[#5f6672]">
-              Enter exactly what the QR code contains. Depending on the selected workflow,
-              a URL or prefixed value may be required; a bare EPD number is not always enough.
+            <p className="mt-2 text-[11px] leading-4 text-muted">
+              {t("camera.manual.help")}
             </p>
             {manualError ? (
-              <p role="alert" className="mt-2 text-xs text-[#b83243]">
+              <p role="alert" className="mt-2 text-xs text-danger">
                 {manualError}
               </p>
             ) : null}
@@ -582,7 +587,7 @@ export function CodeScannerCamera({
       </div>
 
       <p className="sr-only" role="status" aria-live="polite">
-        {lastDetectedCode ? `Code detected: ${lastDetectedCode}` : ""}
+        {lastDetectedCode ? t("camera.detected", { code: lastDetectedCode }) : ""}
       </p>
     </div>
   );

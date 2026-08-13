@@ -1,0 +1,221 @@
+{
+  "metadata": {
+    "mapTitle": "Locations",
+    "mapDescription": "View and edit inventory locations on the map.",
+    "roomsTitle": "Rooms in 3D",
+    "roomsDescription": "Explore RoomPlan scans and spatially positioned inventory."
+  },
+  "map": {
+    "loading": "Loading map…",
+    "eyebrow": "Spatial inventory",
+    "title": {
+      "edit": "Edit locations",
+      "view": "Locations"
+    },
+    "summary": {
+      "positioned": "{{located}} of {{total}} items positioned",
+      "structures_one": "{{value}} georeferenced building",
+      "structures_other": "{{value}} georeferenced buildings",
+      "features": "points, rooms, and object outlines"
+    },
+    "changes": {
+      "unsaved_one": "{{value}} unsaved change",
+      "unsaved_other": "{{value}} unsaved changes"
+    },
+    "actions": {
+      "multiSelect": "Multi-select",
+      "multiSelectOn": "Multi-select on",
+      "view": "View",
+      "save": "Save map changes",
+      "edit": "Edit",
+      "readOnly": "Read only",
+      "dismissError": "Dismiss error",
+      "dismissNotice": "Dismiss notice"
+    },
+    "errors": {
+      "load": "Unable to load map data.",
+      "polygonPoints": "A polygon needs at least three points.",
+      "save_one": "{{value}} map change could not be saved.",
+      "save_other": "{{value}} map changes could not be saved.",
+      "quickEditRequired": "Choose at least one quick edit.",
+      "batch": "Unable to update selection.",
+      "saveBeforeView": "Save your map changes before returning to the map view."
+    },
+    "notices": {
+      "pointPlaced": "Point placed. Save the map changes when you are ready.",
+      "outlineAdded": "Outline added. Drag orange corners or click green handles to refine it.",
+      "saved_one": "{{value}} map change saved.",
+      "saved_other": "{{value}} map changes saved.",
+      "updated_one": "{{value}} item updated.",
+      "updated_other": "{{value}} items updated."
+    },
+    "search": {
+      "placeholder": "Find items, locations, or tags…",
+      "noMatches": "No matching inventory items."
+    },
+    "selection": {
+      "selected_one": "{{value}} selected item",
+      "selected_other": "{{value}} selected items",
+      "selectResults": "Select results",
+      "clear": "Clear",
+      "empty": "Select an item in the list or on the map."
+    },
+    "resource": {
+      "features_one": "{{value}} map feature",
+      "features_other": "{{value}} map features",
+      "notPositioned": "Not positioned",
+      "open": "Open item"
+    },
+    "draw": {
+      "title": "Draw geometry",
+      "layerPlaceholder": "Layer, e.g. Workshop",
+      "placePoint": "Place point",
+      "drawOutline": "Draw outline",
+      "pointHint": "Click the map to place a point.",
+      "polygonHint_one": "Click corners on the map · {{value}} point",
+      "polygonHint_other": "Click corners on the map · {{value}} points",
+      "finishPolygon": "Finish polygon",
+      "cancel": "Cancel",
+      "placeOverlay": "Click once to place the item",
+      "polygonOverlay_one": "{{value}} corner · Enter to finish · Esc to cancel",
+      "polygonOverlay_other": "{{value}} corners · Enter to finish · Esc to cancel"
+    },
+    "features": {
+      "title": "Map features",
+      "edit": "Edit {{type}}",
+      "delete": "Delete map feature",
+      "layer": "Layer",
+      "description": "Description",
+      "editHint": "Drag orange handles · click green handles to add a corner · Alt/Option-click orange handles to remove one.",
+      "types": {
+        "point": "point",
+        "polygon": "polygon"
+      }
+    },
+    "quickEdit": {
+      "title_one": "Quick edit · {{value}} selected item",
+      "title_other": "Quick edit · {{value}} selected items",
+      "keepStatus": "Keep status",
+      "keepType": "Keep type",
+      "keepPriority": "Keep priority",
+      "priority": "Priority {{value}}",
+      "addTags": "Add tags…",
+      "changeLocation": "Change location label",
+      "locationPlaceholder": "Workshop · Shelf A3 (empty clears)",
+      "apply": "Apply to selection"
+    },
+    "statuses": {
+      "available": "Available",
+      "in-use": "In use",
+      "maintenance": "Maintenance",
+      "archived": "Archived"
+    },
+    "types": {
+      "tool": "Tool",
+      "object": "Object",
+      "furniture": "Furniture",
+      "vehicle": "Vehicle",
+      "place": "Place",
+      "clothing": "Clothing",
+      "person": "Person",
+      "project": "Project",
+      "other": "Other"
+    },
+    "structures": {
+      "title": "Buildings",
+      "select": "Select building",
+      "all": "All buildings",
+      "rooms_one": "{{value}} room",
+      "rooms_other": "{{value}} rooms",
+      "open3d": "Open rooms in 3D"
+    },
+    "basemap": {
+      "map": "Map",
+      "satellite": "Satellite"
+    },
+    "shortcuts": "Shift-click to add to selection · P point · G polygon · ⌘/Ctrl+S save",
+    "canvasLabel": "Inventory map",
+    "controls": {
+      "toggleAttribution": "Toggle attribution",
+      "mapTitle": "Map",
+      "resetBearing": "Drag to rotate map, click to reset north",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out"
+    },
+    "defaultLayers": {
+      "location": "Location",
+      "area": "Area"
+    }
+  },
+  "rooms": {
+    "loading": "Loading 3D rooms…",
+    "errors": {
+      "loadRooms": "Unable to load rooms.",
+      "loadScene": "Unable to load room scene."
+    },
+    "empty": {
+      "title": "No rooms have been scanned yet",
+      "description": "Open the Inventory iPhone app, choose Rooms, and scan a room with RoomPlan. Its 3D model and every spatially captured inventory item will appear here.",
+      "requirement": "Requires a LiDAR-capable iPhone"
+    },
+    "eyebrow": "Spatial inventory",
+    "title": "Rooms in 3D",
+    "subtitle": "Navigate RoomPlan scans and open inventory items at their measured positions.",
+    "stats": {
+      "rooms_one": "{{value}} room",
+      "rooms_other": "{{value}} rooms",
+      "items_one": "{{value}} positioned item",
+      "items_other": "{{value}} positioned items",
+      "linked_one": "{{value}} linked room · shared AR frame",
+      "linked_other": "{{value}} linked rooms · shared AR frame"
+    },
+    "structures": {
+      "building": "Building",
+      "individualRooms": "All individual rooms",
+      "summary": "{{floors}} · {{rooms}}",
+      "floors_one": "{{value}} floor",
+      "floors_other": "{{value}} floors",
+      "rooms_one": "{{value}} room",
+      "rooms_other": "{{value}} rooms",
+      "floorRooms_one": "{{floor}} · {{value}} room",
+      "floorRooms_other": "{{floor}} · {{value}} rooms",
+      "viewMap": "View on map"
+    },
+    "scans": {
+      "title": "Scanned rooms",
+      "revision_one": "Revision {{revision}} · {{value}} item",
+      "revision_other": "Revision {{revision}} · {{value}} items",
+      "sharedFrame": "Shared AR frame {{id}}"
+    },
+    "scene": {
+      "noItemsTitle": "No items placed yet",
+      "noItemsDescription": "Capture an item in this room with the AR mode in the iPhone app.",
+      "roomFallback": "Room",
+      "downloadUsdz": "Download original USDZ"
+    },
+    "placements": {
+      "searchPlaceholder": "Search positioned items…",
+      "noMatches": "No matching items",
+      "coordinates": "{{coordinates}} m",
+      "accuracy": "Accuracy {{value}} · {{method}}",
+      "open": "Open {{name}}",
+      "methods": {
+        "manual": "manual",
+        "scene-depth": "scene depth",
+        "mesh-raycast": "mesh raycast",
+        "plane-raycast": "plane raycast"
+      }
+    }
+  },
+  "canvas": {
+    "unsupported": "3D rendering is not supported by this browser.",
+    "aria": {
+      "single": "3D model of {{room}}",
+      "multiple_one": "3D model of {{room}} and {{value}} linked room",
+      "multiple_other": "3D model of {{room}} and {{value}} linked rooms"
+    },
+    "topView": "Top view",
+    "resetView": "Reset view",
+    "controlsHint": "Drag: rotate · two fingers: pan · scroll: zoom"
+  }
+}

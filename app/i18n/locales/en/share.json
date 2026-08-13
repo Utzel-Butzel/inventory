@@ -1,0 +1,75 @@
+{
+  "metadata": {
+    "collection": "Shared inventory",
+    "collectionDescription": "Browse inventory shared through a read-only public link.",
+    "item": "Shared inventory item",
+    "itemDescription": "View an inventory item shared through a read-only public link."
+  },
+  "header": {
+    "sharedInventory": "Shared inventory",
+    "viewOnly": "View only"
+  },
+  "collection": {
+    "eyebrow": "Public collection",
+    "count_one": "{{count}} shared item",
+    "count_other": "{{count}} shared items",
+    "filtered": "Filtered collection",
+    "searchPlaceholder": "Search shared inventory…",
+    "searchLabel": "Search shared inventory",
+    "empty": {
+      "title": "No shared items right now",
+      "search": "Try a different search.",
+      "default": "Items will appear here when they match this share."
+    }
+  },
+  "pagination": {
+    "label": "Pagination",
+    "position": "Page {{page}} of {{pages}}",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "statuses": {
+    "available": "Available",
+    "in-use": "In use",
+    "maintenance": "Maintenance",
+    "archived": "Archived"
+  },
+  "types": {
+    "tool": "Tool",
+    "object": "Object",
+    "furniture": "Furniture",
+    "vehicle": "Vehicle",
+    "place": "Place",
+    "clothing": "Clothing",
+    "person": "Person",
+    "project": "Project",
+    "other": "Other"
+  },
+  "resource": {
+    "back": "Back to shared inventory",
+    "overview": "Overview",
+    "media": "Media",
+    "details": "Item details",
+    "classification": "Classification",
+    "customFields": "Custom fields",
+    "noDescriptionShort": "No description",
+    "noDescription": "No description has been added.",
+    "noLocation": "No location",
+    "units_one": "{{count}} unit",
+    "units_other": "{{count}} units",
+    "fields": {
+      "type": "Type",
+      "quantity": "Quantity",
+      "sku": "SKU",
+      "location": "Location"
+    }
+  },
+  "boolean": {
+    "yes": "Yes",
+    "no": "No"
+  },
+  "unavailable": {
+    "title": "This shared inventory is unavailable",
+    "description": "The link may be invalid, expired, or no longer shared."
+  }
+}

@@ -10,6 +10,8 @@ import {
   Upload,
 } from "lucide-react";
 import { type ChangeEvent, useMemo, useRef, useState } from "react";
+import type { TFunction } from "i18next";
+import { useT } from "next-i18next/client";
 
 import { Button, Card } from "@/components/ui";
 
@@ -124,7 +126,7 @@ const removeSpreadsheetGuard = (value: string) =>
     ? value.slice(1)
     : value;
 
-function parseCsv(source: string): CsvRow[] {
+function parseCsv(source: string, t: TFunction<"settings">): CsvRow[] {
   const text = source.startsWith("\uFEFF") ? source.slice(1) : source;
   const rows: CsvRow[] = [];
   let cells: string[] = [];
@@ -162,7 +164,7 @@ function parseCsv(source: string): CsvRow[] {
     }
 
     if (character === '"') {
-      if (field.length) throw new Error(`Unexpected quote on line ${line}.`);
+      if (field.length) throw new Error(t("csv.validation.unexpectedQuote", { line }));
       inQuotes = true;
     } else if (character === ",") {
       cells.push(field);
@@ -178,7 +180,7 @@ function parseCsv(source: string): CsvRow[] {
   }
 
   if (inQuotes) {
-    throw new Error(`Quoted cell beginning on line ${rowStartLine} is not closed.`);
+    throw new Error(t("csv.validation.unclosedQuote", { line: rowStartLine }));
   }
   if (field.length || cells.length) finishRow();
   return rows;
@@ -188,15 +190,16 @@ const numberError = (
   value: string,
   label: string,
   options: { integer?: boolean; min: number; max: number },
+  t: TFunction<"settings">,
 ) => {
   if (!value.trim()) return null;
   const number = Number(value);
-  if (!Number.isFinite(number)) return `${label} must be a number.`;
+  if (!Number.isFinite(number)) return t("csv.validation.number", { label });
   if (options.integer && !Number.isInteger(number)) {
-    return `${label} must be a whole number.`;
+    return t("csv.validation.wholeNumber", { label });
   }
   if (number < options.min || number > options.max) {
-    return `${label} must be between ${options.min} and ${options.max}.`;
+    return t("csv.validation.range", { label, min: options.min, max: options.max });
   }
   return null;
 };
@@ -205,6 +208,7 @@ const validateJson = (
   value: string,
   label: string,
   shape: "array" | "object",
+  t: TFunction<"settings">,
 ) => {
   if (!value.trim()) return null;
   if (
@@ -216,17 +220,17 @@ const validateJson = (
   try {
     const parsed = JSON.parse(value) as unknown;
     if (shape === "array" && !Array.isArray(parsed)) {
-      return `${label} must contain a JSON array.`;
+      return t("csv.validation.jsonArray", { label });
     }
     if (
       shape === "object" &&
       (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
     ) {
-      return `${label} must contain a JSON object.`;
+      return t("csv.validation.jsonObject", { label });
     }
     return null;
   } catch {
-    return `${label} contains invalid JSON.`;
+    return t("csv.validation.invalidJson", { label });
   }
 };
 
@@ -234,10 +238,11 @@ function validateRow(
   row: CsvRow,
   headers: string[],
   validResourceTypes: ReadonlySet<string>,
+  t: TFunction<"settings">,
 ): PreviewRow {
   const errors: string[] = [];
   if (row.cells.length > headers.length) {
-    errors.push(`Expected ${headers.length} cells but found ${row.cells.length}.`);
+    errors.push(t("csv.validation.cellCount", { expected: headers.length, actual: row.cells.length }));
   }
   const values: Record<string, string> = {};
   headers.forEach((header, index) => {
@@ -245,30 +250,30 @@ function validateRow(
   });
   const value = (header: string) => values[header] ?? "";
 
-  if (!value("name").trim()) errors.push("name is required.");
-  if (value("name").trim().length > 240) errors.push("name is longer than 240 characters.");
+  if (!value("name").trim()) errors.push(t("csv.validation.required", { label: "name" }));
+  if (value("name").trim().length > 240) errors.push(t("csv.validation.tooLong", { label: "name", max: 240 }));
   if (value("description").length > 20_000) {
-    errors.push("description is longer than 20,000 characters.");
+    errors.push(t("csv.validation.tooLong", { label: "description", max: "20,000" }));
   }
-  if (value("sku").trim().length > 80) errors.push("sku is longer than 80 characters.");
+  if (value("sku").trim().length > 80) errors.push(t("csv.validation.tooLong", { label: "sku", max: 80 }));
   if (value("location").trim().length > 240) {
-    errors.push("location is longer than 240 characters.");
+    errors.push(t("csv.validation.tooLong", { label: "location", max: 240 }));
   }
   if (value("serial_number").trim().length > 180) {
-    errors.push("serial_number is longer than 180 characters.");
+    errors.push(t("csv.validation.tooLong", { label: "serial_number", max: 180 }));
   }
-  if (value("notes").length > 20_000) errors.push("notes is longer than 20,000 characters.");
+  if (value("notes").length > 20_000) errors.push(t("csv.validation.tooLong", { label: "notes", max: "20,000" }));
   if (
     value("type").trim() &&
     !validResourceTypes.has(value("type").trim())
   ) {
-    errors.push(`Unknown type: ${value("type").trim()}.`);
+    errors.push(t("csv.validation.unknownType", { value: value("type").trim() }));
   }
   if (value("status").trim() && !resourceStatuses.has(value("status").trim())) {
-    errors.push(`Unknown status: ${value("status").trim()}.`);
+    errors.push(t("csv.validation.unknownStatus", { value: value("status").trim() }));
   }
   if (value("currency").trim() && value("currency").trim().length !== 3) {
-    errors.push("currency must use a three-letter code such as EUR.");
+    errors.push(t("csv.validation.currency"));
   }
 
   for (const error of [
@@ -276,24 +281,24 @@ function validateRow(
       integer: true,
       min: 0,
       max: 1_000_000,
-    }),
+    }, t),
     numberError(value("value_cents"), "value_cents", {
       integer: true,
       min: 0,
       max: 2_000_000_000,
-    }),
-    numberError(value("priority"), "priority", { integer: true, min: 1, max: 5 }),
-    numberError(value("gps_latitude"), "gps_latitude", { min: -90, max: 90 }),
-    numberError(value("gps_longitude"), "gps_longitude", { min: -180, max: 180 }),
+    }, t),
+    numberError(value("priority"), "priority", { integer: true, min: 1, max: 5 }, t),
+    numberError(value("gps_latitude"), "gps_latitude", { min: -90, max: 90 }, t),
+    numberError(value("gps_longitude"), "gps_longitude", { min: -180, max: 180 }, t),
     numberError(value("gps_altitude"), "gps_altitude", {
       min: -12_000,
       max: 100_000,
-    }),
-    validateJson(value("tags"), "tags", "array"),
-    validateJson(value("categories"), "categories", "array"),
-    validateJson(value("related_resource_ids"), "related_resource_ids", "array"),
-    validateJson(value("map_features"), "map_features", "array"),
-    validateJson(value("custom_fields"), "custom_fields", "object"),
+    }, t),
+    validateJson(value("tags"), "tags", "array", t),
+    validateJson(value("categories"), "categories", "array", t),
+    validateJson(value("related_resource_ids"), "related_resource_ids", "array", t),
+    validateJson(value("map_features"), "map_features", "array", t),
+    validateJson(value("custom_fields"), "custom_fields", "object", t),
   ]) {
     if (error) errors.push(error);
   }
@@ -304,11 +309,12 @@ function validateRow(
 function previewCsv(
   text: string,
   validResourceTypes: ReadonlySet<string>,
+  t: TFunction<"settings">,
 ): CsvPreview {
-  const parsed = parseCsv(text);
+  const parsed = parseCsv(text, t);
   const headerRow = parsed[0];
   if (!headerRow || headerRow.cells.every((cell) => !cell.trim())) {
-    return { headers: [], rows: [], totalRows: 0, errors: ["A header row is required."] };
+    return { headers: [], rows: [], totalRows: 0, errors: [t("csv.validation.headerRequired")] };
   }
 
   const headers = headerRow.cells.map(canonicalHeader);
@@ -317,24 +323,24 @@ function previewCsv(
     (header, index) => headers.indexOf(header) !== index,
   );
   const unknown = headers.filter((header) => !supportedHeaders.has(header));
-  if (headers.some((header) => !header)) errors.push("Headers cannot be empty.");
+  if (headers.some((header) => !header)) errors.push(t("csv.validation.emptyHeaders"));
   if (duplicates.length) {
-    errors.push(`Duplicate headers: ${Array.from(new Set(duplicates)).join(", ")}.`);
+    errors.push(t("csv.validation.duplicateHeaders", { headers: Array.from(new Set(duplicates)).join(", ") }));
   }
   if (unknown.length) {
-    errors.push(`Unsupported headers: ${Array.from(new Set(unknown)).join(", ")}.`);
+    errors.push(t("csv.validation.unsupportedHeaders", { headers: Array.from(new Set(unknown)).join(", ") }));
   }
-  if (!headers.includes("name")) errors.push("The name header is required.");
+  if (!headers.includes("name")) errors.push(t("csv.validation.nameHeaderRequired"));
 
   const dataRows = parsed
     .slice(1)
     .filter((row) => row.cells.some((cell) => cell.trim()));
-  if (!dataRows.length) errors.push("The file does not contain any inventory rows.");
+  if (!dataRows.length) errors.push(t("csv.validation.noRows"));
   if (dataRows.length > MAX_DATA_ROWS) {
-    errors.push(`One import may contain at most ${MAX_DATA_ROWS} rows.`);
+    errors.push(t("csv.validation.maxRows", { count: MAX_DATA_ROWS }));
   }
   const rows = dataRows.map((row) =>
-    validateRow(row, headers, validResourceTypes),
+    validateRow(row, headers, validResourceTypes, t),
   );
   return { headers, rows, totalRows: dataRows.length, errors };
 }
@@ -348,12 +354,12 @@ const newIdempotencyKey = () => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
-const responseError = async (response: Response) => {
+const responseError = async (response: Response, fallback: string) => {
   try {
     const payload = (await response.json()) as { error?: string; details?: string[] };
     return [payload.error, ...(payload.details ?? [])].filter(Boolean).join(" ");
   } catch {
-    return `Request failed (HTTP ${response.status}).`;
+    return fallback;
   }
 };
 
@@ -371,6 +377,8 @@ export function CsvImportExport({
   allowImport?: boolean;
   inventoryTypeKeys?: string[];
 }) {
+  const { t, i18n } = useT("settings");
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [csvText, setCsvText] = useState("");
@@ -422,7 +430,7 @@ export function CsvImportExport({
     setImportKey(file ? newIdempotencyKey() : "");
     if (!file) return;
     if (file.size > MAX_FILE_BYTES) {
-      setError("CSV files may be at most 5 MB.");
+      setError(t("csv.errors.maxFile"));
       return;
     }
 
@@ -430,15 +438,15 @@ export function CsvImportExport({
       const text = new TextDecoder("utf-8", { fatal: true }).decode(
         await file.arrayBuffer(),
       );
-      if (text.includes("\u0000")) throw new Error("The file contains null characters.");
-      const parsedPreview = previewCsv(text, validResourceTypes);
+      if (text.includes("\u0000")) throw new Error(t("csv.errors.nullCharacters"));
+      const parsedPreview = previewCsv(text, validResourceTypes, t);
       setCsvText(text);
       setPreview(parsedPreview);
     } catch (readError) {
       setError(
         readError instanceof Error
           ? readError.message
-          : "The selected file is not valid UTF-8 CSV.",
+          : t("csv.errors.invalidUtf8"),
       );
     }
   };
@@ -450,7 +458,7 @@ export function CsvImportExport({
       const response = await fetch("/api/v1/resources/export", {
         headers: { Accept: "text/csv" },
       });
-      if (!response.ok) throw new Error(await responseError(response));
+      if (!response.ok) throw new Error(await responseError(response, t("csv.errors.request", { status: response.status })));
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = url;
@@ -460,7 +468,7 @@ export function CsvImportExport({
       link.remove();
       URL.revokeObjectURL(url);
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : "Export failed.");
+      setError(exportError instanceof Error ? exportError.message : t("csv.errors.export"));
     } finally {
       setExporting(false);
     }
@@ -480,12 +488,12 @@ export function CsvImportExport({
         },
         body: csvText,
       });
-      if (!response.ok) throw new Error(await responseError(response));
+      if (!response.ok) throw new Error(await responseError(response, t("csv.errors.request", { status: response.status })));
       const payload = (await response.json()) as CsvImportResponse;
       setResult(payload);
       if (payload.summary.created) onImported?.(payload.summary);
     } catch (importError) {
-      setError(importError instanceof Error ? importError.message : "Import failed.");
+      setError(importError instanceof Error ? importError.message : t("csv.errors.import"));
     } finally {
       setImporting(false);
     }
@@ -493,16 +501,16 @@ export function CsvImportExport({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
-            <FileSpreadsheet className="size-4 text-emerald-700" aria-hidden="true" />
-            CSV import and export
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <FileSpreadsheet className="size-4 text-success" aria-hidden="true" />
+            {t("csv.title")}
           </div>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
+          <p className="mt-1 text-xs leading-5 text-muted">
             {allowImport
-              ? "Export a safe spreadsheet, or preview up to 1,000 new inventory items before importing."
-              : "Export the current inventory as a spreadsheet."}
+              ? t("csv.description")
+              : t("csv.exportOnlyDescription")}
           </p>
         </div>
         <Button variant="secondary" onClick={() => void exportCsv()} disabled={exporting}>
@@ -511,31 +519,31 @@ export function CsvImportExport({
           ) : (
             <Download className="size-4" aria-hidden="true" />
           )}
-          Export CSV
+          {t("csv.export")}
         </Button>
       </div>
 
       {allowImport ? <div className="space-y-4 p-5">
-        <div className="flex flex-col gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border-strong bg-surface-subtle/70 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-800">
-              {selectedFile ? selectedFile.name : "Choose a UTF-8 CSV file"}
+            <p className="truncate text-sm font-semibold text-muted-strong">
+              {selectedFile ? selectedFile.name : t("csv.chooseFile")}
             </p>
-            <p className="mt-1 text-xs text-slate-600">
+            <p className="mt-1 text-xs text-muted">
               {selectedFile
-                ? `${(selectedFile.size / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 })} KB`
-                : "Use the exported headers; id and timestamps are ignored on import."}
+                ? `${(selectedFile.size / 1024).toLocaleString(locale, { maximumFractionDigits: 1 })} KB`
+                : t("csv.fileHint")}
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
             {selectedFile ? (
               <Button variant="ghost" size="sm" onClick={resetFile}>
-                <RotateCcw className="size-3.5" aria-hidden="true" /> Reset
+                <RotateCcw className="size-3.5" aria-hidden="true" /> {t("csv.reset")}
               </Button>
             ) : null}
-            <label className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-medium text-slate-700 shadow-sm transition hover:bg-slate-50">
+            <label className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border-strong bg-surface px-3 text-[13px] font-medium text-muted-strong shadow-sm transition hover:bg-surface-subtle">
               <Upload className="size-3.5" aria-hidden="true" />
-              {selectedFile ? "Replace" : "Choose file"}
+              {selectedFile ? t("csv.replace") : t("csv.choose")}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -550,7 +558,7 @@ export function CsvImportExport({
         {error ? (
           <div
             role="alert"
-            className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-800"
+            className="flex items-start gap-2 rounded-xl border border-danger-border bg-danger-soft px-3.5 py-3 text-sm text-danger"
           >
             <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <span>{error}</span>
@@ -560,55 +568,54 @@ export function CsvImportExport({
         {preview ? (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-                Preview · {preview.totalRows} {preview.totalRows === 1 ? "row" : "rows"}
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+                {t("csv.previewRows", { count: preview.totalRows })}
               </p>
               {preview.errors.length || rowErrors.length ? (
-                <span className="text-xs font-semibold text-red-700">
-                  {preview.errors.length + rowErrors.length} issue
-                  {preview.errors.length + rowErrors.length === 1 ? "" : "s"}
+                <span className="text-xs font-semibold text-danger">
+                  {t("csv.issues", { count: preview.errors.length + rowErrors.length })}
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
-                  <CheckCircle2 className="size-3.5" aria-hidden="true" /> Ready to import
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-success">
+                  <CheckCircle2 className="size-3.5" aria-hidden="true" /> {t("csv.ready")}
                 </span>
               )}
             </div>
 
             {preview.errors.length ? (
-              <ul className="space-y-1 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
+              <ul className="space-y-1 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-xs text-danger">
                 {preview.errors.map((message) => (
                   <li key={message}>• {message}</li>
                 ))}
               </ul>
             ) : null}
 
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
-                <thead className="bg-slate-50 text-slate-600">
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="min-w-full divide-y divide-border text-left text-xs">
+                <thead className="bg-surface-subtle text-muted">
                   <tr>
-                    <th className="px-3 py-2 font-semibold">Line</th>
-                    <th className="px-3 py-2 font-semibold">Name</th>
-                    <th className="px-3 py-2 font-semibold">Type</th>
-                    <th className="px-3 py-2 font-semibold">SKU</th>
-                    <th className="px-3 py-2 font-semibold">Quantity</th>
-                    <th className="px-3 py-2 font-semibold">Location</th>
-                    <th className="px-3 py-2 font-semibold">Validation</th>
+                    <th className="px-3 py-2 font-semibold">{t("csv.table.line")}</th>
+                    <th className="px-3 py-2 font-semibold">{t("csv.table.name")}</th>
+                    <th className="px-3 py-2 font-semibold">{t("csv.table.type")}</th>
+                    <th className="px-3 py-2 font-semibold">{t("csv.table.sku")}</th>
+                    <th className="px-3 py-2 font-semibold">{t("csv.table.quantity")}</th>
+                    <th className="px-3 py-2 font-semibold">{t("csv.table.location")}</th>
+                    <th className="px-3 py-2 font-semibold">{t("csv.table.validation")}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                <tbody className="divide-y divide-border bg-surface text-muted-strong">
                   {preview.rows.slice(0, PREVIEW_ROWS).map((row) => (
-                    <tr key={row.line} className={row.errors.length ? "bg-red-50/60" : undefined}>
-                      <td className="whitespace-nowrap px-3 py-2 text-slate-600">{row.line}</td>
-                      <td className="max-w-52 truncate px-3 py-2 font-medium text-slate-900">
+                    <tr key={row.line} className={row.errors.length ? "bg-danger-soft/60" : undefined}>
+                      <td className="whitespace-nowrap px-3 py-2 text-muted">{row.line}</td>
+                      <td className="max-w-52 truncate px-3 py-2 font-medium text-foreground">
                         {row.values.name || "—"}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2">{row.values.type || "object"}</td>
                       <td className="whitespace-nowrap px-3 py-2">{row.values.sku || "—"}</td>
                       <td className="whitespace-nowrap px-3 py-2">{row.values.quantity || "1"}</td>
                       <td className="max-w-44 truncate px-3 py-2">{row.values.location || "—"}</td>
-                      <td className={row.errors.length ? "px-3 py-2 text-red-700" : "px-3 py-2 text-emerald-700"}>
-                        {row.errors.length ? row.errors.join(" ") : "Valid"}
+                      <td className={row.errors.length ? "px-3 py-2 text-danger" : "px-3 py-2 text-success"}>
+                        {row.errors.length ? row.errors.join(" ") : t("csv.table.valid")}
                       </td>
                     </tr>
                   ))}
@@ -616,8 +623,8 @@ export function CsvImportExport({
               </table>
             </div>
             {preview.totalRows > PREVIEW_ROWS ? (
-              <p className="text-xs text-slate-600">
-                Showing the first {PREVIEW_ROWS} rows; all {preview.totalRows} rows were validated.
+              <p className="text-xs text-muted">
+                {t("csv.showingRows", { shown: PREVIEW_ROWS, total: preview.totalRows })}
               </p>
             ) : null}
           </div>
@@ -625,23 +632,27 @@ export function CsvImportExport({
 
         {result ? (
           <div
-            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3"
+            className="rounded-xl border border-success-border bg-success-soft px-4 py-3"
             aria-live="polite"
           >
-            <p className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
-              <CheckCircle2 className="size-4" aria-hidden="true" /> Import finished
+            <p className="flex items-center gap-2 text-sm font-semibold text-success">
+              <CheckCircle2 className="size-4" aria-hidden="true" /> {t("csv.finished")}
             </p>
-            <p className="mt-1 text-xs leading-5 text-emerald-800">
-              {result.summary.created} created, {result.summary.replayed} already imported, {result.summary.failed} failed.
+            <p className="mt-1 text-xs leading-5 text-success">
+              {t("csv.summary", result.summary)}
             </p>
             {result.summary.failed ? (
-              <ul className="mt-2 space-y-1 text-xs text-red-800">
+              <ul className="mt-2 space-y-1 text-xs text-danger">
                 {result.rows
                   .filter((row) => row.status === "error")
                   .slice(0, 20)
                   .map((row) => (
                     <li key={row.line}>
-                      Line {row.line}: {row.error} {row.details?.join(" ")}
+                      {t("csv.lineError", {
+                        line: row.line,
+                        error: row.error ?? "",
+                        details: row.details?.join(" ") ?? "",
+                      })}
                     </li>
                   ))}
               </ul>
@@ -649,9 +660,9 @@ export function CsvImportExport({
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="max-w-xl text-xs leading-5 text-slate-600">
-            Import only creates new items. Existing records and matching SKUs are never changed.
+        <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-xl text-xs leading-5 text-muted">
+            {t("csv.importNote")}
           </p>
           <Button onClick={() => void importCsv()} disabled={!canImport}>
             {importing ? (
@@ -659,7 +670,7 @@ export function CsvImportExport({
             ) : (
               <Upload className="size-4" aria-hidden="true" />
             )}
-            Import {preview?.totalRows ?? 0} {preview?.totalRows === 1 ? "item" : "items"}
+            {t("csv.importItems", { count: preview?.totalRows ?? 0 })}
           </Button>
         </div>
       </div> : null}

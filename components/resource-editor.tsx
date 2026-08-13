@@ -36,12 +36,14 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useT } from "next-i18next/client";
 
 import { defaultCoverPrompt } from "@/lib/ai-prompts";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 import { prepareUpload, readImageGps } from "@/lib/client-media";
 import { AssemblyManager } from "@/components/assembly-manager";
 import { CustomFieldInputs } from "@/components/custom-field-inputs";
+import { ResourceTranslations } from "@/components/resource-translations";
 import {
   ImageModelSelector,
   useImageModelPreference,
@@ -111,8 +113,8 @@ type InventoryTypeOption = {
 };
 
 const inputClass =
-  "mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-600 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50 disabled:text-slate-600";
-const labelClass = "block text-xs font-semibold text-slate-700";
+  "mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-success focus:ring-4 focus:ring-success-border disabled:bg-surface-subtle disabled:text-muted";
+const labelClass = "block text-xs font-semibold text-muted-strong";
 
 const toForm = (resource: ClientResource): FormState => ({
   name: resource.name,
@@ -148,8 +150,20 @@ const customFieldDefinitionsFromResponse = (payload: unknown) => {
   return Array.isArray(candidate) ? (candidate as CustomFieldDefinition[]) : [];
 };
 
-export function ResourceEditor({ resourceId }: { resourceId?: string }) {
+export function ResourceEditor({
+  resourceId,
+  canDelete = false,
+  canUseAi = false,
+  canManageSpatial = false,
+}: {
+  resourceId?: string;
+  canDelete?: boolean;
+  canUseAi?: boolean;
+  canManageSpatial?: boolean;
+}) {
   const router = useRouter();
+  const { t, i18n } = useT("resource");
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const isNew = !resourceId;
   const imageModelPreference = useImageModelPreference();
   const [resource, setResource] = useState<ClientResource | null>(null);
@@ -172,7 +186,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
   const [loading, setLoading] = useState(Boolean(resourceId));
   const [saving, setSaving] = useState(false);
   const [aiAction, setAiAction] = useState<"analyze" | "cover" | null>(null);
-  const [autoAnalyze, setAutoAnalyze] = useState(true);
+  const [autoAnalyze, setAutoAnalyze] = useState(canUseAi);
   const [autoCover, setAutoCover] = useState(false);
   const [coverPrompt, setCoverPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -191,11 +205,11 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
       setCustomFields(response.resource.customFields ?? {});
       setCoverPrompt(defaultCoverPrompt(response.resource.name));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load item.");
+      setError(loadError instanceof Error ? loadError.message : t("errors.load"));
     } finally {
       setLoading(false);
     }
-  }, [resourceId]);
+  }, [resourceId, t]);
 
   const loadCustomFieldDefinitions = useCallback(async () => {
     setCustomFieldsLoading(true);
@@ -216,12 +230,12 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
       setCustomFieldsError(
         loadError instanceof Error
           ? loadError.message
-          : "Unable to load custom field definitions.",
+          : t("errors.loadCustomFields"),
       );
     } finally {
       setCustomFieldsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadInventoryTypes = useCallback(async () => {
     try {
@@ -296,13 +310,18 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
         file.type === "application/pdf",
     );
     if (supported.length !== incoming.length) {
-      setError("Some files were skipped. Supported formats are images, video, and PDF.");
+      setError(t("errors.unsupportedFiles"));
     }
     const prepared = await Promise.all(supported.slice(0, 12).map(prepareUpload));
     setFiles((current) => [...current, ...prepared].slice(0, 12));
 
     const firstImage = prepared.find((file) => file.type.startsWith("image/"));
-    if (firstImage && !form.gpsLatitude && !form.gpsLongitude) {
+    if (
+      canManageSpatial &&
+      firstImage &&
+      !form.gpsLatitude &&
+      !form.gpsLongitude
+    ) {
       const gps = await readImageGps(firstImage);
       if (gps) {
         setForm((current) => ({
@@ -311,7 +330,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
           gpsLongitude: String(gps.longitude),
           gpsAltitude: gps.altitude === undefined ? current.gpsAltitude : String(gps.altitude),
         }));
-        setNotice("Location was read from the image metadata. Please verify it.");
+        setNotice(t("notices.locationRead"));
       }
     }
   };
@@ -328,7 +347,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
   };
 
   const payload = () => ({
-    name: form.name.trim() || "Untitled item",
+    name: form.name.trim() || t("fallback.untitled"),
     description: form.description.trim(),
     type: form.type,
     status: form.status,
@@ -380,11 +399,13 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
       setForm(toForm(response.resource));
       setCustomFields(response.resource.customFields ?? {});
       setCoverPrompt(defaultCoverPrompt(response.resource.name));
-      setNotice("AI analysis updated the title, description, tags and type.");
+      setNotice(t("notices.analysisComplete"));
       return response.resource;
     } catch (analysisError) {
       setError(
-        analysisError instanceof Error ? analysisError.message : "AI analysis failed.",
+        analysisError instanceof Error
+          ? analysisError.message
+          : t("errors.analysis"),
       );
       return null;
     } finally {
@@ -411,10 +432,12 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
         },
       );
       setResource(response.resource);
-      setNotice("A new studio cover was generated and set as the first image.");
+      setNotice(t("notices.coverComplete"));
       return response.resource;
     } catch (coverError) {
-      setError(coverError instanceof Error ? coverError.message : "Cover generation failed.");
+      setError(
+        coverError instanceof Error ? coverError.message : t("errors.cover"),
+      );
       return null;
     } finally {
       setAiAction(null);
@@ -433,7 +456,9 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
       );
     });
     if (missingCustomField) {
-      setError(`Complete the required custom field “${missingCustomField.label}”.`);
+      setError(
+        t("errors.requiredCustomField", { label: missingCustomField.label }),
+      );
       return;
     }
     setSaving(true);
@@ -442,7 +467,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
     try {
       if (isNew) {
         if (!form.name.trim() && !files.some((file) => file.type.startsWith("image/"))) {
-          throw new Error("Add a name or at least one image for AI analysis.");
+          throw new Error(t("errors.nameOrImage"));
         }
         const created = await fetchJson<{ resource: ClientResource }>("/api/v1/resources", {
           method: "POST",
@@ -451,16 +476,26 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
         });
         await uploadMedia(created.resource.id);
         let latest = created.resource;
-        if (autoAnalyze && files.some((file) => file.type.startsWith("image/"))) {
+        if (
+          canUseAi &&
+          autoAnalyze &&
+          files.some((file) => file.type.startsWith("image/"))
+        ) {
           latest = (await runAnalysis(created.resource.id, true)) ?? latest;
         }
-        if (autoCover && files.some((file) => file.type.startsWith("image/"))) {
+        if (
+          canUseAi &&
+          autoCover &&
+          files.some((file) => file.type.startsWith("image/"))
+        ) {
           latest = (await runCover(created.resource.id)) ?? latest;
         }
         router.push(`/inventory/${latest.id}`);
         router.refresh();
       } else {
-        await fetchJson(`/api/v1/resources/${resourceId}`, {
+        const saved = await fetchJson<{
+          translation?: { status: string; error?: string };
+        }>(`/api/v1/resources/${resourceId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload()),
@@ -468,24 +503,30 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
         await uploadMedia(resourceId!);
         setFiles([]);
         await loadResource();
-        setNotice("Changes saved.");
+        setNotice(
+          saved.translation?.status === "queued"
+            ? t("notices.savedTranslations")
+            : t("notices.saved"),
+        );
       }
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to save item.");
+      setError(saveError instanceof Error ? saveError.message : t("errors.save"));
     } finally {
       setSaving(false);
     }
   };
 
   const removeMedia = async (mediaId: string) => {
-    if (!resourceId || !window.confirm("Remove this file from the item?")) return;
+    if (!resourceId || !window.confirm(t("confirm.removeFile"))) return;
     try {
       await fetchJson(`/api/v1/resources/${resourceId}/media/${mediaId}`, {
         method: "DELETE",
       });
       await loadResource();
     } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "Unable to remove file.");
+      setError(
+        removeError instanceof Error ? removeError.message : t("errors.removeFile"),
+      );
     }
   };
 
@@ -507,12 +548,17 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
       );
       setResource(response.resource);
     } catch (moveError) {
-      setError(moveError instanceof Error ? moveError.message : "Unable to reorder media.");
+      setError(
+        moveError instanceof Error ? moveError.message : t("errors.reorderMedia"),
+      );
     }
   };
 
   const deleteItem = async () => {
-    if (!resourceId || !window.confirm(`Delete “${resource?.name}”? This cannot be undone.`)) {
+    if (
+      !resourceId ||
+      !window.confirm(t("confirm.delete", { name: resource?.name ?? "" }))
+    ) {
       return;
     }
     try {
@@ -520,7 +566,9 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
       router.push("/inventory");
       router.refresh();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete item.");
+      setError(
+        deleteError instanceof Error ? deleteError.message : t("errors.delete"),
+      );
     }
   };
 
@@ -536,7 +584,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
 
   if (loading) {
     return (
-      <div className="grid min-h-[60vh] place-items-center text-slate-600">
+      <div className="grid min-h-[60vh] place-items-center text-muted">
         <LoaderCircle className="animate-spin" />
       </div>
     );
@@ -545,42 +593,58 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
   return (
     <>
     <form onSubmit={onSubmit} className="mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-      <header className="mb-6 flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
+      <header className="mb-6 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-600">
-            <Link href="/inventory" className="inline-flex items-center gap-1 hover:text-slate-800">
-              <ArrowLeft size={13} /> Inventory
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted">
+            <Link href="/inventory" className="inline-flex items-center gap-1 hover:text-muted-strong">
+              <ArrowLeft size={13} /> {t("header.inventory")}
             </Link>
             <ChevronRight size={13} />
-            <span className="truncate text-slate-600">{isNew ? "New item" : resource?.name}</span>
+            {isNew ? (
+              <span className="truncate text-muted">{t("header.newItem")}</span>
+            ) : (
+              <>
+                <Link href={`/inventory/${resourceId}`} className="truncate hover:text-muted-strong">
+                  {resource?.name}
+                </Link>
+                <ChevronRight size={13} />
+                <span className="text-muted">{t("header.edit")}</span>
+              </>
+            )}
           </div>
-          <h1 className="truncate text-2xl font-semibold tracking-[-0.03em] text-slate-950 sm:text-3xl">
-            {isNew ? "Add inventory item" : resource?.name}
+          <h1 className="truncate text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
+            {isNew ? t("header.addItem") : resource?.name}
           </h1>
           {!isNew && resource ? (
-            <p className="mt-1 text-xs text-slate-600">
-              Updated {new Date(resource.updatedAt).toLocaleString()} · ID {resource.id.slice(0, 8)}
+            <p className="mt-1 text-xs text-muted">
+              {t("header.updated", {
+                date: new Intl.DateTimeFormat(locale, {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                }).format(new Date(resource.updatedAt)),
+                id: resource.id.slice(0, 8),
+              })}
             </p>
           ) : (
-            <p className="mt-1 text-sm text-slate-600">Create manually or let images do the first draft.</p>
+            <p className="mt-1 text-sm text-muted">{t("header.description")}</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {!isNew ? (
+          {!isNew && canDelete ? (
             <Link
               href={`/inventory/${resourceId}/stock`}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3.5 text-sm font-semibold text-violet-800 transition hover:bg-violet-100"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3.5 text-sm font-semibold text-brand transition hover:bg-brand-soft"
             >
               <Warehouse size={16} />
-              Stock
+              {t("header.stock")}
             </Link>
           ) : null}
           {!isNew ? (
             <button
               type="button"
               onClick={deleteItem}
-              className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-              aria-label="Delete item"
+              className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-surface text-muted transition hover:border-danger-border hover:bg-danger-soft hover:text-danger"
+              aria-label={t("actions.deleteItem")}
             >
               <Trash2 size={17} />
             </button>
@@ -593,121 +657,173 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
               customFieldsLoading ||
               Boolean(customFieldsError)
             }
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-strong px-4 text-sm font-semibold text-on-strong shadow-sm transition hover:bg-success disabled:cursor-wait disabled:opacity-60"
           >
             {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
-            {saving ? "Saving…" : isNew ? "Create item" : "Save changes"}
+            {saving
+              ? t("actions.saving")
+              : isNew
+                ? t("actions.createItem")
+                : t("actions.saveChanges")}
           </button>
         </div>
       </header>
 
       {error ? (
-        <div className="mb-5 flex items-start justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="mb-5 flex items-start justify-between gap-4 rounded-2xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
           <span>{error}</span>
-          <button type="button" onClick={() => setError(null)} aria-label="Dismiss error"><X size={16} /></button>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            aria-label={t("actions.dismissError")}
+          >
+            <X size={16} />
+          </button>
         </div>
       ) : null}
       {notice ? (
-        <div className="mb-5 flex items-start justify-between gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <div className="mb-5 flex items-start justify-between gap-4 rounded-2xl border border-success-border bg-success-soft px-4 py-3 text-sm text-success">
           <span className="flex items-center gap-2"><Check size={16} /> {notice}</span>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message"><X size={16} /></button>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            aria-label={t("actions.dismissMessage")}
+          >
+            <X size={16} />
+          </button>
         </div>
       ) : null}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_370px]">
         <div className="space-y-6">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.025)] sm:p-6">
-            <div className="mb-5 flex items-center gap-3 border-b border-slate-100 pb-4">
-              <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-600"><Package size={17} /></div>
-              <div><h2 className="text-sm font-semibold text-slate-950">Core details</h2><p className="text-xs text-slate-600">Identity, category and availability</p></div>
+          <section className="rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)] sm:p-6">
+            <div className="mb-5 flex items-center gap-3 border-b border-border pb-4">
+              <div className="grid h-9 w-9 place-items-center rounded-xl bg-surface-muted text-muted"><Package size={17} /></div>
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">
+                  {t("details.title")}
+                </h2>
+                <p className="text-xs text-muted">{t("details.description")}</p>
+              </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className={`${labelClass} sm:col-span-2`}>
-                Item name
+                {t("details.name")}
                 <input
                   value={form.name}
                   onChange={(event) => setField("name", event.target.value)}
-                  placeholder={files.length ? "Leave blank to generate from images" : "e.g. Festool track saw TS 55"}
+                  placeholder={
+                    files.length
+                      ? t("details.nameAiPlaceholder")
+                      : t("details.namePlaceholder")
+                  }
                   className={inputClass}
                 />
               </label>
               <label className={labelClass}>
-                Type
+                {t("details.type")}
                 <select value={form.type} onChange={(event) => setField("type", event.target.value)} className={inputClass}>
                   {!inventoryTypes.some((type) => type.key === form.type) ? (
                     <option value={form.type}>{form.type}</option>
                   ) : null}
                   {inventoryTypes.map((type) => (
-                    <option key={type.key} value={type.key}>{type.label}</option>
+                    <option key={type.key} value={type.key}>
+                      {fallbackTypes.includes(type.key) &&
+                      type.label.toLowerCase() === type.key
+                        ? t(`types.${type.key}`)
+                        : type.label}
+                    </option>
                   ))}
                 </select>
               </label>
               <label className={labelClass}>
-                Status
+                {t("details.status")}
                 <select value={form.status} onChange={(event) => setField("status", event.target.value)} className={inputClass}>
-                  <option value="available">Available</option><option value="in-use">In use</option><option value="maintenance">Maintenance</option><option value="archived">Archived</option>
+                  <option value="available">{t("statuses.available")}</option>
+                  <option value="in-use">{t("statuses.inUse")}</option>
+                  <option value="maintenance">{t("statuses.maintenance")}</option>
+                  <option value="archived">{t("statuses.archived")}</option>
                 </select>
               </label>
               <label className={`${labelClass} sm:col-span-2`}>
-                Description
+                {t("details.itemDescription")}
                 <textarea
                   value={form.description}
                   onChange={(event) => setField("description", event.target.value)}
-                  placeholder="What is it, what comes with it, and what should someone know before using it?"
+                  placeholder={t("details.descriptionPlaceholder")}
                   rows={7}
                   className={`${inputClass} h-auto resize-y py-3 leading-6`}
                 />
               </label>
               <label className={`${labelClass} sm:col-span-2`}>
-                Tags <span className="font-normal text-slate-600">· comma separated</span>
-                <input value={form.tags} onChange={(event) => setField("tags", event.target.value)} placeholder="woodworking, power-tool, 230v" className={inputClass} />
+                {t("details.tags")} {" "}
+                <span className="font-normal text-muted">
+                  · {t("details.commaSeparated")}
+                </span>
+                <input value={form.tags} onChange={(event) => setField("tags", event.target.value)} placeholder={t("details.tagsPlaceholder")} className={inputClass} />
               </label>
               <label className={`${labelClass} sm:col-span-2`}>
-                Categories <span className="font-normal text-slate-600">· comma separated</span>
-                <input value={form.categories} onChange={(event) => setField("categories", event.target.value)} placeholder="Workshop, Production" className={inputClass} />
+                {t("details.categories")} {" "}
+                <span className="font-normal text-muted">
+                  · {t("details.commaSeparated")}
+                </span>
+                <input value={form.categories} onChange={(event) => setField("categories", event.target.value)} placeholder={t("details.categoriesPlaceholder")} className={inputClass} />
               </label>
             </div>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.025)] sm:p-6">
-            <div className="mb-5 flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          {!isNew && resourceId ? (
+            <ResourceTranslations
+              resourceId={resourceId}
+              resourceUpdatedAt={resource?.updatedAt}
+            />
+          ) : null}
+
+          <section className="rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)] sm:p-6">
+            <div className="mb-5 flex items-center justify-between gap-4 border-b border-border pb-4">
               <div className="flex items-center gap-3">
-                <div className="grid h-9 w-9 place-items-center rounded-xl bg-violet-50 text-violet-700">
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-soft text-brand">
                   <Braces size={17} />
                 </div>
                 <div>
-                  <h2 className="text-sm font-semibold text-slate-950">Custom fields</h2>
-                  <p className="text-xs text-slate-600">
-                    Fields configured for this inventory type and its categories
+                  <h2 className="text-sm font-semibold text-foreground">
+                    {t("customFields.title")}
+                  </h2>
+                  <p className="text-xs text-muted">
+                    {t("customFields.description")}
                   </p>
                 </div>
               </div>
               {!customFieldsLoading && !customFieldsError ? (
-                <span className="hidden rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-semibold text-violet-700 sm:inline-flex">
-                  {applicableCustomFieldDefinitions.length}{" "}
-                  {applicableCustomFieldDefinitions.length === 1 ? "field" : "fields"}
+                <span className="hidden rounded-full bg-brand-soft px-2.5 py-1 text-[10px] font-semibold text-brand sm:inline-flex">
+                  {t("customFields.count", {
+                    count: applicableCustomFieldDefinitions.length,
+                  })}
                 </span>
               ) : null}
             </div>
 
             {customFieldsLoading ? (
-              <div className="grid gap-4 sm:grid-cols-2" aria-label="Loading custom fields">
+              <div
+                className="grid gap-4 sm:grid-cols-2"
+                aria-label={t("customFields.loading")}
+              >
                 {Array.from({ length: 2 }, (_, index) => (
                   <div key={index}>
-                    <div className="h-3 w-24 animate-pulse rounded bg-slate-200" />
-                    <div className="mt-2 h-11 animate-pulse rounded-xl bg-slate-100" />
+                    <div className="h-3 w-24 animate-pulse rounded bg-surface-hover" />
+                    <div className="mt-2 h-11 animate-pulse rounded-xl bg-surface-muted" />
                   </div>
                 ))}
               </div>
             ) : customFieldsError ? (
-              <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 rounded-xl border border-warning-border bg-warning-soft px-4 py-3 text-xs leading-5 text-warning sm:flex-row sm:items-center sm:justify-between">
                 <span>{customFieldsError}</span>
                 <button
                   type="button"
                   onClick={() => void loadCustomFieldDefinitions()}
                   className="shrink-0 font-semibold underline underline-offset-2"
                 >
-                  Try again
+                  {t("actions.retry")}
                 </button>
               </div>
             ) : applicableCustomFieldDefinitions.length ? (
@@ -717,22 +833,33 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
                 onChange={setCustomFields}
               />
             ) : (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-5 py-8 text-center">
-                <Braces className="mx-auto size-5 text-slate-600" aria-hidden="true" />
-                <p className="mt-2 text-xs font-semibold text-slate-600">
-                  No custom fields apply to this item
+              <div className="rounded-xl border border-dashed border-border bg-surface-subtle/60 px-5 py-8 text-center">
+                <Braces className="mx-auto size-5 text-muted" aria-hidden="true" />
+                <p className="mt-2 text-xs font-semibold text-muted">
+                  {t("customFields.empty")}
                 </p>
-                <p className="mx-auto mt-1 max-w-md text-[11px] leading-4 text-slate-600">
-                  Administrators can configure fields for {form.type} records or matching
-                  categories in Settings.
+                <p className="mx-auto mt-1 max-w-md text-[11px] leading-4 text-muted">
+                  {t("customFields.emptyDescription", { type: form.type })}
                 </p>
               </div>
             )}
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.025)] sm:p-6">
-            <div className="mb-5 flex items-center justify-between gap-4 border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-700"><ImageIcon size={17} /></div><div><h2 className="text-sm font-semibold text-slate-950">Media</h2><p className="text-xs text-slate-600">Images, video and PDFs · {totalMedia} file{totalMedia === 1 ? "" : "s"}</p></div></div>
+          <section className="rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)] sm:p-6">
+            <div className="mb-5 flex items-center justify-between gap-4 border-b border-border pb-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-info-soft text-info">
+                  <ImageIcon size={17} />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    {t("media.title")}
+                  </h2>
+                  <p className="text-xs text-muted">
+                    {t("media.description", { count: totalMedia })}
+                  </p>
+                </div>
+              </div>
             </div>
 
             {itemMedia.length ? (
@@ -740,7 +867,7 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
                 {itemMedia.map((item, index) => {
                   const Icon = mediaIcon(item.kind);
                   return (
-                    <div key={item.id} className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                    <div key={item.id} className="group relative overflow-hidden rounded-2xl border border-border bg-surface-subtle">
                       <div className="aspect-square overflow-hidden">
                         {item.kind === "image" ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -748,17 +875,19 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
                         ) : item.kind === "video" ? (
                           <video src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
                         ) : (
-                          <div className="grid h-full place-items-center text-slate-600"><Icon size={34} strokeWidth={1.5} /></div>
+                          <div className="grid h-full place-items-center text-muted"><Icon size={34} strokeWidth={1.5} /></div>
                         )}
                       </div>
                       <div className="absolute inset-x-2 top-2 flex items-center justify-between">
-                        <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${index === 0 ? "bg-emerald-600 text-white" : "bg-white/90 text-slate-600"}`}>{index === 0 ? "Cover" : index + 1}</span>
-                        {item.source === "ai" ? <span className="rounded-full bg-violet-600 px-2 py-1 text-[10px] font-bold text-white">AI</span> : null}
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${index === 0 ? "bg-success text-on-strong" : "bg-surface/90 text-muted"}`}>
+                          {index === 0 ? t("media.cover") : index + 1}
+                        </span>
+                        {item.source === "ai" ? <span className="rounded-full bg-brand-solid px-2 py-1 text-[10px] font-bold text-on-brand">{t("media.ai")}</span> : null}
                       </div>
                       <div className="absolute inset-x-2 bottom-2 flex justify-end gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
-                        <button type="button" disabled={index === 0} onClick={() => void moveMedia(item.id, -1)} className="grid h-7 w-7 place-items-center rounded-lg bg-white/95 text-slate-600 shadow disabled:opacity-30" aria-label="Move file earlier"><ArrowUp size={13} /></button>
-                        <button type="button" disabled={index === itemMedia.length - 1} onClick={() => void moveMedia(item.id, 1)} className="grid h-7 w-7 place-items-center rounded-lg bg-white/95 text-slate-600 shadow disabled:opacity-30" aria-label="Move file later"><ArrowDown size={13} /></button>
-                        <button type="button" onClick={() => void removeMedia(item.id)} className="grid h-7 w-7 place-items-center rounded-lg bg-white/95 text-rose-600 shadow" aria-label="Remove file"><Trash2 size={13} /></button>
+                        <button type="button" disabled={index === 0} onClick={() => void moveMedia(item.id, -1)} className="grid h-7 w-7 place-items-center rounded-lg bg-surface/95 text-muted shadow disabled:opacity-30" aria-label={t("media.moveEarlier")}><ArrowUp size={13} /></button>
+                        <button type="button" disabled={index === itemMedia.length - 1} onClick={() => void moveMedia(item.id, 1)} className="grid h-7 w-7 place-items-center rounded-lg bg-surface/95 text-muted shadow disabled:opacity-30" aria-label={t("media.moveLater")}><ArrowDown size={13} /></button>
+                        <button type="button" onClick={() => void removeMedia(item.id)} className="grid h-7 w-7 place-items-center rounded-lg bg-surface/95 text-danger shadow" aria-label={t("media.remove")}><Trash2 size={13} /></button>
                       </div>
                     </div>
                   );
@@ -769,14 +898,14 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
             {previews.length ? (
               <div className="mb-4 grid grid-cols-3 gap-3 sm:grid-cols-5">
                 {previews.map((preview, index) => (
-                  <div key={preview} className="relative aspect-square overflow-hidden rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50">
+                  <div key={preview} className="relative aspect-square overflow-hidden rounded-xl border-2 border-dashed border-success-border bg-success-soft">
                     {files[index]?.type.startsWith("image/") ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={preview} alt="Pending upload" className="h-full w-full object-cover opacity-90" />
+                      <img src={preview} alt={t("media.pendingUpload")} className="h-full w-full object-cover opacity-90" />
                     ) : (
-                      <div className="grid h-full place-items-center text-emerald-700"><Paperclip size={24} /></div>
+                      <div className="grid h-full place-items-center text-success"><Paperclip size={24} /></div>
                     )}
-                    <button type="button" onClick={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))} className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-slate-950/75 text-white" aria-label="Remove pending file"><X size={12} /></button>
+                    <button type="button" onClick={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))} className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-slate-950/75 text-white" aria-label={t("media.removePending")}><X size={12} /></button>
                   </div>
                 ))}
               </div>
@@ -786,101 +915,115 @@ export function ResourceEditor({ resourceId }: { resourceId?: string }) {
               onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onDrop={onDrop}
-              className={`flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-7 text-center transition ${dragging ? "border-emerald-500 bg-emerald-50" : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100/70"}`}
+              className={`flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-7 text-center transition ${dragging ? "border-success-border bg-success-soft" : "border-border bg-surface-subtle hover:border-border-strong hover:bg-surface-muted/70"}`}
             >
               <input type="file" multiple accept="image/*,video/*,application/pdf" onChange={onFileInput} className="sr-only" />
-              <UploadCloud size={24} className="mb-2 text-slate-600" />
-              <span className="text-sm font-semibold text-slate-700">Drop files here or browse</span>
-              <span className="mt-1 text-xs text-slate-600">JPG, PNG, WebP, HEIC, MP4, MOV or PDF · up to 12 files</span>
+              <UploadCloud size={24} className="mb-2 text-muted" />
+              <span className="text-sm font-semibold text-muted-strong">
+                {t("media.drop")}
+              </span>
+              <span className="mt-1 text-xs text-muted">
+                {t("media.formats")}
+              </span>
             </label>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-            <div className="mb-5 flex items-center gap-3 border-b border-slate-100 pb-4"><div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-50 text-amber-700"><CircleDollarSign size={17} /></div><div><h2 className="text-sm font-semibold text-slate-950">Operations</h2><p className="text-xs text-slate-600">Tracking, value and internal notes</p></div></div>
+          <section className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
+            <div className="mb-5 flex items-center gap-3 border-b border-border pb-4">
+              <div className="grid h-9 w-9 place-items-center rounded-xl bg-warning-soft text-warning"><CircleDollarSign size={17} /></div>
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">{t("operations.title")}</h2>
+                <p className="text-xs text-muted">{t("operations.description")}</p>
+              </div>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <label className={labelClass}>SKU<input value={form.sku} onChange={(event) => setField("sku", event.target.value)} placeholder="TOOL-0042" className={inputClass} /></label>
-              <label className={labelClass}>Serial number<input value={form.serialNumber} onChange={(event) => setField("serialNumber", event.target.value)} className={inputClass} /></label>
+              <label className={labelClass}>{t("operations.sku")}<input value={form.sku} onChange={(event) => setField("sku", event.target.value)} placeholder={t("operations.skuPlaceholder")} className={inputClass} /></label>
+              <label className={labelClass}>{t("operations.serialNumber")}<input value={form.serialNumber} onChange={(event) => setField("serialNumber", event.target.value)} className={inputClass} /></label>
               {isNew ? (
-                <label className={labelClass}>Opening quantity<input type="number" min="0" value={form.quantity} onChange={(event) => setField("quantity", event.target.value)} className={inputClass} /></label>
+                <label className={labelClass}>{t("operations.openingQuantity")}<input type="number" min="0" value={form.quantity} onChange={(event) => setField("quantity", event.target.value)} className={inputClass} /></label>
               ) : (
                 <div className={labelClass}>
-                  Current stock
+                  {t("operations.currentStock")}
                   <Link
                     href={`/inventory/${resourceId}/stock`}
-                    className="mt-1.5 flex h-11 items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-3.5 text-sm font-semibold text-violet-800 transition hover:bg-violet-100"
+                    className="mt-1.5 flex h-11 items-center justify-between rounded-xl border border-brand-border bg-brand-soft px-3.5 text-sm font-semibold text-brand transition hover:bg-brand-soft"
                   >
-                    <span className="inline-flex items-center gap-2"><Warehouse size={15} />{form.quantity} units</span>
-                    <span className="text-xs">Manage stock →</span>
+                    <span className="inline-flex items-center gap-2"><Warehouse size={15} />{t("operations.units", { count: Number(form.quantity) })}</span>
+                    <span className="text-xs">{t("operations.manageStock")} →</span>
                   </Link>
                 </div>
               )}
-              <label className={`${labelClass} sm:col-span-2`}>Location<input value={form.location} onChange={(event) => setField("location", event.target.value)} placeholder="Workshop · Shelf A3" className={inputClass} /></label>
-              <label className={labelClass}>Priority<select value={form.priority} onChange={(event) => setField("priority", event.target.value)} className={inputClass}><option value="1">1 · Low</option><option value="2">2</option><option value="3">3 · Normal</option><option value="4">4</option><option value="5">5 · High</option></select></label>
-              <label className={labelClass}>Value<div className="mt-1.5 flex"><input type="number" min="0" step="0.01" value={form.value} onChange={(event) => setField("value", event.target.value)} className={`${inputClass} mt-0 rounded-r-none`} /><input value={form.currency} onChange={(event) => setField("currency", event.target.value.slice(0, 3))} className="h-11 w-20 rounded-r-xl border border-l-0 border-slate-200 bg-slate-50 px-3 text-center text-xs font-bold uppercase text-slate-600 outline-none" aria-label="Currency" /></div></label>
-              <label className={`${labelClass} sm:col-span-2 lg:col-span-3`}>Internal notes<textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} rows={4} className={`${inputClass} h-auto py-3`} /></label>
+              <label className={`${labelClass} sm:col-span-2`}>{t("operations.location")}<input value={form.location} onChange={(event) => setField("location", event.target.value)} placeholder={t("operations.locationPlaceholder")} className={inputClass} /></label>
+              <label className={labelClass}>{t("operations.priority")}<select value={form.priority} onChange={(event) => setField("priority", event.target.value)} className={inputClass}><option value="1">1 · {t("operations.priorityLow")}</option><option value="2">2</option><option value="3">3 · {t("operations.priorityNormal")}</option><option value="4">4</option><option value="5">5 · {t("operations.priorityHigh")}</option></select></label>
+              <label className={labelClass}>{t("operations.value")}<div className="mt-1.5 flex"><input type="number" min="0" step="0.01" value={form.value} onChange={(event) => setField("value", event.target.value)} className={`${inputClass} mt-0 rounded-r-none`} /><input value={form.currency} onChange={(event) => setField("currency", event.target.value.slice(0, 3))} className="h-11 w-20 rounded-r-xl border border-l-0 border-border bg-surface-subtle px-3 text-center text-xs font-bold uppercase text-muted outline-none" aria-label={t("operations.currency")} /></div></label>
+              <label className={`${labelClass} sm:col-span-2 lg:col-span-3`}>{t("operations.notes")}<textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} rows={4} className={`${inputClass} h-auto py-3`} /></label>
             </div>
           </section>
         </div>
 
         <aside className="space-y-5 xl:sticky xl:top-5">
-          <section className="overflow-hidden rounded-2xl border border-violet-200 bg-[radial-gradient(circle_at_100%_0%,rgba(167,139,250,.26),transparent_42%),linear-gradient(145deg,#fff,#faf8ff)] p-5 shadow-[0_12px_40px_rgba(109,40,217,0.07)]">
-            <div className="mb-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-violet-600 text-white shadow-lg shadow-violet-600/20"><Sparkles size={19} /></div><div><h2 className="text-sm font-semibold text-slate-950">AI catalogue studio</h2><p className="text-xs text-violet-700">Vision analysis + image editing</p></div></div>
+          {canUseAi ? (
+          <section className="overflow-hidden rounded-2xl border border-brand-border bg-gradient-to-br from-brand-soft to-surface p-5 shadow-[var(--shadow-md)]">
+            <div className="mb-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-lg shadow-[var(--shadow-sm)]"><Sparkles size={19} /></div><div><h2 className="text-sm font-semibold text-foreground">{t("ai.title")}</h2><p className="text-xs text-brand">{t("ai.description")}</p></div></div>
             {isNew ? (
               <div className="space-y-3">
-                <label className="flex items-start gap-3 rounded-xl border border-violet-100 bg-white/80 p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => setAutoAnalyze(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="block text-xs font-semibold text-slate-800">Analyze images</span><span className="mt-0.5 block text-[11px] leading-4 text-slate-600">Generate title, description, type, tags and alt text.</span></span></label>
-                <label className="flex items-start gap-3 rounded-xl border border-violet-100 bg-white/80 p-3"><input type="checkbox" checked={autoCover} onChange={(event) => setAutoCover(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="block text-xs font-semibold text-slate-800">Generate studio cover</span><span className="mt-0.5 block text-[11px] leading-4 text-slate-600">Create a clean square hero image from the first photo.</span></span></label>
+                <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-surface/80 p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => setAutoAnalyze(event.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.analyzeDescription")}</span></span></label>
+                <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-surface/80 p-3"><input type="checkbox" checked={autoCover} onChange={(event) => setAutoCover(event.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.coverDescription")}</span></span></label>
                 {autoCover ? (
                   <ImageModelSelector
                     preference={imageModelPreference}
                     disabled={Boolean(aiAction)}
-                    className="rounded-xl border border-violet-100 bg-white/80 p-3"
+                    className="rounded-xl border border-brand-border bg-surface/80 p-3"
                   />
                 ) : null}
-                <p className="text-[11px] leading-4 text-slate-600">AI runs only after the original files are safely stored. You can always edit the result.</p>
+                <p className="text-[11px] leading-4 text-muted">{t("ai.safety")}</p>
               </div>
             ) : (
               <div className="space-y-3">
-                <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runAnalysis(resourceId, true)} className="flex w-full items-center justify-between rounded-xl bg-violet-600 px-3.5 py-3 text-left text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:bg-[#5f6672] disabled:opacity-100"><span className="flex items-center gap-2">{aiAction === "analyze" ? <LoaderCircle size={15} className="animate-spin" /> : <Bot size={15} />}Analyze & rewrite fields</span><ChevronRight size={15} /></button>
-                <div className="rounded-xl border border-violet-100 bg-white/80 p-3">
-                  <label className="text-[11px] font-semibold text-slate-600">
-                    Cover direction
-                    <textarea value={coverPrompt} onChange={(event) => setCoverPrompt(event.target.value)} rows={5} className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-white p-2.5 text-xs leading-5 text-slate-700 outline-none focus:border-violet-400" />
+                <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runAnalysis(resourceId, true)} className="flex w-full items-center justify-between rounded-xl bg-brand-solid px-3.5 py-3 text-left text-xs font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover disabled:bg-muted disabled:text-background disabled:opacity-100"><span className="flex items-center gap-2">{aiAction === "analyze" ? <LoaderCircle size={15} className="animate-spin" /> : <Bot size={15} />}{t("ai.rewrite")}</span><ChevronRight size={15} /></button>
+                <div className="rounded-xl border border-brand-border bg-surface/80 p-3">
+                  <label className="text-[11px] font-semibold text-muted">
+                    {t("ai.coverDirection")}
+                    <textarea value={coverPrompt} onChange={(event) => setCoverPrompt(event.target.value)} rows={5} className="mt-2 w-full resize-none rounded-lg border border-border bg-surface p-2.5 text-xs leading-5 text-muted-strong outline-none focus:border-focus" />
                   </label>
                   <ImageModelSelector
                     preference={imageModelPreference}
                     disabled={Boolean(aiAction)}
                     className="mt-3"
                   />
-                  <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runCover(resourceId)} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 transition hover:bg-violet-100 disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-600 disabled:opacity-100">{aiAction === "cover" ? <LoaderCircle size={14} className="animate-spin" /> : <WandSparkles size={14} />}Generate new cover</button>
+                  <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runCover(resourceId)} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-brand-border bg-brand-soft px-3 py-2 text-xs font-semibold text-brand transition hover:bg-brand-soft disabled:border-border-strong disabled:bg-surface-muted disabled:text-muted disabled:opacity-100">{aiAction === "cover" ? <LoaderCircle size={14} className="animate-spin" /> : <WandSparkles size={14} />}{t("ai.generateNewCover")}</button>
                 </div>
-                {!hasImage ? <p className="text-[11px] text-amber-700">Upload and save an image to enable AI actions.</p> : null}
-                {resource?.aiMetadata ? <div className="flex items-center justify-between rounded-lg bg-violet-50 px-3 py-2 text-[10px] text-violet-700"><span>Last model</span><span className="max-w-40 truncate font-mono">{resource.aiMetadata.model ?? "AI"}</span></div> : null}
+                {!hasImage ? <p className="text-[11px] text-warning">{t("ai.imageRequired")}</p> : null}
+                {resource?.aiMetadata ? <div className="flex items-center justify-between rounded-lg bg-brand-soft px-3 py-2 text-[10px] text-brand"><span>{t("ai.lastModel")}</span><span className="max-w-40 truncate font-mono">{resource.aiMetadata.model ?? "AI"}</span></div> : null}
               </div>
             )}
           </section>
+          ) : null}
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="mb-4 flex items-center gap-2"><MapPin size={16} className="text-emerald-700" /><h2 className="text-sm font-semibold text-slate-950">Position</h2></div>
+          {canManageSpatial ? (
+          <section className="rounded-2xl border border-border bg-surface p-5">
+            <div className="mb-4 flex items-center gap-2"><MapPin size={16} className="text-success" /><h2 className="text-sm font-semibold text-foreground">{t("position.title")}</h2></div>
             {!isNew && resourceId ? (
-              <Link href={`/map?resource=${resourceId}`} className="mb-4 flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5 text-xs font-semibold text-violet-800 transition hover:bg-violet-100">
-                <span className="inline-flex items-center gap-2"><MapPin size={14} />Edit point or outline on map</span>
+              <Link href={`/map?resource=${resourceId}`} className="mb-4 flex items-center justify-between rounded-xl border border-brand-border bg-brand-soft px-3 py-2.5 text-xs font-semibold text-brand transition hover:bg-brand-soft">
+                <span className="inline-flex items-center gap-2"><MapPin size={14} />{t("position.editMap")}</span>
                 <ChevronRight size={14} />
               </Link>
             ) : (
-              <p className="mb-3 text-[11px] leading-4 text-slate-600">Save the item first to draw its point or outline in the map editor.</p>
+              <p className="mb-3 text-[11px] leading-4 text-muted">{t("position.saveFirst")}</p>
             )}
-            {resource?.mapFeatures.length ? <p className="mb-3 text-[11px] leading-4 text-violet-700">Coordinates are derived from the saved map geometry. Edit them on the map to keep both views in sync.</p> : null}
-            <label className={labelClass}>Latitude<input type="number" step="any" value={form.gpsLatitude} onChange={(event) => setField("gpsLatitude", event.target.value)} placeholder="51.0504" disabled={Boolean(resource?.mapFeatures.length)} className={inputClass} /></label>
-            <label className={`${labelClass} mt-3`}>Longitude<input type="number" step="any" value={form.gpsLongitude} onChange={(event) => setField("gpsLongitude", event.target.value)} placeholder="13.7373" disabled={Boolean(resource?.mapFeatures.length)} className={inputClass} /></label>
-            <label className={`${labelClass} mt-3`}>Altitude <span className="font-normal text-slate-600">· metres</span><input type="number" step="any" value={form.gpsAltitude} onChange={(event) => setField("gpsAltitude", event.target.value)} className={inputClass} /></label>
-            {mapHref ? <a href={mapHref} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-900">Open on map <ChevronRight size={13} /></a> : <p className="mt-3 text-[11px] leading-4 text-slate-600">GPS can be read from image metadata, or entered manually.</p>}
+            {resource?.mapFeatures.length ? <p className="mb-3 text-[11px] leading-4 text-brand">{t("position.geometryNotice")}</p> : null}
+            <label className={labelClass}>{t("position.latitude")}<input type="number" step="any" value={form.gpsLatitude} onChange={(event) => setField("gpsLatitude", event.target.value)} placeholder="51.0504" disabled={Boolean(resource?.mapFeatures.length)} className={inputClass} /></label>
+            <label className={`${labelClass} mt-3`}>{t("position.longitude")}<input type="number" step="any" value={form.gpsLongitude} onChange={(event) => setField("gpsLongitude", event.target.value)} placeholder="13.7373" disabled={Boolean(resource?.mapFeatures.length)} className={inputClass} /></label>
+            <label className={`${labelClass} mt-3`}>{t("position.altitude")} <span className="font-normal text-muted">· {t("position.metres")}</span><input type="number" step="any" value={form.gpsAltitude} onChange={(event) => setField("gpsAltitude", event.target.value)} className={inputClass} /></label>
+            {mapHref ? <a href={mapHref} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-success hover:text-success">{t("position.openMap")} <ChevronRight size={13} /></a> : <p className="mt-3 text-[11px] leading-4 text-muted">{t("position.gpsHelp")}</p>}
           </section>
+          ) : null}
 
           {!isNew && resource ? (
-            <section className="rounded-2xl border border-slate-200 bg-white p-5">
-              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-600">Record</h2>
-              <button type="button" onClick={() => void navigator.clipboard.writeText(resource.id).then(() => setNotice("Record ID copied."))} className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 text-left"><span className="min-w-0"><span className="block text-[10px] text-slate-600">Resource ID</span><span className="block truncate font-mono text-xs text-slate-600">{resource.id}</span></span><Copy size={14} className="ml-3 shrink-0 text-slate-600" /></button>
-              <button type="button" onClick={() => void loadResource()} className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900"><RefreshCcw size={13} /> Reload from server</button>
+            <section className="rounded-2xl border border-border bg-surface p-5">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">{t("record.title")}</h2>
+              <button type="button" onClick={() => void navigator.clipboard.writeText(resource.id).then(() => setNotice(t("notices.idCopied")))} className="flex w-full items-center justify-between rounded-xl bg-surface-subtle px-3 py-2.5 text-left"><span className="min-w-0"><span className="block text-[10px] text-muted">{t("record.id")}</span><span className="block truncate font-mono text-xs text-muted">{resource.id}</span></span><Copy size={14} className="ml-3 shrink-0 text-muted" /></button>
+              <button type="button" onClick={() => void loadResource()} className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-muted hover:text-foreground"><RefreshCcw size={13} /> {t("record.reload")}</button>
             </section>
           ) : null}
         </aside>

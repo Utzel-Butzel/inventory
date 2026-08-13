@@ -2,7 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var state: AppState
-    @State private var searchRequested = false
+    @State private var searchQuery = ""
 
     var body: some View {
         Group {
@@ -17,31 +17,123 @@ struct RootView: View {
     }
 
     private var configuredContent: some View {
+        configuredTabs
+            .fullScreenCover(isPresented: toolIsPresented) {
+                presentedTool
+            }
+    }
+
+    @ViewBuilder
+    private var configuredTabs: some View {
+        if #available(iOS 18.0, *) {
+            modernTabs
+        } else {
+            legacyTabs
+        }
+    }
+
+    @available(iOS 18.0, *)
+    @ViewBuilder
+    private var modernTabs: some View {
+        if #available(iOS 26.0, *) {
+            modernTabView
+                .tabViewSearchActivation(.searchTabSelection)
+        } else {
+            modernTabView
+        }
+    }
+
+    @available(iOS 18.0, *)
+    private var modernTabView: some View {
         TabView(selection: $state.selectedTab) {
-            InventoryListView(
-                searchRequested: $searchRequested,
-                onCapture: { state.presentedTool = .capture },
-                onScan: { state.presentedTool = .scanner }
-            )
-            .tag(RootTab.inventory)
+            Tab("Inventar", systemImage: "shippingbox", value: RootTab.inventory) {
+                primaryInventoryList
+            }
+
+            Tab("Karte", systemImage: "map", value: RootTab.map) {
+                InventoryMapView()
+            }
+
+            Tab("Räume", systemImage: "cube.transparent", value: RootTab.rooms) {
+                SpatialRoomsView()
+            }
+
+            Tab("Einstellungen", systemImage: "gearshape", value: RootTab.settings) {
+                SettingsView(onboarding: false)
+            }
+
+            Tab(value: RootTab.search, role: .search) {
+                searchableInventoryList
+            }
+        }
+    }
+
+    private var legacyTabs: some View {
+        TabView(selection: $state.selectedTab) {
+            primaryInventoryList
+                .tabItem {
+                    Label("Inventar", systemImage: "shippingbox")
+                }
+                .tag(RootTab.inventory)
 
             InventoryMapView()
+                .tabItem {
+                    Label("Karte", systemImage: "map")
+                }
                 .tag(RootTab.map)
 
             SpatialRoomsView()
+                .tabItem {
+                    Label("Räume", systemImage: "cube.transparent")
+                }
                 .tag(RootTab.rooms)
 
             SettingsView(onboarding: false)
+                .tabItem {
+                    Label("Einstellungen", systemImage: "gearshape")
+                }
                 .tag(RootTab.settings)
+
+            inventoryList(query: $searchQuery)
+                .searchable(text: $searchQuery, prompt: "Name, SKU, Tag oder Ort")
+                .tabItem {
+                    Label("Suchen", systemImage: "magnifyingglass")
+                }
+                .tag(RootTab.search)
         }
-        .toolbar(.hidden, for: .tabBar)
-        .tint(InventoryTheme.accent)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            bottomDock
+    }
+
+    @ViewBuilder
+    private var primaryInventoryList: some View {
+        if #available(iOS 26.0, *) {
+            inventoryList(query: .constant(""))
+                .toolbar(removing: .search)
+        } else {
+            inventoryList(query: .constant(""))
         }
-        .fullScreenCover(isPresented: toolIsPresented) {
-            presentedTool
+    }
+
+    private var searchableInventoryList: some View {
+        searchInventoryList
+            .searchable(text: $searchQuery, prompt: "Name, SKU, Tag oder Ort")
+    }
+
+    @ViewBuilder
+    private var searchInventoryList: some View {
+        if #available(iOS 26.0, *) {
+            inventoryList(query: $searchQuery)
+                .toolbar(removing: .search)
+        } else {
+            inventoryList(query: $searchQuery)
         }
+    }
+
+    private func inventoryList(query: Binding<String>) -> some View {
+        InventoryListView(
+            query: query,
+            onCapture: { state.presentedTool = .capture },
+            onScan: { state.presentedTool = .scanner }
+        )
     }
 
     private var toolIsPresented: Binding<Bool> {
@@ -62,92 +154,14 @@ struct RootView: View {
                 onClose: { state.presentedTool = nil },
                 onSubmit: { state.intakeQueue.enqueue($0) }
             )
-            .tint(InventoryTheme.accent)
         case .scanner:
             UnifiedCameraView(
                 initialMode: .scan,
                 onClose: { state.presentedTool = nil },
                 onSubmit: { state.intakeQueue.enqueue($0) }
             )
-            .tint(InventoryTheme.accent)
         case nil:
             EmptyView()
         }
-    }
-
-    private var bottomDock: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            HStack(spacing: 2) {
-                dockButton(
-                    title: "Inventar",
-                    systemImage: "shippingbox.fill",
-                    tab: .inventory
-                )
-                dockButton(
-                    title: "Karte",
-                    systemImage: "map.fill",
-                    tab: .map
-                )
-                dockButton(
-                    title: "Räume",
-                    systemImage: "cube.transparent.fill",
-                    tab: .rooms
-                )
-                dockButton(
-                    title: "Einstellungen",
-                    systemImage: "gearshape.fill",
-                    tab: .settings
-                )
-            }
-            .padding(5)
-            .frame(maxWidth: .infinity)
-            .background(InventoryTheme.ink, in: Capsule())
-
-            Button {
-                state.selectedTab = .inventory
-                searchRequested = true
-            } label: {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(InventoryTheme.ink)
-                    .frame(width: 56, height: 56)
-                    .background(InventoryTheme.lime, in: Circle())
-                    .overlay {
-                        Circle().stroke(.black.opacity(0.12), lineWidth: 1)
-                    }
-            }
-            .accessibilityLabel("Inventar durchsuchen")
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 5)
-        .background(.ultraThinMaterial)
-    }
-
-    private func dockButton(
-        title: String,
-        systemImage: String,
-        tab: RootTab
-    ) -> some View {
-        let selected = state.selectedTab == tab
-        return Button {
-            state.selectedTab = tab
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 17, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-            }
-            .foregroundStyle(selected ? InventoryTheme.ink : Color.white.opacity(0.88))
-            .frame(maxWidth: .infinity, minHeight: 46)
-            .padding(.horizontal, 3)
-            .background(selected ? InventoryTheme.highlight : .clear, in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

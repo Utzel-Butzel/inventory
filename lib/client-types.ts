@@ -24,6 +24,22 @@ export type ClientResource = Omit<
   cover: ClientMedia | null;
 };
 
+export type ClientContentLanguage = {
+  code: string;
+  label: string;
+  isDefault: boolean;
+  autoTranslate: boolean;
+};
+
+export type ClientResourceLocalization = {
+  languageCode: string;
+  defaultLanguageCode: string;
+  isDefault: boolean;
+  translatedFields: string[];
+  fallbackFields: string[];
+  availableLanguages: ClientContentLanguage[];
+};
+
 export type ClientApiToken = Omit<
   ApiTokenRecord,
   "tokenHash" | "revokedAt" | "createdAt" | "expiresAt" | "lastUsedAt"

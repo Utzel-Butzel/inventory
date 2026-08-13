@@ -1,6 +1,8 @@
 "use client";
 
+import type { TFunction } from "i18next";
 import Link from "next/link";
+import { useT } from "next-i18next/client";
 import {
   AlertCircle,
   ArrowRight,
@@ -137,22 +139,20 @@ type WorkflowDraft = {
 type Notice = { tone: "success" | "error" | "info"; message: string };
 
 const inputClass =
-  "mt-1.5 h-10 w-full rounded-xl border border-[#dfe2e7] bg-white px-3 text-[13px] text-[#30343a] outline-none transition placeholder:text-[#5f6672] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#5f6672]";
+  "mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
 const textAreaClass =
-  "mt-1.5 min-h-20 w-full resize-y rounded-xl border border-[#dfe2e7] bg-white px-3 py-2.5 text-[13px] leading-5 text-[#30343a] outline-none transition placeholder:text-[#5f6672] hover:border-[#cfd3da] focus:border-[#776fff] focus:ring-3 focus:ring-[#635bff]/10 disabled:cursor-not-allowed disabled:bg-[#f5f6f8] disabled:text-[#5f6672]";
-const labelClass = "block text-[11px] font-semibold text-[#555c67]";
+  "mt-1.5 min-h-20 w-full resize-y rounded-xl border border-border bg-surface px-3 py-2.5 text-[13px] leading-5 text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
+const labelClass = "block text-[11px] font-semibold text-muted-strong";
 
-const unitStatusLabels: Record<UnitStatus, string> = {
-  available: "Available",
-  reserved: "Reserved",
-  "in-use": "In use",
-  maintenance: "Maintenance",
-  consumed: "Consumed",
-  lost: "Lost",
-  retired: "Retired",
-};
-
-const unitStatuses = Object.keys(unitStatusLabels) as UnitStatus[];
+const unitStatuses: UnitStatus[] = [
+  "available",
+  "reserved",
+  "in-use",
+  "maintenance",
+  "consumed",
+  "lost",
+  "retired",
+];
 
 let nextLocalId = 0;
 function localId(prefix: string) {
@@ -160,12 +160,11 @@ function localId(prefix: string) {
   return `${prefix}-${nextLocalId}`;
 }
 
-function templateDraft(resourceId = ""): WorkflowDraft {
+function templateDraft(t: TFunction, resourceId = ""): WorkflowDraft {
   return {
     id: null,
-    name: "Paperless Paper assembly",
-    description:
-      "Read an EPD number from the product QR code, register the assembled unit, and capture its color.",
+    name: t("workflows.template.name"),
+    description: t("workflows.template.description"),
     enabled: true,
     resourceId,
     extraction: {
@@ -182,7 +181,7 @@ function templateDraft(resourceId = ""): WorkflowDraft {
       {
         uid: "template-fixed-assembly-status",
         key: "assemblyStatus",
-        label: "Assembly status",
+        label: t("workflows.template.assemblyStatus"),
         value: "finished-assembled",
       },
     ],
@@ -190,15 +189,15 @@ function templateDraft(resourceId = ""): WorkflowDraft {
       {
         uid: "template-input-color",
         key: "color",
-        label: "Farbe",
+        label: t("workflows.template.color"),
         required: true,
         options: [
-          { uid: "template-color-wood", value: "wood", label: "Holz", color: "#b9875e" },
-          { uid: "template-color-black", value: "black", label: "Schwarz", color: "#202124" },
-          { uid: "template-color-white", value: "white", label: "Weiß", color: "#f4f2ec" },
-          { uid: "template-color-pink", value: "pink", label: "Pink", color: "#ec8eb0" },
-          { uid: "template-color-green", value: "green", label: "Grün", color: "#668c67" },
-          { uid: "template-color-oak", value: "oak", label: "Eiche", color: "#c9a56a" },
+          { uid: "template-color-wood", value: "wood", label: t("workflows.template.colors.wood"), color: "#b9875e" },
+          { uid: "template-color-black", value: "black", label: t("workflows.template.colors.black"), color: "#202124" },
+          { uid: "template-color-white", value: "white", label: t("workflows.template.colors.white"), color: "#f4f2ec" },
+          { uid: "template-color-pink", value: "pink", label: t("workflows.template.colors.pink"), color: "#ec8eb0" },
+          { uid: "template-color-green", value: "green", label: t("workflows.template.colors.green"), color: "#668c67" },
+          { uid: "template-color-oak", value: "oak", label: t("workflows.template.colors.oak"), color: "#c9a56a" },
         ],
       },
     ],
@@ -329,25 +328,25 @@ function stockItemsFromResponse(payload: unknown): StockItem[] {
   );
 }
 
-function validateDraft(draft: WorkflowDraft) {
-  if (!draft.name.trim()) return "Give this workflow a name.";
-  if (!draft.resourceId) return "Choose a serialized inventory item.";
-  if (!draft.identifierPropertyKey.trim()) return "Set an identifier property key.";
+function validateDraft(draft: WorkflowDraft, t: TFunction) {
+  if (!draft.name.trim()) return t("workflows.validation.name");
+  if (!draft.resourceId) return t("workflows.validation.resource");
+  if (!draft.identifierPropertyKey.trim()) return t("workflows.validation.identifier");
   const validPropertyKey = /^[A-Za-z0-9_.-]+$/;
   if (!validPropertyKey.test(draft.identifierPropertyKey.trim())) {
-    return "Property keys may only contain letters, numbers, underscore, dash, and dot.";
+    return t("workflows.validation.propertyKey");
   }
   if (draft.extraction.mode === "url-query") {
-    if (!draft.extraction.parameter.trim()) return "Set the URL query parameter to extract.";
+    if (!draft.extraction.parameter.trim()) return t("workflows.validation.queryParameter");
     if (draft.extraction.sourceOrigin.trim()) {
       try {
         const sourceOrigin = draft.extraction.sourceOrigin.trim();
         const parsed = new URL(sourceOrigin);
         if (parsed.origin !== sourceOrigin) {
-          return "Source origin must contain only scheme and host, for example https://example.com.";
+          return t("workflows.validation.sourceOriginOnly");
         }
       } catch {
-        return "Source origin must be a valid URL origin.";
+        return t("workflows.validation.sourceOriginInvalid");
       }
     }
     if (
@@ -356,24 +355,24 @@ function validateDraft(draft: WorkflowDraft) {
         draft.extraction.sourcePath.includes("?") ||
         draft.extraction.sourcePath.includes("#"))
     ) {
-      return "Source path must begin with / and cannot contain a query or fragment.";
+      return t("workflows.validation.sourcePath");
     }
   }
   if (draft.extraction.mode === "prefix" && !draft.extraction.prefix) {
-    return "Set the prefix that should be removed from scans.";
+    return t("workflows.validation.prefix");
   }
 
   const propertyKeys = new Set<string>();
   propertyKeys.add(draft.identifierPropertyKey.trim());
   for (const property of draft.fixedProperties) {
     if (!property.key.trim() || !property.label.trim() || !property.value.trim()) {
-      return "Every fixed property needs a key, label, and value.";
+      return t("workflows.validation.fixedProperty");
     }
     if (!validPropertyKey.test(property.key.trim())) {
-      return "Property keys may only contain letters, numbers, underscore, dash, and dot.";
+      return t("workflows.validation.propertyKey");
     }
     if (propertyKeys.has(property.key.trim())) {
-      return "Identifier, fixed property, and scan input keys must all be unique.";
+      return t("workflows.validation.uniqueKeys");
     }
     propertyKeys.add(property.key.trim());
   }
@@ -381,23 +380,29 @@ function validateDraft(draft: WorkflowDraft) {
   const inputKeys = new Set<string>();
   for (const field of draft.inputFields) {
     if (!field.key.trim() || !field.label.trim()) {
-      return "Every scan input needs a key and label.";
+      return t("workflows.validation.input");
     }
     if (!validPropertyKey.test(field.key.trim())) {
-      return "Property keys may only contain letters, numbers, underscore, dash, and dot.";
+      return t("workflows.validation.propertyKey");
     }
     if (inputKeys.has(field.key.trim()) || propertyKeys.has(field.key.trim())) {
-      return "Identifier, fixed property, and scan input keys must all be unique.";
+      return t("workflows.validation.uniqueKeys");
     }
     inputKeys.add(field.key.trim());
-    if (field.options.length === 0) return `${field.label || "Each scan input"} needs an option.`;
+    if (field.options.length === 0) return t("workflows.validation.optionRequired", {
+      field: field.label || t("workflows.validation.eachInput"),
+    });
     const optionValues = new Set<string>();
     for (const option of field.options) {
       if (!option.value.trim() || !option.label.trim()) {
-        return `Every option in ${field.label || "a scan input"} needs a value and label.`;
+        return t("workflows.validation.optionValues", {
+          field: field.label || t("workflows.validation.anInput"),
+        });
       }
       if (optionValues.has(option.value.trim())) {
-        return `Option values in ${field.label || "a scan input"} must be unique.`;
+        return t("workflows.validation.optionUnique", {
+          field: field.label || t("workflows.validation.anInput"),
+        });
       }
       optionValues.add(option.value.trim());
     }
@@ -408,47 +413,48 @@ function validateDraft(draft: WorkflowDraft) {
 function extractIdentifier(
   scannedValue: string,
   extraction: WorkflowDraft["extraction"],
+  t: TFunction,
 ): { value: string | null; error: string | null } {
   const raw = scannedValue.trim();
-  if (!raw) return { value: null, error: "Paste or scan a value to test extraction." };
+  if (!raw) return { value: null, error: t("workflows.extractionErrors.empty") };
 
   if (extraction.mode === "full") return { value: raw, error: null };
   if (extraction.mode === "prefix") {
     if (!raw.startsWith(extraction.prefix)) {
-      return { value: null, error: `The scan does not start with “${extraction.prefix}”.` };
+      return { value: null, error: t("workflows.extractionErrors.prefixMismatch", { prefix: extraction.prefix }) };
     }
     const value = raw.slice(extraction.prefix.length).trim();
     return value
       ? { value, error: null }
-      : { value: null, error: "Nothing remains after removing the prefix." };
+      : { value: null, error: t("workflows.extractionErrors.prefixEmpty") };
   }
 
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    return { value: null, error: "The scanned value is not a valid URL." };
+    return { value: null, error: t("workflows.extractionErrors.invalidUrl") };
   }
 
   if (extraction.sourceOrigin.trim()) {
     try {
       const expectedOrigin = new URL(extraction.sourceOrigin).origin;
       if (url.origin !== expectedOrigin) {
-        return { value: null, error: `Expected a QR code from ${expectedOrigin}.` };
+        return { value: null, error: t("workflows.extractionErrors.originMismatch", { origin: expectedOrigin }) };
       }
     } catch {
-      return { value: null, error: "The configured source origin is invalid." };
+      return { value: null, error: t("workflows.extractionErrors.originInvalid") };
     }
   }
   if (extraction.sourcePath.trim() && url.pathname !== extraction.sourcePath.trim()) {
-    return { value: null, error: `Expected the path ${extraction.sourcePath.trim()}.` };
+    return { value: null, error: t("workflows.extractionErrors.pathMismatch", { path: extraction.sourcePath.trim() }) };
   }
   const parameter = extraction.parameter.trim();
   const values = url.searchParams.getAll(parameter);
   if (values.length !== 1) {
     return {
       value: null,
-      error: `The scan must contain exactly one “${parameter || "?"}” query value.`,
+      error: t("workflows.extractionErrors.queryCount", { parameter: parameter || "?" }),
     };
   }
   const value = values[0].trim();
@@ -456,13 +462,13 @@ function extractIdentifier(
     ? { value, error: null }
     : {
         value: null,
-        error: `Query parameter “${parameter || "?"}” is empty.`,
+        error: t("workflows.extractionErrors.queryEmpty", { parameter: parameter || "?" }),
       };
 }
 
-function visiblePropertyValue(property: Pick<FixedProperty, "key" | "value">) {
+function visiblePropertyValue(property: Pick<FixedProperty, "key" | "value">, t: TFunction) {
   if (property.key === "assemblyStatus" && property.value === "finished-assembled") {
-    return "Fully assembled";
+    return t("values.fullyAssembled");
   }
   return property.value
     .replaceAll("-", " ")
@@ -478,7 +484,7 @@ function FlowStep({
   children,
   last = false,
 }: {
-  number: number;
+  number: string;
   icon: ReactNode;
   title: string;
   description: string;
@@ -490,19 +496,19 @@ function FlowStep({
       {!last ? (
         <span
           aria-hidden="true"
-          className="absolute bottom-[-18px] left-[18px] top-10 w-px bg-[#dfe2e7] sm:left-[22px] sm:top-12"
+          className="absolute bottom-[-18px] left-[18px] top-10 w-px bg-border sm:left-[22px] sm:top-12"
         />
       ) : null}
-      <span className="relative z-10 grid size-[38px] place-items-center rounded-xl border border-[#dcd9ff] bg-[#eeedff] text-[#5147d9] shadow-sm sm:size-[46px]">
+      <span className="relative z-10 grid size-[38px] place-items-center rounded-xl border border-brand-border bg-brand-soft text-brand shadow-sm sm:size-[46px]">
         {icon}
-        <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-[#5147d9] text-[8px] font-bold text-white ring-2 ring-[#f7f8fa]">
+        <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-brand-solid text-[8px] font-bold text-on-brand ring-2 ring-background">
           {number}
         </span>
       </span>
       <Card className="min-w-0 p-4 sm:p-5">
         <div className="mb-4">
-          <h2 className="text-[14px] font-semibold text-[#2b2f34]">{title}</h2>
-          <p className="mt-1 text-[11px] leading-5 text-[#5f6672]">{description}</p>
+          <h2 className="text-[14px] font-semibold text-foreground">{title}</h2>
+          <p className="mt-1 text-[11px] leading-5 text-muted">{description}</p>
         </div>
         {children}
       </Card>
@@ -531,12 +537,12 @@ function Toggle({
       onClick={() => onChange(!checked)}
       className={cn(
         "relative h-6 w-11 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-55",
-        checked ? "bg-[#5147d9]" : "bg-[#cdd1d7]",
+        checked ? "bg-brand-solid" : "bg-border-strong",
       )}
     >
       <span
         className={cn(
-          "absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition",
+          "absolute top-0.5 size-5 rounded-full bg-surface shadow-sm transition",
           checked ? "left-[22px]" : "left-0.5",
         )}
       />
@@ -551,9 +557,9 @@ function NoticeBanner({ notice }: { notice: Notice }) {
       role={notice.tone === "error" ? "alert" : "status"}
       className={cn(
         "mb-4 flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-[12px] leading-5",
-        notice.tone === "success" && "border-[#c8eadb] bg-[#f1fbf6] text-[#176845]",
-        notice.tone === "error" && "border-[#efd1d5] bg-[#fff7f8] text-[#a83c49]",
-        notice.tone === "info" && "border-[#d9d7ff] bg-[#f7f6ff] text-[#554ec4]",
+        notice.tone === "success" && "border-success-border bg-success-soft text-success",
+        notice.tone === "error" && "border-danger-border bg-danger-soft text-danger",
+        notice.tone === "info" && "border-brand-border bg-brand-soft text-brand",
       )}
     >
       <Icon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -563,7 +569,10 @@ function NoticeBanner({ notice }: { notice: Notice }) {
 }
 
 export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
-  const firstDraft = useMemo(() => templateDraft(), []);
+  const { t, i18n } = useT("scanner");
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
+  const firstDraft = useMemo(() => templateDraft(t), [t]);
   const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
   const [resources, setResources] = useState<StockItem[]>([]);
   const [draft, setDraft] = useState<WorkflowDraft>(firstDraft);
@@ -610,22 +619,22 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
         if (nextSelection) {
           applyWorkflow(nextSelection);
         } else {
-          const nextDraft = templateDraft(nextResources[0]?.resourceId ?? "");
+          const nextDraft = templateDraft(t, nextResources[0]?.resourceId ?? "");
           setSelectedId(null);
           setDraft(nextDraft);
           setBaseSignature(payloadSignature(nextDraft));
         }
-      } catch (error) {
+      } catch {
         setNotice({
           tone: "error",
-          message: error instanceof Error ? error.message : "Workflows could not be loaded.",
+          message: t("workflows.errors.load"),
         });
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [applyWorkflow],
+    [applyWorkflow, t],
   );
 
   useEffect(() => {
@@ -653,24 +662,24 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
     (resource) => resource.resourceId === draft.resourceId,
   );
   const extractionResult = useMemo(
-    () => extractIdentifier(sampleScan, draft.extraction),
-    [draft.extraction, sampleScan],
+    () => extractIdentifier(sampleScan, draft.extraction, t),
+    [draft.extraction, sampleScan, t],
   );
 
   const confirmDraftDiscard = () =>
     !dirty ||
     window.confirm(
-      "Discard your unsaved workflow changes? This action cannot be undone.",
+      t("workflows.confirmDiscard"),
     );
 
   const chooseTemplate = () => {
     if (interactionBusy || !confirmDraftDiscard()) return;
-    const nextDraft = templateDraft(resources[0]?.resourceId ?? "");
+    const nextDraft = templateDraft(t, resources[0]?.resourceId ?? "");
     setSelectedId(null);
     setDraft(nextDraft);
     setBaseSignature(payloadSignature(nextDraft));
     setConfirmDelete(false);
-    setNotice({ tone: "info", message: "Paperless Paper template loaded. Choose its inventory item, then save." });
+    setNotice({ tone: "info", message: t("workflows.notices.templateLoaded") });
   };
 
   const selectWorkflow = (workflow: WorkflowRecord) => {
@@ -688,13 +697,13 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
     nextDraft: WorkflowDraft,
     message: string,
   ): Promise<WorkflowRecord | null> => {
-    const validationError = validateDraft(nextDraft);
+    const validationError = validateDraft(nextDraft, t);
     if (validationError) {
       setNotice({ tone: "error", message: validationError });
       return null;
     }
     if (!canManage) {
-      setNotice({ tone: "error", message: "Viewer access is read-only." });
+      setNotice({ tone: "error", message: t("workflows.notices.viewerReadOnly") });
       return null;
     }
 
@@ -711,21 +720,21 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
         body: JSON.stringify(payload),
       });
       const saved = workflowFromResponse(response);
-      if (!saved) throw new Error("The workflow service returned an unexpected response.");
+      if (!saved) throw new Error(t("workflows.errors.unexpected"));
       setWorkflows((current) => {
         const exists = current.some((workflow) => workflow.id === saved.id);
         const next = exists
           ? current.map((workflow) => (workflow.id === saved.id ? saved : workflow))
           : [...current, saved];
-        return next.sort((left, right) => left.name.localeCompare(right.name));
+        return next.sort((left, right) => left.name.localeCompare(right.name, locale));
       });
       applyWorkflow(saved);
       setNotice({ tone: "success", message });
       return saved;
-    } catch (error) {
+    } catch {
       setNotice({
         tone: "error",
-        message: error instanceof Error ? error.message : "The workflow could not be saved.",
+        message: t("workflows.errors.save"),
       });
       return null;
     } finally {
@@ -734,7 +743,10 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
   };
 
   const saveDraft = () =>
-    void persistDraft(draft, draft.id ? "Workflow updated." : "Workflow created and ready to scan.");
+    void persistDraft(
+      draft,
+      t(draft.id ? "workflows.notices.updated" : "workflows.notices.created"),
+    );
 
   const toggleSavedWorkflow = async () => {
     if (!savedWorkflow || !canManage || interactionBusy) return;
@@ -754,7 +766,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
         },
       );
       const saved = workflowFromResponse(response);
-      if (!saved) throw new Error("The workflow service returned an unexpected response.");
+      if (!saved) throw new Error(t("workflows.errors.unexpected"));
       setWorkflows((current) =>
         current.map((workflow) => (workflow.id === saved.id ? saved : workflow)),
       );
@@ -770,12 +782,12 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
       setBaseSignature(payloadSignature(workflowToDraft(saved)));
       setNotice({
         tone: "success",
-        message: saved.enabled ? "Workflow enabled." : "Workflow paused.",
+        message: t(saved.enabled ? "workflows.notices.enabled" : "workflows.notices.paused"),
       });
-    } catch (error) {
+    } catch {
       setNotice({
         tone: "error",
-        message: error instanceof Error ? error.message : "The workflow could not be updated.",
+        message: t("workflows.errors.update"),
       });
     } finally {
       setSaving(false);
@@ -796,17 +808,17 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
       if (remaining[0]) {
         applyWorkflow(remaining[0]);
       } else {
-        const nextDraft = templateDraft(resources[0]?.resourceId ?? "");
+        const nextDraft = templateDraft(t, resources[0]?.resourceId ?? "");
         setSelectedId(null);
         setDraft(nextDraft);
         setBaseSignature(payloadSignature(nextDraft));
         setConfirmDelete(false);
       }
-      setNotice({ tone: "success", message: "Workflow deleted." });
-    } catch (error) {
+      setNotice({ tone: "success", message: t("workflows.notices.deleted") });
+    } catch {
       setNotice({
         tone: "error",
-        message: error instanceof Error ? error.message : "The workflow could not be deleted.",
+        message: t("workflows.errors.delete"),
       });
     } finally {
       setDeleting(false);
@@ -882,21 +894,21 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
     <div>
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="animate-fade-up">
-          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#5f6672]">
-            <Workflow className="size-3.5 text-[#5147d9]" aria-hidden="true" />
-            Scan automation
+          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
+            <Workflow className="size-3.5 text-brand" aria-hidden="true" />
+            {t("workflows.header.eyebrow")}
           </div>
-          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-[#1e2126] sm:text-[32px]">
-            Build scan workflows visually.
+          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-foreground sm:text-[32px]">
+            {t("workflows.header.title")}
           </h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#5f6672]">
-            Turn a QR code into an identified stock unit with guided inputs and consistent properties—without code.
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted">
+            {t("workflows.header.description")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!canManage ? (
             <Badge tone="neutral" className="h-9 gap-1.5 px-3">
-              <Lock className="size-3.5" aria-hidden="true" /> Read only
+              <Lock className="size-3.5" aria-hidden="true" /> {t("workflows.header.readOnly")}
             </Badge>
           ) : null}
           <Button
@@ -905,12 +917,12 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
             disabled={interactionBusy}
           >
             <RefreshCw className={cn("size-4", refreshing && "animate-spin")} aria-hidden="true" />
-            Refresh
+            {t("workflows.header.refresh")}
           </Button>
           {canManage ? (
             <Button onClick={chooseTemplate} disabled={interactionBusy}>
               <Sparkles className="size-4" aria-hidden="true" />
-              New from template
+              {t("workflows.header.newTemplate")}
             </Button>
           ) : null}
         </div>
@@ -920,11 +932,14 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
 
       <div className="grid items-start gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
         <Card className="overflow-hidden xl:sticky xl:top-[84px]">
-          <div className="flex items-center justify-between border-b border-[#e8eaed] px-4 py-3.5">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
             <div>
-              <h2 className="text-[13px] font-semibold text-[#30343a]">Workflows</h2>
-              <p className="mt-0.5 text-[10px] text-[#5f6672]">
-                {workflows.length} configured
+              <h2 className="text-[13px] font-semibold text-foreground">{t("workflows.sidebar.title")}</h2>
+              <p className="mt-0.5 text-[10px] text-muted">
+                {t("workflows.sidebar.configured", {
+                  count: workflows.length,
+                  value: integer.format(workflows.length),
+                })}
               </p>
             </div>
             {canManage ? (
@@ -932,8 +947,8 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                 type="button"
                 onClick={chooseTemplate}
                 disabled={interactionBusy}
-                className="grid size-8 place-items-center rounded-lg border border-[#dfe2e7] text-[#5f6672] transition hover:border-[#cbc7ff] hover:bg-[#f5f4ff] hover:text-[#5147d9] disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Create a workflow from the template"
+                className="grid size-8 place-items-center rounded-lg border border-border text-muted transition hover:border-brand-border hover:bg-brand-soft hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={t("workflows.sidebar.createAria")}
               >
                 <Plus className="size-4" aria-hidden="true" />
               </button>
@@ -955,31 +970,34 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     disabled={interactionBusy}
                     className={cn(
                       "group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60",
-                      active ? "bg-[#eeedff]" : "hover:bg-[#f5f6f8]",
+                      active ? "bg-brand-soft" : "hover:bg-surface-hover",
                     )}
                   >
                     <span
                       className={cn(
                         "grid size-8 shrink-0 place-items-center rounded-lg",
                         workflow.enabled
-                          ? "bg-[#e7f7ef] text-[#168258]"
-                          : "bg-[#eceef1] text-[#5f6672]",
+                          ? "bg-success-soft text-success"
+                          : "bg-border text-muted",
                       )}
                     >
                       <QrCode className="size-4" aria-hidden="true" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12px] font-semibold text-[#33373d]">
+                      <span className="block truncate text-[12px] font-semibold text-foreground">
                         {workflow.name}
                       </span>
-                      <span className="mt-0.5 block truncate text-[10px] text-[#5f6672]">
-                        {resource?.name ?? "Inventory item unavailable"} · v{workflow.revision}
+                      <span className="mt-0.5 block truncate text-[10px] text-muted">
+                        {t("workflows.sidebar.resourceRevision", {
+                          resource: resource?.name ?? t("workflows.fallbacks.resourceUnavailable"),
+                          revision: integer.format(workflow.revision),
+                        })}
                       </span>
                     </span>
                     <ChevronRight
                       className={cn(
                         "size-3.5 shrink-0 transition",
-                        active ? "text-[#5147d9]" : "text-[#5f6672] group-hover:text-[#5f6672]",
+                        active ? "text-brand" : "text-muted group-hover:text-muted",
                       )}
                       aria-hidden="true"
                     />
@@ -991,40 +1009,46 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
             <EmptyState
               className="min-h-56 py-8"
               icon={<Workflow className="size-5" aria-hidden="true" />}
-              title="No saved workflows"
+              title={t("workflows.sidebar.emptyTitle")}
               description={
                 canManage
-                  ? "The Paperless Paper template is ready in the builder."
-                  : "A manager can create the first scan workflow here."
+                  ? t("workflows.sidebar.emptyManager")
+                  : t("workflows.sidebar.emptyViewer")
               }
             />
           )}
 
-          <div className="border-t border-[#e8eaed] bg-[#fafbfc] px-4 py-3 text-[10px] leading-4 text-[#5f6672]">
-            <span className="inline-flex items-center gap-1.5 font-medium text-[#646b76]">
-              <ShieldCheck className="size-3.5 text-[#5147d9]" aria-hidden="true" />
-              Safe by design
+          <div className="border-t border-border bg-surface-subtle px-4 py-3 text-[10px] leading-4 text-muted">
+            <span className="inline-flex items-center gap-1.5 font-medium text-muted">
+              <ShieldCheck className="size-3.5 text-brand" aria-hidden="true" />
+              {t("workflows.sidebar.safeTitle")}
             </span>
-            <p className="mt-1">Only configured fields and allowed stock actions run after a scan.</p>
+            <p className="mt-1">{t("workflows.sidebar.safeDescription")}</p>
           </div>
         </Card>
 
         <div className="min-w-0">
           <Card className="mb-4 overflow-hidden">
-            <div className="flex flex-col gap-4 border-b border-[#e8eaed] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <div className="flex flex-col gap-4 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="truncate text-[15px] font-semibold text-[#292d33]">
-                    {draft.id ? draft.name || "Untitled workflow" : "New workflow"}
+                  <h2 className="truncate text-[15px] font-semibold text-foreground">
+                    {draft.id
+                      ? draft.name || t("workflows.fallbacks.untitled")
+                      : t("workflows.editor.newWorkflow")}
                   </h2>
                   <Badge tone={draft.enabled ? "success" : "neutral"}>
-                    {draft.enabled ? "Enabled" : "Paused"}
+                    {t(draft.enabled ? "workflows.editor.enabled" : "workflows.editor.paused")}
                   </Badge>
-                  {dirty ? <Badge tone="warning">Unsaved changes</Badge> : null}
-                  {!draft.id ? <Badge tone="brand">Template</Badge> : null}
+                  {dirty ? <Badge tone="warning">{t("workflows.editor.unsaved")}</Badge> : null}
+                  {!draft.id ? <Badge tone="brand">{t("workflows.editor.template")}</Badge> : null}
                 </div>
-                <p className="mt-1 text-[11px] text-[#5f6672]">
-                  {draft.id ? `Revision ${draft.revision ?? 1}` : "Based on the attached Paperless Paper QR-code use case"}
+                <p className="mt-1 text-[11px] text-muted">
+                  {draft.id
+                    ? t("workflows.editor.revision", {
+                        value: integer.format(draft.revision ?? 1),
+                      })
+                    : t("workflows.editor.basedOnTemplate")}
                 </p>
               </div>
               {canManage ? (
@@ -1036,7 +1060,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                       onClick={() => void toggleSavedWorkflow()}
                       disabled={interactionBusy || !savedWorkflow}
                     >
-                      {savedWorkflow?.enabled ? "Pause" : "Enable"}
+                      {t(savedWorkflow?.enabled ? "workflows.editor.pause" : "workflows.editor.enable")}
                     </Button>
                   ) : null}
                   {draft.id ? (
@@ -1047,7 +1071,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                       disabled={interactionBusy || !savedWorkflow}
                     >
                       <Trash2 className="size-3.5" aria-hidden="true" />
-                      Delete
+                      {t("workflows.editor.delete")}
                     </Button>
                   ) : null}
                   <Button
@@ -1060,27 +1084,33 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     ) : (
                       <Save className="size-3.5" aria-hidden="true" />
                     )}
-                    {saving ? "Saving…" : draft.id ? "Update" : "Save workflow"}
+                    {t(
+                      saving
+                        ? "workflows.editor.saving"
+                        : draft.id
+                          ? "workflows.editor.update"
+                          : "workflows.editor.save",
+                    )}
                   </Button>
                 </div>
               ) : null}
             </div>
 
             {confirmDelete && savedWorkflow ? (
-              <div className="flex flex-col gap-3 border-b border-[#efd1d5] bg-[#fff7f8] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="flex flex-col gap-3 border-b border-danger-border bg-danger-soft px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <div className="flex items-start gap-2.5">
-                  <AlertCircle className="mt-0.5 size-4 shrink-0 text-[#bd4553]" aria-hidden="true" />
-                  <p className="text-[12px] leading-5 text-[#8f3540]">
-                    Delete <strong>{savedWorkflow.name}</strong>? Existing stock units are not affected.
+                  <AlertCircle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden="true" />
+                  <p className="text-[12px] leading-5 text-danger">
+                    {t("workflows.editor.confirmDelete", { name: savedWorkflow.name })}
                   </p>
                 </div>
                 <div className="flex gap-2 self-end sm:self-auto">
                   <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(false)} disabled={interactionBusy}>
-                    Cancel
+                    {t("workflows.editor.cancel")}
                   </Button>
                   <Button variant="danger" size="sm" onClick={() => void deleteWorkflow()} disabled={interactionBusy}>
                     {deleting ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : null}
-                    {deleting ? "Deleting…" : "Delete workflow"}
+                    {t(deleting ? "workflows.editor.deleting" : "workflows.editor.deleteWorkflow")}
                   </Button>
                 </div>
               </div>
@@ -1088,36 +1118,36 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
 
             <div className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
               <label className={labelClass}>
-                Workflow name
+                {t("workflows.editor.name")}
                 <input
                   value={draft.name}
                   onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
                   className={inputClass}
-                  placeholder="Assembly scan"
+                  placeholder={t("workflows.editor.namePlaceholder")}
                   disabled={!editable}
                 />
               </label>
-              <div className="rounded-xl border border-[#e2e4e8] bg-[#fafbfc] px-3.5 py-3">
+              <div className="rounded-xl border border-border bg-surface-subtle px-3.5 py-3">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-[11px] font-semibold text-[#4e555f]">Workflow enabled</p>
-                    <p className="mt-0.5 text-[10px] leading-4 text-[#5f6672]">Available on the Scan screen.</p>
+                    <p className="text-[11px] font-semibold text-muted-strong">{t("workflows.editor.enabledLabel")}</p>
+                    <p className="mt-0.5 text-[10px] leading-4 text-muted">{t("workflows.editor.enabledDescription")}</p>
                   </div>
                   <Toggle
                     checked={draft.enabled}
                     onChange={(enabled) => setDraft((current) => ({ ...current, enabled }))}
                     disabled={!editable || Boolean(draft.id)}
-                    label="Workflow enabled"
+                    label={t("workflows.editor.enabledLabel")}
                   />
                 </div>
               </div>
               <label className={cn(labelClass, "sm:col-span-2")}>
-                Description
+                {t("workflows.editor.description")}
                 <textarea
                   value={draft.description}
                   onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
                   className={textAreaClass}
-                  placeholder="Explain when this workflow should be used."
+                  placeholder={t("workflows.editor.descriptionPlaceholder")}
                   disabled={!editable}
                 />
               </label>
@@ -1125,45 +1155,41 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
           </Card>
 
           {!canManage ? (
-            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[#e0e2e7] bg-white px-4 py-3.5 text-[12px] leading-5 text-[#5f6672] shadow-[var(--shadow-sm)]">
-              <Eye className="mt-0.5 size-4 shrink-0 text-[#5147d9]" aria-hidden="true" />
-              You can inspect and locally preview this workflow. Editing, enabling, and deleting require editor access.
+            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-border bg-surface px-4 py-3.5 text-[12px] leading-5 text-muted shadow-[var(--shadow-sm)]">
+              <Eye className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+              {t("workflows.editor.viewerDescription")}
             </div>
           ) : null}
 
-          <div className="space-y-[18px] rounded-2xl border border-[#e4e7eb] bg-[#f7f8fa] p-3 sm:p-5">
+          <div className="space-y-[18px] rounded-2xl border border-border bg-surface-subtle p-3 sm:p-5">
             <FlowStep
-              number={1}
+              number={integer.format(1)}
               icon={<QrCode className="size-[18px] sm:size-5" aria-hidden="true" />}
-              title="Trigger"
-              description="This workflow starts when a camera or handheld scanner reads a QR code."
+              title={t("workflows.steps.trigger.title")}
+              description={t("workflows.steps.trigger.description")}
             >
-              <div className="flex flex-col gap-3 rounded-xl border border-[#e4e7eb] bg-[#fafbfc] p-3.5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-subtle p-3.5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-9 place-items-center rounded-lg bg-white text-[#5147d9] shadow-sm ring-1 ring-[#e2e4e8]">
+                  <span className="grid size-9 place-items-center rounded-lg bg-surface text-brand shadow-sm ring-1 ring-border">
                     <ScanLine className="size-[18px]" aria-hidden="true" />
                   </span>
                   <div>
-                    <p className="text-[12px] font-semibold text-[#3c4148]">QR code scanned</p>
-                    <p className="mt-0.5 text-[10px] text-[#5f6672]">Pass the decoded text into this workflow</p>
+                    <p className="text-[12px] font-semibold text-foreground">{t("workflows.steps.trigger.event")}</p>
+                    <p className="mt-0.5 text-[10px] text-muted">{t("workflows.steps.trigger.eventDescription")}</p>
                   </div>
                 </div>
-                <Badge tone="brand">Scan trigger</Badge>
+                <Badge tone="brand">{t("workflows.steps.trigger.badge")}</Badge>
               </div>
             </FlowStep>
 
             <FlowStep
-              number={2}
+              number={integer.format(2)}
               icon={<FileKey2 className="size-[18px] sm:size-5" aria-hidden="true" />}
-              title="Extract the EPD number"
-              description="Choose a safe, predefined rule for turning scanned text into the unit identifier."
+              title={t("workflows.steps.extract.title")}
+              description={t("workflows.steps.extract.description")}
             >
-              <div className="grid grid-cols-1 gap-1 rounded-xl bg-[#f0f2f4] p-1 sm:grid-cols-3">
-                {([
-                  ["full", "Full value"],
-                  ["url-query", "URL parameter"],
-                  ["prefix", "Remove prefix"],
-                ] as const).map(([mode, label]) => (
+              <div className="grid grid-cols-1 gap-1 rounded-xl bg-surface-muted p-1 sm:grid-cols-3">
+                {(["full", "url-query", "prefix"] as const).map((mode) => (
                   <button
                     key={mode}
                     type="button"
@@ -1178,11 +1204,11 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     className={cn(
                       "h-9 rounded-lg px-3 text-[11px] font-semibold transition disabled:cursor-not-allowed",
                       draft.extraction.mode === mode
-                        ? "bg-white text-[#3e3a9f] shadow-sm"
-                        : "text-[#5f6672] hover:text-[#383c42] disabled:opacity-65",
+                        ? "bg-surface text-brand-strong shadow-sm"
+                        : "text-muted hover:text-foreground disabled:opacity-65",
                     )}
                   >
-                    {label}
+                    {t(`workflows.steps.extract.modes.${mode}`)}
                   </button>
                 ))}
               </div>
@@ -1190,7 +1216,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
               {draft.extraction.mode === "url-query" ? (
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <label className={labelClass}>
-                    Query parameter
+                    {t("workflows.steps.extract.queryParameter")}
                     <input
                       value={draft.extraction.parameter}
                       onChange={(event) =>
@@ -1200,12 +1226,12 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                         }))
                       }
                       className={inputClass}
-                      placeholder="d"
+                      placeholder={t("workflows.steps.extract.queryParameterPlaceholder")}
                       disabled={!editable}
                     />
                   </label>
                   <label className={labelClass}>
-                    Allowed source origin
+                    {t("workflows.steps.extract.sourceOrigin")}
                     <input
                       value={draft.extraction.sourceOrigin}
                       onChange={(event) =>
@@ -1215,12 +1241,12 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                         }))
                       }
                       className={inputClass}
-                      placeholder="https://paperlesspaper.de"
+                      placeholder={t("workflows.steps.extract.sourceOriginPlaceholder")}
                       disabled={!editable}
                     />
                   </label>
                   <label className={labelClass}>
-                    Allowed path
+                    {t("workflows.steps.extract.sourcePath")}
                     <input
                       value={draft.extraction.sourcePath}
                       onChange={(event) =>
@@ -1230,17 +1256,17 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                         }))
                       }
                       className={inputClass}
-                      placeholder="/b"
+                      placeholder={t("workflows.steps.extract.sourcePathPlaceholder")}
                       disabled={!editable}
                     />
                   </label>
                   <label className={labelClass}>
-                    Identifier property key
+                    {t("workflows.steps.extract.identifierKey")}
                     <input
                       value={draft.identifierPropertyKey}
                       onChange={(event) => setDraft((current) => ({ ...current, identifierPropertyKey: event.target.value }))}
                       className={inputClass}
-                      placeholder="epdNumber"
+                      placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
                       disabled={!editable}
                     />
                   </label>
@@ -1248,7 +1274,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
               ) : draft.extraction.mode === "prefix" ? (
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <label className={labelClass}>
-                    Prefix to remove
+                    {t("workflows.steps.extract.prefix")}
                     <input
                       value={draft.extraction.prefix}
                       onChange={(event) =>
@@ -1258,29 +1284,29 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                         }))
                       }
                       className={inputClass}
-                      placeholder="EPD-"
+                      placeholder={t("workflows.steps.extract.prefixPlaceholder")}
                       disabled={!editable}
                     />
                   </label>
                   <label className={labelClass}>
-                    Identifier property key
+                    {t("workflows.steps.extract.identifierKey")}
                     <input
                       value={draft.identifierPropertyKey}
                       onChange={(event) => setDraft((current) => ({ ...current, identifierPropertyKey: event.target.value }))}
                       className={inputClass}
-                      placeholder="epdNumber"
+                      placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
                       disabled={!editable}
                     />
                   </label>
                 </div>
               ) : (
                 <label className={cn(labelClass, "mt-4 block max-w-md")}>
-                  Identifier property key
+                  {t("workflows.steps.extract.identifierKey")}
                   <input
                     value={draft.identifierPropertyKey}
                     onChange={(event) => setDraft((current) => ({ ...current, identifierPropertyKey: event.target.value }))}
                     className={inputClass}
-                    placeholder="epdNumber"
+                    placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
                     disabled={!editable}
                   />
                 </label>
@@ -1288,61 +1314,71 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
             </FlowStep>
 
             <FlowStep
-              number={3}
+              number={integer.format(3)}
               icon={<PackageCheck className="size-[18px] sm:size-5" aria-hidden="true" />}
-              title="Choose the target inventory item"
-              description="Only inventory configured for serialized stock can receive identified units."
+              title={t("workflows.steps.target.title")}
+              description={t("workflows.steps.target.description")}
             >
               {resources.length ? (
                 <label className={labelClass}>
-                  Serialized inventory item
+                  {t("workflows.steps.target.field")}
                   <select
                     value={draft.resourceId}
                     onChange={(event) => setDraft((current) => ({ ...current, resourceId: event.target.value }))}
                     className={inputClass}
                     disabled={!editable}
                   >
-                    <option value="">Select an inventory item…</option>
+                    <option value="">{t("workflows.steps.target.select")}</option>
                     {resources.map((resource) => (
                       <option key={resource.resourceId} value={resource.resourceId}>
-                        {resource.name}{resource.quantity !== undefined ? ` · ${resource.quantity} ${resource.unitName ?? "units"}` : ""}
+                        {resource.quantity !== undefined
+                          ? t("workflows.steps.target.resourceQuantity", {
+                              name: resource.name,
+                              quantity: integer.format(resource.quantity),
+                              unit:
+                                resource.unitName ??
+                                t("workflows.steps.target.units", {
+                                  count: resource.quantity,
+                                }),
+                            })
+                          : resource.name}
                       </option>
                     ))}
                   </select>
                 </label>
               ) : (
-                <div className="flex flex-col gap-3 rounded-xl border border-[#eadfc7] bg-[#fffaf1] p-3.5 text-[12px] leading-5 text-[#82561c] sm:flex-row sm:items-center sm:justify-between">
-                  <span>No serialized inventory items are available yet.</span>
-                  <Link href="/inventory" className="inline-flex items-center gap-1 font-semibold text-[#6b55d4] hover:underline">
-                    Configure inventory <ArrowRight className="size-3.5" aria-hidden="true" />
+                <div className="flex flex-col gap-3 rounded-xl border border-warning-border bg-warning-soft p-3.5 text-[12px] leading-5 text-warning sm:flex-row sm:items-center sm:justify-between">
+                  <span>{t("workflows.steps.target.none")}</span>
+                  <Link href="/inventory" className="inline-flex items-center gap-1 font-semibold text-brand hover:underline">
+                    {t("workflows.steps.target.configure")} <ArrowRight className="size-3.5" aria-hidden="true" />
                   </Link>
                 </div>
               )}
               {selectedResource ? (
-                <div className="mt-3 flex items-center gap-3 rounded-xl border border-[#dce9e3] bg-[#f4fbf7] p-3">
-                  <Check className="size-4 shrink-0 text-[#17845a]" aria-hidden="true" />
-                  <p className="text-[11px] text-[#4f675b]">
-                    <strong className="text-[#28543f]">{selectedResource.name}</strong> uses serialized tracking.
+                <div className="mt-3 flex items-center gap-3 rounded-xl border border-success-border bg-success-soft p-3">
+                  <Check className="size-4 shrink-0 text-success" aria-hidden="true" />
+                  <p className="text-[11px] text-success">
+                    {t("workflows.steps.target.selected", { name: selectedResource.name })}
                   </p>
                 </div>
               ) : null}
             </FlowStep>
 
             <FlowStep
-              number={4}
+              number={integer.format(4)}
               icon={<Layers3 className="size-[18px] sm:size-5" aria-hidden="true" />}
-              title="Ask for scan-time inputs"
-              description="Build guided select fields for information that changes from unit to unit."
+              title={t("workflows.steps.inputs.title")}
+              description={t("workflows.steps.inputs.description")}
             >
               <div className="space-y-3">
                 {draft.inputFields.map((field, fieldIndex) => (
-                  <div key={field.uid} className="rounded-xl border border-[#e1e4e8] bg-[#fafbfc] p-3.5">
+                  <div key={field.uid} className="rounded-xl border border-border bg-surface-subtle p-3.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <span className="grid size-6 place-items-center rounded-md bg-[#eeedff] text-[10px] font-bold text-[#5147d9]">
-                          {fieldIndex + 1}
+                        <span className="grid size-6 place-items-center rounded-md bg-brand-soft text-[10px] font-bold text-brand">
+                          {integer.format(fieldIndex + 1)}
                         </span>
-                        <p className="text-[12px] font-semibold text-[#42474f]">Select field</p>
+                        <p className="text-[12px] font-semibold text-muted-strong">{t("workflows.steps.inputs.selectField")}</p>
                       </div>
                       {canManage ? (
                         <button
@@ -1354,8 +1390,10 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                             }))
                           }
                           disabled={!editable}
-                          className="grid size-7 place-items-center rounded-lg text-[#9a636a] transition hover:bg-[#fff0f2] hover:text-[#b83243] disabled:cursor-not-allowed disabled:opacity-50"
-                          aria-label={`Remove ${field.label || "scan input"}`}
+                          className="grid size-7 place-items-center rounded-lg text-danger transition hover:bg-danger-soft hover:text-danger disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={t("workflows.steps.inputs.removeField", {
+                            field: field.label || t("workflows.steps.inputs.scanInput"),
+                          })}
                         >
                           <Trash2 className="size-3.5" aria-hidden="true" />
                         </button>
@@ -1364,40 +1402,40 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
 
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <label className={labelClass}>
-                        Property key
+                        {t("workflows.steps.inputs.propertyKey")}
                         <input
                           value={field.key}
                           onChange={(event) => updateInput(field.uid, { key: event.target.value })}
                           className={inputClass}
-                          placeholder="color"
+                          placeholder={t("workflows.steps.inputs.propertyKeyPlaceholder")}
                           disabled={!editable}
                         />
                       </label>
                       <label className={labelClass}>
-                        Visible label
+                        {t("workflows.steps.inputs.visibleLabel")}
                         <input
                           value={field.label}
                           onChange={(event) => updateInput(field.uid, { label: event.target.value })}
                           className={inputClass}
-                          placeholder="Farbe"
+                          placeholder={t("workflows.steps.inputs.visibleLabel")}
                           disabled={!editable}
                         />
                       </label>
                     </div>
-                    <label className="mt-3 flex items-center gap-2 text-[11px] font-medium text-[#555c67]">
+                    <label className="mt-3 flex items-center gap-2 text-[11px] font-medium text-muted-strong">
                       <input
                         type="checkbox"
                         checked={field.required}
                         onChange={(event) => updateInput(field.uid, { required: event.target.checked })}
                         disabled={!editable}
-                        className="size-4 rounded border-[#cfd3da] accent-[#635bff] disabled:cursor-not-allowed"
+                        className="size-4 rounded border-border-strong accent-brand-solid disabled:cursor-not-allowed"
                       />
-                      Required before the scan can be applied
+                      {t("workflows.steps.inputs.required")}
                     </label>
 
-                    <div className="mt-4 border-t border-[#e4e7eb] pt-3">
+                    <div className="mt-4 border-t border-border pt-3">
                       <div className="mb-2 flex items-center justify-between gap-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-[#5f6672]">Options</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">{t("workflows.steps.inputs.options")}</p>
                         {canManage ? (
                           <button
                             type="button"
@@ -1413,7 +1451,9 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                                           {
                                             uid: localId("option"),
                                             value: `option-${item.options.length + 1}`,
-                                            label: `Option ${item.options.length + 1}`,
+                                            label: t("workflows.steps.inputs.newOption", {
+                                              value: integer.format(item.options.length + 1),
+                                            }),
                                             color: "#8b83df",
                                           },
                                         ],
@@ -1423,43 +1463,43 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                               }))
                             }
                             disabled={!editable}
-                            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-[#5d55d7] transition hover:bg-[#eeedff] disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-brand transition hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            <Plus className="size-3" aria-hidden="true" /> Add option
+                            <Plus className="size-3" aria-hidden="true" /> {t("workflows.steps.inputs.addOption")}
                           </button>
                         ) : null}
                       </div>
                       <div className="space-y-2">
                         {field.options.map((option) => (
                           <div key={option.uid} className="grid grid-cols-[36px_minmax(0,1fr)] gap-2 sm:grid-cols-[36px_minmax(0,1fr)_minmax(0,1fr)_30px]">
-                            <label className="relative mt-1.5 grid size-9 cursor-pointer place-items-center overflow-hidden rounded-lg border border-[#d8dce1] bg-white shadow-sm" title="Choose swatch color">
-                              <span className="size-5 rounded-full border border-black/10" style={{ backgroundColor: option.color ?? "#8b83df" }} />
+                            <label className="relative mt-1.5 grid size-9 cursor-pointer place-items-center overflow-hidden rounded-lg border border-border bg-surface shadow-sm" title={t("workflows.steps.inputs.chooseColor")}>
+                              <span className="size-5 rounded-full border border-border-strong" style={{ backgroundColor: option.color ?? "#8b83df" }} />
                               <input
                                 type="color"
                                 value={option.color ?? "#8b83df"}
                                 onChange={(event) => updateOption(field.uid, option.uid, "color", event.target.value)}
                                 disabled={!editable}
                                 className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                                aria-label={`Color for ${option.label}`}
+                                aria-label={t("workflows.steps.inputs.colorFor", { label: option.label })}
                               />
                             </label>
                             <label className={labelClass}>
-                              <span className="sm:sr-only">Label</span>
+                              <span className="sm:sr-only">{t("workflows.steps.inputs.label")}</span>
                               <input
                                 value={option.label}
                                 onChange={(event) => updateOption(field.uid, option.uid, "label", event.target.value)}
                                 className={cn(inputClass, "mt-1.5")}
-                                placeholder="Visible label"
+                                placeholder={t("workflows.steps.inputs.visibleLabel")}
                                 disabled={!editable}
                               />
                             </label>
                             <label className={cn(labelClass, "col-start-2 sm:col-start-auto")}>
-                              <span className="sm:sr-only">Stored value</span>
+                              <span className="sm:sr-only">{t("workflows.steps.inputs.storedValue")}</span>
                               <input
                                 value={option.value}
                                 onChange={(event) => updateOption(field.uid, option.uid, "value", event.target.value)}
                                 className={cn(inputClass, "mt-0 sm:mt-1.5")}
-                                placeholder="Stored value"
+                                placeholder={t("workflows.steps.inputs.storedValue")}
                                 disabled={!editable}
                               />
                             </label>
@@ -1477,8 +1517,8 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                                   }))
                                 }
                                 disabled={!editable}
-                                className="col-start-1 row-start-2 grid size-7 place-items-center self-center rounded-lg text-[#9a636a] transition hover:bg-[#fff0f2] hover:text-[#b83243] disabled:cursor-not-allowed disabled:opacity-50 sm:col-start-auto sm:row-start-auto"
-                                aria-label={`Remove ${option.label}`}
+                                className="col-start-1 row-start-2 grid size-7 place-items-center self-center rounded-lg text-danger transition hover:bg-danger-soft hover:text-danger disabled:cursor-not-allowed disabled:opacity-50 sm:col-start-auto sm:row-start-auto"
+                                aria-label={t("workflows.steps.inputs.removeOption", { label: option.label })}
                               >
                                 <X className="size-3.5" aria-hidden="true" />
                               </button>
@@ -1491,8 +1531,8 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                 ))}
 
                 {draft.inputFields.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-[#d6dae0] px-4 py-6 text-center text-[11px] text-[#5f6672]">
-                    This workflow has no scan-time questions.
+                  <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-[11px] text-muted">
+                    {t("workflows.steps.inputs.none")}
                   </div>
                 ) : null}
 
@@ -1508,10 +1548,19 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                           {
                             uid: localId("input"),
                             key: `property${current.inputFields.length + 1}`,
-                            label: `Property ${current.inputFields.length + 1}`,
+                            label: t("workflows.steps.inputs.newProperty", {
+                              value: integer.format(current.inputFields.length + 1),
+                            }),
                             required: false,
                             options: [
-                              { uid: localId("option"), value: "option-1", label: "Option 1", color: "#8b83df" },
+                              {
+                                uid: localId("option"),
+                                value: "option-1",
+                                label: t("workflows.steps.inputs.newOption", {
+                                  value: integer.format(1),
+                                }),
+                                color: "#8b83df",
+                              },
                             ],
                           },
                         ],
@@ -1519,36 +1568,36 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     }
                     disabled={!editable}
                   >
-                    <Plus className="size-3.5" aria-hidden="true" /> Add select field
+                    <Plus className="size-3.5" aria-hidden="true" /> {t("workflows.steps.inputs.addField")}
                   </Button>
                 ) : null}
               </div>
             </FlowStep>
 
             <FlowStep
-              number={5}
+              number={integer.format(5)}
               icon={<Settings2 className="size-[18px] sm:size-5" aria-hidden="true" />}
-              title="Apply stock actions"
-              description="Decide what happens to the matched EPD unit and which values are always written."
+              title={t("workflows.steps.actions.title")}
+              description={t("workflows.steps.actions.description")}
               last
             >
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-[#e2e4e8] bg-[#fafbfc] p-3.5">
+                <div className="rounded-xl border border-border bg-surface-subtle p-3.5">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[11px] font-semibold text-[#4e555f]">Create missing unit</p>
-                      <p className="mt-1 text-[10px] leading-4 text-[#5f6672]">Register this EPD number if it is new.</p>
+                      <p className="text-[11px] font-semibold text-muted-strong">{t("workflows.steps.actions.createMissing")}</p>
+                      <p className="mt-1 text-[10px] leading-4 text-muted">{t("workflows.steps.actions.createMissingDescription")}</p>
                     </div>
                     <Toggle
                       checked={draft.createMissingUnit}
                       onChange={(createMissingUnit) => setDraft((current) => ({ ...current, createMissingUnit }))}
                       disabled={!editable}
-                      label="Create a missing serialized unit"
+                      label={t("workflows.steps.actions.createMissingAria")}
                     />
                   </div>
                 </div>
                 <label className={labelClass}>
-                  Lifecycle status after scan
+                  {t("workflows.steps.actions.status")}
                   <select
                     value={draft.unitStatus ?? ""}
                     onChange={(event) =>
@@ -1560,19 +1609,19 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     className={inputClass}
                     disabled={!editable}
                   >
-                    <option value="">Keep default / current status</option>
+                    <option value="">{t("workflows.steps.actions.keepStatus")}</option>
                     {unitStatuses.map((status) => (
-                      <option key={status} value={status}>{unitStatusLabels[status]}</option>
+                      <option key={status} value={status}>{t(`statuses.${status}`)}</option>
                     ))}
                   </select>
                 </label>
               </div>
 
-              <div className="mt-4 border-t border-[#e5e7eb] pt-4">
+              <div className="mt-4 border-t border-border pt-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[11px] font-semibold text-[#4e555f]">Fixed properties</p>
-                    <p className="mt-0.5 text-[10px] text-[#5f6672]">These values are applied on every successful scan.</p>
+                    <p className="text-[11px] font-semibold text-muted-strong">{t("workflows.steps.actions.fixedTitle")}</p>
+                    <p className="mt-0.5 text-[10px] text-muted">{t("workflows.steps.actions.fixedDescription")}</p>
                   </div>
                   {canManage ? (
                     <Button
@@ -1586,57 +1635,61 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                             {
                               uid: localId("fixed"),
                               key: `property${current.fixedProperties.length + 1}`,
-                              label: `Property ${current.fixedProperties.length + 1}`,
-                              value: "value",
+                              label: t("workflows.steps.actions.newProperty", {
+                                value: integer.format(current.fixedProperties.length + 1),
+                              }),
+                              value: t("workflows.steps.actions.defaultValue"),
                             },
                           ],
                         }))
                       }
                       disabled={!editable}
                     >
-                      <Plus className="size-3.5" aria-hidden="true" /> Add property
+                      <Plus className="size-3.5" aria-hidden="true" /> {t("workflows.steps.actions.addProperty")}
                     </Button>
                   ) : null}
                 </div>
 
                 <div className="space-y-2">
                   {draft.fixedProperties.map((property) => (
-                    <div key={property.uid} className="rounded-xl border border-[#e1e4e8] bg-[#fafbfc] p-3">
+                    <div key={property.uid} className="rounded-xl border border-border bg-surface-subtle p-3">
                       <div className="grid gap-2 sm:grid-cols-3">
                         <label className={labelClass}>
-                          Key
+                          {t("workflows.steps.actions.key")}
                           <input
                             value={property.key}
                             onChange={(event) => updateFixedProperty(property.uid, "key", event.target.value)}
                             className={inputClass}
-                            placeholder="assemblyStatus"
+                            placeholder={t("workflows.steps.actions.keyPlaceholder")}
                             disabled={!editable}
                           />
                         </label>
                         <label className={labelClass}>
-                          Visible label
+                          {t("workflows.steps.actions.visibleLabel")}
                           <input
                             value={property.label}
                             onChange={(event) => updateFixedProperty(property.uid, "label", event.target.value)}
                             className={inputClass}
-                            placeholder="Assembly status"
+                            placeholder={t("workflows.template.assemblyStatus")}
                             disabled={!editable}
                           />
                         </label>
                         <label className={labelClass}>
-                          Stored value
+                          {t("workflows.steps.actions.storedValue")}
                           <input
                             value={property.value}
                             onChange={(event) => updateFixedProperty(property.uid, "value", event.target.value)}
                             className={inputClass}
-                            placeholder="finished-assembled"
+                            placeholder={t("workflows.steps.actions.storedValuePlaceholder")}
                             disabled={!editable}
                           />
                         </label>
                       </div>
                       <div className="mt-2.5 flex items-center justify-between gap-3">
-                        <p className="text-[10px] text-[#5f6672]">
-                          Visible as <strong className="text-[#4b5159]">{visiblePropertyValue(property)}</strong>
+                        <p className="text-[10px] text-muted">
+                          {t("workflows.steps.actions.visibleAs", {
+                            value: visiblePropertyValue(property, t),
+                          })}
                         </p>
                         {canManage ? (
                           <button
@@ -1648,16 +1701,16 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                               }))
                             }
                             disabled={!editable}
-                            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-[#a2404b] transition hover:bg-[#fff0f2] disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-danger transition hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            <Trash2 className="size-3" aria-hidden="true" /> Remove
+                            <Trash2 className="size-3" aria-hidden="true" /> {t("workflows.steps.actions.remove")}
                           </button>
                         ) : null}
                       </div>
                     </div>
                   ))}
                   {draft.fixedProperties.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-[#d6dae0] px-4 py-5 text-center text-[11px] text-[#5f6672]">No fixed properties.</p>
+                    <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-[11px] text-muted">{t("workflows.steps.actions.none")}</p>
                   ) : null}
                 </div>
               </div>
@@ -1665,27 +1718,27 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
           </div>
 
           <Card className="mt-4 overflow-hidden">
-            <div className="border-b border-[#e8eaed] bg-[linear-gradient(110deg,#faf9ff,#fff)] px-4 py-4 sm:px-5">
+            <div className="border-b border-border bg-[linear-gradient(110deg,var(--color-brand-soft),var(--color-surface))] px-4 py-4 sm:px-5">
               <div className="flex items-center gap-3">
-                <span className="grid size-9 place-items-center rounded-xl bg-[#eeedff] text-[#5147d9]">
+                <span className="grid size-9 place-items-center rounded-xl bg-brand-soft text-brand">
                   <QrCode className="size-[18px]" aria-hidden="true" />
                 </span>
                 <div>
-                  <h2 className="text-[13px] font-semibold text-[#30343a]">Local scan preview</h2>
-                  <p className="mt-0.5 text-[10px] text-[#5f6672]">Test extraction and selections without changing inventory.</p>
+                  <h2 className="text-[13px] font-semibold text-foreground">{t("workflows.preview.title")}</h2>
+                  <p className="mt-0.5 text-[10px] text-muted">{t("workflows.preview.description")}</p>
                 </div>
-                <Badge tone="neutral" className="ml-auto">No write</Badge>
+                <Badge tone="neutral" className="ml-auto">{t("workflows.preview.noWrite")}</Badge>
               </div>
             </div>
             <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
               <div>
                 <label className={labelClass}>
-                  Scanned QR value
+                  {t("workflows.preview.scannedValue")}
                   <textarea
                     value={sampleScan}
                     onChange={(event) => setSampleScan(event.target.value)}
                     className={cn(textAreaClass, "min-h-24 font-mono text-[12px]")}
-                    placeholder="Paste a decoded QR value…"
+                    placeholder={t("workflows.preview.placeholder")}
                     disabled={interactionBusy}
                   />
                 </label>
@@ -1693,7 +1746,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {draft.inputFields.map((field) => (
                       <label key={field.uid} className={labelClass}>
-                        {field.label || field.key || "Input"}{field.required ? " *" : ""}
+                        {field.label || field.key || t("workflows.preview.inputFallback")}{field.required ? " *" : ""}
                         <select
                           value={previewInputs[field.uid] ?? ""}
                           onChange={(event) => setPreviewInputs((current) => ({ ...current, [field.uid]: event.target.value }))}
@@ -1710,46 +1763,48 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                 ) : null}
               </div>
 
-              <div className="rounded-xl border border-[#e1e4e8] bg-[#fafbfc] p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#5f6672]">Result</p>
+              <div className="rounded-xl border border-border bg-surface-subtle p-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">{t("workflows.preview.result")}</p>
                 {extractionResult.error ? (
-                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-[#fff0f2] p-3 text-[11px] leading-5 text-[#a63e4b]">
+                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-danger-soft p-3 text-[11px] leading-5 text-danger">
                     <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                     {extractionResult.error}
                   </div>
                 ) : (
-                  <div className="mt-3 rounded-lg border border-[#cce9db] bg-[#f0faf5] p-3">
-                    <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#28543f]">
-                      <CheckCircle2 className="size-3.5 text-[#168258]" aria-hidden="true" />
-                      {draft.identifierPropertyKey || "Identifier"}
+                  <div className="mt-3 rounded-lg border border-success-border bg-success-soft p-3">
+                    <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-success">
+                      <CheckCircle2 className="size-3.5 text-success" aria-hidden="true" />
+                      {draft.identifierPropertyKey || t("workflows.preview.identifier")}
                     </div>
-                    <p className="mt-1.5 break-all font-mono text-[13px] font-semibold text-[#24573e]">{extractionResult.value}</p>
+                    <p className="mt-1.5 break-all font-mono text-[13px] font-semibold text-success">{extractionResult.value}</p>
                   </div>
                 )}
 
                 <div className="mt-4 space-y-2.5 text-[11px]">
                   <div className="flex items-start justify-between gap-3">
-                    <span className="text-[#5f6672]">Target</span>
-                    <strong className="text-right font-semibold text-[#464c54]">{selectedResource?.name ?? "Not selected"}</strong>
+                    <span className="text-muted">{t("workflows.preview.target")}</span>
+                    <strong className="text-right font-semibold text-muted-strong">{selectedResource?.name ?? t("workflows.preview.notSelected")}</strong>
                   </div>
                   <div className="flex items-start justify-between gap-3">
-                    <span className="text-[#5f6672]">Unit</span>
-                    <strong className="text-right font-semibold text-[#464c54]">{draft.createMissingUnit ? "Find or create" : "Find existing only"}</strong>
+                    <span className="text-muted">{t("workflows.preview.unit")}</span>
+                    <strong className="text-right font-semibold text-muted-strong">
+                      {t(draft.createMissingUnit ? "workflows.preview.findOrCreate" : "workflows.preview.findExisting")}
+                    </strong>
                   </div>
                   {draft.fixedProperties.map((property) => (
                     <div key={property.uid} className="flex items-start justify-between gap-3">
-                      <span className="text-[#5f6672]">{property.label || property.key}</span>
-                      <strong className="text-right font-semibold text-[#464c54]">{visiblePropertyValue(property)}</strong>
+                      <span className="text-muted">{property.label || property.key}</span>
+                      <strong className="text-right font-semibold text-muted-strong">{visiblePropertyValue(property, t)}</strong>
                     </div>
                   ))}
                   {draft.inputFields.map((field) => {
                     const option = field.options.find((item) => item.value === previewInputs[field.uid]);
                     return (
                       <div key={field.uid} className="flex items-center justify-between gap-3">
-                        <span className="text-[#5f6672]">{field.label || field.key}</span>
-                        <strong className="inline-flex items-center gap-1.5 text-right font-semibold text-[#464c54]">
-                          {option?.color ? <span className="size-2.5 rounded-full border border-black/10" style={{ backgroundColor: option.color }} /> : null}
-                          {option?.label ?? "Not selected"}
+                        <span className="text-muted">{field.label || field.key}</span>
+                        <strong className="inline-flex items-center gap-1.5 text-right font-semibold text-muted-strong">
+                          {option?.color ? <span className="size-2.5 rounded-full border border-border-strong" style={{ backgroundColor: option.color }} /> : null}
+                          {option?.label ?? t("workflows.preview.notSelected")}
                         </strong>
                       </div>
                     );

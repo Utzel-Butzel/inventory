@@ -1,0 +1,141 @@
+{
+  "meta": {
+    "title": "Labels",
+    "description": "Create and print QR and barcode labels for inventory items."
+  },
+  "header": {
+    "eyebrow": "Label studio",
+    "title": "Print labels that scan.",
+    "description": "Select inventory items, apply a reusable setup, and print compact QR links, barcodes, text, and object images through your browser."
+  },
+  "print": {
+    "preparing": "Preparing images…",
+    "button_zero": "Print labels",
+    "button_one": "Print {{count}} label",
+    "button_other": "Print {{count}} labels"
+  },
+  "selection": {
+    "title": "1. Select items",
+    "description": "Selection stays active while you search or change pages.",
+    "clear": "Clear {{count}}",
+    "search": "Search inventory",
+    "searchPlaceholder": "Search name, SKU or location…",
+    "clearSearch": "Clear search",
+    "selectPage": "Select page",
+    "itemCount_one": "{{count}} item",
+    "itemCount_other": "{{count}} items",
+    "loading": "Loading inventory",
+    "empty": "No matching items",
+    "emptyDescription": "Try another name, SKU or location.",
+    "noSku": "No SKU",
+    "pagination": "Page {{page}} of {{pages}}",
+    "previousPage": "Previous page",
+    "nextPage": "Next page"
+  },
+  "copies": {
+    "title": "Copies",
+    "fewer": "Fewer copies of {{name}}",
+    "more": "More copies of {{name}}"
+  },
+  "setup": {
+    "title": "2. Choose setup",
+    "description": "Setups keep the media size, content, and positioning together.",
+    "label": "Label setup",
+    "empty": "No setups yet",
+    "copyName": "{{name}} copy",
+    "defaultName": "My label setup",
+    "deleteConfirm": "Delete the label setup “{{name}}”?",
+    "designNamed": "Design {{name}}",
+    "create": "Create a label setup",
+    "design": "Design",
+    "createNew": "Create a new label setup",
+    "new": "New",
+    "summary_one": "{{width}} × {{height}} mm · {{count}} visible element",
+    "summary_other": "{{width}} × {{height}} mm · {{count}} visible elements",
+    "imagesEnabled": " · object images enabled",
+    "emptyTitle": "Create a label setup",
+    "emptyDescription": "A setup defines the paper dimensions and where each label element is printed.",
+    "openDesigner": "Open designer"
+  },
+  "preview": {
+    "title": "Select an item to preview",
+    "description": "The selected setup controls which details, codes, and images appear."
+  },
+  "printer": {
+    "title": "Brother Wi-Fi printing",
+    "description": "Add the printer to this computer first. In the browser print dialog, select that Brother printer, the setup’s media size, 100% scale and no margins. Printing uses the installed system driver; this page does not send RAW commands directly to the printer."
+  },
+  "designer": {
+    "eyebrow": "Label designer",
+    "edit": "Edit setup",
+    "create": "Create setup",
+    "close": "Close label designer",
+    "setupName": "Setup name",
+    "width": "Width (mm)",
+    "height": "Height (mm)",
+    "elementsTitle": "Elements",
+    "showElement": "Show {{element}}",
+    "resizeElement": "Resize {{element}}",
+    "properties": "Properties",
+    "imageFit": "Image fit",
+    "fillFrame": "Fill frame (crop)",
+    "fitImage": "Fit whole image",
+    "fontSize": "Font size (mm)",
+    "alignment": "Alignment",
+    "instructions": "Drag the selected element on the label. Use its corner handle to resize it, or enter exact percentages here.",
+    "chooseElement": "Choose an element to edit its position and style.",
+    "overlap": "Move or resize the image so it does not cover the QR code.",
+    "previewNote": "The preview and printed label use the same positions.",
+    "delete": "Delete setup",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "save": "Save setup",
+    "elements": {
+      "qr": "QR code",
+      "image": "Object image",
+      "name": "Object name",
+      "identifier": "SKU / ID",
+      "barcode": "Barcode",
+      "url": "Short link",
+      "location": "Location"
+    },
+    "coordinates": {
+      "x": "Left",
+      "y": "Top",
+      "width": "Width",
+      "height": "Height"
+    },
+    "align": {
+      "left": "Left",
+      "center": "Center",
+      "right": "Right"
+    },
+    "sample": {
+      "name": "Cordless impact driver",
+      "location": "Workshop · Shelf B"
+    }
+  },
+  "renderer": {
+    "noImage": "No image",
+    "sku": "SKU {{sku}}",
+    "inventoryCount_one": "{{type}} · {{count}} in inventory",
+    "inventoryCount_other": "{{type}} · {{count}} in inventory",
+    "printable": "Printable label for {{name}}",
+    "qr": "QR code for {{value}}",
+    "qrTooLong": "QR URL too long",
+    "barcode": "Code 128 barcode for {{value}}"
+  },
+  "errors": {
+    "loadSetups": "Unable to load label setups.",
+    "loadItems": "Unable to load inventory items.",
+    "saveSetup": "Unable to save the label setup.",
+    "deleteSetup": "Unable to delete the label setup.",
+    "overlapShort": "The object image overlaps the QR code. Edit the setup before printing.",
+    "overlap": "The object image overlaps the QR code in this setup. Open the designer and move or resize one of them before printing.",
+    "urlTooLong": "This deployment URL is too long for the label QR code. Use a shorter public origin before printing.",
+    "missingImages_one": "{{examples}} has no object image. Disable the image element or add the missing image before printing.",
+    "missingImages_other": "{{examples}} have no object image. Disable the image element or add the missing images before printing.",
+    "imageRender": "One or more object images could not be rendered. Check the preview and try again.",
+    "imageLoad": "One or more object images failed to load completely. Nothing was printed; check the image files and try again."
+  }
+}

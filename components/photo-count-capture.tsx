@@ -1,5 +1,6 @@
 "use client";
 
+import type { TFunction } from "i18next";
 import {
   AlertTriangle,
   Camera,
@@ -16,9 +17,11 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
 } from "react";
+import { useT } from "next-i18next/client";
 
 import { prepareUpload } from "@/lib/client-media";
 import type { InventoryCountMarker } from "@/lib/inventory-count-contract";
@@ -100,9 +103,9 @@ function confidencePercent(value: number) {
   return Math.max(0, Math.min(100, Math.round(normalized)));
 }
 
-function cleanCountResult(result: PhotoCountResult) {
+function cleanCountResult(result: PhotoCountResult, t: TFunction) {
   if (!Number.isInteger(result.count) || result.count < 0) {
-    throw new Error("The counter returned an invalid quantity. Please try another photo.");
+    throw new Error(t("errors.invalidQuantity"));
   }
   const markers = Array.isArray(result.markers)
     ? result.markers.filter(
@@ -118,25 +121,24 @@ function cleanCountResult(result: PhotoCountResult) {
       )
     : [];
   if (markers.length !== result.count) {
-    throw new Error(
-      "The counter could not place one highlight on every piece. Please try another photo.",
-    );
+    throw new Error(t("errors.markerMismatch"));
   }
   return {
     ...result,
     confidence: Number.isFinite(result.confidence) ? result.confidence : 0,
-    detectedItem: result.detectedItem?.trim() || "objects",
+    detectedItem: result.detectedItem?.trim() || t("fallback.detectedItem"),
     explanation: result.explanation?.trim() || "",
     warnings: Array.isArray(result.warnings)
       ? result.warnings.filter((warning) => typeof warning === "string" && warning.trim())
       : [],
     markers,
-    model: result.model?.trim() || "AI vision",
+    model: result.model?.trim() || t("fallback.model"),
   };
 }
 
 async function readCountResponse(
   response: Response,
+  t: TFunction,
 ): Promise<PhotoCountResult | PhotoCountProcessing> {
   const text = await response.text();
   let payload: unknown;
@@ -158,7 +160,7 @@ async function readCountResponse(
     ) {
       return payload as PhotoCountProcessing;
     }
-    throw new Error("The counter returned an invalid processing response.");
+    throw new Error(t("errors.invalidProcessingResponse"));
   }
   if (!response.ok) {
     const message =
@@ -167,7 +169,7 @@ async function readCountResponse(
       "error" in payload &&
       typeof payload.error === "string"
         ? payload.error
-        : `Request failed (HTTP ${response.status}).`;
+        : t("errors.requestFailed", { status: response.status });
     const rawRetryAfter = response.headers.get("Retry-After");
     const retryAfterSeconds = rawRetryAfter === null ? NaN : Number(rawRetryAfter);
     throw new CountRequestError(
@@ -183,7 +185,7 @@ async function readCountResponse(
     );
   }
   if (typeof payload !== "object" || payload === null || !("count" in payload)) {
-    throw new Error("The counter returned an invalid result.");
+    throw new Error(t("errors.invalidResult"));
   }
   return payload as PhotoCountResult;
 }
@@ -191,10 +193,11 @@ async function readCountResponse(
 async function pollCountJob(
   processing: PhotoCountProcessing,
   signal: AbortSignal,
+  t: TFunction,
 ) {
   const expiresAt = Date.parse(processing.expiresAt);
   if (!Number.isFinite(expiresAt)) {
-    throw new Error("The counter returned an invalid job deadline.");
+    throw new Error(t("errors.invalidJobDeadline"));
   }
   const deadline = Math.min(expiresAt, Date.now() + 11 * 60_000);
   let jobToken = processing.jobToken;
@@ -208,7 +211,7 @@ async function pollCountJob(
         body: JSON.stringify({ jobToken }),
         signal,
       });
-      const payload = await readCountResponse(response);
+      const payload = await readCountResponse(response, t);
       if ("count" in payload) return payload;
       jobToken = payload.jobToken;
       delayMilliseconds = 3_000;
@@ -230,7 +233,7 @@ async function pollCountJob(
     }
   }
   throw new CountRequestError(
-    "Counting took too long and expired. Please try again.",
+    t("errors.expired"),
     504,
   );
 }
@@ -242,6 +245,9 @@ function PhotoCountPreview({
   previewUrl: string | null;
   markers: InventoryCountMarker[];
 }) {
+  const { t, i18n } = useT("counting");
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
+  const numberFormat = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const [imageBounds, setImageBounds] = useState<RenderedImageBounds | null>(null);
@@ -281,7 +287,7 @@ function PhotoCountPreview({
   return (
     <div
       ref={containerRef}
-      className="relative aspect-[4/3] overflow-hidden rounded-xl border border-violet-200 bg-slate-100"
+      className="relative aspect-[4/3] overflow-hidden rounded-xl border border-brand-border bg-surface-muted"
     >
       {previewUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -290,8 +296,11 @@ function PhotoCountPreview({
           src={previewUrl}
           alt={
             markers.length
-              ? `Photo with ${markers.length} highlighted counted pieces`
-              : "Photo selected for piece counting"
+              ? t("preview.altHighlighted", {
+                  count: markers.length,
+                  value: numberFormat.format(markers.length),
+                })
+              : t("preview.altSelected")
           }
           className="size-full object-contain"
           onLoad={updateImageBounds}
@@ -311,7 +320,7 @@ function PhotoCountPreview({
               <span
                 // The index distinguishes two exceptionally close detections.
                 key={`${marker.x}-${marker.y}-${index}`}
-                className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-600 shadow-[0_1px_4px_rgba(15,23,42,.7)] ring-2 ring-white sm:size-3.5"
+                className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-solid shadow-[0_1px_4px_rgba(15,23,42,.7)] ring-2 ring-white sm:size-3.5"
                 style={style}
                 aria-hidden="true"
               />
@@ -320,7 +329,10 @@ function PhotoCountPreview({
         : null}
       {markers.length ? (
         <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-slate-950/75 px-2 py-1 text-[9px] font-bold text-white shadow-sm backdrop-blur">
-          {markers.length} highlighted
+          {t("preview.highlighted", {
+            count: markers.length,
+            value: numberFormat.format(markers.length),
+          })}
         </span>
       ) : null}
     </div>
@@ -337,6 +349,9 @@ export function PhotoCountCapture({
   disabled = false,
   onCount,
 }: PhotoCountCaptureProps) {
+  const { t, i18n } = useT("counting");
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
+  const numberFormat = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -383,7 +398,7 @@ export function PhotoCountCapture({
     event.target.value = "";
     if (!selected) return;
     if (!selected.type.startsWith("image/")) {
-      setError("Choose a photo in JPG, PNG, WebP, or HEIC format.");
+      setError(t("errors.imageFormat"));
       return;
     }
 
@@ -399,7 +414,7 @@ export function PhotoCountCapture({
       setError(
         prepareError instanceof Error
           ? prepareError.message
-          : "The photo could not be prepared for counting.",
+          : t("errors.preparePhoto"),
       );
     } finally {
       setPreparing(false);
@@ -443,6 +458,7 @@ export function PhotoCountCapture({
               body,
               signal: controller.signal,
             }),
+            t,
           );
           break;
         } catch (error) {
@@ -478,16 +494,16 @@ export function PhotoCountCapture({
           didTimeOut = true;
           controller.abort();
         }, Math.min(remainingMilliseconds, 11 * 60_000));
-        rawResult = await pollCountJob(initial, controller.signal);
+        rawResult = await pollCountJob(initial, controller.signal, t);
       }
       attemptIdRef.current = null;
-      const response = cleanCountResult(rawResult);
+      const response = cleanCountResult(rawResult, t);
       setResult(response);
       if (response.count > 0) onCount(response);
     } catch (countError) {
       if (didTimeOut) {
         if (didReceiveJob) attemptIdRef.current = null;
-        setError("Counting took too long and was stopped. Please try another photo.");
+        setError(t("errors.stoppedTimeout"));
         return;
       }
       if (controller.signal.aborted) return;
@@ -511,7 +527,7 @@ export function PhotoCountCapture({
       setError(
         countError instanceof Error
           ? countError.message
-          : "The objects could not be counted from this photo.",
+          : t("errors.countPhoto"),
       );
     } finally {
       window.clearTimeout(timeout);
@@ -535,39 +551,41 @@ export function PhotoCountCapture({
         type="button"
         disabled={disabled}
         onClick={() => setExpanded(true)}
-        className="mb-5 flex w-full items-center justify-between gap-4 rounded-2xl border border-violet-200 bg-[linear-gradient(135deg,rgba(245,243,255,.96),rgba(255,255,255,.96))] px-4 py-3.5 text-left transition hover:border-violet-300 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
+        className="mb-5 flex w-full items-center justify-between gap-4 rounded-2xl border border-brand-border bg-gradient-to-br from-brand-soft to-surface px-4 py-3.5 text-left transition hover:border-brand-border hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
       >
         <span className="flex min-w-0 items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-violet-600 text-white shadow-sm shadow-violet-600/20">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-sm shadow-[var(--shadow-sm)]">
             <Camera className="size-4.5" aria-hidden="true" />
           </span>
           <span className="min-w-0">
-            <span className="block text-xs font-semibold text-slate-900">
-              Count pieces from a photo
+            <span className="block text-xs font-semibold text-foreground">
+              {t("launch.title")}
             </span>
-            <span className="mt-0.5 block text-[11px] leading-4 text-slate-600">
-              Take a photo and let AI fill the quantity.
+            <span className="mt-0.5 block text-[11px] leading-4 text-muted">
+              {t("launch.description")}
             </span>
           </span>
         </span>
-        <span className="shrink-0 rounded-lg bg-white px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-violet-700 shadow-sm">
-          Try it
+        <span className="shrink-0 rounded-lg bg-surface px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-brand shadow-sm">
+          {t("launch.action")}
         </span>
       </button>
     );
   }
 
   return (
-    <section className="mb-5 overflow-hidden rounded-2xl border border-violet-200 bg-violet-50/40">
-      <div className="flex items-start justify-between gap-3 border-b border-violet-100 bg-white/75 px-4 py-3.5">
+    <section className="mb-5 overflow-hidden rounded-2xl border border-brand-border bg-brand-soft/40">
+      <div className="flex items-start justify-between gap-3 border-b border-brand-border bg-surface/75 px-4 py-3.5">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-violet-600 text-white">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-solid text-on-brand">
             <ScanSearch className="size-4" aria-hidden="true" />
           </span>
           <div>
-            <h3 className="text-xs font-semibold text-slate-900">Photo piece counter</h3>
-            <p className="mt-0.5 text-[10px] leading-4 text-slate-600">
-              Spread pieces out, shoot from above, and avoid overlaps where possible.
+            <h3 className="text-xs font-semibold text-foreground">
+              {t("header.title")}
+            </h3>
+            <p className="mt-0.5 text-[10px] leading-4 text-muted">
+              {t("header.description")}
             </p>
           </div>
         </div>
@@ -578,8 +596,8 @@ export function PhotoCountCapture({
             setExpanded(false);
           }}
           disabled={busy}
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40"
-          aria-label="Close photo counter"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-surface-muted hover:text-muted-strong disabled:opacity-40"
+          aria-label={t("actions.close")}
         >
           <X className="size-4" aria-hidden="true" />
         </button>
@@ -613,22 +631,22 @@ export function PhotoCountCapture({
         {!image ? (
           <label
             htmlFor={inputId}
-            className={`flex min-h-28 flex-col items-center justify-center rounded-xl border-2 border-dashed border-violet-200 bg-white px-5 py-5 text-center transition ${
+            className={`flex min-h-28 flex-col items-center justify-center rounded-xl border-2 border-dashed border-brand-border bg-surface px-5 py-5 text-center transition ${
               busy || disabled
                 ? "cursor-wait opacity-55"
-                : "cursor-pointer hover:border-violet-400 hover:bg-violet-50/50"
+                : "cursor-pointer hover:border-brand-border hover:bg-brand-soft/50"
             }`}
           >
             {preparing ? (
-              <LoaderCircle className="size-5 animate-spin text-violet-600" aria-hidden="true" />
+              <LoaderCircle className="size-5 animate-spin text-brand" aria-hidden="true" />
             ) : (
-              <ImagePlus className="size-5 text-violet-600" aria-hidden="true" />
+              <ImagePlus className="size-5 text-brand" aria-hidden="true" />
             )}
-            <span className="mt-2 text-xs font-semibold text-slate-800">
-              {preparing ? "Preparing photo…" : "Take or choose a photo"}
+            <span className="mt-2 text-xs font-semibold text-muted-strong">
+              {preparing ? t("upload.preparing") : t("upload.choose")}
             </span>
-            <span className="mt-1 text-[10px] text-slate-600">
-              The photo is analyzed for this count and is not attached to the item.
+            <span className="mt-1 text-[10px] text-muted">
+              {t("upload.privacy")}
             </span>
           </label>
         ) : (
@@ -643,7 +661,7 @@ export function PhotoCountCapture({
                 onClick={resetImage}
                 disabled={counting}
                 className="absolute right-1.5 top-1.5 grid size-7 place-items-center rounded-lg bg-slate-950/75 text-white shadow-sm transition hover:bg-slate-950 disabled:opacity-40"
-                aria-label="Remove counting photo"
+                aria-label={t("actions.removePhoto")}
               >
                 <X className="size-3.5" aria-hidden="true" />
               </button>
@@ -652,12 +670,14 @@ export function PhotoCountCapture({
             <div className="flex min-w-0 flex-col justify-center">
               {!result ? (
                 <>
-                  <p className="truncate text-[11px] font-semibold text-slate-700">
-                    {image.name || "Camera photo"}
+                  <p className="truncate text-[11px] font-semibold text-muted-strong">
+                    {image.name || t("fallback.cameraPhoto")}
                   </p>
-                  <p className="mt-1 text-[10px] leading-4 text-slate-600">
-                    AI will count visible {unitName}s matching “{itemName}”. You can correct
-                    the quantity before booking.
+                  <p className="mt-1 text-[10px] leading-4 text-muted">
+                    {t("capture.countHint", {
+                      unit: unitName,
+                      item: itemName,
+                    })}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {counting ? (
@@ -667,29 +687,29 @@ export function PhotoCountCapture({
                           abortRef.current?.abort();
                           abortRef.current = null;
                           setCounting(false);
-                          setError("Stopped waiting. You can resume the same count.");
+                          setError(t("notices.waitingStopped"));
                         }}
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3.5 text-xs font-semibold text-rose-700 shadow-sm transition hover:bg-rose-50"
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-danger-border bg-surface px-3.5 text-xs font-semibold text-danger shadow-sm transition hover:bg-danger-soft"
                       >
                         <X className="size-4" aria-hidden="true" />
-                        Stop waiting
+                        {t("actions.stopWaiting")}
                       </button>
                     ) : (
                       <button
                         type="button"
                         onClick={() => void countObjects()}
                         disabled={busy || disabled}
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3.5 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-wait disabled:opacity-50"
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-brand-solid px-3.5 text-xs font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover disabled:cursor-wait disabled:opacity-50"
                       >
                         <Sparkles className="size-4" aria-hidden="true" />
-                        Count pieces
+                        {t("actions.countPieces")}
                       </button>
                     )}
                     <label
                       htmlFor={inputId}
-                      className="inline-flex h-9 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                      className="inline-flex h-9 cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-3 text-[11px] font-semibold text-muted transition hover:bg-surface-subtle"
                     >
-                      Replace photo
+                      {t("actions.replacePhoto")}
                     </label>
                   </div>
                 </>
@@ -697,29 +717,33 @@ export function PhotoCountCapture({
                 <div
                   className={`rounded-xl border p-3 ${
                     result.count > 0
-                      ? "border-emerald-200 bg-emerald-50"
-                      : "border-amber-200 bg-amber-50"
+                      ? "border-success-border bg-success-soft"
+                      : "border-warning-border bg-warning-soft"
                   }`}
                   aria-live="polite"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 text-xs font-semibold text-slate-900">
+                    <span className="flex items-center gap-2 text-xs font-semibold text-foreground">
                       {result.count > 0 ? (
-                        <Check className="size-4 text-emerald-700" aria-hidden="true" />
+                        <Check className="size-4 text-success" aria-hidden="true" />
                       ) : (
-                        <AlertTriangle className="size-4 text-amber-700" aria-hidden="true" />
+                        <AlertTriangle className="size-4 text-warning" aria-hidden="true" />
                       )}
-                      <strong className="text-lg tabular-nums">{result.count}</strong>
+                      <strong className="text-lg tabular-nums">
+                        {numberFormat.format(result.count)}
+                      </strong>
                       {result.detectedItem}
                     </span>
-                    <span className="rounded-full bg-white/80 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-slate-600">
-                      {confidence}% confidence
+                    <span className="rounded-full bg-surface/80 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-muted">
+                      {t("result.confidence", {
+                        value: numberFormat.format(confidence),
+                      })}
                     </span>
                   </div>
-                  <p className="mt-1.5 text-[10px] leading-4 text-slate-600">
+                  <p className="mt-1.5 text-[10px] leading-4 text-muted">
                     {result.count > 0
-                      ? "Quantity filled in automatically — verify it before booking."
-                      : "No matching pieces were found. Try a clearer photo."}
+                      ? t("result.filled")
+                      : t("result.noneFound")}
                   </p>
                 </div>
               )}
@@ -728,41 +752,48 @@ export function PhotoCountCapture({
         )}
 
         {result && (result.explanation || result.warnings.length > 0 || !result.isExact) ? (
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-[10px] leading-4 text-slate-600">
+          <div className="mt-3 rounded-xl border border-border bg-surface px-3.5 py-3 text-[10px] leading-4 text-muted">
             {result.explanation ? <p>{result.explanation}</p> : null}
             {!result.isExact ? (
-              <p className="mt-1.5 font-semibold text-amber-700">
-                This is an estimate. Check hidden or overlapping pieces carefully.
+              <p className="mt-1.5 font-semibold text-warning">
+                {t("result.estimateWarning")}
               </p>
             ) : null}
             {result.warnings.map((warning) => (
-              <p key={warning} className="mt-1.5 flex items-start gap-1.5 text-amber-700">
+              <p key={warning} className="mt-1.5 flex items-start gap-1.5 text-warning">
                 <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
                 {warning}
               </p>
             ))}
-            <p className="mt-2 text-[9px] text-slate-600">Analyzed with {result.model}</p>
+            <p className="mt-2 text-[9px] text-muted">
+              {t("result.analyzedWith", { model: result.model })}
+            </p>
           </div>
         ) : null}
 
         {exceedsAvailable ? (
-          <p className="mt-3 flex items-start gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-[10px] leading-4 text-rose-700">
+          <p className="mt-3 flex items-start gap-1.5 rounded-xl border border-danger-border bg-danger-soft px-3 py-2.5 text-[10px] leading-4 text-danger">
             <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-            The selected quantity exceeds the {availableQuantity.toLocaleString()} currently
-            available. Correct it or switch to stock in.
+            {t("result.exceedsAvailable", {
+              quantity: numberFormat.format(availableQuantity),
+            })}
           </p>
         ) : null}
 
         {error ? (
           <div
-            className="mt-3 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-[10px] leading-4 text-rose-700"
+            className="mt-3 flex items-start justify-between gap-3 rounded-xl border border-danger-border bg-danger-soft px-3 py-2.5 text-[10px] leading-4 text-danger"
             role="alert"
           >
             <span className="flex items-start gap-1.5">
               <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
               {error}
             </span>
-            <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              aria-label={t("actions.dismissError")}
+            >
               <X className="size-3.5" aria-hidden="true" />
             </button>
           </div>
@@ -777,15 +808,16 @@ export function PhotoCountCapture({
                 setError(null);
               }}
               disabled={busy}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 text-[10px] font-semibold text-violet-700 transition hover:bg-violet-50 disabled:opacity-40"
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-brand-border bg-surface px-3 text-[10px] font-semibold text-brand transition hover:bg-brand-soft disabled:opacity-40"
             >
-              <ScanSearch className="size-3" aria-hidden="true" /> Count again
+              <ScanSearch className="size-3" aria-hidden="true" />
+              {t("actions.countAgain")}
             </button>
             <label
               htmlFor={inputId}
-              className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50"
+              className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface px-3 text-[10px] font-semibold text-muted transition hover:bg-surface-subtle"
             >
-              Use another photo
+              {t("actions.useAnotherPhoto")}
             </label>
           </div>
         ) : null}

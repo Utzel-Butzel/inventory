@@ -6,6 +6,8 @@ import {
   Menu,
 } from "lucide-react";
 
+import { ThemeToggle } from "@/components/theme-toggle";
+
 const githubUrl = "https://github.com/Utzel-Butzel/inventory";
 
 export function OpenInventoryBrand({ inverse = false }: { inverse?: boolean }) {
@@ -13,11 +15,11 @@ export function OpenInventoryBrand({ inverse = false }: { inverse?: boolean }) {
     <Link
       href="/"
       className={`group inline-flex items-center gap-2.5 rounded-xl ${
-        inverse ? "text-white" : "text-[#17181b]"
+        inverse ? "text-white" : "text-foreground"
       }`}
       aria-label="Open Inventory home"
     >
-      <span className="grid size-9 place-items-center rounded-xl bg-[#665cff] text-white shadow-[0_7px_20px_rgba(102,92,255,0.24)] transition-transform duration-300 group-hover:-rotate-3 group-hover:scale-[1.04]">
+      <span className="grid size-9 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-[0_7px_20px_rgba(102,92,255,0.24)] transition-transform duration-300 group-hover:-rotate-3 group-hover:scale-[1.04]">
         <Boxes className="size-[19px]" strokeWidth={2.2} aria-hidden="true" />
       </span>
       <span className="text-[15px] font-semibold tracking-[-0.025em] sm:text-base">
@@ -38,7 +40,7 @@ const navLinks = [
 
 export function MarketingHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-[#17181b]/[0.07] bg-[#f7f5ef]/90 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-xl">
       <div className="mx-auto flex h-[70px] max-w-[1240px] items-center justify-between px-5 sm:px-8">
         <OpenInventoryBrand />
 
@@ -50,7 +52,7 @@ export function MarketingHeader() {
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-lg text-[13px] font-medium text-[#64666c] transition hover:text-[#17181b]"
+              className="rounded-lg text-[13px] font-medium text-muted transition hover:text-foreground"
             >
               {link.label}
             </Link>
@@ -58,38 +60,41 @@ export function MarketingHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
+          <ThemeToggle />
           <a
             href={githubUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-[13px] font-semibold text-[#34363a] transition hover:bg-black/[0.045]"
+            className="inline-flex h-10 items-center gap-2 rounded-xl px-3 text-[13px] font-semibold text-foreground transition hover:bg-surface-muted"
           >
             <Github className="size-4" aria-hidden="true" />
             GitHub
           </a>
           <Link
             href="/login"
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#17181b] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#2a2b30]"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-strong px-4 text-[13px] font-semibold text-on-strong shadow-sm transition hover:-translate-y-0.5 hover:opacity-90"
           >
             Open workspace
             <ArrowUpRight className="size-3.5" aria-hidden="true" />
           </Link>
         </div>
 
-        <details className="group relative lg:hidden">
-          <summary className="grid size-10 list-none place-items-center rounded-xl border border-black/10 bg-white text-[#2d2f33] shadow-sm [&::-webkit-details-marker]:hidden">
+        <div className="flex items-center gap-2 lg:hidden">
+          <ThemeToggle className="size-10" />
+          <details className="group relative">
+          <summary className="grid size-10 list-none place-items-center rounded-xl border border-border bg-surface text-foreground shadow-sm [&::-webkit-details-marker]:hidden">
             <Menu className="size-5" aria-hidden="true" />
             <span className="sr-only">Open navigation</span>
           </summary>
           <nav
-            className="absolute right-0 top-12 flex w-[min(280px,calc(100vw-40px))] flex-col rounded-2xl border border-black/10 bg-white p-2 shadow-2xl"
+            className="absolute right-0 top-12 flex w-[min(280px,calc(100vw-40px))] flex-col rounded-2xl border border-border bg-surface p-2 shadow-2xl"
             aria-label="Mobile navigation"
           >
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="rounded-xl px-3 py-3 text-sm font-medium text-[#44464b] hover:bg-[#f4f3ef]"
+                className="rounded-xl px-3 py-3 text-sm font-medium text-muted-strong hover:bg-surface-muted"
               >
                 {link.label}
               </Link>
@@ -98,20 +103,21 @@ export function MarketingHeader() {
               href={githubUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center justify-between rounded-xl px-3 py-3 text-sm font-medium text-[#44464b] hover:bg-[#f4f3ef]"
+              className="flex items-center justify-between rounded-xl px-3 py-3 text-sm font-medium text-muted-strong hover:bg-surface-muted"
             >
               GitHub
               <Github className="size-4" aria-hidden="true" />
             </a>
             <Link
               href="/login"
-              className="mt-1 flex items-center justify-between rounded-xl bg-[#17181b] px-3 py-3 text-sm font-semibold text-white"
+              className="mt-1 flex items-center justify-between rounded-xl bg-strong px-3 py-3 text-sm font-semibold text-on-strong"
             >
               Open workspace
               <ArrowUpRight className="size-4" aria-hidden="true" />
             </Link>
           </nav>
-        </details>
+          </details>
+        </div>
       </div>
     </header>
   );

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requireAdminSession, requireIdentity } from "@/lib/api-auth";
+import { requirePermission, requireSessionPermission } from "@/lib/api-auth";
 import {
   archiveCustomFieldDefinition,
   customFieldHttpError,
@@ -19,7 +19,7 @@ const readId = async (context: Context) => {
 };
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "inventory.read");
   if (authorization.response) return authorization.response;
   const id = await readId(context);
   if (!id) return Response.json({ error: "Invalid definition id." }, { status: 422 });
@@ -32,7 +32,7 @@ export async function GET(request: Request, context: Context) {
 }
 
 export async function PATCH(request: Request, context: Context) {
-  const authorization = await requireAdminSession(request);
+  const authorization = await requireSessionPermission(request, "settings.custom-fields.manage");
   if (authorization.response) return authorization.response;
   const id = await readId(context);
   if (!id) return Response.json({ error: "Invalid definition id." }, { status: 422 });
@@ -74,7 +74,7 @@ export async function PATCH(request: Request, context: Context) {
 }
 
 export async function DELETE(request: Request, context: Context) {
-  const authorization = await requireAdminSession(request);
+  const authorization = await requireSessionPermission(request, "settings.custom-fields.manage");
   if (authorization.response) return authorization.response;
   const id = await readId(context);
   if (!id) return Response.json({ error: "Invalid definition id." }, { status: 422 });

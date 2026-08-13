@@ -1,6 +1,6 @@
 import type { RoomScanAssetKind } from "@/db/schema";
 import { z } from "zod";
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import {
   roomScanAssetContentDisposition,
   roomScanAssetMimeType,
@@ -21,7 +21,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "spatial.read");
   if (authorization.response) return authorization.response;
   const { id, kind } = await context.params;
   if (!z.uuid().safeParse(id).success) {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
+import { useT } from "next-i18next/client";
 import {
   ArrowRight,
   Boxes,
@@ -24,48 +25,116 @@ import {
   X,
 } from "lucide-react";
 
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { LocalizedThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/components/ui";
 import type { UserRole } from "@/db/schema";
+import type { ApiScope, AppPermission } from "@/lib/access-control-contract";
 
 type ShellUser = {
   name?: string | null;
   email?: string | null;
   role: UserRole;
+  roleName: string;
+  permissions: AppPermission[];
+  scopes: ApiScope[];
 };
 
-const navigation = [
-  { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Inventory", href: "/inventory", icon: PackageOpen },
-  { label: "Stock", href: "/stock", icon: Warehouse },
-  { label: "Locations", href: "/map", icon: MapPinned },
-  { label: "Rooms 3D", href: "/spaces", icon: Boxes },
-  { label: "Batch studio", href: "/batch", icon: Sparkles },
-  { label: "Labels", href: "/labels", icon: ScanQrCode },
-  { label: "Duplicates", href: "/duplicates", icon: Files },
+const navigation: Array<{
+  labelKey: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  permission?: AppPermission;
+  scope?: ApiScope;
+}> = [
+  {
+    labelKey: "navigation.overview",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    permission: "inventory.read",
+  },
+  {
+    labelKey: "navigation.inventory",
+    href: "/inventory",
+    icon: PackageOpen,
+    permission: "inventory.read",
+  },
+  {
+    labelKey: "navigation.stock",
+    href: "/stock",
+    icon: Warehouse,
+    permission: "stock.read",
+  },
+  {
+    labelKey: "navigation.locations",
+    href: "/map",
+    icon: MapPinned,
+    permission: "spatial.read",
+  },
+  {
+    labelKey: "navigation.rooms",
+    href: "/spaces",
+    icon: Boxes,
+    permission: "spatial.read",
+  },
+  {
+    labelKey: "navigation.batch",
+    href: "/batch",
+    icon: Sparkles,
+    scope: "write",
+  },
+  {
+    labelKey: "navigation.labels",
+    href: "/labels",
+    icon: ScanQrCode,
+    permission: "labels.read",
+  },
+  {
+    labelKey: "navigation.duplicates",
+    href: "/duplicates",
+    icon: Files,
+    permission: "inventory.read",
+  },
 ];
 
 const manageNavigation = [
-  { label: "Settings", href: "/settings", icon: Settings },
+  { labelKey: "navigation.settings", href: "/settings", icon: Settings },
 ];
 
 const pageNames: Record<string, string> = {
-  dashboard: "Overview",
-  inventory: "Inventory",
-  stock: "Stock",
-  map: "Locations",
-  spaces: "Rooms 3D",
-  batch: "Batch studio",
-  labels: "Labels",
-  duplicates: "Duplicates",
-  settings: "Settings",
+  dashboard: "navigation.overview",
+  inventory: "navigation.inventory",
+  stock: "navigation.stock",
+  map: "navigation.locations",
+  spaces: "navigation.rooms",
+  batch: "navigation.batch",
+  labels: "navigation.labels",
+  duplicates: "navigation.duplicates",
+  settings: "navigation.settings",
 };
 
-function initials(name?: string | null, email?: string | null) {
-  const source = name?.trim() || email?.split("@")[0] || "User";
+const settingsPageNames: Record<string, string> = {
+  data: "settings.items.data.label",
+  languages: "settings.items.languages.label",
+  "inventory-types": "settings.items.inventoryTypes.label",
+  "custom-fields": "settings.items.customFields.label",
+  users: "settings.items.users.label",
+  access: "settings.items.access.label",
+  sharing: "settings.items.sharing.label",
+  api: "settings.items.api.label",
+};
+
+function initials(
+  name: string | null | undefined,
+  email: string | null | undefined,
+  fallback: string,
+) {
+  const source = name?.trim() || email?.split("@")[0] || fallback;
   const parts = source.split(/\s+/).filter(Boolean);
-  return (parts.length > 1
-    ? `${parts[0]?.[0] ?? ""}${parts.at(-1)?.[0] ?? ""}`
-    : source.slice(0, 2)
+  return (
+    parts.length > 1
+      ? `${parts[0]?.[0] ?? ""}${parts.at(-1)?.[0] ?? ""}`
+      : source.slice(0, 2)
   ).toUpperCase();
 }
 
@@ -78,85 +147,96 @@ function SidebarContent({
   user: ShellUser;
   onNavigate?: () => void;
 }) {
-  const canWrite = user.role !== "viewer";
+  const { t } = useT(["shell", "common"]);
+  const canCreate = user.permissions.includes("inventory.create");
   return (
-    <div className="flex h-full flex-col bg-[#fbfbfc]">
+    <div className="flex h-full flex-col bg-surface-subtle">
       <div className="flex h-[68px] items-center px-5">
         <Link
           href="/dashboard"
           onClick={onNavigate}
-          className="flex items-center gap-2.5 rounded-lg text-[#1f2227]"
+          className="flex items-center gap-2.5 rounded-lg text-foreground"
         >
-          <span className="grid size-8 place-items-center rounded-[10px] bg-[#5147d9] text-white shadow-[0_5px_14px_rgba(99,91,255,0.22)]">
-            <Boxes className="size-[18px]" strokeWidth={2.2} aria-hidden="true" />
+          <span className="grid size-8 place-items-center rounded-[10px] bg-brand-solid text-on-brand shadow-[0_5px_14px_rgba(99,91,255,0.22)]">
+            <Boxes
+              className="size-[18px]"
+              strokeWidth={2.2}
+              aria-hidden="true"
+            />
           </span>
           <span className="text-[15px] font-semibold tracking-[-0.02em]">
-            Inventory
+            {t("brand")}
           </span>
         </Link>
       </div>
 
-      {canWrite ? (
+      {canCreate ? (
         <div className="px-3.5 pt-2">
           <Link
             href="/inventory/new"
             onClick={onNavigate}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#5147d9] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#5147f5] active:bg-[#443be0]"
+            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-brand-solid px-3 text-[13px] font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover active:bg-brand-active"
           >
             <Plus className="size-4" strokeWidth={2.2} aria-hidden="true" />
-            Add inventory item
+            {t("actions.addInventoryItem")}
           </Link>
         </div>
       ) : null}
 
-      <nav className="mt-6 flex-1 px-3" aria-label="Main navigation">
-        <p className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#5f6672]">
-          Workspace
+      <nav className="mt-6 flex-1 px-3" aria-label={t("navigation.mainLabel")}>
+        <p className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-sidebar-muted">
+          {t("sections.workspace")}
         </p>
         <div className="space-y-0.5">
           {navigation
-            .filter((item) => canWrite || item.href !== "/batch")
+            .filter(
+              (item) =>
+                (!item.permission ||
+                  user.permissions.includes(item.permission)) &&
+                (!item.scope || user.scopes.includes(item.scope)),
+            )
             .map((item) => {
-            const active =
-              pathname === item.href ||
-              (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavigate}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "group flex h-10 items-center gap-3 rounded-xl px-2.5 text-[13px] font-medium transition",
-                  active
-                    ? "bg-[#eeedff] text-[#5147d9]"
-                    : "text-[#616873] hover:bg-[#f0f2f4] hover:text-[#292d33]",
-                )}
-              >
-                <Icon
+              const active =
+                pathname === item.href ||
+                (item.href !== "/dashboard" &&
+                  pathname.startsWith(`${item.href}/`));
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onNavigate}
+                  aria-current={active ? "page" : undefined}
                   className={cn(
-                    "size-[17px] shrink-0",
+                    "group flex h-10 items-center gap-3 rounded-xl px-2.5 text-[13px] font-medium transition",
                     active
-                      ? "text-[#5147d9]"
-                      : "text-[#5f6672] group-hover:text-[#555c67]",
+                      ? "bg-brand-soft text-brand"
+                      : "text-sidebar-muted-strong hover:bg-surface-muted hover:text-foreground",
                   )}
-                  strokeWidth={active ? 2.2 : 1.9}
-                  aria-hidden="true"
-                />
-                {item.label}
-                {item.href === "/batch" ? (
-                  <span className="ml-auto rounded-full bg-[#e1dfff] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#5147d9]">
-                    AI
-                  </span>
-                ) : null}
-              </Link>
-            );
-          })}
+                >
+                  <Icon
+                    className={cn(
+                      "size-[17px] shrink-0",
+                      active
+                        ? "text-brand"
+                        : "text-sidebar-muted group-hover:text-sidebar-muted-strong",
+                    )}
+                    strokeWidth={active ? 2.2 : 1.9}
+                    aria-hidden="true"
+                  />
+                  {t(item.labelKey)}
+                  {item.href === "/batch" ? (
+                    <span className="ml-auto rounded-full bg-brand-soft px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-brand">
+                      {t("badges.ai")}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
         </div>
 
-        <p className="mb-2 mt-7 px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#5f6672]">
-          Manage
+        <p className="mb-2 mt-7 px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-sidebar-muted">
+          {t("sections.manage")}
         </p>
         <div className="space-y-0.5">
           {manageNavigation.map((item) => {
@@ -171,49 +251,49 @@ function SidebarContent({
                 className={cn(
                   "group flex h-10 items-center gap-3 rounded-xl px-2.5 text-[13px] font-medium transition",
                   active
-                    ? "bg-[#eeedff] text-[#5147d9]"
-                    : "text-[#616873] hover:bg-[#f0f2f4] hover:text-[#292d33]",
+                    ? "bg-brand-soft text-brand"
+                    : "text-sidebar-muted-strong hover:bg-surface-muted hover:text-foreground",
                 )}
               >
                 <Icon
                   className={cn(
                     "size-[17px]",
                     active
-                      ? "text-[#5147d9]"
-                      : "text-[#5f6672] group-hover:text-[#555c67]",
+                      ? "text-brand"
+                      : "text-sidebar-muted group-hover:text-sidebar-muted-strong",
                   )}
                   strokeWidth={1.9}
                   aria-hidden="true"
                 />
-                {item.label}
+                {t(item.labelKey)}
               </Link>
             );
           })}
         </div>
       </nav>
 
-      <div className="border-t border-[#e8eaed] p-3">
+      <div className="border-t border-border p-3">
         <div className="flex items-center gap-2.5 rounded-xl px-2 py-2">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#e6e4ff] text-[10px] font-bold text-[#554ddb]">
-            {initials(user.name, user.email)}
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft text-[10px] font-bold text-brand">
+            {initials(user.name, user.email, t("user.generic"))}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[12px] font-semibold text-[#34383e]">
-              {user.name || "Inventory admin"}
+            <p className="truncate text-[12px] font-semibold text-foreground">
+              {user.name || t("user.fallbackName")}
             </p>
-            <p className="truncate text-[10px] text-[#5f6672]">
-              {user.email || "Signed in"}
+            <p className="truncate text-[10px] text-sidebar-muted">
+              {user.email || t("user.signedIn")}
             </p>
-            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#5147d9]">
-              {user.role}
+            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-brand">
+              {user.roleName}
             </p>
           </div>
           <button
             type="button"
             onClick={() => signOut({ redirectTo: "/login" })}
-            className="grid size-8 shrink-0 place-items-center rounded-lg text-[#5f6672] transition hover:bg-[#eceef1] hover:text-[#3b3f46]"
-            aria-label="Sign out"
-            title="Sign out"
+            className="grid size-8 shrink-0 place-items-center rounded-lg text-sidebar-muted transition hover:bg-surface-muted hover:text-foreground"
+            aria-label={t("actions.signOut")}
+            title={t("actions.signOut")}
           >
             <LogOut className="size-4" aria-hidden="true" />
           </button>
@@ -231,9 +311,16 @@ export function AppShell({
   user: ShellUser;
 }) {
   const pathname = usePathname();
+  const { t } = useT("shell");
   const [mobileOpen, setMobileOpen] = useState(false);
-  const section = pathname.split("/").filter(Boolean)[0] ?? "dashboard";
-  const pageName = pageNames[section] ?? "Inventory";
+  const pathSegments = pathname.split("/").filter(Boolean);
+  const section = pathSegments[0] ?? "dashboard";
+  const pageName = t(pageNames[section] ?? "navigation.inventory");
+  const settingsPageKey =
+    section === "settings" && pathSegments[1]
+      ? settingsPageNames[pathSegments[1]]
+      : undefined;
+  const settingsPageName = settingsPageKey ? t(settingsPageKey) : undefined;
 
   useEffect(() => {
     setMobileOpen(false);
@@ -247,8 +334,8 @@ export function AppShell({
   }, [mobileOpen]);
 
   return (
-    <div className="min-h-dvh bg-[#f6f7f9]">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[244px] border-r border-[#e4e7eb] lg:block">
+    <div className="min-h-dvh bg-background">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[244px] border-r border-border lg:block">
         <SidebarContent pathname={pathname} user={user} />
       </aside>
 
@@ -256,16 +343,16 @@ export function AppShell({
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-[#17191c]/35 backdrop-blur-[2px]"
-            aria-label="Close navigation"
+            className="absolute inset-0 bg-overlay backdrop-blur-[2px]"
+            aria-label={t("actions.closeNavigation")}
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="relative h-full w-[min(300px,86vw)] border-r border-[#e4e7eb] shadow-2xl">
+          <aside className="relative h-full w-[min(300px,86vw)] border-r border-border shadow-2xl">
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
-              className="absolute right-3 top-[18px] z-10 grid size-8 place-items-center rounded-lg text-[#5f6672] hover:bg-[#eceef1]"
-              aria-label="Close navigation"
+              className="absolute right-3 top-[18px] z-10 grid size-8 place-items-center rounded-lg text-muted hover:bg-surface-muted"
+              aria-label={t("actions.closeNavigation")}
             >
               <X className="size-4" aria-hidden="true" />
             </button>
@@ -279,23 +366,38 @@ export function AppShell({
       ) : null}
 
       <div className="lg:pl-[244px]">
-        <header className="sticky top-0 z-20 flex h-[68px] items-center border-b border-[#e4e7eb] bg-white/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-[68px] items-center border-b border-border bg-surface/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
-            className="mr-3 grid size-9 place-items-center rounded-xl border border-[#e2e5e9] bg-white text-[#5d646f] shadow-sm lg:hidden"
-            aria-label="Open navigation"
+            className="mr-3 grid size-9 place-items-center rounded-xl border border-border bg-surface text-muted shadow-sm lg:hidden"
+            aria-label={t("actions.openNavigation")}
           >
             <Menu className="size-[18px]" aria-hidden="true" />
           </button>
 
           <div className="flex min-w-0 items-center gap-2 text-sm">
-            <span className="hidden text-[#5f6672] sm:inline">Workspace</span>
+            <span className="hidden text-muted sm:inline">
+              {t("breadcrumb.workspace")}
+            </span>
             <ChevronRight
-              className="hidden size-3.5 text-[#5f6672] sm:block"
+              className="hidden size-3.5 text-muted sm:block"
               aria-hidden="true"
             />
-            <span className="truncate font-semibold text-[#34383e]">{pageName}</span>
+            <span className="shrink-0 font-semibold text-foreground">
+              {pageName}
+            </span>
+            {settingsPageName ? (
+              <>
+                <ChevronRight
+                  className="size-3.5 shrink-0 text-muted"
+                  aria-hidden="true"
+                />
+                <span className="truncate font-semibold text-foreground">
+                  {settingsPageName}
+                </span>
+              </>
+            ) : null}
           </div>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
@@ -305,48 +407,41 @@ export function AppShell({
               role="search"
             >
               <Search
-                className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[#5f6672]"
+                className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted"
                 aria-hidden="true"
               />
               <input
                 type="search"
                 name="q"
-                aria-label="Search inventory"
-                placeholder="Search inventory…"
+                aria-label={t("search.label")}
+                placeholder={t("search.placeholder")}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.nativeEvent.isComposing) {
                     event.preventDefault();
                     event.currentTarget.form?.requestSubmit();
                   }
                 }}
-                className="h-9 w-56 rounded-xl border border-[#e1e4e8] bg-[#f8f9fa] pl-9 pr-10 text-[12px] text-[#33373d] transition placeholder:text-[#5f6672] hover:border-[#d4d8de] focus:w-64 focus:border-[#776fff] focus:bg-white focus:outline-none focus:ring-3 focus:ring-[#635bff]/10"
+                className="h-9 w-56 rounded-xl border border-border bg-surface-subtle pl-9 pr-10 text-[12px] text-foreground transition placeholder:text-muted hover:border-border-strong focus:w-64 focus:border-focus focus:bg-surface focus:outline-none focus:ring-3 focus:ring-focus/10"
               />
               <button
                 type="submit"
-                className="absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-[#5f6672] transition hover:bg-[#eceef1] hover:text-[#33373d]"
-                aria-label="Submit inventory search"
-                title="Search"
+                className="absolute right-1 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-muted transition hover:bg-surface-muted hover:text-foreground"
+                aria-label={t("search.submit")}
+                title={t("search.action")}
               >
                 <ArrowRight className="size-3.5" aria-hidden="true" />
               </button>
             </form>
+            <LanguageSwitcher compact />
+            <LocalizedThemeToggle />
             <Link
               href="/settings"
-              className="grid size-9 place-items-center rounded-xl text-[#5f6672] transition hover:bg-[#f0f2f4] hover:text-[#33373d]"
-              aria-label="Help and configuration"
-              title="Help and configuration"
+              className="grid size-9 place-items-center rounded-xl text-muted transition hover:bg-surface-muted hover:text-foreground"
+              aria-label={t("actions.helpAndConfiguration")}
+              title={t("actions.helpAndConfiguration")}
             >
               <CircleHelp className="size-[18px]" aria-hidden="true" />
             </Link>
-            {user.role !== "viewer" ? (
-              <Link
-                href="/inventory/new"
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#5147d9] px-3 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#5147f5] sm:px-3.5"
-              >
-                <Plus className="size-3.5" strokeWidth={2.4} aria-hidden="true" />
-                <span className="hidden sm:inline">Add item</span>
-              </Link>
-            ) : null}
           </div>
         </header>
 

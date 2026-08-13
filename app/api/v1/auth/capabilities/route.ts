@@ -10,5 +10,8 @@ export async function GET(request: Request) {
   return Response.json({
     name: identity.name,
     scopes: identity.scopes,
+    role: identity.role,
+    roleName: identity.roleName,
+    permissions: identity.permissions,
   });
 }

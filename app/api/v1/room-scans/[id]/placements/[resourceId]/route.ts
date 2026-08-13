@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requireIdentity } from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import { spatialPlacementInputSchema } from "@/lib/room-scene-contract";
 import {
   deleteSpatialPlacement,
@@ -12,9 +12,13 @@ type Context = { params: Promise<{ id: string; resourceId: string }> };
 export const dynamic = "force-dynamic";
 
 export async function PUT(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
-  if (authorization.response) return authorization.response;
   const { id, resourceId } = await context.params;
+  const authorization = await requireResourcePermission(
+    request,
+    "spatial.manage",
+    resourceId,
+  );
+  if (authorization.response) return authorization.response;
   const identifiers = z
     .object({ id: z.uuid(), resourceId: z.uuid() })
     .safeParse({ id, resourceId });
@@ -58,9 +62,13 @@ export async function PUT(request: Request, context: Context) {
 }
 
 export async function DELETE(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
-  if (authorization.response) return authorization.response;
   const { id, resourceId } = await context.params;
+  const authorization = await requireResourcePermission(
+    request,
+    "spatial.manage",
+    resourceId,
+  );
+  if (authorization.response) return authorization.response;
   const identifiers = z
     .object({ id: z.uuid(), resourceId: z.uuid() })
     .safeParse({ id, resourceId });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requireAdminSession } from "@/lib/api-auth";
+import { requireSessionPermission } from "@/lib/api-auth";
 import {
   inventoryStructureHttpError,
   updateRelationType,
@@ -24,7 +24,7 @@ const patchSchema = z
   });
 
 export async function PATCH(request: Request, context: Context) {
-  const authorization = await requireAdminSession(request);
+  const authorization = await requireSessionPermission(request, "settings.inventory-types.manage");
   if (authorization.response) return authorization.response;
   const key = inventoryTypeKeySchema.safeParse((await context.params).key);
   if (!key.success) return Response.json({ error: "Invalid relation key." }, { status: 422 });

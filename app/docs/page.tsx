@@ -86,26 +86,26 @@ function SectionHeading({
 }) {
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#665cff]">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">
         {eyebrow}
       </p>
-      <h2 className="mt-3 text-[32px] font-semibold tracking-[-0.05em] text-[#202125] sm:text-[40px]">
+      <h2 className="mt-3 text-[32px] font-semibold tracking-[-0.05em] text-foreground sm:text-[40px]">
         {title}
       </h2>
-      <div className="mt-4 text-[15px] leading-7 text-[#696b71]">{children}</div>
+      <div className="mt-4 text-[15px] leading-7 text-muted">{children}</div>
     </div>
   );
 }
 
 export default function DocsPage() {
   return (
-    <div className="min-h-dvh bg-[#f7f5ef] text-[#1a1b1e]">
+    <div className="min-h-dvh bg-background text-foreground">
       <MarketingHeader />
 
       <main>
         <section
           id="overview"
-          className="scroll-mt-24 border-b border-black/[0.07] bg-[#121318] text-white"
+          className="scroll-mt-24 border-b border-border bg-[#121318] text-white"
         >
           <div className="relative mx-auto max-w-[1240px] overflow-hidden px-5 py-20 sm:px-8 sm:py-28">
             <div className="pointer-events-none absolute right-0 top-0 size-[480px] rounded-full bg-[#665cff]/25 blur-[130px]" />
@@ -137,7 +137,7 @@ export default function DocsPage() {
         <div className="mx-auto grid max-w-[1240px] gap-10 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-[220px_minmax(0,760px)] lg:justify-between">
           <aside className="hidden lg:block">
             <div className="sticky top-24">
-              <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a09f9a]">
+              <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
                 On this page
               </p>
               <nav className="mt-3 grid gap-1" aria-label="Documentation sections">
@@ -145,18 +145,18 @@ export default function DocsPage() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="rounded-xl px-3 py-2.5 text-[13px] font-medium text-[#73757a] transition hover:bg-white hover:text-[#292a2e]"
+                    className="rounded-xl px-3 py-2.5 text-[13px] font-medium text-muted transition hover:bg-surface hover:text-foreground"
                   >
                     {item.label}
                   </Link>
                 ))}
               </nav>
-              <div className="mt-7 border-t border-black/[0.08] pt-6">
+              <div className="mt-7 border-t border-border pt-6">
                 <a
                   href={`${githubUrl}#readme`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-2 px-3 text-xs font-semibold text-[#6257dd] hover:text-[#4539c5]"
+                  className="flex items-center gap-2 px-3 text-xs font-semibold text-brand hover:text-brand-strong"
                 >
                   Full repository README
                   <ExternalLink className="size-3" aria-hidden="true" />
@@ -166,7 +166,7 @@ export default function DocsPage() {
           </aside>
 
           <article className="min-w-0">
-            <section className="border-b border-black/[0.08] pb-16">
+            <section className="border-b border-border pb-16">
               <SectionHeading eyebrow="Start here" title="What you are deploying">
                 <p>
                   Open Inventory is a Next.js application backed by PostgreSQL.
@@ -185,17 +185,17 @@ export default function DocsPage() {
                 ].map((item) => {
                   const Icon = item.icon;
                   return (
-                    <div key={item.title} className="rounded-2xl border border-black/[0.07] bg-white p-5">
-                      <Icon className="size-5 text-[#665cff]" aria-hidden="true" />
-                      <h3 className="mt-5 text-sm font-semibold text-[#323438]">{item.title}</h3>
-                      <p className="mt-1.5 text-xs leading-5 text-[#818389]">{item.text}</p>
+                    <div key={item.title} className="rounded-2xl border border-border bg-surface p-5">
+                      <Icon className="size-5 text-brand" aria-hidden="true" />
+                      <h3 className="mt-5 text-sm font-semibold text-foreground">{item.title}</h3>
+                      <p className="mt-1.5 text-xs leading-5 text-muted">{item.text}</p>
                     </div>
                   );
                 })}
               </div>
             </section>
 
-            <section id="docker" className="scroll-mt-24 border-b border-black/[0.08] py-16">
+            <section id="docker" className="scroll-mt-24 border-b border-border py-16">
               <SectionHeading eyebrow="01 · Installation" title="Deploy with Docker Compose">
                 <p>
                   You need Git, Docker with Compose v2, and Node.js 22.13 or
@@ -207,10 +207,10 @@ export default function DocsPage() {
               <ol className="mt-10 space-y-10">
                 <li>
                   <div className="flex items-start gap-4">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#e8e4ff] font-mono text-[10px] font-bold text-[#5b50df]">1</span>
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft font-mono text-[10px] font-bold text-brand">1</span>
                     <div>
-                      <h3 className="text-base font-semibold text-[#303136]">Clone and create the environment file</h3>
-                      <p className="mt-2 text-sm leading-6 text-[#74767c]">Keep the checked-in example as your reference and put deployment values in <code className="rounded bg-black/[0.05] px-1.5 py-0.5 font-mono text-[12px]">.env</code>.</p>
+                      <h3 className="text-base font-semibold text-foreground">Clone and create the environment file</h3>
+                      <p className="mt-2 text-sm leading-6 text-muted">Keep the checked-in example as your reference and put deployment values in <code className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[12px]">.env</code>.</p>
                     </div>
                   </div>
                   <CodeBlock label="clone" copy={`git clone ${githubUrl}.git\ncd inventory\ncp .env.example .env`}>
@@ -220,10 +220,10 @@ export default function DocsPage() {
 
                 <li>
                   <div className="flex items-start gap-4">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#e8e4ff] font-mono text-[10px] font-bold text-[#5b50df]">2</span>
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft font-mono text-[10px] font-bold text-brand">2</span>
                     <div>
-                      <h3 className="text-base font-semibold text-[#303136]">Generate secrets and the login hash</h3>
-                      <p className="mt-2 text-sm leading-6 text-[#74767c]">Use a URL-safe hex value for the database password. Keep bcrypt hashes in single quotes in the Compose environment file so their dollar signs stay literal.</p>
+                      <h3 className="text-base font-semibold text-foreground">Generate secrets and the login hash</h3>
+                      <p className="mt-2 text-sm leading-6 text-muted">Use a URL-safe hex value for the database password. Keep bcrypt hashes in single quotes in the Compose environment file so their dollar signs stay literal.</p>
                     </div>
                   </div>
                   <CodeBlock label="secrets" copy={'openssl rand -hex 32\nopenssl rand -base64 48\nnpm install\nnpm run auth:hash -- "choose a strong password"'}>
@@ -233,10 +233,10 @@ export default function DocsPage() {
 
                 <li>
                   <div className="flex items-start gap-4">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#e8e4ff] font-mono text-[10px] font-bold text-[#5b50df]">3</span>
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft font-mono text-[10px] font-bold text-brand">3</span>
                     <div>
-                      <h3 className="text-base font-semibold text-[#303136]">Set the required values</h3>
-                      <p className="mt-2 text-sm leading-6 text-[#74767c]">For a local installation, the public URL can be localhost. Remote installations must use the exact public HTTPS origin.</p>
+                      <h3 className="text-base font-semibold text-foreground">Set the required values</h3>
+                      <p className="mt-2 text-sm leading-6 text-muted">For a local installation, the public URL can be localhost. Remote installations must use the exact public HTTPS origin.</p>
                     </div>
                   </div>
                   <CodeBlock label=".env">
@@ -246,23 +246,23 @@ export default function DocsPage() {
 
                 <li>
                   <div className="flex items-start gap-4">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#dff8ed] font-mono text-[10px] font-bold text-[#177e5c]">4</span>
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-success-soft font-mono text-[10px] font-bold text-success">4</span>
                     <div>
-                      <h3 className="text-base font-semibold text-[#303136]">Start the stack</h3>
-                      <p className="mt-2 text-sm leading-6 text-[#74767c]">The local override binds the app to <code className="rounded bg-black/[0.05] px-1.5 py-0.5 font-mono text-[12px]">127.0.0.1:3000</code>. Named volumes survive container replacement.</p>
+                      <h3 className="text-base font-semibold text-foreground">Start the stack</h3>
+                      <p className="mt-2 text-sm leading-6 text-muted">The local override binds the app to <code className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[12px]">127.0.0.1:3000</code>. Named volumes survive container replacement.</p>
                     </div>
                   </div>
                   <CodeBlock label="docker compose" copy={composeCommand}>
                     {`docker compose -f docker-compose.yml \\\n  -f docker-compose.local.yml up --build`}
                   </CodeBlock>
-                  <div className="rounded-2xl border border-[#bce8d5] bg-[#effbf6] p-4 text-sm leading-6 text-[#266b53]">
+                  <div className="rounded-2xl border border-success-border bg-success-soft p-4 text-sm leading-6 text-success">
                     Open <a href="http://localhost:3000" className="font-semibold underline underline-offset-4">http://localhost:3000</a> and sign in with the email and password you configured.
                   </div>
                 </li>
               </ol>
             </section>
 
-            <section id="configuration" className="scroll-mt-24 border-b border-black/[0.08] py-16">
+            <section id="configuration" className="scroll-mt-24 border-b border-border py-16">
               <SectionHeading eyebrow="02 · Configuration" title="Keep the core local. Add only what you need.">
                 <p>
                   Database and local files can stay on your infrastructure.
@@ -271,7 +271,7 @@ export default function DocsPage() {
                 </p>
               </SectionHeading>
 
-              <div className="mt-9 divide-y divide-black/[0.07] rounded-2xl border border-black/[0.07] bg-white">
+              <div className="mt-9 divide-y divide-border rounded-2xl border border-border bg-surface">
                 {[
                   { icon: KeyRound, title: "Accounts and roles", copy: "Bootstrap the first administrator, then manage admin, editor, and viewer accounts from Settings. Auth0 is optional." },
                   { icon: HardDrive, title: "File storage", copy: "Use the persistent local upload volume by default, or point Open Inventory at an Openinary service." },
@@ -281,25 +281,25 @@ export default function DocsPage() {
                   const Icon = item.icon;
                   return (
                     <div key={item.title} className="flex gap-4 p-5 sm:p-6">
-                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#efecff] text-[#6256e4]">
+                      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
                         <Icon className="size-[18px]" aria-hidden="true" />
                       </span>
                       <div>
-                        <h3 className="text-sm font-semibold text-[#33353a]">{item.title}</h3>
-                        <p className="mt-1.5 text-sm leading-6 text-[#777980]">{item.copy}</p>
+                        <h3 className="text-sm font-semibold text-foreground">{item.title}</h3>
+                        <p className="mt-1.5 text-sm leading-6 text-muted">{item.copy}</p>
                       </div>
                     </div>
                   );
                 })}
               </div>
 
-              <a href={`${githubUrl}#authentication`} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-[#5a4fda] hover:text-[#4034c4]">
+              <a href={`${githubUrl}#authentication`} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-brand hover:text-brand-strong">
                 Read every environment option in the README
                 <ExternalLink className="size-3.5" aria-hidden="true" />
               </a>
             </section>
 
-            <section id="api" className="scroll-mt-24 border-b border-black/[0.08] py-16">
+            <section id="api" className="scroll-mt-24 border-b border-border py-16">
               <SectionHeading eyebrow="03 · Integration" title="A scoped API, described in the repository.">
                 <p>
                   Administrators can issue expiring, revocable bearer tokens.
@@ -316,26 +316,26 @@ export default function DocsPage() {
                 ].map((item) => {
                   const Icon = item.icon;
                   return (
-                    <div key={item.title} className="rounded-2xl border border-black/[0.07] bg-white p-5">
-                      <Icon className="size-5 text-[#665cff]" aria-hidden="true" />
-                      <h3 className="mt-5 text-sm font-semibold text-[#33353a]">{item.title}</h3>
-                      <p className="mt-1.5 text-xs leading-5 text-[#82848a]">{item.text}</p>
+                    <div key={item.title} className="rounded-2xl border border-border bg-surface p-5">
+                      <Icon className="size-5 text-brand" aria-hidden="true" />
+                      <h3 className="mt-5 text-sm font-semibold text-foreground">{item.title}</h3>
+                      <p className="mt-1.5 text-xs leading-5 text-muted">{item.text}</p>
                     </div>
                   );
                 })}
               </div>
 
               <div className="mt-6 flex flex-wrap gap-3">
-                <Link href="/api-docs" className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#665cff] px-4 text-sm font-semibold text-white hover:bg-[#5549e8]">
+                <Link href="/api-docs" className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-solid px-4 text-sm font-semibold text-on-brand hover:bg-brand-hover">
                   <BookOpenText className="size-4" aria-hidden="true" />
                   Explore API reference
                   <ArrowRight className="size-4" aria-hidden="true" />
                 </Link>
-                <a href="/openapi.yaml" className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#17181d] px-4 text-sm font-semibold text-white hover:bg-[#2d2e33]">
+                <a href="/openapi.yaml" className="inline-flex h-11 items-center gap-2 rounded-xl bg-strong px-4 text-sm font-semibold text-on-strong hover:opacity-90">
                   <FileCode2 className="size-4" aria-hidden="true" />
                   Open YAML
                 </a>
-                <a href="/openapi.json" className="inline-flex h-11 items-center gap-2 rounded-xl border border-black/10 bg-white px-4 text-sm font-semibold text-[#34363a] hover:border-black/20">
+                <a href="/openapi.json" className="inline-flex h-11 items-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-foreground hover:border-border-strong">
                   Open JSON
                   <ArrowRight className="size-4" aria-hidden="true" />
                 </a>
@@ -351,17 +351,17 @@ export default function DocsPage() {
                 </p>
               </SectionHeading>
 
-              <div className="mt-8 rounded-2xl border border-black/[0.07] bg-white p-6 sm:p-8">
+              <div className="mt-8 rounded-2xl border border-border bg-surface p-6 sm:p-8">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-10 place-items-center rounded-xl bg-[#ddf8ec] text-[#157d5a]">
+                  <span className="grid size-10 place-items-center rounded-xl bg-success-soft text-success">
                     <HeartPulse className="size-5" aria-hidden="true" />
                   </span>
                   <div>
-                    <h3 className="text-sm font-semibold text-[#313338]">Deployment checklist</h3>
-                    <p className="mt-1 text-xs text-[#898b91]">The boring things that keep the useful things safe.</p>
+                    <h3 className="text-sm font-semibold text-foreground">Deployment checklist</h3>
+                    <p className="mt-1 text-xs text-muted">The boring things that keep the useful things safe.</p>
                   </div>
                 </div>
-                <ul className="mt-7 grid gap-4 text-sm text-[#55575d] sm:grid-cols-2">
+                <ul className="mt-7 grid gap-4 text-sm text-muted-strong sm:grid-cols-2">
                   {[
                     "Health check returns 200 at /api/health",
                     "Database and upload volumes are persistent",
@@ -371,22 +371,22 @@ export default function DocsPage() {
                     "AI and storage credentials are set only when used",
                   ].map((item) => (
                     <li key={item} className="flex items-start gap-2.5">
-                      <Check className="mt-0.5 size-4 shrink-0 text-[#16815c]" aria-hidden="true" />
+                      <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
                       {item}
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="mt-8 flex flex-col gap-4 rounded-2xl bg-[#e9e5ff] p-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-8 flex flex-col gap-4 rounded-2xl bg-brand-soft p-6 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
-                  <BookOpenText className="mt-0.5 size-5 shrink-0 text-[#5a4fda]" aria-hidden="true" />
+                  <BookOpenText className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
                   <div>
-                    <h3 className="text-sm font-semibold text-[#353044]">Need the complete reference?</h3>
-                    <p className="mt-1 text-xs leading-5 text-[#716b83]">The repository README covers Dokploy, authentication, stock behavior, native iOS, and every environment variable.</p>
+                    <h3 className="text-sm font-semibold text-foreground">Need the complete reference?</h3>
+                    <p className="mt-1 text-xs leading-5 text-muted">The repository README covers Dokploy, authentication, stock behavior, native iOS, and every environment variable.</p>
                   </div>
                 </div>
-                <a href={`${githubUrl}#readme`} target="_blank" rel="noreferrer" className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#665cff] px-4 text-xs font-semibold text-white hover:bg-[#5549e8]">
+                <a href={`${githubUrl}#readme`} target="_blank" rel="noreferrer" className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-solid px-4 text-xs font-semibold text-on-brand hover:bg-brand-hover">
                   Open README
                   <ExternalLink className="size-3.5" aria-hidden="true" />
                 </a>

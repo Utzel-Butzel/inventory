@@ -14,16 +14,16 @@
 
 .panel {
   overflow: hidden;
-  border: 1px solid #e4e7eb;
+  border: 1px solid var(--color-border);
   border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 1px 3px rgb(18 24 40 / 0.04);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .results {
   max-height: 500px;
   overflow-y: auto;
-  scrollbar-color: #cbd0d8 transparent;
+  scrollbar-color: var(--color-border-strong) transparent;
   scrollbar-width: thin;
 }
 
@@ -35,12 +35,12 @@
   min-height: 560px;
   overflow: auto;
   padding: 30px;
-  background-color: #eef0f3;
+  background-color: var(--color-surface-muted);
   background-image:
-    linear-gradient(45deg, rgb(255 255 255 / 0.75) 25%, transparent 25%),
-    linear-gradient(-45deg, rgb(255 255 255 / 0.75) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgb(255 255 255 / 0.75) 75%),
-    linear-gradient(-45deg, transparent 75%, rgb(255 255 255 / 0.75) 75%);
+    linear-gradient(45deg, color-mix(in srgb, var(--color-surface) 75%, transparent) 25%, transparent 25%),
+    linear-gradient(-45deg, color-mix(in srgb, var(--color-surface) 75%, transparent) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, color-mix(in srgb, var(--color-surface) 75%, transparent) 75%),
+    linear-gradient(-45deg, transparent 75%, color-mix(in srgb, var(--color-surface) 75%, transparent) 75%);
   background-position: 0 0, 0 7px, 7px -7px, -7px 0;
   background-size: 14px 14px;
 }
@@ -69,6 +69,80 @@
 .label:last-child {
   break-after: auto;
   page-break-after: auto;
+}
+
+.designedLabel {
+  display: block;
+  box-sizing: border-box;
+}
+
+.designedElement {
+  position: absolute;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.designedQr,
+.designedBarcode,
+.labelImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.designedQr {
+  object-fit: contain;
+}
+
+.qrUnavailable {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  padding: 1mm;
+  border: 0.25mm dashed #94a3b8;
+  color: #475569;
+  font-size: 2mm;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.labelImage {
+  background: #fff;
+}
+
+.imagePlaceholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border: 1px dashed #a9afb8;
+  background: #f5f6f7;
+  color: #737a85;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.designedText {
+  display: flex;
+  align-items: center;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.designedName {
+  font-weight: 800;
+}
+
+.designedMetadata,
+.designedUrl {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-weight: 650;
+}
+
+.designedUrl {
+  font-weight: 500;
 }
 
 .roll62Compact {
@@ -268,6 +342,10 @@
 }
 
 @media print {
+  :global([data-label-designer]) {
+    display: none !important;
+  }
+
   :global(html),
   :global(body) {
     width: auto !important;

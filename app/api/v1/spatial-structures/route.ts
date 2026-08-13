@@ -1,4 +1,4 @@
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import {
   spatialStructureCreateSchema,
 } from "@/lib/spatial-structure-contract";
@@ -12,13 +12,13 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "spatial.read");
   if (authorization.response) return authorization.response;
   return Response.json({ structures: await listSpatialStructures() });
 }
 
 export async function POST(request: Request) {
-  const authorization = await requireIdentity(request, "write");
+  const authorization = await requirePermission(request, "spatial.manage");
   if (authorization.response) return authorization.response;
 
   let payload: unknown;

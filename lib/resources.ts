@@ -244,6 +244,10 @@ export async function updateResourceWithCustomFieldValidation(options: {
   values: Partial<NewResource>;
   validateCustomFields: boolean;
   customFieldsProvided: boolean;
+  authorize?: (
+    current: ResourceRecord,
+    proposed: ResourceRecord,
+  ) => boolean | Promise<boolean>;
 }) {
   const updated = await db.transaction(async (transaction) => {
     const [current] = await transaction
@@ -280,6 +284,18 @@ export async function updateResourceWithCustomFieldValidation(options: {
       values = { ...values, customFields };
     }
 
+    const proposed = {
+      ...current,
+      ...values,
+      updatedAt: new Date(),
+    } satisfies ResourceRecord;
+    if (
+      options.authorize &&
+      (!(await options.authorize(current, proposed)))
+    ) {
+      throw new Error("RESOURCE_PERMISSION_DENIED");
+    }
+
     const [saved] = await transaction
       .update(resources)
       .set({ ...values, updatedAt: new Date() })
@@ -295,11 +311,15 @@ export async function updateResourcesBatch(options: {
   ids: string[];
   changes: Partial<Pick<NewResource, "type" | "status" | "location" | "priority">>;
   addTags: string[];
+  authorize?: (
+    current: ResourceRecord,
+    proposed: ResourceRecord,
+  ) => boolean | Promise<boolean>;
 }) {
   const ids = Array.from(new Set(options.ids));
   return db.transaction(async (transaction) => {
     const rows = await transaction
-      .select({ id: resources.id, tags: resources.tags })
+      .select()
       .from(resources)
       .where(inArray(resources.id, ids))
       .orderBy(asc(resources.id))
@@ -311,13 +331,23 @@ export async function updateResourcesBatch(options: {
 
     const normalizedTags = options.addTags.map((tag) => tag.toLowerCase());
     for (const row of rows) {
+      const nextTags = normalizedTags.length
+        ? Array.from(new Set([...row.tags, ...normalizedTags]))
+        : row.tags;
+      const proposed = {
+        ...row,
+        ...options.changes,
+        tags: nextTags,
+        updatedAt: new Date(),
+      } satisfies ResourceRecord;
+      if (options.authorize && !(await options.authorize(row, proposed))) {
+        throw new Error("RESOURCE_PERMISSION_DENIED");
+      }
       await transaction
         .update(resources)
         .set({
           ...options.changes,
-          ...(normalizedTags.length
-            ? { tags: Array.from(new Set([...row.tags, ...normalizedTags])) }
-            : {}),
+          ...(normalizedTags.length ? { tags: nextTags } : {}),
           updatedAt: new Date(),
         })
         .where(eq(resources.id, row.id));
@@ -327,16 +357,22 @@ export async function updateResourcesBatch(options: {
   });
 }
 
-export async function deleteResource(id: string) {
+export async function deleteResource(
+  id: string,
+  authorize?: (resource: ResourceRecord) => boolean | Promise<boolean>,
+) {
   const resource = await getResource(id);
   if (!resource) return null;
   const deleted = await db.transaction(async (transaction) => {
     const [locked] = await transaction
-      .select({ id: resources.id })
+      .select()
       .from(resources)
       .where(eq(resources.id, id))
       .for("update");
     if (!locked) return null;
+    if (authorize && !(await authorize(locked))) {
+      throw new Error("RESOURCE_PERMISSION_DENIED");
+    }
     const spatialAssets = await transaction
       .select({
         storageKey: roomScanAssets.storageKey,
@@ -453,6 +489,15 @@ export async function mergeResources(
   keepId: string,
   duplicateId: string,
   actor?: string,
+  authorization?: {
+    authorizeUpdate: (
+      resource: ResourceRecord,
+    ) => boolean | Promise<boolean>;
+    authorizeDelete: (
+      resource: ResourceRecord,
+    ) => boolean | Promise<boolean>;
+    authorizeOrders?: () => boolean | Promise<boolean>;
+  },
 ) {
   if (keepId === duplicateId) throw new Error("Choose two different items.");
   const merged = await db.transaction(async (transaction) => {
@@ -472,6 +517,44 @@ export async function mergeResources(
     const lockedDuplicate = lockedResources.find((item) => item.id === duplicateId);
     if (!lockedKeep || !lockedDuplicate) {
       return false;
+    }
+
+    const now = new Date();
+    const combinedQuantity = lockedKeep.quantity + lockedDuplicate.quantity;
+    const finalKeep = {
+      ...lockedKeep,
+      description: lockedKeep.description || lockedDuplicate.description,
+      quantity: combinedQuantity,
+      location: lockedKeep.location || lockedDuplicate.location,
+      serialNumber: lockedKeep.serialNumber || lockedDuplicate.serialNumber,
+      valueCents: lockedKeep.valueCents ?? lockedDuplicate.valueCents,
+      tags: Array.from(new Set([...lockedKeep.tags, ...lockedDuplicate.tags])),
+      categories: [...lockedKeep.categories, ...lockedDuplicate.categories].filter(
+        (category, index, all) =>
+          all.findIndex((candidate) => candidate.name === category.name) ===
+          index,
+      ),
+      customFields: {
+        ...lockedDuplicate.customFields,
+        ...lockedKeep.customFields,
+      },
+      updatedAt: now,
+    } satisfies ResourceRecord;
+
+    if (authorization) {
+      const [canUpdateLockedKeep, canDeleteLockedDuplicate, canUpdateFinalKeep] =
+        await Promise.all([
+          authorization.authorizeUpdate(lockedKeep),
+          authorization.authorizeDelete(lockedDuplicate),
+          authorization.authorizeUpdate(finalKeep),
+        ]);
+      if (
+        !canUpdateLockedKeep ||
+        !canDeleteLockedDuplicate ||
+        !canUpdateFinalKeep
+      ) {
+        throw new Error("RESOURCE_PERMISSION_DENIED");
+      }
     }
 
     const [spatialScan] = await transaction
@@ -586,6 +669,42 @@ export async function mergeResources(
       );
     }
 
+    const affectedAssemblyIds = Array.from(
+      new Set(
+        bomEdges
+          .filter(
+            (edge) =>
+              edge.child === duplicateId &&
+              edge.parent !== keepId &&
+              edge.parent !== duplicateId,
+          )
+          .map((edge) => edge.parent),
+      ),
+    ).sort();
+    if (affectedAssemblyIds.length) {
+      const affectedAssemblies = await transaction
+        .select()
+        .from(resources)
+        .where(inArray(resources.id, affectedAssemblyIds))
+        .orderBy(asc(resources.id))
+        .for("update");
+      if (affectedAssemblies.length !== affectedAssemblyIds.length) {
+        throw new Error(
+          "An assembly affected by this merge no longer exists.",
+        );
+      }
+      if (authorization) {
+        const allowed = await Promise.all(
+          affectedAssemblies.map((resource) =>
+            authorization.authorizeUpdate(resource),
+          ),
+        );
+        if (allowed.some((value) => !value)) {
+          throw new Error("RESOURCE_PERMISSION_DENIED");
+        }
+      }
+    }
+
     const [historicalBuild] = await transaction
       .select({ id: assemblyBuilds.id })
       .from(assemblyBuilds)
@@ -602,20 +721,26 @@ export async function mergeResources(
       );
     }
 
-    const [receivedOrderLine] = await transaction
-      .select({ id: purchaseOrderLines.id })
+    const duplicateOrderLines = await transaction
+      .select()
       .from(purchaseOrderLines)
-      .where(
-        and(
-          eq(purchaseOrderLines.resourceId, duplicateId),
-          sql`${purchaseOrderLines.receivedQuantity} > 0`,
-        ),
-      )
-      .limit(1);
+      .where(eq(purchaseOrderLines.resourceId, duplicateId))
+      .orderBy(asc(purchaseOrderLines.id))
+      .for("update");
+    const receivedOrderLine = duplicateOrderLines.find(
+      (line) => line.receivedQuantity > 0,
+    );
     if (receivedOrderLine) {
       throw new Error(
         "These items cannot be merged because the duplicate has received purchase-order history. Archive it instead so receipt retries and audit records stay immutable.",
       );
+    }
+    if (
+      duplicateOrderLines.length &&
+      authorization?.authorizeOrders &&
+      !(await authorization.authorizeOrders())
+    ) {
+      throw new Error("ORDERS_PERMISSION_DENIED");
     }
 
     const mediaRows = await transaction
@@ -705,10 +830,6 @@ export async function mergeResources(
       }
     }
 
-    const duplicateOrderLines = await transaction
-      .select()
-      .from(purchaseOrderLines)
-      .where(eq(purchaseOrderLines.resourceId, duplicateId));
     for (const line of duplicateOrderLines) {
       const [collision] = await transaction
         .select()
@@ -753,7 +874,6 @@ export async function mergeResources(
       duplicateSettings?.trackingMode === "serialized"
         ? ("serialized" as const)
         : ("bulk" as const);
-    const now = new Date();
 
     const materializeBulkUnits = async (resource: ResourceRecord) => {
       if (resource.quantity === 0) return;
@@ -837,7 +957,6 @@ export async function mergeResources(
       .set({ resourceId: keepId })
       .where(eq(stockMovements.resourceId, duplicateId));
 
-    const combinedQuantity = lockedKeep.quantity + lockedDuplicate.quantity;
     await transaction
       .insert(stockSettings)
       .values({
@@ -888,22 +1007,15 @@ export async function mergeResources(
     await transaction
       .update(resources)
       .set({
-        description: lockedKeep.description || lockedDuplicate.description,
-        quantity: combinedQuantity,
-        location: lockedKeep.location || lockedDuplicate.location,
-        serialNumber: lockedKeep.serialNumber || lockedDuplicate.serialNumber,
-        valueCents: lockedKeep.valueCents ?? lockedDuplicate.valueCents,
-        tags: Array.from(new Set([...lockedKeep.tags, ...lockedDuplicate.tags])),
-        categories: [...lockedKeep.categories, ...lockedDuplicate.categories].filter(
-          (category, index, all) =>
-            all.findIndex((candidate) => candidate.name === category.name) ===
-            index,
-        ),
-        customFields: {
-          ...lockedDuplicate.customFields,
-          ...lockedKeep.customFields,
-        },
-        updatedAt: now,
+        description: finalKeep.description,
+        quantity: finalKeep.quantity,
+        location: finalKeep.location,
+        serialNumber: finalKeep.serialNumber,
+        valueCents: finalKeep.valueCents,
+        tags: finalKeep.tags,
+        categories: finalKeep.categories,
+        customFields: finalKeep.customFields,
+        updatedAt: finalKeep.updatedAt,
       })
       .where(eq(resources.id, keepId));
     await transaction.insert(stockMovements).values({

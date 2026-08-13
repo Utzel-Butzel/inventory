@@ -201,18 +201,13 @@ struct SpatialRoomsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(InventoryTheme.canvas)
-            .navigationTitle("3D-Räume")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Räume")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
+                    Button("Raum scannen", systemImage: "plus") {
                         presentation = RoomScanPresentation(mode: .newStructure)
-                    } label: {
-                        Image(systemName: "plus.viewfinder")
                     }
                     .disabled(!RoomCaptureSession.isSupported)
-                    .accessibilityLabel("Raum scannen")
                 }
             }
             .refreshable { await loadScans() }
@@ -254,168 +249,92 @@ struct SpatialRoomsView: View {
                     presentation = RoomScanPresentation(mode: .newStructure)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(InventoryTheme.accent)
             }
         }
         .padding(24)
     }
 
     private var roomList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 18) {
-                ForEach(scanLibrary.structures) { structure in
-                    structureCard(structure)
-                }
+        List {
+            ForEach(scanLibrary.structures) { structure in
+                structureSection(structure)
+            }
 
-                if !scanLibrary.standaloneScans.isEmpty {
-                    Text("Einzelräume")
-                        .font(.headline)
-                        .foregroundStyle(InventoryTheme.ink)
-                        .padding(.horizontal, 4)
-
+            if !scanLibrary.standaloneScans.isEmpty {
+                Section("Einzelräume") {
                     ForEach(scanLibrary.standaloneScans) { scan in
-                        VStack(alignment: .leading, spacing: 12) {
-                            roomRow(scan)
-                        }
-                        .padding(16)
-                        .background(
-                            .white,
-                            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(.black.opacity(0.06), lineWidth: 1)
-                        }
+                        roomRow(scan)
                     }
                 }
             }
-            .padding(16)
-            .padding(.bottom, 90)
         }
+        .listStyle(.insetGrouped)
     }
 
     private var scanLibrary: SpatialRoomScanLibrary {
         SpatialRoomScanLibrary(scans: scans)
     }
 
-    private func structureCard(_ structure: SpatialRoomStructureGroup) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
-                Image(systemName: "building.2.crop.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(InventoryTheme.accent)
-                    .frame(width: 48, height: 48)
-                    .background(
-                        InventoryTheme.accent.opacity(0.12),
-                        in: RoundedRectangle(cornerRadius: 14)
-                    )
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(structure.structureName)
-                        .font(.headline)
-                        .foregroundStyle(InventoryTheme.ink)
-                    Text(
-                        "\(structure.roomCount) Räume · \(structure.floors.count) " +
-                            (structure.floors.count == 1 ? "Etage" : "Etagen")
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-
+    private func structureSection(_ structure: SpatialRoomStructureGroup) -> some View {
+        Section {
             ForEach(structure.floors) { floor in
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Label(floor.title, systemImage: "square.stack.3d.up")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(InventoryTheme.accent)
-                        Spacer()
-                        if let index = floor.index {
-                            Text("Index \(index)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    ForEach(Array(floor.scans.enumerated()), id: \.element.id) { index, scan in
-                        if index > 0 { Divider() }
+                DisclosureGroup {
+                    ForEach(floor.scans) { scan in
                         roomRow(scan)
                     }
+                } label: {
+                    Label {
+                        HStack {
+                            Text(floor.title)
+                            Spacer()
+                            Text("\(floor.scans.count)")
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "square.stack.3d.up")
+                    }
                 }
-                .padding(12)
-                .background(
-                    InventoryTheme.canvas,
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
             }
 
-            Button {
+            Button("Raum oder Etage hinzufügen", systemImage: "plus") {
                 guard let seed = structure.appendSeed else { return }
                 presentation = RoomScanPresentation(mode: .appendToStructure(seed))
-            } label: {
-                Label("Raum/Etage hinzufügen", systemImage: "plus.square.on.square")
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
-            .tint(InventoryTheme.accent)
             .disabled(structure.appendSeed == nil || !RoomCaptureSession.isSupported)
-        }
-        .padding(16)
-        .background(.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(.black.opacity(0.06), lineWidth: 1)
+        } header: {
+            Label(structure.structureName, systemImage: "building.2")
+        } footer: {
+            Text(
+                "\(structure.roomCount) Räume auf \(structure.floors.count) " +
+                    (structure.floors.count == 1 ? "Etage" : "Etagen")
+            )
         }
     }
 
     private func roomRow(_ scan: SpatialRoomScanSummary) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            NavigationLink {
-                SpatialRoomSceneView(scan: scan)
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "cube.transparent.fill")
-                        .foregroundStyle(InventoryTheme.accent)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            InventoryTheme.accent.opacity(0.1),
-                            in: RoundedRectangle(cornerRadius: 9)
-                        )
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(scan.roomName)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(InventoryTheme.ink)
-                        Text(
-                            "Revision \(scan.revision) · \(scan.placementCount) Gegenstände"
-                        )
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.bold())
-                        .foregroundStyle(.tertiary)
+        NavigationLink {
+            SpatialRoomSceneView(scan: scan)
+        } label: {
+            Label {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(scan.roomName)
+                    Text(
+                        "Revision \(scan.revision) · \(scan.placementCount) Gegenstände · " +
+                            scan.capturedAt.formatted(date: .abbreviated, time: .omitted)
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
+            } icon: {
+                Image(systemName: "cube.transparent")
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-
-            HStack {
-                Label(
-                    scan.capturedAt.formatted(date: .abbreviated, time: .shortened),
-                    systemImage: "clock"
-                )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    presentation = RoomScanPresentation(mode: .replaceRoom(scan))
-                } label: {
-                    Label("Neu scannen", systemImage: "viewfinder")
-                }
-                .font(.caption.weight(.semibold))
-                .disabled(!RoomCaptureSession.isSupported)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button("Neu scannen", systemImage: "viewfinder") {
+                presentation = RoomScanPresentation(mode: .replaceRoom(scan))
             }
+            .disabled(!RoomCaptureSession.isSupported)
         }
     }
 
@@ -480,6 +399,7 @@ private struct RoomScanFlowView: View {
     @State private var georeferenceEnabled: Bool
     @State private var entryMarkerCode = ""
     @State private var waitsForGeoreferencedStart = false
+    @State private var georeferenceStartTask: Task<Void, Never>?
 
     init(mode: SpatialRoomScanMode, onSaved: @escaping () -> Void) {
         self.mode = mode
@@ -564,6 +484,7 @@ private struct RoomScanFlowView: View {
                 Text(errorMessage ?? "Unbekannter Fehler")
             }
             .onDisappear {
+                georeferenceStartTask?.cancel()
                 locationService.stopGeoreferenceCapture()
             }
             .task {
@@ -573,12 +494,11 @@ private struct RoomScanFlowView: View {
             }
             .onChange(of: georeferenceObservation) { _, observation in
                 guard waitsForGeoreferencedStart, observation != nil else { return }
-                waitsForGeoreferencedStart = false
-                phase = .scanning
+                beginScanning()
             }
             .onChange(of: locationService.errorMessage) { _, message in
                 if waitsForGeoreferencedStart, message != nil {
-                    waitsForGeoreferencedStart = false
+                    beginScanningWithoutGeoreference()
                 }
             }
         }
@@ -663,105 +583,98 @@ private struct RoomScanFlowView: View {
     }
 
     private var details: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 7) {
-                    Label(detailsHeading, systemImage: detailsSystemImage)
-                        .font(.title2.bold())
-                        .foregroundStyle(InventoryTheme.ink)
-                    Text(detailsExplanation)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+        Form {
+            Section {
+                Label(detailsHeading, systemImage: detailsSystemImage)
+                    .font(.headline)
+                Text(detailsExplanation)
+                    .foregroundStyle(.secondary)
+            }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Gebäude und Etage")
-                        .font(.headline)
-                    if case .newStructure = mode {
-                        TextField("Gebäudename", text: $structureName)
-                            .textInputAutocapitalization(.words)
-                    } else {
-                        LabeledContent("Struktur", value: structureName)
+            Section("Gebäude und Etage") {
+                if case .newStructure = mode {
+                    TextField("Gebäudename", text: $structureName)
+                        .textInputAutocapitalization(.words)
+                } else {
+                    LabeledContent("Struktur", value: structureName)
+                }
+                if case .replaceRoom = mode {
+                    LabeledContent("Etage", value: floorIdentifier)
+                    LabeledContent("Etagenindex", value: String(floorIndex))
+                } else {
+                    TextField("Etage, z. B. EG", text: $floorIdentifier)
+                    Stepper(
+                        "Etagenindex: \(floorIndex)",
+                        value: $floorIndex,
+                        in: -20 ... 200
+                    )
+                }
+            }
+
+            Section(mode.supportsMultipleRooms ? "Erster Raum" : "Zu ersetzender Raum") {
+                if case .replaceRoom = mode {
+                    LabeledContent("Raum", value: roomName)
+                } else {
+                    TextField("Raumname, z. B. Werkstatt", text: $roomName)
+                        .textInputAutocapitalization(.words)
+                }
+            }
+
+            Section {
+                Toggle("Auf der Karte verankern", isOn: $georeferenceEnabled)
+                    .onChange(of: georeferenceEnabled) { _, enabled in
+                        if enabled {
+                            locationService.requestCurrentGeoreference()
+                        } else {
+                            georeferenceStartTask?.cancel()
+                            georeferenceStartTask = nil
+                            waitsForGeoreferencedStart = false
+                            locationService.stopGeoreferenceCapture()
+                        }
                     }
-                    if case .replaceRoom = mode {
-                        LabeledContent("Etage", value: floorIdentifier)
-                        LabeledContent("Etagenindex", value: String(floorIndex))
-                    } else {
-                        TextField("Etage, z. B. EG", text: $floorIdentifier)
-                        Stepper(
-                            "Etagenindex: \(floorIndex)",
-                            value: $floorIndex,
-                            in: -20 ... 200
+                if georeferenceEnabled {
+                    TextField("Eingangs- oder QR-Marker (optional)", text: $entryMarkerCode)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if let coordinates = locationService.coordinates,
+                       let heading = locationService.heading {
+                        Label(
+                            "GPS ±\(Int(coordinates.accuracy.rounded())) m · Nord ±\(Int(heading.accuracy.rounded()))°",
+                            systemImage: "location.north.fill"
                         )
-                    }
-                }
-                .roomScanCard()
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(mode.supportsMultipleRooms ? "Erster Raum" : "Zu ersetzender Raum")
-                        .font(.headline)
-                    if case .replaceRoom = mode {
-                        LabeledContent("Raum", value: roomName)
-                    } else {
-                        TextField("Zum Beispiel Werkstatt", text: $roomName)
-                            .textInputAutocapitalization(.words)
-                    }
-                }
-                .roomScanCard()
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle("Gebäude auf der Karte verankern", isOn: $georeferenceEnabled)
-                        .font(.headline)
-                        .onChange(of: georeferenceEnabled) { _, enabled in
-                            if enabled {
-                                locationService.requestCurrentGeoreference()
-                            } else {
-                                waitsForGeoreferencedStart = false
-                                locationService.stopGeoreferenceCapture()
-                            }
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                    } else if locationService.isRequesting || locationService.isRequestingHeading {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Standort und Richtung werden vorbereitet …")
                         }
-                    if georeferenceEnabled {
-                        Text("Beim Scanstart werden GPS-Position und Nordausrichtung einmal für die gesamte Struktur erfasst.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    if let locationError = locationService.errorMessage {
+                        Label(locationError, systemImage: "exclamationmark.triangle")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
-                        TextField("Eingangs-/QR-Marker (optional)", text: $entryMarkerCode)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        if let coordinates = locationService.coordinates,
-                           let heading = locationService.heading {
-                            Label(
-                                "GPS ±\(Int(coordinates.accuracy.rounded())) m · Nord ±\(Int(heading.accuracy.rounded()))°",
-                                systemImage: "location.north.fill"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(InventoryTheme.success)
-                        } else if locationService.isRequesting || locationService.isRequestingHeading {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                Text("Standort und Richtung werden vorbereitet …")
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        }
-                        if let locationError = locationService.errorMessage {
-                            Label(locationError, systemImage: "exclamationmark.triangle.fill")
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                            Button("Erneut versuchen") {
-                                locationService.requestCurrentGeoreference()
-                            }
-                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.red)
+                        Button("Erneut versuchen") {
+                            locationService.requestCurrentGeoreference()
                         }
                     }
                 }
-                .roomScanCard()
+            } header: {
+                Text("Position")
+            } footer: {
+                if georeferenceEnabled {
+                    Text("GPS-Position und Nordausrichtung werden beim Scanstart erfasst.")
+                }
+            }
 
+            Section {
                 Button {
                     if georeferenceEnabled {
-                        waitsForGeoreferencedStart = true
-                        locationService.requestCurrentGeoreference()
+                        startScanningWithOptionalGeoreference()
                     } else {
-                        phase = .scanning
+                        beginScanning()
                     }
                 } label: {
                     if waitsForGeoreferencedStart {
@@ -770,20 +683,15 @@ private struct RoomScanFlowView: View {
                             Text("Standort wird erfasst …")
                         }
                         .frame(maxWidth: .infinity)
-                        .frame(minHeight: 50)
                     } else {
                         Label(scanStartTitle, systemImage: "viewfinder")
                             .frame(maxWidth: .infinity)
-                            .frame(minHeight: 50)
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(InventoryTheme.accent)
                 .disabled(!detailsAreValid || waitsForGeoreferencedStart)
             }
-            .padding(24)
         }
-        .background(InventoryTheme.canvas)
     }
 
     private var scanner: some View {
@@ -869,18 +777,17 @@ private struct RoomScanFlowView: View {
                                 .frame(minHeight: 48)
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(InventoryTheme.accent)
                         .disabled(roomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                     .padding(16)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
                     } else if phase == .processing || phase == .finalizing {
                         HStack(spacing: 9) {
-                            ProgressView().tint(InventoryTheme.ink)
+                            ProgressView()
                             Text(phase == .finalizing ? "Struktur wird aufgebaut" : "Raum wird verarbeitet")
                         }
                         .font(.headline)
-                        .foregroundStyle(InventoryTheme.ink)
+                        .foregroundStyle(.primary)
                         .padding(.horizontal, 22)
                         .frame(minHeight: 52)
                         .background(.white.opacity(0.9), in: Capsule())
@@ -904,8 +811,6 @@ private struct RoomScanFlowView: View {
                                     .frame(minHeight: 50)
                             }
                             .buttonStyle(.borderedProminent)
-                            .tint(InventoryTheme.lime)
-                            .foregroundStyle(InventoryTheme.ink)
                         }
                     } else {
                         Button {
@@ -916,8 +821,6 @@ private struct RoomScanFlowView: View {
                                 .frame(minHeight: 50)
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(InventoryTheme.lime)
-                        .foregroundStyle(InventoryTheme.ink)
                     }
                 }
                 .padding(.bottom, 24)
@@ -936,10 +839,9 @@ private struct RoomScanFlowView: View {
             Spacer()
             Image(systemName: icon)
                 .font(.system(size: 48, weight: .semibold))
-                .foregroundStyle(progress ? InventoryTheme.accent : InventoryTheme.success)
+                .foregroundStyle(progress ? Color.accentColor : .green)
             Text(title)
                 .font(.title2.bold())
-                .foregroundStyle(InventoryTheme.ink)
             Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -950,13 +852,11 @@ private struct RoomScanFlowView: View {
             } else {
                 Button("Fertig") { onSaved() }
                     .buttonStyle(.borderedProminent)
-                    .tint(InventoryTheme.accent)
                     .padding(.top, 8)
             }
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(InventoryTheme.canvas)
     }
 
     @MainActor
@@ -1016,6 +916,8 @@ private struct RoomScanFlowView: View {
     private func discardAndDismiss() {
         uploadTask?.cancel()
         uploadTask = nil
+        georeferenceStartTask?.cancel()
+        georeferenceStartTask = nil
         drafts.forEach { $0.removeLocalArtifacts() }
         drafts.removeAll()
         locationService.stopGeoreferenceCapture()
@@ -1061,6 +963,44 @@ private struct RoomScanFlowView: View {
         return value.isEmpty ? nil : String(value.prefix(240))
     }
 
+    @MainActor
+    private func startScanningWithOptionalGeoreference() {
+        if let observation = georeferenceObservation,
+           abs(observation.capturedAt.timeIntervalSinceNow) <= 2.5 {
+            beginScanning()
+            return
+        }
+
+        waitsForGeoreferencedStart = true
+        locationService.requestCurrentGeoreference()
+        guard locationService.errorMessage == nil else {
+            beginScanningWithoutGeoreference()
+            return
+        }
+
+        georeferenceStartTask?.cancel()
+        georeferenceStartTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(8))
+            guard !Task.isCancelled, waitsForGeoreferencedStart else { return }
+            beginScanningWithoutGeoreference()
+        }
+    }
+
+    @MainActor
+    private func beginScanning() {
+        georeferenceStartTask?.cancel()
+        georeferenceStartTask = nil
+        waitsForGeoreferencedStart = false
+        locationService.stopGeoreferenceCapture()
+        phase = .scanning
+    }
+
+    @MainActor
+    private func beginScanningWithoutGeoreference() {
+        georeferenceEnabled = false
+        beginScanning()
+    }
+
     private var detailsAreValid: Bool {
         !structureName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
             !floorIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -1092,16 +1032,5 @@ private struct RoomScanFlowView: View {
         if georeferenceEnabled {
             locationService.requestCurrentGeoreference()
         }
-    }
-}
-
-private extension View {
-    func roomScanCard() -> some View {
-        padding(16)
-            .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(.black.opacity(0.07), lineWidth: 1)
-            }
     }
 }

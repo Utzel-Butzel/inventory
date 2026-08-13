@@ -2,12 +2,10 @@ import SwiftUI
 
 struct InventoryListView: View {
     @EnvironmentObject private var state: AppState
-    @Binding private var searchRequested: Bool
+    @Binding private var query: String
     private let onCapture: () -> Void
     private let onScan: () -> Void
     @State private var resources: [InventoryResource] = []
-    @State private var query = ""
-    @State private var searchPresented = false
     @State private var typeFilter: InventoryResourceType?
     @State private var statusFilter: InventoryResourceStatus?
     @State private var page = 1
@@ -17,13 +15,16 @@ struct InventoryListView: View {
     @State private var loadingMore = false
     @State private var errorMessage: String?
     @State private var showNewResource = false
+    @State private var resourcePendingDeletion: InventoryResource?
+    @State private var deletingResourceID: UUID?
+    @State private var deletionErrorMessage: String?
 
     init(
-        searchRequested: Binding<Bool> = .constant(false),
+        query: Binding<String>,
         onCapture: @escaping () -> Void = {},
         onScan: @escaping () -> Void = {}
     ) {
-        _searchRequested = searchRequested
+        _query = query
         self.onCapture = onCapture
         self.onScan = onScan
     }
@@ -35,47 +36,52 @@ struct InventoryListView: View {
                     ProgressView("Inventar wird geladen …")
                 } else if resources.isEmpty {
                     ContentUnavailableView {
-                        Label("Keine Einträge", systemImage: "shippingbox")
+                        Label(
+                            hasActiveSearchOrFilters ? "Keine Ergebnisse" : "Keine Einträge",
+                            systemImage: hasActiveSearchOrFilters ? "magnifyingglass" : "shippingbox"
+                        )
                     } description: {
-                        EmptyView()
+                        if hasActiveSearchOrFilters {
+                            Text("Ändere die Suche oder die ausgewählten Filter.")
+                        }
                     } actions: {
-                        Button("Neuer Eintrag") { showNewResource = true }
-                            .buttonStyle(.borderedProminent)
+                        if hasActiveSearchOrFilters {
+                            Button("Suche und Filter zurücksetzen") { resetSearchAndFilters() }
+                        } else {
+                            Button("Neuer Eintrag") { showNewResource = true }
+                                .buttonStyle(.borderedProminent)
+                        }
                     }
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 11) {
+                    List {
+                        Section {
                             ForEach(resources) { resource in
-                                NavigationLink {
-                                    ResourceDetailView(resource: resource)
-                                } label: {
-                                    resourceRow(resource)
-                                }
-                                .buttonStyle(.plain)
-                                .onAppear {
-                                    if resource.id == resources.last?.id { loadNextPage() }
+                                inventoryListRow(resource)
+                            }
+                            if loadingMore {
+                                HStack {
+                                    Spacer()
+                                    ProgressView()
+                                    Spacer()
                                 }
                             }
-                            if loadingMore { ProgressView().padding() }
+                        } footer: {
+                            Text(resultCountLabel)
                         }
-                        .padding(16)
                     }
+                    .listStyle(.plain)
                     .refreshable { await load(reset: true) }
                 }
             }
-            .background(InventoryTheme.canvas)
             .navigationTitle("Inventar")
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(
-                text: $query,
-                isPresented: $searchPresented,
-                prompt: "Name, SKU, Tag oder Ort"
-            )
-            .safeAreaInset(edge: .top, spacing: 0) { filterBar }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    filterMenu
+                }
+
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button(action: onCapture) {
-                        Image(systemName: "camera.fill")
+                        Image(systemName: "camera")
                     }
                     .accessibilityLabel("Erfassen")
 
@@ -89,11 +95,6 @@ struct InventoryListView: View {
                     }
                     .accessibilityLabel("Neuer Eintrag")
                 }
-            }
-            .onChange(of: searchRequested) { _, requested in
-                guard requested else { return }
-                searchPresented = true
-                searchRequested = false
             }
             .task(id: searchKey) {
                 if !query.isEmpty {
@@ -121,77 +122,119 @@ struct InventoryListView: View {
             } message: {
                 Text(errorMessage ?? "Unbekannter Fehler")
             }
+            .confirmationDialog(
+                "Eintrag löschen?",
+                isPresented: deletionConfirmationIsPresented,
+                titleVisibility: .visible,
+                presenting: resourcePendingDeletion
+            ) { resource in
+                Button("„\(resource.name)“ endgültig löschen", role: .destructive) {
+                    Task { await delete(resource) }
+                }
+                Button("Abbrechen", role: .cancel) { }
+            } message: { _ in
+                Text("Diese Aktion kann nicht rückgängig gemacht werden.")
+            }
+            .alert(
+                "Eintrag konnte nicht gelöscht werden",
+                isPresented: Binding(
+                    get: { deletionErrorMessage != nil },
+                    set: { if !$0 { deletionErrorMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) { deletionErrorMessage = nil }
+            } message: {
+                Text(deletionErrorMessage ?? "Unbekannter Fehler")
+            }
         }
     }
 
-    private var filterBar: some View {
-        HStack(spacing: 8) {
-            Menu {
-                Button("Alle Typen") { typeFilter = nil }
+    private var deletionConfirmationIsPresented: Binding<Bool> {
+        Binding(
+            get: { resourcePendingDeletion != nil },
+            set: { if !$0 { resourcePendingDeletion = nil } }
+        )
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            Picker("Typ", selection: $typeFilter) {
+                Text("Alle Typen").tag(nil as InventoryResourceType?)
                 ForEach(selectableTypeFilters, id: \.self) { type in
-                    Button(type.localizedName) { typeFilter = type }
+                    Text(type.localizedName).tag(type as InventoryResourceType?)
                 }
-            } label: {
-                filterPill(typeFilter?.localizedName ?? "Alle Typen", active: typeFilter != nil)
             }
 
-            Menu {
-                Button("Alle Status") { statusFilter = nil }
+            Picker("Status", selection: $statusFilter) {
+                Text("Alle Status").tag(nil as InventoryResourceStatus?)
                 ForEach(InventoryResourceStatus.allCases, id: \.self) { status in
-                    Button(status.localizedName) { statusFilter = status }
+                    Text(status.localizedName).tag(status as InventoryResourceStatus?)
                 }
-            } label: {
-                filterPill(statusFilter?.localizedName ?? "Alle Status", active: statusFilter != nil)
             }
 
-            Spacer()
-            Text("\(total)")
-                .font(.caption.monospacedDigit().weight(.semibold))
-                .foregroundStyle(.secondary)
+            if hasActiveFilters {
+                Divider()
+                Button("Filter zurücksetzen", systemImage: "xmark.circle") {
+                    typeFilter = nil
+                    statusFilter = nil
+                }
+            }
+        } label: {
+            Image(
+                systemName: hasActiveFilters
+                    ? "line.3.horizontal.decrease.circle.fill"
+                    : "line.3.horizontal.decrease.circle"
+            )
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 9)
-        .background(.ultraThinMaterial)
+        .accessibilityLabel("Filter")
+        .accessibilityValue(filterAccessibilityValue)
     }
 
-    private func filterPill(_ label: String, active: Bool) -> some View {
-        HStack(spacing: 5) {
-            Text(label)
-            Image(systemName: "chevron.down").font(.caption2.bold())
+    private func inventoryListRow(_ resource: InventoryResource) -> some View {
+        NavigationLink {
+            ResourceDetailView(resource: resource)
+        } label: {
+            resourceRow(resource)
         }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(active ? InventoryTheme.ink : .secondary)
-        .padding(.horizontal, 11)
-        .padding(.vertical, 7)
-        .background(active ? InventoryTheme.lime.opacity(0.65) : Color.secondary.opacity(0.1), in: Capsule())
+        .onAppear {
+            if resource.id == resources.last?.id { loadNextPage() }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                resourcePendingDeletion = resource
+            } label: {
+                Label("Löschen", systemImage: "trash")
+            }
+            .disabled(deletingResourceID != nil)
+        }
     }
 
     private func resourceRow(_ resource: InventoryResource) -> some View {
-        HStack(spacing: 13) {
+        HStack(spacing: 12) {
             Group {
                 if let cover = resource.cover, let client = state.client {
                     AuthenticatedInventoryImage(media: cover, client: client)
                 } else {
                     Image(systemName: resource.type.symbolName)
                         .font(.title2)
-                        .foregroundStyle(InventoryTheme.ink.opacity(0.5))
+                        .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(InventoryTheme.accent.opacity(0.12))
+                        .background(.quaternary)
                 }
             }
-            .frame(width: 76, height: 76)
-            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .frame(width: 60, height: 60)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(resource.name).font(.headline).lineLimit(2)
-                HStack(spacing: 7) {
+                HStack(spacing: 5) {
                     Text(resource.type.localizedName)
                     if let location = resource.location, !location.isEmpty {
                         Text("·")
-                        Label(location, systemImage: "mappin").labelStyle(.titleOnly)
+                        Text(location)
                     }
                 }
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 HStack {
                     Text(resource.status.localizedName)
@@ -201,10 +244,33 @@ struct InventoryListView: View {
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
             }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.tertiary)
         }
-        .inventoryCard()
+        .padding(.vertical, 3)
+    }
+
+    private var hasActiveFilters: Bool {
+        typeFilter != nil || statusFilter != nil
+    }
+
+    private var hasActiveSearchOrFilters: Bool {
+        !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasActiveFilters
+    }
+
+    private var filterAccessibilityValue: String {
+        guard hasActiveFilters else { return "Keine Filter aktiv" }
+        return [typeFilter?.localizedName, statusFilter?.localizedName]
+            .compactMap { $0 }
+            .joined(separator: ", ")
+    }
+
+    private var resultCountLabel: String {
+        total == 1 ? "1 Eintrag" : "\(total) Einträge"
+    }
+
+    private func resetSearchAndFilters() {
+        query = ""
+        typeFilter = nil
+        statusFilter = nil
     }
 
     private var searchKey: SearchKey {
@@ -255,6 +321,25 @@ struct InventoryListView: View {
         loadingMore = true
         page += 1
         Task { await load(reset: false) }
+    }
+
+    private func delete(_ resource: InventoryResource) async {
+        guard let client = state.client, deletingResourceID == nil else { return }
+        deletingResourceID = resource.id
+        defer { deletingResourceID = nil }
+
+        do {
+            try await client.deleteResource(id: resource.id)
+            withAnimation {
+                resources.removeAll { $0.id == resource.id }
+            }
+            total = max(0, total - 1)
+            pages = max(1, (total + 39) / 40)
+            page = min(page, pages)
+            deletionErrorMessage = nil
+        } catch {
+            deletionErrorMessage = error.localizedDescription
+        }
     }
 }
 

@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useT } from "next-i18next/client";
 
 import {
   ImageModelSelector,
@@ -65,13 +66,7 @@ type ExpiryOption = "never" | "30-days" | "90-days" | "custom";
 
 const scopeOptions: Array<{
   value: ApiScope;
-  label: string;
-  description: string;
-}> = [
-  { value: "read", label: "Read", description: "View resources and media" },
-  { value: "write", label: "Write", description: "Create, edit, and merge" },
-  { value: "ai", label: "AI", description: "Run analysis and generation" },
-];
+}> = [{ value: "read" }, { value: "write" }, { value: "ai" }];
 
 function getErrorMessage(payload: unknown, fallback: string) {
   if (
@@ -85,38 +80,52 @@ function getErrorMessage(payload: unknown, fallback: string) {
   return fallback;
 }
 
-function formatDate(value: string | null | undefined, empty = "Never") {
+function formatDate(
+  value: string | null | undefined,
+  empty: string,
+  locale?: string,
+) {
   if (!value) return empty;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return empty;
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
 }
 
-function StatusPill({ ready, label }: { ready: boolean; label?: string }) {
+function StatusPill({
+  ready,
+  label,
+  readyLabel,
+  notConfiguredLabel,
+}: {
+  ready: boolean;
+  label?: string;
+  readyLabel: string;
+  notConfiguredLabel: string;
+}) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
         ready
-          ? "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200"
-          : "bg-zinc-100 text-zinc-600 ring-1 ring-inset ring-zinc-200"
+          ? "bg-success-soft text-success ring-1 ring-inset ring-success-border"
+          : "bg-surface-muted text-muted ring-1 ring-inset ring-border"
       }`}
     >
       {ready ? <CircleCheck className="size-3.5" /> : <CircleX className="size-3.5" />}
-      {label ?? (ready ? "Ready" : "Not configured")}
+      {label ?? (ready ? readyLabel : notConfiguredLabel)}
     </span>
   );
 }
 
-function LoadingBlock() {
+function LoadingBlock({ label }: { label: string }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Loading runtime configuration">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label={label}>
       {Array.from({ length: 4 }, (_, index) => (
         <div
           key={index}
-          className="h-36 animate-pulse rounded-2xl border border-zinc-200/80 bg-zinc-50"
+          className="h-36 animate-pulse rounded-2xl border border-border/80 bg-surface-subtle"
         />
       ))}
     </div>
@@ -124,6 +133,8 @@ function LoadingBlock() {
 }
 
 export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
+  const { t, i18n } = useT("settings");
+  const locale = i18n.resolvedLanguage ?? i18n.language;
   const imageModelPreference = useImageModelPreference();
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
   const [tokens, setTokens] = useState<ApiToken[]>([]);
@@ -156,7 +167,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
 
       if (!statusResponse.ok) {
         throw new Error(
-          getErrorMessage(statusPayload, "Could not load runtime configuration."),
+          getErrorMessage(statusPayload, t("api.errors.loadRuntime")),
         );
       }
       setRuntime(statusPayload as RuntimeStatus);
@@ -164,7 +175,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
         const tokenResponse = await fetch("/api/tokens", { cache: "no-store" });
         const tokenPayload = await tokenResponse.json().catch(() => null);
         if (!tokenResponse.ok) {
-          throw new Error(getErrorMessage(tokenPayload, "Could not load API tokens."));
+          throw new Error(getErrorMessage(tokenPayload, t("api.errors.loadTokens")));
         }
         setTokens(
           Array.isArray((tokenPayload as { tokens?: unknown })?.tokens)
@@ -175,12 +186,12 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
         setTokens([]);
       }
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Could not load settings.");
+      setLoadError(error instanceof Error ? error.message : t("api.errors.loadSettings"));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, t]);
 
   useEffect(() => {
     void load();
@@ -220,15 +231,15 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
     setFormError(null);
 
     if (!name.trim()) {
-      setFormError("Give this token a name so it is easy to recognize later.");
+      setFormError(t("api.errors.nameRequired"));
       return;
     }
     if (expiry === "custom" && !expiresAt) {
-      setFormError("Choose a valid expiration date and time.");
+      setFormError(t("api.errors.expiryInvalid"));
       return;
     }
     if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) {
-      setFormError("Expiration must be in the future.");
+      setFormError(t("api.errors.expiryFuture"));
       return;
     }
 
@@ -241,7 +252,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(getErrorMessage(payload, "Could not create the token."));
+        throw new Error(getErrorMessage(payload, t("api.errors.create")));
       }
 
       const result = payload as CreatedToken;
@@ -254,7 +265,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
       setFormOpen(false);
       setCopied(null);
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Could not create the token.");
+      setFormError(error instanceof Error ? error.message : t("api.errors.create"));
     } finally {
       setCreating(false);
     }
@@ -266,7 +277,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
       setCopied(target);
       window.setTimeout(() => setCopied((current) => (current === target ? null : current)), 2_000);
     } catch {
-      setActionError("Clipboard access was blocked. Select and copy the text manually.");
+      setActionError(t("api.errors.clipboard"));
     }
   }
 
@@ -279,12 +290,12 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
-        throw new Error(getErrorMessage(payload, "Could not revoke the token."));
+        throw new Error(getErrorMessage(payload, t("api.errors.revoke")));
       }
       setTokens((current) => current.filter((token) => token.id !== id));
       setConfirmRevoke(null);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Could not revoke the token.");
+      setActionError(error instanceof Error ? error.message : t("api.errors.revoke"));
     } finally {
       setRevoking(null);
     }
@@ -295,96 +306,114 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
       <section aria-labelledby="runtime-heading">
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
-            <h2 id="runtime-heading" className="text-base font-semibold text-zinc-950">
-              Runtime configuration
+            <h2 id="runtime-heading" className="text-base font-semibold text-foreground">
+              {t("api.runtime.title")}
             </h2>
-            <p className="mt-1 text-sm text-zinc-600">
-              A live view of services enabled by this deployment&apos;s environment.
+            <p className="mt-1 text-sm text-muted">
+              {t("api.runtime.description")}
             </p>
           </div>
           <button
             type="button"
             onClick={() => void load(true)}
             disabled={loading || refreshing}
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-zinc-300 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Refresh settings"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted shadow-sm transition hover:border-border-strong hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={t("api.runtime.refresh")}
           >
             <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
           </button>
         </div>
 
         {loading ? (
-          <LoadingBlock />
+          <LoadingBlock label={t("api.runtime.loading")} />
         ) : loadError && !runtime ? (
-          <div className="flex items-start justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          <div className="flex items-start justify-between gap-4 rounded-2xl border border-danger-border bg-danger-soft p-4 text-sm text-danger">
             <div className="flex gap-3">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <div>
-                <p className="font-medium">Settings could not be loaded</p>
-                <p className="mt-1 text-rose-700">{loadError}</p>
+                <p className="font-medium">{t("api.runtime.loadTitle")}</p>
+                <p className="mt-1 text-danger">{loadError}</p>
               </div>
             </div>
             <button type="button" onClick={() => void load()} className="font-semibold hover:underline">
-              Retry
+              {t("common:actions.retry")}
             </button>
           </div>
         ) : runtime ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="group rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition hover:border-zinc-300 hover:shadow-sm">
+            <div className="group rounded-2xl border border-border/80 bg-surface p-4 shadow-[var(--shadow-sm)] transition hover:border-border-strong hover:shadow-sm">
               <div className="flex items-start justify-between gap-3">
-                <span className="grid size-10 place-items-center rounded-xl bg-blue-50 text-blue-600">
+                <span className="grid size-10 place-items-center rounded-xl bg-info-soft text-info">
                   {runtime.storage.provider === "local" ? <HardDrive className="size-5" /> : <Cloud className="size-5" />}
                 </span>
-                <StatusPill ready={runtime.storage.configured} />
+                <StatusPill
+                  ready={runtime.storage.configured}
+                  readyLabel={t("api.runtime.ready")}
+                  notConfiguredLabel={t("api.runtime.notConfigured")}
+                />
               </div>
-              <p className="mt-5 text-sm font-semibold text-zinc-900">File storage</p>
-              <p className="mt-1 text-sm capitalize text-zinc-600">{runtime.storage.provider} provider</p>
+              <p className="mt-5 text-sm font-semibold text-foreground">{t("api.runtime.fileStorage")}</p>
+              <p className="mt-1 text-sm capitalize text-muted">
+                {t("api.runtime.provider", { provider: runtime.storage.provider })}
+              </p>
             </div>
 
-            <div className="group rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition hover:border-zinc-300 hover:shadow-sm">
+            <div className="group rounded-2xl border border-border/80 bg-surface p-4 shadow-[var(--shadow-sm)] transition hover:border-border-strong hover:shadow-sm">
               <div className="flex items-start justify-between gap-3">
-                <span className="grid size-10 place-items-center rounded-xl bg-violet-50 text-violet-600">
+                <span className="grid size-10 place-items-center rounded-xl bg-brand-soft text-brand">
                   <Sparkles className="size-5" />
                 </span>
-                <StatusPill ready={runtime.ai.analysis} />
+                <StatusPill
+                  ready={runtime.ai.analysis}
+                  readyLabel={t("api.runtime.ready")}
+                  notConfiguredLabel={t("api.runtime.notConfigured")}
+                />
               </div>
-              <p className="mt-5 text-sm font-semibold text-zinc-900">AI analysis</p>
-              <p className="mt-1 text-sm text-zinc-600">Metadata and batch enrichment</p>
+              <p className="mt-5 text-sm font-semibold text-foreground">{t("api.runtime.aiAnalysis")}</p>
+              <p className="mt-1 text-sm text-muted">{t("api.runtime.aiAnalysisDescription")}</p>
             </div>
 
-            <div className="group rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition hover:border-zinc-300 hover:shadow-sm">
+            <div className="group rounded-2xl border border-border/80 bg-surface p-4 shadow-[var(--shadow-sm)] transition hover:border-border-strong hover:shadow-sm">
               <div className="flex items-start justify-between gap-3">
-                <span className="grid size-10 place-items-center rounded-xl bg-fuchsia-50 text-fuchsia-600">
+                <span className="grid size-10 place-items-center rounded-xl bg-brand-soft text-brand">
                   <Database className="size-5" />
                 </span>
-                <StatusPill ready={runtime.ai.imageGeneration} />
+                <StatusPill
+                  ready={runtime.ai.imageGeneration}
+                  readyLabel={t("api.runtime.ready")}
+                  notConfiguredLabel={t("api.runtime.notConfigured")}
+                />
               </div>
-              <p className="mt-5 text-sm font-semibold text-zinc-900">Image generation</p>
-              <p className="mt-1 text-sm capitalize text-zinc-600">
-                {imageModelPreference.selectedModel?.provider ?? runtime.ai.imageProvider} provider
+              <p className="mt-5 text-sm font-semibold text-foreground">{t("api.runtime.imageGeneration")}</p>
+              <p className="mt-1 text-sm capitalize text-muted">
+                {t("api.runtime.provider", {
+                  provider: imageModelPreference.selectedModel?.provider ?? runtime.ai.imageProvider,
+                })}
               </p>
               <ImageModelSelector
                 preference={imageModelPreference}
-                description="Used for covers created in this browser."
-                className="mt-4 border-t border-zinc-100 pt-3"
+                description={t("api.runtime.imageModelDescription")}
+                className="mt-4 border-t border-border pt-3"
               />
             </div>
 
-            <div className="group rounded-2xl border border-zinc-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition hover:border-zinc-300 hover:shadow-sm">
+            <div className="group rounded-2xl border border-border/80 bg-surface p-4 shadow-[var(--shadow-sm)] transition hover:border-border-strong hover:shadow-sm">
               <div className="flex items-start justify-between gap-3">
-                <span className="grid size-10 place-items-center rounded-xl bg-amber-50 text-amber-700">
+                <span className="grid size-10 place-items-center rounded-xl bg-warning-soft text-warning">
                   <ShieldCheck className="size-5" />
                 </span>
                 <StatusPill
                   ready={runtime.auth.password || runtime.auth.auth0}
-                  label={runtime.auth.auth0 ? "Auth0" : runtime.auth.password ? "Password" : undefined}
+                  label={runtime.auth.auth0 ? "Auth0" : runtime.auth.password ? t("api.runtime.password") : undefined}
+                  readyLabel={t("api.runtime.ready")}
+                  notConfiguredLabel={t("api.runtime.notConfigured")}
                 />
               </div>
-              <p className="mt-5 text-sm font-semibold text-zinc-900">Authentication</p>
-              <p className="mt-1 text-sm text-zinc-600">
+              <p className="mt-5 text-sm font-semibold text-foreground">{t("api.runtime.authentication")}</p>
+              <p className="mt-1 text-sm text-muted">
                 {runtime.auth.password && runtime.auth.auth0
-                  ? "Password and Auth0 enabled"
-                  : "Workspace sign-in provider"}
+                  ? t("api.runtime.bothAuth")
+                  : t("api.runtime.authDescription")}
               </p>
             </div>
           </div>
@@ -394,16 +423,16 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
       {isAdmin ? (
         <section
           aria-labelledby="api-access-heading"
-          className="overflow-hidden rounded-3xl border border-zinc-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)]"
+          className="overflow-hidden rounded-3xl border border-border/80 bg-surface shadow-[var(--shadow-md)]"
         >
-        <div className="flex flex-col gap-4 border-b border-zinc-200/80 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex flex-col gap-4 border-b border-border/80 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-zinc-950 text-white shadow-sm">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-strong text-on-strong shadow-sm">
               <KeyRound className="size-5" />
             </span>
             <div>
-              <h2 id="api-access-heading" className="font-semibold text-zinc-950">API access</h2>
-              <p className="mt-1 text-sm text-zinc-600">Scoped bearer tokens for scripts and integrations.</p>
+              <h2 id="api-access-heading" className="font-semibold text-foreground">{t("api.access.title")}</h2>
+              <p className="mt-1 text-sm text-muted">{t("api.access.description")}</p>
             </div>
           </div>
           <button
@@ -412,22 +441,22 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
               setFormOpen((current) => !current);
               setFormError(null);
             }}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-strong px-4 text-sm font-semibold text-on-strong shadow-sm transition hover:opacity-85 focus:outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2 focus:ring-offset-surface"
           >
             {formOpen ? <X className="size-4" /> : <Plus className="size-4" />}
-            {formOpen ? "Close" : "Create token"}
+            {formOpen ? t("api.access.close") : t("api.access.create")}
           </button>
         </div>
 
         {createdToken ? (
-          <div className="border-b border-amber-200 bg-amber-50/70 p-5 sm:p-6">
+          <div className="border-b border-warning-border bg-warning-soft/70 p-5 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex gap-3">
-                <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-700" />
+                <AlertTriangle className="mt-0.5 size-5 shrink-0 text-warning" />
                 <div>
-                  <h3 className="font-semibold text-amber-950">Save your token now</h3>
-                  <p className="mt-1 max-w-2xl text-sm leading-6 text-amber-800">
-                    This secret is shown once and cannot be recovered. Store it in a password manager or secret vault before closing this panel.
+                  <h3 className="font-semibold text-warning">{t("api.access.saveNow")}</h3>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-warning">
+                    {t("api.access.saveNowDescription")}
                   </p>
                 </div>
               </div>
@@ -437,87 +466,87 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                   setCreatedToken(null);
                   setCopied(null);
                 }}
-                className="grid size-8 shrink-0 place-items-center rounded-lg text-amber-700 transition hover:bg-amber-100"
-                aria-label="Dismiss generated token"
+                className="grid size-8 shrink-0 place-items-center rounded-lg text-warning transition hover:bg-warning-soft"
+                aria-label={t("api.access.dismissGenerated")}
               >
                 <X className="size-4" />
               </button>
             </div>
 
-            <div className="mt-5 rounded-xl border border-amber-200 bg-white p-2 pl-3 shadow-sm">
+            <div className="mt-5 rounded-xl border border-warning-border bg-surface p-2 pl-3 shadow-sm">
               <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 select-all overflow-x-auto whitespace-nowrap font-mono text-xs text-zinc-800 sm:text-sm">
+                <code className="min-w-0 flex-1 select-all overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-strong sm:text-sm">
                   {createdToken.secret}
                 </code>
                 <button
                   type="button"
                   onClick={() => void copyText(createdToken.secret, "secret")}
-                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg bg-zinc-950 px-3 text-xs font-semibold text-white transition hover:bg-zinc-800"
+                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg bg-strong px-3 text-xs font-semibold text-on-strong transition hover:opacity-85"
                 >
                   {copied === "secret" ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                  {copied === "secret" ? "Copied" : "Copy"}
+                  {copied === "secret" ? t("api.access.copied") : t("api.access.copy")}
                 </button>
               </div>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 shadow-sm">
-              <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-                <span className="flex items-center gap-2 text-xs font-medium text-zinc-400">
+            <div className="mt-4 overflow-hidden rounded-xl border border-border-strong bg-strong shadow-sm">
+              <div className="flex items-center justify-between border-b border-on-strong/10 px-3 py-2">
+                <span className="flex items-center gap-2 text-xs font-medium text-on-strong/70">
                   <SquareTerminal className="size-3.5" />
-                  Quick test
+                  {t("api.access.quickTest")}
                 </span>
                 <button
                   type="button"
                   onClick={() => void copyText(curlExample, "curl")}
-                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-on-strong/70 transition hover:bg-on-strong/10 hover:text-on-strong"
                 >
                   {copied === "curl" ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                  {copied === "curl" ? "Copied" : "Copy curl"}
+                  {copied === "curl" ? t("api.access.copied") : t("api.access.copyCurl")}
                 </button>
               </div>
-              <pre className="overflow-x-auto p-4 text-xs leading-6 text-zinc-300"><code>{curlExample}</code></pre>
+              <pre className="overflow-x-auto p-4 text-xs leading-6 text-on-strong/75"><code>{curlExample}</code></pre>
             </div>
           </div>
         ) : null}
 
         {formOpen ? (
-          <form onSubmit={createToken} className="border-b border-zinc-200/80 bg-zinc-50/70 p-5 sm:p-6">
+          <form onSubmit={createToken} className="border-b border-border/80 bg-surface-subtle/70 p-5 sm:p-6">
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
               <div>
-                <label htmlFor="token-name" className="text-sm font-semibold text-zinc-900">Token name</label>
-                <p className="mt-1 text-xs text-zinc-600">Use a name that identifies the integration.</p>
+                <label htmlFor="token-name" className="text-sm font-semibold text-foreground">{t("api.access.name")}</label>
+                <p className="mt-1 text-xs text-muted">{t("api.access.nameDescription")}</p>
                 <input
                   id="token-name"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   maxLength={120}
-                  placeholder="Warehouse sync"
+                  placeholder={t("api.access.namePlaceholder")}
                   autoFocus
-                  className="mt-3 h-11 w-full rounded-xl border border-zinc-200 bg-white px-3.5 text-sm text-zinc-950 shadow-sm outline-none transition placeholder:text-zinc-600 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                  className="mt-3 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted focus:border-focus focus:ring-4 focus:ring-focus/10"
                 />
               </div>
 
               <fieldset>
-                <legend className="text-sm font-semibold text-zinc-900">Expiration</legend>
-                <p className="mt-1 text-xs text-zinc-600">Shorter-lived credentials reduce exposure.</p>
+                <legend className="text-sm font-semibold text-foreground">{t("api.access.expiration")}</legend>
+                <p className="mt-1 text-xs text-muted">{t("api.access.expirationDescription")}</p>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
                   {([
-                    ["never", "Never"],
-                    ["30-days", "30 days"],
-                    ["90-days", "90 days"],
-                    ["custom", "Custom"],
-                  ] as Array<[ExpiryOption, string]>).map(([value, label]) => (
+                    "never",
+                    "30-days",
+                    "90-days",
+                    "custom",
+                  ] as ExpiryOption[]).map((value) => (
                     <button
                       key={value}
                       type="button"
                       onClick={() => setExpiry(value)}
                       className={`h-10 rounded-xl border px-3 text-xs font-semibold transition ${
                         expiry === value
-                          ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
-                          : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900"
+                          ? "border-brand-solid bg-brand-solid text-on-brand shadow-sm"
+                          : "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground"
                       }`}
                     >
-                      {label}
+                      {t(`api.access.expiry.${value}`)}
                     </button>
                   ))}
                 </div>
@@ -527,15 +556,15 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                     value={customExpiry}
                     onChange={(event) => setCustomExpiry(event.target.value)}
                     min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
-                    className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-white px-3.5 text-sm text-zinc-950 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-                    aria-label="Custom expiration date"
+                    className="mt-2 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm text-foreground shadow-sm outline-none transition focus:border-focus focus:ring-4 focus:ring-focus/10"
+                    aria-label={t("api.access.customExpiration")}
                   />
                 ) : null}
               </fieldset>
             </div>
 
             <fieldset className="mt-6">
-              <legend className="text-sm font-semibold text-zinc-900">Scopes</legend>
+              <legend className="text-sm font-semibold text-foreground">{t("api.access.scopes")}</legend>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 {scopeOptions.map((scope) => {
                   const selected = scopes.includes(scope.value);
@@ -547,20 +576,20 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                       aria-pressed={selected}
                       className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${
                         selected
-                          ? "border-indigo-300 bg-indigo-50/70 ring-1 ring-inset ring-indigo-200"
-                          : "border-zinc-200 bg-white hover:border-zinc-300"
+                          ? "border-brand-border bg-brand-soft/70 ring-1 ring-inset ring-focus/10"
+                          : "border-border bg-surface hover:border-border-strong"
                       }`}
                     >
                       <span
                         className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border ${
-                          selected ? "border-indigo-600 bg-indigo-600 text-white" : "border-zinc-300 bg-white"
+                          selected ? "border-brand-solid bg-brand-solid text-on-brand" : "border-border-strong bg-surface"
                         }`}
                       >
                         {selected ? <Check className="size-3.5" /> : null}
                       </span>
                       <span>
-                        <span className="block text-sm font-semibold text-zinc-900">{scope.label}</span>
-                        <span className="mt-0.5 block text-xs leading-5 text-zinc-600">{scope.description}</span>
+                        <span className="block text-sm font-semibold text-foreground">{t(`api.access.scope.${scope.value}.label`)}</span>
+                        <span className="mt-0.5 block text-xs leading-5 text-muted">{t(`api.access.scope.${scope.value}.description`)}</span>
                       </span>
                     </button>
                   );
@@ -569,7 +598,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
             </fieldset>
 
             {formError ? (
-              <p className="mt-4 flex items-center gap-2 text-sm text-rose-700" role="alert">
+              <p className="mt-4 flex items-center gap-2 text-sm text-danger" role="alert">
                 <AlertTriangle className="size-4 shrink-0" />
                 {formError}
               </p>
@@ -579,88 +608,88 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
               <button
                 type="button"
                 onClick={() => setFormOpen(false)}
-                className="h-10 rounded-xl px-4 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-200/70 hover:text-zinc-900"
+                className="h-10 rounded-xl px-4 text-sm font-semibold text-muted transition hover:bg-surface-hover/70 hover:text-foreground"
               >
-                Cancel
+                {t("api.access.cancel")}
               </button>
               <button
                 type="submit"
                 disabled={creating}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-strong px-4 text-sm font-semibold text-on-strong shadow-sm transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {creating ? <LoaderCircle className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
-                {creating ? "Creating…" : "Create token"}
+                {creating ? t("api.access.creating") : t("api.access.create")}
               </button>
             </div>
           </form>
         ) : null}
 
         {actionError ? (
-          <div className="mx-5 mt-5 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 sm:mx-6" role="alert">
+          <div className="mx-5 mt-5 flex items-start justify-between gap-3 rounded-xl border border-danger-border bg-danger-soft p-3 text-sm text-danger sm:mx-6" role="alert">
             <span className="flex items-start gap-2"><AlertTriangle className="mt-0.5 size-4 shrink-0" />{actionError}</span>
-            <button type="button" onClick={() => setActionError(null)} aria-label="Dismiss error"><X className="size-4" /></button>
+            <button type="button" onClick={() => setActionError(null)} aria-label={t("api.access.dismissError")}><X className="size-4" /></button>
           </div>
         ) : null}
 
         <div className="p-2 sm:p-3">
           {loading ? (
             <div className="space-y-2 p-2">
-              {Array.from({ length: 3 }, (_, index) => <div key={index} className="h-20 animate-pulse rounded-xl bg-zinc-100" />)}
+              {Array.from({ length: 3 }, (_, index) => <div key={index} className="h-20 animate-pulse rounded-xl bg-surface-muted" />)}
             </div>
           ) : tokens.length === 0 ? (
             <div className="grid min-h-56 place-items-center px-4 py-10 text-center">
               <div>
-                <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-zinc-100 text-zinc-600">
+                <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-surface-muted text-muted">
                   <LockKeyhole className="size-5" />
                 </span>
-                <h3 className="mt-4 text-sm font-semibold text-zinc-900">No active API tokens</h3>
-                <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-zinc-600">Create a scoped token when you are ready to connect a script or another service.</p>
+                <h3 className="mt-4 text-sm font-semibold text-foreground">{t("api.access.emptyTitle")}</h3>
+                <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-muted">{t("api.access.emptyDescription")}</p>
               </div>
             </div>
           ) : (
-            <div className="divide-y divide-zinc-100">
+            <div className="divide-y divide-border">
               {tokens.map((token) => (
-                <div key={token.id} className="rounded-xl px-3 py-4 transition hover:bg-zinc-50 sm:px-4">
+                <div key={token.id} className="rounded-xl px-3 py-4 transition hover:bg-surface-subtle sm:px-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
-                      <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm">
+                      <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-surface text-muted shadow-sm">
                         <Server className="size-4" />
                       </span>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="truncate text-sm font-semibold text-zinc-950">{token.name}</h3>
+                          <h3 className="truncate text-sm font-semibold text-foreground">{token.name}</h3>
                           {token.scopes.map((scope) => (
-                            <span key={scope} className="rounded-md bg-zinc-100 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-zinc-600">{scope}</span>
+                            <span key={scope} className="rounded-md bg-surface-muted px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-muted">{scope}</span>
                           ))}
                         </div>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-600">
-                          <code className="font-mono text-zinc-700">{token.prefix}</code>
-                          <span>Created {formatDate(token.createdAt, "Unknown")}</span>
-                          <span>Expires {formatDate(token.expiresAt)}</span>
-                          <span>Last used {formatDate(token.lastUsedAt, "Never")}</span>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                          <code className="font-mono text-muted-strong">{token.prefix}</code>
+                          <span>{t("api.access.created", { date: formatDate(token.createdAt, t("api.access.unknown"), locale) })}</span>
+                          <span>{t("api.access.expires", { date: formatDate(token.expiresAt, t("api.access.never"), locale) })}</span>
+                          <span>{t("api.access.lastUsed", { date: formatDate(token.lastUsedAt, t("api.access.never"), locale) })}</span>
                         </div>
                       </div>
                     </div>
 
                     {confirmRevoke === token.id ? (
-                      <div className="flex flex-col gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 sm:flex-row sm:items-center">
-                        <span className="px-1 text-xs font-medium text-rose-800">Revoke this token?</span>
+                      <div className="flex flex-col gap-2 rounded-xl border border-danger-border bg-danger-soft p-2.5 sm:flex-row sm:items-center">
+                        <span className="px-1 text-xs font-medium text-danger">{t("api.access.revokeConfirm")}</span>
                         <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={() => setConfirmRevoke(null)}
-                            className="h-8 rounded-lg px-3 text-xs font-semibold text-zinc-600 transition hover:bg-white"
+                            className="h-8 rounded-lg px-3 text-xs font-semibold text-muted transition hover:bg-surface"
                           >
-                            Cancel
+                            {t("api.access.cancel")}
                           </button>
                           <button
                             type="button"
                             onClick={() => void revokeToken(token.id)}
                             disabled={revoking === token.id}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
+                            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-danger px-3 text-xs font-semibold text-on-strong transition hover:opacity-85 disabled:opacity-60"
                           >
                             {revoking === token.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
-                            Revoke
+                            {t("api.access.revoke")}
                           </button>
                         </div>
                       </div>
@@ -668,10 +697,10 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                       <button
                         type="button"
                         onClick={() => setConfirmRevoke(token.id)}
-                        className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-lg px-3 text-xs font-semibold text-zinc-600 transition hover:bg-rose-50 hover:text-rose-700 lg:self-auto"
+                        className="inline-flex h-9 items-center justify-center gap-2 self-start rounded-lg px-3 text-xs font-semibold text-muted transition hover:bg-danger-soft hover:text-danger lg:self-auto"
                       >
                         <Trash2 className="size-3.5" />
-                        Revoke
+                        {t("api.access.revoke")}
                       </button>
                     )}
                   </div>

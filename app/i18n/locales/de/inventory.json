@@ -1,0 +1,228 @@
+{
+  "actions": {
+    "batchCapture": "Stapelerfassung",
+    "addItem": "Eintrag hinzufügen",
+    "addAnItem": "Eintrag hinzufügen"
+  },
+  "list": {
+    "eyebrow": "Inventarbibliothek",
+    "title": "Alles. Jederzeit auffindbar."
+  },
+  "search": {
+    "label": "Inventar durchsuchen",
+    "placeholder": "Name, Beschreibung, SKU, Schlagwort oder Ort suchen…",
+    "clear": "Suche leeren"
+  },
+  "filters": {
+    "typeLabel": "Nach Typ filtern",
+    "statusLabel": "Nach Status filtern",
+    "allTypes": "Alle Typen",
+    "allStatuses": "Alle Status",
+    "clear": "Filter zurücksetzen",
+    "clearActive_one": "{{value}} Filter zurücksetzen",
+    "clearActive_other": "{{value}} Filter zurücksetzen",
+    "records_one": "{{value}} Eintrag",
+    "records_other": "{{value}} Einträge"
+  },
+  "views": {
+    "grid": "Rasteransicht",
+    "table": "Tabellenansicht"
+  },
+  "loading": "Inventar wird geladen",
+  "errors": {
+    "load": "Das Inventar konnte nicht geladen werden."
+  },
+  "empty": {
+    "filteredTitle": "Keine passenden Einträge",
+    "filteredDescription": "Versuche eine allgemeinere Suche oder setze die aktiven Filter zurück.",
+    "title": "Dein Inventar ist bereit",
+    "description": "Füge den ersten Eintrag manuell hinzu oder fotografiere und katalogisiere ihn per Stapelerfassung mit KI."
+  },
+  "item": {
+    "aiEnriched": "Mit KI angereichert",
+    "noDescription": "Noch keine Beschreibung.",
+    "noLocation": "Kein Ort",
+    "units_one": "{{value}} Einheit",
+    "units_other": "{{value}} Einheiten"
+  },
+  "table": {
+    "item": "Eintrag",
+    "status": "Status",
+    "sku": "SKU",
+    "location": "Ort",
+    "value": "Wert"
+  },
+  "pagination": {
+    "summary_one": "Seite {{page}} von {{pages}} · {{total}} Eintrag",
+    "summary_other": "Seite {{page}} von {{pages}} · {{total}} Einträge",
+    "previous": "Zurück",
+    "next": "Weiter"
+  },
+  "statuses": {
+    "available": "Verfügbar",
+    "in-use": "In Benutzung",
+    "maintenance": "Wartung",
+    "archived": "Archiviert"
+  },
+  "types": {
+    "tool": "Werkzeuge",
+    "object": "Objekte",
+    "furniture": "Möbel",
+    "vehicle": "Fahrzeuge",
+    "place": "Orte",
+    "clothing": "Kleidung",
+    "person": "Personen",
+    "project": "Projekte",
+    "other": "Sonstiges"
+  },
+  "typeSingular": {
+    "tool": "Werkzeug",
+    "object": "Objekt",
+    "furniture": "Möbelstück",
+    "vehicle": "Fahrzeug",
+    "place": "Ort",
+    "clothing": "Kleidung",
+    "person": "Person",
+    "project": "Projekt",
+    "other": "Sonstiges"
+  },
+  "fields": {
+    "type": "Typ",
+    "quantity": "Menge",
+    "sku": "SKU",
+    "serialNumber": "Seriennummer",
+    "location": "Ort",
+    "value": "Wert",
+    "priority": "Priorität",
+    "created": "Erstellt"
+  },
+  "values": {
+    "yes": "Ja",
+    "no": "Nein",
+    "notSet": "Nicht angegeben",
+    "unknown": "Unbekannt"
+  },
+  "mediaKinds": {
+    "image": "Bild",
+    "video": "Video",
+    "document": "Dokument",
+    "other": "Datei"
+  },
+  "details": {
+    "loading": "Eintragsdetails werden geladen",
+    "back": "Zurück zum Inventar",
+    "errors": {
+      "load": "Der Eintrag konnte nicht geladen werden.",
+      "notFound": "Dieser Inventareintrag wurde nicht gefunden.",
+      "delete": "Dieser Inventareintrag konnte nicht gelöscht werden."
+    },
+    "breadcrumb": {
+      "inventory": "Inventar",
+      "details": "Details"
+    },
+    "updatedWithId": "Aktualisiert am {{date}} · ID {{id}}",
+    "contentLanguage": "Inhaltssprache",
+    "defaultLanguageSuffix": " (Standard)",
+    "actions": {
+      "stock": "Bestand",
+      "share": "Teilen",
+      "edit": "Eintrag bearbeiten",
+      "delete": "Eintrag löschen"
+    },
+    "confirmDelete": "„{{name}}“ löschen? Dies kann nicht rückgängig gemacht werden.",
+    "share": {
+      "title": "Öffentliche Links verwalten",
+      "description": "Erstelle und widerrufe öffentliche Links mit Lesezugriff für „{{name}}“.",
+      "close": "Dialog zum Teilen schließen",
+      "createTitle": "Öffentlichen Link erstellen",
+      "createDescription": "Alle Personen mit diesem Link können den Eintrag ohne Anmeldung ansehen.",
+      "nameLabel": "Linkname",
+      "create": "Link erstellen",
+      "creating": "Wird erstellt…",
+      "existingTitle": "Aktive Links",
+      "existingDescription": "Jeder Link bleibt aktiv, bis du ihn widerrufst.",
+      "loading": "Öffentliche Links werden geladen…",
+      "retry": "Erneut versuchen",
+      "created": "Erstellt am {{date}}",
+      "copy": "Link kopieren",
+      "copied": "Kopiert",
+      "open": "Öffnen",
+      "revoke": "Widerrufen",
+      "revokeConfirmation": "Durch den Widerruf wird der öffentliche Zugriff sofort entfernt.",
+      "cancel": "Abbrechen",
+      "confirmRevoke": "Link widerrufen",
+      "revoking": "Wird widerrufen…",
+      "emptyTitle": "Keine öffentlichen Links",
+      "emptyDescription": "Erstelle oben einen Link, wenn du diesen Eintrag teilen möchtest.",
+      "errors": {
+        "load": "Die öffentlichen Links konnten nicht geladen werden.",
+        "nameRequired": "Gib einen Namen für den öffentlichen Link ein.",
+        "create": "Der öffentliche Link konnte nicht erstellt werden.",
+        "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Öffne den Link und kopiere ihn stattdessen aus dem Browser.",
+        "revoke": "Der öffentliche Link konnte nicht widerrufen werden."
+      }
+    },
+    "translationFallback_one": "{{value}} Feld wird weiterhin in der Standardsprache angezeigt, da die Übersetzung fehlt oder veraltet ist.",
+    "translationFallback_other": "{{value}} Felder werden weiterhin in der Standardsprache angezeigt, da ihre Übersetzungen fehlen oder veraltet sind.",
+    "emptyDescription": "Noch keine Beschreibung hinzugefügt.",
+    "files_one": "{{value}} Datei",
+    "files_other": "{{value}} Dateien",
+    "priority": "{{value}} / 5",
+    "openOnMap": "Auf Karte öffnen",
+    "noPosition": "Es wurde keine geografische Position erfasst.",
+    "lastUpdated": "Zuletzt aktualisiert am {{date}}",
+    "sections": {
+      "overview": "Überblick",
+      "media": "Medien",
+      "notes": "Notizen",
+      "itemDetails": "Eintragsdetails",
+      "classification": "Klassifizierung",
+      "customFields": "Benutzerdefinierte Felder",
+      "position": "Position"
+    }
+  },
+  "duplicates": {
+    "page": {
+      "metadataTitle": "Duplikate | Inventar",
+      "metadataDescription": "Potenzielle doppelte Inventareinträge prüfen und zusammenführen.",
+      "eyebrow": "Datenqualität",
+      "title": "Duplikatprüfung",
+      "description": "Vergleiche wahrscheinliche Übereinstimmungen nebeneinander und wähle den Datensatz aus, der als verlässliche Quelle erhalten bleiben soll."
+    },
+    "recordA": "Datensatz A",
+    "recordB": "Datensatz B",
+    "updated": "Aktualisiert am {{date}}",
+    "noDescriptors": "Keine Schlagwörter oder Kategorien",
+    "scanningInventory": "Inventar wird durchsucht…",
+    "matchCount_one": "{{value}} potenzielle Übereinstimmung",
+    "matchCount_other": "{{value}} potenzielle Übereinstimmungen",
+    "rankingDescription": "Übereinstimmungen werden anhand der Ähnlichkeit von SKU und Name bewertet.",
+    "scanning": "Suche läuft…",
+    "runScan": "Suche starten",
+    "success": "Erfolgreich zusammengeführt. „{{name}}“ ist jetzt der Quelldatensatz.",
+    "dismissConfirmation": "Bestätigung schließen",
+    "dismissError": "Fehlermeldung schließen",
+    "loadingMatches": "Duplikatvorschläge werden geladen",
+    "empty": {
+      "title": "Alles ist aufgeräumt",
+      "description": "Es wurden keine wahrscheinlichen Duplikate gefunden. Starte die Suche nach dem Import oder der Erstellung weiterer Einträge erneut."
+    },
+    "potentialMatch": "Potenzielle Übereinstimmung {{value}}",
+    "matchPercent": "{{value}} Übereinstimmung",
+    "keepRecordA": "Datensatz A behalten",
+    "keepRecordB": "Datensatz B behalten",
+    "errors": {
+      "scan": "Das Inventar konnte nicht nach Duplikaten durchsucht werden.",
+      "merge": "Diese Datensätze konnten nicht zusammengeführt werden."
+    },
+    "confirm": {
+      "title": "Diese Datensätze dauerhaft zusammenführen?",
+      "keepSuffix": "bleibt erhalten. Medien, Menge, Schlagwörter und fehlende Angaben von",
+      "removeSuffix": "werden dorthin übernommen. Anschließend wird der zweite Datensatz dauerhaft gelöscht.",
+      "irreversible": "Diese Aktion kann nicht rückgängig gemacht werden.",
+      "cancel": "Abbrechen",
+      "merging": "Wird zusammengeführt…",
+      "submit": "„{{name}}“ behalten und den anderen Datensatz löschen"
+    }
+  }
+}

@@ -58,8 +58,6 @@ struct RuntimeSettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(InventoryTheme.canvas)
         .navigationTitle("Systemstatus")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: client?.serverURL.absoluteString) {
@@ -119,7 +117,6 @@ struct PermissionsSettingsView: View {
                             }
                         } icon: {
                             Image(systemName: scopeIcon(scope))
-                                .foregroundStyle(InventoryTheme.accent)
                         }
                     }
                 }
@@ -136,8 +133,6 @@ struct PermissionsSettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(InventoryTheme.canvas)
         .navigationTitle("Berechtigungen")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: client?.serverURL.absoluteString) {
@@ -231,7 +226,7 @@ private struct SettingsStatusRow: View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
                 .frame(width: 24)
-                .foregroundStyle(available ? InventoryTheme.accent : .secondary)
+                .foregroundStyle(available ? .primary : .secondary)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -242,15 +237,12 @@ private struct SettingsStatusRow: View {
 
             Spacer()
 
-            Text(available ? "Bereit" : "Nicht eingerichtet")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(available ? InventoryTheme.success : .secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    (available ? InventoryTheme.success : Color.secondary).opacity(0.12),
-                    in: Capsule()
-                )
+            Label(
+                available ? "Bereit" : "Nicht eingerichtet",
+                systemImage: available ? "checkmark.circle.fill" : "minus.circle"
+            )
+            .font(.caption)
+            .foregroundStyle(available ? .green : .secondary)
         }
         .accessibilityElement(children: .combine)
     }
@@ -277,8 +269,8 @@ private struct SettingsErrorRow: View {
             Text(message)
                 .foregroundStyle(.secondary)
         } icon: {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(InventoryTheme.warning)
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
         }
     }
 }
@@ -320,8 +312,6 @@ struct InventoryTypesSettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(InventoryTheme.canvas)
         .navigationTitle("Inventartypen")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: client?.serverURL.absoluteString) {
@@ -380,7 +370,7 @@ private struct InventoryTypeSettingsRow: View {
                     if type.canContain {
                         Text("Container")
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(InventoryTheme.info)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -425,8 +415,6 @@ private struct InventoryTypeSettingsDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(InventoryTheme.canvas)
         .navigationTitle(type.label)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -484,8 +472,6 @@ struct CustomFieldsSettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(InventoryTheme.canvas)
         .navigationTitle("Eigene Felder")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: client?.serverURL.absoluteString) {
@@ -539,7 +525,7 @@ private struct CustomFieldSettingsRow: View {
                     if definition.required {
                         Text("Pflicht")
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(InventoryTheme.warning)
+                            .foregroundStyle(.orange)
                     }
                 }
                 Text("\(definition.key) · \(definition.fieldType.localizedTitle)")
@@ -548,7 +534,6 @@ private struct CustomFieldSettingsRow: View {
             }
         } icon: {
             Image(systemName: definition.fieldType.systemImage)
-                .foregroundStyle(InventoryTheme.accent)
         }
     }
 }
@@ -630,8 +615,6 @@ private struct CustomFieldSettingsDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(InventoryTheme.canvas)
         .navigationTitle(definition.label)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -647,7 +630,7 @@ private struct SettingsBooleanValue: View {
     var body: some View {
         Label(value ? "Ja" : "Nein", systemImage: value ? "checkmark.circle.fill" : "minus.circle")
             .labelStyle(.titleAndIcon)
-            .foregroundStyle(value ? InventoryTheme.success : Color.secondary)
+            .foregroundStyle(value ? .green : .secondary)
     }
 }
 
@@ -684,7 +667,7 @@ private func settingsColor(_ value: String) -> Color {
     let normalized = value.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
     guard normalized.count == 6,
           let number = UInt64(normalized, radix: 16) else {
-        return InventoryTheme.info
+        return .gray
     }
     return Color(
         red: Double((number >> 16) & 0xff) / 255,

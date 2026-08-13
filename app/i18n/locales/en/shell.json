@@ -1,0 +1,93 @@
+{
+  "brand": "Inventory",
+  "metadata": {
+    "title": "Inventory",
+    "template": "%s · Inventory",
+    "description": "Manage inventory, stock, locations, and operations."
+  },
+  "sections": {
+    "workspace": "Workspace",
+    "manage": "Manage"
+  },
+  "navigation": {
+    "mainLabel": "Main navigation",
+    "overview": "Overview",
+    "inventory": "Inventory",
+    "stock": "Stock",
+    "locations": "Locations",
+    "rooms": "Rooms 3D",
+    "batch": "Batch studio",
+    "labels": "Labels",
+    "duplicates": "Duplicates",
+    "settings": "Settings"
+  },
+  "badges": {
+    "ai": "AI"
+  },
+  "actions": {
+    "addInventoryItem": "Add inventory item",
+    "addItem": "Add item",
+    "signOut": "Sign out",
+    "openNavigation": "Open navigation",
+    "closeNavigation": "Close navigation",
+    "helpAndConfiguration": "Help and configuration"
+  },
+  "user": {
+    "generic": "User",
+    "fallbackName": "Inventory admin",
+    "signedIn": "Signed in"
+  },
+  "breadcrumb": {
+    "workspace": "Workspace"
+  },
+  "search": {
+    "label": "Search inventory",
+    "placeholder": "Search inventory…",
+    "submit": "Submit inventory search",
+    "action": "Search"
+  },
+  "settings": {
+    "eyebrow": "Workspace",
+    "title": "Settings",
+    "description": "Configure data, access, and integrations.",
+    "navigationLabel": "Settings navigation",
+    "groups": {
+      "workspace": "Workspace",
+      "developer": "Developer"
+    },
+    "items": {
+      "data": {
+        "label": "Data transfer",
+        "description": "Import and export inventory"
+      },
+      "languages": {
+        "label": "Content languages",
+        "description": "Translate inventory content with AI"
+      },
+      "inventoryTypes": {
+        "label": "Inventory types",
+        "description": "Define the kinds of items you track"
+      },
+      "customFields": {
+        "label": "Custom fields",
+        "description": "Add structured workspace data"
+      },
+      "users": {
+        "label": "Users",
+        "description": "Manage people and permissions"
+      },
+      "access": {
+        "label": "Roles & access",
+        "description": "Define roles and item-level rules"
+      },
+      "sharing": {
+        "label": "Public sharing",
+        "description": "Publish inventory with share links"
+      },
+      "api": {
+        "label": "API & services",
+        "description": "Tokens and runtime configuration"
+      }
+    }
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "errors": {
+    "invalidBom": "In der Stücklisten-Antwort fehlt die Ressource.",
+    "loadBom": "Die Stückliste konnte nicht geladen werden.",
+    "loadBuilds": "Die letzten Fertigungen konnten nicht geladen werden.",
+    "componentQuantity": "Jede Komponentenmenge muss eine ganze Zahl von mindestens eins sein.",
+    "saveBom": "Die Stückliste konnte nicht gespeichert werden.",
+    "invalidDate": "Wählen Sie ein gültiges Fertigungsdatum mit Uhrzeit.",
+    "build": "Die Baugruppe konnte nicht gefertigt werden."
+  },
+  "notices": {
+    "bomSaved": "Stückliste gespeichert.",
+    "built_one": "{{count}} × {{name}} erfolgreich gefertigt.",
+    "built_other": "{{count}} × {{name}} erfolgreich gefertigt."
+  },
+  "unavailable": {
+    "title": "Baugruppendaten sind nicht verfügbar",
+    "description": "Die Stückliste konnte nicht geladen werden."
+  },
+  "aria": {
+    "dismissError": "Fehler ausblenden",
+    "dismissMessage": "Meldung ausblenden",
+    "moveUp": "{{name}} nach oben verschieben",
+    "moveDown": "{{name}} nach unten verschieben",
+    "remove": "{{name}} entfernen"
+  },
+  "actions": {
+    "refresh": "Baugruppe aktualisieren",
+    "refreshing": "Wird aktualisiert…",
+    "saveBom": "Stückliste speichern",
+    "saveChanges": "Änderungen speichern",
+    "building": "Wird gefertigt…",
+    "build": "{{count}} fertigen"
+  },
+  "bom": {
+    "title": "Komponenten & Stückliste",
+    "description": "Legen Sie den genauen Inventarverbrauch für einen fertigen Artikel fest.",
+    "emptyTitle": "Noch keine Komponenten",
+    "emptyDescription": "Durchsuchen Sie oben das Inventar, um den Verbrauch eines fertigen Artikels festzulegen.",
+    "unsavedDescription": "Nicht gespeicherte Stücklistenänderungen wirken sich nicht auf Bestand oder Fertigungen aus."
+  },
+  "buildableNow_one": "{{count}} jetzt fertigbar",
+  "buildableNow_other": "{{count}} jetzt fertigbar",
+  "buildable_one": "{{count}} fertigbar",
+  "buildable_other": "{{count}} fertigbar",
+  "availableCount_one": "{{count}} verfügbar",
+  "availableCount_other": "{{count}} verfügbar",
+  "perFinishedCount_one": "{{count}} je fertigem Artikel",
+  "perFinishedCount_other": "{{count}} je fertigem Artikel",
+  "search": {
+    "label": "Inventarkomponenten durchsuchen",
+    "placeholder": "Inventar durchsuchen, um eine Komponente hinzuzufügen…",
+    "clear": "Komponentensuche leeren",
+    "searching": "Inventar wird durchsucht…",
+    "empty": "Keine nicht ausgewählten Artikel gefunden."
+  },
+  "tracking": {
+    "bulk": "Mengenbestand",
+    "serialized": "serialisiert"
+  },
+  "labels": {
+    "noSku": "Keine SKU",
+    "perFinishedItem": "Je fertigem Artikel",
+    "available": "Verfügbar",
+    "ready": "Bereit",
+    "short": "Fehlt",
+    "assemblyNote": "Montagehinweis",
+    "optional": "optional",
+    "buildQuantity": "Fertigungsmenge",
+    "buildDate": "Fertigungsdatum",
+    "finishedLocation": "Lagerort des Fertigbestands",
+    "buildNote": "Fertigungshinweis",
+    "finishedCodes": "Codes der fertigen Einheiten",
+    "component": "Komponente",
+    "required": "Benötigt",
+    "afterBuild": "Nach Fertigung",
+    "noLocation": "Kein Lagerort",
+    "system": "System",
+    "deletedComponent": "Gelöschte Komponente"
+  },
+  "placeholders": {
+    "assemblyNote": "Platzierung, Revision oder Vorbereitungsdetail",
+    "location": "Werkstatt · Fertigwaren",
+    "buildNote": "Charge, Arbeitsauftrag oder Qualitätshinweis",
+    "codes": "Ein Code pro Zeile"
+  },
+  "build": {
+    "title": "Fertigbestand fertigen",
+    "description": "Verbrauchen Sie alle benötigten Komponenten und buchen Sie den fertigen Artikel in einer protokollierten Transaktion ein.",
+    "missingBomTitle": "Eine Stückliste ist erforderlich",
+    "missingBomDescription": "Fügen Sie Komponenten hinzu und speichern Sie sie, bevor Fertigbestand gefertigt werden kann.",
+    "codeHint_one": "Optional. Leer lassen, um Codes zu erzeugen, oder genau {{count}} eindeutigen Code eingeben.",
+    "codeHint_other": "Optional. Leer lassen, um Codes zu erzeugen, oder genau {{count}} eindeutige Codes eingeben.",
+    "selectUnits": "Einheiten von {{name}} auswählen",
+    "selectedCount": "{{selected}} von {{required}} ausgewählt",
+    "saveFirst": "Speichern Sie die Stücklistenänderungen vor der Fertigung.",
+    "insufficientStock": "Für diese Fertigung ist nicht genügend Bestand verfügbar.",
+    "summary_one": "{{count}} fertig · {{components}} Komponenteneinheiten verbraucht",
+    "summary_other": "{{count}} fertig · {{components}} Komponenteneinheiten verbraucht",
+    "confirm_one": "{{count}} × {{name}} fertigen und die aufgeführten Komponenten verbrauchen?",
+    "confirm_other": "{{count}} × {{name}} fertigen und die aufgeführten Komponenten verbrauchen?"
+  },
+  "history": {
+    "title": "Letzte Fertigungen",
+    "description": "Protokollierte Fertigungstransaktionen und ihre verbrauchten Komponenten.",
+    "shown_one": "{{count}} angezeigt",
+    "shown_other": "{{count}} angezeigt",
+    "built_one": "{{count}} × {{name}} gefertigt",
+    "built_other": "{{count}} × {{name}} gefertigt",
+    "emptyTitle": "Keine Fertigungen erfasst",
+    "emptyDescription": "Abgeschlossene Fertigungen erscheinen hier mit ihrem Komponentenprotokoll.",
+    "openStock": "Bestandshistorie öffnen"
+  }
+}

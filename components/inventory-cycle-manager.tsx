@@ -1,5 +1,6 @@
 "use client";
 
+import type { TFunction } from "i18next";
 import {
   AlertTriangle,
   CalendarClock,
@@ -16,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useT } from "next-i18next/client";
 
 import { Button, Card, Skeleton } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
@@ -104,11 +106,15 @@ function localDateTime(value: Date | string = new Date()) {
   return local.toISOString().slice(0, 16);
 }
 
-function formatDate(value: string | null | undefined, includeTime = false) {
+function formatDate(
+  value: string | null | undefined,
+  locale: string,
+  includeTime = false,
+) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("en", {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -116,24 +122,36 @@ function formatDate(value: string | null | undefined, includeTime = false) {
   }).format(date);
 }
 
-function quantityLabel(quantity: number, unitName: string) {
-  const unit = unitName.trim() || "unit";
-  return `${quantity.toLocaleString()} ${unit}${quantity === 1 ? "" : "s"}`;
+function quantityLabel(
+  quantity: number,
+  unitName: string,
+  numberFormat: Intl.NumberFormat,
+  fallbackUnit: string,
+) {
+  const unit = unitName.trim() || fallbackUnit;
+  return `${numberFormat.format(quantity)} ${unit}`;
 }
 
-function scheduleStatus(policy: InventoryCyclePolicy | null) {
+function scheduleStatus(
+  policy: InventoryCyclePolicy | null,
+  t: TFunction,
+  locale: string,
+) {
   if (!policy) {
     return {
-      label: "Not scheduled",
-      detail: "Choose a cadence to make physical checks routine.",
-      tone: "bg-slate-100 text-slate-600",
+      label: t("cycle.schedule.notScheduled"),
+      detail: t("cycle.schedule.notScheduledDetail"),
+      tone: "bg-surface-muted text-muted",
     };
   }
   if (!policy.enabled) {
     return {
-      label: "Paused",
-      detail: `The saved cadence is every ${policy.intervalDays} days.`,
-      tone: "bg-slate-100 text-slate-600",
+      label: t("cycle.schedule.paused"),
+      detail: t("cycle.schedule.pausedDetail", {
+        count: policy.intervalDays,
+        value: new Intl.NumberFormat(locale).format(policy.intervalDays),
+      }),
+      tone: "bg-surface-muted text-muted",
     };
   }
   const dueAt = new Date(policy.nextDueAt);
@@ -141,24 +159,32 @@ function scheduleStatus(policy: InventoryCyclePolicy | null) {
   const days = Math.ceil(difference / (24 * 60 * 60 * 1_000));
   if (difference <= 0) {
     return {
-      label: "Count due",
-      detail: `Due ${formatDate(policy.nextDueAt)}.`,
-      tone: "bg-amber-100 text-amber-800",
+      label: t("cycle.schedule.countDue"),
+      detail: t("cycle.schedule.dueDate", {
+        date: formatDate(policy.nextDueAt, locale),
+      }),
+      tone: "bg-warning-soft text-warning",
     };
   }
   return {
-    label: days === 1 ? "Due tomorrow" : `Due in ${days} days`,
-    detail: formatDate(policy.nextDueAt),
-    tone: "bg-emerald-100 text-emerald-800",
+    label: t("cycle.schedule.dueIn", {
+      count: days,
+      value: new Intl.NumberFormat(locale).format(days),
+    }),
+    detail: formatDate(policy.nextDueAt, locale),
+    tone: "bg-success-soft text-success",
   };
 }
 
 export function InventoryCycleManager({
   resourceId,
   canEdit,
-  unitName = "unit",
+  unitName = "",
   onStockChanged,
 }: InventoryCycleManagerProps) {
+  const { t, i18n } = useT("stock");
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
+  const numberFormat = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const [cycle, setCycle] = useState<InventoryCycle | null>(null);
   const [locations, setLocations] = useState<CountLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,7 +252,7 @@ export function InventoryCycleManager({
         }
         setLocations(
           Array.from(candidates.values()).sort((left, right) =>
-            left.name.localeCompare(right.name),
+            left.name.localeCompare(right.name, locale),
           ),
         );
         if (!quiet || resetCountForm) {
@@ -237,14 +263,14 @@ export function InventoryCycleManager({
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Unable to load the inventory cycle.",
+            : t("cycle.errors.load"),
         );
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [resourceId],
+    [locale, resourceId, t],
   );
 
   useEffect(() => {
@@ -259,7 +285,7 @@ export function InventoryCycleManager({
     countTarget === ENTIRE_INVENTORY
       ? (cycle?.resource.quantity ?? 0)
       : (locationById.get(countTarget)?.quantity ?? 0);
-  const status = scheduleStatus(cycle?.policy ?? null);
+  const status = scheduleStatus(cycle?.policy ?? null, t, locale);
   const lastCompletedAt =
     cycle?.policy?.lastCompletedAt ?? cycle?.history[0]?.countedAt ?? null;
   const parsedInterval = Number(intervalDays);
@@ -285,7 +311,7 @@ export function InventoryCycleManager({
       parsedInterval < 1 ||
       parsedInterval > 3650
     ) {
-      setError("The cycle must be between 1 and 3,650 whole days.");
+      setError(t("cycle.errors.intervalRange"));
       return;
     }
     setSavingPolicy(true);
@@ -297,13 +323,15 @@ export function InventoryCycleManager({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ intervalDays: parsedInterval, enabled }),
       });
-      setNotice(enabled ? "Inventory cycle saved." : "Inventory cycle paused.");
+      setNotice(
+        enabled ? t("cycle.notices.saved") : t("cycle.notices.paused"),
+      );
       await loadCycle(true);
     } catch (saveError) {
       setError(
         saveError instanceof Error
           ? saveError.message
-          : "Unable to save the inventory cycle.",
+          : t("cycle.errors.save"),
       );
     } finally {
       setSavingPolicy(false);
@@ -314,12 +342,12 @@ export function InventoryCycleManager({
     event.preventDefault();
     const parsedCount = Number(countedQuantity);
     if (!Number.isInteger(parsedCount) || parsedCount < 0) {
-      setError("Enter a non-negative whole-number count.");
+      setError(t("cycle.errors.validCount"));
       return;
     }
     const countDate = new Date(countedAt);
     if (Number.isNaN(countDate.getTime())) {
-      setError("Choose a valid count date and time.");
+      setError(t("cycle.errors.validDate"));
       return;
     }
     setSubmittingCount(true);
@@ -342,9 +370,10 @@ export function InventoryCycleManager({
       });
       const targetName =
         countTarget === ENTIRE_INVENTORY
-          ? "the entire inventory"
-          : (locationById.get(countTarget)?.name ?? "the selected location");
-      setNotice(`Count recorded for ${targetName}.`);
+          ? t("cycle.targets.entireInventorySentence")
+          : (locationById.get(countTarget)?.name ??
+            t("cycle.targets.selectedLocation"));
+      setNotice(t("cycle.notices.recorded", { target: targetName }));
       setCountNote("");
       setCountedAt(localDateTime());
       setCountOpen(false);
@@ -354,7 +383,7 @@ export function InventoryCycleManager({
       setError(
         countError instanceof Error
           ? countError.message
-          : "Unable to record this inventory count.",
+          : t("cycle.errors.record"),
       );
     } finally {
       setSubmittingCount(false);
@@ -376,17 +405,17 @@ export function InventoryCycleManager({
         body: JSON.stringify({
           countedQuantity: cycle.resource.quantity,
           countedAt: new Date().toISOString(),
-          note: "Serialized unit review completed",
+          note: t("cycle.serialized.completedNote"),
         }),
       });
-      setNotice("Serialized unit review completed.");
+      setNotice(t("cycle.notices.serializedCompleted"));
       await loadCycle(true, true);
       onStockChanged?.();
     } catch (reviewError) {
       setError(
         reviewError instanceof Error
           ? reviewError.message
-          : "Unable to complete the serialized inventory review.",
+          : t("cycle.errors.serializedReview"),
       );
     } finally {
       setSubmittingCount(false);
@@ -396,7 +425,7 @@ export function InventoryCycleManager({
   if (loading && !cycle) {
     return (
       <Card className="overflow-hidden">
-        <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+        <div className="border-b border-border px-5 py-4 sm:px-6">
           <Skeleton className="h-10 w-60" />
         </div>
         <div className="space-y-3 p-5 sm:p-6">
@@ -411,12 +440,12 @@ export function InventoryCycleManager({
   if (!cycle) {
     return (
       <Card className="p-6">
-        <div className="flex items-start gap-3 text-sm text-rose-700">
+        <div className="flex items-start gap-3 text-sm text-danger">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div>
-            <p className="font-semibold">Inventory cycle is unavailable</p>
-            <p className="mt-1 text-xs leading-5 text-rose-600">
-              {error || "Cycle data could not be loaded."}
+            <p className="font-semibold">{t("cycle.unavailable.title")}</p>
+            <p className="mt-1 text-xs leading-5 text-danger">
+              {error || t("cycle.unavailable.description")}
             </p>
             <Button
               size="sm"
@@ -424,7 +453,7 @@ export function InventoryCycleManager({
               className="mt-4"
               onClick={() => void loadCycle()}
             >
-              Try again
+              {t("cycle.actions.tryAgain")}
             </Button>
           </div>
         </div>
@@ -434,15 +463,15 @@ export function InventoryCycleManager({
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
+      <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-success-soft text-success">
             <CalendarClock className="size-4" aria-hidden="true" />
           </span>
           <div>
-            <h2 className="text-sm font-semibold text-slate-950">Inventory cycle</h2>
-            <p className="mt-0.5 text-xs leading-4 text-slate-600">
-              Schedule recurring physical counts and reconcile discrepancies.
+            <h2 className="text-sm font-semibold text-foreground">{t("cycle.title")}</h2>
+            <p className="mt-0.5 text-xs leading-4 text-muted">
+              {t("cycle.description")}
             </p>
           </div>
         </div>
@@ -450,9 +479,9 @@ export function InventoryCycleManager({
           type="button"
           onClick={() => void loadCycle(true)}
           disabled={refreshing}
-          className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
-          aria-label="Refresh inventory cycle"
-          title="Refresh inventory cycle"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-surface-muted hover:text-muted-strong disabled:opacity-50"
+          aria-label={t("cycle.actions.refresh")}
+          title={t("cycle.actions.refresh")}
         >
           <RefreshCw
             className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
@@ -462,58 +491,63 @@ export function InventoryCycleManager({
       </div>
 
       {error ? (
-        <div className="mx-5 mt-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-700 sm:mx-6">
+        <div className="mx-5 mt-4 flex items-start justify-between gap-3 rounded-xl border border-danger-border bg-danger-soft px-3 py-2.5 text-xs text-danger sm:mx-6">
           <span className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             {error}
           </span>
-          <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
+          <button type="button" onClick={() => setError(null)} aria-label={t("cycle.actions.dismissError")}>
             <X className="size-3.5" aria-hidden="true" />
           </button>
         </div>
       ) : null}
       {notice ? (
-        <div className="mx-5 mt-4 flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800 sm:mx-6">
+        <div className="mx-5 mt-4 flex items-start justify-between gap-3 rounded-xl border border-success-border bg-success-soft px-3 py-2.5 text-xs text-success sm:mx-6">
           <span className="flex items-center gap-2">
             <Check className="size-3.5 shrink-0" aria-hidden="true" /> {notice}
           </span>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">
+          <button type="button" onClick={() => setNotice(null)} aria-label={t("cycle.actions.dismissMessage")}>
             <X className="size-3.5" aria-hidden="true" />
           </button>
         </div>
       ) : null}
 
       <div className="grid gap-4 p-5 sm:grid-cols-[minmax(0,1fr)_220px] sm:p-6">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+        <div className="rounded-2xl border border-border bg-surface-subtle/60 p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-                Current schedule
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                {t("cycle.currentSchedule")}
               </p>
-              <p className="mt-2 text-base font-semibold text-slate-950">{status.label}</p>
-              <p className="mt-1 text-[11px] leading-4 text-slate-600">{status.detail}</p>
+              <p className="mt-2 text-base font-semibold text-foreground">{status.label}</p>
+              <p className="mt-1 text-[11px] leading-4 text-muted">{status.detail}</p>
             </div>
             <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${status.tone}`}>
-              {cycle.policy?.enabled ? "Active" : "Inactive"}
+              {cycle.policy?.enabled
+                ? t("cycle.state.active")
+                : t("cycle.state.inactive")}
             </span>
           </div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-            Last completed
+        <div className="rounded-2xl border border-border bg-surface p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+            {t("cycle.lastCompleted")}
           </p>
-          <p className="mt-2 text-sm font-semibold text-slate-900">
-            {formatDate(lastCompletedAt)}
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            {formatDate(lastCompletedAt, locale)}
           </p>
-          <p className="mt-1 text-[11px] text-slate-600">
+          <p className="mt-1 text-[11px] text-muted">
             {cycle.history.length
-              ? `${cycle.history.length} recent ${cycle.history.length === 1 ? "count" : "counts"}`
-              : "No physical counts yet"}
+              ? t("cycle.recentCount", {
+                  count: cycle.history.length,
+                  value: numberFormat.format(cycle.history.length),
+                })
+              : t("cycle.noPhysicalCounts")}
           </p>
         </div>
       </div>
 
-      <form onSubmit={savePolicy} className="border-y border-slate-100 px-5 py-5 sm:px-6">
+      <form onSubmit={savePolicy} className="border-y border-border px-5 py-5 sm:px-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3">
@@ -524,11 +558,11 @@ export function InventoryCycleManager({
                 disabled={!canEdit}
                 onClick={() => setEnabled((current) => !current)}
                 className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  enabled ? "bg-emerald-600" : "bg-slate-300"
+                  enabled ? "bg-success" : "bg-surface-hover"
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 grid size-5 place-items-center rounded-full bg-white text-slate-600 shadow-sm transition ${
+                  className={`absolute top-0.5 grid size-5 place-items-center rounded-full bg-surface text-muted shadow-sm transition ${
                     enabled ? "left-[22px]" : "left-0.5"
                   }`}
                 >
@@ -540,11 +574,13 @@ export function InventoryCycleManager({
                 </span>
               </button>
               <div>
-                <p className="text-xs font-semibold text-slate-800">
-                  {enabled ? "Recurring counts enabled" : "Recurring counts paused"}
+                <p className="text-xs font-semibold text-muted-strong">
+                  {enabled
+                    ? t("cycle.policy.enabled")
+                    : t("cycle.policy.paused")}
                 </p>
-                <p className="mt-0.5 text-[10px] text-slate-600">
-                  Counts can still be recorded while the reminder is paused.
+                <p className="mt-0.5 text-[10px] text-muted">
+                  {t("cycle.policy.pausedHelp")}
                 </p>
               </div>
             </div>
@@ -561,11 +597,14 @@ export function InventoryCycleManager({
                   }}
                   className={`h-9 rounded-xl border px-3 text-[11px] font-semibold transition disabled:opacity-50 ${
                     !customInterval && parsedInterval === days
-                      ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      ? "border-success-border bg-success-soft text-success"
+                      : "border-border bg-surface text-muted hover:border-border-strong"
                   }`}
                 >
-                  {days / 7} weeks
+                  {t("cycle.policy.weeks", {
+                    count: days / 7,
+                    value: numberFormat.format(days / 7),
+                  })}
                 </button>
               ))}
               <button
@@ -574,15 +613,15 @@ export function InventoryCycleManager({
                 onClick={() => setCustomInterval(true)}
                 className={`h-9 rounded-xl border px-3 text-[11px] font-semibold transition disabled:opacity-50 ${
                   customInterval
-                    ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                    ? "border-success-border bg-success-soft text-success"
+                    : "border-border bg-surface text-muted hover:border-border-strong"
                 }`}
               >
-                Custom
+                {t("cycle.policy.custom")}
               </button>
               {customInterval ? (
                 <label className="relative block">
-                  <span className="sr-only">Custom interval in days</span>
+                  <span className="sr-only">{t("cycle.policy.customDaysLabel")}</span>
                   <input
                     type="number"
                     min="1"
@@ -592,10 +631,10 @@ export function InventoryCycleManager({
                     disabled={!canEdit}
                     value={intervalDays}
                     onChange={(event) => setIntervalDays(event.target.value)}
-                    className="h-9 w-28 rounded-xl border border-slate-200 bg-white pl-3 pr-11 text-xs text-slate-800 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10 disabled:bg-slate-50"
+                    className="h-9 w-28 rounded-xl border border-border bg-surface pl-3 pr-11 text-xs text-muted-strong outline-none focus:border-success focus:ring-4 focus:ring-success-border disabled:bg-surface-subtle"
                   />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-600">
-                    days
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted">
+                    {t("cycle.policy.days")}
                   </span>
                 </label>
               ) : null}
@@ -609,11 +648,11 @@ export function InventoryCycleManager({
               ) : (
                 <Save className="size-3.5" aria-hidden="true" />
               )}
-              Save schedule
+              {t("cycle.actions.saveSchedule")}
             </Button>
           ) : (
-            <p className="text-[10px] leading-4 text-slate-600">
-              Write access is required to change the schedule.
+            <p className="text-[10px] leading-4 text-muted">
+              {t("cycle.policy.writeRequired")}
             </p>
           )}
         </div>
@@ -622,13 +661,13 @@ export function InventoryCycleManager({
       <div className="p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-success-soft text-success">
               <ClipboardCheck className="size-3.5" aria-hidden="true" />
             </span>
             <div>
-              <h3 className="text-xs font-semibold text-slate-900">Physical count</h3>
-              <p className="mt-1 text-[11px] leading-4 text-slate-600">
-                Record what is physically present; any variance becomes an audited adjustment.
+              <h3 className="text-xs font-semibold text-foreground">{t("cycle.count.title")}</h3>
+              <p className="mt-1 text-[11px] leading-4 text-muted">
+                {t("cycle.count.description")}
               </p>
             </div>
           </div>
@@ -644,18 +683,17 @@ export function InventoryCycleManager({
                 }
               }}
             >
-              {countOpen ? "Cancel" : "Count now"}
+              {countOpen ? t("cycle.actions.cancel") : t("cycle.actions.countNow")}
             </Button>
           ) : null}
         </div>
 
         {cycle.resource.trackingMode === "serialized" ? (
-          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-3 text-[11px] leading-4 text-blue-700 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-info-border bg-info-soft px-3.5 py-3 text-[11px] leading-4 text-info sm:flex-row sm:items-center sm:justify-between">
             <span className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
               <span>
-                Review or scan each identified unit and correct its status first. Then
-                complete the review without breaking unit-level traceability.
+                {t("cycle.serialized.description")}
               </span>
             </span>
             {canEdit ? (
@@ -670,36 +708,41 @@ export function InventoryCycleManager({
                 ) : (
                   <ClipboardCheck className="size-3.5" aria-hidden="true" />
                 )}
-                Complete review
+                {t("cycle.actions.completeReview")}
               </Button>
             ) : null}
           </div>
         ) : !canEdit ? (
-          <p className="mt-4 rounded-xl bg-slate-50 px-3.5 py-3 text-[11px] leading-4 text-slate-600">
-            You can review completed counts. Recording a new count requires write access.
+          <p className="mt-4 rounded-xl bg-surface-subtle px-3.5 py-3 text-[11px] leading-4 text-muted">
+            {t("cycle.count.readOnly")}
           </p>
         ) : countOpen ? (
-          <form onSubmit={submitCount} className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+          <form onSubmit={submitCount} className="mt-5 rounded-2xl border border-success-border bg-success-soft/40 p-4">
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="block text-[11px] font-semibold text-slate-600">
-                Count scope
+              <label className="block text-[11px] font-semibold text-muted">
+                {t("cycle.count.scope")}
                 <select
                   value={countTarget}
                   onChange={(event) => chooseCountTarget(event.target.value)}
-                  className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
+                  className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs text-muted-strong outline-none focus:border-success focus:ring-4 focus:ring-success-border"
                 >
                   <option value={ENTIRE_INVENTORY}>
-                    Entire inventory · expected {cycle.resource.quantity}
+                    {t("cycle.count.entireExpected", {
+                      quantity: numberFormat.format(cycle.resource.quantity),
+                    })}
                   </option>
                   {locations.map((location) => (
                     <option key={location.id} value={location.id}>
-                      {location.name} · expected {location.quantity}
+                      {t("cycle.count.locationExpected", {
+                        name: location.name,
+                        quantity: numberFormat.format(location.quantity),
+                      })}
                     </option>
                   ))}
                 </select>
               </label>
-              <label className="block text-[11px] font-semibold text-slate-600">
-                Counted quantity
+              <label className="block text-[11px] font-semibold text-muted">
+                {t("cycle.count.countedQuantity")}
                 <input
                   type="number"
                   min="0"
@@ -708,36 +751,47 @@ export function InventoryCycleManager({
                   required
                   value={countedQuantity}
                   onChange={(event) => setCountedQuantity(event.target.value)}
-                  className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
+                  className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs text-muted-strong outline-none focus:border-success focus:ring-4 focus:ring-success-border"
                 />
               </label>
-              <label className="block text-[11px] font-semibold text-slate-600">
-                Counted at
+              <label className="block text-[11px] font-semibold text-muted">
+                {t("cycle.count.countedAt")}
                 <input
                   type="datetime-local"
                   required
                   value={countedAt}
                   onChange={(event) => setCountedAt(event.target.value)}
-                  className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
+                  className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs text-muted-strong outline-none focus:border-success focus:ring-4 focus:ring-success-border"
                 />
               </label>
-              <label className="block text-[11px] font-semibold text-slate-600">
-                Note <span className="font-normal text-slate-600">(optional)</span>
+              <label className="block text-[11px] font-semibold text-muted">
+                {t("cycle.count.note")} {" "}
+                <span className="font-normal text-muted">
+                  ({t("cycle.optional")})
+                </span>
                 <input
                   maxLength={20_000}
                   value={countNote}
                   onChange={(event) => setCountNote(event.target.value)}
-                  placeholder="Reason or observation"
-                  className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none placeholder:text-slate-600 focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
+                  placeholder={t("cycle.count.notePlaceholder")}
+                  className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs text-muted-strong outline-none placeholder:text-muted focus:border-success focus:ring-4 focus:ring-success-border"
                 />
               </label>
             </div>
-            <div className="mt-4 flex flex-col gap-3 border-t border-emerald-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[10px] leading-4 text-slate-600">
-                Expected {quantityLabel(expectedQuantity, unitName)} · variance{" "}
-                <span className="font-semibold tabular-nums text-slate-700">
+            <div className="mt-4 flex flex-col gap-3 border-t border-success-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[10px] leading-4 text-muted">
+                {t("cycle.count.expected", {
+                  quantity: quantityLabel(
+                    expectedQuantity,
+                    unitName,
+                    numberFormat,
+                    t("cycle.unit"),
+                  ),
+                })}{" "}
+                · {t("cycle.count.variance")}{" "}
+                <span className="font-semibold tabular-nums text-muted-strong">
                   {Number.isInteger(Number(countedQuantity))
-                    ? `${Number(countedQuantity) - expectedQuantity >= 0 ? "+" : ""}${Number(countedQuantity) - expectedQuantity}`
+                    ? `${Number(countedQuantity) - expectedQuantity >= 0 ? "+" : ""}${numberFormat.format(Number(countedQuantity) - expectedQuantity)}`
                     : "—"}
                 </span>
               </p>
@@ -747,27 +801,26 @@ export function InventoryCycleManager({
                 ) : (
                   <ClipboardCheck className="size-3.5" aria-hidden="true" />
                 )}
-                Record count
+                {t("cycle.actions.recordCount")}
               </Button>
             </div>
             {countTarget === ENTIRE_INVENTORY && locations.some((location) => location.quantity > 0) ? (
-              <p className="mt-3 text-[10px] leading-4 text-slate-600">
-                A total count reconciles unassigned stock. To correct one stored balance,
-                select that location instead.
+              <p className="mt-3 text-[10px] leading-4 text-muted">
+                {t("cycle.count.totalHelp")}
               </p>
             ) : null}
           </form>
         ) : null}
       </div>
 
-      <div className="border-t border-slate-100">
+      <div className="border-t border-border">
         <div className="flex items-center gap-2 px-5 py-3.5 sm:px-6">
-          <History className="size-3.5 text-slate-600" aria-hidden="true" />
-          <h3 className="text-xs font-semibold text-slate-800">Recent counts</h3>
-          <span className="ml-auto text-[10px] text-slate-600">{cycle.history.length}</span>
+          <History className="size-3.5 text-muted" aria-hidden="true" />
+          <h3 className="text-xs font-semibold text-muted-strong">{t("cycle.history.title")}</h3>
+          <span className="ml-auto text-[10px] text-muted">{numberFormat.format(cycle.history.length)}</span>
         </div>
         {cycle.history.length ? (
-          <div className="divide-y divide-slate-100 border-t border-slate-100">
+          <div className="divide-y divide-border border-t border-border">
             {cycle.history.slice(0, 10).map((count) => {
               const location = count.locationResourceId
                 ? locationById.get(count.locationResourceId)
@@ -778,40 +831,44 @@ export function InventoryCycleManager({
                   className="grid gap-3 px-5 py-3.5 sm:grid-cols-[minmax(0,1fr)_120px_100px] sm:items-center sm:px-6"
                 >
                   <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-slate-800">
+                    <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-muted-strong">
                       {count.locationResourceId ? (
-                        <MapPin className="size-3 shrink-0 text-slate-600" aria-hidden="true" />
+                        <MapPin className="size-3 shrink-0 text-muted" aria-hidden="true" />
                       ) : (
-                        <ClipboardCheck className="size-3 shrink-0 text-slate-600" aria-hidden="true" />
+                        <ClipboardCheck className="size-3 shrink-0 text-muted" aria-hidden="true" />
                       )}
                       <span className="truncate">
                         {location?.name ??
-                          (count.locationResourceId ? "Unknown location" : "Entire inventory")}
+                          (count.locationResourceId
+                            ? t("cycle.history.unknownLocation")
+                            : t("cycle.targets.entireInventory"))}
                       </span>
                     </p>
-                    <p className="mt-1 truncate text-[10px] text-slate-600">
-                      {count.expectedQuantity.toLocaleString()} expected →{" "}
-                      {count.countedQuantity.toLocaleString()} counted
+                    <p className="mt-1 truncate text-[10px] text-muted">
+                      {t("cycle.history.quantities", {
+                        expected: numberFormat.format(count.expectedQuantity),
+                        counted: numberFormat.format(count.countedQuantity),
+                      })}
                       {count.note ? ` · ${count.note}` : ""}
                     </p>
                   </div>
                   <span
                     className={`w-fit rounded-lg px-2 py-1 text-[11px] font-bold tabular-nums ${
                       count.variance > 0
-                        ? "bg-emerald-50 text-emerald-700"
+                        ? "bg-success-soft text-success"
                         : count.variance < 0
-                          ? "bg-rose-50 text-rose-700"
-                          : "bg-slate-100 text-slate-600"
+                          ? "bg-danger-soft text-danger"
+                          : "bg-surface-muted text-muted"
                     }`}
                   >
                     {count.variance > 0 ? "+" : ""}
-                    {count.variance}
+                    {numberFormat.format(count.variance)}
                   </span>
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-600 sm:block">
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted sm:block">
                     <Clock3 className="size-3 sm:hidden" aria-hidden="true" />
-                    <p>{formatDate(count.countedAt)}</p>
+                    <p>{formatDate(count.countedAt, locale)}</p>
                     <p className="mt-0.5 hidden truncate text-[9px] sm:block">
-                      {count.createdBy || "System"}
+                      {count.createdBy || t("cycle.history.system")}
                     </p>
                   </div>
                 </div>
@@ -819,11 +876,11 @@ export function InventoryCycleManager({
             })}
           </div>
         ) : (
-          <div className="border-t border-slate-100 px-6 py-9 text-center">
-            <ClipboardCheck className="mx-auto size-5 text-slate-600" aria-hidden="true" />
-            <p className="mt-2 text-xs font-semibold text-slate-600">No counts recorded</p>
-            <p className="mt-1 text-[10px] text-slate-600">
-              The first physical check will appear here with its variance.
+          <div className="border-t border-border px-6 py-9 text-center">
+            <ClipboardCheck className="mx-auto size-5 text-muted" aria-hidden="true" />
+            <p className="mt-2 text-xs font-semibold text-muted">{t("cycle.history.emptyTitle")}</p>
+            <p className="mt-1 text-[10px] text-muted">
+              {t("cycle.history.emptyDescription")}
             </p>
           </div>
         )}

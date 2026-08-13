@@ -1,0 +1,221 @@
+{
+  "metadata": {
+    "mapTitle": "Standorte",
+    "mapDescription": "Inventarstandorte auf der Karte ansehen und bearbeiten.",
+    "roomsTitle": "Räume in 3D",
+    "roomsDescription": "RoomPlan-Scans und räumlich positioniertes Inventar erkunden."
+  },
+  "map": {
+    "loading": "Karte wird geladen…",
+    "eyebrow": "Räumliches Inventar",
+    "title": {
+      "edit": "Standorte bearbeiten",
+      "view": "Standorte"
+    },
+    "summary": {
+      "positioned": "{{located}} von {{total}} Objekten positioniert",
+      "structures_one": "{{value}} georeferenziertes Gebäude",
+      "structures_other": "{{value}} georeferenzierte Gebäude",
+      "features": "Punkte, Räume und Objektumrisse"
+    },
+    "changes": {
+      "unsaved_one": "{{value}} ungespeicherte Änderung",
+      "unsaved_other": "{{value}} ungespeicherte Änderungen"
+    },
+    "actions": {
+      "multiSelect": "Mehrfachauswahl",
+      "multiSelectOn": "Mehrfachauswahl aktiv",
+      "view": "Ansicht",
+      "save": "Kartenänderungen speichern",
+      "edit": "Bearbeiten",
+      "readOnly": "Schreibgeschützt",
+      "dismissError": "Fehler schließen",
+      "dismissNotice": "Hinweis schließen"
+    },
+    "errors": {
+      "load": "Die Kartendaten konnten nicht geladen werden.",
+      "polygonPoints": "Ein Polygon benötigt mindestens drei Punkte.",
+      "save_one": "{{value}} Kartenänderung konnte nicht gespeichert werden.",
+      "save_other": "{{value}} Kartenänderungen konnten nicht gespeichert werden.",
+      "quickEditRequired": "Wähle mindestens eine Schnelländerung aus.",
+      "batch": "Die Auswahl konnte nicht aktualisiert werden.",
+      "saveBeforeView": "Speichere die Kartenänderungen, bevor du zur Kartenansicht zurückkehrst."
+    },
+    "notices": {
+      "pointPlaced": "Punkt platziert. Speichere die Kartenänderungen, sobald du fertig bist.",
+      "outlineAdded": "Umriss hinzugefügt. Ziehe die orangefarbenen Ecken oder klicke auf grüne Griffe, um ihn anzupassen.",
+      "saved_one": "{{value}} Kartenänderung gespeichert.",
+      "saved_other": "{{value}} Kartenänderungen gespeichert.",
+      "updated_one": "{{value}} Objekt aktualisiert.",
+      "updated_other": "{{value}} Objekte aktualisiert."
+    },
+    "search": {
+      "placeholder": "Objekte, Standorte oder Tags suchen…",
+      "noMatches": "Keine passenden Inventarobjekte."
+    },
+    "selection": {
+      "selected_one": "{{value}} Objekt ausgewählt",
+      "selected_other": "{{value}} Objekte ausgewählt",
+      "selectResults": "Ergebnisse auswählen",
+      "clear": "Leeren",
+      "empty": "Wähle ein Objekt in der Liste oder auf der Karte aus."
+    },
+    "resource": {
+      "features_one": "{{value}} Kartenmerkmal",
+      "features_other": "{{value}} Kartenmerkmale",
+      "notPositioned": "Nicht positioniert",
+      "open": "Objekt öffnen"
+    },
+    "draw": {
+      "title": "Geometrie zeichnen",
+      "layerPlaceholder": "Ebene, z. B. Werkstatt",
+      "placePoint": "Punkt platzieren",
+      "drawOutline": "Umriss zeichnen",
+      "pointHint": "Klicke auf die Karte, um einen Punkt zu platzieren.",
+      "polygonHint_one": "Klicke Ecken auf der Karte an · {{value}} Punkt",
+      "polygonHint_other": "Klicke Ecken auf der Karte an · {{value}} Punkte",
+      "finishPolygon": "Polygon abschließen",
+      "cancel": "Abbrechen",
+      "placeOverlay": "Einmal klicken, um das Objekt zu platzieren",
+      "polygonOverlay_one": "{{value}} Ecke · Eingabetaste zum Abschließen · Esc zum Abbrechen",
+      "polygonOverlay_other": "{{value}} Ecken · Eingabetaste zum Abschließen · Esc zum Abbrechen"
+    },
+    "features": {
+      "title": "Kartenmerkmale",
+      "edit": "{{type}} bearbeiten",
+      "delete": "Kartenmerkmal löschen",
+      "layer": "Ebene",
+      "description": "Beschreibung",
+      "editHint": "Orangefarbene Griffe ziehen · grüne Griffe anklicken, um eine Ecke hinzuzufügen · orangefarbene Griffe mit Alt-/Option-Klick entfernen.",
+      "types": {
+        "point": "Punkt",
+        "polygon": "Polygon"
+      }
+    },
+    "quickEdit": {
+      "title_one": "Schnellbearbeitung · {{value}} Objekt ausgewählt",
+      "title_other": "Schnellbearbeitung · {{value}} Objekte ausgewählt",
+      "keepStatus": "Status beibehalten",
+      "keepType": "Typ beibehalten",
+      "keepPriority": "Priorität beibehalten",
+      "priority": "Priorität {{value}}",
+      "addTags": "Tags hinzufügen…",
+      "changeLocation": "Standortbezeichnung ändern",
+      "locationPlaceholder": "Werkstatt · Regal A3 (leer löscht)",
+      "apply": "Auf Auswahl anwenden"
+    },
+    "statuses": {
+      "available": "Verfügbar",
+      "in-use": "In Verwendung",
+      "maintenance": "Wartung",
+      "archived": "Archiviert"
+    },
+    "types": {
+      "tool": "Werkzeug",
+      "object": "Objekt",
+      "furniture": "Möbel",
+      "vehicle": "Fahrzeug",
+      "place": "Ort",
+      "clothing": "Kleidung",
+      "person": "Person",
+      "project": "Projekt",
+      "other": "Sonstiges"
+    },
+    "structures": {
+      "title": "Gebäude",
+      "select": "Gebäude auswählen",
+      "all": "Alle Gebäude",
+      "rooms_one": "{{value}} Raum",
+      "rooms_other": "{{value}} Räume",
+      "open3d": "Räume in 3D öffnen"
+    },
+    "basemap": {
+      "map": "Karte",
+      "satellite": "Satellit"
+    },
+    "shortcuts": "Umschalt-Klick: zur Auswahl hinzufügen · P: Punkt · G: Polygon · ⌘/Strg+S: speichern",
+    "canvasLabel": "Inventarkarte",
+    "controls": {
+      "toggleAttribution": "Quellenangaben ein- oder ausblenden",
+      "mapTitle": "Karte",
+      "resetBearing": "Zum Drehen der Karte ziehen, zum Ausrichten nach Norden klicken",
+      "zoomIn": "Vergrößern",
+      "zoomOut": "Verkleinern"
+    },
+    "defaultLayers": {
+      "location": "Standort",
+      "area": "Bereich"
+    }
+  },
+  "rooms": {
+    "loading": "3D-Räume werden geladen…",
+    "errors": {
+      "loadRooms": "Die Räume konnten nicht geladen werden.",
+      "loadScene": "Die Raumszene konnte nicht geladen werden."
+    },
+    "empty": {
+      "title": "Noch keine Räume gescannt",
+      "description": "Öffne die Inventory-App auf dem iPhone, wähle Räume und scanne einen Raum mit RoomPlan. Das 3D-Modell und alle räumlich erfassten Inventarobjekte erscheinen anschließend hier.",
+      "requirement": "Erfordert ein LiDAR-fähiges iPhone"
+    },
+    "eyebrow": "Räumliches Inventar",
+    "title": "Räume in 3D",
+    "subtitle": "Navigiere durch RoomPlan-Scans und öffne Inventarobjekte an ihren gemessenen Positionen.",
+    "stats": {
+      "rooms_one": "{{value}} Raum",
+      "rooms_other": "{{value}} Räume",
+      "items_one": "{{value}} positioniertes Objekt",
+      "items_other": "{{value}} positionierte Objekte",
+      "linked_one": "{{value}} verknüpfter Raum · gemeinsamer AR-Bezugsrahmen",
+      "linked_other": "{{value}} verknüpfte Räume · gemeinsamer AR-Bezugsrahmen"
+    },
+    "structures": {
+      "building": "Gebäude",
+      "individualRooms": "Alle einzelnen Räume",
+      "summary": "{{floors}} · {{rooms}}",
+      "floors_one": "{{value}} Etage",
+      "floors_other": "{{value}} Etagen",
+      "rooms_one": "{{value}} Raum",
+      "rooms_other": "{{value}} Räume",
+      "floorRooms_one": "{{floor}} · {{value}} Raum",
+      "floorRooms_other": "{{floor}} · {{value}} Räume",
+      "viewMap": "Auf Karte anzeigen"
+    },
+    "scans": {
+      "title": "Gescannte Räume",
+      "revision_one": "Revision {{revision}} · {{value}} Objekt",
+      "revision_other": "Revision {{revision}} · {{value}} Objekte",
+      "sharedFrame": "Gemeinsamer AR-Bezugsrahmen {{id}}"
+    },
+    "scene": {
+      "noItemsTitle": "Noch keine Objekte platziert",
+      "noItemsDescription": "Erfasse mit dem AR-Modus der iPhone-App ein Objekt in diesem Raum.",
+      "roomFallback": "Raum",
+      "downloadUsdz": "Original-USDZ herunterladen"
+    },
+    "placements": {
+      "searchPlaceholder": "Positionierte Objekte suchen…",
+      "noMatches": "Keine passenden Objekte",
+      "coordinates": "{{coordinates}} m",
+      "accuracy": "Genauigkeit {{value}} · {{method}}",
+      "open": "{{name}} öffnen",
+      "methods": {
+        "manual": "manuell",
+        "scene-depth": "Szenentiefe",
+        "mesh-raycast": "Mesh-RayCast",
+        "plane-raycast": "Ebenen-RayCast"
+      }
+    }
+  },
+  "canvas": {
+    "unsupported": "Dieser Browser unterstützt keine 3D-Darstellung.",
+    "aria": {
+      "single": "3D-Modell von {{room}}",
+      "multiple_one": "3D-Modell von {{room}} und {{value}} verknüpftem Raum",
+      "multiple_other": "3D-Modell von {{room}} und {{value}} verknüpften Räumen"
+    },
+    "topView": "Draufsicht",
+    "resetView": "Ansicht zurücksetzen",
+    "controlsHint": "Ziehen: drehen · zwei Finger: verschieben · scrollen: zoomen"
+  }
+}

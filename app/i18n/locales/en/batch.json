@@ -1,0 +1,130 @@
+{
+  "header": {
+    "inventory": "Inventory",
+    "eyebrow": "Fast intake",
+    "title": "Batch capture",
+    "processing_one": "{{count}} item processing",
+    "processing_other": "{{count}} items processing",
+    "ready": "Ready for the next item"
+  },
+  "types": {
+    "object": "Object",
+    "tool": "Tool",
+    "furniture": "Furniture",
+    "clothing": "Clothing",
+    "vehicle": "Vehicle",
+    "place": "Place",
+    "person": "Person",
+    "project": "Project",
+    "other": "Other"
+  },
+  "camera": {
+    "heading": "Camera capture",
+    "preview": "Live camera preview",
+    "ready": "Camera ready",
+    "opening": "Opening camera",
+    "off": "Camera off",
+    "device": "Camera device",
+    "numbered": "Camera {{number}}",
+    "unavailable": "Camera unavailable",
+    "permission": "Waiting for permission…",
+    "prompt": "Photograph the item in place",
+    "description": "We’ll prefer the rear camera. You can also upload existing images at any time.",
+    "retry": "Try camera again",
+    "allow": "Allow camera",
+    "upload": "Upload",
+    "takePhoto": "Take photo",
+    "stop": "Stop"
+  },
+  "photos": {
+    "title": "Photo tray",
+    "description": "Add several angles for a better AI result.",
+    "clear": "Clear",
+    "selected": "Selected photos",
+    "alt": "Selected item view {{number}}",
+    "primary": "Primary",
+    "remove": "Remove photo {{number}}",
+    "addMore": "Add more photos",
+    "empty": "No photos yet",
+    "emptyDescription": "Take a photo or choose images from this device."
+  },
+  "defaults": {
+    "eyebrow": "Defaults",
+    "title": "Describe the batch",
+    "optional": "Optional",
+    "itemType": "Item type",
+    "locationLabel": "Location label",
+    "locationPlaceholder": "e.g. Workshop · Shelf B2",
+    "coordinates": "GPS coordinates",
+    "clear": "Clear",
+    "findingLocation": "Finding your location…",
+    "useLocation": "Use current location",
+    "accuracy": "Accurate to about {{meters}} m · Tap to refresh",
+    "locationPrivacy": "Saved privately with this inventory item",
+    "generateCover": "Generate AI cover",
+    "generateCoverDescription": "Identify the item, then create a clean studio cover from the first photo."
+  },
+  "submit": {
+    "create": "Create with AI",
+    "photoCount_one": "{{count}} photo",
+    "photoCount_other": "{{count}} photos",
+    "addPhotos": "Add photos",
+    "description": "The tray clears immediately, so you can capture the next item while AI works."
+  },
+  "jobs": {
+    "eyebrow": "Background queue",
+    "title": "Recent captures",
+    "clearFinished": "Clear finished",
+    "captureName_one": "{{count}}-photo capture",
+    "captureName_other": "{{count}}-photo capture",
+    "openItem": "Open item",
+    "empty": "Nothing queued yet",
+    "emptyDescription": "Completed and in-progress items will stay visible here.",
+    "stage": {
+      "ready": "Ready",
+      "warning": "Saved with a warning",
+      "attention": "Needs attention",
+      "creating": "Creating item",
+      "uploading": "Uploading photos",
+      "analyzing": "AI is identifying it",
+      "cover": "Generating cover",
+      "processing": "Processing"
+    },
+    "steps": {
+      "save": "Save item",
+      "upload": "Upload",
+      "analyze": "Analyze",
+      "cover": "Cover"
+    },
+    "messages": {
+      "analysisFailed": "Item and photos saved, but AI analysis failed: {{reason}}",
+      "coverFailed": "Item analyzed, but its AI cover failed: {{reason}}",
+      "readyWithCover": "Item, metadata, and AI cover are ready.",
+      "ready": "Item and AI metadata are ready."
+    }
+  },
+  "errors": {
+    "cameraBlocked": "Camera access was blocked. Allow it in your browser settings, or upload photos instead.",
+    "cameraMissing": "No camera was found on this device.",
+    "cameraInUse": "The camera is already in use by another app.",
+    "cameraOpen": "The camera could not be opened.",
+    "cameraUnsupported": "Live camera capture is not supported here. Open this page over HTTPS or upload photos instead.",
+    "cameraWarming": "The camera is still warming up. Try again in a moment.",
+    "filesUnsupported_one": "Skipped {{count}} unsupported file.",
+    "filesUnsupported_other": "Skipped {{count}} unsupported files.",
+    "filesOverLimit_one": "Skipped {{count}} file over the {{max}}-photo limit.",
+    "filesOverLimit_other": "Skipped {{count}} files over the {{max}}-photo limit.",
+    "filesSkippedBoth": "Skipped {{unsupportedCount}} unsupported file(s) and {{limitCount}} over the {{max}}-photo limit.",
+    "photoLimit": "Each item can contain up to {{max}} photos.",
+    "frameNotReady": "Camera frame is not ready.",
+    "frameUnsupported": "This browser cannot capture the frame.",
+    "photoProcess": "The photo could not be processed.",
+    "photoCapture": "The photo could not be captured.",
+    "geolocationUnsupported": "Geolocation is not supported by this browser.",
+    "locationBlocked": "Location access was blocked. You can still save this item without coordinates.",
+    "locationUnknown": "Your current location could not be determined.",
+    "unknownReason": "Unknown error",
+    "batchSave": "This batch could not be saved.",
+    "photoRequired": "Take or upload at least one photo first."
+  }
+}

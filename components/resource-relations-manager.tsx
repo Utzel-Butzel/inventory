@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useT } from "next-i18next/client";
 
 import { Badge, Button, Card, EmptyState } from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
@@ -72,6 +73,7 @@ export function ResourceRelationsManager({
   resourceId: string;
   canEdit: boolean;
 }) {
+  const { t } = useT("resource");
   const [relations, setRelations] = useState<Relation[]>([]);
   const [resources, setResources] = useState<ClientResource[]>([]);
   const [types, setTypes] = useState<InventoryType[]>([]);
@@ -110,11 +112,15 @@ export function ResourceRelationsManager({
         ),
       );
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load relationships.");
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : t("relations.errors.load"),
+      );
     } finally {
       setLoading(false);
     }
-  }, [resourceId]);
+  }, [resourceId, t]);
 
   useEffect(() => {
     void load();
@@ -154,7 +160,11 @@ export function ResourceRelationsManager({
       setRelatedId("");
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to save relationship.");
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : t("relations.errors.save"),
+      );
     } finally {
       setSaving(false);
     }
@@ -170,7 +180,11 @@ export function ResourceRelationsManager({
       );
       await load();
     } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "Unable to remove relationship.");
+      setError(
+        removeError instanceof Error
+          ? removeError.message
+          : t("relations.errors.remove"),
+      );
     } finally {
       setSaving(false);
     }
@@ -179,15 +193,17 @@ export function ResourceRelationsManager({
   return (
     <section className="mx-auto w-full max-w-[1450px] px-4 pb-8 sm:px-6 lg:px-8">
       <Card className="overflow-hidden p-0">
-        <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-emerald-600 text-white">
+            <span className="grid size-10 place-items-center rounded-xl bg-success text-on-strong">
               <Link2 className="size-5" aria-hidden="true" />
             </span>
             <div>
-              <h2 className="font-semibold text-slate-950">Placement & relationships</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Map outlines assign the most specific containing item automatically. Manual placements stay pinned.
+              <h2 className="font-semibold text-foreground">
+                {t("relations.title")}
+              </h2>
+              <p className="mt-1 text-sm text-muted">
+                {t("relations.description")}
               </p>
             </div>
           </div>
@@ -195,21 +211,21 @@ export function ResourceRelationsManager({
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
-            aria-label="Refresh relationships"
+            className="grid size-10 place-items-center rounded-xl border border-border text-muted hover:bg-surface-subtle"
+            aria-label={t("relations.refresh")}
           >
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
 
         {error ? (
-          <div className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm text-red-700">{error}</div>
+          <div className="border-b border-danger-border bg-danger-soft px-5 py-3 text-sm text-danger">{error}</div>
         ) : null}
 
         <div className="grid gap-6 p-5 sm:p-6 xl:grid-cols-2">
           <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <MapPin className="size-4 text-emerald-600" /> Located in
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <MapPin className="size-4 text-success" /> {t("relations.locatedIn")}
             </h3>
             <div className="mt-3 space-y-2">
               {parents.length ? parents.map((relation) => (
@@ -217,15 +233,15 @@ export function ResourceRelationsManager({
                   key={relation.id}
                   relation={relation}
                   resource={relation.source}
-                  label={relation.relationType?.inverseLabel ?? "Located in"}
+                  label={relation.relationType?.inverseLabel ?? t("relations.locatedIn")}
                   saving={saving}
                   onRemove={canEdit ? removeRelation : undefined}
                 />
               )) : (
                 <EmptyState
                   icon={<MapPin className="size-5" />}
-                  title="No parent assigned"
-                  description="Draw this item inside a container outline, or choose a parent manually."
+                  title={t("relations.noParent")}
+                  description={t("relations.noParentDescription")}
                 />
               )}
             </div>
@@ -234,9 +250,9 @@ export function ResourceRelationsManager({
                 <select
                   value={parentId}
                   onChange={(event) => setParentId(event.target.value)}
-                  className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                  className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 text-sm"
                 >
-                  <option value="">Choose a room, furniture item, or container…</option>
+                  <option value="">{t("relations.chooseParent")}</option>
                   {possibleParents.map((resource) => (
                     <option key={resource.id} value={resource.id}>{resource.name} · {resource.type}</option>
                   ))}
@@ -251,15 +267,15 @@ export function ResourceRelationsManager({
                   })}
                 >
                   {saving ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}
-                  Add
+                  {t("relations.add")}
                 </Button>
               </div>
             ) : null}
           </div>
 
           <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Boxes className="size-4 text-violet-600" /> Contains
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Boxes className="size-4 text-brand" /> {t("relations.contains")}
             </h3>
             <div className="mt-3 space-y-2">
               {children.length ? children.map((relation) => (
@@ -267,22 +283,22 @@ export function ResourceRelationsManager({
                   key={relation.id}
                   relation={relation}
                   resource={relation.target}
-                  label={relation.relationType?.label ?? "Contains"}
+                  label={relation.relationType?.label ?? t("relations.contains")}
                   saving={saving}
                   onRemove={canEdit ? removeRelation : undefined}
                 />
               )) : (
-                <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-600">
-                  No contained items yet.
+                <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                  {t("relations.noChildren")}
                 </p>
               )}
             </div>
           </div>
         </div>
 
-        <details className="border-t border-slate-200 px-5 py-4 sm:px-6">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-700">
-            Other relationships ({others.length})
+        <details className="border-t border-border px-5 py-4 sm:px-6">
+          <summary className="cursor-pointer text-sm font-semibold text-muted-strong">
+            {t("relations.other", { count: others.length })}
           </summary>
           <div className="mt-4 space-y-2">
             {others.map((relation) => {
@@ -306,7 +322,7 @@ export function ResourceRelationsManager({
               <select
                 value={relationTypeKey}
                 onChange={(event) => setRelationTypeKey(event.target.value)}
-                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                className="h-10 rounded-xl border border-border bg-surface px-3 text-sm"
               >
                 {relationTypes.map((relationType) => (
                   <option key={relationType.key} value={relationType.key}>{relationType.label}</option>
@@ -315,9 +331,9 @@ export function ResourceRelationsManager({
               <select
                 value={relatedId}
                 onChange={(event) => setRelatedId(event.target.value)}
-                className="h-10 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                className="h-10 min-w-0 rounded-xl border border-border bg-surface px-3 text-sm"
               >
-                <option value="">Choose another inventory item…</option>
+                <option value="">{t("relations.chooseItem")}</option>
                 {resources.map((resource) => (
                   <option key={resource.id} value={resource.id}>{resource.name} · {resource.type}</option>
                 ))}
@@ -331,7 +347,7 @@ export function ResourceRelationsManager({
                   relationTypeKey,
                 })}
               >
-                <Plus className="size-4" /> Link
+                <Plus className="size-4" /> {t("relations.link")}
               </Button>
             </div>
           ) : null}
@@ -354,25 +370,32 @@ function RelationRow({
   saving: boolean;
   onRemove?: (relation: Relation) => void;
 }) {
+  const { t } = useT("resource");
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-      <ArrowDownToLine className="size-4 shrink-0 text-slate-600" aria-hidden="true" />
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
+      <ArrowDownToLine className="size-4 shrink-0 text-muted" aria-hidden="true" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-slate-800">{resource?.name ?? "Missing item"}</p>
-        <p className="mt-0.5 text-[10px] text-slate-600">{label} · {resource?.type ?? "unknown"}</p>
+        <p className="truncate text-sm font-semibold text-muted-strong">
+          {resource?.name ?? t("relations.missingItem")}
+        </p>
+        <p className="mt-0.5 text-[10px] text-muted">
+          {label} · {resource?.type ?? t("relations.unknown")}
+        </p>
       </div>
       {relation.origin === "spatial" ? (
-        <Badge tone="brand"><Sparkles className="mr-1 size-3" /> Automatic</Badge>
+        <Badge tone="brand"><Sparkles className="mr-1 size-3" /> {t("relations.automatic")}</Badge>
       ) : (
-        <Badge>Manual</Badge>
+        <Badge>{t("relations.manual")}</Badge>
       )}
       {relation.origin === "manual" && onRemove ? (
         <button
           type="button"
           onClick={() => onRemove(relation)}
           disabled={saving}
-          className="grid size-8 place-items-center rounded-lg text-slate-600 hover:bg-red-50 hover:text-red-600"
-          aria-label={`Remove relationship with ${resource?.name ?? "item"}`}
+          className="grid size-8 place-items-center rounded-lg text-muted hover:bg-danger-soft hover:text-danger"
+          aria-label={t("relations.removeWith", {
+            name: resource?.name ?? t("relations.item"),
+          })}
         >
           <Trash2 className="size-4" />
         </button>

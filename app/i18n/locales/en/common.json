@@ -1,0 +1,55 @@
+{
+  "language": {
+    "label": "Interface language",
+    "english": "English",
+    "german": "German"
+  },
+  "actions": {
+    "add": "Add",
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "continue": "Continue",
+    "create": "Create",
+    "delete": "Delete",
+    "edit": "Edit",
+    "refresh": "Refresh",
+    "remove": "Remove",
+    "reset": "Reset",
+    "retry": "Try again",
+    "save": "Save",
+    "saving": "Saving…",
+    "search": "Search",
+    "select": "Select",
+    "upload": "Upload"
+  },
+  "state": {
+    "active": "Active",
+    "complete": "Complete",
+    "disabled": "Disabled",
+    "error": "Error",
+    "loading": "Loading…",
+    "none": "None",
+    "ready": "Ready",
+    "unknown": "Unknown"
+  },
+  "roles": {
+    "admin": "Administrator",
+    "editor": "Editor",
+    "viewer": "Viewer"
+  },
+  "boolean": {
+    "yes": "Yes",
+    "no": "No"
+  },
+  "models": {
+    "image": "Image model",
+    "counting": "Counting model",
+    "serverDefault": "Server default"
+  },
+  "theme": {
+    "toggle": "Toggle color theme",
+    "light": "Switch to light mode",
+    "dark": "Switch to dark mode"
+  }
+}

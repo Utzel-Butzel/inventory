@@ -32,6 +32,8 @@ import {
   useRef,
   useState,
 } from "react";
+import type { TFunction } from "i18next";
+import { useT } from "next-i18next/client";
 
 import {
   ImageModelSelector,
@@ -42,15 +44,15 @@ const MAX_PHOTOS = 12;
 const MAX_CAPTURE_EDGE = 1920;
 
 const FALLBACK_RESOURCE_TYPES = [
-  { value: "object", label: "Object" },
-  { value: "tool", label: "Tool" },
-  { value: "furniture", label: "Furniture" },
-  { value: "clothing", label: "Clothing" },
-  { value: "vehicle", label: "Vehicle" },
-  { value: "place", label: "Place" },
-  { value: "person", label: "Person" },
-  { value: "project", label: "Project" },
-  { value: "other", label: "Other" },
+  { value: "object", labelKey: "types.object" },
+  { value: "tool", labelKey: "types.tool" },
+  { value: "furniture", labelKey: "types.furniture" },
+  { value: "clothing", labelKey: "types.clothing" },
+  { value: "vehicle", labelKey: "types.vehicle" },
+  { value: "place", labelKey: "types.place" },
+  { value: "person", labelKey: "types.person" },
+  { value: "project", labelKey: "types.project" },
+  { value: "other", labelKey: "types.other" },
 ] as const;
 
 type ResourceType = string;
@@ -125,31 +127,32 @@ async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-const cameraErrorMessage = (error: unknown) => {
+const cameraErrorMessage = (error: unknown, t: TFunction<"batch">) => {
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError") {
-      return "Camera access was blocked. Allow it in your browser settings, or upload photos instead.";
+      return t("errors.cameraBlocked");
     }
-    if (error.name === "NotFoundError") return "No camera was found on this device.";
+    if (error.name === "NotFoundError") return t("errors.cameraMissing");
     if (error.name === "NotReadableError") {
-      return "The camera is already in use by another app.";
+      return t("errors.cameraInUse");
     }
   }
-  return error instanceof Error ? error.message : "The camera could not be opened.";
+  return error instanceof Error ? error.message : t("errors.cameraOpen");
 };
 
-const stageLabel = (job: BatchJob) => {
-  if (job.state === "complete") return "Ready";
-  if (job.state === "warning") return "Saved with a warning";
-  if (job.state === "error") return "Needs attention";
-  if (job.stage === "creating") return "Creating item";
-  if (job.stage === "uploading") return "Uploading photos";
-  if (job.stage === "analyzing") return "AI is identifying it";
-  if (job.stage === "cover") return "Generating cover";
-  return "Processing";
+const stageLabel = (job: BatchJob, t: TFunction<"batch">) => {
+  if (job.state === "complete") return t("jobs.stage.ready");
+  if (job.state === "warning") return t("jobs.stage.warning");
+  if (job.state === "error") return t("jobs.stage.attention");
+  if (job.stage === "creating") return t("jobs.stage.creating");
+  if (job.stage === "uploading") return t("jobs.stage.uploading");
+  if (job.stage === "analyzing") return t("jobs.stage.analyzing");
+  if (job.stage === "cover") return t("jobs.stage.cover");
+  return t("jobs.stage.processing");
 };
 
 export default function BatchCapturePage() {
+  const { t, i18n } = useT("batch");
   const imageModelPreference = useImageModelPreference();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -166,9 +169,7 @@ export default function BatchCapturePage() {
   const [shutterFlash, setShutterFlash] = useState(false);
 
   const [resourceType, setResourceType] = useState<ResourceType>("object");
-  const [resourceTypes, setResourceTypes] = useState<InventoryTypeOption[]>(
-    FALLBACK_RESOURCE_TYPES.map(({ value, label }) => ({ key: value, label })),
-  );
+  const [resourceTypes, setResourceTypes] = useState<InventoryTypeOption[]>([]);
   const [locationName, setLocationName] = useState("");
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
   const [geoState, setGeoState] = useState<GeoState>("idle");
@@ -231,9 +232,7 @@ export default function BatchCapturePage() {
 
       if (!navigator.mediaDevices?.getUserMedia) {
         setCameraState("error");
-        setCameraMessage(
-          "Live camera capture is not supported here. Open this page over HTTPS or upload photos instead.",
-        );
+        setCameraMessage(t("errors.cameraUnsupported"));
         return;
       }
 
@@ -264,7 +263,7 @@ export default function BatchCapturePage() {
 
       if (!nextStream) {
         setCameraState("error");
-        setCameraMessage(cameraErrorMessage(lastError));
+        setCameraMessage(cameraErrorMessage(lastError, t));
         return;
       }
 
@@ -302,7 +301,7 @@ export default function BatchCapturePage() {
       }
       setCameraState("ready");
     },
-    [refreshDevices, stopCamera],
+    [refreshDevices, stopCamera, t],
   );
 
   useEffect(() => {
@@ -341,31 +340,34 @@ export default function BatchCapturePage() {
       }));
       const skippedForLimit = supported.length - accepted.length;
       if (unsupportedCount || skippedForLimit) {
-        const details = [
-          unsupportedCount
-            ? `${unsupportedCount} unsupported file${unsupportedCount === 1 ? "" : "s"}`
-            : "",
-          skippedForLimit
-            ? `${skippedForLimit} over the ${MAX_PHOTOS}-photo limit`
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" and ");
-        setFormError(`Skipped ${details}.`);
+        setFormError(
+          unsupportedCount && skippedForLimit
+            ? t("errors.filesSkippedBoth", {
+                unsupportedCount,
+                limitCount: skippedForLimit,
+                max: MAX_PHOTOS,
+              })
+            : unsupportedCount
+              ? t("errors.filesUnsupported", { count: unsupportedCount })
+              : t("errors.filesOverLimit", {
+                  count: skippedForLimit,
+                  max: MAX_PHOTOS,
+                }),
+        );
       }
       updatePhotos((current) => [...current, ...accepted]);
     },
-    [updatePhotos],
+    [t, updatePhotos],
   );
 
   const capturePhoto = useCallback(async () => {
     const video = videoRef.current;
     if (!video || !isVideoReady || video.readyState < 2) {
-      setFormError("The camera is still warming up. Try again in a moment.");
+      setFormError(t("errors.cameraWarming"));
       return;
     }
     if (photosRef.current.length >= MAX_PHOTOS) {
-      setFormError(`Each item can contain up to ${MAX_PHOTOS} photos.`);
+      setFormError(t("errors.photoLimit", { max: MAX_PHOTOS }));
       return;
     }
 
@@ -374,7 +376,9 @@ export default function BatchCapturePage() {
     try {
       const sourceWidth = video.videoWidth;
       const sourceHeight = video.videoHeight;
-      if (!sourceWidth || !sourceHeight) throw new Error("Camera frame is not ready.");
+      if (!sourceWidth || !sourceHeight) {
+        throw new Error(t("errors.frameNotReady"));
+      }
       const scale = Math.min(
         1,
         MAX_CAPTURE_EDGE / Math.max(sourceWidth, sourceHeight),
@@ -385,12 +389,12 @@ export default function BatchCapturePage() {
       canvas.width = width;
       canvas.height = height;
       const context = canvas.getContext("2d");
-      if (!context) throw new Error("This browser cannot capture the frame.");
+      if (!context) throw new Error(t("errors.frameUnsupported"));
       context.drawImage(video, 0, 0, width, height);
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob(resolve, "image/jpeg", 0.9),
       );
-      if (!blob) throw new Error("The photo could not be processed.");
+      if (!blob) throw new Error(t("errors.photoProcess"));
       const file = new File([blob], `capture-${Date.now()}.jpg`, {
         type: "image/jpeg",
       });
@@ -400,12 +404,12 @@ export default function BatchCapturePage() {
       navigator.vibrate?.(35);
     } catch (error) {
       setFormError(
-        error instanceof Error ? error.message : "The photo could not be captured.",
+        error instanceof Error ? error.message : t("errors.photoCapture"),
       );
     } finally {
       setIsCapturing(false);
     }
-  }, [addFiles, isVideoReady]);
+  }, [addFiles, isVideoReady, t]);
 
   const removePhoto = (photoId: string) => {
     updatePhotos((current) => {
@@ -419,7 +423,7 @@ export default function BatchCapturePage() {
     setGeoMessage(null);
     if (!navigator.geolocation) {
       setGeoState("error");
-      setGeoMessage("Geolocation is not supported by this browser.");
+      setGeoMessage(t("errors.geolocationUnsupported"));
       return;
     }
     setGeoState("requesting");
@@ -437,13 +441,13 @@ export default function BatchCapturePage() {
         setGeoState("error");
         setGeoMessage(
           error.code === error.PERMISSION_DENIED
-            ? "Location access was blocked. You can still save this item without coordinates."
-            : "Your current location could not be determined.",
+            ? t("errors.locationBlocked")
+            : t("errors.locationUnknown"),
         );
       },
       { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
     );
-  }, []);
+  }, [t]);
 
   const patchJob = useCallback(
     (jobId: string, values: Partial<BatchJob>) => {
@@ -522,9 +526,12 @@ export default function BatchCapturePage() {
             state: "warning",
             stage: "complete",
             progress: 100,
-            message: `Item and photos saved, but AI analysis failed: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`,
+            message: t("jobs.messages.analysisFailed", {
+              reason:
+                error instanceof Error
+                  ? error.message
+                  : t("errors.unknownReason"),
+            }),
           });
           return;
         }
@@ -549,9 +556,12 @@ export default function BatchCapturePage() {
               stage: "complete",
               progress: 100,
               resourceName: analyzedResource.name,
-              message: `Item analyzed, but its AI cover failed: ${
-                error instanceof Error ? error.message : "Unknown error"
-              }`,
+              message: t("jobs.messages.coverFailed", {
+                reason:
+                  error instanceof Error
+                    ? error.message
+                    : t("errors.unknownReason"),
+              }),
             });
             return;
           }
@@ -563,8 +573,8 @@ export default function BatchCapturePage() {
           progress: 100,
           resourceName: analyzedResource.name,
           message: input.cover
-            ? "Item, metadata, and AI cover are ready."
-            : "Item and AI metadata are ready.",
+            ? t("jobs.messages.readyWithCover")
+            : t("jobs.messages.ready"),
         });
       } catch (error) {
         patchJob(jobId, {
@@ -574,23 +584,23 @@ export default function BatchCapturePage() {
           resourceId: createdResource?.id,
           resourceName: createdResource?.name,
           message:
-            error instanceof Error ? error.message : "This batch could not be saved.",
+            error instanceof Error ? error.message : t("errors.batchSave"),
         });
       }
     },
-    [patchJob],
+    [patchJob, t],
   );
 
   const sendBatch = () => {
     if (!photos.length) {
-      setFormError("Take or upload at least one photo first.");
+      setFormError(t("errors.photoRequired"));
       return;
     }
     const files = photos.map((photo) => photo.file);
     const jobId = makeId();
     const job: BatchJob = {
       id: jobId,
-      createdAt: new Intl.DateTimeFormat(undefined, {
+      createdAt: new Intl.DateTimeFormat(i18n.resolvedLanguage, {
         hour: "2-digit",
         minute: "2-digit",
       }).format(new Date()),
@@ -623,44 +633,54 @@ export default function BatchCapturePage() {
       5,
     )}`;
   }, [coordinates]);
+  const displayedResourceTypes = useMemo(
+    () =>
+      resourceTypes.length
+        ? resourceTypes
+        : FALLBACK_RESOURCE_TYPES.map(({ value, labelKey }) => ({
+            key: value,
+            label: t(labelKey),
+          })),
+    [resourceTypes, t],
+  );
 
   const activeJobs = jobs.filter((job) => job.state === "running").length;
 
   return (
-    <div className="min-h-full bg-[#f4f5f0] text-[#1d211b]">
+    <div className="min-h-full bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1540px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
         <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Link
               href="/inventory"
-              className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-[#687065] transition hover:text-[#20251f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff] focus-visible:ring-offset-2"
+              className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-muted transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              Inventory
+              {t("header.inventory")}
             </Link>
             <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#20251f] text-[#dfff71] shadow-sm">
+              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-strong text-on-strong shadow-sm">
                 <Aperture className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5f6672]">
-                  Fast intake
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+                  {t("header.eyebrow")}
                 </p>
                 <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
-                  Batch capture
+                  {t("header.title")}
                 </h1>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 self-start rounded-full border border-[#dfe2d9] bg-white px-3 py-2 text-xs font-medium text-[#687065] shadow-sm sm:self-auto">
+          <div className="flex items-center gap-2 self-start rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-muted shadow-sm sm:self-auto">
             <span
               className={`h-2 w-2 rounded-full ${
-                activeJobs ? "animate-pulse bg-[#5147d9]" : "bg-[#9ba397]"
+                activeJobs ? "animate-pulse bg-brand-solid" : "bg-border-strong"
               }`}
             />
             {activeJobs
-              ? `${activeJobs} ${activeJobs === 1 ? "item" : "items"} processing`
-              : "Ready for the next item"}
+              ? t("header.processing", { count: activeJobs })
+              : t("header.ready")}
           </div>
         </header>
 
@@ -671,7 +691,7 @@ export default function BatchCapturePage() {
           >
             <div className="relative aspect-[4/3] min-h-[340px] max-h-[680px] w-full overflow-hidden bg-[#11130f] sm:aspect-[16/10]">
               <h2 id="camera-heading" className="sr-only">
-                Camera capture
+                {t("camera.heading")}
               </h2>
               <video
                 ref={videoRef}
@@ -682,7 +702,7 @@ export default function BatchCapturePage() {
                 className={`h-full w-full object-cover transition-opacity duration-500 ${
                   cameraState === "ready" ? "opacity-100" : "opacity-0"
                 }`}
-                aria-label="Live camera preview"
+                aria-label={t("camera.preview")}
               />
 
               <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.42),transparent_28%,transparent_70%,rgba(0,0,0,0.55))]" />
@@ -704,15 +724,15 @@ export default function BatchCapturePage() {
                     }`}
                   />
                   {cameraState === "ready" && isVideoReady
-                    ? "Camera ready"
+                    ? t("camera.ready")
                     : cameraState === "requesting"
-                      ? "Opening camera"
-                      : "Camera off"}
+                      ? t("camera.opening")
+                      : t("camera.off")}
                 </div>
 
                 {devices.length > 1 ? (
                   <label className="relative max-w-[58%]">
-                    <span className="sr-only">Camera device</span>
+                    <span className="sr-only">{t("camera.device")}</span>
                     <select
                       value={selectedDeviceId}
                       onChange={(event) => {
@@ -724,7 +744,7 @@ export default function BatchCapturePage() {
                     >
                       {devices.map((device, index) => (
                         <option key={device.deviceId} value={device.deviceId}>
-                          {device.label || `Camera ${index + 1}`}
+                          {device.label || t("camera.numbered", { number: index + 1 })}
                         </option>
                       ))}
                     </select>
@@ -750,14 +770,14 @@ export default function BatchCapturePage() {
                   </div>
                   <p className="max-w-sm text-lg font-semibold text-white">
                     {cameraState === "error"
-                      ? "Camera unavailable"
+                      ? t("camera.unavailable")
                       : cameraState === "requesting"
-                        ? "Waiting for permission…"
-                        : "Photograph the item in place"}
+                        ? t("camera.permission")
+                        : t("camera.prompt")}
                   </p>
                   <p className="mt-2 max-w-md text-sm leading-6 text-white/55">
                     {cameraMessage ??
-                      "We’ll prefer the rear camera. You can also upload existing images at any time."}
+                      t("camera.description")}
                   </p>
                   {cameraState !== "requesting" ? (
                     <button
@@ -766,7 +786,9 @@ export default function BatchCapturePage() {
                       className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full bg-[#dfff71] px-5 py-2.5 text-sm font-semibold text-[#20251f] transition hover:bg-[#e8ff9a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#11130f]"
                     >
                       <Camera className="h-4 w-4" aria-hidden="true" />
-                      {cameraState === "error" ? "Try camera again" : "Allow camera"}
+                      {cameraState === "error"
+                        ? t("camera.retry")
+                        : t("camera.allow")}
                     </button>
                   ) : null}
                 </div>
@@ -779,7 +801,7 @@ export default function BatchCapturePage() {
                   className="group flex h-12 min-w-12 items-center justify-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71] sm:px-4"
                 >
                   <Upload className="h-4 w-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Upload</span>
+                  <span className="hidden sm:inline">{t("camera.upload")}</span>
                 </button>
                 <button
                   type="button"
@@ -790,7 +812,7 @@ export default function BatchCapturePage() {
                     isCapturing ||
                     photos.length >= MAX_PHOTOS
                   }
-                  aria-label="Take photo"
+                  aria-label={t("camera.takePhoto")}
                   className="grid h-[74px] w-[74px] place-items-center rounded-full border-[5px] border-white bg-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.35)] transition hover:scale-[1.04] active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71] focus-visible:ring-offset-4 focus-visible:ring-offset-black"
                 >
                   <span className="grid h-[54px] w-[54px] place-items-center rounded-full bg-white text-[#171a15]">
@@ -814,7 +836,7 @@ export default function BatchCapturePage() {
                     className="flex h-12 min-w-12 items-center justify-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71] sm:px-4"
                   >
                     <CircleStop className="h-4 w-4" aria-hidden="true" />
-                    <span className="hidden sm:inline">Stop</span>
+                    <span className="hidden sm:inline">{t("camera.stop")}</span>
                   </button>
                 ) : (
                   <div className="h-12 min-w-12" aria-hidden="true" />
@@ -838,13 +860,13 @@ export default function BatchCapturePage() {
               <div className="mb-3 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold">
-                    Photo tray
+                    {t("photos.title")}
                     <span className="ml-2 font-normal text-white/45">
                       {photos.length}/{MAX_PHOTOS}
                     </span>
                   </p>
                   <p className="mt-0.5 text-xs text-white/40">
-                    Add several angles for a better AI result.
+                    {t("photos.description")}
                   </p>
                 </div>
                 {photos.length ? (
@@ -861,13 +883,16 @@ export default function BatchCapturePage() {
                     className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-white/55 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71]"
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                    Clear
+                    {t("photos.clear")}
                   </button>
                 ) : null}
               </div>
 
               {photos.length ? (
-                <div className="flex gap-3 overflow-x-auto pb-1" aria-label="Selected photos">
+                <div
+                  className="flex gap-3 overflow-x-auto pb-1"
+                  aria-label={t("photos.selected")}
+                >
                   {photos.map((photo, index) => (
                     <div
                       key={photo.id}
@@ -875,18 +900,18 @@ export default function BatchCapturePage() {
                     >
                       <img
                         src={photo.previewUrl}
-                        alt={`Selected item view ${index + 1}`}
+                        alt={t("photos.alt", { number: index + 1 })}
                         className="h-full w-full object-cover"
                       />
                       {index === 0 ? (
                         <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur">
-                          Primary
+                          {t("photos.primary")}
                         </span>
                       ) : null}
                       <button
                         type="button"
                         onClick={() => removePhoto(photo.id)}
-                        aria-label={`Remove photo ${index + 1}`}
+                        aria-label={t("photos.remove", { number: index + 1 })}
                         className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/65 text-white shadow-sm transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71]"
                       >
                         <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -898,7 +923,7 @@ export default function BatchCapturePage() {
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="grid h-24 w-24 shrink-0 place-items-center rounded-2xl border border-dashed border-white/20 text-white/45 transition hover:border-white/40 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71]"
-                      aria-label="Add more photos"
+                      aria-label={t("photos.addMore")}
                     >
                       <ImagePlus className="h-5 w-5" aria-hidden="true" />
                     </button>
@@ -915,10 +940,10 @@ export default function BatchCapturePage() {
                   </span>
                   <span>
                     <span className="block text-sm font-medium text-white/75">
-                      No photos yet
+                      {t("photos.empty")}
                     </span>
                     <span className="mt-0.5 block text-xs text-white/40">
-                      Take a photo or choose images from this device.
+                      {t("photos.emptyDescription")}
                     </span>
                   </span>
                 </button>
@@ -926,25 +951,25 @@ export default function BatchCapturePage() {
             </div>
           </section>
 
-          <aside className="flex flex-col rounded-[28px] border border-[#dfe2d9] bg-white p-5 shadow-[0_12px_36px_rgba(25,29,22,0.06)] sm:p-6">
+          <aside className="flex flex-col rounded-[28px] border border-border bg-surface p-5 shadow-[var(--shadow-md)] sm:p-6">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5f6672]">
-                  Defaults
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                  {t("defaults.eyebrow")}
                 </p>
                 <h2 className="mt-1 text-xl font-semibold tracking-[-0.025em]">
-                  Describe the batch
+                  {t("defaults.title")}
                 </h2>
               </div>
-              <span className="rounded-full bg-[#f0f1ec] px-2.5 py-1 text-[11px] font-semibold text-[#5f6672]">
-                Optional
+              <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-semibold text-muted">
+                {t("defaults.optional")}
               </span>
             </div>
 
             <div className="space-y-5">
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-[#363b34]">
-                  Item type
+                <span className="mb-2 block text-sm font-medium text-muted-strong">
+                  {t("defaults.itemType")}
                 </span>
                 <span className="relative block">
                   <select
@@ -952,44 +977,44 @@ export default function BatchCapturePage() {
                     onChange={(event) =>
                       setResourceType(event.target.value as ResourceType)
                     }
-                    className="h-12 w-full appearance-none rounded-2xl border border-[#dde0d7] bg-[#f8f9f5] px-4 pr-10 text-sm font-medium outline-none transition focus:border-[#635bff] focus:bg-white focus:ring-4 focus:ring-[#635bff]/10"
+                    className="h-12 w-full appearance-none rounded-2xl border border-border bg-surface-subtle px-4 pr-10 text-sm font-medium text-foreground outline-none transition focus:border-focus focus:bg-surface focus:ring-4 focus:ring-focus/10"
                   >
-                    {resourceTypes.map((type) => (
+                    {displayedResourceTypes.map((type) => (
                       <option key={type.key} value={type.key}>
                         {type.label}
                       </option>
                     ))}
                   </select>
                   <ChevronDown
-                    className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5f6672]"
+                    className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
                     aria-hidden="true"
                   />
                 </span>
               </label>
 
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-[#363b34]">
-                  Location label
+                <span className="mb-2 block text-sm font-medium text-muted-strong">
+                  {t("defaults.locationLabel")}
                 </span>
                 <span className="relative block">
                   <MapPin
-                    className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5f6672]"
+                    className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
                     aria-hidden="true"
                   />
                   <input
                     value={locationName}
                     onChange={(event) => setLocationName(event.target.value)}
                     maxLength={240}
-                    placeholder="e.g. Workshop · Shelf B2"
-                    className="h-12 w-full rounded-2xl border border-[#dde0d7] bg-[#f8f9f5] pl-11 pr-4 text-sm outline-none transition placeholder:text-[#5f6672] focus:border-[#635bff] focus:bg-white focus:ring-4 focus:ring-[#635bff]/10"
+                    placeholder={t("defaults.locationPlaceholder")}
+                    className="h-12 w-full rounded-2xl border border-border bg-surface-subtle pl-11 pr-4 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-focus focus:bg-surface focus:ring-4 focus:ring-focus/10"
                   />
                 </span>
               </label>
 
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium text-[#363b34]">
-                    GPS coordinates
+                  <span className="text-sm font-medium text-muted-strong">
+                    {t("defaults.coordinates")}
                   </span>
                   {coordinates ? (
                     <button
@@ -999,9 +1024,9 @@ export default function BatchCapturePage() {
                         setGeoState("idle");
                         setGeoMessage(null);
                       }}
-                      className="text-xs font-medium text-[#5f6672] underline-offset-2 hover:text-[#30352e] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff]"
+                      className="text-xs font-medium text-muted underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                     >
-                      Clear
+                      {t("defaults.clear")}
                     </button>
                   ) : null}
                 </div>
@@ -1009,17 +1034,17 @@ export default function BatchCapturePage() {
                   type="button"
                   onClick={requestLocation}
                   disabled={geoState === "requesting"}
-                  className={`flex min-h-14 w-full items-center gap-3 rounded-2xl border px-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff] focus-visible:ring-offset-2 ${
+                  className={`flex min-h-14 w-full items-center gap-3 rounded-2xl border px-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 ${
                     coordinates
-                      ? "border-[#cce99a] bg-[#f5ffe5]"
-                      : "border-[#dde0d7] bg-[#f8f9f5] hover:border-[#c9cdc3] hover:bg-white"
+                      ? "border-success-border bg-success-soft"
+                      : "border-border bg-surface-subtle hover:border-border-strong hover:bg-surface"
                   }`}
                 >
                   <span
                     className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
                       coordinates
-                        ? "bg-[#dfff71] text-[#32372f]"
-                        : "bg-white text-[#5f6672] shadow-sm"
+                        ? "bg-success text-on-strong"
+                        : "bg-surface text-muted shadow-sm"
                     }`}
                   >
                     {geoState === "requesting" ? (
@@ -1034,42 +1059,44 @@ export default function BatchCapturePage() {
                     )}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-[#363b34]">
+                    <span className="block truncate text-sm font-medium text-muted-strong">
                       {coordinates
                         ? coordinateLabel
                         : geoState === "requesting"
-                          ? "Finding your location…"
-                          : "Use current location"}
+                          ? t("defaults.findingLocation")
+                          : t("defaults.useLocation")}
                     </span>
-                    <span className="mt-0.5 block text-xs text-[#5f6672]">
+                    <span className="mt-0.5 block text-xs text-muted">
                       {coordinates
-                        ? `Accurate to about ${Math.round(coordinates.accuracy)} m · Tap to refresh`
-                        : "Saved privately with this inventory item"}
+                        ? t("defaults.accuracy", {
+                            meters: Math.round(coordinates.accuracy),
+                          })
+                        : t("defaults.locationPrivacy")}
                     </span>
                   </span>
                   {coordinates ? (
                     <RefreshCw
-                      className="ml-auto h-3.5 w-3.5 shrink-0 text-[#5f6672]"
+                      className="ml-auto h-3.5 w-3.5 shrink-0 text-muted"
                       aria-hidden="true"
                     />
                   ) : null}
                 </button>
                 {geoMessage ? (
-                  <p className="mt-2 text-xs leading-5 text-amber-700">{geoMessage}</p>
+                  <p className="mt-2 text-xs leading-5 text-warning">{geoMessage}</p>
                 ) : null}
               </div>
 
-              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-[#dedcfb] bg-[#f7f6ff] p-4">
+              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-brand-border bg-brand-soft p-4">
                 <span className="flex min-w-0 items-start gap-3">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#5147d9] text-white shadow-sm shadow-[#635bff]/25">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-sm">
                     <WandSparkles className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <span>
-                    <span className="block text-sm font-semibold text-[#353251]">
-                      Generate AI cover
+                    <span className="block text-sm font-semibold text-brand-strong">
+                      {t("defaults.generateCover")}
                     </span>
-                    <span className="mt-0.5 block text-xs leading-5 text-[#5f6672]">
-                      Identify the item, then create a clean studio cover from the first photo.
+                    <span className="mt-0.5 block text-xs leading-5 text-muted">
+                      {t("defaults.generateCoverDescription")}
                     </span>
                   </span>
                 </span>
@@ -1080,14 +1107,14 @@ export default function BatchCapturePage() {
                     onChange={(event) => setAutoGenerateCover(event.target.checked)}
                     className="peer sr-only"
                   />
-                  <span className="block h-6 w-11 rounded-full bg-[#c9c7df] transition peer-checked:bg-[#5147d9] peer-focus-visible:ring-2 peer-focus-visible:ring-[#635bff] peer-focus-visible:ring-offset-2" />
-                  <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+                  <span className="block h-6 w-11 rounded-full bg-border-strong transition peer-checked:bg-brand-solid peer-focus-visible:ring-2 peer-focus-visible:ring-focus peer-focus-visible:ring-offset-2" />
+                  <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-surface shadow-sm transition-transform peer-checked:translate-x-5" />
                 </span>
               </label>
               {autoGenerateCover ? (
                 <ImageModelSelector
                   preference={imageModelPreference}
-                  className="mt-3 rounded-2xl border border-[#dedcfb] bg-white p-4"
+                  className="mt-3 rounded-2xl border border-brand-border bg-surface p-4"
                 />
               ) : null}
             </div>
@@ -1096,7 +1123,7 @@ export default function BatchCapturePage() {
               {formError ? (
                 <div
                   role="alert"
-                  className="mb-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-700"
+                  className="mb-3 flex items-start gap-2 rounded-xl border border-danger-border bg-danger-soft px-3 py-2.5 text-xs leading-5 text-danger"
                 >
                   <AlertTriangle
                     className="mt-0.5 h-3.5 w-3.5 shrink-0"
@@ -1109,21 +1136,21 @@ export default function BatchCapturePage() {
                 type="button"
                 onClick={sendBatch}
                 disabled={!photos.length}
-                className="group flex min-h-14 w-full items-center justify-between rounded-2xl bg-[#20251f] px-5 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(32,37,31,0.18)] transition hover:-translate-y-0.5 hover:bg-[#2b3129] hover:shadow-[0_14px_30px_rgba(32,37,31,0.22)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-[#687065] disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff] focus-visible:ring-offset-2"
+                className="group flex min-h-14 w-full items-center justify-between rounded-2xl bg-strong px-5 text-sm font-semibold text-on-strong shadow-[var(--shadow-md)] transition hover:-translate-y-0.5 hover:opacity-90 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
               >
                 <span className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4" aria-hidden="true" />
-                  Create with AI
+                  {t("submit.create")}
                 </span>
-                <span className="flex items-center gap-2 text-white/65 group-hover:text-white group-disabled:text-white/70">
+                <span className="flex items-center gap-2 text-on-strong/65 group-hover:text-on-strong group-disabled:text-on-strong/70">
                   {photos.length
-                    ? `${photos.length} ${photos.length === 1 ? "photo" : "photos"}`
-                    : "Add photos"}
+                    ? t("submit.photoCount", { count: photos.length })
+                    : t("submit.addPhotos")}
                   <Send className="h-4 w-4" aria-hidden="true" />
                 </span>
               </button>
-              <p className="mt-3 text-center text-xs leading-5 text-[#5f6672]">
-                The tray clears immediately, so you can capture the next item while AI works.
+              <p className="mt-3 text-center text-xs leading-5 text-muted">
+                {t("submit.description")}
               </p>
             </div>
           </aside>
@@ -1132,11 +1159,11 @@ export default function BatchCapturePage() {
         <section className="mt-6" aria-labelledby="jobs-heading" aria-live="polite">
           <div className="mb-3 flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5f6672]">
-                Background queue
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                {t("jobs.eyebrow")}
               </p>
               <h2 id="jobs-heading" className="mt-1 text-lg font-semibold">
-                Recent captures
+                {t("jobs.title")}
               </h2>
             </div>
             {jobs.length ? (
@@ -1147,9 +1174,9 @@ export default function BatchCapturePage() {
                     current.filter((job) => job.state === "running"),
                   )
                 }
-                className="rounded-lg px-2 py-1.5 text-xs font-medium text-[#5f6672] transition hover:bg-white hover:text-[#30352e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff]"
+                className="rounded-lg px-2 py-1.5 text-xs font-medium text-muted transition hover:bg-surface hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
               >
-                Clear finished
+                {t("jobs.clearFinished")}
               </button>
             ) : null}
           </div>
@@ -1159,18 +1186,18 @@ export default function BatchCapturePage() {
               {jobs.map((job) => (
                 <article
                   key={job.id}
-                  className="rounded-2xl border border-[#dfe2d9] bg-white p-4 shadow-[0_6px_20px_rgba(25,29,22,0.04)]"
+                  className="rounded-2xl border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
                 >
                   <div className="flex items-start gap-3">
                     <span
                       className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
                         job.state === "running"
-                          ? "bg-[#efeeff] text-[#5147d9]"
+                          ? "bg-brand-soft text-brand"
                           : job.state === "complete"
-                            ? "bg-[#effbd9] text-[#4c7118]"
+                            ? "bg-success-soft text-success"
                             : job.state === "warning"
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-red-50 text-red-700"
+                              ? "bg-warning-soft text-warning"
+                              : "bg-danger-soft text-danger"
                       }`}
                     >
                       {job.state === "running" ? (
@@ -1187,34 +1214,34 @@ export default function BatchCapturePage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-[#343a32]">
+                          <p className="truncate text-sm font-semibold text-foreground">
                             {job.resourceName && job.resourceName !== "Untitled item"
                               ? job.resourceName
-                              : `${job.photoCount}-photo capture`}
+                              : t("jobs.captureName", { count: job.photoCount })}
                           </p>
-                          <p className="mt-0.5 text-xs text-[#5f6672]">
-                            {job.createdAt} · {stageLabel(job)}
+                          <p className="mt-0.5 text-xs text-muted">
+                            {job.createdAt} · {stageLabel(job, t)}
                           </p>
                         </div>
                         {job.resourceId ? (
                           <Link
                             href={`/inventory/${job.resourceId}`}
-                            className="shrink-0 rounded-full bg-[#f1f2ed] px-3 py-1.5 text-xs font-semibold text-[#4f564d] transition hover:bg-[#e6e8e1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#635bff]"
+                            className="shrink-0 rounded-full bg-surface-muted px-3 py-1.5 text-xs font-semibold text-muted-strong transition hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                           >
-                            Open item
+                            {t("jobs.openItem")}
                           </Link>
                         ) : null}
                       </div>
-                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#eceee8]">
+                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-muted">
                         <div
                           className={`h-full rounded-full transition-[width] duration-500 ${
                             job.state === "error"
-                              ? "bg-red-500"
+                              ? "bg-danger"
                               : job.state === "warning"
-                                ? "bg-amber-500"
+                                ? "bg-warning"
                                 : job.state === "complete"
-                                  ? "bg-[#87b438]"
-                                  : "bg-[#5147d9]"
+                                  ? "bg-success"
+                                  : "bg-brand-solid"
                           }`}
                           style={{ width: `${job.progress}%` }}
                         />
@@ -1223,48 +1250,48 @@ export default function BatchCapturePage() {
                         <p
                           className={`mt-2 text-xs leading-5 ${
                             job.state === "error"
-                              ? "text-red-700"
+                              ? "text-danger"
                               : job.state === "warning"
-                                ? "text-amber-700"
-                                : "text-[#5f6672]"
+                                ? "text-warning"
+                                : "text-muted"
                           }`}
                         >
                           {job.message}
                         </p>
                       ) : (
-                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#5f6672]">
+                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
                           <span
                             className={
-                              job.stage !== "creating" ? "text-[#526b2e]" : ""
+                              job.stage !== "creating" ? "text-success" : ""
                             }
                           >
-                            Save item
+                            {t("jobs.steps.save")}
                           </span>
                           <span
                             className={
                               ["analyzing", "cover", "complete"].includes(job.stage)
-                                ? "text-[#526b2e]"
+                                ? "text-success"
                                 : ""
                             }
                           >
-                            Upload
+                            {t("jobs.steps.upload")}
                           </span>
                           <span
                             className={
                               ["cover", "complete"].includes(job.stage)
-                                ? "text-[#526b2e]"
+                                ? "text-success"
                                 : ""
                             }
                           >
-                            Analyze
+                            {t("jobs.steps.analyze")}
                           </span>
                           {job.coverRequested ? (
                             <span
                               className={
-                                job.stage === "complete" ? "text-[#526b2e]" : ""
+                                job.stage === "complete" ? "text-success" : ""
                               }
                             >
-                              Cover
+                              {t("jobs.steps.cover")}
                             </span>
                           ) : null}
                         </div>
@@ -1275,17 +1302,17 @@ export default function BatchCapturePage() {
               ))}
             </div>
           ) : (
-            <div className="flex min-h-32 items-center justify-center rounded-2xl border border-dashed border-[#d5d9cf] bg-white/45 px-6 text-center">
+            <div className="flex min-h-32 items-center justify-center rounded-2xl border border-dashed border-border-strong bg-surface/45 px-6 text-center">
               <div>
                 <ImagePlus
-                  className="mx-auto h-5 w-5 text-[#5f6672]"
+                  className="mx-auto h-5 w-5 text-muted"
                   aria-hidden="true"
                 />
-                <p className="mt-2 text-sm font-medium text-[#687065]">
-                  Nothing queued yet
+                <p className="mt-2 text-sm font-medium text-muted-strong">
+                  {t("jobs.empty")}
                 </p>
-                <p className="mt-1 text-xs text-[#5f6672]">
-                  Completed and in-progress items will stay visible here.
+                <p className="mt-1 text-xs text-muted">
+                  {t("jobs.emptyDescription")}
                 </p>
               </div>
             </div>

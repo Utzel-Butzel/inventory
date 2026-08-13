@@ -1,0 +1,141 @@
+{
+  "meta": {
+    "title": "Etiketten",
+    "description": "QR- und Barcode-Etiketten für Inventarelemente erstellen und drucken."
+  },
+  "header": {
+    "eyebrow": "Etikettenstudio",
+    "title": "Etiketten drucken, die sich scannen lassen.",
+    "description": "Wähle Inventarelemente aus, verwende eine wiederverwendbare Vorlage und drucke kompakte QR-Links, Barcodes, Text und Objektbilder im Browser."
+  },
+  "print": {
+    "preparing": "Bilder werden vorbereitet…",
+    "button_zero": "Etiketten drucken",
+    "button_one": "{{count}} Etikett drucken",
+    "button_other": "{{count}} Etiketten drucken"
+  },
+  "selection": {
+    "title": "1. Elemente auswählen",
+    "description": "Die Auswahl bleibt beim Suchen und Wechseln der Seite erhalten.",
+    "clear": "{{count}} entfernen",
+    "search": "Inventar durchsuchen",
+    "searchPlaceholder": "Name, SKU oder Standort suchen…",
+    "clearSearch": "Suche leeren",
+    "selectPage": "Seite auswählen",
+    "itemCount_one": "{{count}} Element",
+    "itemCount_other": "{{count}} Elemente",
+    "loading": "Inventar wird geladen",
+    "empty": "Keine passenden Elemente",
+    "emptyDescription": "Versuche einen anderen Namen, eine SKU oder einen Standort.",
+    "noSku": "Keine SKU",
+    "pagination": "Seite {{page}} von {{pages}}",
+    "previousPage": "Vorherige Seite",
+    "nextPage": "Nächste Seite"
+  },
+  "copies": {
+    "title": "Exemplare",
+    "fewer": "Weniger Exemplare von {{name}}",
+    "more": "Mehr Exemplare von {{name}}"
+  },
+  "setup": {
+    "title": "2. Vorlage auswählen",
+    "description": "Vorlagen halten Mediengröße, Inhalt und Positionierung zusammen.",
+    "label": "Etikettenvorlage",
+    "empty": "Noch keine Vorlagen",
+    "copyName": "Kopie von {{name}}",
+    "defaultName": "Meine Etikettenvorlage",
+    "deleteConfirm": "Etikettenvorlage „{{name}}“ löschen?",
+    "designNamed": "{{name}} gestalten",
+    "create": "Etikettenvorlage erstellen",
+    "design": "Gestalten",
+    "createNew": "Neue Etikettenvorlage erstellen",
+    "new": "Neu",
+    "summary_one": "{{width}} × {{height}} mm · {{count}} sichtbares Element",
+    "summary_other": "{{width}} × {{height}} mm · {{count}} sichtbare Elemente",
+    "imagesEnabled": " · Objektbilder aktiviert",
+    "emptyTitle": "Etikettenvorlage erstellen",
+    "emptyDescription": "Eine Vorlage legt die Papiermaße und die Position der einzelnen Etikettenelemente fest.",
+    "openDesigner": "Designer öffnen"
+  },
+  "preview": {
+    "title": "Element für die Vorschau auswählen",
+    "description": "Die ausgewählte Vorlage bestimmt, welche Details, Codes und Bilder erscheinen."
+  },
+  "printer": {
+    "title": "Brother-WLAN-Druck",
+    "description": "Füge den Drucker zuerst diesem Computer hinzu. Wähle im Druckdialog des Browsers den Brother-Drucker, die Mediengröße der Vorlage, 100 % Skalierung und keine Ränder. Gedruckt wird über den installierten Systemtreiber; diese Seite sendet keine RAW-Befehle direkt an den Drucker."
+  },
+  "designer": {
+    "eyebrow": "Etikettendesigner",
+    "edit": "Vorlage bearbeiten",
+    "create": "Vorlage erstellen",
+    "close": "Etikettendesigner schließen",
+    "setupName": "Vorlagenname",
+    "width": "Breite (mm)",
+    "height": "Höhe (mm)",
+    "elementsTitle": "Elemente",
+    "showElement": "{{element}} anzeigen",
+    "resizeElement": "Größe von {{element}} ändern",
+    "properties": "Eigenschaften",
+    "imageFit": "Bildanpassung",
+    "fillFrame": "Rahmen füllen (zuschneiden)",
+    "fitImage": "Ganzes Bild einpassen",
+    "fontSize": "Schriftgröße (mm)",
+    "alignment": "Ausrichtung",
+    "instructions": "Ziehe das ausgewählte Element auf dem Etikett. Ändere seine Größe am Eckgriff oder gib hier genaue Prozentwerte ein.",
+    "chooseElement": "Wähle ein Element aus, um Position und Stil zu bearbeiten.",
+    "overlap": "Verschiebe oder skaliere das Bild, damit es den QR-Code nicht überdeckt.",
+    "previewNote": "Vorschau und gedrucktes Etikett verwenden dieselben Positionen.",
+    "delete": "Vorlage löschen",
+    "cancel": "Abbrechen",
+    "saving": "Wird gespeichert…",
+    "save": "Vorlage speichern",
+    "elements": {
+      "qr": "QR-Code",
+      "image": "Objektbild",
+      "name": "Objektname",
+      "identifier": "SKU / ID",
+      "barcode": "Barcode",
+      "url": "Kurzlink",
+      "location": "Standort"
+    },
+    "coordinates": {
+      "x": "Links",
+      "y": "Oben",
+      "width": "Breite",
+      "height": "Höhe"
+    },
+    "align": {
+      "left": "Links",
+      "center": "Zentriert",
+      "right": "Rechts"
+    },
+    "sample": {
+      "name": "Akku-Schlagschrauber",
+      "location": "Werkstatt · Regal B"
+    }
+  },
+  "renderer": {
+    "noImage": "Kein Bild",
+    "sku": "SKU {{sku}}",
+    "inventoryCount_one": "{{type}} · {{count}} im Inventar",
+    "inventoryCount_other": "{{type}} · {{count}} im Inventar",
+    "printable": "Druckbares Etikett für {{name}}",
+    "qr": "QR-Code für {{value}}",
+    "qrTooLong": "QR-URL zu lang",
+    "barcode": "Code-128-Barcode für {{value}}"
+  },
+  "errors": {
+    "loadSetups": "Etikettenvorlagen konnten nicht geladen werden.",
+    "loadItems": "Inventarelemente konnten nicht geladen werden.",
+    "saveSetup": "Die Etikettenvorlage konnte nicht gespeichert werden.",
+    "deleteSetup": "Die Etikettenvorlage konnte nicht gelöscht werden.",
+    "overlapShort": "Das Objektbild überlappt den QR-Code. Bearbeite die Vorlage vor dem Drucken.",
+    "overlap": "Das Objektbild überlappt in dieser Vorlage den QR-Code. Öffne den Designer und verschiebe oder skaliere eines der Elemente vor dem Drucken.",
+    "urlTooLong": "Die Deployment-URL ist für den QR-Code auf dem Etikett zu lang. Verwende vor dem Drucken eine kürzere öffentliche URL.",
+    "missingImages_one": "Für {{examples}} fehlt ein Objektbild. Deaktiviere das Bildelement oder füge das fehlende Bild vor dem Drucken hinzu.",
+    "missingImages_other": "Für {{examples}} fehlen Objektbilder. Deaktiviere das Bildelement oder füge die fehlenden Bilder vor dem Drucken hinzu.",
+    "imageRender": "Mindestens ein Objektbild konnte nicht gerendert werden. Prüfe die Vorschau und versuche es erneut.",
+    "imageLoad": "Mindestens ein Objektbild wurde nicht vollständig geladen. Es wurde nichts gedruckt; prüfe die Bilddateien und versuche es erneut."
+  }
+}

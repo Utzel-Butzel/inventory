@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { requireIdentity } from "@/lib/api-auth";
+import {
+  canAccessResource,
+  requirePermission,
+  requireIdentity,
+} from "@/lib/api-auth";
 import {
   assemblyHttpError,
   buildAssembly,
@@ -66,7 +70,7 @@ const buildSchema = z
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "stock.read");
   if (authorization.response) return authorization.response;
   const { id } = await context.params;
   if (!z.string().uuid().safeParse(id).success) {
@@ -91,6 +95,7 @@ export async function GET(request: Request, context: Context) {
 export async function POST(request: Request, context: Context) {
   const authorization = await requireIdentity(request, "write");
   if (authorization.response) return authorization.response;
+
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
   if (!idempotency.key) {
@@ -136,6 +141,12 @@ export async function POST(request: Request, context: Context) {
           build: parsed.data,
         }),
       },
+      (resource) =>
+        canAccessResource(
+          authorization.identity,
+          "stock.manage",
+          resource,
+        ),
     );
     return Response.json(result.response, {
       status: result.replayed ? 200 : 201,

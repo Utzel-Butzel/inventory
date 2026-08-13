@@ -1,16 +1,20 @@
 import { and, eq } from "drizzle-orm";
 
 import { media } from "@/db/schema";
-import { requireIdentity } from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { deleteStoredMedia } from "@/lib/storage";
 
 type Context = { params: Promise<{ id: string; mediaId: string }> };
 
 export async function DELETE(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
-  if (authorization.response) return authorization.response;
   const { id, mediaId } = await context.params;
+  const authorization = await requireResourcePermission(
+    request,
+    "inventory.update",
+    id,
+  );
+  if (authorization.response) return authorization.response;
   const [item] = await db
     .select()
     .from(media)

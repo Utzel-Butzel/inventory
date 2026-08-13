@@ -1,8 +1,9 @@
 import { hash } from "bcryptjs";
-import { asc, desc } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 
-import { users } from "@/db/schema";
-import { requireAdminSession } from "@/lib/api-auth";
+import { accessRoles, inventoryAccessRules, users } from "@/db/schema";
+import { requireSessionPermission } from "@/lib/api-auth";
+import { listAccessRolesWithCounts } from "@/lib/access-control";
 import { db } from "@/lib/db";
 import { userCreateInputSchema } from "@/lib/validators";
 
@@ -21,22 +22,26 @@ const publicUser = {
 };
 
 export async function GET(request: Request) {
-  const authorization = await requireAdminSession(request);
+  const authorization = await requireSessionPermission(request, "users.manage");
   if (authorization.response) return authorization.response;
 
-  const rows = await db
-    .select(publicUser)
-    .from(users)
-    .orderBy(desc(users.isActive), asc(users.name), asc(users.email));
+  const [rows, roles] = await Promise.all([
+    db
+      .select(publicUser)
+      .from(users)
+      .orderBy(desc(users.isActive), asc(users.name), asc(users.email)),
+    listAccessRolesWithCounts(),
+  ]);
 
   return Response.json({
     users: rows,
+    roles,
     currentUserId: authorization.identity.userId ?? null,
   });
 }
 
 export async function POST(request: Request) {
-  const authorization = await requireAdminSession(request);
+  const authorization = await requireSessionPermission(request, "users.manage");
   if (authorization.response) return authorization.response;
 
   let payload: unknown;
@@ -51,6 +56,41 @@ export async function POST(request: Request) {
     return Response.json(
       { error: "Invalid user settings.", details: parsed.error.flatten() },
       { status: 422 },
+    );
+  }
+
+  const [[selectedRole], selectedRoleRules] = await Promise.all([
+    db
+      .select({ key: accessRoles.key, permissions: accessRoles.permissions })
+      .from(accessRoles)
+      .where(eq(accessRoles.key, parsed.data.role))
+      .limit(1),
+    db
+      .select({ permissions: inventoryAccessRules.permissions })
+      .from(inventoryAccessRules)
+      .where(
+        and(
+          eq(inventoryAccessRules.roleKey, parsed.data.role),
+          eq(inventoryAccessRules.enabled, true),
+        ),
+      ),
+  ]);
+  if (!selectedRole) {
+    return Response.json({ error: "The selected role does not exist." }, { status: 422 });
+  }
+  const selectedRoleGrants = new Set([
+    ...selectedRole.permissions,
+    ...selectedRoleRules.flatMap((rule) => rule.permissions),
+  ]);
+  if (
+    selectedRole.key !== authorization.identity.role &&
+    Array.from(selectedRoleGrants).some(
+      (permission) => !authorization.identity.permissions.includes(permission),
+    )
+  ) {
+    return Response.json(
+      { error: "You cannot assign a role with permissions beyond your own." },
+      { status: 403 },
     );
   }
 

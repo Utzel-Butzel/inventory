@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { stockTrackingModes } from "@/db/schema";
-import { requireIdentity } from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import { stockHttpError, updateStockConfig } from "@/lib/stock";
 
 type Context = { params: Promise<{ id: string }> };
@@ -22,12 +22,16 @@ const configSchema = z
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
-  if (authorization.response) return authorization.response;
   const { id } = await context.params;
   if (!z.string().uuid().safeParse(id).success) {
     return Response.json({ error: "Invalid resource id." }, { status: 422 });
   }
+  const authorization = await requireResourcePermission(
+    request,
+    "stock.manage",
+    id,
+  );
+  if (authorization.response) return authorization.response;
 
   let payload: unknown;
   try {

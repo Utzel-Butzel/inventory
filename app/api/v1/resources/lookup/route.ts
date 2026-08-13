@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import {
   AmbiguousResourceCodeError,
   lookupResourceByCode,
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const codeSchema = z.string().trim().min(1).max(2_048);
 
 export async function GET(request: Request) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "inventory.read");
   if (authorization.response) return authorization.response;
 
   const parsed = codeSchema.safeParse(new URL(request.url).searchParams.get("code"));

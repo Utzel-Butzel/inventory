@@ -1,0 +1,228 @@
+{
+  "actions": {
+    "batchCapture": "Batch capture",
+    "addItem": "Add item",
+    "addAnItem": "Add an item"
+  },
+  "list": {
+    "eyebrow": "Inventory library",
+    "title": "Everything, findable."
+  },
+  "search": {
+    "label": "Search inventory",
+    "placeholder": "Search name, description, SKU, tag or location…",
+    "clear": "Clear search"
+  },
+  "filters": {
+    "typeLabel": "Filter by type",
+    "statusLabel": "Filter by status",
+    "allTypes": "All types",
+    "allStatuses": "All statuses",
+    "clear": "Clear filters",
+    "clearActive_one": "Clear {{value}} filter",
+    "clearActive_other": "Clear {{value}} filters",
+    "records_one": "{{value}} record",
+    "records_other": "{{value}} records"
+  },
+  "views": {
+    "grid": "Grid view",
+    "table": "Table view"
+  },
+  "loading": "Loading inventory",
+  "errors": {
+    "load": "Unable to load inventory."
+  },
+  "empty": {
+    "filteredTitle": "No matching items",
+    "filteredDescription": "Try a broader search or clear the active filters.",
+    "title": "Your inventory is ready",
+    "description": "Add your first record manually, or use batch capture to photograph and catalogue it with AI."
+  },
+  "item": {
+    "aiEnriched": "AI enriched",
+    "noDescription": "No description yet.",
+    "noLocation": "No location",
+    "units_one": "{{value}} unit",
+    "units_other": "{{value}} units"
+  },
+  "table": {
+    "item": "Item",
+    "status": "Status",
+    "sku": "SKU",
+    "location": "Location",
+    "value": "Value"
+  },
+  "pagination": {
+    "summary_one": "Page {{page}} of {{pages}} · {{total}} item",
+    "summary_other": "Page {{page}} of {{pages}} · {{total}} items",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "statuses": {
+    "available": "Available",
+    "in-use": "In use",
+    "maintenance": "Maintenance",
+    "archived": "Archived"
+  },
+  "types": {
+    "tool": "Tools",
+    "object": "Objects",
+    "furniture": "Furniture",
+    "vehicle": "Vehicles",
+    "place": "Places",
+    "clothing": "Clothing",
+    "person": "People",
+    "project": "Projects",
+    "other": "Other"
+  },
+  "typeSingular": {
+    "tool": "Tool",
+    "object": "Object",
+    "furniture": "Furniture",
+    "vehicle": "Vehicle",
+    "place": "Place",
+    "clothing": "Clothing",
+    "person": "Person",
+    "project": "Project",
+    "other": "Other"
+  },
+  "fields": {
+    "type": "Type",
+    "quantity": "Quantity",
+    "sku": "SKU",
+    "serialNumber": "Serial number",
+    "location": "Location",
+    "value": "Value",
+    "priority": "Priority",
+    "created": "Created"
+  },
+  "values": {
+    "yes": "Yes",
+    "no": "No",
+    "notSet": "Not set",
+    "unknown": "Unknown"
+  },
+  "mediaKinds": {
+    "image": "Image",
+    "video": "Video",
+    "document": "Document",
+    "other": "File"
+  },
+  "details": {
+    "loading": "Loading item details",
+    "back": "Back to inventory",
+    "errors": {
+      "load": "Unable to load item.",
+      "notFound": "This inventory item could not be found.",
+      "delete": "Unable to delete this inventory item."
+    },
+    "breadcrumb": {
+      "inventory": "Inventory",
+      "details": "Details"
+    },
+    "updatedWithId": "Updated {{date}} · ID {{id}}",
+    "contentLanguage": "Content language",
+    "defaultLanguageSuffix": " (default)",
+    "actions": {
+      "stock": "Stock",
+      "share": "Share",
+      "edit": "Edit item",
+      "delete": "Delete item"
+    },
+    "confirmDelete": "Delete “{{name}}”? This cannot be undone.",
+    "share": {
+      "title": "Manage public links",
+      "description": "Create and revoke public, view-only links for “{{name}}”.",
+      "close": "Close sharing dialog",
+      "createTitle": "Create a public link",
+      "createDescription": "Anyone with this link can view the shared item without signing in.",
+      "nameLabel": "Link name",
+      "create": "Create link",
+      "creating": "Creating…",
+      "existingTitle": "Active links",
+      "existingDescription": "Each link stays active until you revoke it.",
+      "loading": "Loading public links…",
+      "retry": "Try again",
+      "created": "Created {{date}}",
+      "copy": "Copy link",
+      "copied": "Copied",
+      "open": "Open",
+      "revoke": "Revoke",
+      "revokeConfirmation": "Revoking this link immediately removes public access.",
+      "cancel": "Cancel",
+      "confirmRevoke": "Revoke link",
+      "revoking": "Revoking…",
+      "emptyTitle": "No public links",
+      "emptyDescription": "Create a link above when you want to share this item.",
+      "errors": {
+        "load": "Public links could not be loaded.",
+        "nameRequired": "Enter a name for the public link.",
+        "create": "The public link could not be created.",
+        "clipboard": "Clipboard access was blocked. Open the link and copy it from the browser instead.",
+        "revoke": "The public link could not be revoked."
+      }
+    },
+    "translationFallback_one": "{{value}} field is still shown in the default language because its translation is missing or stale.",
+    "translationFallback_other": "{{value}} fields are still shown in the default language because their translations are missing or stale.",
+    "emptyDescription": "No description has been added yet.",
+    "files_one": "{{value}} file",
+    "files_other": "{{value}} files",
+    "priority": "{{value}} / 5",
+    "openOnMap": "Open on map",
+    "noPosition": "No geographic position has been recorded.",
+    "lastUpdated": "Last updated {{date}}",
+    "sections": {
+      "overview": "Overview",
+      "media": "Media",
+      "notes": "Notes",
+      "itemDetails": "Item details",
+      "classification": "Classification",
+      "customFields": "Custom fields",
+      "position": "Position"
+    }
+  },
+  "duplicates": {
+    "page": {
+      "metadataTitle": "Duplicates | Inventory",
+      "metadataDescription": "Review and merge potential duplicate inventory records.",
+      "eyebrow": "Data quality",
+      "title": "Duplicate review",
+      "description": "Compare likely matches side by side, then choose which record should remain as the source of truth."
+    },
+    "recordA": "Record A",
+    "recordB": "Record B",
+    "updated": "Updated {{date}}",
+    "noDescriptors": "No tags or categories",
+    "scanningInventory": "Scanning inventory…",
+    "matchCount_one": "{{value}} potential match",
+    "matchCount_other": "{{value}} potential matches",
+    "rankingDescription": "Matches are ranked using SKU and name similarity.",
+    "scanning": "Scanning…",
+    "runScan": "Run scan",
+    "success": "Merged successfully. “{{name}}” is now the source record.",
+    "dismissConfirmation": "Dismiss confirmation",
+    "dismissError": "Dismiss error",
+    "loadingMatches": "Loading duplicate matches",
+    "empty": {
+      "title": "Everything looks tidy",
+      "description": "No likely duplicate records were found. Run the scan again after importing or creating more inventory."
+    },
+    "potentialMatch": "Potential match {{value}}",
+    "matchPercent": "{{value}} match",
+    "keepRecordA": "Keep record A",
+    "keepRecordB": "Keep record B",
+    "errors": {
+      "scan": "Could not scan for duplicates.",
+      "merge": "Could not merge these records."
+    },
+    "confirm": {
+      "title": "Permanently merge these records?",
+      "keepSuffix": "will be kept. Media, quantity, tags, and missing details from",
+      "removeSuffix": "will be moved into it, then the second record will be permanently deleted.",
+      "irreversible": "This action cannot be undone.",
+      "cancel": "Cancel",
+      "merging": "Merging…",
+      "submit": "Keep “{{name}}” and delete the other"
+    }
+  }
+}

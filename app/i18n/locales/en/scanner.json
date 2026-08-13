@@ -1,0 +1,386 @@
+{
+  "metadata": {
+    "scanTitle": "Scan stock | Inventory",
+    "scanDescription": "Scan QR codes and apply configured properties to stock units.",
+    "workflowsTitle": "Scan workflows | Inventory",
+    "workflowsDescription": "Visually configure QR-code-driven stock workflows."
+  },
+  "statuses": {
+    "available": "Available",
+    "reserved": "Reserved",
+    "in-use": "In use",
+    "maintenance": "Maintenance",
+    "consumed": "Consumed",
+    "lost": "Lost",
+    "retired": "Retired",
+    "unknown": "Unknown"
+  },
+  "colors": {
+    "wood": "Wood",
+    "black": "Black",
+    "white": "White",
+    "pink": "Pink",
+    "green": "Green",
+    "oak": "Oak"
+  },
+  "values": {
+    "yes": "Yes",
+    "no": "No",
+    "fullyAssembled": "Fully assembled",
+    "empty": "—"
+  },
+  "camera": {
+    "errors": {
+      "blocked": "Camera access was blocked. Allow camera access in your browser settings, then try again.",
+      "notFound": "No camera was found on this device. You can upload a photo or enter the code manually.",
+      "inUse": "The camera is already in use or could not be started. Close other camera apps and try again.",
+      "unavailable": "The selected camera is not available. Choose another camera or try again.",
+      "generic": "The camera could not be started. You can still upload a photo or enter the code manually.",
+      "secureContext": "Camera access requires a secure HTTPS connection. Open this page over HTTPS, or use photo upload/manual entry below.",
+      "unsupported": "This browser does not provide camera access. Use photo upload or manual entry below.",
+      "noQr": "No QR code was found. Try a closer, sharper photo with the whole code visible, or enter the code manually.",
+      "imageUnreadable": "This image could not be read. Try another photo or enter the code manually.",
+      "manualRequired": "Enter the complete content expected by the selected workflow."
+    },
+    "deviceFallback": "Camera {{value}}",
+    "title": "Scan with camera",
+    "description": "Hold the complete QR code inside the frame.",
+    "cameraLabel": "Camera",
+    "previewLabel": "Live camera preview for QR-code scanning",
+    "status": {
+      "paused": "Scanner paused after detection",
+      "unavailable": "Camera unavailable",
+      "waiting": "Waiting for camera permission…",
+      "off": "Camera is off"
+    },
+    "stop": "Stop camera",
+    "scanAnother": "Scan another code",
+    "start": "Start camera",
+    "privacy": "Camera access works on HTTPS or localhost. The video stays on this device and is only inspected for QR codes.",
+    "separator": "or",
+    "photo": {
+      "title": "Upload a QR photo",
+      "description": "Useful when camera access is blocked or the label is hard to reach.",
+      "reading": "Reading photo…",
+      "choose": "Choose or take photo"
+    },
+    "manual": {
+      "title": "Enter code manually",
+      "label": "Complete QR-code content",
+      "placeholder": "Complete QR-code content",
+      "use": "Use code",
+      "help": "Enter exactly what the QR code contains. Depending on the selected workflow, a URL or prefixed value may be required; a bare EPD number is not always enough."
+    },
+    "detected": "Code detected: {{code}}"
+  },
+  "scan": {
+    "fallbacks": {
+      "untitledWorkflow": "Untitled workflow",
+      "unknownResource": "Unknown resource"
+    },
+    "errors": {
+      "workflowsLoad": "Scan workflows could not be loaded.",
+      "resolve": "This code could not be resolved with the selected workflow.",
+      "resolveUnexpected": "The scan service returned an unexpected resolution.",
+      "resolveFallback": "The scanned code could not be resolved.",
+      "update": "The stock update could not be completed.",
+      "updateUnexpected": "The stock service returned an unexpected result."
+    },
+    "validation": {
+      "required": "{{field}} is required."
+    },
+    "metadata": {
+      "none": "No metadata"
+    },
+    "header": {
+      "eyebrow": "Stock automation",
+      "title": "Scan into stock",
+      "description": "Scan the complete QR content, let the selected workflow extract its identifier, and review every change before it reaches inventory."
+    },
+    "setup": {
+      "errorTitle": "Scanner setup could not be loaded",
+      "retry": "Retry",
+      "emptyTitle": "No enabled scan workflow",
+      "emptyDescription": "Create and enable a workflow first. It defines how QR content maps to an EPD number, stock state, and editable properties.",
+      "workflowLabel": "Scan workflow"
+    },
+    "success": {
+      "eyebrow": "Stock updated",
+      "created": "A new stock unit was assembled and added.",
+      "updated": "The existing stock unit was updated.",
+      "unit": "Unit",
+      "resource": "Resource",
+      "metadata": "Saved metadata",
+      "next": "Scan next item"
+    },
+    "resolving": "Resolving EPD number and workflow…",
+    "resolveErrorTitle": "Code could not be resolved",
+    "how": {
+      "title": "How this scan works",
+      "steps": {
+        "scan": {
+          "number": "1",
+          "title": "Scan",
+          "description": "Read a QR code or enter its complete content."
+        },
+        "enrich": {
+          "number": "2",
+          "title": "Enrich",
+          "description": "Choose configured properties such as color."
+        },
+        "review": {
+          "number": "3",
+          "title": "Review",
+          "description": "Confirm the unit and stock status before saving."
+        }
+      }
+    },
+    "readOnly": {
+      "title": "Read-only access",
+      "description": "You can scan and review a result, but only members and admins can apply it to stock."
+    },
+    "review": {
+      "eyebrow": "Review scan",
+      "existingUnit": "Existing unit",
+      "unitNotFound": "Unit not found",
+      "newUnit": "New unit",
+      "extractedCode": "Extracted EPD / code",
+      "targetUnit": "Target stock unit",
+      "currentStatus": "Current status: {{status}}",
+      "willCreate": "Will be created when you confirm",
+      "willNotCreate": "No unit will be created",
+      "impactTitle": "Inventory impact on confirmation",
+      "lifecycleStatus": "Lifecycle status",
+      "unitDoesNotExist": "Unit does not exist yet",
+      "availableStock": "Available stock",
+      "availableHelp": "Available stock counts only units whose lifecycle status is Available. A transition away from Available therefore reduces this quantity.",
+      "fixedProperties": "Set by workflow",
+      "completeProperties": "Complete scan properties",
+      "selectField": "Select {{field}}",
+      "metadataPreview": "Metadata preview",
+      "updateErrorTitle": "Update was not completed",
+      "retryHelp": "You can retry safely; the same idempotency key is reused.",
+      "unitUnavailable": "No unit with this EPD number exists, and this workflow is not allowed to create one. Change the workflow or create the unit before trying again.",
+      "readOnly": "This is a read-only preview. Your role cannot execute stock changes.",
+      "scanAgain": "Scan again",
+      "updating": "Updating stock…",
+      "cannotUpdate": "Unit cannot be updated",
+      "confirm": "Confirm and update stock"
+    }
+  },
+  "workflows": {
+    "fallbacks": {
+      "resourceUnavailable": "Inventory item unavailable",
+      "untitled": "Untitled workflow",
+      "input": "Input",
+      "identifier": "Identifier",
+      "notSelected": "Not selected"
+    },
+    "template": {
+      "name": "Paperless Paper assembly",
+      "description": "Read an EPD number from the product QR code, register the assembled unit, and capture its color.",
+      "assemblyStatus": "Assembly status",
+      "color": "Color",
+      "colors": {
+        "wood": "Wood",
+        "black": "Black",
+        "white": "White",
+        "pink": "Pink",
+        "green": "Green",
+        "oak": "Oak"
+      }
+    },
+    "validation": {
+      "name": "Give this workflow a name.",
+      "resource": "Choose a serialized inventory item.",
+      "identifier": "Set an identifier property key.",
+      "propertyKey": "Property keys may only contain letters, numbers, underscore, dash, and dot.",
+      "queryParameter": "Set the URL query parameter to extract.",
+      "sourceOriginOnly": "Source origin must contain only scheme and host, for example https://example.com.",
+      "sourceOriginInvalid": "Source origin must be a valid URL origin.",
+      "sourcePath": "Source path must begin with / and cannot contain a query or fragment.",
+      "prefix": "Set the prefix that should be removed from scans.",
+      "fixedProperty": "Every fixed property needs a key, label, and value.",
+      "uniqueKeys": "Identifier, fixed property, and scan input keys must all be unique.",
+      "input": "Every scan input needs a key and label.",
+      "optionRequired": "{{field}} needs an option.",
+      "optionValues": "Every option in {{field}} needs a value and label.",
+      "optionUnique": "Option values in {{field}} must be unique.",
+      "eachInput": "Each scan input",
+      "anInput": "a scan input"
+    },
+    "extractionErrors": {
+      "empty": "Paste or scan a value to test extraction.",
+      "prefixMismatch": "The scan does not start with “{{prefix}}”.",
+      "prefixEmpty": "Nothing remains after removing the prefix.",
+      "invalidUrl": "The scanned value is not a valid URL.",
+      "originMismatch": "Expected a QR code from {{origin}}.",
+      "originInvalid": "The configured source origin is invalid.",
+      "pathMismatch": "Expected the path {{path}}.",
+      "queryCount": "The scan must contain exactly one “{{parameter}}” query value.",
+      "queryEmpty": "Query parameter “{{parameter}}” is empty."
+    },
+    "errors": {
+      "load": "Workflows could not be loaded.",
+      "unexpected": "The workflow service returned an unexpected response.",
+      "save": "The workflow could not be saved.",
+      "update": "The workflow could not be updated.",
+      "delete": "The workflow could not be deleted."
+    },
+    "confirmDiscard": "Discard your unsaved workflow changes? This action cannot be undone.",
+    "notices": {
+      "templateLoaded": "Paperless Paper template loaded. Choose its inventory item, then save.",
+      "viewerReadOnly": "Viewer access is read-only.",
+      "updated": "Workflow updated.",
+      "created": "Workflow created and ready to scan.",
+      "enabled": "Workflow enabled.",
+      "paused": "Workflow paused.",
+      "deleted": "Workflow deleted."
+    },
+    "header": {
+      "eyebrow": "Scan automation",
+      "title": "Build scan workflows visually.",
+      "description": "Turn a QR code into an identified stock unit with guided inputs and consistent properties—without code.",
+      "readOnly": "Read only",
+      "refresh": "Refresh",
+      "newTemplate": "New from template"
+    },
+    "sidebar": {
+      "title": "Workflows",
+      "configured_one": "{{value}} configured",
+      "configured_other": "{{value}} configured",
+      "createAria": "Create a workflow from the template",
+      "resourceRevision": "{{resource}} · v{{revision}}",
+      "emptyTitle": "No saved workflows",
+      "emptyManager": "The Paperless Paper template is ready in the builder.",
+      "emptyViewer": "A manager can create the first scan workflow here.",
+      "safeTitle": "Safe by design",
+      "safeDescription": "Only configured fields and allowed stock actions run after a scan."
+    },
+    "editor": {
+      "newWorkflow": "New workflow",
+      "enabled": "Enabled",
+      "paused": "Paused",
+      "unsaved": "Unsaved changes",
+      "template": "Template",
+      "revision": "Revision {{value}}",
+      "basedOnTemplate": "Based on the attached Paperless Paper QR-code use case",
+      "pause": "Pause",
+      "enable": "Enable",
+      "delete": "Delete",
+      "saving": "Saving…",
+      "update": "Update",
+      "save": "Save workflow",
+      "confirmDelete": "Delete {{name}}? Existing stock units are not affected.",
+      "cancel": "Cancel",
+      "deleting": "Deleting…",
+      "deleteWorkflow": "Delete workflow",
+      "name": "Workflow name",
+      "namePlaceholder": "Assembly scan",
+      "enabledLabel": "Workflow enabled",
+      "enabledDescription": "Available on the Scan screen.",
+      "description": "Description",
+      "descriptionPlaceholder": "Explain when this workflow should be used.",
+      "viewerDescription": "You can inspect and locally preview this workflow. Editing, enabling, and deleting require editor access."
+    },
+    "steps": {
+      "trigger": {
+        "title": "Trigger",
+        "description": "This workflow starts when a camera or handheld scanner reads a QR code.",
+        "event": "QR code scanned",
+        "eventDescription": "Pass the decoded text into this workflow",
+        "badge": "Scan trigger"
+      },
+      "extract": {
+        "title": "Extract the EPD number",
+        "description": "Choose a safe, predefined rule for turning scanned text into the unit identifier.",
+        "modes": {
+          "full": "Full value",
+          "url-query": "URL parameter",
+          "prefix": "Remove prefix"
+        },
+      "queryParameter": "Query parameter",
+      "queryParameterPlaceholder": "d",
+      "sourceOrigin": "Allowed source origin",
+      "sourceOriginPlaceholder": "https://paperlesspaper.de",
+      "sourcePath": "Allowed path",
+      "sourcePathPlaceholder": "/b",
+      "identifierKey": "Identifier property key",
+      "identifierKeyPlaceholder": "epdNumber",
+      "prefix": "Prefix to remove",
+      "prefixPlaceholder": "EPD-"
+      },
+      "target": {
+        "title": "Choose the target inventory item",
+        "description": "Only inventory configured for serialized stock can receive identified units.",
+        "field": "Serialized inventory item",
+        "select": "Select an inventory item…",
+        "resourceQuantity": "{{name}} · {{quantity}} {{unit}}",
+        "units_one": "unit",
+        "units_other": "units",
+        "none": "No serialized inventory items are available yet.",
+        "configure": "Configure inventory",
+        "selected": "{{name}} uses serialized tracking."
+      },
+      "inputs": {
+        "title": "Ask for scan-time inputs",
+        "description": "Build guided select fields for information that changes from unit to unit.",
+        "selectField": "Select field",
+        "removeField": "Remove {{field}}",
+        "scanInput": "scan input",
+      "propertyKey": "Property key",
+      "propertyKeyPlaceholder": "color",
+        "visibleLabel": "Visible label",
+        "required": "Required before the scan can be applied",
+        "options": "Options",
+        "addOption": "Add option",
+        "newOption": "Option {{value}}",
+        "chooseColor": "Choose swatch color",
+        "colorFor": "Color for {{label}}",
+        "label": "Label",
+        "storedValue": "Stored value",
+        "removeOption": "Remove {{label}}",
+        "none": "This workflow has no scan-time questions.",
+        "addField": "Add select field",
+        "newProperty": "Property {{value}}"
+      },
+      "actions": {
+        "title": "Apply stock actions",
+        "description": "Decide what happens to the matched EPD unit and which values are always written.",
+        "createMissing": "Create missing unit",
+        "createMissingDescription": "Register this EPD number if it is new.",
+        "createMissingAria": "Create a missing serialized unit",
+        "status": "Lifecycle status after scan",
+        "keepStatus": "Keep default / current status",
+        "fixedTitle": "Fixed properties",
+        "fixedDescription": "These values are applied on every successful scan.",
+        "addProperty": "Add property",
+      "key": "Key",
+      "keyPlaceholder": "assemblyStatus",
+        "visibleLabel": "Visible label",
+      "storedValue": "Stored value",
+      "storedValuePlaceholder": "finished-assembled",
+        "visibleAs": "Visible as {{value}}",
+        "remove": "Remove",
+        "none": "No fixed properties.",
+        "newProperty": "Property {{value}}",
+        "defaultValue": "value"
+      }
+    },
+    "preview": {
+      "title": "Local scan preview",
+      "description": "Test extraction and selections without changing inventory.",
+      "noWrite": "No write",
+      "scannedValue": "Scanned QR value",
+      "placeholder": "Paste a decoded QR value…",
+      "inputFallback": "Input",
+      "result": "Result",
+      "identifier": "Identifier",
+      "target": "Target",
+      "unit": "Unit",
+      "findOrCreate": "Find or create",
+      "findExisting": "Find existing only",
+      "notSelected": "Not selected"
+    }
+  }
+}

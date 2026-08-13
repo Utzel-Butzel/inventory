@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import { media } from "@/db/schema";
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { readLocalMedia } from "@/lib/storage";
 
@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "inventory.read");
   if (authorization.response) return authorization.response;
   const { path: segments } = await context.params;
   const storageKey = segments.join("/");

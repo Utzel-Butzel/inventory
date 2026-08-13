@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requireIdentity } from "@/lib/api-auth";
+import { requirePermission } from "@/lib/api-auth";
 import { scanWorkflowPatchSchema } from "@/lib/scan-workflow-contract";
 import {
   deleteScanWorkflow,
@@ -19,7 +19,7 @@ const readId = async (context: Context) => {
 };
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "workflows.read");
   if (authorization.response) return authorization.response;
   const id = await readId(context);
   if (!id) {
@@ -41,7 +41,7 @@ export async function GET(request: Request, context: Context) {
 }
 
 export async function PATCH(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
+  const authorization = await requirePermission(request, "workflows.manage");
   if (authorization.response) return authorization.response;
   const id = await readId(context);
   if (!id) {
@@ -88,7 +88,7 @@ export async function PATCH(request: Request, context: Context) {
 }
 
 export async function DELETE(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
+  const authorization = await requirePermission(request, "workflows.manage");
   if (authorization.response) return authorization.response;
   const id = await readId(context);
   if (!id) {

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 
 export default function ApiDocsPage() {
   return (
-    <div className="min-h-dvh bg-[#f7f5ef] text-[#1a1b1e]">
+    <div className="min-h-dvh bg-background text-foreground">
       <MarketingHeader />
 
       <main>
@@ -75,7 +75,7 @@ export default function ApiDocsPage() {
 
         <section
           aria-label="Interactive API reference"
-          className="api-docs-reference bg-white"
+          className="api-docs-reference bg-surface"
         >
           <ApiDocumentation />
         </section>

@@ -1,9 +1,21 @@
 import "server-only";
 
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  ilike,
+  inArray,
+  isNull,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 
 import {
   customFieldDefinitions,
+  resources,
+  stockUnits,
   type CustomFieldDefinitionRecord,
 } from "@/db/schema";
 import {
@@ -11,6 +23,7 @@ import {
   normalizeCustomFieldKey,
   type CustomFieldDefinition,
   type CustomFieldEntityType,
+  type CustomFieldReferenceOption,
   type CustomFieldTarget,
   type CustomFieldValue,
   type CustomFieldValues,
@@ -75,6 +88,11 @@ const definitionDto = (
   resourceTypes: row.resourceTypes,
   categories: row.categories,
   options: row.options,
+  referenceEntityType: row.referenceEntityType,
+  referenceMultiple: row.referenceMultiple,
+  referenceResourceTypes: row.referenceResourceTypes,
+  referenceCategories: row.referenceCategories,
+  referenceStatuses: row.referenceStatuses,
   position: row.position,
   revision: row.revision,
   createdBy: row.createdBy,
@@ -182,6 +200,11 @@ export async function updateCustomFieldDefinition(
       resourceTypes: current.resourceTypes,
       categories: current.categories,
       options: current.options,
+      referenceEntityType: current.referenceEntityType,
+      referenceMultiple: current.referenceMultiple,
+      referenceResourceTypes: current.referenceResourceTypes,
+      referenceCategories: current.referenceCategories,
+      referenceStatuses: current.referenceStatuses,
       position: current.position,
       ...patchChanges,
     });
@@ -205,6 +228,11 @@ export async function updateCustomFieldDefinition(
       resourceTypes: merged.data.resourceTypes,
       categories: merged.data.categories,
       options: merged.data.options,
+      referenceEntityType: merged.data.referenceEntityType,
+      referenceMultiple: merged.data.referenceMultiple,
+      referenceResourceTypes: merged.data.referenceResourceTypes,
+      referenceCategories: merged.data.referenceCategories,
+      referenceStatuses: merged.data.referenceStatuses,
       position: merged.data.position,
     };
     const [saved] = await transaction
@@ -286,6 +314,9 @@ const validCalendarDate = (value: string) => {
   );
 };
 
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 const validateValue = (
   definition: CustomFieldDefinition,
   value: CustomFieldValue,
@@ -331,6 +362,26 @@ const validateValue = (
     return value;
   }
 
+  if (definition.fieldType === "reference") {
+    const references = definition.referenceMultiple
+      ? Array.isArray(value)
+        ? value
+        : invalidValue(definition, "expected a list of referenced record IDs.")
+      : typeof value === "string"
+        ? [value]
+        : invalidValue(definition, "expected a referenced record ID.");
+    if (references.length > 100) {
+      return invalidValue(definition, "must contain at most 100 references.");
+    }
+    if (new Set(references).size !== references.length) {
+      return invalidValue(definition, "referenced record IDs must be unique.");
+    }
+    if (references.some((reference) => !uuidPattern.test(reference))) {
+      return invalidValue(definition, "expected stable UUID record IDs.");
+    }
+    return definition.referenceMultiple ? references : references[0];
+  }
+
   if (typeof value !== "string") {
     return invalidValue(definition, "expected text.");
   }
@@ -372,6 +423,234 @@ const validateValue = (
   return value;
 };
 
+const normalizedFilter = (value: string) => value.trim().toLowerCase();
+
+const categoryCondition = (column: typeof resources.categories, categories: string[]) => {
+  if (!categories.length) return undefined;
+  const normalized = categories.map(normalizedFilter);
+  return sql`exists (
+    select 1
+    from jsonb_array_elements(${column}) as custom_field_category
+    where lower(custom_field_category ->> 'name') in (${sql.join(
+      normalized.map((category) => sql`${category}`),
+      sql`, `,
+    )})
+  )`;
+};
+
+const normalizedListCondition = (
+  column: typeof resources.status | typeof stockUnits.status,
+  values: string[],
+) =>
+  sql`lower(${column}) in (${sql.join(
+    values.map((value) => sql`${normalizedFilter(value)}`),
+    sql`, `,
+  )})`;
+
+async function queryReferenceOptions(options: {
+  definition: CustomFieldDefinition;
+  query?: string;
+  ids?: string[];
+  applyFilters: boolean;
+  limit: number;
+  executor: CustomFieldQueryExecutor;
+}): Promise<CustomFieldReferenceOption[]> {
+  const { definition, executor } = options;
+  const query = options.query?.trim();
+  if (definition.referenceEntityType === "inventory") {
+    const conditions: SQL[] = [];
+    if (options.ids?.length) conditions.push(inArray(resources.id, options.ids));
+    if (options.applyFilters) {
+      if (definition.referenceResourceTypes.length) {
+        conditions.push(inArray(resources.type, definition.referenceResourceTypes));
+      }
+      if (definition.referenceStatuses.length) {
+        conditions.push(
+          normalizedListCondition(resources.status, definition.referenceStatuses),
+        );
+      }
+      const categories = categoryCondition(
+        resources.categories,
+        definition.referenceCategories,
+      );
+      if (categories) conditions.push(categories);
+    }
+    if (query) {
+      const pattern = `%${query.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+      const queryCondition = or(
+        ilike(resources.name, pattern),
+        ilike(resources.sku, pattern),
+        sql`${resources.id}::text ilike ${pattern}`,
+      );
+      if (queryCondition) conditions.push(queryCondition);
+    }
+    const rows = await executor
+      .select({
+        id: resources.id,
+        name: resources.name,
+        sku: resources.sku,
+        type: resources.type,
+        status: resources.status,
+      })
+      .from(resources)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(asc(resources.name), asc(resources.id))
+      .limit(options.limit);
+    return rows.map((row) => ({
+      id: row.id,
+      entityType: "inventory" as const,
+      label: row.name,
+      description: [row.sku, row.type, row.status].filter(Boolean).join(" · "),
+      status: row.status,
+    }));
+  }
+
+  if (definition.referenceEntityType === "stock_unit") {
+    const conditions: SQL[] = [];
+    if (options.ids?.length) conditions.push(inArray(stockUnits.id, options.ids));
+    if (options.applyFilters) {
+      if (definition.referenceResourceTypes.length) {
+        conditions.push(inArray(resources.type, definition.referenceResourceTypes));
+      }
+      if (definition.referenceStatuses.length) {
+        conditions.push(
+          normalizedListCondition(stockUnits.status, definition.referenceStatuses),
+        );
+      }
+      const categories = categoryCondition(
+        resources.categories,
+        definition.referenceCategories,
+      );
+      if (categories) conditions.push(categories);
+    }
+    if (query) {
+      const pattern = `%${query.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+      const queryCondition = or(
+        ilike(stockUnits.code, pattern),
+        ilike(resources.name, pattern),
+        ilike(resources.sku, pattern),
+        sql`${stockUnits.id}::text ilike ${pattern}`,
+      );
+      if (queryCondition) conditions.push(queryCondition);
+    }
+    const rows = await executor
+      .select({
+        id: stockUnits.id,
+        code: stockUnits.code,
+        status: stockUnits.status,
+        resourceName: resources.name,
+        resourceType: resources.type,
+        sku: resources.sku,
+      })
+      .from(stockUnits)
+      .innerJoin(resources, eq(stockUnits.resourceId, resources.id))
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(asc(resources.name), asc(stockUnits.code), asc(stockUnits.id))
+      .limit(options.limit);
+    return rows.map((row) => ({
+      id: row.id,
+      entityType: "stock_unit" as const,
+      label: `${row.resourceName} · ${row.code}`,
+      description: [row.sku, row.resourceType, row.status].filter(Boolean).join(" · "),
+      status: row.status,
+    }));
+  }
+
+  return [];
+}
+
+export async function listCustomFieldReferenceOptions(options: {
+  definitionId: string;
+  query?: string;
+  selectedIds?: string[];
+  limit?: number;
+  executor?: CustomFieldQueryExecutor;
+}) {
+  const executor = options.executor ?? db;
+  const [row] = await executor
+    .select()
+    .from(customFieldDefinitions)
+    .where(
+      and(
+        eq(customFieldDefinitions.id, options.definitionId),
+        isNull(customFieldDefinitions.archivedAt),
+      ),
+    )
+    .limit(1);
+  if (!row) throw new CustomFieldError("Custom field definition not found.", 404);
+  const definition = definitionDto(row);
+  if (definition.fieldType !== "reference" || !definition.referenceEntityType) {
+    throw new CustomFieldError("This custom field is not a reference field.", 422);
+  }
+
+  const selectedIds = [...new Set(options.selectedIds ?? [])];
+  if (selectedIds.some((id) => !uuidPattern.test(id))) {
+    throw new CustomFieldError("Reference option IDs must be UUIDs.", 422);
+  }
+  if (selectedIds.length > 100) {
+    throw new CustomFieldError("Resolve at most 100 selected references at a time.", 422);
+  }
+  const limit = Math.min(Math.max(options.limit ?? 25, 1), 50);
+  const [selected, matches] = await Promise.all([
+    selectedIds.length
+      ? queryReferenceOptions({
+          definition,
+          ids: selectedIds,
+          applyFilters: false,
+          limit: selectedIds.length,
+          executor,
+        })
+      : Promise.resolve([]),
+    queryReferenceOptions({
+      definition,
+      query: options.query,
+      applyFilters: true,
+      limit,
+      executor,
+    }),
+  ]);
+  const result = new Map<string, CustomFieldReferenceOption>();
+  for (const option of [...selected, ...matches]) result.set(option.id, option);
+  return { definition, options: [...result.values()].slice(0, selected.length + limit) };
+}
+
+async function validateReferenceValue(options: {
+  definition: CustomFieldDefinition;
+  value: CustomFieldValue;
+  currentValue?: CustomFieldValue;
+  executor: CustomFieldQueryExecutor;
+}) {
+  if (options.definition.fieldType !== "reference") return;
+  const references: string[] = Array.isArray(options.value)
+    ? options.value
+    : typeof options.value === "string"
+      ? [options.value]
+      : [];
+  const currentReferences = new Set(
+    Array.isArray(options.currentValue)
+      ? options.currentValue
+      : typeof options.currentValue === "string"
+        ? [options.currentValue]
+        : [],
+  );
+  const added = references.filter((reference) => !currentReferences.has(reference));
+  if (!added.length) return;
+  const matches = await queryReferenceOptions({
+    definition: options.definition,
+    ids: added,
+    applyFilters: true,
+    limit: added.length,
+    executor: options.executor,
+  });
+  const matchedIds = new Set(matches.map((match) => match.id));
+  if (added.some((reference) => !matchedIds.has(reference))) {
+    return invalidValue(
+      options.definition,
+      "a referenced record does not exist or does not match the configured filters.",
+    );
+  }
+}
+
 const sameJsonValue = (left: unknown, right: unknown) =>
   JSON.stringify(left) === JSON.stringify(right);
 
@@ -411,7 +690,14 @@ export async function validateCustomFieldValues(options: {
         { field: key },
       );
     }
-    result[key] = validateValue(definition, value);
+    const validated = validateValue(definition, value);
+    await validateReferenceValue({
+      definition,
+      value: validated,
+      currentValue: options.currentValues?.[key],
+      executor: options.executor ?? db,
+    });
+    result[key] = validated;
   }
 
   // Archived or no-longer-applicable values remain stored but cannot be

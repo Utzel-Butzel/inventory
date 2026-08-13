@@ -1,4 +1,5 @@
-import { requireIdentity } from "@/lib/api-auth";
+import { canAccessResource, requireIdentity } from "@/lib/api-auth";
+import { getResourceRecords } from "@/lib/access-control";
 import {
   assertActiveInventoryType,
   inventoryStructureHttpError,
@@ -28,11 +29,43 @@ export async function PATCH(request: Request) {
     );
   }
 
+  const selectedResources = await getResourceRecords(parsed.data.ids);
+  if (selectedResources.length !== new Set(parsed.data.ids).size) {
+    return Response.json(
+      { error: "At least one selected inventory item no longer exists." },
+      { status: 404 },
+    );
+  }
+  const allowed = await Promise.all(
+    selectedResources.map((resource) =>
+      canAccessResource(authorization.identity, "inventory.update", resource),
+    ),
+  );
+  if (allowed.some((value) => !value)) {
+    return Response.json(
+      { error: "You do not have permission to update every selected item." },
+      { status: 403 },
+    );
+  }
+
   try {
     if (parsed.data.changes.type) {
       await assertActiveInventoryType(parsed.data.changes.type);
     }
-    const result = await updateResourcesBatch(parsed.data);
+    const result = await updateResourcesBatch({
+      ...parsed.data,
+      authorize: async (current, proposed) =>
+        (await canAccessResource(
+          authorization.identity,
+          "inventory.update",
+          current,
+        )) &&
+        (await canAccessResource(
+          authorization.identity,
+          "inventory.update",
+          proposed,
+        )),
+    });
     if (parsed.data.changes.type) {
       await synchronizeSpatialContainment(authorization.identity.subject);
     }
@@ -49,6 +82,15 @@ export async function PATCH(request: Request) {
       return Response.json(
         { error: "At least one selected inventory item no longer exists." },
         { status: 404 },
+      );
+    }
+    if (error instanceof Error && error.message === "RESOURCE_PERMISSION_DENIED") {
+      return Response.json(
+        {
+          error:
+            "A batch change cannot move an item outside the inventory rule that grants your access.",
+        },
+        { status: 403 },
       );
     }
     return Response.json(

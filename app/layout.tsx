@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 
+import { UI_LANGUAGE_HEADER, UI_LANGUAGES } from "@/i18n.config";
+
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -44,17 +46,45 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
-  colorScheme: "light",
-  themeColor: "#f6f7f9",
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f6f7f9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0c10" },
+  ],
 };
 
-export default function RootLayout({
+const themeInitScript = `
+let theme = null;
+try {
+  theme = localStorage.getItem("inventory-theme");
+} catch {}
+if (theme === "light" || theme === "dark") {
+  document.documentElement.dataset.theme = theme;
+}
+const resolvedTheme = theme === "light" || theme === "dark"
+  ? theme
+  : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+  meta.setAttribute("content", resolvedTheme === "dark" ? "#0a0c10" : "#f6f7f9");
+});
+`;
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const requestHeaders = await headers();
+  const requestedLanguage = requestHeaders.get(UI_LANGUAGE_HEADER) ?? "en";
+  const language = UI_LANGUAGES.includes(requestedLanguage as "en" | "de")
+    ? requestedLanguage
+    : "en";
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={language} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="min-h-dvh antialiased">{children}</body>
     </html>
   );

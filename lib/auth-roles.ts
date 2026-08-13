@@ -1,15 +1,23 @@
 import type { UserRole } from "@/db/schema";
+import {
+  builtinRolePermissions,
+  scopesForPermissions,
+  type ApiScope,
+} from "@/lib/access-control-contract";
 
-export type ApiScope = "read" | "write" | "ai";
+export type { ApiScope } from "@/lib/access-control-contract";
 
-export const roleScopes: Record<UserRole, ApiScope[]> = {
-  admin: ["read", "write", "ai"],
-  editor: ["read", "write", "ai"],
-  viewer: ["read"],
+export const roleScopes: Record<"admin" | "editor" | "viewer", ApiScope[]> = {
+  admin: scopesForPermissions(builtinRolePermissions.admin),
+  editor: scopesForPermissions(builtinRolePermissions.editor),
+  viewer: scopesForPermissions(builtinRolePermissions.viewer),
 };
 
 export function isUserRole(value: unknown): value is UserRole {
-  return value === "admin" || value === "editor" || value === "viewer";
+  return (
+    typeof value === "string" &&
+    /^[a-z][a-z0-9_-]{0,63}$/.test(value)
+  );
 }
 
 export function normalizeUserRole(
@@ -18,9 +26,9 @@ export function normalizeUserRole(
 ): UserRole {
   if (isUserRole(value)) return value;
   if (Array.isArray(value)) {
-    if (value.includes("admin")) return "admin";
-    if (value.includes("editor")) return "editor";
-    if (value.includes("viewer")) return "viewer";
+    for (const candidate of value) {
+      if (isUserRole(candidate)) return candidate;
+    }
   }
   return fallback;
 }

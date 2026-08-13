@@ -14,7 +14,7 @@ import {
   finishAiOperation,
   releaseAiOperation,
 } from "@/lib/ai-idempotency";
-import { hashRequestIdentity, requireIdentity } from "@/lib/api-auth";
+import { hashRequestIdentity, requirePermission } from "@/lib/api-auth";
 import { hashIdempotentPayload, readIdempotencyKey } from "@/lib/idempotency";
 import {
   createReplicateCountJobToken,
@@ -87,7 +87,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 export async function POST(request: Request) {
-  const authorization = await requireIdentity(request, "ai");
+  const authorization = await requirePermission(request, "ai.use");
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;

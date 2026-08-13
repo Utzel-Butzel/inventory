@@ -1,0 +1,820 @@
+{
+  "header": {
+    "eyebrow": "Einstellungen"
+  },
+  "pages": {
+    "access": {
+      "title": "Rollen & Zugriff",
+      "metaDescription": "Detaillierte Rollen und bedingten Inventarzugriff verwalten.",
+      "description": "Stellen Sie Arbeitsbereichsrollen aus präzisen Berechtigungen zusammen und ergänzen Sie Regeln, die ausgewählte Aktionen nur für passende Inventareinträge erlauben."
+    },
+    "api": {
+      "title": "API & Dienste",
+      "metaDescription": "Laufzeitdienste prüfen und API-Zugriff verwalten.",
+      "description": "Prüfen Sie die für diese Bereitstellung aktivierten Dienste und verwalten Sie bereichsbezogene Zugangsdaten für Integrationen.",
+      "documentation": "API-Dokumentation"
+    },
+    "customFields": {
+      "title": "Benutzerdefinierte Felder",
+      "metaDescription": "Strukturierte Zusatzdaten für Inventar und Bestandseinheiten konfigurieren.",
+      "description": "Erstellen Sie strukturierte Felder für Inventareinträge und serialisierte Bestandseinheiten mit Typ- und Kategoriezuordnung."
+    },
+    "data": {
+      "title": "Datentransfer",
+      "metaDescription": "Inventar als CSV importieren oder Arbeitsbereichsdaten exportieren.",
+      "description": "Übertragen Sie Inventardaten mit einem validierten CSV-Ablauf in diesen Arbeitsbereich oder aus ihm heraus."
+    },
+    "inventoryTypes": {
+      "title": "Inventartypen",
+      "metaDescription": "Die im Arbeitsbereich verfügbaren Eintragstypen konfigurieren.",
+      "description": "Definieren Sie die Arten von Einträgen und Behältern, die Ihr Arbeitsbereich erfasst, einschließlich Bezeichnungen, Farben und Funktionen."
+    },
+    "languages": {
+      "title": "Inhaltssprachen",
+      "metaDescription": "Quellsprache und KI-übersetzte Inventarsprachen konfigurieren.",
+      "description": "Wählen Sie die maßgebliche Sprache für die Inhaltserstellung und die Sprachen, in die Inventarinhalte übersetzt werden sollen."
+    },
+    "users": {
+      "title": "Benutzer",
+      "metaDescription": "Benutzer, Rollen und Zugriffe des Arbeitsbereichs verwalten.",
+      "description": "Fügen Sie Personen zum Arbeitsbereich hinzu, weisen Sie Rollen zu und verwalten Sie lokale Kontozugriffe."
+    },
+    "sharing": {
+      "title": "Öffentliche Freigaben",
+      "metaDescription": "Öffentliche Links für das Inventar erstellen und verwalten.",
+      "description": "Veröffentlichen Sie das gesamte Inventar, eine nach benutzerdefiniertem Feld gefilterte Ansicht oder einen einzelnen Eintrag über einen widerrufbaren Link."
+    }
+  },
+  "sharing": {
+    "create": {
+      "title": "Öffentlichen Link erstellen",
+      "description": "Legen Sie genau fest, was der Link zeigt. Jeder mit der URL kann die Inhalte ohne Anmeldung ansehen.",
+      "warning": "Öffentliche Links umgehen die Anmeldung am Arbeitsbereich. Vermeiden Sie private Felder und widerrufen Sie nicht mehr benötigte Links.",
+      "scope": "Was soll freigegeben werden?",
+      "scopes": {
+        "inventory": "Inventar",
+        "item": "Einzelner Eintrag"
+      },
+      "name": "Linkname",
+      "namePlaceholder": "Werkstattmuster",
+      "filter": "Filter für benutzerdefiniertes Feld",
+      "optional": "· optional",
+      "allInventory": "Gesamtes Inventar · kein Filter",
+      "filterHint": "Nur Einträge, deren Wert für {{field}} exakt dem folgenden Wert entspricht, sind sichtbar.",
+      "item": "Inventareintrag",
+      "itemPlaceholder": "Nach Name, SKU, Standort oder benutzerdefiniertem Feld suchen…",
+      "loadingItems": "Inventareinträge werden geladen",
+      "clearItem": "Ausgewählten Inventareintrag entfernen",
+      "noItems": "Keine Inventareinträge entsprechen dieser Suche.",
+      "creating": "Wird erstellt…",
+      "submit": "Öffentlichen Link erstellen"
+    },
+    "list": {
+      "title": "Aktive öffentliche Links",
+      "description": "Kopieren, prüfen oder widerrufen Sie Links, die derzeit ohne Anmeldung funktionieren.",
+      "activeCount_one": "{{count}} aktiv",
+      "activeCount_other": "{{count}} aktiv",
+      "dismissNotice": "Hinweis schließen",
+      "loading": "Öffentliche Links werden geladen",
+      "loadTitle": "Öffentliche Links konnten nicht geladen werden",
+      "emptyTitle": "Keine aktiven öffentlichen Links",
+      "emptyDescription": "Erstellen Sie oben einen Link, sobald Sie Inventar veröffentlichen möchten.",
+      "filterDescription": "{{field}} entspricht {{value}}",
+      "scopes": {
+        "inventory": "Inventar",
+        "item": "Einzelner Eintrag"
+      },
+      "unavailableItem": "Der Inventareintrag ist nicht mehr verfügbar",
+      "allInventory": "Gesamtes Inventar · kein Filter",
+      "created": "Erstellt: {{date}}",
+      "copy": "Link kopieren",
+      "copied": "Kopiert",
+      "open": "Öffnen",
+      "revoke": "Widerrufen",
+      "confirmRevoke": "Widerruf bestätigen"
+    },
+    "notices": {
+      "created": "Öffentlicher Link „{{name}}“ wurde erstellt.",
+      "revoked": "Öffentlicher Link wurde widerrufen."
+    },
+    "errors": {
+      "load": "Die Einstellungen für öffentliche Freigaben konnten nicht geladen werden.",
+      "loadItems": "Inventareinträge konnten nicht geladen werden.",
+      "nameRequired": "Geben Sie dem Link einen Namen, damit er später leicht zu erkennen ist.",
+      "itemRequired": "Wählen Sie den Inventareintrag aus, den dieser Link freigeben soll.",
+      "filterValueRequired": "Wählen Sie einen Wert für den Filter des benutzerdefinierten Feldes.",
+      "create": "Der öffentliche Link konnte nicht erstellt werden.",
+      "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Öffnen Sie den Link und kopieren Sie ihn stattdessen aus dem Browser.",
+      "revoke": "Der öffentliche Link konnte nicht widerrufen werden."
+    }
+  },
+  "api": {
+    "runtime": {
+      "title": "Laufzeitkonfiguration",
+      "description": "Eine Live-Übersicht der durch die Umgebung dieser Bereitstellung aktivierten Dienste.",
+      "loading": "Laufzeitkonfiguration wird geladen",
+      "refresh": "Einstellungen aktualisieren",
+      "loadTitle": "Einstellungen konnten nicht geladen werden",
+      "fileStorage": "Dateispeicher",
+      "provider": "Anbieter: {{provider}}",
+      "aiAnalysis": "KI-Analyse",
+      "aiAnalysisDescription": "Metadaten und Stapelanreicherung",
+      "imageGeneration": "Bilderzeugung",
+      "imageModelDescription": "Wird für Cover verwendet, die in diesem Browser erstellt werden.",
+      "authentication": "Authentifizierung",
+      "password": "Passwort",
+      "bothAuth": "Passwort und Auth0 aktiviert",
+      "authDescription": "Anmeldeanbieter des Arbeitsbereichs",
+      "ready": "Bereit",
+      "notConfigured": "Nicht konfiguriert"
+    },
+    "access": {
+      "title": "API-Zugriff",
+      "description": "Bereichsbezogene Bearer-Token für Skripte und Integrationen.",
+      "create": "Token erstellen",
+      "creating": "Wird erstellt…",
+      "close": "Schließen",
+      "saveNow": "Token jetzt speichern",
+      "saveNowDescription": "Dieses Geheimnis wird nur einmal angezeigt und kann nicht wiederhergestellt werden. Speichern Sie es vor dem Schließen in einem Passwortmanager oder Secret-Vault.",
+      "dismissGenerated": "Erstelltes Token schließen",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "quickTest": "Schnelltest",
+      "copyCurl": "curl kopieren",
+      "name": "Tokenname",
+      "nameDescription": "Verwenden Sie einen Namen, der die Integration eindeutig bezeichnet.",
+      "namePlaceholder": "Lagerabgleich",
+      "expiration": "Ablauf",
+      "expirationDescription": "Kürzer gültige Zugangsdaten verringern das Risiko.",
+      "expiry": {
+        "never": "Nie",
+        "30-days": "30 Tage",
+        "90-days": "90 Tage",
+        "custom": "Benutzerdefiniert"
+      },
+      "customExpiration": "Benutzerdefiniertes Ablaufdatum",
+      "scopes": "Berechtigungsbereiche",
+      "scope": {
+        "read": { "label": "Lesen", "description": "Einträge und Medien anzeigen" },
+        "write": { "label": "Schreiben", "description": "Erstellen, bearbeiten und zusammenführen" },
+        "ai": { "label": "KI", "description": "Analyse und Erzeugung ausführen" }
+      },
+      "cancel": "Abbrechen",
+      "dismissError": "Fehler schließen",
+      "emptyTitle": "Keine aktiven API-Token",
+      "emptyDescription": "Erstellen Sie ein bereichsbezogenes Token, sobald Sie ein Skript oder einen anderen Dienst verbinden möchten.",
+      "created": "Erstellt: {{date}}",
+      "expires": "Läuft ab: {{date}}",
+      "lastUsed": "Zuletzt verwendet: {{date}}",
+      "unknown": "Unbekannt",
+      "never": "Nie",
+      "revokeConfirm": "Dieses Token widerrufen?",
+      "revoke": "Widerrufen"
+    },
+    "errors": {
+      "loadRuntime": "Die Laufzeitkonfiguration konnte nicht geladen werden.",
+      "loadTokens": "Die API-Token konnten nicht geladen werden.",
+      "loadSettings": "Die Einstellungen konnten nicht geladen werden.",
+      "nameRequired": "Geben Sie diesem Token einen Namen, damit es später leicht zu erkennen ist.",
+      "expiryInvalid": "Wählen Sie ein gültiges Ablaufdatum mit Uhrzeit.",
+      "expiryFuture": "Der Ablaufzeitpunkt muss in der Zukunft liegen.",
+      "create": "Das Token konnte nicht erstellt werden.",
+      "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Markieren und kopieren Sie den Text manuell.",
+      "revoke": "Das Token konnte nicht widerrufen werden."
+    }
+  },
+  "inventoryTypes": {
+    "title": "Inventartypen",
+    "description": "Konfigurieren Sie Räume, Möbel, Geräte, Behälter oder jeden anderen Typ, den Ihr Arbeitsbereich benötigt.",
+    "refresh": "Inventartypen aktualisieren",
+    "add": "Typ hinzufügen",
+    "close": "Schließen",
+    "visibleName": "Sichtbarer Name",
+    "visibleNamePlaceholder": "Raum",
+    "stableKey": "Stabiler Schlüssel",
+    "stableKeyPlaceholder": "raum",
+    "color": "Farbe",
+    "order": "Reihenfolge",
+    "descriptionLabel": "Beschreibung",
+    "descriptionPlaceholder": "Was gehört zu diesem Typ?",
+    "canContain": "Kann andere Einträge enthalten",
+    "automaticMapAssignment": "Einträge innerhalb des Kartenumrisses automatisch zuweisen",
+    "create": "Typ erstellen",
+    "container": "Behälter",
+    "autoFromMap": "Automatisch aus Karte",
+    "save": "{{name}} speichern",
+    "restore": "{{name}} wiederherstellen",
+    "archive": "{{name}} archivieren",
+    "notices": {
+      "created": "Typ „{{name}}“ wurde erstellt.",
+      "updated": "Typ „{{name}}“ wurde aktualisiert."
+    },
+    "errors": {
+      "load": "Inventartypen konnten nicht geladen werden.",
+      "create": "Der Typ konnte nicht erstellt werden.",
+      "update": "Der Typ konnte nicht aktualisiert werden."
+    }
+  },
+  "languages": {
+    "title": "Inhaltssprachen",
+    "description": "Autoren bearbeiten eine maßgebliche Sprache. Die KI aktualisiert nur veraltete Textfelder und übersetzt sie gemeinsam im Kontext des vollständigen Eintrags.",
+    "translateInventory": "Inventar übersetzen",
+    "translating": "Wird übersetzt…",
+    "refresh": "Sprachen aktualisieren",
+    "close": "Schließen",
+    "add": "Sprache hinzufügen",
+    "languageCode": "Sprachcode",
+    "codePlaceholder": "de",
+    "visibleName": "Sichtbarer Name",
+    "namePlaceholder": "Deutsch",
+    "guidance": "Übersetzungshinweise",
+    "guidanceHint": "· optionale Terminologie, Tonalität oder Glossar",
+    "guidancePlaceholder": "Für tool den Begriff Werkzeug verwenden; Produktmodellnamen unverändert lassen.",
+    "autoOnSave": "Veraltete Felder beim Speichern eines Eintrags neu erzeugen",
+    "name": "Name",
+    "order": "Reihenfolge",
+    "status": {
+      "archived": "Archiviert",
+      "canonical": "Maßgebliche Quelle",
+      "automatic": "Automatisch",
+      "manual": "Manuell"
+    },
+    "restore": "Wiederherstellen",
+    "auto": "Automatisch",
+    "makeDefault": "Als Standard festlegen",
+    "makeDefaultTitle": "Verfügbar, bis die erste Übersetzung erzeugt wurde",
+    "default": "Standard",
+    "save": "Speichern",
+    "archive": "{{name}} archivieren",
+    "archiveConfirm": "„{{name}}“ archivieren? Gespeicherte Übersetzungen bleiben erhalten.",
+    "starting": "Wird gestartet…",
+    "queueing": "Wird eingereiht…",
+    "jobsQueued": "{{jobs}} Übersetzungsaufträge für {{resources}} Einträge wurden eingereiht. Sie werden im Hintergrund fortgesetzt.",
+    "noJobs": "Es sind keine Zielsprachen für die Übersetzung eingerichtet.",
+    "progress": "{{scannedItems}} Einträge geprüft · {{translatedItems}} übersetzt · {{savedFields}} Felder aktualisiert",
+    "passComplete": "Übersetzungslauf abgeschlossen: {{scannedItems}} Einträge geprüft und {{savedFields}} Felder aktualisiert.",
+    "notices": {
+      "added": "Sprache „{{name}}“ wurde hinzugefügt. Bei aktivierter automatischer Übersetzung werden bestehende Einträge automatisch eingereiht.",
+      "updated": "Sprache „{{name}}“ wurde aktualisiert.",
+      "archived": "Sprache „{{name}}“ wurde archiviert."
+    },
+    "errors": {
+      "load": "Sprachen konnten nicht geladen werden.",
+      "add": "Die Sprache konnte nicht hinzugefügt werden.",
+      "update": "Die Sprache konnte nicht aktualisiert werden.",
+      "archive": "Die Sprache konnte nicht archiviert werden.",
+      "translate": "Das bestehende Inventar konnte nicht übersetzt werden."
+    },
+    "explanation": {
+      "title": "Warum feldbewusst und im Eintragskontext?",
+      "body": "Eine geänderte Beschreibung verbraucht keine Token für die erneute Übersetzung eines unveränderten Titels. Die KI erhält dennoch den vollständigen Eintrag und übersetzt alle veralteten Felder in einer Anfrage, damit die Terminologie im gesamten Datensatz einheitlich bleibt."
+    }
+  },
+  "users": {
+    "title": "Benutzer des Arbeitsbereichs",
+    "description": "Individuelle lokale Konten, die denselben Inventararbeitsbereich verwenden.",
+    "activeCount_one": "{{count}} aktiv",
+    "activeCount_other": "{{count}} aktiv",
+    "refresh": "Benutzer aktualisieren",
+    "close": "Schließen",
+    "add": "Benutzer hinzufügen",
+    "fullName": "Vollständiger Name",
+    "namePlaceholder": "Ada Lovelace",
+    "email": "E-Mail-Adresse",
+    "emailPlaceholder": "ada@beispiel.de",
+    "temporaryPassword": "Temporäres Passwort",
+    "passwordPlaceholder": "Mindestens 12 Zeichen",
+    "showPassword": "Passwort anzeigen",
+    "hidePassword": "Passwort ausblenden",
+    "role": "Rolle",
+    "roleFor": "Rolle für {{name}}",
+    "roleDescription": {
+      "admin": "Benutzer, Token und alle Inventaraktionen",
+      "editor": "Inventar, Bestand, Uploads und KI",
+      "viewer": "Schreibgeschützter Zugriff auf das gemeinsame Inventar"
+    },
+    "passwordDelivery": "Senden Sie das Passwort über einen sicheren Kanal. Es gibt keine öffentliche Registrierung.",
+    "creating": "Wird erstellt…",
+    "createAccount": "Konto erstellen",
+    "dismissError": "Fehler schließen",
+    "loadTitle": "Benutzer konnten nicht geladen werden",
+    "retry": "Erneut versuchen",
+    "you": "Sie",
+    "active": "Aktiv",
+    "disabled": "Deaktiviert",
+    "never": "Nie",
+    "lastSignIn": "Letzte Anmeldung: {{date}}",
+    "added": "Hinzugefügt: {{date}}",
+    "resetPassword": "Passwort zurücksetzen",
+    "disable": "Deaktivieren",
+    "enable": "Aktivieren",
+    "auth0Note": "Auth0-Identitäten werden in Auth0 verwaltet. Ihre Arbeitsbereichsrolle stammt aus dem konfigurierten Rollen-Claim oder der Auth0-Standardrolle der Bereitstellung.",
+    "resetDescription": "Legen Sie ein neues Passwort für {{name}} fest. Bestehende Sitzungen werden abgemeldet.",
+    "newPassword": "Neues Passwort",
+    "cancel": "Abbrechen",
+    "savePassword": "Passwort speichern",
+    "errors": {
+      "loadWorkspace": "Die Benutzer des Arbeitsbereichs konnten nicht geladen werden.",
+      "load": "Benutzer konnten nicht geladen werden.",
+      "create": "Dieser Benutzer konnte nicht erstellt werden.",
+      "update": "Dieser Benutzer konnte nicht aktualisiert werden.",
+      "reset": "Dieses Passwort konnte nicht zurückgesetzt werden."
+    }
+  },
+  "access": {
+    "refresh": "Zugriffseinstellungen aktualisieren",
+    "close": "Schließen",
+    "cancel": "Abbrechen",
+    "saving": "Wird gespeichert…",
+    "overview": {
+      "title": "Zugriffssteuerung",
+      "description": "Rollen gewähren arbeitsbereichsweite Berechtigungen. Inventarregeln ergänzen eng begrenzte Aktionen, wenn ein Artikel alle Bedingungen erfüllt.",
+      "roles": "Konfigurierte Rollen",
+      "members": "Aktive Mitglieder",
+      "activeRules": "Aktive Artikelregeln"
+    },
+    "tabs": {
+      "label": "Bereiche der Zugriffssteuerung",
+      "roles": "Rollen",
+      "rules": "Inventarregeln"
+    },
+    "roles": {
+      "title": "Arbeitsbereichsrollen",
+      "description": "Fassen Sie einzelne Berechtigungen zu wiederverwendbaren Rollen zusammen, die Mitgliedern des Arbeitsbereichs zugewiesen werden können.",
+      "add": "Rolle hinzufügen",
+      "newEyebrow": "Neue Rolle",
+      "editEyebrow": "Rolle bearbeiten",
+      "newTitle": "Benutzerdefinierte Rolle erstellen",
+      "name": "Rollenname",
+      "namePlaceholder": "Werkstattkoordination",
+      "key": "Stabiler Schlüssel",
+      "keyPlaceholder": "werkstattkoordination",
+      "descriptionLabel": "Beschreibung",
+      "descriptionPlaceholder": "Wofür sollen Personen mit dieser Rolle verantwortlich sein?",
+      "permissionTitle": "Arbeitsbereichsberechtigungen",
+      "permissionDescription": "Jede Berechtigung ist unabhängig. Wählen Sie nur den Zugriff aus, den diese Rolle überall im Arbeitsbereich benötigt.",
+      "selectedPermissions_one": "{{count}} Berechtigung ausgewählt",
+      "selectedPermissions_other": "{{count}} Berechtigungen ausgewählt",
+      "permissions": "Berechtigungen",
+      "members_one": "Mitglied",
+      "members_other": "Mitglieder",
+      "builtIn": "Integriert",
+      "custom": "Benutzerdefiniert",
+      "noDescription": "Keine Rollenbeschreibung",
+      "edit": "{{name}} bearbeiten",
+      "create": "Rolle erstellen",
+      "save": "Rolle speichern",
+      "delete": "Rolle löschen",
+      "deleteConfirm": "Die Rolle „{{name}}“ löschen? Ihre bedingten Inventarregeln werden ebenfalls gelöscht.",
+      "systemDeleteHint": "Integrierte Rollen können nicht gelöscht werden.",
+      "memberDeleteHint": "Weisen Sie jedes Mitglied einer anderen Rolle zu, bevor Sie diese Rolle löschen.",
+      "sessionWarning_one": "Durch das Speichern der Berechtigungsänderungen wird das {{count}} aktive Mitglied mit dieser Rolle abgemeldet.",
+      "sessionWarning_other": "Durch das Speichern der Berechtigungsänderungen werden die {{count}} aktiven Mitglieder mit dieser Rolle abgemeldet.",
+      "emptyTitle": "Keine Rollen konfiguriert",
+      "emptyDescription": "Erstellen Sie eine Rolle, um Mitgliedern des Arbeitsbereichs einen präzisen Satz von Berechtigungen zu geben."
+    },
+    "rules": {
+      "title": "Bedingte Inventarregeln",
+      "description": "Gewähren Sie einer Rolle zusätzliche Aktionen für Inventarartikel, die alle Bedingungen einer Regel erfüllen.",
+      "add": "Regel hinzufügen",
+      "newEyebrow": "Neue Inventarregel",
+      "editEyebrow": "Inventarregel bearbeiten",
+      "newTitle": "Bedingte Regel erstellen",
+      "editorDescription": "Regeln gewähren nur zusätzlichen Zugriff. Sie entziehen niemals Berechtigungen, die bereits durch die Rolle bereitgestellt werden.",
+      "name": "Regelname",
+      "namePlaceholder": "Werkstattwerkzeuge können aktualisiert werden",
+      "role": "Rolle, die Zugriff erhält",
+      "chooseRole": "Rolle auswählen…",
+      "priority": "Priorität",
+      "priorityValue": "Priorität {{value}}",
+      "descriptionLabel": "Beschreibung",
+      "descriptionPlaceholder": "Erklären Sie, warum diese Ausnahme besteht.",
+      "actionsTitle": "Zu gewährende Aktionen",
+      "actionsDescription": "Diese Aktionen sind nur für Inventarartikel verfügbar, die alle folgenden Bedingungen erfüllen.",
+      "conditionsTitle": "Artikelbedingungen",
+      "conditionsDescription": "Alle Bedingungen werden mit UND verknüpft. Verwenden Sie eine stabile Artikel-ID für einen bestimmten Artikel oder Felder wie Tags, Kategorien, Typ und benutzerdefinierte Felder für eine Gruppe.",
+      "addCondition": "Bedingung hinzufügen",
+      "removeCondition": "Bedingung {{number}} entfernen",
+      "field": "Feld",
+      "fieldPlaceholder": "tags oder customFields.team",
+      "operator": "Operator",
+      "valueType": "Werttyp",
+      "valueTypes": {
+        "text": "Text",
+        "number": "Zahl",
+        "boolean": "Wahr / falsch"
+      },
+      "booleanValues": {
+        "true": "Wahr",
+        "false": "Falsch"
+      },
+      "value": "Wert",
+      "valuePlaceholder": "werkstatt",
+      "noValue": "Kein Vergleichswert erforderlich",
+      "if": "WENN",
+      "and": "UND",
+      "when": "Wenn",
+      "customFieldHint": "Geben Sie für ein benutzerdefiniertes Feld customFields. gefolgt von seinem stabilen Schlüssel ein, zum Beispiel customFields.department.",
+      "enableOnSave": "Diese Regel sofort aktivieren",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "enable": "{{name}} aktivieren",
+      "disable": "{{name}} deaktivieren",
+      "edit": "Bearbeiten",
+      "create": "Regel erstellen",
+      "save": "Regel speichern",
+      "delete": "Regel löschen",
+      "deleteConfirm": "Die Inventarregel „{{name}}“ löschen?",
+      "emptyTitle": "Keine bedingten Regeln",
+      "emptyDescription": "Fügen Sie eine Regel hinzu, wenn eine Rolle zusätzliche Aktionen nur für einen bestimmten Artikel oder eine passende Gruppe erhalten soll."
+    },
+    "permissionGroups": {
+      "inventory": {
+        "label": "Inventar",
+        "description": "Zentrale Artikeldatensätze und Massendatenübertragung."
+      },
+      "operations": {
+        "label": "Abläufe",
+        "description": "Bestands-, Zuständigkeits-, Zählungs-, Raum- und Einkaufsabläufe."
+      },
+      "administration": {
+        "label": "Verwaltung",
+        "description": "Arbeitsbereichsstruktur, Identitäten und Zugangsdaten."
+      }
+    },
+    "permissions": {
+      "inventory_read": {
+        "label": "Artikel anzeigen",
+        "description": "Inventarartikel durchsuchen, suchen und öffnen."
+      },
+      "inventory_create": {
+        "label": "Artikel erstellen",
+        "description": "Neue Inventarartikel hinzufügen."
+      },
+      "inventory_update": {
+        "label": "Artikel aktualisieren",
+        "description": "Artikelfelder, Medien, Beziehungen und Stücklisten bearbeiten."
+      },
+      "inventory_delete": {
+        "label": "Artikel löschen",
+        "description": "Inventarartikel dauerhaft löschen oder zusammenführen."
+      },
+      "inventory_import": {
+        "label": "Daten importieren",
+        "description": "Artikel aus CSV-Dateien erstellen und aktualisieren."
+      },
+      "inventory_export": {
+        "label": "Daten exportieren",
+        "description": "Das Inventar als CSV herunterladen."
+      },
+      "stock_read": {
+        "label": "Bestand anzeigen",
+        "description": "Bestände, Bewegungen, Einheiten und Lagerorte anzeigen."
+      },
+      "stock_manage": {
+        "label": "Bestand verwalten",
+        "description": "Bestände, Einheiten, Lagerorte und Fertigungen ändern."
+      },
+      "assignments_read": {
+        "label": "Zuweisungen anzeigen",
+        "description": "Ausleihen, Reservierungen und Zuweisungen anzeigen."
+      },
+      "assignments_manage": {
+        "label": "Zuweisungen verwalten",
+        "description": "Zuweisungen erstellen, zurückgeben und stornieren."
+      },
+      "counts_read": {
+        "label": "Zählungen anzeigen",
+        "description": "Inventurzyklen und Zählhistorie anzeigen."
+      },
+      "counts_manage": {
+        "label": "Zählungen verwalten",
+        "description": "Zyklen konfigurieren und Inventurzählungen erfassen."
+      },
+      "spatial_read": {
+        "label": "Räume anzeigen",
+        "description": "Räume, Scans, Karten und Platzierungen anzeigen."
+      },
+      "spatial_manage": {
+        "label": "Räume verwalten",
+        "description": "Scans, Strukturen und Artikelplatzierungen erstellen."
+      },
+      "orders_read": {
+        "label": "Bestellungen anzeigen",
+        "description": "Bestellungen und Wareneingänge anzeigen."
+      },
+      "orders_manage": {
+        "label": "Bestellungen verwalten",
+        "description": "Bestellungen erstellen und aktualisieren sowie Bestand einbuchen."
+      },
+      "workflows_read": {
+        "label": "Scan-Abläufe anzeigen",
+        "description": "Abläufe zum Scannen von Bestand anzeigen."
+      },
+      "workflows_manage": {
+        "label": "Scan-Abläufe verwalten",
+        "description": "Abläufe zum Scannen von Bestand erstellen, bearbeiten und ausführen."
+      },
+      "labels_read": {
+        "label": "Etiketten anzeigen",
+        "description": "Etikettenlayouts anzeigen und Etiketten drucken."
+      },
+      "labels_manage": {
+        "label": "Etiketten verwalten",
+        "description": "Wiederverwendbare Etikettenlayouts erstellen und ändern."
+      },
+      "ai_use": {
+        "label": "KI verwenden",
+        "description": "Analyse, Zählung, Übersetzung und Bilderzeugung ausführen."
+      },
+      "settings_inventory_types_manage": {
+        "label": "Inventartypen verwalten",
+        "description": "Inventar- und Beziehungstypen erstellen und ändern."
+      },
+      "settings_custom_fields_manage": {
+        "label": "Benutzerdefinierte Felder verwalten",
+        "description": "Definitionen benutzerdefinierter Felder erstellen und ändern."
+      },
+      "settings_languages_manage": {
+        "label": "Sprachen verwalten",
+        "description": "Inhaltssprachen konfigurieren und Übersetzungen neu erzeugen."
+      },
+      "users_manage": {
+        "label": "Benutzer verwalten",
+        "description": "Benutzer erstellen, Rollen zuweisen, Passwörter zurücksetzen und Konten deaktivieren."
+      },
+      "roles_manage": {
+        "label": "Zugriff verwalten",
+        "description": "Rollen und bedingte Regeln für den Inventarzugriff erstellen."
+      },
+      "sharing_manage": {
+        "label": "Öffentliche Freigaben verwalten",
+        "description": "Öffentliche Inventarlinks erstellen und widerrufen."
+      },
+      "tokens_manage": {
+        "label": "API-Token verwalten",
+        "description": "API-Zugangsdaten des Arbeitsbereichs erstellen und widerrufen."
+      },
+      "tokens_delegate": {
+        "label": "Token-Zugriff delegieren",
+        "description": "API-Token erstellen, deren Bereiche über die eigenen Berechtigungen hinausgehen dürfen."
+      }
+    },
+    "fields": {
+      "id": "ID",
+      "name": "Name",
+      "type": "Typ",
+      "status": "Status",
+      "sku": "SKU",
+      "location": "Standort",
+      "serialNumber": "Seriennummer",
+      "priority": "Priorität",
+      "tags": "Tags",
+      "categories": "Kategorien",
+      "createdBy": "Erstellt von"
+    },
+    "operators": {
+      "equals": "ist gleich",
+      "not_equals": "ist nicht gleich",
+      "contains": "enthält",
+      "starts_with": "beginnt mit",
+      "exists": "ist vorhanden",
+      "not_exists": "ist nicht vorhanden"
+    },
+    "notices": {
+      "roleCreated": "Rolle „{{name}}“ erstellt.",
+      "roleUpdated": "Rolle „{{name}}“ aktualisiert. Betroffene Mitglieder müssen sich erneut anmelden.",
+      "roleDeleted": "Rolle „{{name}}“ gelöscht.",
+      "ruleCreated": "Inventarregel „{{name}}“ erstellt.",
+      "ruleUpdated": "Inventarregel „{{name}}“ aktualisiert.",
+      "ruleDeleted": "Inventarregel „{{name}}“ gelöscht.",
+      "ruleEnabled": "Inventarregel „{{name}}“ aktiviert.",
+      "ruleDisabled": "Inventarregel „{{name}}“ deaktiviert."
+    },
+    "errors": {
+      "load": "Zugriffseinstellungen konnten nicht geladen werden.",
+      "roleRequired": "Geben Sie einen Rollennamen und einen stabilen Schlüssel ein.",
+      "createRole": "Die Rolle konnte nicht erstellt werden.",
+      "updateRole": "Die Rolle konnte nicht aktualisiert werden.",
+      "deleteRole": "Die Rolle konnte nicht gelöscht werden.",
+      "ruleRequired": "Geben Sie einen Regelnamen ein und wählen Sie eine Rolle aus.",
+      "rulePermission": "Wählen Sie mindestens eine Aktion für diese Regel aus.",
+      "ruleCondition": "Fügen Sie mindestens eine Artikelbedingung hinzu.",
+      "conditionIncomplete": "Vervollständigen Sie jede Bedingung, bevor Sie die Regel speichern.",
+      "priorityValue": "Der Vergleichswert für die Artikelpriorität muss eine Zahl sein.",
+      "createRule": "Die Inventarregel konnte nicht erstellt werden.",
+      "updateRule": "Die Inventarregel konnte nicht aktualisiert werden.",
+      "deleteRule": "Die Inventarregel konnte nicht gelöscht werden."
+    }
+  },
+  "customFields": {
+    "title": "Benutzerdefinierte Felder",
+    "description": "Konfigurieren Sie typisierte Informationen nach Inventartyp oder Kategorie.",
+    "refresh": "Benutzerdefinierte Felder aktualisieren",
+    "newField": "Neues Feld",
+    "dismissError": "Fehler ausblenden",
+    "dismissMessage": "Meldung ausblenden",
+    "loading": "Benutzerdefinierte Felder werden geladen…",
+    "fieldCount_one": "{{count}} Feld",
+    "fieldCount_other": "{{count}} Felder",
+    "emptyTitle": "Noch keine benutzerdefinierten Felder",
+    "emptyDescription": "Erstellen Sie das erste Feld für {{target}}.",
+    "addField": "Feld hinzufügen",
+    "editTitle": "{{label}} bearbeiten",
+    "createTitle": "Benutzerdefiniertes Feld erstellen",
+    "formDescription": "Schlüssel sind stabile API-Bezeichner. Beschriftungen und Feldeinstellungen können später geändert werden.",
+    "visibleLabel": "Sichtbare Beschriftung",
+    "visibleLabelPlaceholder": "Farbe",
+    "apiKey": "API-Schlüssel",
+    "apiKeyPlaceholder": "farbe",
+    "generatedWhenEmpty": "wird bei leerem Feld erzeugt",
+    "fieldType": "Feldtyp",
+    "position": "Position",
+    "fieldDescription": "Beschreibung",
+    "optionalHelperText": "optionaler Hilfetext",
+    "descriptionPlaceholder": "Wird unter der Eingabe angezeigt und erklärt, was hier eingetragen werden soll.",
+    "placeholder": "Platzhalter",
+    "optional": "optional",
+    "placeholderExample": "z. B. Ozeanblau",
+    "required": "Für passende Datensätze erforderlich",
+    "numberConstraints": "Zahlenbeschränkungen",
+    "minimum": "Minimum",
+    "maximum": "Maximum",
+    "step": "Schrittweite",
+    "options": "Optionen",
+    "optionsDescription": "Beschriftungen werden Personen angezeigt; Werte werden in der API gespeichert.",
+    "defaultOption": "Option {{number}}",
+    "addOption": "Option hinzufügen",
+    "chooseOptionColor": "Optionsfarbe auswählen",
+    "colorFor": "Farbe für {{label}}",
+    "storedValue": "Gespeicherter Wert",
+    "storedValuePlaceholder": "gespeicherter_wert",
+    "removeOption": "{{label}} entfernen",
+    "allTypes": "Alle Typen",
+    "commaSeparated": "durch Kommas getrennt",
+    "commaSeparatedOptional": "durch Kommas getrennt, optional",
+    "inventoryTypes": "Inventartypen",
+    "additionalInventoryTypes": "Zusätzliche Inventartyp-Schlüssel",
+    "additionalInventoryTypesPlaceholder": "maschine, sicherheitsausrüstung",
+    "categories": "Kategorien",
+    "categoriesPlaceholder": "Werkstatt, Produktion",
+    "editKeyHint": "Der API-Schlüssel bleibt beim Bearbeiten unverändert.",
+    "createKeyHint": "Lassen Sie den Schlüssel leer, um ihn aus der Beschriftung zu erzeugen.",
+    "saveField": "Feld speichern",
+    "createField": "Feld erstellen",
+    "deleteConfirm": "„{{label}}“ löschen? Bereits gespeicherte Werte für diesen Schlüssel sind dann möglicherweise nicht mehr sichtbar.",
+    "entities": {
+      "inventory": "Inventareinträge",
+      "inventoryLower": "Inventareinträge",
+      "stockUnit": "Bestandseinheiten",
+      "serializedStockUnits": "Serialisierte Bestandseinheiten",
+      "serializedStockUnitsLower": "serialisierte Bestandseinheiten"
+    },
+    "fieldTypes": {
+      "text": "Einzeiliger Text",
+      "textarea": "Langer Text",
+      "number": "Zahl",
+      "boolean": "Ja / Nein",
+      "date": "Datum",
+      "datetime": "Datum und Uhrzeit",
+      "select": "Auswahlliste",
+      "multi_select": "Mehrfachauswahl",
+      "reference": "Inventar-/Bestandsreferenz",
+      "email": "E-Mail-Adresse",
+      "url": "URL"
+    },
+    "resourceTypes": {
+      "tool": "Werkzeuge",
+      "object": "Objekte",
+      "furniture": "Möbel",
+      "vehicle": "Fahrzeuge",
+      "place": "Orte",
+      "clothing": "Kleidung",
+      "person": "Personen",
+      "project": "Projekte",
+      "other": "Sonstiges"
+    },
+    "reference": {
+      "title": "Dynamische Referenz",
+      "description": "Das Feld speichert stabile Datensatz-IDs. Personen suchen nach Name oder Code; der Server erzwingt diese Zielfilter.",
+      "targetCollection": "Zielsammlung",
+      "allowMultiple": "Mehrere Datensätze zulassen",
+      "targetInventoryTypes": "Ziel-Inventartypen",
+      "targetCategories": "Zielkategorien",
+      "categoryPlaceholder": "Hersteller",
+      "allowedStatuses": "Zulässige Zielstatus",
+      "stockStatusPlaceholder": "available, in-use",
+      "inventoryStatusPlaceholder": "available",
+      "additionalTargetTypes": "Zusätzliche Zieltyp-Schlüssel",
+      "additionalTargetTypesPlaceholder": "hersteller, lieferant"
+    },
+    "applies": {
+      "title": "Gilt für",
+      "description": "Lassen Sie beide Filter leer, um dieses Feld überall anzuzeigen. Wenn beide gesetzt sind, müssen Datensätze beiden entsprechen."
+    },
+    "validation": {
+      "labelRequired": "Geben Sie diesem Feld eine sichtbare Beschriftung.",
+      "keyFormat": "Der Schlüssel muss mit einem Kleinbuchstaben beginnen und darf nur Kleinbuchstaben, Zahlen und Unterstriche enthalten.",
+      "position": "Die Position muss eine ganze Zahl ab null sein.",
+      "inventoryTypeKeys": "Inventartyp-Schlüssel müssen mit einem Kleinbuchstaben beginnen und dürfen nur Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche enthalten.",
+      "minimum": "Das Minimum muss eine gültige Zahl sein.",
+      "maximum": "Das Maximum muss eine gültige Zahl sein.",
+      "step": "Die Schrittweite muss größer als null sein.",
+      "minimumMaximum": "Das Minimum darf das Maximum nicht überschreiten.",
+      "optionRequired": "Fügen Sie mindestens eine Auswahloption hinzu.",
+      "optionValues": "Jede Auswahloption benötigt eine Beschriftung und einen gespeicherten Wert.",
+      "optionUnique": "Die Werte der Auswahloptionen müssen eindeutig sein.",
+      "referenceTypeKeys": "Referenz-Inventartyp-Schlüssel müssen mit einem Kleinbuchstaben beginnen und dürfen nur Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche enthalten."
+    },
+    "notices": {
+      "created": "Benutzerdefiniertes Feld erstellt.",
+      "updated": "Benutzerdefiniertes Feld aktualisiert.",
+      "deleted": "Benutzerdefiniertes Feld gelöscht."
+    },
+    "errors": {
+      "load": "Benutzerdefinierte Felder konnten nicht geladen werden.",
+      "save": "Das benutzerdefinierte Feld konnte nicht gespeichert werden.",
+      "delete": "Das benutzerdefinierte Feld konnte nicht gelöscht werden."
+    }
+  },
+  "customInputs": {
+    "choose": "Auswählen…",
+    "reference": "Referenz",
+    "unavailable": "Nicht verfügbar · {{id}}",
+    "removeReference": "{{label}} entfernen",
+    "searchReference": "{{target}} durchsuchen…",
+    "serializedStock": "serialisierte Bestände",
+    "inventory": "Inventar",
+    "loadingReferenceChoices": "Referenzauswahl wird geladen",
+    "loading": "Wird geladen…",
+    "selected": "Ausgewählt",
+    "noMatches": "Keine passenden Datensätze.",
+    "errors": {
+      "referenceChoices": "Die Referenzauswahl konnte nicht geladen werden."
+    }
+  },
+  "csv": {
+    "title": "CSV-Import und -Export",
+    "description": "Exportieren Sie eine sichere Tabelle oder prüfen Sie bis zu 1.000 neue Inventareinträge vor dem Import.",
+    "exportOnlyDescription": "Exportieren Sie das aktuelle Inventar als Tabelle.",
+    "export": "CSV exportieren",
+    "chooseFile": "UTF-8-CSV-Datei auswählen",
+    "fileHint": "Verwenden Sie die exportierten Spaltenüberschriften; ID und Zeitstempel werden beim Import ignoriert.",
+    "reset": "Zurücksetzen",
+    "replace": "Ersetzen",
+    "choose": "Datei auswählen",
+    "previewRows_one": "Vorschau · {{count}} Zeile",
+    "previewRows_other": "Vorschau · {{count}} Zeilen",
+    "issues_one": "{{count}} Problem",
+    "issues_other": "{{count}} Probleme",
+    "ready": "Bereit zum Import",
+    "table": {
+      "line": "Zeile",
+      "name": "Name",
+      "type": "Typ",
+      "sku": "SKU",
+      "quantity": "Menge",
+      "location": "Standort",
+      "validation": "Validierung",
+      "valid": "Gültig"
+    },
+    "showingRows": "Die ersten {{shown}} Zeilen werden angezeigt; alle {{total}} Zeilen wurden validiert.",
+    "finished": "Import abgeschlossen",
+    "summary": "{{created}} erstellt, {{replayed}} bereits importiert, {{failed}} fehlgeschlagen.",
+    "lineError": "Zeile {{line}}: {{error}} {{details}}",
+    "importNote": "Der Import erstellt nur neue Einträge. Bestehende Datensätze und übereinstimmende SKUs werden nie geändert.",
+    "importItems_one": "{{count}} Eintrag importieren",
+    "importItems_other": "{{count}} Einträge importieren",
+    "errors": {
+      "maxFile": "CSV-Dateien dürfen höchstens 5 MB groß sein.",
+      "nullCharacters": "Die Datei enthält Nullzeichen.",
+      "invalidUtf8": "Die ausgewählte Datei ist keine gültige UTF-8-CSV-Datei.",
+      "export": "Der Export ist fehlgeschlagen.",
+      "import": "Der Import ist fehlgeschlagen.",
+      "request": "Anfrage fehlgeschlagen (HTTP {{status}})."
+    },
+    "validation": {
+      "unexpectedQuote": "Unerwartetes Anführungszeichen in Zeile {{line}}.",
+      "unclosedQuote": "Die in Zeile {{line}} beginnende Zelle in Anführungszeichen wurde nicht geschlossen.",
+      "headerRequired": "Eine Kopfzeile ist erforderlich.",
+      "emptyHeaders": "Spaltenüberschriften dürfen nicht leer sein.",
+      "duplicateHeaders": "Doppelte Spaltenüberschriften: {{headers}}.",
+      "unsupportedHeaders": "Nicht unterstützte Spaltenüberschriften: {{headers}}.",
+      "nameHeaderRequired": "Die Spaltenüberschrift name ist erforderlich.",
+      "noRows": "Die Datei enthält keine Inventarzeilen.",
+      "maxRows": "Ein Import darf höchstens {{count}} Zeilen enthalten.",
+      "cellCount": "{{expected}} Zellen erwartet, aber {{actual}} gefunden.",
+      "required": "{{label}} ist erforderlich.",
+      "tooLong": "{{label}} ist länger als {{max}} Zeichen.",
+      "unknownType": "Unbekannter Typ: {{value}}.",
+      "unknownStatus": "Unbekannter Status: {{value}}.",
+      "currency": "currency muss einen dreistelligen Code wie EUR verwenden.",
+      "number": "{{label}} muss eine Zahl sein.",
+      "wholeNumber": "{{label}} muss eine ganze Zahl sein.",
+      "range": "{{label}} muss zwischen {{min}} und {{max}} liegen.",
+      "jsonArray": "{{label}} muss ein JSON-Array enthalten.",
+      "jsonObject": "{{label}} muss ein JSON-Objekt enthalten.",
+      "invalidJson": "{{label}} enthält ungültiges JSON."
+    }
+  }
+}

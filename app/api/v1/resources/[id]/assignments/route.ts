@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 import { assignmentKinds } from "@/db/schema";
-import { requireIdentity } from "@/lib/api-auth";
+import {
+  requirePermission,
+  requireResourcePermission,
+} from "@/lib/api-auth";
 import {
   createInventoryAssignment,
   inventoryAssignmentHttpError,
@@ -53,7 +56,7 @@ const createSchema = z
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "read");
+  const authorization = await requirePermission(request, "assignments.read");
   if (authorization.response) return authorization.response;
   const id = z.string().uuid().safeParse((await context.params).id);
   if (!id.success) {
@@ -75,8 +78,6 @@ export async function GET(request: Request, context: Context) {
 }
 
 export async function POST(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
-  if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
   if (!idempotency.key) {
@@ -89,6 +90,12 @@ export async function POST(request: Request, context: Context) {
   if (!id.success) {
     return Response.json({ error: "Invalid resource id." }, { status: 422 });
   }
+  const authorization = await requireResourcePermission(
+    request,
+    "assignments.manage",
+    id.data,
+  );
+  if (authorization.response) return authorization.response;
 
   let payload: unknown;
   try {

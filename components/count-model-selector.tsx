@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useT } from "next-i18next/client";
 
 const storageKey = "inventory.count-model";
 
@@ -116,14 +117,15 @@ export function CountModelSelector({
   disabled?: boolean;
   onChange?: () => void;
 }) {
+  const { t } = useT("common");
   const selectId = useId();
   const descriptionId = useId();
   if (preference.loading || !preference.models.length) return null;
 
   return (
-    <div className="mb-3 rounded-xl border border-violet-100 bg-white p-3">
-      <label htmlFor={selectId} className="block text-[11px] font-semibold text-slate-700">
-        Counting model
+    <div className="mb-3 rounded-xl border border-brand-border bg-surface p-3">
+      <label htmlFor={selectId} className="block text-[11px] font-semibold text-muted-strong">
+        {t("models.counting")}
       </label>
       <select
         id={selectId}
@@ -134,7 +136,7 @@ export function CountModelSelector({
           preference.setSelectedModelId(event.target.value);
           onChange?.();
         }}
-        className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:bg-slate-50"
+        className="mt-1.5 h-10 w-full rounded-lg border border-border bg-surface px-2.5 text-xs text-muted-strong outline-none focus:border-focus focus:ring-4 focus:ring-focus/10 disabled:bg-surface-subtle"
       >
         {preference.models.map((model) => (
           <option key={model.id} value={model.id}>
@@ -142,7 +144,7 @@ export function CountModelSelector({
           </option>
         ))}
       </select>
-      <p id={descriptionId} className="mt-1 text-[10px] leading-4 text-slate-600">
+      <p id={descriptionId} className="mt-1 text-[10px] leading-4 text-muted">
         {preference.selectedModel?.description}
       </p>
     </div>

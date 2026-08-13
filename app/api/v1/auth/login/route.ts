@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
 
 import { apiTokens } from "@/db/schema";
+import { getEffectiveRole } from "@/lib/access-control";
 import { hashApiToken } from "@/lib/api-auth";
-import { roleScopes } from "@/lib/auth-roles";
 import { db } from "@/lib/db";
 import { authenticateLocalUser } from "@/lib/local-auth";
 import { checkRateLimit, resetRateLimit } from "@/lib/rate-limit";
@@ -125,7 +125,17 @@ export async function POST(request: Request) {
   const expiresAt = new Date(
     Date.now() + nativeTokenLifetimeDays() * 24 * 60 * 60_000,
   );
-  const scopes = [...roleScopes[user.role]];
+  const effectiveRole = await getEffectiveRole(user.role);
+  if (!effectiveRole) {
+    return Response.json(
+      { error: "This account is assigned to a role that no longer exists." },
+      { status: 403, headers: noStoreHeaders },
+    );
+  }
+  // Linked native credentials inherit live role policy on every request. All
+  // transport scopes are stored so a later role or rule grant takes effect
+  // without weakening authorization or forcing a fresh device login.
+  const scopes: Array<"read" | "write" | "ai"> = ["read", "write", "ai"];
   const tokenName = `Inventory · ${parsed.data.deviceName}`;
 
   await db.insert(apiTokens).values({

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useT } from "next-i18next/client";
 import {
   AlertTriangle,
   ArrowRight,
@@ -45,50 +46,12 @@ type ResourcesResponse = {
   pagination: { total: number };
 };
 
-const compactNumber = new Intl.NumberFormat("en", {
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-
-const money = new Intl.NumberFormat("en", {
-  style: "currency",
-  currency: "EUR",
-  maximumFractionDigits: 0,
-});
-
-const typeLabels: Record<string, string> = {
-  place: "Places",
-  person: "People",
-  vehicle: "Vehicles",
-  tool: "Tools",
-  project: "Projects",
-  clothing: "Clothing",
-  furniture: "Furniture",
-  object: "Objects",
-  other: "Other",
-};
-
 const typeColors = ["#635bff", "#3b82f6", "#16a374", "#e99b2d", "#a66dd4", "#e2647f"];
 
-function statusBadge(status: string) {
-  if (status === "available") return <Badge tone="success">Available</Badge>;
-  if (status === "maintenance") return <Badge tone="warning">Maintenance</Badge>;
-  if (status === "in-use") return <Badge tone="brand">In use</Badge>;
-  return <Badge>{status.charAt(0).toUpperCase() + status.slice(1)}</Badge>;
-}
-
-function relativeDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Recently";
-  const minutes = Math.round((Date.now() - date.getTime()) / 60_000);
-  if (minutes < 2) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString("en", { month: "short", day: "numeric" });
-}
+const humanize = (value: string) =>
+  value
+    .replace(/[-_]+/g, " ")
+    .replace(/^./, (character) => character.toUpperCase());
 
 function DashboardLoading() {
   return (
@@ -133,6 +96,8 @@ function DashboardLoading() {
 }
 
 export function DashboardClient() {
+  const { t, i18n } = useT("dashboard");
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,7 +115,7 @@ export function DashboardClient() {
         }),
       ]);
       if (!statsResponse.ok || !resourcesResponse.ok) {
-        throw new Error("The dashboard data could not be loaded.");
+        throw new Error(t("errors.load"));
       }
       const statsPayload = (await statsResponse.json()) as { stats: DashboardStats };
       const resourcesPayload = (await resourcesResponse.json()) as ResourcesResponse;
@@ -161,12 +126,12 @@ export function DashboardClient() {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "The dashboard data could not be loaded.",
+          : t("errors.load"),
       );
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -174,8 +139,35 @@ export function DashboardClient() {
     return () => controller.abort();
   }, [loadDashboard]);
 
+  const compactNumber = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        notation: "compact",
+        maximumFractionDigits: 1,
+      }),
+    [locale],
+  );
+  const money = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 0,
+      }),
+    [locale],
+  );
+  const percent = useMemo(
+    () => new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }),
+    [locale],
+  );
+  const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const greeting =
+    hour < 12
+      ? t("greeting.morning")
+      : hour < 18
+        ? t("greeting.afternoon")
+        : t("greeting.evening");
   const availability = stats?.resources
     ? Math.round((stats.available / stats.resources) * 100)
     : 0;
@@ -183,38 +175,71 @@ export function DashboardClient() {
     () => Math.max(1, ...(stats?.byType.map((item) => item.value) ?? [1])),
     [stats],
   );
+  const typeLabel = (value: string) =>
+    t(`types.${value}`, { defaultValue: humanize(value) });
+  const typeGroupLabel = (value: string) =>
+    t(`typeGroups.${value}`, { defaultValue: humanize(value) });
+  const statusLabel = (value: string) =>
+    t(`statuses.${value}`, { defaultValue: humanize(value) });
+  const statusBadge = (status: string) => {
+    if (status === "available") {
+      return <Badge tone="success">{statusLabel(status)}</Badge>;
+    }
+    if (status === "maintenance") {
+      return <Badge tone="warning">{statusLabel(status)}</Badge>;
+    }
+    if (status === "in-use") {
+      return <Badge tone="brand">{statusLabel(status)}</Badge>;
+    }
+    return <Badge>{statusLabel(status)}</Badge>;
+  };
+  const relativeDate = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return t("relative.recently");
+    const minutes = Math.round((Date.now() - date.getTime()) / 60_000);
+    if (minutes < 2) return t("relative.justNow");
+    if (minutes < 60) return t("relative.minutesAgo", { count: minutes });
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return t("relative.hoursAgo", { count: hours });
+    const days = Math.round(hours / 24);
+    if (days < 7) return t("relative.daysAgo", { count: days });
+    return new Intl.DateTimeFormat(locale, {
+      month: "short",
+      day: "numeric",
+    }).format(date);
+  };
 
   return (
     <div className="mx-auto max-w-[1540px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-9">
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="animate-fade-up">
           <div className="mb-2 flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-[#20a36d] ring-4 ring-[#20a36d]/10" />
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6672]">
-              Workspace overview
+            <span className="size-1.5 rounded-full bg-success ring-4 ring-success-border" />
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+              {t("eyebrow")}
             </p>
           </div>
-          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-[#1e2126] sm:text-[32px]">
+          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-foreground sm:text-[32px]">
             {greeting}
           </h1>
-          <p className="mt-1.5 text-sm text-[#5f6672]">
-            Here’s what’s happening across your inventory.
+          <p className="mt-1.5 text-sm text-muted">
+            {t("subtitle")}
           </p>
         </div>
         <div className="flex animate-fade-up gap-2 animation-delay-1">
           <Link
             href="/batch"
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#dfe2e7] bg-white px-3.5 text-[13px] font-semibold text-[#3e4249] shadow-sm transition hover:border-[#cfd3da] hover:bg-[#fafafa]"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-[13px] font-semibold text-foreground shadow-sm transition hover:border-border-strong hover:bg-surface-hover"
           >
-            <UploadCloud className="size-4 text-[#5f6672]" aria-hidden="true" />
-            Batch upload
+            <UploadCloud className="size-4 text-muted" aria-hidden="true" />
+            {t("actions.batchUpload")}
           </Link>
           <Link
             href="/inventory/new"
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#5147d9] px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#5147f5]"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-solid px-3.5 text-[13px] font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover"
           >
             <PackagePlus className="size-4" aria-hidden="true" />
-            Add item
+            {t("actions.addItem")}
           </Link>
         </div>
       </div>
@@ -222,15 +247,15 @@ export function DashboardClient() {
       {loading ? <DashboardLoading /> : null}
 
       {!loading && error ? (
-        <Card className="border-[#efd6d9] bg-[#fffafa]">
+        <Card className="border-danger-border bg-danger-soft">
           <EmptyState
-            icon={<AlertTriangle className="size-5 text-[#c34755]" aria-hidden="true" />}
-            title="Dashboard data is unavailable"
-            description={`${error} Make sure Postgres is running and the database has been migrated.`}
+            icon={<AlertTriangle className="size-5 text-danger" aria-hidden="true" />}
+            title={t("errors.title")}
+            description={t("errors.description", { error })}
             action={
               <Button variant="secondary" onClick={() => void loadDashboard()}>
                 <RefreshCw className="size-4" aria-hidden="true" />
-                Try again
+                {t("actions.retry")}
               </Button>
             }
           />
@@ -242,52 +267,66 @@ export function DashboardClient() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[
               {
-                label: "Inventory items",
+                id: "items",
+                label: t("metrics.items.label"),
                 value: compactNumber.format(stats.resources),
-                detail: `${compactNumber.format(stats.units)} total units`,
+                detail: t("metrics.items.detail", {
+                  count: stats.units,
+                  value: compactNumber.format(stats.units),
+                }),
                 icon: Boxes,
-                iconClass: "bg-[#eeedff] text-[#5147d9]",
+                iconClass: "bg-brand-soft text-brand",
               },
               {
-                label: "Tracked value",
+                id: "value",
+                label: t("metrics.value.label"),
                 value: money.format(stats.valueCents / 100),
-                detail: "Across all inventory",
+                detail: t("metrics.value.detail"),
                 icon: CircleDollarSign,
-                iconClass: "bg-[#e8f7f0] text-[#138a5b]",
+                iconClass: "bg-success-soft text-success",
               },
               {
-                label: "Available now",
+                id: "available",
+                label: t("metrics.available.label"),
                 value: compactNumber.format(stats.available),
-                detail: stats.resources ? `${availability}% of all items` : "No items yet",
+                detail: stats.resources
+                  ? t("metrics.available.detail", {
+                      value: percent.format(availability / 100),
+                    })
+                  : t("metrics.available.empty"),
                 icon: CircleCheck,
-                iconClass: "bg-[#eaf4ff] text-[#357bc2]",
+                iconClass: "bg-info-soft text-info",
               },
               {
-                label: "Needs attention",
+                id: "attention",
+                label: t("metrics.attention.label"),
                 value: compactNumber.format(stats.attention),
-                detail: stats.attention === 1 ? "1 maintenance item" : `${stats.attention} maintenance items`,
+                detail: t("metrics.attention.detail", {
+                  count: stats.attention,
+                  value: integer.format(stats.attention),
+                }),
                 icon: AlertTriangle,
-                iconClass: "bg-[#fff2e2] text-[#bd680c]",
+                iconClass: "bg-warning-soft text-warning",
               },
             ].map((metric) => {
               const Icon = metric.icon;
               return (
                 <Card
-                  key={metric.label}
-                  className="group p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[#d8dbe1] hover:shadow-[var(--shadow-md)]"
+                  key={metric.id}
+                  className="group p-5 transition duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-md)]"
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-[12px] font-medium text-[#5f6672]">
+                    <p className="text-[12px] font-medium text-muted">
                       {metric.label}
                     </p>
                     <span className={cn("grid size-8 place-items-center rounded-xl", metric.iconClass)}>
                       <Icon className="size-4" strokeWidth={2} aria-hidden="true" />
                     </span>
                   </div>
-                  <p className="mt-5 truncate text-[27px] font-semibold tracking-[-0.04em] text-[#24272c]">
+                  <p className="mt-5 truncate text-[27px] font-semibold tracking-[-0.04em] text-foreground">
                     {metric.value}
                   </p>
-                  <p className="mt-1 text-[11px] text-[#5f6672]">{metric.detail}</p>
+                  <p className="mt-1 text-[11px] text-muted">{metric.detail}</p>
                 </Card>
               );
             })}
@@ -295,31 +334,35 @@ export function DashboardClient() {
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.75fr)]">
             <Card className="overflow-hidden">
-              <div className="flex items-center justify-between border-b border-[#eceef1] px-5 py-4 sm:px-6">
+              <div className="flex items-center justify-between border-b border-border px-5 py-4 sm:px-6">
                 <div>
-                  <h2 className="text-sm font-semibold text-[#2c3036]">Recent inventory</h2>
-                  <p className="mt-0.5 text-[11px] text-[#5f6672]">Latest additions and updates</p>
+                  <h2 className="text-sm font-semibold text-foreground">
+                    {t("recent.title")}
+                  </h2>
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    {t("recent.subtitle")}
+                  </p>
                 </div>
                 <Link
                   href="/inventory"
-                  className="group flex items-center gap-1 text-[12px] font-semibold text-[#625ae6] hover:text-[#4e46cd]"
+                  className="group flex items-center gap-1 text-[12px] font-semibold text-brand hover:text-brand-strong"
                 >
-                  View all
+                  {t("actions.viewAll")}
                   <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" aria-hidden="true" />
                 </Link>
               </div>
 
               {resources.length ? (
-                <div className="divide-y divide-[#eff0f2]">
+                <div className="divide-y divide-border">
                   {resources.map((resource) => (
                     <Link
                       key={resource.id}
                       href={`/inventory/${resource.id}`}
-                      className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition hover:bg-[#fafbfc] sm:grid-cols-[minmax(0,1fr)_110px_100px] sm:px-6"
+                      className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition hover:bg-surface-subtle sm:grid-cols-[minmax(0,1fr)_110px_100px] sm:px-6"
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <div
-                          className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-[#e5e7eb] bg-[#f1f3f5] bg-cover bg-center text-[#5f6672]"
+                          className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-surface-muted bg-cover bg-center text-muted"
                           style={
                             resource.cover?.url
                               ? { backgroundImage: `url(${JSON.stringify(resource.cover.url)})` }
@@ -331,13 +374,18 @@ export function DashboardClient() {
                           {!resource.cover?.url ? <BoxIcon className="size-[18px]" aria-hidden="true" /> : null}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-[13px] font-semibold text-[#33373d] transition group-hover:text-[#5147d9]">
+                          <p className="truncate text-[13px] font-semibold text-foreground transition group-hover:text-brand">
                             {resource.name}
                           </p>
-                          <div className="mt-1 flex min-w-0 items-center gap-2 text-[10px] text-[#5f6672]">
-                            <span className="capitalize">{resource.type}</span>
+                          <div className="mt-1 flex min-w-0 items-center gap-2 text-[10px] text-muted">
+                            <span>{typeLabel(resource.type)}</span>
                             <span aria-hidden="true">·</span>
-                            <span>Qty {resource.quantity}</span>
+                            <span>
+                              {t("recent.quantity", {
+                                count: resource.quantity,
+                                value: integer.format(resource.quantity),
+                              })}
+                            </span>
                             {resource.location ? (
                               <>
                                 <span className="hidden sm:inline" aria-hidden="true">·</span>
@@ -351,7 +399,7 @@ export function DashboardClient() {
                         </div>
                       </div>
                       <div className="hidden sm:block">{statusBadge(resource.status)}</div>
-                      <span className="text-right text-[10px] text-[#5f6672]">
+                      <span className="text-right text-[10px] text-muted">
                         {relativeDate(resource.updatedAt)}
                       </span>
                     </Link>
@@ -361,15 +409,15 @@ export function DashboardClient() {
                 <EmptyState
                   className="min-h-[330px]"
                   icon={<PackagePlus className="size-5" aria-hidden="true" />}
-                  title="Your inventory is ready"
-                  description="Add your first item manually, or upload a group of images and let AI do the repetitive work."
+                  title={t("recent.empty.title")}
+                  description={t("recent.empty.description")}
                   action={
                     <Link
                       href="/inventory/new"
-                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#5147d9] px-3.5 text-[12px] font-semibold text-white shadow-sm hover:bg-[#5147f5]"
+                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand-solid px-3.5 text-[12px] font-semibold text-on-brand shadow-sm hover:bg-brand-hover"
                     >
                       <PlusIcon />
-                      Add first item
+                      {t("actions.addFirstItem")}
                     </Link>
                   }
                 />
@@ -380,10 +428,14 @@ export function DashboardClient() {
               <Card className="p-5 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-sm font-semibold text-[#2c3036]">Inventory mix</h2>
-                    <p className="mt-0.5 text-[11px] text-[#5f6672]">Items by type</p>
+                    <h2 className="text-sm font-semibold text-foreground">
+                      {t("mix.title")}
+                    </h2>
+                    <p className="mt-0.5 text-[11px] text-muted">
+                      {t("mix.subtitle")}
+                    </p>
                   </div>
-                  <span className="grid size-8 place-items-center rounded-xl bg-[#f1f2f5] text-[#5f6672]">
+                  <span className="grid size-8 place-items-center rounded-xl bg-surface-muted text-muted">
                     <Layers3 className="size-4" aria-hidden="true" />
                   </span>
                 </div>
@@ -392,12 +444,14 @@ export function DashboardClient() {
                     {stats.byType.slice(0, 6).map((item, index) => (
                       <div key={item.type}>
                         <div className="mb-1.5 flex items-center justify-between text-[11px]">
-                          <span className="font-medium text-[#5d646f]">
-                            {typeLabels[item.type] ?? item.type}
+                          <span className="font-medium text-muted">
+                            {typeGroupLabel(item.type)}
                           </span>
-                          <span className="tabular-nums text-[#5f6672]">{item.value}</span>
+                          <span className="tabular-nums text-muted">
+                            {integer.format(item.value)}
+                          </span>
                         </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-[#eef0f2]">
+                        <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
                           <div
                             className="h-full rounded-full transition-[width] duration-700"
                             style={{
@@ -410,26 +464,28 @@ export function DashboardClient() {
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-6 rounded-xl bg-[#f8f9fa] p-4 text-center text-[12px] text-[#5f6672]">
-                    Item types will appear here.
+                  <p className="mt-6 rounded-xl bg-surface-subtle p-4 text-center text-[12px] text-muted">
+                    {t("mix.empty")}
                   </p>
                 )}
               </Card>
 
-              <Card className="relative overflow-hidden border-[#dedcff] bg-gradient-to-br from-[#f7f6ff] to-white p-5 sm:p-6">
-                <div className="absolute -right-12 -top-14 size-32 rounded-full bg-[#5147d9]/10 blur-2xl" />
-                <span className="relative grid size-9 place-items-center rounded-xl bg-[#5147d9] text-white shadow-[0_6px_16px_rgba(99,91,255,0.22)]">
+              <Card className="relative overflow-hidden border-brand-border bg-gradient-to-br from-brand-soft to-surface p-5 sm:p-6">
+                <div className="absolute -right-12 -top-14 size-32 rounded-full bg-brand-solid/10 blur-2xl" />
+                <span className="relative grid size-9 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-[var(--shadow-sm)]">
                   <Sparkles className="size-4" aria-hidden="true" />
                 </span>
-                <h2 className="relative mt-4 text-sm font-semibold text-[#322f66]">Turn photos into records</h2>
-                <p className="relative mt-1.5 text-[12px] leading-5 text-[#706d91]">
-                  Upload images in batches, then generate titles, details, tags, and polished covers with AI.
+                <h2 className="relative mt-4 text-sm font-semibold text-brand">
+                  {t("batchCard.title")}
+                </h2>
+                <p className="relative mt-1.5 text-[12px] leading-5 text-muted">
+                  {t("batchCard.description")}
                 </p>
                 <Link
                   href="/batch"
-                  className="relative mt-4 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#574fd4] hover:text-[#443cbd]"
+                  className="relative mt-4 inline-flex items-center gap-1.5 text-[12px] font-semibold text-brand hover:text-brand-strong"
                 >
-                  Open batch studio
+                  {t("batchCard.action")}
                   <ArrowRight className="size-3.5" aria-hidden="true" />
                 </Link>
               </Card>

@@ -9,7 +9,6 @@ struct InventoryApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(state)
-                .tint(InventoryTheme.accent)
                 .preferredColorScheme(.light)
                 .onOpenURL { url in
                     guard ResourceCodeParser.parse(url.absoluteString).resourceID != nil else { return }

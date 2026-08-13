@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { stockUnitStatuses } from "@/db/schema";
-import { requireIdentity } from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import { stockHttpError, updateStockUnit } from "@/lib/stock";
 import { customFieldValuesInputSchema } from "@/lib/validators";
 
@@ -38,13 +38,17 @@ const unitPatchSchema = z
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request, context: Context) {
-  const authorization = await requireIdentity(request, "write");
-  if (authorization.response) return authorization.response;
   const { id, unitId } = await context.params;
   const uuidSchema = z.string().uuid();
   if (!uuidSchema.safeParse(id).success || !uuidSchema.safeParse(unitId).success) {
     return Response.json({ error: "Invalid resource or unit id." }, { status: 422 });
   }
+  const authorization = await requireResourcePermission(
+    request,
+    "stock.manage",
+    id,
+  );
+  if (authorization.response) return authorization.response;
 
   let payload: unknown;
   try {

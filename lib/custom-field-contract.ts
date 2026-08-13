@@ -10,6 +10,7 @@ export const customFieldTypes = [
   "datetime",
   "select",
   "multi_select",
+  "reference",
   "email",
   "url",
 ] as const;
@@ -37,6 +38,14 @@ export type CustomFieldOption = {
 export type CustomFieldValue = string | number | boolean | string[];
 export type CustomFieldValues = Record<string, CustomFieldValue>;
 
+export type CustomFieldReferenceOption = {
+  id: string;
+  entityType: CustomFieldEntityType;
+  label: string;
+  description: string;
+  status: string;
+};
+
 export type CustomFieldDefinition = {
   id: string;
   entityType: CustomFieldEntityType;
@@ -52,6 +61,11 @@ export type CustomFieldDefinition = {
   resourceTypes: CustomFieldResourceType[];
   categories: string[];
   options: CustomFieldOption[];
+  referenceEntityType: CustomFieldEntityType | null;
+  referenceMultiple: boolean;
+  referenceResourceTypes: CustomFieldResourceType[];
+  referenceCategories: string[];
+  referenceStatuses: string[];
   position: number;
   revision: number;
   createdBy: string | null;
@@ -64,6 +78,10 @@ export type CustomFieldDefinition = {
 export type CustomFieldTarget = {
   type: string;
   categories: Array<string | { name: string }>;
+};
+
+export type CustomFieldReferenceTarget = CustomFieldTarget & {
+  status: string;
 };
 
 const normalizedTarget = (value: string) => value.trim().toLowerCase();
@@ -108,5 +126,36 @@ export function isCustomFieldDefinitionApplicable(
   );
   return definition.categories.some((category) =>
     resourceCategories.has(normalizedTarget(category)),
+  );
+}
+
+/**
+ * Reference filters use the same wildcard and AND semantics as field
+ * applicability, with an optional status filter layered on top.
+ */
+export function isCustomFieldReferenceTargetApplicable(
+  definition: Pick<
+    CustomFieldDefinition,
+    "referenceResourceTypes" | "referenceCategories" | "referenceStatuses"
+  >,
+  target: CustomFieldReferenceTarget,
+) {
+  if (
+    !isCustomFieldDefinitionApplicable(
+      {
+        resourceTypes: definition.referenceResourceTypes,
+        categories: definition.referenceCategories,
+      },
+      target,
+    )
+  ) {
+    return false;
+  }
+  const targetStatus = normalizedTarget(target.status);
+  return (
+    definition.referenceStatuses.length === 0 ||
+    definition.referenceStatuses.some(
+      (status) => normalizedTarget(status) === targetStatus,
+    )
   );
 }

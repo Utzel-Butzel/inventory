@@ -20,8 +20,10 @@ Open Inventory is released under the [MIT License](LICENSE).
   notes, GPS, GeoJSON-compatible map features, priority, and ordered media
 - Directed, configurable relationships between inventory items, including
   manual containment and automatic point-in-polygon placement on the map
-- Typed custom fields for inventory items and serialized stock units, scoped by
-  inventory type and category
+- Typed custom fields for inventory items and serialized stock units, including
+  searchable references to filtered inventory or stock records
+- AI content translation with one canonical language, field-level freshness,
+  whole-item context, terminology guidance, and automatic regeneration
 - Bulk and serialized stock tracking with immutable dated movement history,
   per-inventory-location balances, and auditable location transfers
 - Per-item inventory cycles, due-count queues, location-aware counts, and stock
@@ -29,8 +31,8 @@ Open Inventory is released under the [MIT License](LICENSE).
 - Checkout, assignment, and reservation workflows for bulk stock and serialized
   units, with users, inventory items, or free-text recipients
 - UTF-8 CSV import and export with row-level validation and idempotent retries
-- Browser-generated QR and Code 128 labels for Brother 62 mm rolls and
-  102 × 152 mm media
+- Reusable browser-designed label setups with compact QR links, Code 128,
+  optional object images, and presets for Brother 62 mm and 102 × 152 mm media
 - Bills of materials for assembled items with atomic component consumption
 - Purchase orders, incoming quantities, and partial goods receipts
 - Minimum levels, reorder quantities, lead times, consumption rates, and
@@ -51,7 +53,8 @@ Open Inventory is released under the [MIT License](LICENSE).
   tags, alt text, and confidence output
 - OpenAI or Google image editing for clean square studio covers
 - Local persistent file storage or Openinary
-- Multiple local user accounts with admin, editor, and viewer roles, plus optional Auth0
+- Database-backed custom roles, granular permissions, conditional item rules,
+  and optional Auth0
 - Hashed, scoped, expiring, revocable API tokens
 - Duplicate scoring and transactional record merging
 - Docker Compose deployment with PostgreSQL and persistent volumes
@@ -71,6 +74,35 @@ npm run dev
 
 Then open [http://localhost:3000](http://localhost:3000). Change the values in
 `.env.local` before using the app outside a local development machine.
+
+### SSH tunnel to a remote PostgreSQL database
+
+Keep PostgreSQL private and forward it over SSH when remote database access is
+needed for local development. Configure `.env.local` with an SSH host and either
+a server-reachable PostgreSQL host or the name of its Docker container:
+
+```dotenv
+DB_TUNNEL_SSH_HOST=production.example.com
+DB_TUNNEL_SSH_USER=deploy
+DB_TUNNEL_DOCKER_SERVICE=inventree-postgres-i58yfc
+DB_TUNNEL_LOCAL_PORT=15432
+```
+
+If PostgreSQL is already published on the production server's loopback
+interface, replace `DB_TUNNEL_DOCKER_SERVICE` with
+`DB_TUNNEL_REMOTE_HOST=127.0.0.1`. An SSH config alias can be used as
+`DB_TUNNEL_SSH_HOST`; `DB_TUNNEL_IDENTITY_FILE` and `DB_TUNNEL_SSH_JUMP` are
+available when needed.
+
+Start the foreground tunnel and keep that terminal open:
+
+```bash
+yarn db:tunnel
+```
+
+The command prints the loopback-only `DATABASE_URL` shape to use in a second
+terminal. Never commit production credentials, and use a restricted database
+role for routine local development.
 
 Set `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` to use Mapbox streets and satellite
 imagery. Without it, the map falls back to OpenFreeMap streets and Esri World
@@ -183,12 +215,21 @@ BOOTSTRAP_ADMIN_PASSWORD_HASH=$2b$12$...
 
 The first matching successful login creates the database-backed administrator.
 That administrator can then create, disable, re-enable, reset, and assign roles
-to additional accounts under **Settings → Workspace users**. All accounts share
-the same inventory workspace:
+to additional accounts under **Settings → Users**. Roles are configured under
+**Settings → Roles & access**. All accounts share the same inventory workspace:
 
 - `admin` manages users and API tokens and has full inventory and AI access.
 - `editor` can read and change inventory and use AI features.
 - `viewer` has read-only access.
+
+These built-in roles preserve the original defaults. You can also create custom
+roles and select individual inventory, stock, assignment, count, spatial,
+purchasing, workflow, label, AI, settings, user, sharing, and token permissions.
+Conditional inventory rules provide additive access to matching items. For
+example, a role without global item-update access can be allowed to update only
+items whose `tags` contain `xyz`. Rules support item ID, name, type, status, SKU,
+location, serial number, priority, tags, categories, creator, and
+`customFields.<key>` conditions. Every condition in a rule must match.
 
 After the first administrator exists, remove the bootstrap password hash from
 the deployment environment. Existing database users continue to work. Disabling
@@ -209,7 +250,7 @@ AUTH0_CLIENT_ID=...
 AUTH0_CLIENT_SECRET=...
 AUTH0_DOMAIN=your-tenant.eu.auth0.com
 AUTH0_DEFAULT_ROLE=editor
-# Optional custom claim containing admin, editor, or viewer:
+# Optional custom claim containing a built-in or custom role key:
 AUTH0_ROLE_CLAIM=https://inventory.example.com/role
 ```
 
@@ -225,7 +266,7 @@ For local development, use
 Auth0 identities are managed in Auth0 rather than the local user list. Restrict
 the enabled Auth0 connections or invitations at the tenant level; every
 successful Auth0 login receives `AUTH0_DEFAULT_ROLE`, unless the configured role
-claim contains a supported role.
+claim contains an existing role key. Unknown role keys fail closed.
 
 ## Stock management
 
@@ -332,9 +373,19 @@ Administrators configure custom fields under **Settings → Custom fields** for
 inventory items or individually tracked stock units. A definition has a stable
 API key, display label, description, placeholder, position, and optional
 required flag. Supported field types are single-line text, long text, number,
-yes/no, date, date and time, select, multi-select, email address, and URL.
+yes/no, date, date and time, select, multi-select, dynamic reference, email
+address, and URL.
 Number fields can define minimum, maximum, and step values; select fields carry
 their own stored values, display labels, and optional colours.
+
+Reference fields target either inventory items or serialized stock units. They
+can allow one or many choices and filter the searchable list by target inventory
+type, category, and status. Values are stable UUIDs, not copied display names;
+the API verifies every newly assigned target and the UI resolves stored IDs back
+to current names. For example, create ordinary inventory records in a
+`Manufacturer` category, then configure a single-value reference field whose
+target category is `Manufacturer`. The same field type is available on stock
+units, and stock-unit targets can be selected as well.
 
 Definitions can target inventory types, categories, or both. An empty target
 list is a wildcard. When both lists are populated, an item must match one type
@@ -350,6 +401,35 @@ revision so concurrent edits cannot silently overwrite each other. Deleting one
 archives the definition instead of erasing it or its previously stored values;
 archived definitions are hidden from normal forms and can still be requested
 through the API.
+
+### Content languages and AI translation
+
+Administrators configure the canonical authoring language and target languages
+under **Settings → Content languages**. Inventory names, descriptions, notes,
+applicable text or textarea custom fields, and media alt text are translated.
+Tags, categories, types, SKUs, URLs, and other identifiers remain canonical so
+filters and integrations do not split into locale-specific values.
+
+Each resource and locale has one atomic translation document, with a source
+hash for every field. A database trigger commits a coalesced translation job in
+the same transaction as every canonical content write—including imports,
+analysis, media changes, and merges. A leased background worker processes one
+locale at a time, sends only missing or stale fields, and supplies the complete
+safe item context for consistent terminology. Jobs survive restarts, retry with
+backoff, and are safe across multiple application replicas.
+
+Provider results use strict structured output and are written only when the job
+generation, language policy, and source hashes still match. Missing or stale
+fields fall back individually to the canonical value. Manual translations are
+locked against AI overwrite; after their source changes, AI creates a suggestion
+that remains in review until a person accepts it or edits the translation.
+
+Each target language can enable automatic refresh and provide terminology or
+tone guidance. Adding an automatic language queues an existing-inventory
+backfill, and changing guidance invalidates AI-managed translations. The item
+editor exposes queued, processing, failed, stale, and review states. The default
+language is locked once translations exist because changing it would relabel
+canonical content without rebuilding every saved translation.
 
 ### Assemblies and bills of materials
 
@@ -412,12 +492,22 @@ idempotency key so retrying the same file does not duplicate records. Tags,
 categories, custom fields, related-resource IDs, and map features use JSON
 inside their CSV cells.
 
-The **Labels** screen creates scannable inventory links as QR codes together
-with SKU or resource identifiers as Code 128 barcodes. Print layouts are
-included for Brother 62 × 35 mm and 62 × 50 mm continuous-roll labels and for
-102 × 152 mm large-format media. Printing uses the browser's system print
-dialog, so a Wi-Fi Brother printer must first be available to the operating
-system with the matching media selected and page scaling disabled.
+The **Labels** screen applies reusable setups that store the physical media size
+and the visibility, position, and size of each label element. Editors can use
+the visual designer to create, copy, edit, and delete setups; available elements
+are QR code, object cover image, name, SKU or resource identifier, Code 128
+barcode, printed URL, and location. Text alignment and size and image
+crop/contain behavior are configurable. Preset setups are included for Brother
+62 × 35 mm and 62 × 50 mm continuous-roll labels and 102 × 152 mm
+large-format media.
+
+QR codes and printed URLs use a compact `/r/{code}` link whose 22-character
+base64url code losslessly represents the resource UUID. The redirect preserves
+the normal access boundary: signed-in users go to the item, while other users
+are sent through login with the item as the callback. Printing waits for object
+cover images to load, then uses the browser's system print dialog, so a Wi-Fi
+Brother printer must first be available to the operating system with the setup's
+media size selected and page scaling disabled.
 
 ## File storage
 
@@ -453,6 +543,13 @@ Replicate models:
 ```dotenv
 OPENAI_API_KEY=...
 OPENAI_VISION_MODEL=gpt-4.1-mini
+OPENAI_TRANSLATION_MODEL=gpt-5.6-terra
+OPENAI_TRANSLATION_TIMEOUT_MS=120000
+TRANSLATION_WORKER_ENABLED=true
+TRANSLATION_WORKER_POLL_MS=2000
+TRANSLATION_WORKER_CONCURRENCY=1
+TRANSLATION_JOB_LEASE_SECONDS=180
+TRANSLATION_JOB_MAX_ATTEMPTS=5
 REPLICATE_API_TOKEN=...
 REPLICATE_COUNT_DEFAULT_MODEL=grounding-dino
 REPLICATE_GROUNDING_DINO_MODEL=adirik/grounding-dino:efd10a8ddc57ea28773327e881ce95e20cc1d734c589f7dd01d2036921ed78aa
@@ -466,9 +563,13 @@ REPLICATE_COUNT_MAX_MASKS=100
 AI_OUTPUT_LANGUAGE=English
 AI_ANALYSIS_RATE_LIMIT_PER_MINUTE=10
 AI_COUNT_RATE_LIMIT_PER_MINUTE=10
+AI_TRANSLATION_RATE_LIMIT_PER_MINUTE=30
 ```
 
 An OpenAI-compatible endpoint can be selected with `OPENAI_BASE_URL`.
+Content translation uses the Responses API with strict structured output. The
+model default is `gpt-5.6-terra`; override `OPENAI_TRANSLATION_MODEL` when the
+compatible endpoint exposes another model.
 
 The bulk-stock screen and native item detail can send one transient camera image
 to the selected counting model, localize the requested parts, and copy the
@@ -596,6 +697,10 @@ Definition writes (`POST /api/v1/custom-fields` and `PATCH` or `DELETE` on
 session and do not accept API tokens. Inventory and stock-unit create/update
 requests carry configured values in `customFields`, keyed by each definition's
 stable key. For example: `{"customFields":{"colour":"yellow","voltage":18}}`.
+Reference values use one UUID or an array of UUIDs. Search or resolve choices
+through `GET /api/v1/custom-fields/{id}/options?q=acme`; selected IDs may be
+repeated as `selected` query parameters so saved values remain readable even
+after a target stops matching the field's current filters.
 
 Upload media after creation:
 
@@ -651,7 +756,9 @@ npm run start        Start the production server
 npm run lint         Run ESLint
 npm run typecheck    Run TypeScript checks
 npm run test:locations   Test geographic containment and EXIF coordinates
+npm run test:translations Test language normalization and field freshness
 npm run test:room-scenes Test RoomPlan scene and placement contracts
+npm run db:tunnel    Forward a remote PostgreSQL database over SSH
 npm run db:migrate   Apply checked-in PostgreSQL migrations
 npm run db:seed      Add sample records when the database is empty
 npm run db:generate  Generate a Drizzle migration after schema changes
@@ -662,6 +769,8 @@ npm run auth:hash    Generate a bcrypt password hash
 
 - Session and bearer-token authorization are both enforced inside every data
   route; the dashboard layout redirect is not the security boundary.
+- Bearer-token scopes are transport ceilings. Role permissions and conditional
+  item rules remain the authorization boundary for user-linked tokens.
 - Lists are capped at 100 records per request.
 - Media metadata is normalized in PostgreSQL while bytes stay in the selected
   storage provider.
