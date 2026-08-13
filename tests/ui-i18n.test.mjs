@@ -133,7 +133,7 @@ test("UI catalogs use i18next plural rules", async () => {
   assert.equal(i18n.t("submit.photoCount", { count: 3 }), "3 Fotos");
 });
 
-test("the locale proxy is scoped to the application, not the public website", async () => {
+test("the locale proxy is scoped to application routes", async () => {
   const source = await readFile(
     fileURLToPath(new URL("../proxy.ts", import.meta.url)),
     "utf8",

@@ -16,8 +16,6 @@ function DocumentLanguage({ children }: { children: React.ReactNode }) {
 
   useEffect(
     () => () => {
-      // Client-side navigation back to the public website keeps the root layout
-      // mounted, so restore its deliberately English document language.
       document.documentElement.lang = "en";
     },
     [],
