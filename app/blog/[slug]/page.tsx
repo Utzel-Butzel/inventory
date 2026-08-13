@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -45,6 +46,20 @@ export async function generateMetadata({
       type: "article",
       publishedTime: article.publishedAt,
       authors: ["Open Inventory"],
+      images: [
+        {
+          url: article.cover.src,
+          width: article.cover.width,
+          height: article.cover.height,
+          alt: article.cover.alt,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: article.title,
+      description: article.description,
+      images: [article.cover.src],
     },
   };
 }
@@ -82,12 +97,30 @@ function Note({
         </span>
         <div>
           <p className="text-sm font-semibold text-foreground">{note.title}</p>
-          <p className="mt-1.5 text-sm leading-6 text-muted-strong">{note.body}</p>
+          <p className="mt-1.5 text-sm leading-6 text-muted-strong">
+            <InlineCode text={note.body} />
+          </p>
         </div>
       </div>
     </aside>
   );
 }
+
+function InlineCode({ text }: { text: string }) {
+  return text.split(/(`[^`]+`)/g).map((part, index) =>
+    part.startsWith("`") && part.endsWith("`") ? (
+      <code
+        key={`${part}-${index}`}
+        className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[0.88em] text-foreground"
+      >
+        {part.slice(1, -1)}
+      </code>
+    ) : (
+      part
+    ),
+  );
+}
+
 export default async function ArticlePage({ params }: ArticlePageProps) {
   const { slug } = await params;
   const article = getArticle(slug);
@@ -138,13 +171,29 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                 </span>
                 <div>
                   <p className="text-xs font-semibold text-white">Open Inventory</p>
-                  <p className="mt-0.5 text-[11px] text-white/45">Open Source · MIT-lizenziert</p>
+                  <p className="mt-0.5 text-[11px] text-white/45">Technische Notizen · MIT-lizenziert</p>
                 </div>
               </div>
             </div>
           </header>
 
-          <div className="mx-auto grid max-w-[1120px] gap-12 px-5 py-14 sm:px-8 sm:py-20 lg:grid-cols-[220px_minmax(0,760px)] lg:justify-between">
+          <figure className="mx-auto max-w-[1120px] px-5 pt-10 sm:px-8 sm:pt-12">
+            <div className="relative aspect-[3/2] overflow-hidden rounded-[24px] border border-border bg-surface-muted shadow-sm">
+              <Image
+                src={article.cover.src}
+                alt={article.cover.alt}
+                fill
+                priority
+                sizes="(max-width: 1120px) 100vw, 1056px"
+                className="object-cover"
+              />
+            </div>
+            <figcaption className="mt-3 text-xs leading-5 text-muted">
+              {article.cover.caption}
+            </figcaption>
+          </figure>
+
+          <div className="mx-auto grid max-w-[1120px] gap-12 px-5 py-12 sm:px-8 sm:py-16 lg:grid-cols-[220px_minmax(0,760px)] lg:justify-between">
             <aside className="hidden lg:block">
               <div className="sticky top-24">
                 <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
@@ -186,7 +235,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                       <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-success-soft text-success">
                         <Check className="size-3" strokeWidth={2.5} aria-hidden="true" />
                       </span>
-                      {takeaway}
+                      <InlineCode text={takeaway} />
                     </li>
                   ))}
                 </ul>
@@ -217,7 +266,9 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                     {section.paragraphs ? (
                       <div className="mt-7 space-y-5 text-[15px] leading-7 text-muted-strong sm:text-base sm:leading-8">
                         {section.paragraphs.map((paragraph) => (
-                          <p key={paragraph}>{paragraph}</p>
+                          <p key={paragraph}>
+                            <InlineCode text={paragraph} />
+                          </p>
                         ))}
                       </div>
                     ) : null}
@@ -231,10 +282,10 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                             </span>
                             <div>
                               <h3 className="text-base font-semibold tracking-[-0.02em] text-foreground">
-                                {step.title}
+                                <InlineCode text={step.title} />
                               </h3>
                               <p className="mt-2 text-sm leading-6 text-muted">
-                                {step.body}
+                                <InlineCode text={step.body} />
                               </p>
                             </div>
                           </li>
@@ -247,7 +298,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
                         {section.bullets.map((bullet) => (
                           <li key={bullet} className="flex items-start gap-3 rounded-xl bg-surface-subtle px-4 py-3.5 text-sm leading-6 text-muted-strong">
                             <Check className="mt-1 size-3.5 shrink-0 text-brand" strokeWidth={2.5} aria-hidden="true" />
-                            {bullet}
+                            <InlineCode text={bullet} />
                           </li>
                         ))}
                       </ul>

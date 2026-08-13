@@ -36,7 +36,13 @@ export type BlogArticle = {
   readingTime: string;
   accent: string;
   accentSoft: string;
-  heroLabel: string;
+  cover: {
+    src: string;
+    alt: string;
+    width: number;
+    height: number;
+    caption: string;
+  };
   takeaways: string[];
   sections: ArticleSection[];
   relatedLinks: ArticleLink[];
@@ -46,58 +52,65 @@ export const articles: BlogArticle[] = [
   {
     slug: "serienerfassung-in-sekunden",
     category: "Workflow",
-    title: "Serienerfassung: Inventarisieren in Sekunden statt Stunden",
-    shortTitle: "Serienerfassung in Sekunden",
+    title: "Serienerfassung: Was beim Batch-Workflow Zeit spart",
+    shortTitle: "Serienerfassung als Batch",
     excerpt:
-      "Foto aufnehmen, gemeinsame Vorgaben übernehmen und direkt zum nächsten Gegenstand wechseln. So wird aus einer langen Inventurliste ein flüssiger Ablauf.",
+      "Standort und Typ werden einmal gesetzt. Jede Aufnahme landet in einer Queue; Upload, Analyse und Cover laufen weiter, während du das nächste Objekt fotografierst.",
     description:
-      "Ein praktischer Workflow für schnelle Serienerfassung mit Open Inventory im Browser und in der nativen iOS-App.",
+      "Technischer Überblick über Batch-Erfassung, Queue-Stufen und Idempotenz in Web-Client und nativer iOS-App.",
     publishedAt: "2026-08-13",
     publishedLabel: "13. August 2026",
     readingTime: "7 Min. Lesezeit",
     accent: "from-[#665cff] to-[#9088ff]",
     accentSoft: "bg-brand-soft text-brand",
-    heroLabel: "Ein Regal, ein Rundgang, eine ruhige Warteschlange",
+    cover: {
+      src: "/marketing/blog/series-capture.webp",
+      alt: "Eine Person fotografiert ein gebrauchtes Werkzeug in einem Werkstattregal mit dem Smartphone.",
+      width: 1536,
+      height: 1024,
+      caption:
+        "Illustratives Bild zur Serienerfassung. Mit ImageGen erstellt; kein Foto einer realen Open-Inventory-Installation.",
+    },
     takeaways: [
-      "Vorgaben einmal für eine ganze Aufnahmeserie setzen",
-      "Das nächste Objekt fotografieren, während das vorige verarbeitet wird",
-      "KI-Vorschläge prüfen, statt Datenfelder von Grund auf auszufüllen",
+      "Gemeinsame Felder werden pro Batch wiederverwendet",
+      "Resource-, Media-, Analyse- und Cover-Schritte laufen getrennt",
+      "Stabile Idempotency-Keys verhindern Duplikate bei definierten Retries",
     ],
     sections: [
       {
         id: "warum-serienerfassung",
         eyebrow: "Das eigentliche Problem",
-        title: "Nicht das Tippen beschleunigen – das Tippen vermeiden",
+        title: "Welche Eingaben pro Batch wiederverwendet werden",
         paragraphs: [
-          "Klassische Inventarisierung zwingt zu einem ständigen Wechsel: Gegenstand ansehen, Namen eintippen, Kategorie wählen, Standort notieren, Foto ablegen und wieder von vorn. Bei einem vollen Regal ist nicht ein einzelner Schritt langsam, sondern die Summe der Unterbrechungen.",
-          "Open Inventory dreht den Ablauf um. Du legst gemeinsame Angaben wie Typ und Standort vor der Serie fest, fotografierst einen Gegenstand und gibst ihn an die Warteschlange weiter. Die KI kann Titel, Beschreibung, Tags und ein aufgeräumtes Titelbild vorschlagen. Anschließend prüfst du das Ergebnis – die Entscheidung bleibt bei dir.",
-          "„In Sekunden statt Stunden“ ist dabei ein Arbeitsprinzip, kein pauschales Zeitversprechen: Die Erfassung pro Gegenstand soll nur einen kurzen Moment beanspruchen. Wie schnell eine gesamte Inventur wird, hängt unter anderem von Objekten, Netz, Server und gewünschter Detailtiefe ab.",
+          "Bei einer Serie kosten die wiederholten Kontextwechsel mehr Zeit als ein einzelnes Textfeld. Typ und Standort ändern sich innerhalb eines Regals oft nicht. Deshalb setzt du diese Werte einmal und übernimmst sie für die folgenden Aufnahmen.",
+          "Für jedes Foto legt der Client einen eigenen Auftrag an. Der Server erstellt zuerst den Inventareintrag, danach die Medien. Analyse und Cover sind optionale, getrennte Schritte. Ein Fehler beim Cover muss also nicht die bereits hochgeladenen Fotos verwerfen.",
+          "„In Sekunden statt Stunden“ beschreibt das Ziel für die Aufnahme vor Ort, nicht eine veröffentlichte Benchmark. Die Verarbeitung kann danach weiterlaufen. Gesamtdauer und Durchsatz hängen von Netz, Server, Bildgröße und aktivierten externen Diensten ab.",
         ],
       },
       {
         id: "workflow",
         eyebrow: "Der Ablauf",
-        title: "Ein Rundgang in fünf Schritten",
+        title: "Die Queue in fünf Schritten",
         steps: [
           {
-            title: "Serie vorbereiten",
-            body: "Öffne die Serienerfassung und wähle gemeinsame Vorgaben: etwa „Werkzeug“ und „Werkstatt · Regal B2“. Aktiviere ein KI-Titelbild nur, wenn du es wirklich brauchst.",
+            title: "Batch-Kontext setzen",
+            body: "Wähle gemeinsame Werte, zum Beispiel Typ „Werkzeug“ und Standort „Werkstatt · Regal B2“. Cover-Erzeugung und Analyse bleiben optional.",
           },
           {
-            title: "Einen Gegenstand fotografieren",
-            body: "Nimm ein klares Hauptfoto auf. Weitere Blickwinkel sind möglich, wenn Modell, Anschluss oder Typenschild sonst nicht erkennbar wären.",
+            title: "Aufnahmen lokal vorbereiten",
+            body: "Nimm ein Hauptfoto und bei Bedarf weitere Blickwinkel auf. Modellnummern und Typenschilder gehören auf separate, scharfe Bilder.",
           },
           {
-            title: "Auftrag abschicken",
-            body: "Open Inventory legt den Eintrag an, lädt die Fotos hoch und startet die ausgewählten Verarbeitungsschritte. Die Fotoablage wird für das nächste Objekt frei.",
+            title: "Resource und Medien anlegen",
+            body: "Der Client erstellt den Eintrag und lädt anschließend die Bilder hoch. Beide Stufen haben eigene Status- und Fehlerzustände.",
           },
           {
-            title: "Ohne Warten weitergehen",
-            body: "Erfasse das nächste Objekt, während laufende und abgeschlossene Aufträge in der Hintergrundwarteschlange sichtbar bleiben. Wiederholungen sind gegen versehentliche Duplikate abgesichert.",
+            title: "Queue weiterarbeiten lassen",
+            body: "Du startest die nächste Aufnahme, während frühere Jobs weiterlaufen. Definierte Wiederholungen nutzen stabile Operation-IDs und serverseitige Idempotency-Keys.",
           },
           {
-            title: "Ergebnisse gesammelt prüfen",
-            body: "Kontrolliere Namen, Bestand, Typ, Standort und Bilder. Ergänze Seriennummern oder benutzerdefinierte Felder dort, wo sie fachlich nötig sind.",
+            title: "Ergebnisse prüfen",
+            body: "Kontrolliere Name, Tracking-Modus, Standort und Bilder. Seriennummern und benutzerdefinierte Felder werden nicht durch ein brauchbares Foto ersetzt.",
           },
         ],
         note: {
@@ -109,25 +122,25 @@ export const articles: BlogArticle[] = [
       {
         id: "browser-oder-ios",
         eyebrow: "Browser und iPhone",
-        title: "Nutze die Oberfläche, die zum Ort passt",
+        title: "Web-Client und iOS-App im Vergleich",
         paragraphs: [
-          "Im Browser eignet sich die Serienerfassung für einen Laptop oder ein Tablet am Arbeitstisch. Kamera und vorhandene Bilddateien können kombiniert werden. Für mobilen Einsatz bietet das Open-Source-Repository zusätzlich eine native SwiftUI-App für iOS.",
-          "Die iOS-App nutzt die rückseitige Kamera direkt, erkennt QR- und gängige Barcodes und führt neue Aufnahmen über eine dauerhafte Upload-Warteschlange durch. Vorbereitete Bilder bleiben lokal in einer ausfallsicheren Outbox, bis die einzelnen Server-Schritte bestätigt sind. Dadurch kann man sich durch einen Raum bewegen, ohne jede Netzwerkpause zum Arbeitsschritt zu machen.",
+          "Der Web-Client kombiniert Browser-Kamera und vorhandene Dateien. Das passt zu Laptop oder Tablet am Arbeitstisch. Die native SwiftUI-App nutzt AVFoundation direkt und enthält zusätzlich Code-Scanner und RoomPlan-Pfade.",
+          "Unter iOS werden Fotos und Stage-Status in einer servergebundenen Outbox unter Application Support persistiert. Nach einem Neustart prüft die App den letzten bestätigten Schritt und setzt dort fort. Das ist keine Offline-Synchronisation des ganzen Datenmodells, sondern eine persistente Upload-Queue.",
         ],
         bullets: [
           "Browser-Kamera benötigt HTTPS oder localhost; alternativ lassen sich Fotos hochladen.",
           "Für die native App muss dein selbst gehosteter Server vom iPhone erreichbar sein. Öffentliche Verbindungen sollten HTTPS verwenden.",
-          "KI-Analyse und Cover-Erstellung benötigen einen konfigurierten, unterstützten Bildmodell-Anbieter und verursachen je nach Anbieter externe Verarbeitung.",
+          "Optionale KI-Schritte verlassen den eigenen Server: Analyse nutzt OpenAI, Cover können über OpenAI oder Google laufen, Fotozählung über Replicate.",
           "Barcode-Erkennung ersetzt keine inhaltliche Prüfung, wenn mehrere Artikel denselben oder gar keinen Code tragen.",
         ],
       },
       {
         id: "danach",
         eyebrow: "Nach der Aufnahme",
-        title: "Schnell erfassen, bewusst strukturieren",
+        title: "Nach der Verarbeitung: Felder und Bilder prüfen",
         paragraphs: [
-          "Eine schnelle Erfassung liefert den Rohbestand. Den dauerhaften Nutzen schaffen konsistente Standorte, passende Inventartypen und die Entscheidung zwischen Mengenbestand und serialisierten Einheiten. Für wiederkehrende Objekte lohnt es sich, zuerst diese Regeln festzulegen.",
-          "Open Inventory ist MIT-lizenziert, Open Source und selbst hostbar. Du kannst den Ablauf im Quellcode nachvollziehen, über die REST-API automatisieren und ihn an die Prozesse deiner Familie, deines Makerspaces, Vereins oder Startups anpassen.",
+          "Die Queue liefert zunächst einen bearbeitbaren Datensatz. Danach musst du prüfen, ob Standort, Tracking-Modus, Menge und Bilder zum realen Objekt passen. Für Seriennummern oder sicherheitsrelevante Angaben sollte kein Modellvorschlag ungeprüft übernommen werden.",
+          "Der komplette Pfad liegt im MIT-lizenzierten Repository: Web-Client, REST-Routen und die SwiftUI-Outbox sind Open Source. Damit lassen sich Queue-Verhalten und Datenfluss direkt im Code prüfen und bei Bedarf ändern.",
         ],
       },
     ],
@@ -158,50 +171,57 @@ export const articles: BlogArticle[] = [
   {
     slug: "mengenbestand-oder-serialisiert",
     category: "Grundlagen",
-    title: "Mengenbestand oder serialisiert? Das richtige Modell wählen",
-    shortTitle: "Bulk vs. serialisiert",
+    title: "Mengenbestand oder serialisiert: Unterschiede im Datenmodell",
+    shortTitle: "Bulk und serialisiert",
     excerpt:
-      "Schrauben zählt man, Laptops verfolgt man einzeln. Dazwischen entscheidet der Arbeitsablauf – nicht der Gegenstand allein.",
+      "Im Bulk-Modus wird eine Menge gebucht. Im serialisierten Modus hat jede Einheit Code, Status und Standort. Der Wechsel hat technische Nebenbedingungen.",
     description:
-      "Entscheidungshilfe für Mengenbestand und serialisierte Einheiten in Open Inventory, inklusive Beispielen, Grenzen und Migrationsfragen.",
+      "Technischer Vergleich von Bulk- und serialisiertem Tracking in Open Inventory, inklusive Bewegungen und Moduswechsel.",
     publishedAt: "2026-08-10",
     publishedLabel: "10. August 2026",
     readingTime: "8 Min. Lesezeit",
     accent: "from-[#1eaf82] to-[#8ff0cc]",
     accentSoft: "bg-success-soft text-success",
-    heroLabel: "Die passende Tiefe für jeden Bestand",
+    cover: {
+      src: "/marketing/blog/stock-models.webp",
+      alt: "Lose Schrauben und Kabelbinder liegen neben einzeln nummerierten Messwerkzeugen auf einer Werkbank.",
+      width: 1536,
+      height: 1024,
+      caption:
+        "Illustratives Bild zu Bulk- und Einzelverfolgung. Mit ImageGen erstellt; kein Foto einer realen Open-Inventory-Installation.",
+    },
     takeaways: [
-      "Mengenbestand für austauschbare Teile und Verbrauchsmaterial",
-      "Serialisierte Erfassung für Identität, Status und Standort jeder Einheit",
-      "Entscheidung vor Import und Etikettierung treffen",
+      "`trackingMode: bulk` bucht Mengen pro Inventareintrag und Standort",
+      "`trackingMode: serialized` speichert identifizierte Einheiten",
+      "Ein Moduswechsel prüft Bestand, Varianten, Zuweisungen und Einheiten",
     ],
     sections: [
       {
         id: "unterschied",
         eyebrow: "Zwei Modelle",
-        title: "Zahl oder Identität?",
+        title: "trackingMode legt die Buchungslogik fest",
         paragraphs: [
-          "Beim Mengenbestand beantwortest du vor allem die Frage: Wie viele Einheiten sind an welchem Ort verfügbar? Eine Buchung erhöht, verringert oder verschiebt eine Menge. Das passt zu Schrauben, Kabelbindern, Versandkartons, Getränkekisten oder identischen Ersatzteilen.",
-          "Bei serialisiertem Bestand erhält jede physische Einheit eine eigene Identität. Neben dem lesbaren Einheitscode können Standort, Lebenszyklusstatus, Anschaffungsdatum und individuelle Metadaten gepflegt werden. Das passt zu Laptops, Messgeräten, Maschinen, Leihwerkzeug oder Sammlungsstücken.",
-          "Beide Modelle schreiben Bewegungen in eine datierte Historie. Bei Mengenbestand liegt die Wahrheit im Saldo und seinen Buchungen; bei serialisiertem Bestand zusätzlich im aktuellen Zustand jeder Einheit.",
+          "In der API heißt der Schalter `trackingMode`; in PostgreSQL liegt er als `stock_settings.tracking_mode`. `bulk` erlaubt Mengenbuchungen und Bestände pro Standort. Das passt zu Schrauben, Kabelbindern oder identischen Ersatzteilen.",
+          "Bei `serialized` erhält jede physische Einheit einen eigenen Datensatz mit Code, Status und Standort. Direkte Mengenbuchungen sind dann gesperrt. Stattdessen wird eine konkrete Einheit erstellt, verschoben oder im Status geändert.",
+          "Beide Modelle schreiben Bewegungen in die Historie. Der Unterschied ist die kleinste adressierbare Einheit: eine Zahl im Bulk-Modus, ein identifiziertes Objekt im serialisierten Modus.",
         ],
       },
       {
         id: "entscheidung",
         eyebrow: "Entscheidungshilfe",
-        title: "Fünf Fragen, die Klarheit schaffen",
+        title: "Entscheidungskriterien",
         steps: [
           {
             title: "Ist jede Einheit austauschbar?",
-            body: "Wenn es keine Rolle spielt, welche konkrete Einheit entnommen wird, ist Mengenbestand meistens ausreichend.",
+            body: "Wenn jede Einheit denselben Zweck erfüllt und keine eigene Historie braucht, reicht Bulk meistens aus.",
           },
           {
             title: "Braucht jede Einheit einen eigenen Status?",
-            body: "„Verfügbar“, „ausgeliehen“, „in Reparatur“ oder „installiert“ sprechen für serialisierte Erfassung.",
+            body: "Status wie `available`, `reserved`, `in-use`, `maintenance` oder `retired` benötigen eine identifizierte Einheit.",
           },
           {
             title: "Musst du den Standort einzeln kennen?",
-            body: "Ein Gesamtbestand pro Regal genügt für Bulk. Ein bestimmtes Messgerät in einem bestimmten Raum braucht eine Einheit.",
+            body: "Bulk speichert Mengen pro Standort. Wenn ein bestimmtes Messgerät auffindbar sein muss, braucht es eine eigene Einheit.",
           },
           {
             title: "Gibt es individuelle Merkmale?",
@@ -216,7 +236,7 @@ export const articles: BlogArticle[] = [
       {
         id: "beispiele",
         eyebrow: "Praxis",
-        title: "So sieht die Wahl im Alltag aus",
+        title: "Beispiele für beide Modi",
         bullets: [
           "Makerspace: M4-Schrauben als Mengenbestand; Akkuschrauber mit Inventaretikett als serialisierte Einheiten.",
           "Familie: Umzugskartons als einzelne Inventareinträge oder Menge; Fahrräder mit Rahmennummer serialisiert.",
@@ -225,19 +245,19 @@ export const articles: BlogArticle[] = [
           "Sammlung: Standardhüllen als Mengenbestand; jedes Werk mit Provenienz und individuellem Zustand serialisiert.",
         ],
         note: {
-          title: "Eine Mischform ist normal",
-          body: "Ein Workspace muss sich nicht für ein einziges Modell entscheiden. Open Inventory speichert den Tracking-Modus pro Inventareintrag – genau dort, wo die fachliche Entscheidung hingehört.",
+          title: "Beide Modi können parallel laufen",
+          body: "`trackingMode` wird pro Inventareintrag gespeichert. Ein Workspace kann Verbrauchsmaterial als Bulk und Geräte serialisiert führen.",
           tone: "brand",
         },
       },
       {
         id: "wechsel",
         eyebrow: "Grenzen",
-        title: "Ein späterer Wechsel ist möglich, aber nicht kostenlos",
+        title: "Was beim Moduswechsel geprüft wird",
         paragraphs: [
-          "Wer von Mengenbestand zu serialisiert wechselt, muss die vorhandene Zahl in konkrete Einheiten mit eigenen Codes übersetzen. Der umgekehrte Weg entfernt die Steuerelemente für einzelne Einheiten. Installierte serialisierte Komponenten müssen zunächst aus ihren Baugruppen entfernt werden, bevor eine Rückkehr zum Mengenbestand möglich ist.",
-          "Plane deshalb vor einem großen CSV-Import oder Etikettendruck eine kleine Probe mit realen Abläufen: Wareneingang, Entnahme, Transfer, Ausleihe, Rückgabe und Inventur. Nicht die schönste Datenstruktur gewinnt, sondern diejenige, die dein Team im Alltag korrekt pflegt.",
-          "Open Inventory bleibt dabei transparent: Das Projekt ist Open Source unter MIT-Lizenz, kann selbst gehostet werden und dokumentiert sein Bestandsmodell offen im Repository und über die OpenAPI-Schnittstelle.",
+          "Beim Wechsel von Bulk zu serialisiert erzeugt Open Inventory eine Einheit pro vorhandener Menge. Dafür müssen Variantenbestände auf null stehen, aktive Zuweisungen oder Reservierungen beendet sein und Bulk-Bestand am Ort „Unassigned“ liegen. Pro Konvertierung gilt außerdem ein Limit von 5.000 Einheiten.",
+          "Der Rückweg zu Bulk ist blockiert, solange identifizierte Einheiten existieren. Der Modus ist deshalb keine reine Darstellungsoption, sondern ändert erlaubte Buchungen und die gespeicherten Datensätze.",
+          "Teste vor einem großen Import Wareneingang, Entnahme, Transfer, Ausleihe, Rückgabe und Inventur mit wenigen echten Objekten. Die Regeln stehen offen in `lib/stock.ts`, im Drizzle-Schema und in der OpenAPI-Spezifikation des MIT-lizenzierten Repositories.",
         ],
       },
     ],
@@ -268,68 +288,75 @@ export const articles: BlogArticle[] = [
   {
     slug: "qr-etiketten-im-makerspace",
     category: "Makerspace",
-    title: "QR-Etiketten im Makerspace: vom Regal direkt zum Datensatz",
+    title: "QR-Etiketten im Makerspace: Link, Layout und Scan-Workflow",
     shortTitle: "QR-Etiketten im Makerspace",
     excerpt:
-      "Ein gut geplantes Etikett verbindet Werkzeug, Standort und digitalen Verlauf. So bleibt es auch mit vielen Händen verständlich.",
+      "Das Ressourcenetikett enthält einen kompakten Link unter /r/{code}. Layout, Material und Scan-Workflow entscheiden, ob es in der Werkstatt funktioniert.",
     description:
-      "Praxisleitfaden für robuste QR-Etiketten, Scan-Abläufe und Bestandsorganisation in Makerspaces mit Open Inventory.",
+      "Technischer Überblick über kompakte Ressourcenlinks, Etikettenlayout, Druck und transaktionale Scan-Workflows.",
     publishedAt: "2026-08-07",
     publishedLabel: "7. August 2026",
     readingTime: "9 Min. Lesezeit",
     accent: "from-[#f09b32] to-[#f7c84d]",
     accentSoft: "bg-warning-soft text-warning",
-    heroLabel: "Scannen, verstehen, handeln",
+    cover: {
+      src: "/marketing/blog/qr-labels-makerspace.webp",
+      alt: "Zwei Hände kleben ein QR-Etikett auf einen stark benutzten Werkzeugkoffer.",
+      width: 1536,
+      height: 1024,
+      caption:
+        "Illustratives Bild zum Etiketten-Workflow. Mit ImageGen erstellt; der abgebildete QR-Code ist kein Open-Inventory-Code.",
+    },
     takeaways: [
-      "Etiketten nach Umgebung und Scanabstand gestalten",
-      "QR-Ziel und betriebliche Aktion bewusst trennen",
-      "Drucken, kleben und Rückgabe als einen Workflow testen",
+      "Ressourcenlinks verwenden kurze Codes unter `/r/{code}`",
+      "Etikett und ausführender Scan-Workflow sind getrennte Konzepte",
+      "Druckmaß, Kontrast, Material und Scanabstand gehören in den Test",
     ],
     sections: [
       {
         id: "mehr-als-code",
         eyebrow: "Vor dem Druck",
-        title: "Ein Etikett ist eine kleine Benutzeroberfläche",
+        title: "Was im Ressourcen-QR steckt",
         paragraphs: [
-          "Im Makerspace wechseln Werkzeuge, Projekte und Menschen häufig. Ein QR-Code allein löst das Organisationsproblem nicht. Das Etikett muss auch ohne Smartphone verständlich bleiben: Name, kurze Kennung und Standort helfen beim Einsortieren; der Code öffnet die aktuelle digitale Information.",
-          "Open Inventory erzeugt für Inventareinträge kompakte Links. Angemeldete Personen gelangen nach dem Scan direkt zum Gegenstand; ohne Sitzung führt der Zugriff über die Anmeldung und anschließend zurück zum Ziel. Die vorhandene Zugriffskontrolle wird durch das gedruckte Etikett nicht umgangen.",
-          "Im visuellen Etikettendesigner lassen sich QR-Code, Titelbild, Name, SKU oder Ressourcenkennung, Code 128, URL und Standort platzieren. Voreinstellungen für gängige Brother-Endlosrollen und großformatige Medien geben einen Startpunkt, den du an Drucker und Material anpassen kannst.",
+          "`lib/resource-short-link.ts` erzeugt aus der Resource-UUID einen kurzen Code. Das Etikett kodiert dann eine URL unter `/r/{code}`. Die Route löst den Code serverseitig wieder in die UUID auf und leitet zum Datensatz weiter.",
+          "Der Kurzlink umgeht keine Berechtigungen. Ohne gültige Sitzung landet der Browser zuerst bei der Anmeldung und wird danach zum Inventareintrag zurückgeführt. Name, Kennung und Standort sollten trotzdem als lesbarer Text auf dem Etikett stehen.",
+          "Der Etikettendesigner kann QR-Code, Bild, Name, Identifier, Code 128, URL und Standort platzieren. Die Maße werden in Millimetern gespeichert. Presets sind nur Startwerte; Browser, Druckertreiber und reales Medium bleiben Teil der Ausgabe.",
         ],
       },
       {
         id: "workflow",
         eyebrow: "Werkstatt-Workflow",
-        title: "Von der Bestandsaufnahme bis zum ersten Scan",
+        title: "Pilot mit echten Werkzeugen",
         steps: [
           {
-            title: "Bereiche und Verantwortlichkeit festlegen",
-            body: "Definiere Räume, Schränke und Regale als verständliche Standorte. Entscheide, wer Datensätze ändern, Etiketten verwalten und Bestand buchen darf.",
+            title: "Standorte und Rechte festlegen",
+            body: "Lege Räume, Schränke und Regale als Standorte an. Prüfe getrennt, wer Datensätze ändern, Etiketten verwalten und Bestand buchen darf.",
           },
           {
             title: "Pilotgruppe inventarisieren",
             body: "Starte mit einer überschaubaren Gruppe, etwa Handmaschinen. Wähle serialisierte Einheiten für individuell verfolgte Geräte und Mengenbestand für austauschbares Verbrauchsmaterial.",
           },
           {
-            title: "Ein reduziertes Layout bauen",
+            title: "Layout in Millimetern bauen",
             body: "Drucke Name, kurze Kennung, Standort und einen ausreichend großen QR-Code. Vermeide kleine Schmuckelemente, die Lesbarkeit und Haltbarkeit nicht verbessern.",
           },
           {
-            title: "Unter echten Bedingungen testen",
+            title: "Druck und Scan testen",
             body: "Scanne aus typischem Abstand, mit Werkstattlicht und einem nicht frisch gereinigten Etikett. Prüfe außerdem Anmeldung, mobile Ansicht und Rückweg zum Regal.",
           },
           {
-            title: "Erst danach ausrollen",
-            body: "Passe Vorlage und Befestigung nach dem Pilot an. Nutze anschließend dieselbe gespeicherte Einrichtung für konsistente Etiketten.",
+            title: "Setup versionieren und wiederverwenden",
+            body: "Passe Vorlage und Befestigung nach dem Pilot an. Gespeicherte Setups haben eine Revision und schützen parallele Änderungen vor stillem Überschreiben.",
           },
         ],
       },
       {
         id: "scan-workflows",
         eyebrow: "Zwei Arten von Scan",
-        title: "Datensatz öffnen oder einen Prozess ausführen",
+        title: "Ressourcenlink und Scan-Ausführung sind getrennt",
         paragraphs: [
-          "Das Ressourcenetikett öffnet einen vorhandenen Inventareintrag. Daneben können konfigurierbare QR-Scan-Workflows fremde oder produktspezifische Codes auswerten und eine serialisierte Einheit nach einer Vorschau aktualisieren. Ein Workflow kann den vollständigen Wert verwenden, ein Präfix entfernen oder einen URL-Parameter auslesen.",
-          "Diese Prozess-Scans sind bewusst überprüfbar: Der Nutzer sieht Ziel und Änderungen vor der Bestätigung. Ausführung, Bestandsbewegung und Audit-Eintrag werden zusammen behandelt; ein veralteter Vorschauzustand muss neu geprüft werden. Für einfache Ausleihe kann dagegen schon das Öffnen des Datensatzes und die dortige Zuweisung der klarere Weg sein.",
+          "Ein Ressourcenetikett öffnet nur einen vorhandenen Datensatz. Konfigurierbare Scan-Workflows sind ein eigener Pfad: Sie lesen fremde Codes, extrahieren den relevanten Wert und können eine serialisierte Einheit nach einer Vorschau ändern.",
+          "Vor der Mutation zeigt der Server Ziel und Diff. Die Ausführung läuft mit Idempotency-Key in einer Transaktion zusammen mit Bestandsbewegung und Audit-Eintrag. Ist die Vorschau veraltet, muss sie neu geladen werden. Für einfache Ausleihe kann das Öffnen des Datensatzes trotzdem der kürzere Weg sein.",
         ],
         bullets: [
           "Der visuelle Browser-Scanner benötigt HTTPS oder localhost und eine Kamerafreigabe.",
@@ -341,11 +368,11 @@ export const articles: BlogArticle[] = [
       {
         id: "material",
         eyebrow: "Physische Realität",
-        title: "Kleber, Oberfläche und Drucker gehören zum System",
+        title: "Drucker und Material sind Teil des Systems",
         paragraphs: [
           "Staub, Öl, Abrieb, Rundungen und Metallflächen entscheiden über die Lebensdauer eines Etiketts. Reinige die Fläche, wähle ein für den Untergrund geeignetes Material und platziere den Code dort, wo er beim normalen Gebrauch nicht übergriffen wird. Bei kleinen, heißen oder stark beanspruchten Werkzeugen kann ein Anhänger besser sein als ein Aufkleber.",
           "Der Browser nutzt beim Drucken den Systemdialog. Ein Netzwerkdrucker muss deshalb im Betriebssystem eingerichtet, die richtige Mediengröße gewählt und die Seitenskalierung deaktiviert sein. Open Inventory kann den Druckinhalt vorbereiten, aber keine mechanischen Druckerprobleme oder ungeeignetes Verbrauchsmaterial ausgleichen.",
-          "Gerade für gemeinschaftliche Werkstätten ist Self-Hosting attraktiv: Open Inventory ist Open Source, MIT-lizenziert und lässt sich auf eigener Infrastruktur betreiben. Der Makerspace kontrolliert Benutzer, Daten und Updates – und kann Verbesserungen zurück ins offene Projekt tragen.",
+          "Open Inventory ist MIT-lizenziert und Open Source. Bei lokaler Speicherung laufen Anwendung, PostgreSQL und Uploads auf der eigenen Infrastruktur. Wer Openinary oder optionale KI-Anbieter konfiguriert, nutzt dagegen zusätzliche externe Datenpfade; diese gehören in die Betriebsdokumentation des Makerspaces.",
         ],
       },
     ],
@@ -376,80 +403,87 @@ export const articles: BlogArticle[] = [
   {
     slug: "warum-inventar-selbst-hosten",
     category: "Open Source",
-    title: "Warum Inventar selbst hosten? Kontrolle mit Verantwortung",
-    shortTitle: "Warum selbst hosten?",
+    title: "Inventar selbst hosten: Komponenten und Betriebsaufgaben",
+    shortTitle: "Self-Hosting im Betrieb",
     excerpt:
-      "Datenhoheit ist mehr als ein Serverstandort. Self-Hosting macht Betrieb, Sicherung und Weiterentwicklung zur bewussten Entscheidung.",
+      "Next.js, PostgreSQL und Upload-Speicher lassen sich selbst betreiben. Dafür müssen Backups, TLS, Updates und externe Datenpfade sauber konfiguriert werden.",
     description:
-      "Was Self-Hosting und MIT-lizenziertes Open Source bei Inventarsoftware bedeuten – mit Vorteilen, Voraussetzungen und Pflichten.",
+      "Technischer Überblick über den selbst gehosteten Open-Inventory-Stack, externe Dienste und laufende Betriebsaufgaben.",
     publishedAt: "2026-08-04",
     publishedLabel: "4. August 2026",
     readingTime: "8 Min. Lesezeit",
     accent: "from-[#272936] to-[#665cff]",
     accentSoft: "bg-surface-muted text-foreground",
-    heroLabel: "Deine Daten, dein Betrieb, nachvollziehbarer Code",
+    cover: {
+      src: "/marketing/blog/self-hosting-homelab.webp",
+      alt: "Ein kleiner Homelab-Aufbau mit Mini-PC, NAS, Switch und sichtbaren Netzwerkkabeln.",
+      width: 1536,
+      height: 1024,
+      caption:
+        "Illustratives Bild eines kleinen Homelabs. Mit ImageGen erstellt; kein Foto einer realen Open-Inventory-Installation.",
+    },
     takeaways: [
-      "Anwendung und Datenbank auf eigener Infrastruktur betreiben",
-      "MIT-lizenzierten Quellcode prüfen, verändern und integrieren",
-      "Backups, Updates und sichere Erreichbarkeit bewusst übernehmen",
+      "Anwendung und PostgreSQL laufen im Docker-Compose-Stack",
+      "Uploads können lokal oder über Openinary gespeichert werden",
+      "Backup, Restore-Test, TLS, Monitoring und Updates bleiben eigene Aufgaben",
     ],
     sections: [
       {
         id: "was-self-hosting-heisst",
         eyebrow: "Begriffe klären",
-        title: "Self-hosted heißt nicht automatisch sorgenfrei",
+        title: "Welche Komponenten selbst laufen",
         paragraphs: [
-          "Beim Self-Hosting betreibst du Open Inventory auf Infrastruktur, die du auswählst und administrierst – beispielsweise auf einem eigenen Server oder bei einem Hosting-Anbieter deines Vertrauens. Anwendung, PostgreSQL-Datenbank und Upload-Speicher bleiben unter deiner betrieblichen Kontrolle.",
-          "Das ist besonders relevant, wenn Fotos, Anschaffungswerte, Standorte, Seriennummern und Zuweisungen interne Abläufe abbilden. Du legst fest, wer den Server erreicht, wann aktualisiert wird, wo Sicherungen liegen und wie lange Daten aufbewahrt werden.",
-          "Gleichzeitig übernimmt kein externer SaaS-Betreiber automatisch Wartung und Wiederherstellung. Self-Hosting tauscht Abhängigkeit gegen Gestaltungsspielraum – und gegen konkrete Verantwortung.",
+          "Der eingecheckte Compose-Stack startet PostgreSQL, führt Migrationen aus und startet die Next.js-Anwendung. Persistente Volumes halten Datenbank und lokale Uploads außerhalb des Container-Dateisystems.",
+          "Der Upload-Pfad ist konfigurierbar. Mit lokalem Storage bleiben Medien auf dem eigenen Volume. Mit Openinary werden Dateien an dessen Upload-API gesendet. Self-Hosting der Anwendung bedeutet also nicht automatisch, dass jeder Blob lokal bleibt.",
+          "Fotos, Werte, Standorte und Zuweisungen sind Betriebsdaten. Du musst festlegen, wer den Host erreicht, wie TLS terminiert wird, wo Backups liegen und wie Restore-Tests dokumentiert werden.",
         ],
       },
       {
         id: "open-source",
         eyebrow: "Open Source unter MIT",
-        title: "Transparenz endet nicht an der Benutzeroberfläche",
+        title: "MIT-Lizenz, Quellcode und API",
         paragraphs: [
-          "Open Inventory ist Open Source und unter der permissiven MIT-Lizenz veröffentlicht. Du kannst den Quellcode lesen, für eigene Zwecke verändern, interne Integrationen bauen und Änderungen weitergeben – unter Beachtung der kurzen Lizenzbedingungen.",
-          "Offener Code ist kein automatisches Sicherheitszertifikat. Er schafft aber die Möglichkeit, Datenflüsse und Berechtigungslogik selbst oder durch Dritte zu prüfen. Fehler und Verbesserungsvorschläge können über GitHub nachvollziehbar diskutiert werden, statt in einer geschlossenen Produkt-Roadmap zu verschwinden.",
-          "Die dokumentierte REST- und OpenAPI-Schnittstelle reduziert außerdem Lock-in: Inventardaten können mit vorhandenen Prozessen verbunden und vollständig als CSV ausgetauscht werden. Open Source ist hier nicht nur ein Lizenzhinweis, sondern eine praktische Integrationsstrategie.",
+          "Open Inventory steht unter der MIT-Lizenz. Server, Web-Client, Datenbankschema und iOS-App liegen im selben offenen Repository und können geprüft, verändert und intern verteilt werden, solange die Lizenzbedingungen eingehalten werden.",
+          "Offener Code ist kein Sicherheitsaudit. Er macht aber Berechtigungsprüfungen, Datenflüsse und Migrationen nachvollziehbar. Issues und Pull Requests sind öffentlich und technische Änderungen müssen nicht aus einer Produktbeschreibung abgeleitet werden.",
+          "Die REST-Endpunkte sind in `public/openapi.yaml` dokumentiert. CSV deckt Kernfelder des Inventars ab, ist aber kein vollständiges Backup aller Medien, Nutzer und Workspace-Daten. Für Wiederherstellung brauchst du Datenbank und Upload-Speicher.",
         ],
       },
       {
         id: "start",
         eyebrow: "Praktischer Start",
-        title: "Vom Repository zum eigenen Workspace",
+        title: "Lokaler Start mit Docker Compose",
         steps: [
           {
-            title: "Voraussetzungen schaffen",
-            body: "Plane einen aktuellen Docker-Host, persistenten Speicher, eine erreichbare Domain und HTTPS. Für produktive Nutzung gehören auch Monitoring und ein Backup-Ziel dazu.",
+            title: "Host und persistente Volumes vorbereiten",
+            body: "Du brauchst Docker, ausreichend Speicher, eine Domain oder interne Adresse und ein Backup-Ziel für PostgreSQL und Uploads.",
           },
           {
-            title: "Repository und Umgebung vorbereiten",
-            body: "Klone das MIT-lizenzierte Projekt, kopiere die Beispielumgebung und erzeuge eigene Geheimnisse sowie ein Passwort-Hash gemäß Dokumentation.",
+            title: "Repository und `.env` vorbereiten",
+            body: "Klone das MIT-lizenzierte Repository, kopiere `.env.example` und setze eigene Secrets, Hostnamen und Storage-Konfiguration.",
           },
           {
-            title: "Compose-Stack starten",
+            title: "Migrationen und Anwendung starten",
             body: "Der eingecheckte Stack startet PostgreSQL, führt die gebündelten Migrationen aus und startet anschließend die Next.js-Anwendung mit persistenten Volumes.",
           },
           {
-            title: "Zugriff begrenzen",
-            body: "Lege Rollen nach dem Prinzip minimaler Rechte an. Veröffentliche die Anwendung nicht ungeschützt und teste Anmeldung sowie Wiederherstellung, bevor echte Daten importiert werden.",
+            title: "TLS und Rollen testen",
+            body: "Veröffentliche die Anwendung nicht ungeschützt. Teste Anmeldung, Rollen und einen Restore, bevor echte Daten importiert werden.",
           },
           {
-            title: "Klein beginnen",
-            body: "Inventarisiere einen begrenzten Bereich, überprüfe Datenmodell und Alltagstauglichkeit und erweitere erst dann auf weitere Teams oder Standorte.",
+            title: "Mit Testdaten prüfen",
+            body: "Prüfe Import, Bilder, Bestandsbewegungen und Etikettendruck zuerst in einem kleinen Workspace.",
           },
         ],
       },
       {
         id: "verantwortung",
         eyebrow: "Betrieb",
-        title: "Vier Dinge, die du nicht delegieren kannst",
+        title: "Backups, Updates, TLS und Monitoring",
         bullets: [
-          "Backups: Datenbank und Uploads regelmäßig sichern und die Rücksicherung tatsächlich testen.",
-          "Updates: Release-Änderungen lesen, Migrationen einplanen und vor produktiver Übernahme prüfen.",
-          "Sicherheit: HTTPS, starke Geheimnisse, restriktive Rollen und begrenzte Netzwerkfreigaben betreiben.",
-          "Kapazität: Speicher, Datenbank und Bildverarbeitung beobachten, bevor ein Engpass die Aufnahme blockiert.",
+          "Backups: PostgreSQL und Uploads gemeinsam sichern; einen Restore regelmäßig auf einem getrennten Ziel testen.",
+          "Updates: Diff und Migrationen lesen; neue Images zuerst gegen eine Kopie der Datenbank starten.",
+          "TLS und Secrets: öffentliche Hosts nur über HTTPS betreiben; Secrets nicht in Compose-Dateien oder Images einchecken.",
+          "Monitoring: freien Speicher, Datenbank, HTTP-Fehler und externe Bildverarbeitung beobachten.",
         ],
         note: {
           title: "Hinweis zu KI-Funktionen",
@@ -460,10 +494,10 @@ export const articles: BlogArticle[] = [
       {
         id: "fuer-wen",
         eyebrow: "Gute Passung",
-        title: "Wann sich der eigene Betrieb lohnt",
+        title: "Wann Self-Hosting sinnvoll ist",
         paragraphs: [
-          "Self-Hosting passt besonders zu Teams, die bereits Anwendungen betreiben, Inventardaten in interne Prozesse integrieren oder Datenflüsse selbst kontrollieren wollen. Ein Startup kann die API anbinden, ein Verein einen kleinen Server gemeinsam verwalten und eine Familie das System im Heimnetz betreiben.",
-          "Wer keinen verlässlichen Betrieb, keine Backups und keine Updates organisieren kann, sollte diese Lücke zuerst lösen. Die Freiheit von Open Source besteht auch darin, die eigenen Voraussetzungen ehrlich zu bewerten.",
+          "Self-Hosting passt, wenn bereits Docker-Anwendungen betrieben werden, interne API-Integrationen nötig sind oder Datenflüsse selbst dokumentiert werden müssen. Ein kleiner Heimserver reicht für einen Test; produktiver Betrieb braucht trotzdem Backups und Updates.",
+          "Wenn niemand Restore, TLS und Aktualisierungen übernimmt, ist der eigene Betrieb keine technische Abkürzung. Die MIT-Lizenz erlaubt Anpassungen, übernimmt aber keinen Betrieb für dich.",
         ],
       },
     ],
@@ -494,69 +528,76 @@ export const articles: BlogArticle[] = [
   {
     slug: "iphone-lidar-inventarisierung",
     category: "iOS-App",
-    title: "Mit iPhone und LiDAR Räume erfassen – und Inventar darin verorten",
-    shortTitle: "iPhone, LiDAR und Räume",
+    title: "iOS-App: Kamera, Outbox, RoomPlan und LiDAR",
+    shortTitle: "iOS, RoomPlan und LiDAR",
     excerpt:
-      "Die native iOS-App verbindet schnelle Kameraerfassung mit RoomPlan. Was der räumliche Workflow kann – und was nicht.",
+      "Die SwiftUI-App nutzt AVFoundation für Fotos und Codes, eine persistente Outbox für Uploads und RoomPlan für parametrische Raumgeometrie.",
     description:
-      "Open Inventory auf dem iPhone: Kamera, QR-Scanner, ausfallsichere Uploads und räumliche Inventarisierung mit LiDAR und RoomPlan.",
+      "Technischer Überblick über AVFoundation, persistente Upload-Stufen, RoomPlan und ARKit in der Open-Source-iOS-App.",
     publishedAt: "2026-08-01",
     publishedLabel: "1. August 2026",
     readingTime: "9 Min. Lesezeit",
     accent: "from-[#409cff] to-[#8ff0cc]",
     accentSoft: "bg-brand-soft text-brand",
-    heroLabel: "Vom Kamerabild zum Platz im Raum",
+    cover: {
+      src: "/marketing/blog/iphone-lidar-room.webp",
+      alt: "Eine Person hält ein Smartphone vor sich und erfasst damit einen Werkstattraum.",
+      width: 1536,
+      height: 1024,
+      caption:
+        "Illustratives Bild zur Raumerfassung. Mit ImageGen erstellt; die Displaydarstellung ist keine echte App-Oberfläche.",
+    },
     takeaways: [
-      "Native Kamera und Codescanner für den mobilen Rundgang",
-      "RoomPlan-Strukturen und räumlich positionierte Gegenstände",
-      "LiDAR-Funktionen erfordern kompatible Hardware und reale Gerätetests",
+      "AVFoundation liefert Fotos sowie QR- und Barcode-Erkennung",
+      "Die Outbox persistiert Fotos, IDs und bestätigte API-Stufen",
+      "RoomPlan liefert parametrische Geometrie, keinen fotorealistischen Scan",
     ],
     sections: [
       {
         id: "native-app",
         eyebrow: "Mehr als eine Webansicht",
-        title: "Eine native Begleit-App im Open-Source-Repository",
+        title: "Native Komponenten und unterstützte Codes",
         paragraphs: [
-          "Zum MIT-lizenzierten Open-Inventory-Projekt gehört eine native SwiftUI-App. Sie nutzt AVFoundation für Fotos sowie QR- und Barcode-Erkennung und spricht direkt mit deinem selbst gehosteten Server. Unterstützt werden unter anderem QR, EAN-8/13, UPC-E, Code 128, Data Matrix, PDF417 und Aztec.",
-          "Bekannte Ressourcen können über UUID, Inventory-Link, exakte SKU oder Seriennummer gefunden werden. Ein unbekannter Code lässt sich als Ausgangspunkt für einen neuen Eintrag verwenden. Die eigentliche Erfassung folgt derselben Kette wie im Browser: Eintrag anlegen, Medien hochladen, optional analysieren und auf Wunsch ein Titelbild erzeugen.",
-          "Der Anmeldetoken liegt im iOS-Schlüsselbund. Vorbereitete Fotos und Auftragsstatus werden in einer dauerhaften, an den Server gebundenen Warteschlange gesichert. Wiederholte Netzwerkversuche sollen dadurch weder Einträge noch KI-Arbeit duplizieren.",
+          "Die MIT-lizenzierte SwiftUI-App liegt unter `ios/Inventory`. AVFoundation liefert Kamerabilder und Metadaten für QR, EAN-8/13, UPC-E, Code 128, Data Matrix, PDF417 und Aztec.",
+          "Die App löst UUID, Open-Inventory-Link, exakte SKU oder Seriennummer gegen den Server auf. Ein unbekannter Code kann als Identifier für einen neuen Eintrag übernommen werden. Danach folgen dieselben REST-Schritte wie im Web: Resource anlegen, Medien hochladen, optional analysieren und optional ein Cover erzeugen.",
+          "Der Bearer-Token liegt im iOS-Schlüsselbund. Fotos, Resource-ID, Media-IDs und Stage-Status werden servergebunden unter Application Support gespeichert. Wiederholungen verwenden pro Stufe stabile Idempotency-Keys.",
         ],
       },
       {
         id: "schneller-rundgang",
         eyebrow: "Inventarisieren in Sekunden",
-        title: "Kamera auf, Objekt erfassen, weitergehen",
+        title: "Persistente Outbox und stufenweise API-Aufrufe",
         steps: [
           {
-            title: "Server verbinden",
-            body: "Trage die Root-URL deines erreichbaren Open-Inventory-Servers ein und melde dich mit einem Workspace-Konto an.",
+            title: "Origin und Token setzen",
+            body: "Die Root-URL bindet Queue-Einträge an einen Server. Öffentliche Hosts müssen HTTPS verwenden, bevor ein Bearer-Token gesendet wird.",
           },
           {
-            title: "Code scannen oder neu aufnehmen",
+            title: "Code auflösen oder Resource vorbereiten",
             body: "Öffne einen vorhandenen Gegenstand über seinen Code oder erstelle einen neuen Eintrag mit bis zu zwölf Fotos.",
           },
           {
-            title: "Kontext ergänzen",
+            title: "Request-Daten ergänzen",
             body: "Wähle Standort, optional GPS und – falls vorbereitet – den räumlichen Modus. Bei Bedarf kann ein Bestand direkt empfangen oder nach Bestätigung ausgegeben werden.",
           },
           {
-            title: "Auftrag der Outbox übergeben",
-            body: "Die App arbeitet Upload und optionale KI-Schritte stufenweise ab. Du kannst mit der nächsten Aufnahme fortfahren, statt neben dem Objekt auf jede Antwort zu warten.",
+            title: "Job in Application Support persistieren",
+            body: "Die App kopiert Fotos in die Outbox und speichert die aktuelle Stufe. Danach können Upload und optionale KI-Schritte nacheinander laufen.",
           },
           {
-            title: "Ergebnis prüfen",
-            body: "Öffne fertige Einträge, kontrolliere Vorschläge und korrigiere Details. Schnelligkeit entsteht durch den Fluss, nicht durch ungeprüfte Automatik.",
+            title: "Serverzustand prüfen",
+            body: "Nach jeder Stufe speichert die App die zurückgegebenen IDs. Bei einem Neustart setzt sie beim letzten bestätigten Zustand fort; fachliche Felder müssen trotzdem geprüft werden.",
           },
         ],
       },
       {
         id: "lidar",
         eyebrow: "RoomPlan",
-        title: "Erst den Raum messen, dann Gegenstände darin platzieren",
+        title: "RoomPlan-Geometrie und Objektpositionen",
         paragraphs: [
-          "Auf einem LiDAR-fähigen iPhone kann die App zusammenhängende Räume mit Apple RoomPlan aufnehmen. Wände, Öffnungen, Böden und erkannte Einrichtung werden als gemessene, parametrische Szene gespeichert. Mehrere Räume eines durchgehenden Durchlaufs teilen sich ein Koordinatensystem und können als Struktur im Web betrachtet werden.",
-          "Für einen Gegenstand wählst du anschließend den Raum und richtest das Fadenkreuz auf das Objekt. Die App wartet auf die Relokalisierung im gespeicherten AR-Raum und nutzt zuerst LiDAR-Tiefendaten, alternativ eine Ebenenschätzung. Foto, Raumzuordnung und Position laufen danach durch dieselbe robuste Upload-Pipeline wie eine normale Aufnahme.",
-          "Das Ergebnis ist kein magisches Digital-Twin-Versprechen. RoomPlan liefert ein gemessenes, vereinfachtes Raummodell und keinen fotorealistischen Scan. Automatische Raumerkennung kann an Türen oder bei unklaren Grundrissen Hilfe brauchen; deshalb bleibt eine manuelle Auswahl verfügbar.",
+          "Auf einem LiDAR-fähigen iPhone nimmt RoomPlan Wände, Öffnungen, Böden und erkannte Einrichtungsobjekte als parametrische Szene auf. Räume desselben Durchlaufs teilen sich ein ARKit-Koordinatensystem und können im Web gemeinsam gerendert werden.",
+          "Für ein Inventarobjekt relokalisiert sich die App im gespeicherten AR-Raum. Die Position kommt bevorzugt aus LiDAR-Tiefe, ersatzweise aus einer Ebenenschätzung. Foto, Raum-ID, Transform und Referenzframe laufen danach durch die normale Upload-Queue.",
+          "RoomPlan speichert kein fotorealistisches Mesh. Die Geometrie ist vereinfacht und kann Türen, Spiegel oder unklare Übergänge falsch klassifizieren. Deshalb bleiben manuelle Raumauswahl und reale Gerätetests nötig.",
         ],
         note: {
           title: "Hardware-Voraussetzung",
@@ -567,7 +608,7 @@ export const articles: BlogArticle[] = [
       {
         id: "grenzen",
         eyebrow: "Vor dem Einsatz",
-        title: "Netz, Datenschutz und Umgebung mitdenken",
+        title: "Grenzen von Netz, Hardware und Umgebung",
         bullets: [
           "Der Server muss vom iPhone erreichbar sein; Bearer-Tokens werden für öffentliche Hosts nicht über unverschlüsseltes HTTP gesendet.",
           "Der Simulator eignet sich für Teile von API und Oberfläche, nicht als Abnahme für Kamera, Scanner, LiDAR oder räumliche Genauigkeit.",
@@ -579,10 +620,10 @@ export const articles: BlogArticle[] = [
       {
         id: "offen",
         eyebrow: "Offen weiterbauen",
-        title: "iOS-App und Server entwickeln sich gemeinsam",
+        title: "Codepfade im offenen Repository",
         paragraphs: [
-          "Weil Server, API-Verträge und SwiftUI-App gemeinsam Open Source sind, lässt sich der gesamte mobile Pfad nachvollziehen. Teams können eigene Builds signieren, Anforderungen diskutieren und Integrationen ergänzen, ohne auf eine geschlossene App-Cloud festgelegt zu sein.",
-          "Die MIT-Lizenz gibt dabei viel Freiheit, ersetzt aber weder Apple-Entwicklerwerkzeuge noch einen gepflegten Serverbetrieb. Für Makerspaces, Sammlungen oder Startups mit räumlichem Bedarf ist das eine ehrliche Grundlage: leistungsfähige Bausteine, klar benannte Voraussetzungen und eigener Gestaltungsspielraum.",
+          "Server-Routen, DTOs, `APIClient`, `IntakeQueue`, RoomPlan-Controller und SwiftUI-Oberflächen liegen gemeinsam im Open-Source-Repository. Dadurch lässt sich der mobile Request-Pfad vom Foto bis zum Datenbankeintrag direkt nachvollziehen.",
+          "Die MIT-Lizenz erlaubt eigene Builds und Änderungen. Für Signierung, Kamera, LiDAR und RoomPlan brauchst du trotzdem Apple-Werkzeuge sowie Tests auf einem physischen Gerät. Der Simulator deckt diese Hardwarepfade nicht ab.",
         ],
       },
     ],
