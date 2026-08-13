@@ -15,7 +15,22 @@ const {
   roomScanMatchesSpatialMetadata,
   roomScanWorldMapChecksumMatches,
   roomScanWriteReceipt,
+  validateBoundedUploadLength,
 } = await import("../lib/room-scan-upload-policy.ts");
+
+test("requires a bounded HTTP framing length before buffering room uploads", () => {
+  assert.deepEqual(validateBoundedUploadLength(null, 100), {
+    valid: false,
+    status: 411,
+    error: "Content-Length is required for this upload.",
+  });
+  assert.equal(validateBoundedUploadLength("12.5", 100).valid, false);
+  assert.equal(validateBoundedUploadLength("101", 100).status, 413);
+  assert.deepEqual(validateBoundedUploadLength("100", 100), {
+    valid: true,
+    bytes: 100,
+  });
+});
 
 test("room scan downloads use fixed non-executable MIME types and attachments", () => {
   assert.equal(

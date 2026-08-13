@@ -16,6 +16,7 @@ import {
 import { getResource } from "@/lib/resources";
 import {
   isUsdzMediaType,
+  validateObjectScanImage,
   validateResourceMediaUpload,
 } from "@/lib/resource-media-contract";
 import {
@@ -28,6 +29,7 @@ import {
   UnsupportedStorageMediaTypeError,
 } from "@/lib/storage";
 import { validateUsdzPackage } from "@/lib/usdz-package";
+import { enqueueWebhookEvent } from "@/lib/webhooks";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -135,6 +137,17 @@ export async function POST(request: Request, context: Context) {
         { status: validation.status },
       );
     }
+  }
+
+  const objectScanImage = validateObjectScanImage(resource.media, files);
+  if (!objectScanImage.valid) {
+    return Response.json(
+      { error: objectScanImage.error },
+      { status: objectScanImage.status },
+    );
+  }
+
+  for (const file of files) {
     if (isUsdzMediaType(file.type)) {
       const packageValidation = validateUsdzPackage(
         new Uint8Array(await file.arrayBuffer()),
@@ -210,9 +223,15 @@ export async function POST(request: Request, context: Context) {
 
       // Serialize position allocation per resource while keeping file I/O outside
       // the transaction, so concurrent batches cannot receive overlapping slots.
-      await transaction.execute(
-        sql`select ${resources.id} from ${resources} where ${resources.id} = ${id} for update`,
-      );
+      const [currentResource] = await transaction
+        .select()
+        .from(resources)
+        .where(eq(resources.id, id))
+        .limit(1)
+        .for("update");
+      if (!currentResource) {
+        throw new Error("Resource disappeared while committing media.");
+      }
       const [{ highest }] = await transaction
         .select({ highest: sql<number>`coalesce(max(${media.position}), -1)::int` })
         .from(media)
@@ -233,6 +252,25 @@ export async function POST(request: Request, context: Context) {
           uploaded.map((item) => ({ batchId, mediaId: item.id })),
         );
       }
+      const allMedia = await transaction
+        .select()
+        .from(media)
+        .where(eq(media.resourceId, id))
+        .orderBy(asc(media.position));
+      await enqueueWebhookEvent(transaction, {
+        type: "inventory.resource.updated",
+        aggregateType: "resource",
+        aggregateId: id,
+        actor: authorization.identity.subject,
+        data: {
+          resource: {
+            ...currentResource,
+            media: allMedia,
+            cover: allMedia.find((item) => item.kind === "image") ?? null,
+          },
+          changedFields: ["media", "cover"],
+        },
+      });
       return { kind: "created", uploaded, batchId };
     });
   } catch (error) {
@@ -319,12 +357,40 @@ export async function PATCH(request: Request, context: Context) {
   const order = body.order as string[];
 
   await db.transaction(async (transaction) => {
+    const [currentResource] = await transaction
+      .select()
+      .from(resources)
+      .where(eq(resources.id, id))
+      .limit(1)
+      .for("update");
+    if (!currentResource) {
+      throw new Error("Resource disappeared while reordering media.");
+    }
     for (const [position, mediaId] of order.entries()) {
       await transaction
         .update(media)
         .set({ position })
         .where(eq(media.id, mediaId as string));
     }
+    const orderedMedia = await transaction
+      .select()
+      .from(media)
+      .where(eq(media.resourceId, id))
+      .orderBy(asc(media.position));
+    await enqueueWebhookEvent(transaction, {
+      type: "inventory.resource.updated",
+      aggregateType: "resource",
+      aggregateId: id,
+      actor: authorization.identity.subject,
+      data: {
+        resource: {
+          ...currentResource,
+          media: orderedMedia,
+          cover: orderedMedia.find((item) => item.kind === "image") ?? null,
+        },
+        changedFields: ["media", "cover"],
+      },
+    });
   });
   return Response.json({ resource: await getResource(id) });
 }

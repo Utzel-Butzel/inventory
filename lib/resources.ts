@@ -1,5 +1,7 @@
 import "server-only";
 
+import { isDeepStrictEqual } from "node:util";
+
 import {
   and,
   asc,
@@ -23,6 +25,7 @@ import {
   purchaseOrderLines,
   resourceCreationRequests,
   resourceRelations,
+  resourceVariants,
   roomScanAssets,
   roomScanKeyframes,
   roomScans,
@@ -36,6 +39,10 @@ import {
   type ResourceRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import {
+  enqueueStockMovementWebhookEvents,
+  enqueueWebhookEvent,
+} from "@/lib/webhooks";
 import { validateCustomFieldValues } from "@/lib/custom-fields";
 import { BOM_WRITE_LOCK_ID } from "@/lib/inventory-locks";
 
@@ -80,14 +87,26 @@ export async function listResources(options: {
 
   if (options.query?.trim()) {
     const pattern = `%${options.query.trim()}%`;
+    const variantMatches = db
+      .select({ resourceId: resourceVariants.resourceId })
+      .from(resourceVariants)
+      .where(
+        or(
+          ilike(resourceVariants.name, pattern),
+          ilike(resourceVariants.sku, pattern),
+          ilike(resourceVariants.barcode, pattern),
+        ),
+      );
     conditions.push(
       or(
         ilike(resources.name, pattern),
         ilike(resources.description, pattern),
         ilike(resources.sku, pattern),
+        ilike(resources.barcode, pattern),
         ilike(resources.location, pattern),
         sql`${resources.tags}::text ILIKE ${pattern}`,
         sql`${resources.customFields}::text ILIKE ${pattern}`,
+        inArray(resources.id, variantMatches),
       ),
     );
   }
@@ -129,6 +148,126 @@ export async function listResources(options: {
   };
 }
 
+export async function countResourcesForRecognition() {
+  const [row] = await db.select({ value: count() }).from(resources);
+  return row?.value ?? 0;
+}
+
+/**
+ * Searches recognition metadata across the complete inventory before applying
+ * a response-size bound. A small recent image-bearing fallback lets visual
+ * reranking still help records with sparse metadata. Image bytes are read only
+ * for the final shortlist in the route.
+ */
+export async function listResourcesForRecognition(
+  searchTerms: readonly string[],
+  limit = 2_000,
+) {
+  const boundedLimit = Math.min(5_000, Math.max(1, Math.trunc(limit)));
+  const patterns = Array.from(
+    new Set(
+      searchTerms
+        .map((term) => term.trim().replace(/[%_]+/gu, " ").trim())
+        .filter((term) => term.length >= 1)
+        .map((term) => term.slice(0, 160)),
+    ),
+  )
+    .slice(0, 16)
+    .map((term) => `%${term}%`);
+  const resourceMatches = patterns.flatMap((pattern) => [
+    ilike(resources.name, pattern),
+    ilike(resources.description, pattern),
+    ilike(resources.type, pattern),
+    ilike(resources.sku, pattern),
+    ilike(resources.barcode, pattern),
+    ilike(resources.serialNumber, pattern),
+    ilike(resources.location, pattern),
+    sql`${resources.tags}::text ILIKE ${pattern}`,
+    sql`${resources.categories}::text ILIKE ${pattern}`,
+    sql`${resources.customFields}::text ILIKE ${pattern}`,
+  ]);
+  const relevance = sql<number>`(${sql.join(
+    patterns.flatMap((pattern) => [
+      sql`CASE WHEN ${resources.sku} ILIKE ${pattern} OR ${resources.barcode} ILIKE ${pattern} OR ${resources.serialNumber} ILIKE ${pattern} THEN 24 ELSE 0 END`,
+      sql`CASE WHEN ${resources.name} ILIKE ${pattern} THEN 16 ELSE 0 END`,
+      sql`CASE WHEN ${resources.tags}::text ILIKE ${pattern} OR ${resources.categories}::text ILIKE ${pattern} THEN 7 ELSE 0 END`,
+      sql`CASE WHEN ${resources.description} ILIKE ${pattern} OR ${resources.customFields}::text ILIKE ${pattern} THEN 3 ELSE 0 END`,
+    ]),
+    sql` + `,
+  )})`;
+  const matchingMedia = db
+    .select({ resourceId: media.resourceId })
+    .from(media)
+    .where(
+      and(
+        eq(media.kind, "image"),
+        or(...patterns.map((pattern) => ilike(media.altText, pattern))),
+      ),
+    );
+  const recognitionWhere = patterns.length
+    ? or(...resourceMatches, inArray(resources.id, matchingMedia))
+    : sql`false`;
+  const resourcesWithImages = db
+    .select({ resourceId: media.resourceId })
+    .from(media)
+    .where(eq(media.kind, "image"))
+    .groupBy(media.resourceId);
+  const fallbackLimit = Math.min(40, boundedLimit);
+  const [
+    matchingRows,
+    matchingTotalRows,
+    fallbackRows,
+    imageResourceTotalRows,
+    inventoryTotalRows,
+  ] = await Promise.all([
+      db
+        .select()
+        .from(resources)
+        .where(recognitionWhere)
+        .orderBy(desc(relevance), desc(resources.updatedAt))
+        .limit(boundedLimit),
+      db.select({ value: count() }).from(resources).where(recognitionWhere),
+      db
+        .select()
+        .from(resources)
+        .where(inArray(resources.id, resourcesWithImages))
+        .orderBy(desc(resources.updatedAt))
+        .limit(fallbackLimit),
+      db
+        .select({ value: count() })
+        .from(resources)
+        .where(inArray(resources.id, resourcesWithImages)),
+      db.select({ value: count() }).from(resources),
+    ]);
+  const fallbackIds = new Set(fallbackRows.map((row) => row.id));
+  const rows = Array.from(
+    new Map(
+      [...matchingRows, ...fallbackRows].map((row) => [row.id, row] as const),
+    ).values(),
+  ).slice(0, boundedLimit);
+  const mediaRows = rows.length
+    ? await db
+        .select()
+        .from(media)
+        .where(
+          and(
+            inArray(media.resourceId, rows.map((row) => row.id)),
+            eq(media.kind, "image"),
+          ),
+        )
+        .orderBy(asc(media.position))
+    : [];
+  return {
+    resources: attachMedia(rows, mediaRows),
+    visualFallbackResourceIds: fallbackIds,
+    matchingTotal: matchingTotalRows[0]?.value ?? 0,
+    inventoryTotal: inventoryTotalRows[0]?.value ?? 0,
+    truncated:
+      (matchingTotalRows[0]?.value ?? 0) > matchingRows.length ||
+      (imageResourceTotalRows[0]?.value ?? 0) > fallbackRows.length,
+  };
+}
+
 export async function getResource(id: string) {
   const [row] = await db
     .select()
@@ -145,8 +284,18 @@ export async function getResource(id: string) {
   return attachMedia([row], mediaRows)[0];
 }
 
-export async function createResource(values: NewResource) {
-  const [created] = await db.insert(resources).values(values).returning();
+export async function createResource(values: NewResource, actor?: string | null) {
+  const created = await db.transaction(async (transaction) => {
+    const [row] = await transaction.insert(resources).values(values).returning();
+    await enqueueWebhookEvent(transaction, {
+      type: "inventory.resource.created",
+      aggregateType: "resource",
+      aggregateId: row.id,
+      actor: actor ?? values.createdBy ?? null,
+      data: { resource: { ...row, media: [], cover: null } },
+    });
+    return row;
+  });
   return { ...created, media: [], cover: null } satisfies ResourceWithMedia;
 }
 
@@ -190,6 +339,7 @@ export async function createResourceIdempotently(options: {
   values: NewResource;
   idempotencyKey: string;
   requestHash: string;
+  actor?: string | null;
 }) {
   const replay = () => replayResourceCreation(options);
 
@@ -215,6 +365,13 @@ export async function createResourceIdempotently(options: {
         resourceId: created.id,
         response: snapshot,
       });
+      await enqueueWebhookEvent(transaction, {
+        type: "inventory.resource.created",
+        aggregateType: "resource",
+        aggregateId: created.id,
+        actor: options.actor ?? options.values.createdBy ?? null,
+        data: { resource: envelope.resource },
+      });
       return envelope;
     });
     return { response, replayed: false } as const;
@@ -230,12 +387,39 @@ export async function createResourceIdempotently(options: {
 export async function updateResource(
   id: string,
   values: Partial<NewResource>,
+  actor?: string | null,
 ) {
-  const [updated] = await db
-    .update(resources)
-    .set({ ...values, updatedAt: new Date() })
-    .where(eq(resources.id, id))
-    .returning();
+  const updated = await db.transaction(async (transaction) => {
+    const [current] = await transaction
+      .select()
+      .from(resources)
+      .where(eq(resources.id, id))
+      .limit(1)
+      .for("update");
+    if (!current) return null;
+    const [saved] = await transaction
+      .update(resources)
+      .set({ ...values, updatedAt: new Date() })
+      .where(eq(resources.id, id))
+      .returning();
+    if (!saved) return null;
+    const changedFields = Object.keys(values).filter(
+      (key) =>
+        key !== "updatedAt" &&
+        !isDeepStrictEqual(
+          current[key as keyof ResourceRecord],
+          saved[key as keyof ResourceRecord],
+        ),
+    );
+    await enqueueWebhookEvent(transaction, {
+      type: "inventory.resource.updated",
+      aggregateType: "resource",
+      aggregateId: saved.id,
+      actor: actor ?? null,
+      data: { resource: saved, changedFields },
+    });
+    return saved;
+  });
   if (!updated) return null;
   return getResource(updated.id);
 }
@@ -249,6 +433,7 @@ export async function updateResourceWithCustomFieldValidation(options: {
     current: ResourceRecord,
     proposed: ResourceRecord,
   ) => boolean | Promise<boolean>;
+  actor?: string | null;
 }) {
   const updated = await db.transaction(async (transaction) => {
     const [current] = await transaction
@@ -302,6 +487,23 @@ export async function updateResourceWithCustomFieldValidation(options: {
       .set({ ...values, updatedAt: new Date() })
       .where(eq(resources.id, options.id))
       .returning();
+    if (saved) {
+      const changedFields = Object.keys(values).filter(
+        (key) =>
+          key !== "updatedAt" &&
+          !isDeepStrictEqual(
+            current[key as keyof ResourceRecord],
+            saved[key as keyof ResourceRecord],
+          ),
+      );
+      await enqueueWebhookEvent(transaction, {
+        type: "inventory.resource.updated",
+        aggregateType: "resource",
+        aggregateId: saved.id,
+        actor: options.actor ?? null,
+        data: { resource: saved, changedFields },
+      });
+    }
     return saved ?? null;
   });
 
@@ -316,6 +518,7 @@ export async function updateResourcesBatch(options: {
     current: ResourceRecord,
     proposed: ResourceRecord,
   ) => boolean | Promise<boolean>;
+  actor?: string | null;
 }) {
   const ids = Array.from(new Set(options.ids));
   return db.transaction(async (transaction) => {
@@ -344,14 +547,28 @@ export async function updateResourcesBatch(options: {
       if (options.authorize && !(await options.authorize(row, proposed))) {
         throw new Error("RESOURCE_PERMISSION_DENIED");
       }
-      await transaction
+      const [saved] = await transaction
         .update(resources)
         .set({
           ...options.changes,
           ...(normalizedTags.length ? { tags: nextTags } : {}),
           updatedAt: new Date(),
         })
-        .where(eq(resources.id, row.id));
+        .where(eq(resources.id, row.id))
+        .returning();
+      await enqueueWebhookEvent(transaction, {
+        type: "inventory.resource.updated",
+        aggregateType: "resource",
+        aggregateId: saved.id,
+        actor: options.actor ?? null,
+        data: {
+          resource: saved,
+          changedFields: [
+            ...Object.keys(options.changes),
+            ...(normalizedTags.length ? ["tags"] : []),
+          ],
+        },
+      });
     }
 
     return { updated: rows.length, ids: rows.map((row) => row.id) };
@@ -361,6 +578,7 @@ export async function updateResourcesBatch(options: {
 export async function deleteResource(
   id: string,
   authorize?: (resource: ResourceRecord) => boolean | Promise<boolean>,
+  actor?: string | null,
 ) {
   const resource = await getResource(id);
   if (!resource) return null;
@@ -393,6 +611,13 @@ export async function deleteResource(
         .where(eq(roomScans.roomResourceId, id)),
     ]);
     await transaction.delete(resources).where(eq(resources.id, id));
+    await enqueueWebhookEvent(transaction, {
+      type: "inventory.resource.deleted",
+      aggregateType: "resource",
+      aggregateId: locked.id,
+      actor: actor ?? null,
+      data: { resource },
+    });
     return [...spatialAssets, ...keyframeImages];
   });
   return deleted ? { ...resource, roomScanAssets: deleted } : null;
@@ -575,6 +800,17 @@ export async function mergeResources(
       .limit(1);
     if (spatialScan) {
       throw new Error("Rooms with 3D room scans cannot be merged.");
+    }
+
+    const [variant] = await transaction
+      .select({ id: resourceVariants.id })
+      .from(resourceVariants)
+      .where(inArray(resourceVariants.resourceId, [keepId, duplicateId]))
+      .limit(1);
+    if (variant) {
+      throw new Error(
+        "Items with variants cannot be merged. Remove empty variants or archive the duplicate so variant stock and identifiers remain unambiguous.",
+      );
     }
 
     const [
@@ -909,21 +1145,25 @@ export async function mergeResources(
           })),
         )
         .returning();
-      await transaction.insert(stockMovements).values(
-        createdUnits.map((unit) => ({
-          resourceId: resource.id,
-          unitId: unit.id,
-          delta: 0,
-          quantity: 1,
-          balanceAfter: resource.quantity,
-          type: "serialization-opening",
-          reason: "Bulk stock converted during inventory merge",
-          note: "",
-          location: unit.location,
-          occurredAt: now,
-          createdBy: actor ?? null,
-        })),
-      );
+      const openingMovements = await transaction
+        .insert(stockMovements)
+        .values(
+          createdUnits.map((unit) => ({
+            resourceId: resource.id,
+            unitId: unit.id,
+            delta: 0,
+            quantity: 1,
+            balanceAfter: resource.quantity,
+            type: "serialization-opening",
+            reason: "Bulk stock converted during inventory merge",
+            note: "",
+            location: unit.location,
+            occurredAt: now,
+            createdBy: actor ?? null,
+          })),
+        )
+        .returning();
+      await enqueueStockMovementWebhookEvents(transaction, openingMovements);
     };
 
     if (finalTrackingMode === "serialized") {
@@ -1029,19 +1269,51 @@ export async function mergeResources(
         updatedAt: finalKeep.updatedAt,
       })
       .where(eq(resources.id, keepId));
-    await transaction.insert(stockMovements).values({
-      resourceId: keepId,
-      // The duplicate ledger is repointed above, so its deltas already explain
-      // the transferred quantity. This row is an audit marker, not another receipt.
-      delta: 0,
-      quantity: 0,
-      balanceAfter: combinedQuantity,
-      type: "merge",
-      reason: `Merged stock from ${lockedDuplicate.name}`,
-      note: `Source inventory ID: ${duplicateId}`,
-      location: lockedKeep.location || lockedDuplicate.location,
-      occurredAt: now,
-      createdBy: actor ?? null,
+    const [mergeMovement] = await transaction
+      .insert(stockMovements)
+      .values({
+        resourceId: keepId,
+        // The duplicate ledger is repointed above, so its deltas already explain
+        // the transferred quantity. This row is an audit marker, not another receipt.
+        delta: 0,
+        quantity: 0,
+        balanceAfter: combinedQuantity,
+        type: "merge",
+        reason: `Merged stock from ${lockedDuplicate.name}`,
+        note: `Source inventory ID: ${duplicateId}`,
+        location: lockedKeep.location || lockedDuplicate.location,
+        occurredAt: now,
+        createdBy: actor ?? null,
+      })
+      .returning();
+    await enqueueStockMovementWebhookEvents(transaction, [mergeMovement]);
+    const mergedMedia = [
+      ...keepMedia,
+      ...duplicateMedia.map((item, index) => ({
+        ...item,
+        resourceId: keepId,
+        position: highestPosition + index + 1,
+      })),
+    ].sort((left, right) => left.position - right.position);
+    await enqueueWebhookEvent(transaction, {
+      type: "inventory.resource.merged",
+      aggregateType: "resource",
+      aggregateId: keepId,
+      actor: actor ?? null,
+      data: {
+        keptResource: {
+          ...finalKeep,
+          media: mergedMedia,
+          cover: mergedMedia.find((item) => item.kind === "image") ?? null,
+        },
+        removedResource: {
+          ...lockedDuplicate,
+          media: duplicateMedia,
+          cover: duplicateMedia.find((item) => item.kind === "image") ?? null,
+        },
+        keptResourceId: keepId,
+        removedResourceId: duplicateId,
+      },
     });
     await transaction.delete(resources).where(eq(resources.id, duplicateId));
     return true;

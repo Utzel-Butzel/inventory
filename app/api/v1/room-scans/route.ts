@@ -23,6 +23,7 @@ import {
   roomScanCreationErrorStatus,
   roomScanMatchesReplayIdentity,
   roomScanWriteReceipt,
+  validateBoundedUploadLength,
   type RoomScanAssetFingerprint,
   type RoomScanKeyframeFingerprint,
   type RoomScanReplayRequest,
@@ -108,14 +109,14 @@ export async function POST(request: Request) {
   if (authorization.response) return authorization.response;
 
   const uploadLimit = maxRoomScanUploadBytes();
-  const declaredLength = Number(request.headers.get("content-length"));
-  if (
-    Number.isFinite(declaredLength) &&
-    declaredLength > uploadLimit + 3_000_000
-  ) {
+  const declaredLength = validateBoundedUploadLength(
+    request.headers.get("content-length"),
+    uploadLimit + 3_000_000,
+  );
+  if (!declaredLength.valid) {
     return Response.json(
-      { error: "The complete room scan exceeds the upload size limit." },
-      { status: 413 },
+      { error: declaredLength.error },
+      { status: declaredLength.status },
     );
   }
 

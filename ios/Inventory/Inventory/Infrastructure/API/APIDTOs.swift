@@ -195,15 +195,40 @@ public struct ResourceResponse: Codable, Equatable, Sendable {
 public enum ResourceCodeMatch: String, Codable, CaseIterable, Sendable {
     case id
     case sku
+    case barcode
     case serialNumber
+    case variantSku
+    case variantBarcode
+}
+
+public struct ResourceVariantDTO: Codable, Equatable, Sendable {
+    public let id: UUID
+    public let resourceId: UUID
+    public let name: String
+    public let sku: String?
+    public let barcode: String?
+    public let priceCents: Int?
+    public let currency: String
+    public let quantity: Int
+    public let position: Int
+    public let createdBy: String?
+    public let updatedBy: String?
+    public let createdAt: Date
+    public let updatedAt: Date
 }
 
 public struct ResourceLookupResponse: Codable, Equatable, Sendable {
     public let resource: InventoryResource
+    public let variant: ResourceVariantDTO?
     public let matchedBy: ResourceCodeMatch
 
-    public init(resource: InventoryResource, matchedBy: ResourceCodeMatch) {
+    public init(
+        resource: InventoryResource,
+        variant: ResourceVariantDTO? = nil,
+        matchedBy: ResourceCodeMatch
+    ) {
         self.resource = resource
+        self.variant = variant
         self.matchedBy = matchedBy
     }
 }
@@ -265,6 +290,40 @@ public struct AnalyzeResourceResponse: Codable, Equatable, Sendable {
         self.analysis = analysis
         self.model = model
     }
+}
+
+public struct InventoryRecognitionObservation: Codable, Equatable, Sendable {
+    public let label: String
+    public let category: String
+    public let brand: String?
+    public let model: String?
+    public let color: String?
+    public let material: String?
+    public let visibleText: [String]
+    public let searchTerms: [String]
+    public let confidence: Double
+}
+
+public struct InventoryRecognitionMatch: Codable, Equatable, Identifiable, Sendable {
+    public let resource: InventoryResource
+    public let confidence: Double
+    public let reason: String
+    public let evidence: [String]
+
+    public var id: UUID { resource.id }
+}
+
+public struct InventoryRecognitionCatalog: Codable, Equatable, Sendable {
+    public let considered: Int
+    public let truncated: Bool
+}
+
+public struct InventoryRecognitionResponse: Codable, Equatable, Sendable {
+    public let detected: InventoryRecognitionObservation?
+    public let matches: [InventoryRecognitionMatch]
+    public let isConfident: Bool
+    public let model: String?
+    public let catalog: InventoryRecognitionCatalog
 }
 
 public struct ObjectCountMarker: Codable, Equatable, Sendable {

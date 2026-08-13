@@ -1,6 +1,11 @@
 import { access, constants, mkdir } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  prepareBootstrapCredential,
+  validateBootstrapCredential,
+} from "./bootstrap-credential.mjs";
+
 const value = (name) => process.env[name]?.trim() ?? "";
 const errors = [];
 
@@ -47,9 +52,8 @@ if (!authUrl) {
   }
 }
 
-if (value("SIMPLE_AUTH_PASSWORD") || value("BOOTSTRAP_ADMIN_PASSWORD")) {
-  errors.push("Plaintext login passwords are disabled in the production image; use a bcrypt hash.");
-}
+const bootstrapCredential = validateBootstrapCredential();
+errors.push(...bootstrapCredential.errors);
 
 for (const variableName of [
   "SIMPLE_AUTH_PASSWORD_HASH",
@@ -94,6 +98,12 @@ if (errors.length > 0) {
   console.error("Inventory production configuration is invalid:");
   for (const error of errors) console.error(`- ${error}`);
   process.exit(1);
+}
+
+if (await prepareBootstrapCredential(process.env, bootstrapCredential.password)) {
+  // The cleartext value is accepted only for one-click bootstrap. Convert it
+  // before application modules load, then remove it from the process environment.
+  console.log("Prepared the one-time administrator credential as a bcrypt hash.");
 }
 
 console.log("Applying database migrations...");

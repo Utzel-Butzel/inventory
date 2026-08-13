@@ -1,4 +1,47 @@
 {
+  "variants": {
+    "title": "Variants",
+    "description": "Optional choices with their own SKU, barcode, price and bulk stock.",
+    "allocated": "{{value}} allocated",
+    "unallocated": "{{value}} unallocated",
+    "serializedDisabled": "Variants are disabled for serialized tracking. Identified units continue to use the item-level stock workflow.",
+    "empty": "No variants. The parent item continues to work exactly as before.",
+    "optional": "optional",
+    "currency": "Currency",
+    "namePlaceholder": "e.g. Blue / Large",
+    "openingAllocation": "Opening allocation",
+    "openingAllocationHelp": "From existing unallocated item stock",
+    "stockChange": "Stock change for {{name}}",
+    "stockHelp": "Positive values receive stock; negative values issue stock. Parent and variant totals update atomically.",
+    "addTitle": "Add variant",
+    "editTitle": "Edit {{name}}",
+    "confirmDelete": "Delete variant “{{name}}”?",
+    "fields": {
+      "name": "Name",
+      "sku": "SKU",
+      "barcode": "Barcode",
+      "price": "Price",
+      "stock": "Stock"
+    },
+    "actions": {
+      "stock": "Stock",
+      "edit": "Edit",
+      "delete": "Delete variant",
+      "zeroFirst": "Move stock to zero first",
+      "book": "Book",
+      "cancel": "Cancel",
+      "save": "Save variant",
+      "add": "Add variant"
+    },
+    "errors": {
+      "load": "Unable to load variants.",
+      "save": "Unable to save variant.",
+      "delete": "Unable to delete variant.",
+      "stock": "Unable to change stock.",
+      "invalidForm": "Enter a name and a non-negative whole opening quantity.",
+      "invalidStock": "Enter a non-zero whole stock change."
+    }
+  },
   "actions": {
     "batchCapture": "Batch capture",
     "addItem": "Add item",
@@ -49,6 +92,7 @@
     "item": "Item",
     "status": "Status",
     "sku": "SKU",
+    "barcode": "Barcode",
     "location": "Location",
     "value": "Value"
   },
@@ -173,6 +217,9 @@
     "translationFallback_one": "{{value}} field is still shown in the default language because its translation is missing or stale.",
     "translationFallback_other": "{{value}} fields are still shown in the default language because their translations are missing or stale.",
     "emptyDescription": "No description has been added yet.",
+    "articleImage": "Item image",
+    "noArticleImage": "No item image yet",
+    "addArticleImage": "Add an item image",
     "files_one": "{{value}} file",
     "files_other": "{{value}} files",
     "priority": "{{value}} / 5",
@@ -182,6 +229,7 @@
     "sections": {
       "overview": "Overview",
       "media": "Media",
+      "additionalMedia": "Additional media",
       "notes": "Notes",
       "itemDetails": "Item details",
       "classification": "Classification",

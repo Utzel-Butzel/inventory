@@ -56,6 +56,7 @@ const SAMPLE_RESOURCE: LabelResource = {
   id: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
   name: "Cordless impact driver",
   sku: "TOOL-042",
+  barcode: null,
   location: "Workshop · Shelf B",
   type: "tool",
   quantity: 3,

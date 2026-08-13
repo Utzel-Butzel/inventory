@@ -19,7 +19,12 @@
     "batch": "Batch studio",
     "labels": "Labels",
     "duplicates": "Duplicates",
+    "notifications": "Notifications",
     "settings": "Settings"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "open": "Open notifications ({{count}} unread)"
   },
   "badges": {
     "ai": "AI"
@@ -83,6 +88,14 @@
       "sharing": {
         "label": "Public sharing",
         "description": "Publish inventory with share links"
+      },
+      "notifications": {
+        "label": "Notifications",
+        "description": "Configure quiet alerts and digests"
+      },
+      "webhooks": {
+        "label": "Webhooks",
+        "description": "Send signed events to integrations"
       },
       "api": {
         "label": "API & services",

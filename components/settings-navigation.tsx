@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useT } from "next-i18next/client";
 import {
+  Bell,
   Braces,
   Boxes,
   DatabaseZap,
@@ -12,6 +13,7 @@ import {
   Share2,
   ShieldCheck,
   Users,
+  Webhook,
   type LucideIcon,
 } from "lucide-react";
 
@@ -81,11 +83,24 @@ const navigationGroups: Array<{
         icon: Share2,
         requiredPermission: "sharing.manage",
       },
+      {
+        labelKey: "settings.items.notifications.label",
+        descriptionKey: "settings.items.notifications.description",
+        href: "/settings/notifications",
+        icon: Bell,
+      },
     ],
   },
   {
     labelKey: "settings.groups.developer",
     items: [
+      {
+        labelKey: "settings.items.webhooks.label",
+        descriptionKey: "settings.items.webhooks.description",
+        href: "/settings/webhooks",
+        icon: Webhook,
+        requiredPermission: "webhooks.manage",
+      },
       {
         labelKey: "settings.items.api.label",
         descriptionKey: "settings.items.api.description",

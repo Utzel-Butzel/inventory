@@ -127,6 +127,12 @@ export const spatialPlacementInputSchema = z
   })
   .strict();
 
+export const roomLayoutTransformPatchSchema = z
+  .object({
+    transform: spatialMatrix4Schema.nullable(),
+  })
+  .strict();
+
 export type SpatialVector3 = z.infer<typeof spatialVector3Schema>;
 export type SpatialQuaternion = z.infer<typeof spatialQuaternionSchema>;
 export type SpatialMatrix4 = z.infer<typeof spatialMatrix4Schema>;
@@ -134,6 +140,9 @@ export type RoomSurface = z.infer<typeof roomSurfaceSchema>;
 export type RoomObject = z.infer<typeof roomObjectSchema>;
 export type RoomScene = z.infer<typeof roomSceneSchema>;
 export type SpatialPlacementInput = z.infer<typeof spatialPlacementInputSchema>;
+export type RoomLayoutTransformPatch = z.infer<
+  typeof roomLayoutTransformPatchSchema
+>;
 export type PhotoLocalizationEvidence = z.infer<
   typeof photoLocalizationEvidenceSchema
 >;

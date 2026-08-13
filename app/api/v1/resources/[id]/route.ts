@@ -23,6 +23,10 @@ import {
   TranslationLanguageError,
   localizeResource,
 } from "@/lib/content-translations";
+import {
+  assertResourceIdentifiersAvailable,
+  ResourceIdentifierConflictError,
+} from "@/lib/resource-identifiers";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -123,6 +127,9 @@ export async function PATCH(request: Request, context: Context) {
     if (parsed.data.type !== undefined) {
       await assertActiveInventoryType(parsed.data.type);
     }
+    if (parsed.data.sku !== undefined || parsed.data.barcode !== undefined) {
+      await assertResourceIdentifiersAvailable(parsed.data, id);
+    }
     const validateCustomFields =
       parsed.data.customFields !== undefined ||
       parsed.data.type !== undefined ||
@@ -138,6 +145,7 @@ export async function PATCH(request: Request, context: Context) {
       values,
       validateCustomFields,
       customFieldsProvided: parsed.data.customFields !== undefined,
+      actor: authorization.identity.subject,
       authorize: async (current, proposed) => {
         const canUpdate =
           (await canAccessResource(
@@ -237,6 +245,9 @@ export async function PATCH(request: Request, context: Context) {
         { status: 409 },
       );
     }
+    if (error instanceof ResourceIdentifierConflictError) {
+      return Response.json({ error: error.message }, { status: 409 });
+    }
     const duplicateSku = message.includes("resources_sku_unique");
     return Response.json(
       { error: duplicateSku ? "That SKU is already in use." : message },
@@ -255,12 +266,15 @@ export async function DELETE(request: Request, context: Context) {
   if (authorization.response) return authorization.response;
   let resource;
   try {
-    resource = await deleteResource(id, (current) =>
-      canAccessResource(
-        authorization.identity,
-        "inventory.delete",
-        current,
-      ),
+    resource = await deleteResource(
+      id,
+      (current) =>
+        canAccessResource(
+          authorization.identity,
+          "inventory.delete",
+          current,
+        ),
+      authorization.identity.subject,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "";

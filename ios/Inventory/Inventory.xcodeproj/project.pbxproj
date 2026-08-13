@@ -1,7 +1,8 @@
 // !$*UTF8*$!
 {
 	archiveVersion = 1;
-	classes = {};
+	classes = {
+	};
 	objectVersion = 77;
 	objects = {
 
@@ -21,7 +22,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A1000000000000000000000A /* Exceptions for Inventory */ = {
+		A1000000000000000000000A /* Exceptions for "Inventory" folder in "Inventory" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -34,7 +35,7 @@
 		A10000000000000000000006 /* Inventory */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				A1000000000000000000000A /* Exceptions for Inventory */,
+				A1000000000000000000000A /* Exceptions for "Inventory" folder in "Inventory" target */,
 			);
 			path = Inventory;
 			sourceTree = "<group>";
@@ -50,27 +51,20 @@
 		A10000000000000000000020 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = ();
+			files = (
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A10000000000000000000023 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
-			files = ();
+			files = (
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		A10000000000000000000005 = {
-			isa = PBXGroup;
-			children = (
-				A10000000000000000000006 /* Inventory */,
-				A10000000000000000000007 /* InventoryTests */,
-				A10000000000000000000004 /* Products */,
-			);
-			sourceTree = "<group>";
-		};
 		A10000000000000000000004 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -80,19 +74,30 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		A10000000000000000000005 = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000006 /* Inventory */,
+				A10000000000000000000007 /* InventoryTests */,
+				A10000000000000000000004 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
 		A10000000000000000000002 /* Inventory */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A10000000000000000000031 /* Build configuration list for Inventory */;
+			buildConfigurationList = A10000000000000000000031 /* Build configuration list for PBXNativeTarget "Inventory" */;
 			buildPhases = (
 				A1000000000000000000001F /* Sources */,
 				A10000000000000000000020 /* Frameworks */,
 				A10000000000000000000021 /* Resources */,
 			);
-			buildRules = ();
-			dependencies = ();
+			buildRules = (
+			);
+			dependencies = (
+			);
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000006 /* Inventory */,
 			);
@@ -103,13 +108,14 @@
 		};
 		A10000000000000000000003 /* InventoryTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A10000000000000000000032 /* Build configuration list for InventoryTests */;
+			buildConfigurationList = A10000000000000000000032 /* Build configuration list for PBXNativeTarget "InventoryTests" */;
 			buildPhases = (
 				A10000000000000000000022 /* Sources */,
 				A10000000000000000000023 /* Frameworks */,
 				A10000000000000000000024 /* Resources */,
 			);
-			buildRules = ();
+			buildRules = (
+			);
 			dependencies = (
 				A10000000000000000000012 /* PBXTargetDependency */,
 			);
@@ -131,14 +137,23 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
-					A10000000000000000000002 = { CreatedOnToolsVersion = 26.6; };
-					A10000000000000000000003 = { CreatedOnToolsVersion = 26.6; TestTargetID = A10000000000000000000002; };
+					A10000000000000000000002 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					A10000000000000000000003 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = A10000000000000000000002;
+					};
 				};
 			};
-			buildConfigurationList = A10000000000000000000030 /* Build configuration list for PBXProject */;
+			buildConfigurationList = A10000000000000000000030 /* Build configuration list for PBXProject "Inventory" */;
 			developmentRegion = de;
 			hasScannedForEncodings = 0;
-			knownRegions = (de, en, Base);
+			knownRegions = (
+				de,
+				en,
+				Base,
+			);
 			mainGroup = A10000000000000000000005;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A10000000000000000000004 /* Products */;
@@ -155,13 +170,15 @@
 		A10000000000000000000021 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = ();
+			files = (
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A10000000000000000000024 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = ();
+			files = (
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
@@ -170,13 +187,15 @@
 		A1000000000000000000001F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = ();
+			files = (
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A10000000000000000000022 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = ();
+			files = (
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
@@ -214,7 +233,10 @@
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = ("DEBUG=1", "$(inherited)");
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
@@ -270,7 +292,10 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Inventory/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 1.4;
 				PRODUCT_BUNDLE_IDENTIFIER = digital.congru.inventory.scan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -294,7 +319,10 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Inventory/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 1.4;
 				PRODUCT_BUNDLE_IDENTIFIER = digital.congru.inventory.scan;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -316,7 +344,11 @@
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = digital.congru.inventory.scan.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -335,7 +367,11 @@
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = digital.congru.inventory.scan.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -350,7 +386,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A10000000000000000000030 /* Build configuration list for PBXProject */ = {
+		A10000000000000000000030 /* Build configuration list for PBXProject "Inventory" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A10000000000000000000040 /* Debug */,
@@ -359,7 +395,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A10000000000000000000031 /* Build configuration list for Inventory */ = {
+		A10000000000000000000031 /* Build configuration list for PBXNativeTarget "Inventory" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A10000000000000000000042 /* Debug */,
@@ -368,7 +404,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A10000000000000000000032 /* Build configuration list for InventoryTests */ = {
+		A10000000000000000000032 /* Build configuration list for PBXNativeTarget "InventoryTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A10000000000000000000044 /* Debug */,

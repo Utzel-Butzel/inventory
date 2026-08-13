@@ -26,6 +26,7 @@ import {
   type StockUnitRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 
@@ -780,6 +781,7 @@ export async function receivePurchaseOrderLine(
           .returning();
         movements = [movement];
       }
+      await enqueueStockMovementWebhookEvents(transaction, movements);
 
       const receivedQuantity = line.receivedQuantity + input.quantity;
       await transaction

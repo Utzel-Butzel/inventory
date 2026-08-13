@@ -1,9 +1,9 @@
 {
   "metadata": {
     "scanTitle": "Bestand scannen | Inventory",
-    "scanDescription": "QR-Codes scannen und konfigurierte Eigenschaften auf Bestandseinheiten anwenden.",
+    "scanDescription": "QR-Codes und Barcodes scannen und konfigurierte Eigenschaften auf Bestandseinheiten anwenden.",
     "workflowsTitle": "Scan-Workflows | Inventory",
-    "workflowsDescription": "QR-Code-gesteuerte Bestands-Workflows visuell konfigurieren."
+    "workflowsDescription": "Code-gesteuerte Bestands-Workflows visuell konfigurieren."
   },
   "statuses": {
     "available": "Verfügbar",
@@ -38,15 +38,15 @@
       "generic": "Die Kamera konnte nicht gestartet werden. Du kannst weiterhin ein Foto hochladen oder den Code manuell eingeben.",
       "secureContext": "Der Kamerazugriff erfordert eine sichere HTTPS-Verbindung. Öffne diese Seite über HTTPS oder nutze unten den Foto-Upload beziehungsweise die manuelle Eingabe.",
       "unsupported": "Dieser Browser bietet keinen Kamerazugriff. Nutze unten den Foto-Upload oder die manuelle Eingabe.",
-      "noQr": "Es wurde kein QR-Code gefunden. Versuche es mit einem näheren, schärferen Foto, auf dem der gesamte Code sichtbar ist, oder gib den Code manuell ein.",
+      "noQr": "Es wurde kein unterstützter Code gefunden. Versuche es mit einem näheren, schärferen Foto, auf dem der gesamte Code sichtbar ist, oder gib ihn manuell ein.",
       "imageUnreadable": "Dieses Bild konnte nicht gelesen werden. Versuche es mit einem anderen Foto oder gib den Code manuell ein.",
       "manualRequired": "Gib den vollständigen Inhalt ein, den der ausgewählte Workflow erwartet."
     },
     "deviceFallback": "Kamera {{value}}",
     "title": "Mit Kamera scannen",
-    "description": "Halte den vollständigen QR-Code innerhalb des Rahmens.",
+    "description": "Halte den vollständigen QR-Code oder Barcode innerhalb des Rahmens.",
     "cameraLabel": "Kamera",
-    "previewLabel": "Live-Kameravorschau zum Scannen von QR-Codes",
+    "previewLabel": "Live-Kameravorschau zum Scannen von QR-Codes und Barcodes",
     "status": {
       "paused": "Scanner nach Erkennung pausiert",
       "unavailable": "Kamera nicht verfügbar",
@@ -56,20 +56,20 @@
     "stop": "Kamera stoppen",
     "scanAnother": "Weiteren Code scannen",
     "start": "Kamera starten",
-    "privacy": "Der Kamerazugriff funktioniert über HTTPS oder localhost. Das Video verbleibt auf diesem Gerät und wird ausschließlich nach QR-Codes durchsucht.",
+    "privacy": "Unterstützt QR, Data Matrix, Aztec, PDF417, Code 39/93/128, Codabar, EAN, UPC und ITF. Das Video verbleibt auf diesem Gerät.",
     "separator": "oder",
     "photo": {
-      "title": "QR-Foto hochladen",
+      "title": "Code-Foto hochladen",
       "description": "Hilfreich, wenn der Kamerazugriff blockiert oder das Etikett schwer erreichbar ist.",
       "reading": "Foto wird gelesen…",
       "choose": "Foto auswählen oder aufnehmen"
     },
     "manual": {
       "title": "Code manuell eingeben",
-      "label": "Vollständiger QR-Code-Inhalt",
-      "placeholder": "Vollständiger QR-Code-Inhalt",
+      "label": "Vollständiger Code-Inhalt",
+      "placeholder": "Vollständiger Code-Inhalt",
       "use": "Code verwenden",
-      "help": "Gib genau den Inhalt des QR-Codes ein. Je nach ausgewähltem Workflow kann eine URL oder ein Wert mit Präfix erforderlich sein; eine reine EPD-Nummer reicht nicht immer aus."
+      "help": "Gib genau den Inhalt des Codes ein. Je nach ausgewähltem Workflow kann eine URL oder ein Wert mit Präfix erforderlich sein; eine reine EPD-Nummer reicht nicht immer aus."
     },
     "detected": "Code erkannt: {{code}}"
   },
@@ -95,13 +95,13 @@
     "header": {
       "eyebrow": "Bestandsautomatisierung",
       "title": "In den Bestand scannen",
-      "description": "Scanne den vollständigen QR-Inhalt, lass den ausgewählten Workflow die Kennung extrahieren und prüfe jede Änderung, bevor sie in das Inventar übernommen wird."
+      "description": "Scanne den vollständigen Code-Inhalt, lass den ausgewählten Workflow die Kennung extrahieren und prüfe jede Änderung, bevor sie in das Inventar übernommen wird."
     },
     "setup": {
       "errorTitle": "Scanner-Einrichtung konnte nicht geladen werden",
       "retry": "Erneut versuchen",
       "emptyTitle": "Kein aktivierter Scan-Workflow",
-      "emptyDescription": "Erstelle und aktiviere zuerst einen Workflow. Er legt fest, wie QR-Inhalte einer EPD-Nummer, einem Bestandsstatus und bearbeitbaren Eigenschaften zugeordnet werden.",
+      "emptyDescription": "Erstelle und aktiviere zuerst einen Workflow. Er legt fest, wie Code-Inhalte einer EPD-Nummer, einem Bestandsstatus und bearbeitbaren Eigenschaften zugeordnet werden.",
       "workflowLabel": "Scan-Workflow"
     },
     "success": {
@@ -121,7 +121,7 @@
         "scan": {
           "number": "1",
           "title": "Scannen",
-          "description": "Lies einen QR-Code oder gib seinen vollständigen Inhalt ein."
+          "description": "Lies einen QR-Code oder Barcode oder gib seinen vollständigen Inhalt ein."
         },
         "enrich": {
           "number": "2",
@@ -214,7 +214,7 @@
       "prefixMismatch": "Der Scan beginnt nicht mit „{{prefix}}“.",
       "prefixEmpty": "Nach dem Entfernen des Präfixes bleibt nichts übrig.",
       "invalidUrl": "Der gescannte Wert ist keine gültige URL.",
-      "originMismatch": "Es wurde ein QR-Code von {{origin}} erwartet.",
+      "originMismatch": "Es wurde ein Code von {{origin}} erwartet.",
       "originInvalid": "Der konfigurierte Quellursprung ist ungültig.",
       "pathMismatch": "Der Pfad {{path}} wurde erwartet.",
       "queryCount": "Der Scan muss genau einen Abfragewert „{{parameter}}“ enthalten.",
@@ -240,7 +240,7 @@
     "header": {
       "eyebrow": "Scan-Automatisierung",
       "title": "Scan-Workflows visuell erstellen.",
-      "description": "Verwandle einen QR-Code mit geführten Eingaben und einheitlichen Eigenschaften in eine identifizierte Bestandseinheit – ganz ohne Code.",
+      "description": "Verwandle einen gescannten Code mit geführten Eingaben und einheitlichen Eigenschaften in eine identifizierte Bestandseinheit – ganz ohne Programmierung.",
       "readOnly": "Schreibgeschützt",
       "refresh": "Aktualisieren",
       "newTemplate": "Neu aus Vorlage"
@@ -286,8 +286,8 @@
     "steps": {
       "trigger": {
         "title": "Auslöser",
-        "description": "Dieser Workflow startet, wenn eine Kamera oder ein Handscanner einen QR-Code liest.",
-        "event": "QR-Code gescannt",
+        "description": "Dieser Workflow startet, wenn eine Kamera oder ein Handscanner einen Code liest.",
+        "event": "Code gescannt",
         "eventDescription": "Dekodierten Text an diesen Workflow übergeben",
         "badge": "Scan-Auslöser"
       },
@@ -371,8 +371,8 @@
       "title": "Lokale Scan-Vorschau",
       "description": "Extraktion und Auswahl testen, ohne das Inventar zu verändern.",
       "noWrite": "Keine Änderung",
-      "scannedValue": "Gescannter QR-Wert",
-      "placeholder": "Dekodierten QR-Wert einfügen…",
+      "scannedValue": "Gescannter Code-Wert",
+      "placeholder": "Dekodierten Code-Wert einfügen…",
       "inputFallback": "Eingabe",
       "result": "Ergebnis",
       "identifier": "Kennung",

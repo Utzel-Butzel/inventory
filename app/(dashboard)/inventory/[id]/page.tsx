@@ -1,6 +1,7 @@
 import { ResourceAssignmentsManager } from "@/components/resource-assignments-manager";
 import { ResourceDetails } from "@/components/resource-details";
 import { ResourceRelationsManager } from "@/components/resource-relations-manager";
+import { ResourceVariantsManager } from "@/components/resource-variants-manager";
 import { canAccessResource, getSessionIdentity } from "@/lib/api-auth";
 import { getResourceRecord } from "@/lib/access-control";
 
@@ -12,14 +13,15 @@ export default async function InventoryItemPage({ params }: Props) {
     getSessionIdentity(),
     getResourceRecord(id),
   ]);
-  const [canEdit, canDelete, canManageAssignments] =
+  const [canEdit, canDelete, canManageAssignments, canManageStock] =
     identity && resource
       ? await Promise.all([
           canAccessResource(identity, "inventory.update", resource),
           canAccessResource(identity, "inventory.delete", resource),
           canAccessResource(identity, "assignments.manage", resource),
+          canAccessResource(identity, "stock.manage", resource),
         ])
-      : [false, false, false];
+      : [false, false, false, false];
   const canShare = Boolean(identity?.permissions.includes("sharing.manage"));
   const canViewStock = Boolean(identity?.permissions.includes("stock.read"));
   const canViewAssignments = Boolean(
@@ -36,6 +38,11 @@ export default async function InventoryItemPage({ params }: Props) {
         canViewStock={canViewStock}
       />
       <ResourceRelationsManager resourceId={id} canEdit={canEdit} />
+      <ResourceVariantsManager
+        resourceId={id}
+        canEdit={canEdit}
+        canManageStock={canManageStock}
+      />
       {canViewAssignments ? (
         <ResourceAssignmentsManager
           resourceId={id}

@@ -1,0 +1,18 @@
+{
+  "eyebrow": "Attention queue",
+  "title": "Notifications",
+  "description": "A quiet, deduplicated inbox for inventory events that need attention.",
+  "showAll": "Show all",
+  "showUnread": "Unread only",
+  "markAllRead": "Mark all read",
+  "refresh": "Refresh",
+  "new": "New",
+  "emptyTitle": "Nothing needs attention",
+  "emptyDescription": "Low stock, expiry, maintenance, and return reminders will appear here.",
+  "emptyUnreadTitle": "No unread notifications",
+  "emptyUnreadDescription": "You are caught up. Switch to all notifications to review history.",
+  "errors": {
+    "load": "Notifications could not be loaded.",
+    "update": "The notification could not be updated."
+  }
+}

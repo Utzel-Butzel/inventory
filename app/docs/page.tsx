@@ -24,8 +24,11 @@ import {
 } from "@/components/marketing/site-chrome";
 
 const githubUrl = "https://github.com/Utzel-Butzel/inventory";
-const composeCommand =
-  "docker compose -f docker-compose.yml -f docker-compose.local.yml up --build";
+const quickStartCommand = `git clone ${githubUrl}.git
+cd inventory
+./scripts/install.sh`;
+const dokployDeployUrl = `${githubUrl}/tree/main/deploy/dokploy`;
+const coolifyDeployUrl = `${githubUrl}/tree/main/deploy/coolify`;
 
 export const metadata: Metadata = {
   title: { absolute: "Documentation — Open Inventory" },
@@ -36,7 +39,7 @@ export const metadata: Metadata = {
 
 const navigation = [
   { label: "Overview", href: "#overview" },
-  { label: "Docker install", href: "#docker" },
+  { label: "Install & deploy", href: "#docker" },
   { label: "Configuration", href: "#configuration" },
   { label: "API", href: "#api" },
   { label: "Operations", href: "#operations" },
@@ -196,70 +199,116 @@ export default function DocsPage() {
             </section>
 
             <section id="docker" className="scroll-mt-24 border-b border-border py-16">
-              <SectionHeading eyebrow="01 · Installation" title="Deploy with Docker Compose">
+              <SectionHeading eyebrow="01 · Installation" title="Choose the easiest path for your server">
                 <p>
-                  You need Git, Docker with Compose v2, and Node.js 22.13 or
-                  newer for the included password-hash helper. The application
-                  itself runs inside Docker.
+                  Run the guided Docker installer on any host with Git, Docker
+                  Compose v2, OpenSSL, and curl, or import the catalog-ready
+                  definitions for Dokploy and Coolify. All three paths use the same
+                  production image, migrations, health check, and persistent
+                  storage model.
                 </p>
               </SectionHeading>
 
-              <ol className="mt-10 space-y-10">
-                <li>
-                  <div className="flex items-start gap-4">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft font-mono text-[10px] font-bold text-brand">1</span>
-                    <div>
-                      <h3 className="text-base font-semibold text-foreground">Clone and create the environment file</h3>
-                      <p className="mt-2 text-sm leading-6 text-muted">Keep the checked-in example as your reference and put deployment values in <code className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[12px]">.env</code>.</p>
-                    </div>
-                  </div>
-                  <CodeBlock label="clone" copy={`git clone ${githubUrl}.git\ncd inventory\ncp .env.example .env`}>
-                    {`git clone ${githubUrl}.git\ncd inventory\ncp .env.example .env`}
-                  </CodeBlock>
-                </li>
+              <div className="mt-9 grid gap-3 sm:grid-cols-3">
+                {[
+                  {
+                    icon: Container,
+                    title: "Docker Compose",
+                    text: "Clone the repository and let the installer create secure settings and start the complete stack.",
+                    href: "#docker-quick-start",
+                    label: "Quick start",
+                  },
+                  {
+                    icon: Sparkles,
+                    title: "Dokploy template",
+                    text: "Import the platform-native definition now; it is ready for one-click catalog inclusion.",
+                    href: dokployDeployUrl,
+                    label: "Open Dokploy files",
+                  },
+                  {
+                    icon: Sparkles,
+                    title: "Coolify template",
+                    text: "Import the matching service definition now; it is ready for one-click catalog inclusion.",
+                    href: coolifyDeployUrl,
+                    label: "Open Coolify files",
+                  },
+                ].map((option) => {
+                  const Icon = option.icon;
+                  const external = option.href.startsWith("http");
+                  return (
+                    <article key={option.title} className="flex flex-col rounded-2xl border border-border bg-surface p-5">
+                      <Icon className="size-5 text-brand" aria-hidden="true" />
+                      <h3 className="mt-5 text-sm font-semibold text-foreground">{option.title}</h3>
+                      <p className="mt-2 text-xs leading-5 text-muted">{option.text}</p>
+                      <a
+                        href={option.href}
+                        target={external ? "_blank" : undefined}
+                        rel={external ? "noreferrer" : undefined}
+                        className="mt-auto inline-flex items-center gap-1.5 pt-5 text-xs font-semibold text-brand hover:text-brand-strong"
+                      >
+                        {option.label}
+                        {external ? <ExternalLink className="size-3" aria-hidden="true" /> : <ArrowRight className="size-3" aria-hidden="true" />}
+                      </a>
+                    </article>
+                  );
+                })}
+              </div>
 
-                <li>
-                  <div className="flex items-start gap-4">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft font-mono text-[10px] font-bold text-brand">2</span>
-                    <div>
-                      <h3 className="text-base font-semibold text-foreground">Generate secrets and the login hash</h3>
-                      <p className="mt-2 text-sm leading-6 text-muted">Use a URL-safe hex value for the database password. Keep bcrypt hashes in single quotes in the Compose environment file so their dollar signs stay literal.</p>
-                    </div>
-                  </div>
-                  <CodeBlock label="secrets" copy={'openssl rand -hex 32\nopenssl rand -base64 48\nnpm install\nnpm run auth:hash -- "choose a strong password"'}>
-                    {'openssl rand -hex 32        # POSTGRES_PASSWORD\nopenssl rand -base64 48     # AUTH_SECRET\nnpm install\nnpm run auth:hash -- "choose a strong password"'}
-                  </CodeBlock>
-                </li>
+              <div id="docker-quick-start" className="scroll-mt-24 pt-14">
+                <h3 className="text-xl font-semibold tracking-[-0.03em] text-foreground">
+                  Docker quick start
+                </h3>
+                <p className="mt-3 text-sm leading-6 text-muted">
+                  The installer creates a private <code className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[12px]">.env</code>,
+                  generates the required secrets and a bootstrap administrator,
+                  starts PostgreSQL and Open Inventory, and waits for the health
+                  check. You do not need Node.js or a manually prepared password
+                  hash for this path.
+                </p>
 
-                <li>
-                  <div className="flex items-start gap-4">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft font-mono text-[10px] font-bold text-brand">3</span>
-                    <div>
-                      <h3 className="text-base font-semibold text-foreground">Set the required values</h3>
-                      <p className="mt-2 text-sm leading-6 text-muted">For a local installation, the public URL can be localhost. Remote installations must use the exact public HTTPS origin.</p>
-                    </div>
-                  </div>
-                  <CodeBlock label=".env">
-                    {`POSTGRES_PASSWORD=<hex value from step 2>\nAUTH_SECRET=<random value from step 2>\nAUTH_URL=http://localhost:3000\nAUTH_TRUST_HOST=true\n\nSIMPLE_AUTH_EMAIL=admin@example.com\nSIMPLE_AUTH_NAME=Inventory admin\nSIMPLE_AUTH_PASSWORD_HASH='<bcrypt hash from step 2>'`}
-                  </CodeBlock>
-                </li>
+                <CodeBlock label="three commands" copy={quickStartCommand}>
+                  {quickStartCommand}
+                </CodeBlock>
 
-                <li>
-                  <div className="flex items-start gap-4">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-success-soft font-mono text-[10px] font-bold text-success">4</span>
-                    <div>
-                      <h3 className="text-base font-semibold text-foreground">Start the stack</h3>
-                      <p className="mt-2 text-sm leading-6 text-muted">The local override binds the app to <code className="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[12px]">127.0.0.1:3000</code>. Named volumes survive container replacement.</p>
-                    </div>
-                  </div>
-                  <CodeBlock label="docker compose" copy={composeCommand}>
-                    {`docker compose -f docker-compose.yml \\\n  -f docker-compose.local.yml up --build`}
-                  </CodeBlock>
-                  <div className="rounded-2xl border border-success-border bg-success-soft p-4 text-sm leading-6 text-success">
-                    Open <a href="http://localhost:3000" className="font-semibold underline underline-offset-4">http://localhost:3000</a> and sign in with the email and password you configured.
-                  </div>
-                </li>
-              </ol>
+                <div className="rounded-2xl border border-success-border bg-success-soft p-5 text-sm leading-6 text-success">
+                  <p className="font-semibold">First login</p>
+                  <p className="mt-1">
+                    When installation finishes, the terminal prints the admin
+                    email (by default <code className="font-mono text-[12px]">admin@inventory.local</code>)
+                    and an automatically generated bootstrap password. Sign in
+                    at <a href="http://localhost:3000" className="font-semibold underline underline-offset-4">http://localhost:3000</a>,
+                    then change the password under <strong>Settings → Users</strong>.
+                    The production start converts the bootstrap value to bcrypt
+                    before the server starts and removes its plaintext value
+                    from the running process; the database stores only the hash
+                    after the first successful login.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-12 rounded-2xl border border-border bg-surface p-6">
+                <h3 className="text-base font-semibold text-foreground">Dokploy and Coolify</h3>
+                <p className="mt-2 text-sm leading-6 text-muted">
+                  Pick your platform, open its deploy directory, and import the
+                  included template or Compose definition. It configures
+                  PostgreSQL, persistent uploads, port 3000, and
+                  <code className="ml-1 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[12px]">/api/health</code>.
+                  The platform generates the bootstrap password as a secret;
+                  find it in Dokploy&apos;s or Coolify&apos;s environment UI for the
+                  initial login. Change the password in <strong>Settings → Users</strong>;
+                  the bootstrap credential cannot replace an existing account.
+                </p>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <a href={dokployDeployUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-solid px-4 text-xs font-semibold text-on-brand hover:bg-brand-hover">
+                    Import for Dokploy
+                    <ExternalLink className="size-3.5" aria-hidden="true" />
+                  </a>
+                  <a href={coolifyDeployUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-solid px-4 text-xs font-semibold text-on-brand hover:bg-brand-hover">
+                    Import for Coolify
+                    <ExternalLink className="size-3.5" aria-hidden="true" />
+                  </a>
+                </div>
+              </div>
             </section>
 
             <section id="configuration" className="scroll-mt-24 border-b border-border py-16">
@@ -273,7 +322,7 @@ export default function DocsPage() {
 
               <div className="mt-9 divide-y divide-border rounded-2xl border border-border bg-surface">
                 {[
-                  { icon: KeyRound, title: "Accounts and roles", copy: "Bootstrap the first administrator, then manage admin, editor, and viewer accounts from Settings. Auth0 is optional." },
+                  { icon: KeyRound, title: "Accounts and roles", copy: "The guided deployment paths generate the first bootstrap login automatically. Change that password after signing in, then manage admin, editor, and viewer accounts from Settings. Auth0 is optional." },
                   { icon: HardDrive, title: "File storage", copy: "Use the persistent local upload volume by default, or point Open Inventory at an Openinary service." },
                   { icon: Sparkles, title: "AI assistance", copy: "OpenAI-compatible analysis and OpenAI or Google image editing are optional. Nothing is sent to an AI provider until you configure and use it." },
                   { icon: Database, title: "Maps and location", copy: "Street and satellite defaults require external tile services. Compatible tile URLs can be replaced with your own infrastructure." },
@@ -383,7 +432,7 @@ export default function DocsPage() {
                   <BookOpenText className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">Need the complete reference?</h3>
-                    <p className="mt-1 text-xs leading-5 text-muted">The repository README covers Dokploy, authentication, stock behavior, native iOS, and every environment variable.</p>
+                    <p className="mt-1 text-xs leading-5 text-muted">The repository README covers Docker, Dokploy, Coolify, authentication, stock behavior, native iOS, and every environment variable.</p>
                   </div>
                 </div>
                 <a href={`${githubUrl}#readme`} target="_blank" rel="noreferrer" className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-solid px-4 text-xs font-semibold text-on-brand hover:bg-brand-hover">

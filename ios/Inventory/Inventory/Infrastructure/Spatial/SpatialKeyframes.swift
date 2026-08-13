@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import UniformTypeIdentifiers
 import Vision
 import simd
 
@@ -126,6 +127,186 @@ struct SpatialPhotoLocalization: Equatable, Sendable {
     let estimatedCameraTransform: SpatialMatrix4
     let cameraPositionError: Double?
     let confidence: Double
+    let candidateCount: Int
+    let secondBestFeatureDistance: Double?
+}
+
+enum SpatialPhotoOnlyLocalizationState: Equatable, Sendable {
+    case unavailable
+    case indexing
+    case ready(referenceCount: Int)
+    case matching(referenceCount: Int)
+
+    var referenceCount: Int {
+        switch self {
+        case .ready(let referenceCount), .matching(let referenceCount):
+            referenceCount
+        case .unavailable, .indexing:
+            0
+        }
+    }
+
+    var canMatch: Bool {
+        if case .ready(let referenceCount) = self {
+            return referenceCount >= SpatialPhotoOnlyLocalizationPolicy.minimumCandidateCount
+        }
+        return false
+    }
+
+    mutating func beginIndexing() {
+        self = .indexing
+    }
+
+    mutating func finishIndexing(referenceCount: Int) {
+        self = referenceCount >= SpatialPhotoOnlyLocalizationPolicy.minimumCandidateCount
+            ? .ready(referenceCount: referenceCount)
+            : .unavailable
+    }
+
+    mutating func beginMatching() -> Bool {
+        guard case .ready(let referenceCount) = self,
+              referenceCount >= SpatialPhotoOnlyLocalizationPolicy.minimumCandidateCount
+        else { return false }
+        self = .matching(referenceCount: referenceCount)
+        return true
+    }
+
+    mutating func finishMatching() {
+        guard case .matching(let referenceCount) = self else { return }
+        self = .ready(referenceCount: referenceCount)
+    }
+}
+
+struct SpatialPhotoOnlyEstimate: Equatable, Sendable, Identifiable {
+    var id: UUID { keyframeID }
+
+    let roomScanID: UUID
+    let keyframeID: UUID
+    let featureDistance: Double
+    let confidence: Double
+    /// This is the pose of the matched stored keyframe, not a solved pose for
+    /// the query image and never an object position.
+    let referenceCameraTransform: SpatialMatrix4
+
+    var referenceCameraPosition: SpatialVector3 {
+        [
+            referenceCameraTransform[12],
+            referenceCameraTransform[13],
+            referenceCameraTransform[14],
+        ]
+    }
+}
+
+enum SpatialPhotoOnlyLocalizationPolicy {
+    static let maximumQueryBytes = SpatialKeyframeCapturePolicy.standard.maximumTotalBytes
+    static let minimumCandidateCount = 2
+    static let maximumFeatureDistance = 28.0
+    static let minimumConfidence = 0.62
+
+    static func estimate(
+        from localization: SpatialPhotoLocalization
+    ) -> SpatialPhotoOnlyEstimate? {
+        let transform = localization.estimatedCameraTransform
+        guard let secondBestDistance = localization.secondBestFeatureDistance,
+              localization.candidateCount >= minimumCandidateCount,
+              localization.featureDistance.isFinite,
+              localization.featureDistance >= 0,
+              localization.featureDistance <= maximumFeatureDistance,
+              secondBestDistance.isFinite,
+              secondBestDistance > localization.featureDistance,
+              (secondBestDistance - localization.featureDistance) /
+                  secondBestDistance >= 0.12,
+              localization.confidence.isFinite,
+              localization.confidence >= minimumConfidence,
+              localization.confidence <= 1,
+              transform.count == 16,
+              transform.allSatisfy(\.isFinite),
+              abs(transform[3]) < 0.000_001,
+              abs(transform[7]) < 0.000_001,
+              abs(transform[11]) < 0.000_001,
+              abs(transform[15] - 1) < 0.000_001
+        else { return nil }
+
+        return SpatialPhotoOnlyEstimate(
+            roomScanID: localization.roomScanID,
+            keyframeID: localization.keyframeID,
+            featureDistance: localization.featureDistance,
+            confidence: localization.confidence,
+            referenceCameraTransform: transform
+        )
+    }
+}
+
+enum SpatialPhotoQueryError: Error, LocalizedError, Sendable {
+    case encodedImageTooLarge
+    case unreadableImage
+    case unableToEncodeImage
+
+    var errorDescription: String? {
+        switch self {
+        case .encodedImageTooLarge:
+            "Das Foto ist für die lokale Zuordnung zu groß."
+        case .unreadableImage:
+            "Das ausgewählte Foto konnte nicht gelesen werden."
+        case .unableToEncodeImage:
+            "Das Foto konnte nicht für die Zuordnung vorbereitet werden."
+        }
+    }
+}
+
+enum SpatialPhotoQueryProcessor {
+    static let maximumPixelSize = 2_200
+
+    /// Applies the source orientation while decoding, bounds memory/transfer
+    /// size, and emits an upright JPEG because the matcher consumes `.up`.
+    static func normalizedJPEG(from encodedData: Data) throws -> Data {
+        guard encodedData.count <= SpatialPhotoOnlyLocalizationPolicy.maximumQueryBytes else {
+            throw SpatialPhotoQueryError.encodedImageTooLarge
+        }
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(
+            encodedData as CFData,
+            sourceOptions
+        ) else {
+            throw SpatialPhotoQueryError.unreadableImage
+        }
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maximumPixelSize,
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(
+            source,
+            CGImageSourceGetPrimaryImageIndex(source),
+            thumbnailOptions as CFDictionary
+        ) else {
+            throw SpatialPhotoQueryError.unreadableImage
+        }
+
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            output,
+            UTType.jpeg.identifier as CFString,
+            1,
+            nil
+        ) else {
+            throw SpatialPhotoQueryError.unableToEncodeImage
+        }
+        let properties: [CFString: Any] = [
+            kCGImageDestinationLossyCompressionQuality: 0.86,
+            kCGImagePropertyOrientation: 1,
+        ]
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else {
+            throw SpatialPhotoQueryError.unableToEncodeImage
+        }
+        let result = output as Data
+        guard result.count <= SpatialPhotoOnlyLocalizationPolicy.maximumQueryBytes else {
+            throw SpatialPhotoQueryError.encodedImageTooLarge
+        }
+        return result
+    }
 }
 
 enum SpatialPhotoLocalizationScorer {
@@ -172,12 +353,13 @@ actor SpatialPhotoKeyframeMatcher {
 
     init() {}
 
-    func add(_ reference: SpatialRoomKeyframeReference) {
+    @discardableResult
+    func add(_ reference: SpatialRoomKeyframeReference) -> Bool {
         guard let observation = try? Self.featurePrint(
             for: reference.imageData,
             orientation: Self.visionOrientation(for: reference.metadata.orientation)
         ) else {
-            return
+            return false
         }
         references.append(
             IndexedReference(
@@ -186,6 +368,7 @@ actor SpatialPhotoKeyframeMatcher {
                 observation: observation
             )
         )
+        return true
     }
 
     var isEmpty: Bool { references.isEmpty }
@@ -209,6 +392,7 @@ actor SpatialPhotoKeyframeMatcher {
             return (indexed, Double(value))
         }.sorted { $0.1 < $1.1 }
         guard let best = ranked.first else { return nil }
+        let secondBestDistance = ranked.dropFirst().first?.1
 
         let poseError = currentCameraTransform.map {
             SpatialKeyframeCapturePolicy.translationDistance(
@@ -224,9 +408,11 @@ actor SpatialPhotoKeyframeMatcher {
             cameraPositionError: poseError,
             confidence: SpatialPhotoLocalizationScorer.confidence(
                 bestDistance: best.1,
-                secondBestDistance: ranked.dropFirst().first?.1,
+                secondBestDistance: secondBestDistance,
                 cameraPositionError: poseError
-            )
+            ),
+            candidateCount: ranked.count,
+            secondBestFeatureDistance: secondBestDistance
         )
     }
 

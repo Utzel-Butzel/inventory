@@ -27,6 +27,7 @@ import { db } from "@/lib/db";
 import { hashIdempotentPayload, readIdempotencyKey } from "@/lib/idempotency";
 import { getResource } from "@/lib/resources";
 import { mediaToDataUrl } from "@/lib/storage";
+import { enqueueWebhookEvent } from "@/lib/webhooks";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -202,20 +203,32 @@ export async function POST(request: Request, context: Context) {
         .set({ ...values, updatedAt: new Date() })
         .where(eq(resources.id, resource.id))
         .returning();
+      if (!updated) throw new Error("Resource disappeared during AI analysis.");
       const mediaRows = await transaction
         .select()
         .from(media)
         .where(eq(media.resourceId, resource.id))
         .orderBy(asc(media.position));
+      const resourceSnapshot = {
+        ...updated,
+        media: mediaRows,
+        cover: mediaRows.find((item) => item.kind === "image") ?? null,
+      };
       const body = {
-        resource: {
-          ...updated,
-          media: mediaRows,
-          cover: mediaRows.find((item) => item.kind === "image") ?? null,
-        },
+        resource: resourceSnapshot,
         analysis: result,
         model,
       };
+      await enqueueWebhookEvent(transaction, {
+        type: "inventory.resource.updated",
+        aggregateType: "resource",
+        aggregateId: updated.id,
+        actor: authorization.identity.subject,
+        data: {
+          resource: resourceSnapshot,
+          changedFields: Array.from(new Set([...Object.keys(values), "media"])),
+        },
+      });
       if (operationId) {
         await transaction
           .update(aiIdempotencyOperations)

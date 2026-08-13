@@ -1,0 +1,23 @@
+[variables]
+main_domain = "${domain}"
+postgres_password = "${password:32}"
+auth_secret = "${password:64}"
+bootstrap_admin_password = "${password:32}"
+
+[config]
+
+[[config.domains]]
+serviceName = "inventory"
+port = 3000
+host = "${main_domain}"
+path = "/"
+
+[config.env]
+POSTGRES_PASSWORD = "${postgres_password}"
+AUTH_SECRET = "${auth_secret}"
+AUTH_URL = "https://${main_domain}"
+AUTH_TRUST_HOST = "true"
+BOOTSTRAP_ADMIN_EMAIL = "admin@inventory.local"
+BOOTSTRAP_ADMIN_NAME = "Inventory admin"
+BOOTSTRAP_ADMIN_PASSWORD = "${bootstrap_admin_password}"
+BOOTSTRAP_ADMIN_PASSWORD_ONCE = "true"

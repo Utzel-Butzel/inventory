@@ -2,12 +2,19 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 
-import { resources } from "@/db/schema";
+import { resources, resourceVariants } from "@/db/schema";
 import { db } from "@/lib/db";
 import { parseResourceCode } from "@/lib/resource-code";
 import { getResource } from "@/lib/resources";
+import { resourceVariantDto } from "@/lib/resource-variants";
 
-export type ResourceCodeMatch = "id" | "sku" | "serialNumber";
+export type ResourceCodeMatch =
+  | "id"
+  | "sku"
+  | "barcode"
+  | "serialNumber"
+  | "variantSku"
+  | "variantBarcode";
 
 export class AmbiguousResourceCodeError extends Error {
   constructor() {
@@ -35,6 +42,48 @@ export async function lookupResourceByCode(value: string) {
   if (skuRow) {
     const resource = await getResource(skuRow.id);
     return resource ? { resource, matchedBy: "sku" as const } : null;
+  }
+
+  const [barcodeRow] = await db
+    .select({ id: resources.id })
+    .from(resources)
+    .where(eq(resources.barcode, parsed.code))
+    .limit(1);
+  if (barcodeRow) {
+    const resource = await getResource(barcodeRow.id);
+    return resource ? { resource, matchedBy: "barcode" as const } : null;
+  }
+
+  const [variantSku] = await db
+    .select()
+    .from(resourceVariants)
+    .where(eq(resourceVariants.sku, parsed.code))
+    .limit(1);
+  if (variantSku) {
+    const resource = await getResource(variantSku.resourceId);
+    return resource
+      ? {
+          resource,
+          variant: resourceVariantDto(variantSku),
+          matchedBy: "variantSku" as const,
+        }
+      : null;
+  }
+
+  const [variantBarcode] = await db
+    .select()
+    .from(resourceVariants)
+    .where(eq(resourceVariants.barcode, parsed.code))
+    .limit(1);
+  if (variantBarcode) {
+    const resource = await getResource(variantBarcode.resourceId);
+    return resource
+      ? {
+          resource,
+          variant: resourceVariantDto(variantBarcode),
+          matchedBy: "variantBarcode" as const,
+        }
+      : null;
   }
 
   const serialRows = await db

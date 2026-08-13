@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import ImageIO
+import QuickLook
 
 private struct PendingStockAction: Sendable {
     let id: UUID
@@ -19,6 +20,9 @@ struct ResourceDetailView: View {
     @State private var confirmIssue = false
     @State private var pendingStockAction: PendingStockAction?
     @State private var errorMessage: String?
+    @State private var modelDownloadID: UUID?
+    @State private var downloadedModel: DownloadedObjectModel?
+    @State private var modelErrorMessage: String?
 
     init(resource: InventoryResource) {
         _current = State(initialValue: resource)
@@ -71,6 +75,9 @@ struct ResourceDetailView: View {
             StockManagementView(resource: current)
                 .presentationDetents([.large])
         }
+        .sheet(item: $downloadedModel) { model in
+            ObjectModelPreviewSheet(model: model)
+        }
         .confirmationDialog(
             "Eine Einheit aus dem Bestand entnehmen?",
             isPresented: $confirmIssue,
@@ -97,6 +104,17 @@ struct ResourceDetailView: View {
             }
         } message: {
             Text(errorMessage ?? "Unbekannter Fehler")
+        }
+        .alert(
+            "3D-Modell konnte nicht geöffnet werden",
+            isPresented: Binding(
+                get: { modelErrorMessage != nil },
+                set: { if !$0 { modelErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { modelErrorMessage = nil }
+        } message: {
+            Text(modelErrorMessage ?? "Unbekannter Fehler")
         }
     }
 
@@ -227,12 +245,12 @@ struct ResourceDetailView: View {
 
     @ViewBuilder
     private var mediaSection: some View {
-        if !current.media.isEmpty, let client = state.client {
+        if let client = state.client, !imageMedia.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Medien").font(.headline)
+                Text("Bilder").font(.headline)
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 10) {
-                        ForEach(current.media.filter { $0.kind == .image }) { media in
+                        ForEach(imageMedia) { media in
                             AuthenticatedInventoryImage(media: media, client: client)
                                 .frame(width: 150, height: 150)
                                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -240,6 +258,66 @@ struct ResourceDetailView: View {
                     }
                 }
             }
+        }
+
+        if !objectModels.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("3D-Objektscan", systemImage: "cube.transparent.fill")
+                    .font(.headline)
+                ForEach(objectModels) { media in
+                    objectModelCard(media)
+                }
+            }
+            .inventoryCard()
+        }
+    }
+
+    private var imageMedia: [InventoryMedia] {
+        current.media.filter {
+            $0.kind == .image && $0.id != current.cover?.id
+        }
+    }
+
+    private var objectModels: [InventoryMedia] {
+        current.media.filter {
+            $0.kind == .model ||
+                $0.mimeType == CapturedObjectModel.mimeType ||
+                $0.name.lowercased().hasSuffix(".usdz")
+        }
+    }
+
+    private func objectModelCard(_ media: InventoryMedia) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "cube.fill")
+                .font(.title2)
+                .foregroundStyle(InventoryTheme.accent)
+                .frame(width: 44, height: 44)
+                .background(
+                    InventoryTheme.accent.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                )
+            VStack(alignment: .leading, spacing: 3) {
+                Text(media.name)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                Text(media.size.map { $0.formatted(.byteCount(style: .file)) } ?? "USDZ-Modell")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                openObjectModel(media)
+            } label: {
+                if modelDownloadID == media.id {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Label("Öffnen", systemImage: "arkit")
+                        .labelStyle(.iconOnly)
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(modelDownloadID != nil || state.client == nil)
+            .accessibilityLabel("3D-Modell öffnen")
         }
     }
 
@@ -262,6 +340,40 @@ struct ResourceDetailView: View {
     private func refresh() async {
         guard let client = state.client else { return }
         do { current = try await client.getResource(id: current.id) } catch { }
+    }
+
+    private func openObjectModel(_ media: InventoryMedia) {
+        guard let client = state.client, modelDownloadID == nil else { return }
+        modelDownloadID = media.id
+        modelErrorMessage = nil
+        Task {
+            defer { modelDownloadID = nil }
+            var downloadedFileURL: URL?
+            do {
+                let fileURL = try await client.mediaFile(for: media)
+                downloadedFileURL = fileURL
+                try Task.checkCancellation()
+                downloadedModel = DownloadedObjectModel(
+                    name: media.name,
+                    fileURL: fileURL
+                )
+                downloadedFileURL = nil // The preview sheet now owns cleanup.
+            } catch is CancellationError {
+                if let downloadedFileURL {
+                    try? FileManager.default.removeItem(
+                        at: downloadedFileURL.deletingLastPathComponent()
+                    )
+                }
+                return
+            } catch {
+                if let downloadedFileURL {
+                    try? FileManager.default.removeItem(
+                        at: downloadedFileURL.deletingLastPathComponent()
+                    )
+                }
+                modelErrorMessage = error.localizedDescription
+            }
+        }
     }
 
     private func book(delta: Int, type: String, reason: String) {
@@ -300,6 +412,68 @@ struct ResourceDetailView: View {
                 errorMessage = error.localizedDescription
             }
             booking = false
+        }
+    }
+}
+
+private struct DownloadedObjectModel: Identifiable {
+    let id = UUID()
+    let name: String
+    let fileURL: URL
+
+    func removeLocalFile() {
+        try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent())
+    }
+}
+
+private struct ObjectModelPreviewSheet: View {
+    let model: DownloadedObjectModel
+
+    var body: some View {
+        NavigationStack {
+            ObjectModelQuickLook(fileURL: model.fileURL)
+                .navigationTitle(model.name)
+                .navigationBarTitleDisplayMode(.inline)
+        }
+        .onDisappear { model.removeLocalFile() }
+    }
+}
+
+private struct ObjectModelQuickLook: UIViewControllerRepresentable {
+    let fileURL: URL
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(fileURL: fileURL)
+    }
+
+    func makeUIViewController(context: Context) -> QLPreviewController {
+        let controller = QLPreviewController()
+        controller.dataSource = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(
+        _ uiViewController: QLPreviewController,
+        context: Context
+    ) {
+        context.coordinator.fileURL = fileURL
+        uiViewController.reloadData()
+    }
+
+    final class Coordinator: NSObject, QLPreviewControllerDataSource {
+        var fileURL: URL
+
+        init(fileURL: URL) {
+            self.fileURL = fileURL
+        }
+
+        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+
+        func previewController(
+            _ controller: QLPreviewController,
+            previewItemAt index: Int
+        ) -> QLPreviewItem {
+            fileURL as NSURL
         }
     }
 }

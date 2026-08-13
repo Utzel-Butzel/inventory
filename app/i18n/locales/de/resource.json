@@ -74,12 +74,19 @@
     "pendingUpload": "Ausstehender Upload",
     "removePending": "Ausstehende Datei entfernen",
     "drop": "Dateien hier ablegen oder auswählen",
-    "formats": "JPG, PNG, WebP, HEIC, MP4, MOV, PDF oder USDZ · bis zu 12 Dateien"
+    "formats": "JPG, PNG, WebP, HEIC, MP4, MOV, PDF oder USDZ · bis zu 12 Dateien",
+    "objectCaptureReady": "Object-Capture-Paket ist bereit",
+    "objectCaptureReadyDescription": "Das Foto wird zum Artikelbild und die USDZ-Datei bleibt als interaktives 3D-Modell verfügbar.",
+    "objectCaptureReadyDescriptionAi": "Der bestehende KI-Ablauf erkennt den Artikel anhand des ausgewählten Fotos und erstellt ein freigestelltes Artikelbild. Die USDZ-Datei bleibt als interaktives 3D-Modell verfügbar.",
+    "objectCaptureNeedsImage": "3D-Modell ausgewählt",
+    "objectCaptureNeedsImageDescription": "Füge mindestens ein deutliches Objektfoto hinzu, um das Artikelbild zu erstellen und KI-Erkennung sowie Freistellung zu aktivieren."
   },
   "operations": {
     "title": "Betrieb",
     "description": "Nachverfolgung, Wert und interne Notizen",
     "serialNumber": "Seriennummer",
+    "barcode": "Barcode",
+    "barcodePlaceholder": "EAN, UPC oder Code 128",
     "sku": "SKU",
     "skuPlaceholder": "WERKZEUG-0042",
     "openingQuantity": "Anfangsmenge",
@@ -285,6 +292,7 @@
     "cover": "Titelbilderstellung fehlgeschlagen.",
     "requiredCustomField": "Fülle das erforderliche benutzerdefinierte Feld „{{label}}“ aus.",
     "nameOrImage": "Füge einen Namen oder mindestens ein Bild für die KI-Analyse hinzu.",
+    "objectCaptureImageRequired": "Füge vor dem Speichern dieses 3D-Modells mindestens ein Objektfoto hinzu.",
     "translation": "KI-Übersetzung fehlgeschlagen.",
     "save": "Element konnte nicht gespeichert werden.",
     "removeFile": "Datei konnte nicht entfernt werden.",

@@ -1,0 +1,128 @@
+name: Deployment check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compose-smoke-test:
+    name: Compose install and first login
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUTH_URL: http://localhost:3000
+      BOOTSTRAP_ADMIN_EMAIL: admin@inventory.local
+      BOOTSTRAP_ADMIN_NAME: Inventory CI
+      BOOTSTRAP_ADMIN_PASSWORD_ONCE: "true"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Generate disposable test credentials
+        shell: bash
+        run: |
+          postgres_password="$(openssl rand -hex 32)"
+          auth_secret="$(openssl rand -hex 32)"
+          admin_password="$(openssl rand -hex 12)"
+          echo "::add-mask::$postgres_password"
+          echo "::add-mask::$auth_secret"
+          echo "::add-mask::$admin_password"
+          echo "POSTGRES_PASSWORD=$postgres_password" >> "$GITHUB_ENV"
+          echo "AUTH_SECRET=$auth_secret" >> "$GITHUB_ENV"
+          echo "BOOTSTRAP_ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test deployment credential handling
+        run: npm run test:deployment
+
+      - name: Validate platform definitions
+        run: |
+          docker compose -p dokploy-check -f deploy/dokploy/docker-compose.yml config --quiet
+          SERVICE_PASSWORD_POSTGRES="$POSTGRES_PASSWORD" \
+          SERVICE_PASSWORD_64_AUTH="$AUTH_SECRET" \
+          SERVICE_FQDN_INVENTORY=inventory.example.com \
+          SERVICE_URL_INVENTORY_3000=https://inventory.example.com \
+          SERVICE_PASSWORD_64_ADMIN="$BOOTSTRAP_ADMIN_PASSWORD" \
+            docker compose -p coolify-check -f deploy/coolify/compose.yaml config --quiet
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const encoded = fs.readFileSync("deploy/dokploy/base64.txt", "utf8").trim();
+            const bundle = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
+            if (bundle.compose !== fs.readFileSync("deploy/dokploy/docker-compose.yml", "utf8")) throw new Error("Dokploy Compose bundle is stale");
+            if (bundle.config !== fs.readFileSync("deploy/dokploy/template.toml", "utf8")) throw new Error("Dokploy template bundle is stale");
+          '
+
+      - name: Start a fresh installation
+        run: |
+          docker compose -p inventory-check \
+            -f docker-compose.yml -f docker-compose.local.yml \
+            up -d --build
+          timeout 180 sh -c '
+            until [ "$(docker inspect --format={{.State.Health.Status}} inventory-check-app-1 2>/dev/null)" = healthy ]; do
+              sleep 2
+            done
+          '
+
+      - name: Verify health and first login
+        run: |
+          curl --fail --silent --show-error http://localhost:3000/api/health
+          node --input-type=module -e '
+            import fs from "node:fs";
+            fs.writeFileSync("/tmp/inventory-login-request.json", JSON.stringify({
+              email: process.env.BOOTSTRAP_ADMIN_EMAIL,
+              password: process.env.BOOTSTRAP_ADMIN_PASSWORD,
+              deviceName: "Deployment check",
+            }));
+          '
+          curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            --data @/tmp/inventory-login-request.json \
+            http://localhost:3000/api/v1/auth/login > /tmp/inventory-login.json
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const result = JSON.parse(fs.readFileSync("/tmp/inventory-login.json", "utf8"));
+            if (!result.token?.startsWith("inv_") || result.user?.role !== "admin") throw new Error("Initial administrator login failed");
+          '
+
+      - name: Verify login after application restart
+        run: |
+          docker compose -p inventory-check \
+            -f docker-compose.yml -f docker-compose.local.yml restart app
+          timeout 120 sh -c 'until curl --fail --silent http://localhost:3000/api/health >/dev/null; do sleep 2; done'
+          node --input-type=module -e '
+            import fs from "node:fs";
+            fs.writeFileSync("/tmp/inventory-restart-login-request.json", JSON.stringify({
+              email: process.env.BOOTSTRAP_ADMIN_EMAIL,
+              password: process.env.BOOTSTRAP_ADMIN_PASSWORD,
+              deviceName: "Deployment restart check",
+            }));
+          '
+          curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            --data @/tmp/inventory-restart-login-request.json \
+            http://localhost:3000/api/v1/auth/login > /dev/null
+
+      - name: Show service logs after failure
+        if: failure()
+        run: |
+          docker compose -p inventory-check \
+            -f docker-compose.yml -f docker-compose.local.yml \
+            logs --no-color --tail=200
+
+      - name: Remove test stack
+        if: always()
+        run: |
+          docker compose -p inventory-check \
+            -f docker-compose.yml -f docker-compose.local.yml \
+            down --volumes --remove-orphans

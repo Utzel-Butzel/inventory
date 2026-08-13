@@ -41,6 +41,7 @@ import type {
   CustomFieldDefinition,
   CustomFieldValue,
 } from "@/lib/custom-field-contract";
+import { getObjectCapturePresentation } from "@/lib/object-capture-presentation";
 import { isUsdzMedia } from "@/lib/usdz";
 
 const statusStyles: Record<string, string> = {
@@ -289,6 +290,8 @@ export function ResourceDetails({
     t(`statuses.${value}`, { defaultValue: humanize(value) });
   const mediaKindLabel = (value: string) =>
     t(`mediaKinds.${value}`, { defaultValue: humanize(value) });
+  const { model: objectModel, gallery: galleryMedia } =
+    getObjectCapturePresentation(resource.media, resource.cover?.id ?? null);
 
   return (
     <div className="mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
@@ -386,7 +389,60 @@ export function ResourceDetails({
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
         <div className="space-y-6">
           <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
-            {resource.cover ? (
+            {objectModel ? (
+              <div className="grid border-b border-border lg:grid-cols-2">
+                {resource.cover ? (
+                  <div className="relative aspect-square overflow-hidden bg-[radial-gradient(circle_at_50%_35%,var(--color-surface),var(--color-surface-muted))] lg:aspect-auto lg:min-h-80">
+                    {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={resource.cover.url}
+                      alt={resource.cover.altText || resource.name}
+                      className="h-full w-full object-contain"
+                    />
+                    <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1 text-[10px] font-semibold text-muted shadow-sm">
+                      <ImageIcon className="size-3.5" aria-hidden="true" />
+                      {t("details.articleImage")}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="grid aspect-square place-items-center bg-gradient-to-br from-success-soft to-surface-muted px-8 text-center text-muted lg:aspect-auto lg:min-h-80">
+                    <div>
+                      <ImageIcon
+                        className="mx-auto size-12"
+                        strokeWidth={1.25}
+                        aria-hidden="true"
+                      />
+                      <p className="mt-3 text-sm font-semibold text-muted-strong">
+                        {t("details.noArticleImage")}
+                      </p>
+                      {canEdit ? (
+                        <Link
+                          href={`/inventory/${resource.id}/edit`}
+                          className="mt-2 inline-flex text-xs font-semibold text-success hover:text-success"
+                        >
+                          {t("details.addArticleImage")}
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+                <UsdzModelViewer
+                  src={objectModel.url}
+                  name={objectModel.name}
+                  className="min-h-80 self-stretch rounded-none border-0"
+                  labels={{
+                    loading: t("modelViewer.loading"),
+                    unavailable: t("modelViewer.unavailable"),
+                    viewInAr: t("modelViewer.viewInAr"),
+                    download: t("modelViewer.download"),
+                    interaction: t("modelViewer.interaction", {
+                      name: objectModel.name,
+                    }),
+                  }}
+                />
+              </div>
+            ) : resource.cover ? (
               <div className="aspect-[16/9] overflow-hidden bg-surface-muted sm:aspect-[2/1]">
                 {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -411,21 +467,24 @@ export function ResourceDetails({
             </div>
           </section>
 
-          {resource.media.length > 1 || (resource.media.length === 1 && !resource.cover) ? (
+          {galleryMedia.length ? (
             <section className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <ImageIcon className="size-4 text-success" /> {t("details.sections.media")}
+                  <ImageIcon className="size-4 text-success" />
+                  {resource.cover || objectModel
+                    ? t("details.sections.additionalMedia")
+                    : t("details.sections.media")}
                 </h2>
                 <span className="text-xs text-muted">
                   {t("details.files", {
-                    count: resource.media.length,
-                    value: integer.format(resource.media.length),
+                    count: galleryMedia.length,
+                    value: integer.format(galleryMedia.length),
                   })}
                 </span>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {resource.media.map((item) => (
+                {galleryMedia.map((item) => (
                   <MediaCard
                     key={item.id}
                     item={item}
@@ -462,6 +521,7 @@ export function ResourceDetails({
                 })}
               />
               <DetailField icon={Barcode} label={t("fields.sku")} value={resource.sku || "—"} mono />
+              <DetailField icon={Barcode} label={t("fields.barcode")} value={resource.barcode || "—"} mono />
               <DetailField icon={Barcode} label={t("fields.serialNumber")} value={resource.serialNumber || "—"} mono />
               <DetailField icon={MapPin} label={t("fields.location")} value={resource.location || "—"} />
               <DetailField

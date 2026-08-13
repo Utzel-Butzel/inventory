@@ -26,6 +26,10 @@ import {
   inventoryStructureHttpError,
   synchronizeSpatialContainment,
 } from "@/lib/inventory-structure";
+import {
+  assertResourceIdentifiersAvailable,
+  ResourceIdentifierConflictError,
+} from "@/lib/resource-identifiers";
 
 export const dynamic = "force-dynamic";
 
@@ -119,6 +123,7 @@ export async function POST(request: Request) {
     }
 
     await assertActiveInventoryType(parsed.data.type);
+    await assertResourceIdentifiersAvailable(parsed.data);
     const customFields = await validateCustomFieldValues({
       entityType: "inventory",
       target: { type: parsed.data.type, categories: parsed.data.categories },
@@ -138,6 +143,7 @@ export async function POST(request: Request) {
         values,
         idempotencyKey: idempotency.key,
         requestHash,
+        actor: authorization.identity.subject,
       });
       if (
         !result.replayed &&
@@ -166,7 +172,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const resource = await createResource(values);
+    const resource = await createResource(values, authorization.identity.subject);
     if (
       parsed.data.mapFeatures.length > 0 ||
       (parsed.data.gpsLatitude !== null &&
@@ -201,6 +207,9 @@ export async function POST(request: Request) {
       );
     }
     if (error instanceof IdempotencyConflictError) {
+      return Response.json({ error: error.message }, { status: 409 });
+    }
+    if (error instanceof ResourceIdentifierConflictError) {
       return Response.json({ error: error.message }, { status: 409 });
     }
     const message = error instanceof Error ? error.message : "Unable to create item.";

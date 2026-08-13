@@ -12,7 +12,12 @@ import {
   stockSettings,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 import { StockOperationError } from "@/lib/stock";
+import {
+  allocatedVariantQuantity,
+  assertVariantAllocationFits,
+} from "@/lib/variant-stock-invariant";
 
 const nextDate = (from: Date, intervalDays: number) =>
   new Date(from.getTime() + intervalDays * 24 * 60 * 60 * 1_000);
@@ -244,6 +249,17 @@ export async function recordInventoryCount(
     if (balanceAfter < 0) {
       throw new StockOperationError("This count would make the total stock negative.", 409);
     }
+    if (!input.locationResourceId) {
+      const variantAllocation = await allocatedVariantQuantity(
+        transaction,
+        resourceId,
+      );
+      assertVariantAllocationFits(
+        balanceAfter,
+        variantAllocation,
+        (message) => new StockOperationError(message, 409),
+      );
+    }
     const countedAt = input.countedAt ?? new Date();
     await transaction
       .update(resources)
@@ -287,6 +303,7 @@ export async function recordInventoryCount(
         createdBy: actor,
       })
       .returning();
+    await enqueueStockMovementWebhookEvents(transaction, [movement]);
     const [count] = await transaction
       .insert(inventoryCounts)
       .values({

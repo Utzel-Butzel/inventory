@@ -7,6 +7,7 @@ import {
   parseSampledGaussianSplat,
   roomKeyframeDisplayOrientation,
   sampleRoomKeyframes,
+  selectPhotorealAssetBudget,
   validateEmbeddedGlb,
 } from "../lib/room-scene-visualization.ts";
 
@@ -40,10 +41,15 @@ function binaryPositionPly(points, extraProperties = []) {
   return bytes.buffer;
 }
 
-function glb(document) {
+function glb(document, binary) {
   const json = new TextEncoder().encode(JSON.stringify(document));
   const paddedLength = Math.ceil(json.length / 4) * 4;
-  const bytes = new ArrayBuffer(20 + paddedLength);
+  const binaryLength = binary
+    ? Math.ceil(binary.byteLength / 4) * 4
+    : 0;
+  const bytes = new ArrayBuffer(
+    20 + paddedLength + (binary ? 8 + binaryLength : 0),
+  );
   const view = new DataView(bytes);
   view.setUint32(0, 0x46546c67, true);
   view.setUint32(4, 2, true);
@@ -53,8 +59,27 @@ function glb(document) {
   const target = new Uint8Array(bytes, 20, paddedLength);
   target.fill(0x20);
   target.set(json);
+  if (binary) {
+    const offset = 20 + paddedLength;
+    view.setUint32(offset, binaryLength, true);
+    view.setUint32(offset + 4, 0x004e4942, true);
+    new Uint8Array(bytes, offset + 8, binary.byteLength).set(binary);
+  }
   return bytes;
 }
+
+const positionGlbDocument = (count = 1) => ({
+  asset: { version: "2.0" },
+  buffers: [{ byteLength: 12 }],
+  bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
+  accessors: [{
+    bufferView: 0,
+    componentType: 5126,
+    count,
+    type: "VEC3",
+  }],
+  meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+});
 
 test("samples long keyframe captures deterministically and retains the best frame", () => {
   const frames = Array.from({ length: 300 }, (_, index) => ({
@@ -68,6 +93,19 @@ test("samples long keyframe captures deterministically and retains the best fram
   assert.equal(new Set(sampled.map((frame) => frame.id)).size, 40);
   assert.ok(sampled.some((frame) => frame.id === "frame-157"));
   assert.deepEqual(sampled, sampleRoomKeyframes(frames, 40));
+});
+
+test("keeps multi-room photoreal assets inside one aggregate memory budget", () => {
+  const assets = [
+    { id: "primary", size: 80 },
+    { id: "second", size: 30 },
+    { id: "third", size: 20 },
+    { id: "oversized", size: 81 },
+  ];
+  const result = selectPhotorealAssetBudget(assets, 80, 120, 2);
+  assert.deepEqual(result.selected.map(({ id }) => id), ["primary", "second"]);
+  assert.equal(result.bytes, 110);
+  assert.equal(result.skipped, 2);
 });
 
 test("rejects GLB assets that can fetch external buffers or images", () => {
@@ -88,6 +126,47 @@ test("rejects GLB assets that can fetch external buffers or images", () => {
     ).valid,
     false,
   );
+});
+
+test("rejects bounded-viewer allocation bombs and unsupported GLTFLoader codecs", () => {
+  assert.equal(
+    validateEmbeddedGlb(
+      glb(positionGlbDocument(), new Uint8Array(12)),
+    ).valid,
+    true,
+  );
+  assert.match(
+    validateEmbeddedGlb(
+      glb(positionGlbDocument(1_000_000_000), new Uint8Array(12)),
+    ).error,
+    /accessors\[0\]\.count/,
+  );
+  assert.equal(
+    validateEmbeddedGlb(glb({
+      asset: { version: "2.0" },
+      buffers: [
+        { byteLength: 1, uri: "data:application/octet-stream;base64,AA==" },
+        { byteLength: 1, uri: "data:application/octet-stream;base64,AA==" },
+      ],
+    })).valid,
+    false,
+  );
+
+  for (const extension of [
+    "KHR_draco_mesh_compression",
+    "KHR_texture_basisu",
+    "EXT_meshopt_compression",
+    "KHR_meshopt_compression",
+  ]) {
+    assert.equal(
+      validateEmbeddedGlb(glb({
+        asset: { version: "2.0" },
+        extensionsUsed: [extension],
+        extensionsRequired: [extension],
+      })).valid,
+      false,
+    );
+  }
 });
 
 test("recognizes ASCII and binary PLY headers without trusting an extension", () => {

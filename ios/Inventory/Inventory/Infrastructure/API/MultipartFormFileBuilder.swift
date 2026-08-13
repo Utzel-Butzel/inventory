@@ -145,6 +145,56 @@ enum MultipartFormFileBuilder {
         }
     }
 
+    static func buildObjectRecognition(
+        image: MediaUploadFile
+    ) throws -> MultipartBodyFile {
+        let boundary = "InventoryBoundary-\(UUID().uuidString)"
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("inventory-recognition-\(UUID().uuidString)")
+            .appendingPathExtension("multipart")
+
+        guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
+            throw APIClientError.invalidUpload(
+                "Der Upload für die Objekterkennung konnte nicht vorbereitet werden."
+            )
+        }
+
+        do {
+            guard image.fileURL.isFileURL else {
+                throw APIClientError.invalidUpload(
+                    "Das Erkennungsfoto muss eine lokale Datei sein."
+                )
+            }
+            let values = try image.fileURL.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .fileSizeKey,
+            ])
+            guard values.isRegularFile == true, (values.fileSize ?? 0) > 0 else {
+                throw APIClientError.invalidUpload(
+                    "Das Erkennungsfoto fehlt oder ist leer."
+                )
+            }
+
+            let output = try FileHandle(forWritingTo: outputURL)
+            defer { try? output.close() }
+            let safeFilename = sanitizeHeaderValue(image.filename)
+            let safeMIMEType = sanitizeHeaderValue(image.mimeType)
+            try write("--\(boundary)\r\n", to: output)
+            try write(
+                "Content-Disposition: form-data; name=\"image\"; filename=\"\(safeFilename)\"\r\n",
+                to: output
+            )
+            try write("Content-Type: \(safeMIMEType)\r\n\r\n", to: output)
+            try copy(image.fileURL, to: output)
+            try write("\r\n--\(boundary)--\r\n", to: output)
+            try output.synchronize()
+            return MultipartBodyFile(fileURL: outputURL, boundary: boundary)
+        } catch {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw error
+        }
+    }
+
     static func buildRoomScan(
         draft: SpatialRoomScanDraft,
         roomResourceID: UUID

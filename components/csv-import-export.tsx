@@ -2,9 +2,11 @@
 
 import {
   AlertCircle,
+  ChevronDown,
   CheckCircle2,
   Download,
   FileSpreadsheet,
+  FileText,
   LoaderCircle,
   RotateCcw,
   Upload,
@@ -29,6 +31,7 @@ const supportedHeaders = new Set([
   "quantity",
   "location",
   "serial_number",
+  "barcode",
   "value_cents",
   "currency",
   "priority",
@@ -43,6 +46,7 @@ const supportedHeaders = new Set([
   "notes",
   "created_at",
   "updated_at",
+  "variants",
 ]);
 
 const resourceTypes = new Set([
@@ -112,6 +116,8 @@ type CsvImportResponse = {
   summary: CsvImportSummary;
   rows: ImportRowResult[];
 };
+
+type ExportFormat = "csv" | "xlsx" | "pdf";
 
 const canonicalHeader = (header: string) => {
   const normalized = header
@@ -262,6 +268,9 @@ function validateRow(
   if (value("serial_number").trim().length > 180) {
     errors.push(t("csv.validation.tooLong", { label: "serial_number", max: 180 }));
   }
+  if (value("barcode").trim().length > 180) {
+    errors.push(t("csv.validation.tooLong", { label: "barcode", max: 180 }));
+  }
   if (value("notes").length > 20_000) errors.push(t("csv.validation.tooLong", { label: "notes", max: "20,000" }));
   if (
     value("type").trim() &&
@@ -363,9 +372,9 @@ const responseError = async (response: Response, fallback: string) => {
   }
 };
 
-const filenameFromDisposition = (header: string | null) => {
+const filenameFromDisposition = (header: string | null, fallback: string) => {
   const match = header?.match(/filename="?([^";]+)"?/i);
-  return (match?.[1] ?? "inventory.csv").replace(/[^a-zA-Z0-9._-]/g, "_");
+  return (match?.[1] ?? fallback).replace(/[^a-zA-Z0-9._-]/g, "_");
 };
 
 export function CsvImportExport({
@@ -380,6 +389,7 @@ export function CsvImportExport({
   const { t, i18n } = useT("settings");
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const exportMenuRef = useRef<HTMLDetailsElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [csvText, setCsvText] = useState("");
   const [importKey, setImportKey] = useState("");
@@ -387,7 +397,7 @@ export function CsvImportExport({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CsvImportResponse | null>(null);
   const [importing, setImporting] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const validResourceTypes = useMemo(
     () =>
       inventoryTypeKeys?.length
@@ -451,26 +461,50 @@ export function CsvImportExport({
     }
   };
 
-  const exportCsv = async () => {
-    setExporting(true);
+  const exportInventory = async (format: ExportFormat) => {
+    if (exportMenuRef.current) exportMenuRef.current.open = false;
+    setExporting(format);
     setError(null);
     try {
-      const response = await fetch("/api/v1/resources/export", {
-        headers: { Accept: "text/csv" },
-      });
-      if (!response.ok) throw new Error(await responseError(response, t("csv.errors.request", { status: response.status })));
+      const exportLocale = locale.toLocaleLowerCase("en-US").startsWith("de")
+        ? "de"
+        : "en";
+      const accept = {
+        csv: "text/csv",
+        xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        pdf: "application/pdf",
+      }[format];
+      const response = await fetch(
+        `/api/v1/resources/export?format=${format}&lang=${exportLocale}`,
+        {
+          headers: { Accept: accept },
+        },
+      );
+      if (!response.ok) {
+        throw new Error(
+          await responseError(
+            response,
+            t("csv.errors.request", { status: response.status }),
+          ),
+        );
+      }
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = url;
-      link.download = filenameFromDisposition(response.headers.get("content-disposition"));
+      link.download = filenameFromDisposition(
+        response.headers.get("content-disposition"),
+        `inventory.${format}`,
+      );
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : t("csv.errors.export"));
+      setError(
+        exportError instanceof Error ? exportError.message : t("csv.errors.export"),
+      );
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   };
 
@@ -513,15 +547,66 @@ export function CsvImportExport({
               : t("csv.exportOnlyDescription")}
           </p>
         </div>
-        <Button variant="secondary" onClick={() => void exportCsv()} disabled={exporting}>
-          {exporting ? (
-            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Download className="size-4" aria-hidden="true" />
-          )}
-          {t("csv.export")}
-        </Button>
+        <details ref={exportMenuRef} className="group relative">
+          <summary
+            className="inline-flex h-10 cursor-pointer list-none items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-foreground shadow-sm transition hover:border-border-strong hover:bg-surface-subtle [&::-webkit-details-marker]:hidden"
+            aria-label={t("csv.export")}
+          >
+            {exporting ? (
+              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Download className="size-4" aria-hidden="true" />
+            )}
+            {exporting
+              ? t("csv.exporting", { format: exporting.toUpperCase() })
+              : t("csv.export")}
+            <ChevronDown
+              className="size-3.5 transition group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </summary>
+          <div
+            role="menu"
+            aria-label={t("csv.exportFormats")}
+            className="absolute right-0 z-20 mt-2 w-72 overflow-hidden rounded-xl border border-border bg-surface p-1.5 shadow-lg"
+          >
+            {([
+              ["csv", FileSpreadsheet],
+              ["xlsx", FileSpreadsheet],
+              ["pdf", FileText],
+            ] as const).map(([format, Icon]) => (
+              <button
+                key={format}
+                type="button"
+                role="menuitem"
+                disabled={Boolean(exporting)}
+                onClick={() => void exportInventory(format)}
+                className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-surface-subtle disabled:pointer-events-none disabled:opacity-50"
+              >
+                <Icon className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+                <span>
+                  <span className="block text-sm font-semibold text-foreground">
+                    {t(`csv.formats.${format}.label`)}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-4 text-muted">
+                    {t(`csv.formats.${format}.description`)}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </details>
       </div>
+
+      {error ? (
+        <div
+          role="alert"
+          className="mx-5 mt-4 flex items-start gap-2 rounded-xl border border-danger-border bg-danger-soft px-3.5 py-3 text-sm text-danger"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>{error}</span>
+        </div>
+      ) : null}
 
       {allowImport ? <div className="space-y-4 p-5">
         <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border-strong bg-surface-subtle/70 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -554,16 +639,6 @@ export function CsvImportExport({
             </label>
           </div>
         </div>
-
-        {error ? (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-xl border border-danger-border bg-danger-soft px-3.5 py-3 text-sm text-danger"
-          >
-            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <span>{error}</span>
-          </div>
-        ) : null}
 
         {preview ? (
           <div className="space-y-3">

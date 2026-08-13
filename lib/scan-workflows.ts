@@ -15,6 +15,7 @@ import {
   type StockUnitRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 import {
   scanWorkflowCreateSchema,
   scanWorkflowLimits,
@@ -812,6 +813,7 @@ export async function executeStockScan(
           createdBy: actor,
         })
         .returning();
+      await enqueueStockMovementWebhookEvents(transaction, [movement]);
 
       const response = {
         workflowId: workflow.id,

@@ -115,6 +115,120 @@ final class SpatialKeyframeTests: XCTestCase {
         XCTAssertTrue((0 ... 1).contains(standalone))
     }
 
+    func testPhotoOnlyLocalizationStateRequiresComparableReferencesAndRestoresReadyState() {
+        var state = SpatialPhotoOnlyLocalizationState.unavailable
+        XCTAssertFalse(state.canMatch)
+
+        state.beginIndexing()
+        XCTAssertEqual(state, .indexing)
+        XCTAssertFalse(state.beginMatching())
+
+        state.finishIndexing(referenceCount: 1)
+        XCTAssertEqual(state, .unavailable)
+        XCTAssertFalse(state.canMatch)
+        XCTAssertFalse(state.beginMatching())
+
+        state.finishIndexing(referenceCount: 3)
+        XCTAssertTrue(state.canMatch)
+        XCTAssertTrue(state.beginMatching())
+        XCTAssertEqual(state, .matching(referenceCount: 3))
+
+        state.finishMatching()
+        XCTAssertEqual(state, .ready(referenceCount: 3))
+        XCTAssertEqual(state.referenceCount, 3)
+    }
+
+    func testPhotoOnlyPolicyReturnsOnlyStoredReferencePoseAsCoarseEstimate() throws {
+        let roomScanID = UUID()
+        let keyframeID = UUID()
+        var transform = identity
+        transform[12] = 1.25
+        transform[13] = -0.5
+        transform[14] = 3.75
+        let localization = SpatialPhotoLocalization(
+            roomScanID: roomScanID,
+            keyframeID: keyframeID,
+            featureDistance: 5,
+            estimatedCameraTransform: transform,
+            cameraPositionError: nil,
+            confidence: 0.82,
+            candidateCount: 4,
+            secondBestFeatureDistance: 18
+        )
+
+        let estimate = try XCTUnwrap(
+            SpatialPhotoOnlyLocalizationPolicy.estimate(from: localization)
+        )
+        XCTAssertEqual(estimate.roomScanID, roomScanID)
+        XCTAssertEqual(estimate.keyframeID, keyframeID)
+        XCTAssertEqual(estimate.referenceCameraTransform, transform)
+        XCTAssertEqual(estimate.referenceCameraPosition, [1.25, -0.5, 3.75])
+        XCTAssertEqual(
+            SpatialPhotoOnlyLocalizationPolicy.maximumQueryBytes,
+            SpatialKeyframeCapturePolicy.standard.maximumTotalBytes
+        )
+    }
+
+    func testPhotoOnlyPolicyRejectsAmbiguousLowConfidenceAndInvalidPoses() {
+        let base = SpatialPhotoLocalization(
+            roomScanID: UUID(),
+            keyframeID: UUID(),
+            featureDistance: 5,
+            estimatedCameraTransform: identity,
+            cameraPositionError: nil,
+            confidence: 0.82,
+            candidateCount: 4,
+            secondBestFeatureDistance: 18
+        )
+        let ambiguous = SpatialPhotoLocalization(
+            roomScanID: base.roomScanID,
+            keyframeID: base.keyframeID,
+            featureDistance: base.featureDistance,
+            estimatedCameraTransform: base.estimatedCameraTransform,
+            cameraPositionError: nil,
+            confidence: base.confidence,
+            candidateCount: 1,
+            secondBestFeatureDistance: nil
+        )
+        let lowConfidence = SpatialPhotoLocalization(
+            roomScanID: base.roomScanID,
+            keyframeID: base.keyframeID,
+            featureDistance: base.featureDistance,
+            estimatedCameraTransform: base.estimatedCameraTransform,
+            cameraPositionError: nil,
+            confidence: 0.2,
+            candidateCount: base.candidateCount,
+            secondBestFeatureDistance: base.secondBestFeatureDistance
+        )
+        var invalidTransform = identity
+        invalidTransform[15] = 0
+        let invalidPose = SpatialPhotoLocalization(
+            roomScanID: base.roomScanID,
+            keyframeID: base.keyframeID,
+            featureDistance: base.featureDistance,
+            estimatedCameraTransform: invalidTransform,
+            cameraPositionError: nil,
+            confidence: base.confidence,
+            candidateCount: base.candidateCount,
+            secondBestFeatureDistance: base.secondBestFeatureDistance
+        )
+        let visuallyAmbiguous = SpatialPhotoLocalization(
+            roomScanID: base.roomScanID,
+            keyframeID: base.keyframeID,
+            featureDistance: 5,
+            estimatedCameraTransform: base.estimatedCameraTransform,
+            cameraPositionError: nil,
+            confidence: base.confidence,
+            candidateCount: base.candidateCount,
+            secondBestFeatureDistance: 5.2
+        )
+
+        XCTAssertNil(SpatialPhotoOnlyLocalizationPolicy.estimate(from: ambiguous))
+        XCTAssertNil(SpatialPhotoOnlyLocalizationPolicy.estimate(from: lowConfidence))
+        XCTAssertNil(SpatialPhotoOnlyLocalizationPolicy.estimate(from: invalidPose))
+        XCTAssertNil(SpatialPhotoOnlyLocalizationPolicy.estimate(from: visuallyAmbiguous))
+    }
+
     func testKeyframeDecodesBackendReadContract() throws {
         let id = UUID()
         let json = """

@@ -1,9 +1,9 @@
 {
   "metadata": {
     "scanTitle": "Scan stock | Inventory",
-    "scanDescription": "Scan QR codes and apply configured properties to stock units.",
+    "scanDescription": "Scan QR codes and barcodes and apply configured properties to stock units.",
     "workflowsTitle": "Scan workflows | Inventory",
-    "workflowsDescription": "Visually configure QR-code-driven stock workflows."
+    "workflowsDescription": "Visually configure code-driven stock workflows."
   },
   "statuses": {
     "available": "Available",
@@ -38,15 +38,15 @@
       "generic": "The camera could not be started. You can still upload a photo or enter the code manually.",
       "secureContext": "Camera access requires a secure HTTPS connection. Open this page over HTTPS, or use photo upload/manual entry below.",
       "unsupported": "This browser does not provide camera access. Use photo upload or manual entry below.",
-      "noQr": "No QR code was found. Try a closer, sharper photo with the whole code visible, or enter the code manually.",
+      "noQr": "No supported code was found. Try a closer, sharper photo with the whole code visible, or enter it manually.",
       "imageUnreadable": "This image could not be read. Try another photo or enter the code manually.",
       "manualRequired": "Enter the complete content expected by the selected workflow."
     },
     "deviceFallback": "Camera {{value}}",
     "title": "Scan with camera",
-    "description": "Hold the complete QR code inside the frame.",
+    "description": "Hold the complete QR code or barcode inside the frame.",
     "cameraLabel": "Camera",
-    "previewLabel": "Live camera preview for QR-code scanning",
+    "previewLabel": "Live camera preview for QR-code and barcode scanning",
     "status": {
       "paused": "Scanner paused after detection",
       "unavailable": "Camera unavailable",
@@ -56,20 +56,20 @@
     "stop": "Stop camera",
     "scanAnother": "Scan another code",
     "start": "Start camera",
-    "privacy": "Camera access works on HTTPS or localhost. The video stays on this device and is only inspected for QR codes.",
+    "privacy": "Supports QR, Data Matrix, Aztec, PDF417, Code 39/93/128, Codabar, EAN, UPC, and ITF. Video stays on this device.",
     "separator": "or",
     "photo": {
-      "title": "Upload a QR photo",
+      "title": "Upload a code photo",
       "description": "Useful when camera access is blocked or the label is hard to reach.",
       "reading": "Reading photo…",
       "choose": "Choose or take photo"
     },
     "manual": {
       "title": "Enter code manually",
-      "label": "Complete QR-code content",
-      "placeholder": "Complete QR-code content",
+      "label": "Complete code content",
+      "placeholder": "Complete code content",
       "use": "Use code",
-      "help": "Enter exactly what the QR code contains. Depending on the selected workflow, a URL or prefixed value may be required; a bare EPD number is not always enough."
+      "help": "Enter exactly what the code contains. Depending on the selected workflow, a URL or prefixed value may be required; a bare EPD number is not always enough."
     },
     "detected": "Code detected: {{code}}"
   },
@@ -95,13 +95,13 @@
     "header": {
       "eyebrow": "Stock automation",
       "title": "Scan into stock",
-      "description": "Scan the complete QR content, let the selected workflow extract its identifier, and review every change before it reaches inventory."
+      "description": "Scan the complete code content, let the selected workflow extract its identifier, and review every change before it reaches inventory."
     },
     "setup": {
       "errorTitle": "Scanner setup could not be loaded",
       "retry": "Retry",
       "emptyTitle": "No enabled scan workflow",
-      "emptyDescription": "Create and enable a workflow first. It defines how QR content maps to an EPD number, stock state, and editable properties.",
+      "emptyDescription": "Create and enable a workflow first. It defines how code content maps to an EPD number, stock state, and editable properties.",
       "workflowLabel": "Scan workflow"
     },
     "success": {
@@ -121,7 +121,7 @@
         "scan": {
           "number": "1",
           "title": "Scan",
-          "description": "Read a QR code or enter its complete content."
+          "description": "Read a QR code or barcode, or enter its complete content."
         },
         "enrich": {
           "number": "2",
@@ -214,7 +214,7 @@
       "prefixMismatch": "The scan does not start with “{{prefix}}”.",
       "prefixEmpty": "Nothing remains after removing the prefix.",
       "invalidUrl": "The scanned value is not a valid URL.",
-      "originMismatch": "Expected a QR code from {{origin}}.",
+      "originMismatch": "Expected a code from {{origin}}.",
       "originInvalid": "The configured source origin is invalid.",
       "pathMismatch": "Expected the path {{path}}.",
       "queryCount": "The scan must contain exactly one “{{parameter}}” query value.",
@@ -240,7 +240,7 @@
     "header": {
       "eyebrow": "Scan automation",
       "title": "Build scan workflows visually.",
-      "description": "Turn a QR code into an identified stock unit with guided inputs and consistent properties—without code.",
+      "description": "Turn a scanned code into an identified stock unit with guided inputs and consistent properties—without programming.",
       "readOnly": "Read only",
       "refresh": "Refresh",
       "newTemplate": "New from template"
@@ -286,8 +286,8 @@
     "steps": {
       "trigger": {
         "title": "Trigger",
-        "description": "This workflow starts when a camera or handheld scanner reads a QR code.",
-        "event": "QR code scanned",
+        "description": "This workflow starts when a camera or handheld scanner reads a code.",
+        "event": "Code scanned",
         "eventDescription": "Pass the decoded text into this workflow",
         "badge": "Scan trigger"
       },
@@ -371,8 +371,8 @@
       "title": "Local scan preview",
       "description": "Test extraction and selections without changing inventory.",
       "noWrite": "No write",
-      "scannedValue": "Scanned QR value",
-      "placeholder": "Paste a decoded QR value…",
+      "scannedValue": "Scanned code value",
+      "placeholder": "Paste a decoded code value…",
       "inputFallback": "Input",
       "result": "Result",
       "identifier": "Identifier",

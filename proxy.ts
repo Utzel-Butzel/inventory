@@ -4,8 +4,8 @@ import i18nConfig from "./i18n.config";
 
 export const proxy = createProxy(i18nConfig);
 
-// The public website intentionally remains English. Locale detection is scoped to
-// sign-in, inventory shares, and authenticated application routes only.
+// The public marketing website has fixed German copy. Locale detection is scoped
+// to sign-in, inventory shares, and authenticated application routes only.
 export const config = {
   matcher: [
     "/login",
@@ -17,6 +17,7 @@ export const config = {
     "/batch/:path*",
     "/labels/:path*",
     "/duplicates/:path*",
+    "/notifications/:path*",
     "/settings/:path*",
     "/share/:path*",
   ],

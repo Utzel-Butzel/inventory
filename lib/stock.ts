@@ -35,11 +35,16 @@ import {
   type StockUnitStatus,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 import {
   CustomFieldError,
   validateCustomFieldValues,
 } from "@/lib/custom-fields";
 import type { CustomFieldValues } from "@/lib/custom-field-contract";
+import {
+  allocatedVariantQuantity,
+  assertVariantAllocationFits,
+} from "@/lib/variant-stock-invariant";
 
 const FORECAST_WINDOW_DAYS = 30;
 const MAX_SERIALIZATION_UNITS = 5_000;
@@ -158,6 +163,13 @@ const movementDto = (row: StockMovementRecord) => ({
   occurredAt: row.occurredAt.toISOString(),
   createdAt: row.createdAt.toISOString(),
   createdBy: row.createdBy,
+  ...(row.variantId
+    ? {
+        variantId: row.variantId,
+        variantDelta: row.variantDelta,
+        variantBalanceAfter: row.variantBalanceAfter,
+      }
+    : {}),
   ...(row.unitId ? { unitId: row.unitId } : {}),
   ...(row.assemblyBuildId ? { assemblyBuildId: row.assemblyBuildId } : {}),
   ...(row.purchaseReceiptId ? { purchaseReceiptId: row.purchaseReceiptId } : {}),
@@ -687,7 +699,7 @@ export async function updateStockConfig(
     const next: StockConfig = { ...current, ...patch };
     let unitsCreated = 0;
 
-    if (current.trackingMode !== next.trackingMode) {
+      if (current.trackingMode !== next.trackingMode) {
       const [{ value: existingUnits }] = await transaction
         .select({ value: sql<number>`count(*)::int` })
         .from(stockUnits)
@@ -701,6 +713,16 @@ export async function updateStockConfig(
       }
 
       if (next.trackingMode === "serialized") {
+        const variantAllocation = await allocatedVariantQuantity(
+          transaction,
+          resourceId,
+        );
+        if (variantAllocation > 0) {
+          throw new StockOperationError(
+            "Move all variant stock to zero before enabling serialized tracking.",
+            409,
+          );
+        }
         if (Number(existingUnits ?? 0) > 0) {
           throw new StockOperationError(
             "This item already has serialized units and cannot be converted again.",
@@ -761,21 +783,25 @@ export async function updateStockConfig(
             )
             .returning();
           unitsCreated = createdUnits.length;
-          await transaction.insert(stockMovements).values(
-            createdUnits.map((unit) => ({
-              resourceId,
-              unitId: unit.id,
-              delta: 0,
-              quantity: 1,
-              balanceAfter: resource.quantity,
-              type: "serialization-opening",
-              reason: "Bulk stock converted to an identified unit",
-              note: "",
-              location: unit.location,
-              occurredAt,
-              createdBy: actor,
-            })),
-          );
+          const openingMovements = await transaction
+            .insert(stockMovements)
+            .values(
+              createdUnits.map((unit) => ({
+                resourceId,
+                unitId: unit.id,
+                delta: 0,
+                quantity: 1,
+                balanceAfter: resource.quantity,
+                type: "serialization-opening",
+                reason: "Bulk stock converted to an identified unit",
+                note: "",
+                location: unit.location,
+                occurredAt,
+                createdBy: actor,
+              })),
+            )
+            .returning();
+          await enqueueStockMovementWebhookEvents(transaction, openingMovements);
         }
       }
     }
@@ -949,6 +975,15 @@ export async function bookStockMovement(
           409,
         );
       }
+      const variantAllocation = await allocatedVariantQuantity(
+        transaction,
+        resourceId,
+      );
+      assertVariantAllocationFits(
+        balanceAfter,
+        variantAllocation,
+        (message) => new StockOperationError(message, 409),
+      );
 
       if (!settings) {
         await transaction
@@ -1020,9 +1055,11 @@ export async function bookStockMovement(
           createdBy: actor,
         })
         .returning();
+      const movementPayload = movementDto(movement);
+      await enqueueStockMovementWebhookEvents(transaction, [movement]);
       const response = {
         resource: { ...resource, quantity: balanceAfter },
-        movement: movementDto(movement),
+        movement: movementPayload,
       };
       if (idempotency) {
         await transaction.insert(stockMovementRequests).values({
@@ -1162,6 +1199,7 @@ export async function createStockUnits(
           })),
         )
         .returning();
+      await enqueueStockMovementWebhookEvents(transaction, createdMovements);
       return {
         resource: { ...resource, quantity: balanceAfter },
         units: createdUnits.map(unitDto),
@@ -1339,6 +1377,7 @@ export async function updateStockUnit(
         createdBy: actor,
       })
       .returning();
+    await enqueueStockMovementWebhookEvents(transaction, [movement]);
     return {
       resource: { ...resource, quantity: balanceAfter },
       unit: unitDto(savedUnit),

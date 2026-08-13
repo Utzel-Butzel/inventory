@@ -19,6 +19,7 @@ export const UI_NAMESPACES = [
   "spatial",
   "labels",
   "settings",
+  "notifications",
   "batch",
   "share",
 ] as const;

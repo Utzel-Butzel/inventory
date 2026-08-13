@@ -21,8 +21,8 @@
     },
     "data": {
       "title": "Datentransfer",
-      "metaDescription": "Inventar als CSV importieren oder Arbeitsbereichsdaten exportieren.",
-      "description": "Übertragen Sie Inventardaten mit einem validierten CSV-Ablauf in diesen Arbeitsbereich oder aus ihm heraus."
+      "metaDescription": "Inventar als CSV importieren oder als CSV, Excel und PDF exportieren.",
+      "description": "Übertragen Sie Inventardaten mit einem validierten CSV-Import in diesen Arbeitsbereich oder exportieren Sie sie als CSV, Excel oder PDF."
     },
     "inventoryTypes": {
       "title": "Inventartypen",
@@ -43,7 +43,274 @@
       "title": "Öffentliche Freigaben",
       "metaDescription": "Öffentliche Links für das Inventar erstellen und verwalten.",
       "description": "Veröffentlichen Sie das gesamte Inventar, eine nach benutzerdefiniertem Feld gefilterte Ansicht oder einen einzelnen Eintrag über einen widerrufbaren Link."
+    },
+    "notifications": {
+      "title": "Benachrichtigungen",
+      "metaDescription": "Ruhige Inventarhinweise und Zusammenfassungen konfigurieren.",
+      "description": "Wählen Sie Ereignisse, Schwellen, Digest-Zeit und optionale externe Kanäle. Das In-App-Postfach ist immer verfügbar."
+    },
+    "webhooks": {
+      "title": "Webhooks",
+      "metaDescription": "Inventarereignisse über signierte Webhooks mit externen Systemen verbinden.",
+      "description": "Senden Sie signierte Inventarereignisse an eigene HTTPS-Endpunkte, testen Sie Integrationen und prüfen Sie deren Zustellstatus."
     }
+  },
+  "notifications": {
+    "events": {
+      "title": "Beobachtete Ereignisse",
+      "description": "Ausgewählte Ereignisse gelangen nach Schwellen- und Cooldown-Prüfung ins In-App-Postfach.",
+      "low_stock": {
+        "label": "Niedriger Bestand",
+        "description": "Hinweis, wenn der verfügbare Bestand den festgelegten Anteil des Mindestbestands erreicht."
+      },
+      "expiry": {
+        "label": "Ablaufdatum",
+        "description": "Überwacht ein Datums-Custom-Field auf bevorstehende oder überfällige Abläufe."
+      },
+      "maintenance": {
+        "label": "Wartung",
+        "description": "Überwacht Wartungsstatus und ein konfigurierbares Wartungsdatum."
+      },
+      "return_due": {
+        "label": "Rückgabe fällig",
+        "description": "Hinweis vor der Fälligkeit einer aktiven Ausleihe, Zuordnung oder Reservierung."
+      }
+    },
+    "noise": {
+      "title": "Rhythmus und Ruhe",
+      "description": "Täglicher Digest und 24 Stunden Cooldown sind die ruhigen Defaults. Sofortmeldungen bleiben dedupliziert.",
+      "frequency": "Externe Zustellung",
+      "daily": "Tägliche Zusammenfassung (empfohlen)",
+      "immediate": "Sofort",
+      "digestHour": "Digest-Stunde · 0–23",
+      "timezone": "IANA-Zeitzone",
+      "language": "Benachrichtigungssprache",
+      "cooldown": "Cooldown · Stunden"
+    },
+    "thresholds": {
+      "lowStock": "Niedrigbestand · % vom Minimum",
+      "expiryWindow": "Ablauf-Fenster · Tage",
+      "maintenanceWindow": "Wartungsfenster · Tage",
+      "returnWindow": "Rückgabefenster · Tage",
+      "expiryField": "Custom-Field-Key für Ablaufdatum",
+      "maintenanceField": "Custom-Field-Key für Wartungsdatum"
+    },
+    "channels": {
+      "title": "Zustellkanäle",
+      "description": "Externe Kanäle bleiben aus, bis Sie sie ausdrücklich aktivieren. Ziele werden serverseitig verwaltet und hier redigiert.",
+      "optIn": "Opt-in",
+      "alwaysOn": "Immer aktiv",
+      "configured": "Konfiguriert",
+      "notConfigured": "Nicht konfiguriert",
+      "enabled": "Aktiv",
+      "disabled": "Inaktiv",
+      "inApp": {
+        "label": "In-App-Postfach",
+        "description": "Empfängt immer deduplizierte Ereignisse; kein externer Kanal nötig."
+      },
+      "email": {
+        "label": "E-Mail",
+        "description": "Zustellung an die E-Mail-Adresse des angemeldeten Kontos."
+      },
+      "push": {
+        "label": "Web Push",
+        "description": "Abonniert diesen Browser über den verschlüsselten Push-API-Ablauf."
+      },
+      "slack": {
+        "label": "Slack",
+        "description": "Deploymentweiter Incoming Webhook."
+      },
+      "teams": {
+        "label": "Microsoft Teams",
+        "description": "Deploymentweiter Workflow-Webhook."
+      },
+      "webhook": {
+        "label": "Generischer Webhook",
+        "description": "Deploymentweiter, signierter JSON-Endpunkt."
+      }
+    },
+    "actions": {
+      "save": "Einstellungen speichern",
+      "retry": "Erneut versuchen",
+      "preview": "Nur Vorschau",
+      "enable": "Aktivieren",
+      "disable": "Deaktivieren"
+    },
+    "notices": {
+      "saved": "Benachrichtigungseinstellungen gespeichert.",
+      "pushEnabled": "Web Push für diesen Browser aktiviert.",
+      "pushDisabled": "Web Push für diesen Browser deaktiviert.",
+      "previewOnly": "Vorschau serverseitig erzeugt. Es wurde keine Nachricht gesendet."
+    },
+    "errors": {
+      "load": "Benachrichtigungseinstellungen konnten nicht geladen werden.",
+      "save": "Benachrichtigungseinstellungen konnten nicht gespeichert werden.",
+      "preview": "Die Kanalvorschau konnte nicht erstellt werden.",
+      "pushUnsupported": "Dieser Browser unterstützt Web Push nicht.",
+      "pushDenied": "Die Browserberechtigung für Benachrichtigungen wurde nicht erteilt.",
+      "pushSubscribe": "Dieser Browser konnte Web Push nicht abonnieren.",
+      "pushUnsubscribe": "Web Push konnte für diesen Browser nicht deaktiviert werden."
+    },
+    "unsaved": "Ungespeicherte Änderungen",
+    "savedState": "Alle Änderungen gespeichert"
+  },
+  "webhooks": {
+    "list": {
+      "title": "Integrations-Webhooks",
+      "description": "Jeder Endpunkt erhält für ausgewählte Inventarereignisse eine signierte JSON-Anfrage.",
+      "activeCount_one": "{{count}} aktiv",
+      "activeCount_other": "{{count}} aktiv",
+      "loading": "Webhooks werden geladen",
+      "emptyTitle": "Noch keine Webhooks",
+      "emptyDescription": "Erstellen Sie einen Endpunkt, um Inventaränderungen in Echtzeit an einen anderen Dienst zu senden."
+    },
+    "form": {
+      "createTitle": "Webhook erstellen",
+      "createDescription": "Wählen Sie ein Ziel und die Ereignisse, die diese Integration empfangen soll.",
+      "editTitle": "Webhook bearbeiten",
+      "editDescription": "Ändern Sie Name, Ereignisse, Status oder ersetzen Sie die Ziel-URL.",
+      "name": "Name der Integration",
+      "namePlaceholder": "Lagerautomatisierung",
+      "nameHint": "Verwenden Sie einen Namen, an dem das empfangende System leicht zu erkennen ist.",
+      "url": "Endpunkt-URL",
+      "urlPlaceholder": "https://automation.example.com/hooks/inventory",
+      "urlEditPlaceholder": "Leer lassen, um die aktuelle URL beizubehalten",
+      "urlHint": "Verwenden Sie eine HTTPS-URL, die von der empfangenden Integration kontrolliert wird.",
+      "currentTarget": "Aktuelles Ziel: {{target}}. Leer lassen, um es beizubehalten.",
+      "events": "Zugestellte Ereignisse",
+      "eventsHint": "Wählen Sie mindestens ein Ereignis. Die Auswahl kann später geändert werden.",
+      "enabled": "Sofort aktivieren",
+      "enabledHint": "Deaktivierte Endpunkte behalten ihre Konfiguration, erhalten aber keine neuen Zustellungen."
+    },
+    "events": {
+      "inventory": {
+        "resource": {
+          "created": {
+            "label": "Eintrag erstellt",
+            "description": "Ein neuer Inventareintrag wurde hinzugefügt."
+          },
+          "updated": {
+            "label": "Eintrag aktualisiert",
+            "description": "Felder oder Metadaten eines Eintrags wurden geändert."
+          },
+          "deleted": {
+            "label": "Eintrag gelöscht",
+            "description": "Ein Inventareintrag wurde endgültig entfernt."
+          },
+          "merged": {
+            "label": "Einträge zusammengeführt",
+            "description": "Ein Duplikat wurde mit einem anderen Eintrag zusammengeführt."
+          }
+        },
+        "stock": {
+          "movement": {
+            "created": {
+              "label": "Bestandsbewegung",
+              "description": "Bestand wurde eingebucht, ausgegeben, umgelagert oder korrigiert."
+            }
+          }
+        },
+        "webhook": {
+          "test": {
+            "label": "Webhook-Test",
+            "description": "Ein manuell angeforderter Verbindungstest."
+          }
+        }
+      }
+    },
+    "secret": {
+      "eyebrow": "Einmalige Anzeige",
+      "title": "Signatur-Secret für {{name}}",
+      "description": "Kopieren Sie dieses Secret jetzt und speichern Sie es im Secret-Speicher des empfangenden Dienstes. Nach dem Ausblenden kann es nicht erneut angezeigt werden.",
+      "copy": "Secret kopieren",
+      "copied": "Kopiert",
+      "dismiss": "Signatur-Secret ausblenden"
+    },
+    "status": {
+      "enabled": "Aktiv",
+      "disabled": "Inaktiv",
+      "failureCount_one": "{{count}} Fehler in Folge",
+      "failureCount_other": "{{count}} Fehler in Folge"
+    },
+    "health": {
+      "lastSuccess": "Letzter Erfolg",
+      "lastFailure": "Letzter Fehler",
+      "created": "Erstellt",
+      "never": "Noch keine Zustellung",
+      "unknown": "Unbekannt"
+    },
+    "actions": {
+      "create": "Webhook erstellen",
+      "save": "Änderungen speichern",
+      "saving": "Wird gespeichert…",
+      "cancel": "Abbrechen",
+      "close": "Editor schließen",
+      "refresh": "Webhooks aktualisieren",
+      "edit": "Bearbeiten",
+      "test": "Test senden",
+      "deliveries": "Zustellungen",
+      "retryDelivery": "Erneut zustellen",
+      "rotate": "Secret rotieren",
+      "delete": "Löschen",
+      "enable": "Aktivieren",
+      "disable": "Deaktivieren",
+      "confirmRotate": "Secret rotieren",
+      "confirmDelete": "Webhook löschen",
+      "dismissError": "Fehler ausblenden",
+      "dismissNotice": "Meldung ausblenden"
+    },
+    "confirm": {
+      "rotateTitle": "Signatur-Secret ersetzen?",
+      "rotateDescription": "Neue Zustellungen für {{name}} verwenden das neue Secret. Bereits eingeplante Zustellungen behalten ihr bisheriges Secret. Akzeptieren Sie während des Übergangs beide.",
+      "deleteTitle": "Diesen Webhook löschen?",
+      "deleteDescription": "{{name}} erhält keine Ereignisse mehr und verschwindet aus den Einstellungen. Zustelldaten bleiben bis zum Ablauf der konfigurierten Aufbewahrungsfrist verfügbar."
+    },
+    "deliveries": {
+      "title": "Letzte Zustellungen",
+      "description": "Neueste Versuche, Antwortcodes und geplante Wiederholungen für diesen Endpunkt.",
+      "refresh": "Zustellungen aktualisieren",
+      "emptyTitle": "Keine Zustellversuche",
+      "emptyDescription": "Senden Sie einen Test oder warten Sie auf ein ausgewähltes Inventarereignis.",
+      "unknownEvent": "Unbekanntes Ereignis",
+      "httpStatus": "HTTP-Status",
+      "attempts_one": "{{count}} Versuch",
+      "attempts_other": "{{count}} Versuche",
+      "nextAttempt": "Nächster Versuch {{date}}",
+      "status": {
+        "succeeded": "Zugestellt",
+        "processing": "Wird zugestellt",
+        "retrying": "Wird wiederholt",
+        "failed": "Fehlgeschlagen",
+        "pending": "Ausstehend"
+      }
+    },
+    "notices": {
+      "created": "Webhook „{{name}}“ erstellt.",
+      "updated": "Webhook „{{name}}“ aktualisiert.",
+      "enabled": "Webhook „{{name}}“ aktiviert.",
+      "disabled": "Webhook „{{name}}“ deaktiviert.",
+      "tested": "Testzustellung für „{{name}}“ eingeplant.",
+      "retried": "Fehlgeschlagene Zustellung für „{{name}}“ erneut eingeplant.",
+      "rotated": "Signatur-Secret für „{{name}}“ rotiert.",
+      "deleted": "Webhook „{{name}}“ gelöscht."
+    },
+    "errors": {
+      "load": "Webhooks konnten nicht geladen werden.",
+      "nameRequired": "Geben Sie diesem Webhook einen erkennbaren Namen.",
+      "urlRequired": "Geben Sie die URL des empfangenden Endpunkts ein.",
+      "urlInvalid": "Geben Sie eine gültige HTTPS-Endpunkt-URL ein.",
+      "eventsRequired": "Wählen Sie mindestens ein zuzustellendes Ereignis.",
+      "create": "Der Webhook konnte nicht erstellt werden.",
+      "update": "Der Webhook konnte nicht aktualisiert werden.",
+      "toggle": "Der Status des Webhooks konnte nicht geändert werden.",
+      "test": "Die Testzustellung ist fehlgeschlagen.",
+      "retry": "Die fehlgeschlagene Zustellung konnte nicht erneut eingeplant werden.",
+      "rotate": "Das Signatur-Secret konnte nicht rotiert werden.",
+      "delete": "Der Webhook konnte nicht gelöscht werden.",
+      "deliveries": "Der Zustellverlauf konnte nicht geladen werden.",
+      "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Markieren und kopieren Sie das Secret manuell."
+    },
+    "securityNote": "Signatur-Secrets werden nur nach dem Erstellen oder Rotieren angezeigt. Prüfen Sie jede eingehende Signatur, bevor Sie deren Nutzlast verarbeiten, und verwenden Sie Ereignis-IDs zur Idempotenz."
   },
   "sharing": {
     "create": {
@@ -465,7 +732,7 @@
       },
       "inventory_export": {
         "label": "Daten exportieren",
-        "description": "Das Inventar als CSV herunterladen."
+        "description": "Das Inventar als CSV, Excel oder PDF herunterladen."
       },
       "stock_read": {
         "label": "Bestand anzeigen",
@@ -558,6 +825,10 @@
       "tokens_delegate": {
         "label": "Token-Zugriff delegieren",
         "description": "API-Token erstellen, deren Bereiche über die eigenen Berechtigungen hinausgehen dürfen."
+      },
+      "webhooks_manage": {
+        "label": "Webhooks verwalten",
+        "description": "Inventarereignisse des gesamten Arbeitsbereichs an externe Ziele exportieren und Signatur-Secrets sowie Wiederholungen verwalten."
       }
     },
     "fields": {
@@ -754,10 +1025,17 @@
     }
   },
   "csv": {
-    "title": "CSV-Import und -Export",
-    "description": "Exportieren Sie eine sichere Tabelle oder prüfen Sie bis zu 1.000 neue Inventareinträge vor dem Import.",
-    "exportOnlyDescription": "Exportieren Sie das aktuelle Inventar als Tabelle.",
-    "export": "CSV exportieren",
+    "title": "Inventarimport und -export",
+    "description": "Exportieren Sie das Inventar als CSV, Excel oder PDF oder prüfen Sie bis zu 1.000 neue Einträge vor dem CSV-Import.",
+    "exportOnlyDescription": "Exportieren Sie das aktuelle Inventar als CSV, Excel oder PDF.",
+    "export": "Exportieren",
+    "exporting": "{{format}} wird vorbereitet…",
+    "exportFormats": "Exportformate",
+    "formats": {
+      "csv": { "label": "CSV-Daten", "description": "Importkompatible UTF-8-Daten mit allen Feldern." },
+      "xlsx": { "label": "Excel-Arbeitsmappe", "description": "Formatierte Arbeitsmappe mit Filtern, fixierten Kopfzeilen und passenden Datentypen." },
+      "pdf": { "label": "PDF-Bericht", "description": "Kompakte, druckbare Inventarübersicht mit Seitenzahlen." }
+    },
     "chooseFile": "UTF-8-CSV-Datei auswählen",
     "fileHint": "Verwenden Sie die exportierten Spaltenüberschriften; ID und Zeitstempel werden beim Import ignoriert.",
     "reset": "Zurücksetzen",

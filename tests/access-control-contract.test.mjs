@@ -258,6 +258,7 @@ test("built-in roles have the intended default permission boundaries", () => {
     "sharing.manage",
     "tokens.manage",
     "tokens.delegate",
+    "webhooks.manage",
   ]) {
     assert.equal(builtinRolePermissions.editor.includes(permission), false);
   }
@@ -296,5 +297,6 @@ test("permissions map to deterministic API scopes", () => {
 
   assert.equal(permissionsForScopes(["read"]).includes("inventory.export"), true);
   assert.equal(permissionsForScopes(["read"]).includes("inventory.update"), false);
+  assert.equal(permissionsForScopes(["write"]).includes("webhooks.manage"), false);
   assert.deepEqual(permissionsForScopes(["ai"]), ["ai.use"]);
 });

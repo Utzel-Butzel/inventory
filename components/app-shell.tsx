@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { NotificationBell } from "@/components/notification-bell";
 import { LocalizedThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/components/ui";
 import type { UserRole } from "@/db/schema";
@@ -110,6 +111,7 @@ const pageNames: Record<string, string> = {
   batch: "navigation.batch",
   labels: "navigation.labels",
   duplicates: "navigation.duplicates",
+  notifications: "navigation.notifications",
   settings: "navigation.settings",
 };
 
@@ -121,6 +123,8 @@ const settingsPageNames: Record<string, string> = {
   users: "settings.items.users.label",
   access: "settings.items.access.label",
   sharing: "settings.items.sharing.label",
+  notifications: "settings.items.notifications.label",
+  webhooks: "settings.items.webhooks.label",
   api: "settings.items.api.label",
 };
 
@@ -432,6 +436,7 @@ export function AppShell({
                 <ArrowRight className="size-3.5" aria-hidden="true" />
               </button>
             </form>
+            <NotificationBell />
             <LanguageSwitcher compact />
             <LocalizedThemeToggle />
             <Link

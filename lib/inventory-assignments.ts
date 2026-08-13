@@ -16,6 +16,11 @@ import {
   type InventoryAssignmentRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
+import {
+  allocatedVariantQuantity,
+  assertVariantAllocationFits,
+} from "@/lib/variant-stock-invariant";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 
@@ -530,6 +535,15 @@ export async function createInventoryAssignment(
         .returning();
 
       const balanceAfter = resource.quantity - input.quantity;
+      const variantAllocation = await allocatedVariantQuantity(
+        transaction,
+        resourceId,
+      );
+      assertVariantAllocationFits(
+        balanceAfter,
+        variantAllocation,
+        (message) => new InventoryAssignmentError(message, 409),
+      );
       await transaction
         .update(resources)
         .set({ quantity: balanceAfter, updatedAt: now })
@@ -560,6 +574,7 @@ export async function createInventoryAssignment(
           createdBy: actor,
         })
         .returning();
+      await enqueueStockMovementWebhookEvents(transaction, [movement]);
       const response: StoredMutationResponse = {
         assignment: assignmentDto(
           assignment,
@@ -749,6 +764,7 @@ export async function completeInventoryAssignment(
           createdBy: actor,
         })
         .returning();
+      await enqueueStockMovementWebhookEvents(transaction, [movement]);
       const response: StoredMutationResponse = {
         assignment: assignmentDto(
           savedAssignment,

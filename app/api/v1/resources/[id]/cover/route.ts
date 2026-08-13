@@ -29,6 +29,7 @@ import {
   storeMedia,
 } from "@/lib/storage";
 import { coverInputSchema } from "@/lib/validators";
+import { enqueueWebhookEvent } from "@/lib/webhooks";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -228,17 +229,19 @@ export async function POST(request: Request, context: Context) {
           })
           .where(eq(resources.id, resource.id))
           .returning();
+        if (!updated) throw new Error("Resource disappeared during cover generation.");
         const mediaRows = await transaction
           .select()
           .from(media)
           .where(eq(media.resourceId, resource.id))
           .orderBy(asc(media.position));
+        const resourceSnapshot = {
+          ...updated,
+          media: mediaRows,
+          cover: mediaRows.find((item) => item.kind === "image") ?? null,
+        };
         const body = {
-          resource: {
-            ...updated,
-            media: mediaRows,
-            cover: mediaRows.find((item) => item.kind === "image") ?? null,
-          },
+          resource: resourceSnapshot,
           generation: {
             id: generated.id,
             provider: generated.provider,
@@ -248,6 +251,16 @@ export async function POST(request: Request, context: Context) {
             transparencyMethod: generated.transparencyMethod,
           },
         };
+        await enqueueWebhookEvent(transaction, {
+          type: "inventory.resource.updated",
+          aggregateType: "resource",
+          aggregateId: updated.id,
+          actor: authorization.identity.subject,
+          data: {
+            resource: resourceSnapshot,
+            changedFields: ["aiMetadata", "media", "cover"],
+          },
+        });
         if (operationId) {
           await transaction
             .update(aiIdempotencyOperations)

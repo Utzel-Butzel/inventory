@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Inventory API
-  version: 1.13.0
-  description: Scoped API for configurable inventory structures, localized content, indoor 3D room scans, location-aware stock, cycle counts, assignments, CSV exchange, typed custom fields, label setups, media, AI, and data quality.
+  version: 1.14.0
+  description: Scoped API for configurable inventory structures, localized content, indoor 3D room scans, location-aware stock, cycle counts, assignments, CSV exchange, typed custom fields, label setups, media, AI, outgoing integration webhooks, and data quality.
   license:
     name: MIT License
     identifier: MIT
@@ -44,10 +44,319 @@ tags:
   - name: Spatial rooms
     description: Versioned RoomPlan scenes, native AR world-map assets, and measured indoor item placements.
   - name: AI
-    description: Visual counting, item analysis, and generated covers.
+    description: Visual inventory recognition, counting, item analysis, and generated covers.
   - name: Insights
     description: Workspace statistics and duplicate detection.
+  - name: Notifications
+    description: Session-scoped in-app inbox, anti-noise preferences, Web Push subscriptions, and preview-only channel tests.
+  - name: Webhooks
+    description: Session-administered outgoing integration events with durable at-least-once delivery, HMAC signatures, retry history, and manual replay.
 paths:
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List the current user's in-app notifications
+      description: The inbox is always available. Events are deduplicated using the user's configured cooldown; external delivery is not required.
+      security: [{ adminSession: [] }]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+        - name: unreadOnly
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Notifications plus the complete unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [notifications, unread]
+                properties:
+                  notifications:
+                    type: array
+                    items: { $ref: "#/components/schemas/Notification" }
+                  unread: { type: integer, minimum: 0 }
+        "403": { description: An authenticated browser session is required }
+  /notifications/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Notifications]
+      summary: Mark one notification read
+      security: [{ adminSession: [] }]
+      responses:
+        "200": { description: Notification marked read }
+        "404": { description: Notification not found for this user }
+  /notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark every notification for the current user read
+      security: [{ adminSession: [] }]
+      responses:
+        "200": { description: Number of updated inbox entries }
+  /notifications/preferences:
+    get:
+      tags: [Notifications]
+      summary: Read personal anti-noise and channel preferences
+      security: [{ adminSession: [] }]
+      responses:
+        "200":
+          description: Preferences, redacted runtime channel state, and Push subscription count
+    patch:
+      tags: [Notifications]
+      summary: Update personal notification preferences
+      description: External channels default off and must be explicitly enabled. Destination URLs remain server environment variables and are never accepted by this endpoint.
+      security: [{ adminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationPreferencePatch" }
+      responses:
+        "200": { description: Preferences updated }
+        "422": { description: Invalid thresholds, cadence, fields, locale, or channel opt-ins }
+  /notifications/push-subscriptions:
+    post:
+      tags: [Notifications]
+      summary: Subscribe the current browser to Web Push
+      description: Subscription endpoint and key material are encrypted before storage using the deployment notification encryption key.
+      security: [{ adminSession: [] }]
+      responses:
+        "201": { description: Encrypted subscription stored }
+        "503": { description: VAPID or at-rest encryption is not configured }
+    delete:
+      tags: [Notifications]
+      summary: Revoke the current browser's Web Push subscription
+      security: [{ adminSession: [] }]
+      responses:
+        "200": { description: Subscription revoked when present }
+  /notifications/test:
+    post:
+      tags: [Notifications]
+      summary: Preview one delivery channel without sending
+      description: Dry-run only. This endpoint never invokes SMTP, Web Push, Slack, Teams, or generic webhook transports.
+      security: [{ adminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [channel]
+              properties:
+                channel: { type: string, enum: [email, push, slack, teams, webhook] }
+      responses:
+        "200": { description: Redacted sample payload with dryRun true }
+  /notifications/run:
+    post:
+      tags: [Notifications]
+      summary: Run notification detection and due digest dispatch
+      description: >-
+        Invokes one deduplicated detector/dispatcher cycle. Authenticate with
+        `Authorization: Bearer NOTIFICATION_CRON_SECRET`, or with an
+        authenticated browser session that has `tokens.manage`. Safe retries
+        rely on cooldown, inbox uniqueness, and dispatch dedupe keys.
+      security:
+        - cronSecret: []
+        - adminSession: []
+      responses:
+        "200": { description: Detection and dispatch counters }
+        "401": { description: Missing or invalid cron secret or browser session }
+        "403": { description: Browser session lacks tokens.manage }
+  /webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List outgoing webhook endpoints
+      description: Requires an authenticated browser session with `webhooks.manage`. Stored targets are redacted in responses, and API bearer tokens are not accepted.
+      security: [{ adminSession: [] }]
+      responses:
+        "200":
+          description: Configured webhook endpoints
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookListResponse" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+    post:
+      tags: [Webhooks]
+      summary: Create an outgoing webhook endpoint
+      description: Requires `webhooks.manage`. The signing secret is returned only by this response; store it before leaving the page.
+      security: [{ adminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookEndpointCreate" }
+      responses:
+        "201":
+          description: Webhook endpoint created and its signing secret disclosed once
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookCreatedResponse" }
+        "400": { description: Request body is not valid JSON }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "422": { description: Invalid name, target URL, event subscription, or enabled state }
+        "503": { description: Webhook at-rest encryption is not configured }
+  /webhooks/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/WebhookId" }
+    get:
+      tags: [Webhooks]
+      summary: Retrieve one outgoing webhook endpoint
+      description: Requires an authenticated browser session with `webhooks.manage`. The target is redacted and the signing secret is never returned.
+      security: [{ adminSession: [] }]
+      responses:
+        "200":
+          description: Webhook endpoint
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookResponse" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "404": { description: Webhook endpoint not found }
+        "422": { description: Invalid webhook endpoint identifier }
+    patch:
+      tags: [Webhooks]
+      summary: Update an outgoing webhook endpoint
+      description: Requires `webhooks.manage`. Submit at least one field. A new target must be supplied in full because stored targets are only returned in redacted form.
+      security: [{ adminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookEndpointPatch" }
+      responses:
+        "200":
+          description: Webhook endpoint updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookResponse" }
+        "400": { description: Request body is not valid JSON }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "404": { description: Webhook endpoint not found }
+        "422": { description: Empty or invalid webhook endpoint update }
+        "503": { description: Webhook at-rest encryption is not configured }
+    delete:
+      tags: [Webhooks]
+      summary: Delete an outgoing webhook endpoint
+      description: Requires an authenticated browser session with `webhooks.manage`.
+      security: [{ adminSession: [] }]
+      responses:
+        "204": { description: Webhook endpoint deleted }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "404": { description: Webhook endpoint not found }
+        "422": { description: Invalid webhook endpoint identifier }
+  /webhooks/{id}/test:
+    parameters:
+      - { $ref: "#/components/parameters/WebhookId" }
+    post:
+      tags: [Webhooks]
+      summary: Enqueue a real signed test delivery
+      description: Requires `webhooks.manage`. Unlike notification channel previews, this creates an event and sends an actual HTTP request through the durable delivery queue.
+      security: [{ adminSession: [] }]
+      responses:
+        "202":
+          description: Test event and delivery accepted for asynchronous processing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookTestResponse" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "404": { description: Webhook endpoint not found }
+        "422": { description: Invalid webhook endpoint identifier }
+        "503": { description: Webhook at-rest encryption is not configured }
+  /webhooks/{id}/rotate-secret:
+    parameters:
+      - { $ref: "#/components/parameters/WebhookId" }
+    post:
+      tags: [Webhooks]
+      summary: Rotate a webhook signing secret
+      description: Requires `webhooks.manage`. The replacement secret is returned only by this response and cannot be read again.
+      security: [{ adminSession: [] }]
+      responses:
+        "200":
+          description: Signing secret rotated and disclosed once
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookSecretResponse" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "404": { description: Webhook endpoint not found }
+        "422": { description: Invalid webhook endpoint identifier }
+        "503": { description: Webhook at-rest encryption is not configured }
+  /webhooks/{id}/deliveries:
+    parameters:
+      - { $ref: "#/components/parameters/WebhookId" }
+    get:
+      tags: [Webhooks]
+      summary: List delivery attempts for one webhook endpoint
+      description: Requires an authenticated browser session with `webhooks.manage`.
+      security: [{ adminSession: [] }]
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of recent deliveries returned; values above 100 are capped.
+          schema: { type: integer, minimum: 1, default: 50 }
+      responses:
+        "200":
+          description: Recent deliveries and their retry state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDeliveryListResponse" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "404": { description: Webhook endpoint not found }
+        "422": { description: Invalid webhook endpoint identifier or delivery limit }
+  /webhooks/{id}/deliveries/{deliveryId}/retry:
+    parameters:
+      - { $ref: "#/components/parameters/WebhookId" }
+      - { $ref: "#/components/parameters/WebhookDeliveryId" }
+    post:
+      tags: [Webhooks]
+      summary: Manually retry a failed delivery
+      description: Requires `webhooks.manage` and an enabled endpoint. The same event identity is retained so receivers can deduplicate an at-least-once replay.
+      security: [{ adminSession: [] }]
+      responses:
+        "202":
+          description: Delivery accepted for asynchronous retry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDeliveryResponse" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "404": { description: Enabled webhook endpoint or failed delivery not found }
+        "422": { description: Invalid webhook endpoint or delivery identifier }
+  /webhooks/run:
+    post:
+      tags: [Webhooks]
+      summary: Process due outgoing webhook deliveries
+      description: >-
+        Runs one bounded delivery cycle for deployments without the built-in
+        worker. Authenticate only with `Authorization: Bearer
+        WEBHOOK_CRON_SECRET`; browser sessions and API tokens are not accepted.
+      security: [{ webhookCronSecret: [] }]
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of due deliveries claimed during this bounded cycle.
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Due deliveries processed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookRunResponse" }
+        "401": { description: Missing, invalid, or unconfigured webhook cron secret }
+        "422": { description: Limit must be an integer between 1 and 100 }
   /spatial-structures:
     get:
       tags: [Spatial rooms]
@@ -182,7 +491,7 @@ paths:
                 texturedMesh:
                   type: string
                   format: binary
-                  description: Optional self-contained GLB v2 textured room mesh whose vertices are already in the scan's ARKit world frame in metres (model/gltf-binary, maximum 80 MB).
+                  description: Optional self-contained, bounded GLB v2 textured room mesh whose vertices are already in the scan's ARKit world frame in metres (model/gltf-binary, maximum 80 MB). External resources, unsafe accessor ranges/counts, oversized embedded textures, and unsupported required codecs are rejected.
                 gaussianSplat:
                   type: string
                   format: binary
@@ -200,6 +509,7 @@ paths:
               schema: { $ref: "#/components/schemas/RoomScanUploadResult" }
         "404": { description: Room resource not found }
         "409": { description: Scan id belongs to another room }
+        "411": { description: Content-Length is required before buffering the multipart upload }
         "413": { description: Combined upload exceeds the configured room-scan limit }
         "415": { description: A keyframe or photorealistic derivative has an unsafe MIME type/extension pair }
         "422": { description: Invalid scene, identifier, date, or non-place resource }
@@ -224,6 +534,25 @@ paths:
                   scene: { $ref: "#/components/schemas/RoomSceneManifest" }
         "404": { description: Room scan not found }
         "422": { description: Invalid room scan identifier }
+  /room-scans/{scanId}/layout:
+    parameters:
+      - name: scanId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Spatial rooms]
+      summary: Position one room inside its floor layout
+      description: Requires spatial management permission. The transform is a column-major world-from-model matrix in metres. Set it to null to restore automatic floor arrangement.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoomLayoutTransformPatch" }
+      responses:
+        "200": { description: Room layout position updated }
+        "404": { description: Room scan not found }
+        "422": { description: Invalid room scan identifier or layout transform }
   /room-scans/{scanId}/assets/{kind}:
     parameters:
       - name: scanId
@@ -244,7 +573,7 @@ paths:
     put:
       tags: [Spatial rooms]
       summary: Attach or replace a photorealistic room derivative
-      description: Accepts raw GLB bytes for textured_mesh or raw bounded PLY bytes for gaussian_splat. Vertices must already use the scan's shared ARKit world frame (metres, right-handed, Y-up); no alignment transform is inferred. This mutable enrichment does not change the idempotent identity of the original room capture.
+      description: Accepts raw GLB bytes for textured_mesh or raw bounded PLY bytes for gaussian_splat. Vertices must already use the scan's shared ARKit world frame (metres, right-handed, Y-up); no alignment transform is inferred. The web client renders PLY as a bounded point-splat preview; textured GLB is the full photorealistic path. This mutable enrichment does not change the idempotent identity of the original room capture. Content-Length is required before the server buffers the body.
       requestBody:
         required: true
         content:
@@ -257,6 +586,7 @@ paths:
         "201": { description: Derivative attached }
         "404": { description: Room scan or mutable asset kind not found }
         "413": { description: Asset exceeds its 80 MB limit }
+        "411": { description: Content-Length is required }
         "415": { description: Content-Type does not match the asset kind }
         "422": { description: Invalid identifier or malformed GLB/PLY data }
   /room-scans/{scanId}/keyframes/{keyframeId}:
@@ -1013,6 +1343,42 @@ paths:
         "404": { description: Relationship type not found }
         "409": { description: A built-in relationship type cannot be archived }
         "422": { description: Invalid or empty relationship type update }
+  /ai/recognize:
+    post:
+      tags: [AI]
+      summary: Match one photographed object to existing inventory items
+      description: Requires direct inventory.read permission and the ai scope/ai.use permission. The uploaded image is transient and is not attached to an item. The server describes the dominant object, shortlists a bounded inventory catalog, and visually reranks up to five advisory matches. Clients must let the user review the result instead of treating it as an exact identifier.
+      parameters:
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Exactly one JPEG, PNG, WebP, AVIF, HEIC, or HEIF image.
+      responses:
+        "200":
+          description: Ranked, advisory inventory matches; matches may be empty.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InventoryRecognitionResult" }
+        "202": { description: An identical idempotent request is still processing; retry with the same image and key after Retry-After. }
+        "400": { description: Malformed idempotency key or multipart request }
+        "403": { description: Missing AI or direct inventory-read permission }
+        "409": { description: Idempotency-Key was reused for another identity or image }
+        "413": { description: Image exceeds the configured upload limit }
+        "415": { description: Request is not multipart or the image type is unsupported }
+        "422": { description: Missing, duplicate, empty, or unreadable image }
+        "429": { description: AI recognition is disabled or the request limit was reached }
+        "502": { description: Vision provider or structured-output error }
+        "503": { description: Inventory catalog, retry protection, or shared rate limiter unavailable }
   /ai/count:
     post:
       tags: [AI]
@@ -1315,18 +1681,32 @@ paths:
   /resources/export:
     get:
       tags: [Data exchange]
-      summary: Export the complete inventory as UTF-8 CSV
-      description: Returns a BOM-prefixed CSV download containing up to 100,000 inventory records. Potential spreadsheet formulas are escaped.
+      summary: Export the complete inventory as CSV, Excel, or PDF
+      description: Returns up to 100,000 inventory records. CSV remains the default and is BOM-prefixed with potential spreadsheet formulas escaped. Excel includes formatted, filterable inventory and variant sheets; PDF is a compact printable report.
+      parameters:
+        - in: query
+          name: format
+          schema: { type: string, enum: [csv, xlsx, pdf], default: csv }
+          description: Download format. Omitting the parameter preserves the existing CSV response.
+        - in: query
+          name: lang
+          schema: { type: string, enum: [en, de], default: en }
+          description: Report language used for generated Excel and PDF labels.
       responses:
         "200":
-          description: Inventory CSV
+          description: Inventory export in the requested format
           headers:
             Content-Disposition:
               schema: { type: string }
-              description: Dated inventory CSV filename.
+              description: Dated inventory filename with an extension matching the requested format.
           content:
             text/csv:
               schema: { type: string }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400": { description: "Unsupported export format" }
         "413": { description: "The workspace contains more than 100,000 records" }
   /resources/batch:
     patch:
@@ -1398,6 +1778,85 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
+  /resources/{id}/variants:
+    parameters:
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Resources, Stock]
+      summary: List optional bulk-stock variants for an inventory item
+      responses:
+        "200":
+          description: Variants and the allocated/unallocated parent stock summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [variants, summary, trackingMode]
+                properties:
+                  variants: { type: array, items: { $ref: "#/components/schemas/ResourceVariant" } }
+                  summary: { $ref: "#/components/schemas/ResourceVariantStockSummary" }
+                  trackingMode: { type: string, enum: [bulk, serialized] }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Resources, Stock]
+      summary: Add a variant and optionally allocate existing parent stock
+      description: Variants are bulk-only. `initialAllocation` moves existing unallocated parent stock into the variant without changing the parent total.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceVariantInput" }
+      responses:
+        "201": { description: Variant created }
+        "409": { description: Identifier conflict, serialized tracking, or insufficient unallocated stock }
+        "422": { description: Invalid variant }
+  /resources/{id}/variants/{variantId}:
+    parameters:
+      - { $ref: "#/components/parameters/ResourceId" }
+      - name: variantId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Resources]
+      summary: Update variant identity or price fields
+      description: Quantity cannot be patched; use a dated variant stock movement.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceVariantPatch" }
+      responses:
+        "200": { description: Variant updated }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: SKU or barcode is already used }
+    delete:
+      tags: [Resources]
+      summary: Delete an unused zero-stock variant
+      responses:
+        "204": { description: Variant deleted }
+        "409": { description: Variant has stock or movement history }
+  /resources/{id}/variants/{variantId}/stock/movements:
+    parameters:
+      - { $ref: "#/components/parameters/ResourceId" }
+      - name: variantId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Stock]
+      summary: Book an atomic parent and variant stock movement
+      description: The signed delta updates parent and variant quantities together and appends one dated stock-ledger row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceVariantStockMovementInput" }
+      responses:
+        "201": { description: Parent and variant stock updated atomically }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Insufficient stock, serialized tracking, or maximum quantity exceeded }
+        "422": { description: Invalid stock movement }
   /resources/{id}/translations:
     parameters:
       - { $ref: "#/components/parameters/ResourceId" }
@@ -1525,7 +1984,7 @@ paths:
     get:
       tags: [Resources]
       summary: Resolve a scanned QR or barcode to an inventory item
-      description: Accepts an item UUID, Inventory resource URL, SKU, or serial number.
+      description: Accepts an item UUID, Inventory resource URL, item or variant SKU/barcode, or serial number. Variant matches include a `variant` object.
       parameters:
         - name: code
           in: query
@@ -1541,7 +2000,8 @@ paths:
                 required: [resource, matchedBy]
                 properties:
                   resource: { $ref: "#/components/schemas/Resource" }
-                  matchedBy: { type: string, enum: [id, sku, serialNumber] }
+                  variant: { $ref: "#/components/schemas/ResourceVariant" }
+                  matchedBy: { type: string, enum: [id, sku, barcode, serialNumber, variantSku, variantBarcode] }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Serial number is ambiguous }
   /stock:
@@ -2192,6 +2652,7 @@ paths:
         "201": { description: Uploaded }
         "413": { description: A file exceeds MAX_UPLOAD_MB, or a USDZ model exceeds MAX_USDZ_UPLOAD_MB }
         "415": { description: Unsupported media type, invalid USDZ filename, or structurally invalid USDZ package }
+        "422": { description: A USDZ Object Capture model was uploaded without an existing or accompanying item image }
         "409": { description: Idempotency key belongs to another resource }
         "503": { description: The configured storage provider cannot store the accepted media type }
     patch:
@@ -2312,6 +2773,59 @@ paths:
                 removeResourceId: { type: string, format: uuid }
       responses:
         "200": { description: Merged resource }
+webhooks:
+  inventoryEvent:
+    post:
+      tags: [Webhooks]
+      summary: Receive an outgoing Inventory event
+      security: []
+      description: >-
+        This operation documents the HTTP request Inventory sends to each
+        subscribed target; it is not an endpoint hosted by Inventory. Delivery
+        is at least once, so receivers must deduplicate by the stable event id.
+        Return any 2xx status to acknowledge the exact request body.
+      parameters:
+        - name: X-Inventory-Event-Id
+          in: header
+          required: true
+          description: Stable event UUID; use it as the receiver's deduplication key.
+          schema: { type: string, format: uuid }
+        - name: X-Inventory-Event-Type
+          in: header
+          required: true
+          description: Event name, also present in the JSON envelope.
+          schema: { $ref: "#/components/schemas/WebhookOutboundEventType" }
+        - name: X-Inventory-Delivery-Id
+          in: header
+          required: true
+          description: UUID of this endpoint-specific delivery record.
+          schema: { type: string, format: uuid }
+        - name: X-Inventory-Timestamp
+          in: header
+          required: true
+          description: Unix timestamp also carried as `t` in the signature header.
+          schema: { type: string, pattern: '^[0-9]+$' }
+        - name: X-Inventory-Signature
+          in: header
+          required: true
+          description: >-
+            `t=<unix>,v1=<hex>` where `v1` is the lowercase hexadecimal
+            HMAC-SHA256 of `<unix>.<exact raw request body>` using the endpoint
+            signing secret. Verify the raw bytes before parsing JSON.
+          schema:
+            type: string
+            pattern: '^t=[0-9]+,v1=[a-f0-9]{64}$'
+          example: t=1786608000,v1=7d6f2dba7b8d83cd0c87bfce4c34f35621e96fe930a29d309926f7156bdb976c
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookEvent" }
+      responses:
+        2XX:
+          description: Event acknowledged; Inventory marks the delivery successful.
+        default:
+          description: Non-2xx response; transient statuses may be retried according to the delivery policy.
 components:
   securitySchemes:
     bearerAuth:
@@ -2323,6 +2837,16 @@ components:
       in: cookie
       name: authjs.session-token
       description: Auth.js browser session cookie; each operation declares its required administrative permission. HTTPS deployments use the secure-prefixed cookie variant.
+    cronSecret:
+      type: http
+      scheme: bearer
+      bearerFormat: NOTIFICATION_CRON_SECRET
+      description: Deployment-level scheduler secret used only by the notification run endpoint.
+    webhookCronSecret:
+      type: http
+      scheme: bearer
+      bearerFormat: WEBHOOK_CRON_SECRET
+      description: Deployment-level scheduler secret used only by the outgoing webhook run endpoint.
   parameters:
     IdempotencyKey:
       name: Idempotency-Key
@@ -2346,10 +2870,265 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    WebhookId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    WebhookDeliveryId:
+      name: deliveryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
   responses:
     NotFound:
       description: Resource not found
   schemas:
+    NotificationEventType:
+      type: string
+      enum: [low_stock, expiry, maintenance, return_due]
+    Notification:
+      type: object
+      required: [id, eventType, sourceKey, title, body, metadata, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        eventType: { $ref: "#/components/schemas/NotificationEventType" }
+        resourceId: { type: [string, "null"], format: uuid }
+        assignmentId: { type: [string, "null"], format: uuid }
+        sourceKey: { type: string }
+        title: { type: string }
+        body: { type: string }
+        href: { type: [string, "null"] }
+        metadata: { type: object, additionalProperties: true }
+        readAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    NotificationPreferencePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        enabledEventTypes:
+          type: array
+          uniqueItems: true
+          maxItems: 4
+          items: { $ref: "#/components/schemas/NotificationEventType" }
+        frequency: { type: string, enum: [daily, immediate] }
+        digestHour: { type: integer, minimum: 0, maximum: 23 }
+        timezone: { type: string, maxLength: 80 }
+        locale: { type: string, enum: [en, de] }
+        cooldownHours: { type: integer, minimum: 1, maximum: 720 }
+        lowStockThresholdPercent: { type: integer, minimum: 1, maximum: 500 }
+        expiryWindowDays: { type: integer, minimum: 0, maximum: 3650 }
+        expiryFieldKey: { type: string, maxLength: 64, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+        maintenanceWindowDays: { type: integer, minimum: 0, maximum: 3650 }
+        maintenanceFieldKey: { type: string, maxLength: 64, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+        returnDueWindowDays: { type: integer, minimum: 0, maximum: 365 }
+        emailEnabled: { type: boolean, default: false }
+        pushEnabled: { type: boolean, default: false }
+        slackEnabled: { type: boolean, default: false }
+        teamsEnabled: { type: boolean, default: false }
+        webhookEnabled: { type: boolean, default: false }
+    WebhookEventType:
+      type: string
+      description: Stable integration event name selected when configuring an endpoint.
+      enum:
+        - inventory.resource.created
+        - inventory.resource.updated
+        - inventory.resource.deleted
+        - inventory.resource.merged
+        - inventory.stock.movement.created
+    WebhookOutboundEventType:
+      type: string
+      description: Event name sent in a delivery. Test actions use a dedicated type that cannot be subscribed to.
+      enum:
+        - inventory.resource.created
+        - inventory.resource.updated
+        - inventory.resource.deleted
+        - inventory.resource.merged
+        - inventory.stock.movement.created
+        - inventory.webhook.test
+    WebhookEndpointCreate:
+      type: object
+      additionalProperties: false
+      required: [name, url, eventTypes]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        url:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 2048
+          description: Absolute HTTPS delivery target. Private and local networks are blocked unless the deployment explicitly opts in.
+        eventTypes:
+          type: array
+          minItems: 1
+          maxItems: 5
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/WebhookEventType" }
+        enabled: { type: boolean, default: true }
+    WebhookEndpointPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        url:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 2048
+          description: Complete replacement HTTPS target; the current stored target cannot be recovered from its redacted response form.
+        eventTypes:
+          type: array
+          minItems: 1
+          maxItems: 5
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/WebhookEventType" }
+        enabled: { type: boolean }
+    WebhookEndpoint:
+      type: object
+      additionalProperties: false
+      required: [id, name, target, eventTypes, enabled, failureCount, lastSuccessAt, lastFailureAt, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        target:
+          type: string
+          description: Redacted delivery target. Query values and secret path segments are never returned.
+          examples: [https://hooks.example.com/…]
+        eventTypes:
+          type: array
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/WebhookEventType" }
+        enabled: { type: boolean }
+        failureCount: { type: integer, minimum: 0 }
+        lastSuccessAt: { type: [string, "null"], format: date-time }
+        lastFailureAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    WebhookListResponse:
+      type: object
+      additionalProperties: false
+      required: [webhooks]
+      properties:
+        webhooks:
+          type: array
+          items: { $ref: "#/components/schemas/WebhookEndpoint" }
+    WebhookResponse:
+      type: object
+      additionalProperties: false
+      required: [webhook]
+      properties:
+        webhook: { $ref: "#/components/schemas/WebhookEndpoint" }
+    WebhookCreatedResponse:
+      type: object
+      additionalProperties: false
+      required: [webhook, secret]
+      properties:
+        webhook: { $ref: "#/components/schemas/WebhookEndpoint" }
+        secret:
+          type: string
+          description: Signing secret disclosed once. It is encrypted at rest and cannot be retrieved later.
+    WebhookSecretResponse:
+      type: object
+      additionalProperties: false
+      required: [secret]
+      properties:
+        secret:
+          type: string
+          description: Replacement signing secret disclosed once.
+    WebhookTestResponse:
+      type: object
+      additionalProperties: false
+      required: [eventId, deliveryId]
+      properties:
+        eventId: { type: string, format: uuid }
+        deliveryId: { type: string, format: uuid }
+    WebhookDeliveryStatus:
+      type: string
+      enum: [pending, processing, succeeded, failed]
+    WebhookDeliveryEvent:
+      type: object
+      additionalProperties: false
+      required: [id, type, occurredAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: "#/components/schemas/WebhookOutboundEventType" }
+        occurredAt: { type: string, format: date-time }
+    WebhookDelivery:
+      type: object
+      additionalProperties: false
+      required: [id, status, attempts, nextAttemptAt, httpStatus, error, deliveredAt, createdAt, event]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/WebhookDeliveryStatus" }
+        attempts: { type: integer, minimum: 0 }
+        nextAttemptAt: { type: string, format: date-time }
+        httpStatus: { type: [integer, "null"], minimum: 100, maximum: 599 }
+        error: { type: [string, "null"] }
+        deliveredAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        event: { $ref: "#/components/schemas/WebhookDeliveryEvent" }
+    WebhookDeliveryState:
+      type: object
+      additionalProperties: false
+      description: Delivery state returned immediately after a manual retry; fetch the delivery list for its event summary.
+      required: [id, status, attempts, nextAttemptAt, httpStatus, error, deliveredAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/WebhookDeliveryStatus" }
+        attempts: { type: integer, minimum: 0 }
+        nextAttemptAt: { type: string, format: date-time }
+        httpStatus: { type: [integer, "null"], minimum: 100, maximum: 599 }
+        error: { type: [string, "null"] }
+        deliveredAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    WebhookDeliveryListResponse:
+      type: object
+      additionalProperties: false
+      required: [deliveries]
+      properties:
+        deliveries:
+          type: array
+          items: { $ref: "#/components/schemas/WebhookDelivery" }
+    WebhookDeliveryResponse:
+      type: object
+      additionalProperties: false
+      required: [delivery]
+      properties:
+        delivery: { $ref: "#/components/schemas/WebhookDeliveryState" }
+    WebhookRunResponse:
+      type: object
+      additionalProperties: false
+      required: [processed, results]
+      properties:
+        processed: { type: integer, minimum: 0 }
+        results:
+          type: array
+          items: { type: string, enum: [succeeded, failed] }
+    WebhookEvent:
+      type: object
+      additionalProperties: false
+      required: [id, type, apiVersion, occurredAt, actor, data]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Stable event identifier used by receivers for deduplication across retries.
+        type: { $ref: "#/components/schemas/WebhookOutboundEventType" }
+        apiVersion: { type: string, const: "1" }
+        occurredAt: { type: string, format: date-time }
+        actor:
+          type: [string, "null"]
+          description: Identity responsible for the event when one is available.
+        data:
+          type: object
+          additionalProperties: true
+          description: >-
+            Event-specific snapshot: create, update, and delete events include
+            `resource`; updates also include `changedFields`; merges include `keptResource`,
+            `removedResource`, `keptResourceId`, and `removedResourceId`; stock
+            movement events include the immutable `movement` snapshot; test
+            deliveries include `test: true` and a human-readable `message`.
     AccessRoleKey:
       type: string
       minLength: 1
@@ -2390,6 +3169,7 @@ components:
         - sharing.manage
         - tokens.manage
         - tokens.delegate
+        - webhooks.manage
     InventoryRulePermission:
       type: string
       description: Permission that a conditional rule may grant for matching inventory items.
@@ -2430,7 +3210,7 @@ components:
         description: { type: string, maxLength: 1000, default: "" }
         permissions:
           type: array
-          maxItems: 29
+          maxItems: 30
           default: []
           items: { $ref: "#/components/schemas/AppPermission" }
     AccessRolePatch:
@@ -2442,7 +3222,7 @@ components:
         description: { type: string, maxLength: 1000 }
         permissions:
           type: array
-          maxItems: 29
+          maxItems: 30
           items: { $ref: "#/components/schemas/AppPermission" }
     AccessRole:
       type: object
@@ -2454,7 +3234,7 @@ components:
         description: { type: string, maxLength: 1000 }
         permissions:
           type: array
-          maxItems: 29
+          maxItems: 30
           items: { $ref: "#/components/schemas/AppPermission" }
         isSystem:
           type: boolean
@@ -2745,7 +3525,7 @@ components:
         createdAt: { type: string, format: date-time }
     RoomScanSummary:
       type: object
-      required: [id, roomResourceId, roomName, revision, status, capturedAt, createdAt, updatedAt, placementCount, assets, keyframes]
+      required: [id, roomResourceId, roomName, revision, status, capturedAt, createdAt, updatedAt, placementCount, assets, keyframeCount]
       properties:
         id: { type: string, format: uuid }
         roomResourceId: { type: string, format: uuid }
@@ -2756,6 +3536,11 @@ components:
         floorIdentifier: { type: [string, "null"] }
         floorIndex: { type: [integer, "null"] }
         roomIdentifier: { type: [string, "null"] }
+        layoutTransform:
+          oneOf:
+            - { $ref: "#/components/schemas/SpatialMatrix4" }
+            - { type: "null" }
+          description: Optional saved world-from-model transform used to arrange the room with the other rooms on its floor.
         georeference:
           oneOf:
             - { $ref: "#/components/schemas/SpatialGeoreference" }
@@ -2767,13 +3552,14 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         placementCount: { type: integer, minimum: 0 }
+        keyframeCount:
+          type: integer
+          minimum: 0
+          maximum: 32
+          description: Number of calibrated reference photos. Full metadata is returned only by the room-scene detail endpoint.
         assets:
           type: array
           items: { $ref: "#/components/schemas/RoomScanAsset" }
-        keyframes:
-          type: array
-          maxItems: 32
-          items: { $ref: "#/components/schemas/RoomCameraKeyframe" }
     RoomScanUploadResult:
       type: object
       additionalProperties: false
@@ -2781,6 +3567,15 @@ components:
       properties:
         id: { type: string, format: uuid }
         replayed: { type: boolean }
+    RoomLayoutTransformPatch:
+      type: object
+      additionalProperties: false
+      required: [transform]
+      properties:
+        transform:
+          oneOf:
+            - { $ref: "#/components/schemas/SpatialMatrix4" }
+            - { type: "null" }
     SpatialPlacementInput:
       type: object
       additionalProperties: false
@@ -2853,7 +3648,6 @@ components:
             height: { type: integer, minimum: 1, maximum: 4096 }
             orientation: { type: string, enum: [up, up-mirrored, down, down-mirrored, left-mirrored, right, right-mirrored, left] }
             quality: { type: number, minimum: 0, maximum: 1 }
-            featureDescriptor: { type: [object, "null"] }
             mimeType: { type: string, const: image/jpeg }
             size: { type: integer, minimum: 1, maximum: 6291456 }
             checksumSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
@@ -2890,6 +3684,11 @@ components:
             floorIdentifier: { type: [string, "null"] }
             floorIndex: { type: [integer, "null"] }
             roomIdentifier: { type: [string, "null"] }
+            layoutTransform:
+              oneOf:
+                - { $ref: "#/components/schemas/SpatialMatrix4" }
+                - { type: "null" }
+              description: Optional saved world-from-model transform used to arrange the room with the other rooms on its floor.
             georeference:
               oneOf:
                 - { $ref: "#/components/schemas/SpatialGeoreference" }
@@ -3402,6 +4201,66 @@ components:
               x: { type: integer, minimum: 0, maximum: 1000 }
               y: { type: integer, minimum: 0, maximum: 1000 }
         model: { type: string }
+    InventoryRecognitionObservation:
+      type: object
+      additionalProperties: false
+      required: [label, category, brand, model, color, material, visibleText, searchTerms, confidence]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 160 }
+        category: { type: string, minLength: 1, maxLength: 160 }
+        brand: { type: [string, "null"], minLength: 1, maxLength: 160 }
+        model: { type: [string, "null"], minLength: 1, maxLength: 160 }
+        color: { type: [string, "null"], minLength: 1, maxLength: 120 }
+        material: { type: [string, "null"], minLength: 1, maxLength: 120 }
+        visibleText:
+          type: array
+          maxItems: 20
+          items: { type: string, minLength: 1, maxLength: 160 }
+        searchTerms:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items: { type: string, minLength: 1, maxLength: 160 }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+    InventoryRecognitionMatch:
+      type: object
+      additionalProperties: false
+      required: [resourceId, confidence, reason, evidence, resource]
+      properties:
+        resourceId: { type: string, format: uuid }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        reason: { type: string, minLength: 1, maxLength: 600 }
+        evidence:
+          type: array
+          maxItems: 8
+          items: { type: string, minLength: 1, maxLength: 240 }
+        resource: { $ref: "#/components/schemas/Resource" }
+    InventoryRecognitionResult:
+      type: object
+      additionalProperties: false
+      required: [detected, matches, isConfident, model, catalog]
+      properties:
+        detected:
+          oneOf:
+            - { $ref: "#/components/schemas/InventoryRecognitionObservation" }
+            - { type: "null" }
+        matches:
+          type: array
+          maxItems: 5
+          items: { $ref: "#/components/schemas/InventoryRecognitionMatch" }
+        isConfident:
+          type: boolean
+          description: True only when the leading provider score is strong and sufficiently separated from the runner-up; the match remains advisory.
+        model: { type: [string, "null"] }
+        catalog:
+          type: object
+          additionalProperties: false
+          required: [considered, truncated]
+          properties:
+            considered: { type: integer, minimum: 0, maximum: 5000 }
+            truncated:
+              type: boolean
+              description: True when metadata matches or the image-bearing visual fallback exceeded the bounded comparison catalog; clients should present the result as non-exhaustive.
     InventoryCountJob:
       type: object
       additionalProperties: false
@@ -3438,6 +4297,9 @@ components:
       additionalProperties: false
       properties:
         resourceId: { type: string, format: uuid }
+        variantId: { type: [string, "null"], format: uuid }
+        variantDelta: { type: [integer, "null"] }
+        variantBalanceAfter: { type: [integer, "null"], minimum: 0 }
         quantityPerAssembly: { type: integer, minimum: 1 }
         position: { type: integer, minimum: 0 }
         note: { type: string, maxLength: 20000 }
@@ -4308,6 +5170,7 @@ components:
         type: { $ref: "#/components/schemas/InventoryTypeKey" }
         status: { type: string, enum: [available, in-use, maintenance, archived] }
         sku: { type: [string, "null"], maxLength: 80 }
+        barcode: { type: [string, "null"], maxLength: 180 }
         quantity: { type: integer, minimum: 0, description: Opening quantity; later changes use stock movements. }
         location: { type: [string, "null"] }
         serialNumber: { type: [string, "null"] }
@@ -4346,6 +5209,7 @@ components:
         type: { $ref: "#/components/schemas/InventoryTypeKey" }
         status: { type: string, enum: [available, in-use, maintenance, archived] }
         sku: { type: [string, "null"], maxLength: 80 }
+        barcode: { type: [string, "null"], maxLength: 180 }
         location: { type: [string, "null"] }
         serialNumber: { type: [string, "null"] }
         valueCents: { type: [integer, "null"], minimum: 0 }
@@ -4374,6 +5238,67 @@ components:
           items: { $ref: "#/components/schemas/ResourceMapFeature" }
         notes: { type: string }
         customFields: { $ref: "#/components/schemas/CustomFieldValues" }
+    ResourceVariantInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 240 }
+        sku: { type: [string, "null"], maxLength: 80 }
+        barcode: { type: [string, "null"], maxLength: 180 }
+        priceCents: { type: [integer, "null"], minimum: 0, maximum: 2000000000 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        position: { type: integer, minimum: 0, maximum: 100000 }
+        initialAllocation:
+          type: integer
+          minimum: 0
+          maximum: 2000000000
+          default: 0
+    ResourceVariantPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 240 }
+        sku: { type: [string, "null"], maxLength: 80 }
+        barcode: { type: [string, "null"], maxLength: 180 }
+        priceCents: { type: [integer, "null"], minimum: 0, maximum: 2000000000 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        position: { type: integer, minimum: 0, maximum: 100000 }
+    ResourceVariant:
+      type: object
+      required: [id, resourceId, name, currency, quantity, position, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        resourceId: { type: string, format: uuid }
+        name: { type: string }
+        sku: { type: [string, "null"] }
+        barcode: { type: [string, "null"] }
+        priceCents: { type: [integer, "null"], minimum: 0 }
+        currency: { type: string }
+        quantity: { type: integer, minimum: 0 }
+        position: { type: integer, minimum: 0 }
+        createdBy: { type: [string, "null"] }
+        updatedBy: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ResourceVariantStockSummary:
+      type: object
+      required: [totalQuantity, allocatedQuantity, unallocatedQuantity, variantCount]
+      properties:
+        totalQuantity: { type: integer, minimum: 0 }
+        allocatedQuantity: { type: integer, minimum: 0 }
+        unallocatedQuantity: { type: integer, minimum: 0 }
+        variantCount: { type: integer, minimum: 0 }
+    ResourceVariantStockMovementInput:
+      type: object
+      additionalProperties: false
+      required: [delta]
+      properties:
+        delta: { type: integer, minimum: -2000000000, maximum: 2000000000, not: { const: 0 } }
+        type: { type: string, enum: [receipt, issue, adjustment, return, waste], default: adjustment }
+        reason: { type: [string, "null"], maxLength: 240 }
+        note: { type: string, maxLength: 20000 }
+        occurredAt: { type: string, format: date-time }
     ResourceMapFeature:
       type: object
       required: [id, type, layer, description, coordinates]

@@ -197,6 +197,10 @@ test("assembles multiple room manifests from shared batched detail rows", () => 
     manifests[0].scan.keyframes[0].url,
     "/api/v1/room-scans/scan-a/keyframes/77777777-7777-4777-8777-777777777777",
   );
+  assert.equal(
+    Object.hasOwn(manifests[0].scan.keyframes[0], "featureDescriptor"),
+    false,
+  );
 });
 
 test("returns an empty manifest set for an empty structure batch", () => {

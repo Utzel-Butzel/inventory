@@ -1,8 +1,13 @@
 "use client";
 
 import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
   Camera,
   Cuboid,
+  Footprints,
   Image as ImageIcon,
   LoaderCircle,
   Maximize2,
@@ -29,6 +34,7 @@ import {
   parseSampledGaussianSplat,
   roomKeyframeDisplayOrientation,
   sampleRoomKeyframes,
+  selectPhotorealAssetBudget,
   type SampledGaussianSplat,
   type RoomCameraKeyframe,
   type RoomPhotorealAssetKind,
@@ -37,7 +43,14 @@ import {
 
 type CameraCommand = "reset" | "top";
 type SceneMode = "roomplan" | RoomPhotorealAssetKind;
-type AssetLoadState = "idle" | "loading" | "ready" | "error" | "too-large";
+type NavigationMode = "orbit" | "walk";
+type AssetLoadState =
+  | "idle"
+  | "loading"
+  | "ready"
+  | "partial"
+  | "error"
+  | "too-large";
 
 type RoomSurface =
   ClientRoomSceneManifest["scan"]["scene"]["surfaces"][number];
@@ -52,6 +65,8 @@ type SurfaceRect = {
 type WallAperture = {
   rect: SurfaceRect;
 };
+
+type LocatedRoomCameraKeyframe = RoomCameraKeyframe & { roomScanId: string };
 
 const objectColors: Record<string, number> = {
   storage: 0xb79a72,
@@ -164,7 +179,10 @@ function setMatrix(object: THREE.Object3D, values: number[]) {
 type RoomSceneAsset = ClientRoomSceneManifest["scan"]["assets"][number];
 
 const keyframesForManifest = (manifest: ClientRoomSceneManifest) =>
-  manifest.scan.keyframes ?? [];
+  (manifest.scan.keyframes ?? []).map((frame) => ({
+    ...frame,
+    roomScanId: manifest.scan.id,
+  }));
 
 const photorealAsset = (
   manifest: ClientRoomSceneManifest,
@@ -404,12 +422,16 @@ export function RoomSceneCanvas({
   const keyframeCommandRef = useRef<
     (visible: boolean, selectedId: string | null) => void
   >(() => undefined);
+  const walkCommandRef = useRef<
+    (direction: "forward" | "backward" | "left" | "right", active: boolean) => void
+  >(() => undefined);
   const selectedResourceRef = useRef(selectedResourceId);
   const keyframesVisibleRef = useRef(false);
   const selectedKeyframeRef = useRef<string | null>(null);
   const onSelectRef = useRef(onSelectResource);
   const [rendererError, setRendererError] = useState<string | null>(null);
   const [sceneMode, setSceneMode] = useState<SceneMode>("roomplan");
+  const [navigationMode, setNavigationMode] = useState<NavigationMode>("orbit");
   const [assetLoadState, setAssetLoadState] = useState<AssetLoadState>("idle");
   const [showKeyframes, setShowKeyframes] = useState(false);
   const [selectedKeyframeId, setSelectedKeyframeId] = useState<string | null>(null);
@@ -488,6 +510,7 @@ export function RoomSceneCanvas({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.className = "block size-full touch-none";
+    renderer.domElement.tabIndex = 0;
     renderer.domElement.setAttribute(
       "aria-label",
       visibleManifests.length > 1
@@ -707,6 +730,7 @@ export function RoomSceneCanvas({
     });
     const camera = new THREE.PerspectiveCamera(48, 1, 0.02, 250);
     const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enabled = navigationMode === "orbit";
     controls.enableDamping = true;
     controls.dampingFactor = 0.075;
     controls.minDistance = 0.35;
@@ -732,6 +756,9 @@ export function RoomSceneCanvas({
     scene.add(webRoot);
     const assetAbortController = new AbortController();
     const roomPlanRoots = new Map<string, THREE.Object3D>();
+    const roomWorldRoots = new Map<string, THREE.Group>();
+    const roomWorldDeltas = new Map<string, THREE.Matrix4>();
+    const wallColliderMeshes: THREE.Mesh[] = [];
     const splatMaterials = new Set<THREE.ShaderMaterial>();
     let disposed = false;
 
@@ -783,7 +810,7 @@ export function RoomSceneCanvas({
       const wall = new THREE.Group();
       setMatrix(wall, surface.transform);
       for (const piece of pieces) {
-        addBox({
+        wallColliderMeshes.push(addBox({
           parent: wall,
           size: [piece.right - piece.left, piece.top - piece.bottom, depth],
           position: [
@@ -792,7 +819,7 @@ export function RoomSceneCanvas({
             0,
           ],
           material: wallMaterial,
-        });
+        }));
       }
       return wall;
     };
@@ -837,15 +864,17 @@ export function RoomSceneCanvas({
         material: trimMaterial,
         castShadow: true,
       });
-      addBox({
-        parent: door,
-        size: [panelWidth, panelHeight, panelDepth],
-        position: [0, -frameWidth / 2, 0],
-        material: doorMaterial,
-        castShadow: true,
-      });
+      if (navigationMode !== "walk") {
+        addBox({
+          parent: door,
+          size: [panelWidth, panelHeight, panelDepth],
+          position: [0, -frameWidth / 2, 0],
+          material: doorMaterial,
+          castShadow: true,
+        });
+      }
 
-      if (panelWidth > 0.32 && panelHeight > 0.75) {
+      if (navigationMode !== "walk" && panelWidth > 0.32 && panelHeight > 0.75) {
         const detailDepth = 0.009;
         const detailWidth = panelWidth * 0.68;
         const detailHeight = panelHeight * 0.28;
@@ -866,7 +895,7 @@ export function RoomSceneCanvas({
         }
       }
 
-      if (panelWidth > 0.24 && panelHeight > 0.5) {
+      if (navigationMode !== "walk" && panelWidth > 0.24 && panelHeight > 0.5) {
         const handleX = panelWidth * 0.34;
         const handleY = -height / 2 + Math.min(1, height * 0.48);
         const rosetteRadius = THREE.MathUtils.clamp(width * 0.032, 0.018, 0.032);
@@ -921,12 +950,12 @@ export function RoomSceneCanvas({
       const glassWidth = Math.max(width - frameWidth * 2, 0.02);
       const glassHeight = Math.max(height - frameWidth * 2, 0.02);
 
-      addBox({
+      wallColliderMeshes.push(addBox({
         parent: window,
         size: [glassWidth, glassHeight, 0.012],
         material: windowMaterial,
         receiveShadow: false,
-      });
+      }));
       for (const x of [-width / 2 + frameWidth / 2, width / 2 - frameWidth / 2]) {
         addBox({
           parent: window,
@@ -1005,9 +1034,25 @@ export function RoomSceneCanvas({
     };
 
     for (const roomManifest of visibleManifests) {
+      const capturedModelTransform = new THREE.Matrix4().fromArray(
+        roomManifest.scan.scene.worldFromModel,
+      );
+      const layoutModelTransform = new THREE.Matrix4().fromArray(
+        roomManifest.scan.layoutTransform ??
+          roomManifest.scan.scene.worldFromModel,
+      );
+      const worldDelta = layoutModelTransform
+        .clone()
+        .multiply(capturedModelTransform.clone().invert());
+      const roomWorldRoot = new THREE.Group();
+      setMatrix(roomWorldRoot, worldDelta.toArray());
+      webRoot.add(roomWorldRoot);
+      roomWorldRoots.set(roomManifest.scan.id, roomWorldRoot);
+      roomWorldDeltas.set(roomManifest.scan.id, worldDelta);
+
       const modelRoot = new THREE.Group();
       setMatrix(modelRoot, roomManifest.scan.scene.worldFromModel);
-      webRoot.add(modelRoot);
+      roomWorldRoot.add(modelRoot);
       roomPlanRoots.set(roomManifest.scan.id, modelRoot);
 
       const aperturesByWall = wallApertures(roomManifest.scan.scene.surfaces);
@@ -1115,7 +1160,7 @@ export function RoomSceneCanvas({
       }
       object.userData.photorealAsset = mode;
       object.userData.roomScanId = roomManifest.scan.id;
-      webRoot.add(object);
+      (roomWorldRoots.get(roomManifest.scan.id) ?? webRoot).add(object);
       roomPlanRoots.get(roomManifest.scan.id)!.visible = false;
       return true;
     };
@@ -1130,14 +1175,28 @@ export function RoomSceneCanvas({
       const limit = sceneMode === "textured_mesh"
         ? maximumTexturedMeshBytes
         : maximumGaussianSplatBytes;
-      const loadable = assets.filter(({ asset }) => asset.size <= limit);
+      const budget = selectPhotorealAssetBudget(
+        assets.map(({ asset }) => asset),
+        limit,
+      );
+      const selectedAssets = new Set(budget.selected);
+      const loadable = assets.filter(({ asset }) => selectedAssets.has(asset));
       setAssetLoadState(loadable.length ? "loading" : "too-large");
       if (loadable.length) {
-        void Promise.allSettled(
-          loadable.map(({ roomManifest, asset }) =>
-            loadPhotorealAsset(roomManifest, asset, sceneMode),
-          ),
-        ).then((results) => {
+        // Decode sequentially. A linked floor may contain several 80 MB
+        // derivatives, and concurrent GLTF/image decoding can multiply memory.
+        void (async () => {
+          const results: PromiseSettledResult<boolean>[] = [];
+          for (const { roomManifest, asset } of loadable) {
+            try {
+              results.push({
+                status: "fulfilled",
+                value: await loadPhotorealAsset(roomManifest, asset, sceneMode),
+              });
+            } catch (reason) {
+              results.push({ status: "rejected", reason });
+            }
+          }
           if (disposed) return;
           const loaded = results.some(
             (result) => result.status === "fulfilled" && result.value,
@@ -1146,8 +1205,19 @@ export function RoomSceneCanvas({
             (result) =>
               result.status === "rejected" && result.reason instanceof RangeError,
           );
-          setAssetLoadState(loaded ? "ready" : tooLarge ? "too-large" : "error");
-        });
+          const incomplete = budget.skipped > 0 || results.some(
+            (result) => result.status === "rejected",
+          );
+          setAssetLoadState(
+            loaded
+              ? incomplete
+                ? "partial"
+                : "ready"
+              : tooLarge
+                ? "too-large"
+                : "error",
+          );
+        })();
       }
     }
 
@@ -1161,7 +1231,10 @@ export function RoomSceneCanvas({
     >();
     for (const frame of visibleKeyframes) {
       const pose = new THREE.Group();
-      setMatrix(pose, frame.cameraTransform);
+      const poseTransform = (roomWorldDeltas.get(frame.roomScanId) ?? new THREE.Matrix4())
+        .clone()
+        .multiply(new THREE.Matrix4().fromArray(frame.cameraTransform));
+      setMatrix(pose, poseTransform.toArray());
       pose.userData.keyframeId = frame.id;
 
       const lineMaterial = new THREE.LineBasicMaterial({
@@ -1221,7 +1294,7 @@ export function RoomSceneCanvas({
     let photoBitmap: ImageBitmap | null = null;
     let loadedPhotoFrameId: string | null = null;
     let photoGeneration = 0;
-    const loadPhotoPlane = async (frame: RoomCameraKeyframe) => {
+    const loadPhotoPlane = async (frame: LocatedRoomCameraKeyframe) => {
       photoRequestController?.abort();
       const request = new AbortController();
       photoRequestController = request;
@@ -1285,7 +1358,10 @@ export function RoomSceneCanvas({
         photoGeneration += 1;
         return;
       }
-      setMatrix(photoPose, frame.cameraTransform);
+      const photoTransform = (roomWorldDeltas.get(frame.roomScanId) ?? new THREE.Matrix4())
+        .clone()
+        .multiply(new THREE.Matrix4().fromArray(frame.cameraTransform));
+      setMatrix(photoPose, photoTransform.toArray());
       const depth = 0.34;
       const fx = Math.max(frame.intrinsics[0] ?? 1, 1);
       const fy = Math.max(frame.intrinsics[4] ?? 1, 1);
@@ -1322,10 +1398,11 @@ export function RoomSceneCanvas({
         halo: THREE.Mesh;
       }
     >();
-    for (const placement of visibleManifests.flatMap((item) => item.placements)) {
-      const marker = new THREE.Group();
-      marker.position.fromArray(placement.position);
-      marker.userData.resourceId = placement.resource.id;
+    for (const roomManifest of visibleManifests) {
+      for (const placement of roomManifest.placements) {
+        const marker = new THREE.Group();
+        marker.position.fromArray(placement.position);
+        marker.userData.resourceId = placement.resource.id;
 
       const stemMaterial = new THREE.MeshBasicMaterial({
         color: 0x635bff,
@@ -1374,14 +1451,15 @@ export function RoomSceneCanvas({
       halo.userData.resourceId = placement.resource.id;
       marker.add(halo);
 
-      markerMeshes.push(marker, ...marker.children);
-      markerStyles.set(placement.resource.id, {
-        dot,
-        dotMaterial,
-        stemMaterial,
-        halo,
-      });
-      webRoot.add(marker);
+        markerMeshes.push(marker, ...marker.children);
+        markerStyles.set(placement.resource.id, {
+          dot,
+          dotMaterial,
+          stemMaterial,
+          halo,
+        });
+        (roomWorldRoots.get(roomManifest.scan.id) ?? webRoot).add(marker);
+      }
     }
 
     const applySelection = (resourceId: string | null) => {
@@ -1397,7 +1475,7 @@ export function RoomSceneCanvas({
     selectionCommandRef.current = applySelection;
     applySelection(selectedResourceRef.current);
 
-    const box = visibleManifests.reduce((combined, roomManifest) => {
+    const boundsForManifest = (roomManifest: ClientRoomSceneManifest) => {
       const bounds = roomManifest.scan.scene.bounds;
       const modelBox = new THREE.Box3(
         new THREE.Vector3(...bounds.min),
@@ -1405,8 +1483,15 @@ export function RoomSceneCanvas({
       );
       const modelToWeb = new THREE.Matrix4()
         .fromArray(manifest.scan.scene.webFromWorld)
-        .multiply(new THREE.Matrix4().fromArray(roomManifest.scan.scene.worldFromModel));
-      return combined.union(modelBox.applyMatrix4(modelToWeb));
+        .multiply(new THREE.Matrix4().fromArray(
+          roomManifest.scan.layoutTransform ??
+            roomManifest.scan.scene.worldFromModel,
+        ));
+      return modelBox.applyMatrix4(modelToWeb);
+    };
+    const primaryBox = boundsForManifest(manifest);
+    const box = visibleManifests.reduce((combined, roomManifest) => {
+      return combined.union(boundsForManifest(roomManifest));
     }, new THREE.Box3());
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
@@ -1435,7 +1520,43 @@ export function RoomSceneCanvas({
     grid.position.set(center.x, box.min.y - 0.025, center.z);
     scene.add(grid);
 
+    webRoot.updateMatrixWorld(true);
+    const playerRadius = 0.2;
+    const eyeHeight = 1.62;
+    const collisionBoxes = wallColliderMeshes.map((mesh) =>
+      new THREE.Box3().setFromObject(mesh).expandByScalar(playerRadius),
+    );
+    const walkFloorY = primaryBox.min.y;
+    const pressedKeys = new Set<string>();
+    const virtualKeys = new Set<string>();
+    let walkYaw = 0;
+    let walkPitch = 0;
+
+    const applyWalkRotation = () => {
+      camera.rotation.order = "YXZ";
+      camera.rotation.y = walkYaw;
+      camera.rotation.x = walkPitch;
+      camera.rotation.z = 0;
+    };
+    const resetWalkCamera = () => {
+      controls.enabled = false;
+      camera.up.set(0, 1, 0);
+      const walkStart = primaryBox.getCenter(new THREE.Vector3());
+      camera.position.set(walkStart.x, walkFloorY + eyeHeight, walkStart.z);
+      walkYaw = 0;
+      walkPitch = 0;
+      applyWalkRotation();
+      camera.near = 0.02;
+      camera.far = Math.max(100, radius * 30);
+      camera.updateProjectionMatrix();
+    };
+
     const resetCamera = () => {
+      if (navigationMode === "walk") {
+        resetWalkCamera();
+        return;
+      }
+      controls.enabled = true;
       controls.target.copy(center);
       camera.up.set(0, 1, 0);
       camera.position.copy(
@@ -1447,7 +1568,7 @@ export function RoomSceneCanvas({
       controls.update();
     };
     commandRef.current = (command) => {
-      if (command === "top") {
+      if (command === "top" && navigationMode === "orbit") {
         controls.target.copy(center);
         camera.up.set(0, 0, -1);
         camera.position.set(center.x, center.y + radius * 2.2, center.z + 0.001);
@@ -1459,20 +1580,86 @@ export function RoomSceneCanvas({
     };
     resetCamera();
 
+    const movementKey = (key: string) =>
+      ["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(
+        key.toLowerCase(),
+      );
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (navigationMode !== "walk" || !movementKey(event.key)) return;
+      event.preventDefault();
+      pressedKeys.add(event.key.toLowerCase());
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      pressedKeys.delete(event.key.toLowerCase());
+    };
+    const virtualKey = {
+      forward: "w",
+      backward: "s",
+      left: "a",
+      right: "d",
+    } as const;
+    walkCommandRef.current = (direction, active) => {
+      if (active) virtualKeys.add(virtualKey[direction]);
+      else virtualKeys.delete(virtualKey[direction]);
+    };
+    const onMouseMove = (event: MouseEvent) => {
+      if (
+        navigationMode !== "walk" ||
+        document.pointerLockElement !== renderer.domElement
+      ) return;
+      walkYaw -= event.movementX * 0.0022;
+      walkPitch = THREE.MathUtils.clamp(
+        walkPitch - event.movementY * 0.0018,
+        -Math.PI * 0.46,
+        Math.PI * 0.46,
+      );
+      applyWalkRotation();
+    };
+    window.addEventListener("keydown", onKeyDown, { passive: false });
+    window.addEventListener("keyup", onKeyUp);
+    document.addEventListener("mousemove", onMouseMove);
+
     const raycaster = new THREE.Raycaster();
     raycaster.params.Line.threshold = 0.065;
     const pointer = new THREE.Vector2();
     let pointerStart: { x: number; y: number } | null = null;
+    let touchLook: { id: number; x: number; y: number } | null = null;
     const onPointerDown = (event: PointerEvent) => {
+      if (navigationMode === "walk") {
+        renderer.domElement.focus({ preventScroll: true });
+        if (event.pointerType === "mouse") {
+          void renderer.domElement.requestPointerLock?.();
+        } else {
+          touchLook = { id: event.pointerId, x: event.clientX, y: event.clientY };
+          renderer.domElement.setPointerCapture(event.pointerId);
+        }
+      }
       pointerStart = { x: event.clientX, y: event.clientY };
     };
+    const onPointerMove = (event: PointerEvent) => {
+      if (
+        navigationMode !== "walk" ||
+        !touchLook ||
+        touchLook.id !== event.pointerId
+      ) return;
+      walkYaw -= (event.clientX - touchLook.x) * 0.006;
+      walkPitch = THREE.MathUtils.clamp(
+        walkPitch - (event.clientY - touchLook.y) * 0.005,
+        -Math.PI * 0.46,
+        Math.PI * 0.46,
+      );
+      touchLook = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      applyWalkRotation();
+    };
     const onPointerUp = (event: PointerEvent) => {
+      if (touchLook?.id === event.pointerId) touchLook = null;
       if (!pointerStart) return;
       const travel = Math.hypot(
         event.clientX - pointerStart.x,
         event.clientY - pointerStart.y,
       );
       pointerStart = null;
+      if (navigationMode === "walk") return;
       if (travel > 6) return;
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1510,7 +1697,9 @@ export function RoomSceneCanvas({
       }
     };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
     renderer.domElement.addEventListener("pointerup", onPointerUp);
+    renderer.domElement.addEventListener("pointercancel", onPointerUp);
 
     const resize = () => {
       const width = Math.max(1, host.clientWidth);
@@ -1527,9 +1716,43 @@ export function RoomSceneCanvas({
     resize();
 
     let animationFrame = 0;
+    const clock = new THREE.Clock();
     const draw = () => {
       animationFrame = requestAnimationFrame(draw);
-      controls.update();
+      const delta = Math.min(clock.getDelta(), 0.05);
+      if (navigationMode === "walk") {
+        const active = (key: string) => pressedKeys.has(key) || virtualKeys.has(key);
+        const forwardAmount = Number(active("w") || active("arrowup")) -
+          Number(active("s") || active("arrowdown"));
+        const sideAmount = Number(active("d") || active("arrowright")) -
+          Number(active("a") || active("arrowleft"));
+        if (forwardAmount || sideAmount) {
+          const forward = new THREE.Vector3(-Math.sin(walkYaw), 0, -Math.cos(walkYaw));
+          const right = new THREE.Vector3(Math.cos(walkYaw), 0, -Math.sin(walkYaw));
+          const movement = forward
+            .multiplyScalar(forwardAmount)
+            .add(right.multiplyScalar(sideAmount))
+            .normalize()
+            .multiplyScalar(delta * 2.1);
+          const blocked = (position: THREE.Vector3) =>
+            collisionBoxes.some((bounds) => bounds.containsPoint(position));
+          const candidate = camera.position.clone().add(movement);
+          candidate.y = walkFloorY + eyeHeight;
+          if (!blocked(candidate)) {
+            camera.position.copy(candidate);
+          } else {
+            const xOnly = camera.position.clone();
+            xOnly.x += movement.x;
+            if (!blocked(xOnly)) camera.position.x = xOnly.x;
+            const zOnly = camera.position.clone();
+            zOnly.z += movement.z;
+            if (!blocked(zOnly)) camera.position.z = zOnly.z;
+          }
+        }
+        camera.position.y = walkFloorY + eyeHeight;
+      } else {
+        controls.update();
+      }
       renderer.render(scene, camera);
     };
     draw();
@@ -1541,7 +1764,13 @@ export function RoomSceneCanvas({
       cancelAnimationFrame(animationFrame);
       observer.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("pointercancel", onPointerUp);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      document.removeEventListener("mousemove", onMouseMove);
+      if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
       controls.dispose();
       const materials = new Set<THREE.Material>([
         wallMaterial,
@@ -1590,8 +1819,9 @@ export function RoomSceneCanvas({
       commandRef.current = () => undefined;
       selectionCommandRef.current = () => undefined;
       keyframeCommandRef.current = () => undefined;
+      walkCommandRef.current = () => undefined;
     };
-  }, [integer, manifest, sceneMode, t, visibleKeyframes, visibleManifests]);
+  }, [integer, manifest, navigationMode, sceneMode, t, visibleKeyframes, visibleManifests]);
 
   return (
     <div ref={hostRef} className="relative size-full overflow-hidden bg-surface-muted">
@@ -1673,6 +1903,8 @@ export function RoomSceneCanvas({
               ? t("canvas.asset.loading")
               : assetLoadState === "too-large"
                 ? t("canvas.asset.tooLarge")
+                : assetLoadState === "partial"
+                  ? t("canvas.asset.partial")
                 : t("canvas.asset.failed")}
           </div>
         ) : null}
@@ -1720,13 +1952,34 @@ export function RoomSceneCanvas({
       <div className="pointer-events-none absolute right-3 top-3 z-10 flex gap-2">
         <button
           type="button"
-          onClick={() => commandRef.current("top")}
-          className="pointer-events-auto grid size-9 place-items-center rounded-xl border border-border bg-surface/90 text-muted shadow-sm backdrop-blur transition hover:text-brand"
-          title={t("canvas.topView")}
-          aria-label={t("canvas.topView")}
+          onClick={() => setNavigationMode((current) =>
+            current === "walk" ? "orbit" : "walk")}
+          className={cn(
+            "pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-[10px] font-semibold shadow-sm backdrop-blur transition",
+            navigationMode === "walk"
+              ? "border-brand-border bg-brand-solid text-on-brand"
+              : "border-border bg-surface/90 text-muted hover:text-brand",
+          )}
+          title={t("canvas.walk.toggle")}
+          aria-label={t("canvas.walk.toggle")}
+          aria-pressed={navigationMode === "walk"}
         >
-          <ScanSearch className="size-4" aria-hidden="true" />
+          <Footprints className="size-3.5" aria-hidden="true" />
+          {navigationMode === "walk"
+            ? t("canvas.walk.exit")
+            : t("canvas.walk.enter")}
         </button>
+        {navigationMode === "orbit" ? (
+          <button
+            type="button"
+            onClick={() => commandRef.current("top")}
+            className="pointer-events-auto grid size-9 place-items-center rounded-xl border border-border bg-surface/90 text-muted shadow-sm backdrop-blur transition hover:text-brand"
+            title={t("canvas.topView")}
+            aria-label={t("canvas.topView")}
+          >
+            <ScanSearch className="size-4" aria-hidden="true" />
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => commandRef.current("reset")}
@@ -1738,8 +1991,60 @@ export function RoomSceneCanvas({
         </button>
       </div>
       <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-surface/78 px-2.5 py-1.5 text-[10px] font-medium text-muted shadow-sm backdrop-blur">
-        {t("canvas.controlsHint")}
+        {navigationMode === "walk"
+          ? t("canvas.walk.hint")
+          : t("canvas.controlsHint")}
       </div>
+      {navigationMode === "walk" ? (
+        <div className="absolute bottom-3 right-3 z-10 grid grid-cols-3 gap-1 sm:hidden">
+          <span />
+          <button
+            type="button"
+            onPointerDown={() => walkCommandRef.current("forward", true)}
+            onPointerUp={() => walkCommandRef.current("forward", false)}
+            onPointerCancel={() => walkCommandRef.current("forward", false)}
+            onPointerLeave={() => walkCommandRef.current("forward", false)}
+            className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
+            aria-label={t("canvas.walk.forward")}
+          >
+            <ArrowUp className="size-4" aria-hidden="true" />
+          </button>
+          <span />
+          <button
+            type="button"
+            onPointerDown={() => walkCommandRef.current("left", true)}
+            onPointerUp={() => walkCommandRef.current("left", false)}
+            onPointerCancel={() => walkCommandRef.current("left", false)}
+            onPointerLeave={() => walkCommandRef.current("left", false)}
+            className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
+            aria-label={t("canvas.walk.left")}
+          >
+            <ArrowLeft className="size-4" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onPointerDown={() => walkCommandRef.current("backward", true)}
+            onPointerUp={() => walkCommandRef.current("backward", false)}
+            onPointerCancel={() => walkCommandRef.current("backward", false)}
+            onPointerLeave={() => walkCommandRef.current("backward", false)}
+            className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
+            aria-label={t("canvas.walk.backward")}
+          >
+            <ArrowDown className="size-4" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onPointerDown={() => walkCommandRef.current("right", true)}
+            onPointerUp={() => walkCommandRef.current("right", false)}
+            onPointerCancel={() => walkCommandRef.current("right", false)}
+            onPointerLeave={() => walkCommandRef.current("right", false)}
+            className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
+            aria-label={t("canvas.walk.right")}
+          >
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
       {showKeyframes && selectedKeyframe ? (
         <div className="absolute bottom-12 right-3 z-10 w-56 overflow-hidden rounded-xl border border-border bg-surface/95 shadow-lg backdrop-blur">
           <div

@@ -5,6 +5,7 @@ import UIKit
 enum CameraMode: String, CaseIterable, Identifiable, Sendable {
     case capture
     case scan
+    case recognize
     case count
 
     var id: String { rawValue }
@@ -13,6 +14,7 @@ enum CameraMode: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .capture: "Erfassen"
         case .scan: "Scannen"
+        case .recognize: "Erkennen"
         case .count: "Zählen"
         }
     }
@@ -21,6 +23,7 @@ enum CameraMode: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .capture: "Inventar erfassen"
         case .scan: "QR & Barcode"
+        case .recognize: "Objekt erkennen"
         case .count: "Teile per Foto zählen"
         }
     }
@@ -29,6 +32,7 @@ enum CameraMode: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .capture: "Inventar mit Fotos erfassen"
         case .scan: "QR- oder Barcode scannen"
+        case .recognize: "Inventarartikel per Foto erkennen"
         case .count: "Teile per Foto zählen"
         }
     }
@@ -36,11 +40,14 @@ enum CameraMode: String, CaseIterable, Identifiable, Sendable {
 
 private enum CameraPhotoRequest: Equatable {
     case capture(UUID, cropAspectRatio: CGFloat)
+    case recognize(UUID, cropAspectRatio: CGFloat)
     case count(UUID, cropAspectRatio: CGFloat)
 
     var cropAspectRatio: CGFloat {
         switch self {
-        case .capture(_, let cropAspectRatio), .count(_, let cropAspectRatio):
+        case .capture(_, let cropAspectRatio),
+             .recognize(_, let cropAspectRatio),
+             .count(_, let cropAspectRatio):
             cropAspectRatio
         }
     }
@@ -51,11 +58,13 @@ struct UnifiedCameraView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var camera = CameraService()
     @StateObject private var captureModel = CaptureViewModel()
+    @StateObject private var recognitionModel = ResourceRecognitionViewModel()
     @StateObject private var countModel: StockCountViewModel
 
     @State private var mode: CameraMode
     @State private var countResource: InventoryResource?
     @State private var pendingPhotoRequest: CameraPhotoRequest?
+    @State private var pendingPhotoRequestInvalidated = false
     @State private var shutterFlash = false
     @State private var isPinchingZoom = false
 
@@ -145,9 +154,22 @@ struct UnifiedCameraView: View {
             }
         }
         .onDisappear(perform: tearDown)
-        .onChange(of: mode) { _, _ in
+        .onChange(of: mode) { oldMode, _ in
+            if pendingPhotoRequest != nil {
+                pendingPhotoRequestInvalidated = true
+            }
+            if oldMode == .recognize {
+                recognitionModel.cancel()
+            }
             lastCode = nil
             configureMode()
+        }
+        .onChange(of: recognitionModel.phase) { _, phase in
+            guard mode == .recognize,
+                  phase == .result,
+                  recognitionModel.result != nil else { return }
+            detailsDetent = .large
+            showCaptureDetails = true
         }
         .onChange(of: pickerItems) { _, items in
             captureModel.addPickerItems(items)
@@ -248,6 +270,17 @@ struct UnifiedCameraView: View {
             Text(scannerErrorMessage ?? "Unbekannter Fehler")
         }
         .alert(
+            "Objekt konnte nicht erkannt werden",
+            isPresented: Binding(
+                get: { recognitionModel.errorMessage != nil },
+                set: { if !$0 { recognitionModel.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { recognitionModel.errorMessage = nil }
+        } message: {
+            Text(recognitionModel.errorMessage ?? "Unbekannter Fehler")
+        }
+        .alert(
             "Aktion fehlgeschlagen",
             isPresented: Binding(
                 get: { countModel.errorMessage != nil },
@@ -265,12 +298,20 @@ struct UnifiedCameraView: View {
             Color.black
 
             CameraPreview(camera: camera)
-                .opacity(showingCountPhoto ? 0 : 1)
+                .opacity(showingCapturedPhoto ? 0 : 1)
 
             if mode == .count, let photoURL = countModel.photoURL {
                 StockCountPhotoPreview(
                     url: photoURL,
                     markers: countModel.result?.markers ?? [],
+                    contentMode: .fill
+                )
+            }
+
+            if mode == .recognize, let photoURL = recognitionModel.photoURL {
+                StockCountPhotoPreview(
+                    url: photoURL,
+                    markers: [],
                     contentMode: .fill
                 )
             }
@@ -304,6 +345,19 @@ struct UnifiedCameraView: View {
                         countModel.phase == .preparingPhoto
                             ? "Foto wird vorbereitet …"
                             : "Teile werden gezählt …"
+                    )
+                    .font(.headline)
+                }
+                .foregroundStyle(.white)
+                .padding(24)
+                .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 20))
+            } else if recognitionModel.isBusy, mode == .recognize {
+                VStack(spacing: 12) {
+                    ProgressView().tint(.white).controlSize(.large)
+                    Text(
+                        recognitionModel.phase == .preparingPhoto
+                            ? "Foto wird vorbereitet …"
+                            : "Inventar wird durchsucht …"
                     )
                     .font(.headline)
                 }
@@ -363,7 +417,7 @@ struct UnifiedCameraView: View {
             .foregroundStyle(.white)
             .accessibilityLabel("Details öffnen")
 
-            if !showingCountPhoto {
+            if !showingCapturedPhoto {
                 Button { camera.toggleTorch() } label: {
                     Image(
                         systemName: camera.torchEnabled
@@ -425,7 +479,7 @@ struct UnifiedCameraView: View {
 
     private func cameraControlDeck(viewportAspectRatio: CGFloat) -> some View {
         VStack(spacing: 14) {
-            if !showingCountPhoto {
+            if !showingCapturedPhoto {
                 zoomSelector
             }
 
@@ -433,8 +487,12 @@ struct UnifiedCameraView: View {
                 .frame(minHeight: 88)
 
             CameraModeBar(selection: $mode)
-                .disabled(countModel.phase == .booking)
-                .opacity(countModel.phase == .booking ? 0.65 : 1)
+                .disabled(countModel.phase == .booking || pendingPhotoRequest != nil)
+                .opacity(
+                    countModel.phase == .booking || pendingPhotoRequest != nil
+                        ? 0.65
+                        : 1
+                )
         }
         .padding(.horizontal, 18)
         .padding(.top, 18)
@@ -520,6 +578,65 @@ struct UnifiedCameraView: View {
                     .frame(width: 82, height: 82)
                     .background(.black.opacity(0.4), in: Circle())
                     .accessibilityLabel("Code wird automatisch gescannt")
+                Spacer()
+                cameraSwitchButton
+            }
+
+        case .recognize:
+            HStack {
+                Color.clear.frame(width: 52, height: 52)
+                Spacer()
+                if !state.canUseAI {
+                    Label("KI fehlt", systemImage: "lock.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(.black.opacity(0.56), in: Capsule())
+                } else if recognitionModel.photoURL == nil, !recognitionModel.isBusy {
+                    shutterButton(
+                        accessibilityLabel: "Foto aufnehmen und Inventarartikel suchen"
+                    ) {
+                        requestPhoto(
+                            for: .recognize(
+                                UUID(),
+                                cropAspectRatio: viewportAspectRatio
+                            )
+                        )
+                    }
+                    .disabled(camera.state != .ready || pendingPhotoRequest != nil)
+                } else if recognitionModel.result != nil {
+                    Button {
+                        recognitionModel.retake()
+                        showCaptureDetails = false
+                        configureMode()
+                    } label: {
+                        Label("Neues Foto", systemImage: "camera.rotate")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(.black.opacity(0.56), in: Capsule())
+                    }
+                    .foregroundStyle(.white)
+                } else if recognitionModel.photoURL != nil, !recognitionModel.isBusy {
+                    Button {
+                        guard let client = state.client else {
+                            recognitionModel.errorMessage =
+                                "Keine Verbindung zum Inventarserver."
+                            return
+                        }
+                        recognitionModel.retry(using: client)
+                    } label: {
+                        Label("Erneut suchen", systemImage: "arrow.clockwise")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(.black.opacity(0.56), in: Capsule())
+                    }
+                    .foregroundStyle(.white)
+                } else {
+                    ProgressView().tint(.white).controlSize(.large)
+                }
                 Spacer()
                 cameraSwitchButton
             }
@@ -684,6 +801,262 @@ struct UnifiedCameraView: View {
                 .padding(12)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
             }
+            .inventoryCard()
+        }
+    }
+
+    @ViewBuilder
+    private var recognitionDetails: some View {
+        if !state.canUseAI {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Objekterkennung nicht verfügbar", systemImage: "lock.fill")
+                    .font(.headline)
+                Text(
+                    "Die Fotoerkennung benötigt die KI-Berechtigung für dieses Konto. "
+                        + "Erfassen und Codes scannen stehen weiterhin zur Verfügung."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .inventoryCard()
+        } else if recognitionModel.isBusy {
+            VStack(spacing: 12) {
+                ProgressView()
+                Text(
+                    recognitionModel.phase == .preparingPhoto
+                        ? "Foto wird vorbereitet …"
+                        : "Passender Inventarartikel wird gesucht …"
+                )
+                .font(.subheadline.weight(.semibold))
+                Text(
+                    "Das Foto sowie eine begrenzte Auswahl passender Inventardaten "
+                        + "und Referenzbilder werden temporär an den KI-Dienst "
+                        + "übertragen, aber nicht als Inventarmedium gespeichert."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .inventoryCard()
+        } else if let result = recognitionModel.result {
+            if let detected = result.detected {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Erkanntes Objekt")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(detected.label).font(.headline)
+                            Text(
+                                [detected.brand, detected.model]
+                                    .compactMap { $0 }
+                                    .joined(separator: " · ")
+                            )
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(
+                            detected.confidence.formatted(
+                                .percent.precision(.fractionLength(0))
+                            )
+                        )
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .inventoryCard()
+            }
+
+            if result.matches.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label(
+                        "Kein sicherer Inventartreffer",
+                        systemImage: "questionmark.app.dashed"
+                    )
+                    .font(.headline)
+                    Text(
+                        result.catalog.considered == 0
+                            ? "Es sind keine sichtbaren Inventareinträge vorhanden."
+                            : "Zu diesem Foto wurde kein passender Eintrag gefunden. "
+                                + "Fotografiere das Objekt näher, schärfer oder von einer anderen Seite."
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    Button {
+                        recognitionModel.retake()
+                        showCaptureDetails = false
+                        configureMode()
+                    } label: {
+                        Label("Neues Foto aufnehmen", systemImage: "camera.fill")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(InventoryTheme.ink)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .inventoryCard()
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(
+                        result.isConfident ? "Sehr wahrscheinlicher Treffer" : "Treffer prüfen",
+                        systemImage: result.isConfident
+                            ? "checkmark.seal.fill"
+                            : "list.bullet.clipboard"
+                    )
+                    .font(.headline)
+                    .foregroundStyle(
+                        result.isConfident ? InventoryTheme.success : InventoryTheme.warning
+                    )
+                    Text(
+                        result.isConfident
+                            ? "Öffne den Artikel, um den Treffer zu bestätigen."
+                            : "Mehrere Einträge können ähnlich aussehen. Wähle den passenden Artikel."
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .inventoryCard()
+
+                ForEach(result.matches) { match in
+                    Button {
+                        openRecognizedResource(match.resource)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 12) {
+                                Group {
+                                    if let cover = match.resource.cover,
+                                       let client = state.client {
+                                        AuthenticatedInventoryImage(
+                                            media: cover,
+                                            client: client
+                                        )
+                                    } else {
+                                        Image(systemName: match.resource.type.symbolName)
+                                            .font(.title2)
+                                            .foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                            .background(.quaternary)
+                                    }
+                                }
+                                .frame(width: 68, height: 68)
+                                .clipShape(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                )
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(match.resource.name)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                        .multilineTextAlignment(.leading)
+                                    Text(
+                                        [
+                                            match.resource.type.localizedName,
+                                            match.resource.location,
+                                        ]
+                                        .compactMap { $0 }
+                                        .joined(separator: " · ")
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 4)
+                                Text(
+                                    match.confidence.formatted(
+                                        .percent.precision(.fractionLength(0))
+                                    )
+                                )
+                                .font(.subheadline.monospacedDigit().bold())
+                                .foregroundStyle(
+                                    result.isConfident && match.id == result.matches.first?.id
+                                        ? InventoryTheme.success
+                                        : InventoryTheme.warning
+                                )
+                            }
+                            Text(match.reason)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                            Label("Inventarartikel öffnen", systemImage: "arrow.up.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(InventoryTheme.accent)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .inventoryCard()
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Öffnet den erkannten Inventarartikel")
+                }
+            }
+
+            if result.catalog.truncated {
+                Label(
+                    "Die visuelle Vergleichsauswahl war begrenzt; ältere oder ähnlich "
+                        + "benannte Einträge können fehlen.",
+                    systemImage: "info.circle"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .inventoryCard()
+            }
+        } else if recognitionModel.photoURL != nil {
+            VStack(alignment: .leading, spacing: 12) {
+                Label(
+                    "Suche nicht abgeschlossen",
+                    systemImage: "exclamationmark.arrow.triangle.2.circlepath"
+                )
+                    .font(.headline)
+                Text(
+                    "Das Foto ist noch vorhanden. Du kannst dieselbe geschützte Anfrage "
+                        + "fortsetzen oder ein neues Foto aufnehmen."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                HStack {
+                    Button("Neues Foto") {
+                        recognitionModel.retake()
+                        showCaptureDetails = false
+                        configureMode()
+                    }
+                    .buttonStyle(.bordered)
+                    Spacer()
+                    Button("Erneut suchen") {
+                        guard let client = state.client else {
+                            recognitionModel.errorMessage =
+                                "Keine Verbindung zum Inventarserver."
+                            return
+                        }
+                        recognitionModel.retry(using: client)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(InventoryTheme.ink)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .inventoryCard()
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Inventarartikel per Foto finden", systemImage: "camera.metering.center.weighted")
+                    .font(.headline)
+                Text(
+                    "Fotografiere einen einzelnen Gegenstand gut sichtbar. Die Suche vergleicht "
+                        + "Form, Farbe, Marke, Modell und lesbare Beschriftungen mit deinem Inventar."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                Label(
+                    "Das Suchfoto wird temporär verarbeitet und nicht an einen "
+                        + "Inventarartikel angehängt.",
+                    systemImage: "hand.raised.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .inventoryCard()
         }
     }
@@ -953,6 +1326,8 @@ struct UnifiedCameraView: View {
                         captureUploadAction
                     case .scan:
                         scannerDetails
+                    case .recognize:
+                        recognitionDetails
                     case .count:
                         countDetails
                     }
@@ -1162,8 +1537,9 @@ struct UnifiedCameraView: View {
         .padding(24)
     }
 
-    private var showingCountPhoto: Bool {
-        mode == .count && countModel.photoURL != nil
+    private var showingCapturedPhoto: Bool {
+        (mode == .count && countModel.photoURL != nil)
+            || (mode == .recognize && recognitionModel.photoURL != nil)
     }
 
     private var showsScanGuide: Bool {
@@ -1184,6 +1560,8 @@ struct UnifiedCameraView: View {
             captureModel.photos.isEmpty ? nil : "\(captureModel.photos.count)"
         case .scan:
             unmatchedCode == nil ? nil : "!"
+        case .recognize:
+            recognitionModel.result.map { "\($0.matches.count)" }
         case .count:
             countModel.result == nil ? nil : "\(countModel.adjustedCount)"
         }
@@ -1193,6 +1571,7 @@ struct UnifiedCameraView: View {
         DragGesture(minimumDistance: 32)
             .onEnded { value in
                 guard !isPinchingZoom,
+                      pendingPhotoRequest == nil,
                       countModel.phase != .booking,
                       abs(value.translation.width) > abs(value.translation.height),
                       abs(value.translation.width) >= 52,
@@ -1250,7 +1629,7 @@ struct UnifiedCameraView: View {
                 resolve(code, purpose: .inventoryLookup)
             case .count where countResource == nil:
                 resolve(code, purpose: .countTarget)
-            case .capture, .count:
+            case .capture, .recognize, .count:
                 break
             }
         }
@@ -1302,6 +1681,9 @@ struct UnifiedCameraView: View {
         camera.onPhoto = nil
         if camera.torchEnabled { camera.toggleTorch() }
         camera.stop()
+        pendingPhotoRequest = nil
+        pendingPhotoRequestInvalidated = true
+        recognitionModel.cleanup()
         countModel.cleanup()
     }
 
@@ -1311,13 +1693,22 @@ struct UnifiedCameraView: View {
             countModel.errorMessage = "Die Fotozählung benötigt die KI-Berechtigung für dieses Konto."
             return
         }
+        if case .recognize = request, !state.canUseAI {
+            recognitionModel.errorMessage =
+                "Die Objekterkennung benötigt die KI-Berechtigung für dieses Konto."
+            return
+        }
+        pendingPhotoRequestInvalidated = false
         pendingPhotoRequest = request
         camera.capturePhoto()
     }
 
     private func handleCapturedPhoto(_ result: Result<Data, CameraService.PhotoCaptureError>) {
         guard let request = pendingPhotoRequest else { return }
+        let shouldDiscard = pendingPhotoRequestInvalidated
         pendingPhotoRequest = nil
+        pendingPhotoRequestInvalidated = false
+        guard !shouldDiscard else { return }
 
         let data: Data
         switch result {
@@ -1327,6 +1718,8 @@ struct UnifiedCameraView: View {
             switch request {
             case .capture:
                 captureModel.errorMessage = error.localizedDescription
+            case .recognize:
+                recognitionModel.errorMessage = error.localizedDescription
             case .count:
                 countModel.errorMessage = error.localizedDescription
             }
@@ -1343,6 +1736,17 @@ struct UnifiedCameraView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
                 withAnimation(.easeIn(duration: 0.14)) { shutterFlash = false }
             }
+        case .recognize:
+            if camera.torchEnabled { camera.toggleTorch() }
+            guard let client = state.client else {
+                recognitionModel.errorMessage = "Keine Verbindung zum Inventarserver."
+                return
+            }
+            recognitionModel.recognizeCapturedData(
+                data,
+                cropAspectRatio: request.cropAspectRatio,
+                using: client
+            )
         case .count:
             if camera.torchEnabled { camera.toggleTorch() }
             guard let client = state.client else {
@@ -1437,6 +1841,13 @@ struct UnifiedCameraView: View {
         showCaptureDetails = true
     }
 
+    private func openRecognizedResource(_ resource: InventoryResource) {
+        showCaptureDetails = false
+        camera.scanningEnabled = false
+        camera.stop()
+        foundResource = resource
+    }
+
     private func submitCapture() {
         guard captureModel.canSubmit, captureModel.processingCount == 0 else { return }
         let submission = captureModel.makeSubmission(imageModelID: state.selectedImageModelID)
@@ -1476,7 +1887,7 @@ private struct CameraModeBar: View {
     @Binding var selection: CameraMode
 
     var body: some View {
-        HStack(spacing: 26) {
+        HStack(spacing: 2) {
             ForEach(CameraMode.allCases) { mode in
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
@@ -1489,15 +1900,19 @@ private struct CameraModeBar: View {
                         .foregroundStyle(
                             selection == mode ? Color.yellow : Color.white.opacity(0.82)
                         )
-                        .frame(minHeight: 44)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .scaleEffect(selection == mode ? 1.05 : 1)
                 }
                 .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
                 .accessibilityLabel(mode.accessibilityLabel)
                 .accessibilityAddTraits(selection == mode ? .isSelected : [])
             }
         }
-        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(.black.opacity(0.34), in: Capsule())
         .simultaneousGesture(

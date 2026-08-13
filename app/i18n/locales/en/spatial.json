@@ -151,7 +151,8 @@
     "loading": "Loading 3D rooms…",
     "errors": {
       "loadRooms": "Unable to load rooms.",
-      "loadScene": "Unable to load room scene."
+      "loadScene": "Unable to load room scene.",
+      "saveLayout": "Unable to save the floor layout."
     },
     "empty": {
       "title": "No rooms have been scanned yet",
@@ -166,8 +167,8 @@
       "rooms_other": "{{value}} rooms",
       "items_one": "{{value}} positioned item",
       "items_other": "{{value}} positioned items",
-      "linked_one": "{{value}} linked room · shared AR frame",
-      "linked_other": "{{value}} linked rooms · shared AR frame"
+      "linked_one": "{{value}} connected room on this floor",
+      "linked_other": "{{value}} connected rooms on this floor"
     },
     "structures": {
       "building": "Building",
@@ -192,6 +193,21 @@
       "noItemsDescription": "Capture an item in this room with the AR mode in the iPhone app.",
       "roomFallback": "Room",
       "downloadUsdz": "Download original USDZ"
+    },
+    "layout": {
+      "open": "Arrange rooms",
+      "close": "Close layout",
+      "title": "Arrange this floor",
+      "description": "Move and rotate rooms until their doors meet.",
+      "room": "Room to arrange",
+      "automatic": "Restore automatic side-by-side layout",
+      "forward": "Move room forward",
+      "backward": "Move room backward",
+      "left": "Move room left",
+      "right": "Move room right",
+      "step": "Movement: 25 cm · Rotation: 5°",
+      "cancel": "Cancel",
+      "save": "Save layout"
     },
     "placements": {
       "searchPlaceholder": "Search positioned items…",
@@ -218,12 +234,13 @@
     "modes": {
       "roomplan": "RoomPlan",
       "textured": "Textured",
-      "splat": "Photo splat"
+      "splat": "Splat preview"
     },
     "asset": {
       "loading": "Loading photorealistic view…",
       "failed": "Photorealistic asset unavailable — showing RoomPlan",
-      "tooLarge": "Asset is too large for the browser — showing RoomPlan"
+      "tooLarge": "Asset is too large for the browser — showing RoomPlan",
+      "partial": "Photorealistic view is memory-limited — remaining rooms use RoomPlan"
     },
     "keyframes": {
       "toggle_one": "{{value}} camera",
@@ -236,6 +253,16 @@
     },
     "topView": "Top view",
     "resetView": "Reset view",
-    "controlsHint": "Drag: rotate · two fingers: pan · scroll: zoom"
+    "controlsHint": "Drag: rotate · two fingers: pan · scroll: zoom",
+    "walk": {
+      "toggle": "Toggle first-person navigation",
+      "enter": "Walk",
+      "exit": "Exit walk",
+      "hint": "Click to look · WASD or arrow keys to walk · Esc releases the mouse",
+      "forward": "Walk forward",
+      "backward": "Walk backward",
+      "left": "Walk left",
+      "right": "Walk right"
+    }
   }
 }

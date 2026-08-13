@@ -254,7 +254,7 @@ public struct SpatialRoomScanSummary: Codable, Equatable, Identifiable, Sendable
     public let updatedAt: Date
     public let placementCount: Int
     public let assets: [SpatialRoomScanAsset]
-    public let keyframes: [SpatialRoomKeyframe]?
+    public let keyframeCount: Int?
     public let structureID: UUID?
     public let structureName: String?
     public let floorIdentifier: String?
@@ -279,7 +279,7 @@ public struct SpatialRoomScanSummary: Codable, Equatable, Identifiable, Sendable
         case updatedAt
         case placementCount
         case assets
-        case keyframes
+        case keyframeCount
         case structureID = "structureId"
         case structureName
         case floorIdentifier

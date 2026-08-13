@@ -1,0 +1,18 @@
+{
+  "id": "open-inventory",
+  "name": "Open Inventory",
+  "version": "latest",
+  "description": "A self-hosted inventory workspace with stock control, media, labels, maps, and a scoped API.",
+  "logo": "open-inventory.svg",
+  "links": {
+    "github": "https://github.com/Utzel-Butzel/inventory",
+    "website": "https://github.com/Utzel-Butzel/inventory",
+    "docs": "https://github.com/Utzel-Butzel/inventory#readme"
+  },
+  "tags": [
+    "inventory",
+    "asset-management",
+    "self-hosted",
+    "productivity"
+  ]
+}

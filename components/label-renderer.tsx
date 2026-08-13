@@ -5,19 +5,26 @@ import { useT } from "next-i18next/client";
 
 import {
   canEncodeQr,
-  canEncodeCode128B,
   Code128Barcode,
   QrCode,
 } from "@/components/label-codes";
 import type { LabelElement, LabelSetupDto } from "@/lib/label-setup-contract";
 import type { ClientResource } from "@/lib/client-types";
 import { resourceShortUrl } from "@/lib/resource-short-link";
+import { printableLabelBarcode } from "@/lib/label-barcode";
 
 import styles from "./label-printer.module.css";
 
 export type LabelResource = Pick<
   ClientResource,
-  "id" | "name" | "sku" | "location" | "type" | "quantity" | "cover"
+  | "id"
+  | "name"
+  | "sku"
+  | "barcode"
+  | "location"
+  | "type"
+  | "quantity"
+  | "cover"
 >;
 
 const elementPosition = (element: LabelElement): CSSProperties => ({
@@ -101,8 +108,7 @@ export function LabelRenderer({
   const { t } = useT("labels");
   const shortUrl = resourceShortUrl(origin, resource.id);
   const qrValue = canEncodeQr(shortUrl) ? shortUrl : null;
-  const visibleCode = resource.sku?.trim() || resource.id;
-  const barcodeCode = canEncodeCode128B(visibleCode) ? visibleCode : resource.id;
+  const barcodeCode = printableLabelBarcode(resource);
   const identifier = resource.sku
     ? t("renderer.sku", { sku: resource.sku })
     : resource.id;

@@ -31,7 +31,7 @@ import {
   type CustomFieldValues,
 } from "@/lib/custom-field-contract";
 import type { LabelElement } from "@/lib/label-setup-contract";
-import type { RoomScene } from "@/lib/room-scene-contract";
+import type { RoomScene, SpatialMatrix4 } from "@/lib/room-scene-contract";
 import type {
   RoomCameraIntrinsics,
   RoomKeyframeFeatureDescriptor,
@@ -46,6 +46,17 @@ import type {
   PublicShareFilter,
   PublicShareScope,
 } from "@/lib/public-share-contract";
+import type {
+  NotificationChannel,
+  NotificationEventType,
+  NotificationFrequency,
+  NotificationLocale,
+  NotificationMetadata,
+} from "@/lib/notification-contract";
+import type {
+  WebhookEventType,
+  WebhookSubscriptionEventType,
+} from "@/lib/webhook-contract";
 
 export const userRoles = ["admin", "editor", "viewer"] as const;
 export type BuiltinUserRole = (typeof userRoles)[number];
@@ -393,6 +404,7 @@ export const resources = pgTable(
     quantity: integer("quantity").notNull().default(1),
     location: varchar("location", { length: 240 }),
     serialNumber: varchar("serial_number", { length: 180 }),
+    barcode: varchar("barcode", { length: 180 }),
     valueCents: integer("value_cents"),
     currency: varchar("currency", { length: 3 }).notNull().default("EUR"),
     priority: integer("priority").notNull().default(3),
@@ -426,6 +438,9 @@ export const resources = pgTable(
   },
   (table) => [
     uniqueIndex("resources_sku_unique").on(table.sku),
+    uniqueIndex("resources_barcode_unique")
+      .on(table.barcode)
+      .where(sql`${table.barcode} is not null`),
     index("resources_name_idx").on(table.name),
     index("resources_type_idx").on(table.type),
     index("resources_status_idx").on(table.status),
@@ -436,6 +451,65 @@ export const resources = pgTable(
       "resources_custom_fields_object",
       sql`jsonb_typeof(${table.customFields}) = 'object'`,
     ),
+  ],
+);
+
+/**
+ * Optional sellable/stocked choices that belong to one inventory item.
+ *
+ * The resource quantity remains the canonical total used by all existing stock
+ * code. Variant quantities allocate part of that total; stock that has not been
+ * allocated to a variant remains available on the parent item. Variants are
+ * deliberately bulk-only so identified-unit tracking keeps its established,
+ * resource-level ownership model.
+ */
+export const resourceVariants = pgTable(
+  "resource_variants",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 240 }).notNull(),
+    sku: varchar("sku", { length: 80 }),
+    barcode: varchar("barcode", { length: 180 }),
+    priceCents: integer("price_cents"),
+    currency: varchar("currency", { length: 3 }).notNull().default("EUR"),
+    quantity: integer("quantity").notNull().default(0),
+    position: integer("position").notNull().default(0),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("resource_variants_resource_name_unique").on(
+      table.resourceId,
+      table.name,
+    ),
+    uniqueIndex("resource_variants_id_resource_unique").on(
+      table.id,
+      table.resourceId,
+    ),
+    index("resource_variants_resource_position_idx").on(
+      table.resourceId,
+      table.position,
+    ),
+    uniqueIndex("resource_variants_sku_unique")
+      .on(table.sku)
+      .where(sql`${table.sku} is not null`),
+    uniqueIndex("resource_variants_barcode_unique")
+      .on(table.barcode)
+      .where(sql`${table.barcode} is not null`),
+    check("resource_variants_name_nonempty", sql`length(btrim(${table.name})) > 0`),
+    check("resource_variants_price_nonnegative", sql`${table.priceCents} is null or ${table.priceCents} >= 0`),
+    check("resource_variants_quantity_nonnegative", sql`${table.quantity} >= 0`),
+    check("resource_variants_position_nonnegative", sql`${table.position} >= 0`),
+    check("resource_variants_currency_format", sql`${table.currency} ~ '^[A-Z]{3}$'`),
   ],
 );
 
@@ -671,6 +745,7 @@ export const roomScans = pgTable(
       .notNull()
       .default("active"),
     scene: jsonb("scene").$type<RoomScene>().notNull(),
+    layoutTransform: jsonb("layout_transform").$type<SpatialMatrix4>(),
     capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
     deviceModel: varchar("device_model", { length: 120 }),
     createdBy: varchar("created_by", { length: 320 }),
@@ -715,6 +790,10 @@ export const roomScans = pgTable(
       sql`${table.status} in ('active', 'superseded')`,
     ),
     check("room_scans_scene_object", sql`jsonb_typeof(${table.scene}) = 'object'`),
+    check(
+      "room_scans_layout_transform_array",
+      sql`${table.layoutTransform} is null or (jsonb_typeof(${table.layoutTransform}) = 'array' and jsonb_array_length(${table.layoutTransform}) = 16)`,
+    ),
     check(
       "room_scans_coordinate_space_requires_structure",
       sql`${table.coordinateSpaceId} is null or ${table.structureId} is not null`,
@@ -1489,6 +1568,9 @@ export const stockMovements = pgTable(
     resourceId: uuid("resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "cascade" }),
+    variantId: uuid("variant_id"),
+    variantDelta: integer("variant_delta"),
+    variantBalanceAfter: integer("variant_balance_after"),
     unitId: uuid("unit_id").references(() => stockUnits.id, {
       onDelete: "set null",
     }),
@@ -1527,6 +1609,12 @@ export const stockMovements = pgTable(
   },
   (table) => [
     index("stock_movements_resource_id_idx").on(table.resourceId),
+    index("stock_movements_variant_id_idx").on(table.variantId),
+    foreignKey({
+      name: "stock_movements_variant_resource_fk",
+      columns: [table.variantId, table.resourceId],
+      foreignColumns: [resourceVariants.id, resourceVariants.resourceId],
+    }).onDelete("restrict"),
     index("stock_movements_resource_occurred_idx").on(
       table.resourceId,
       table.occurredAt,
@@ -1545,6 +1633,14 @@ export const stockMovements = pgTable(
     check(
       "stock_movements_quantity_nonnegative",
       sql`${table.quantity} >= 0`,
+    ),
+    check(
+      "stock_movements_variant_balance_nonnegative",
+      sql`${table.variantBalanceAfter} is null or ${table.variantBalanceAfter} >= 0`,
+    ),
+    check(
+      "stock_movements_variant_fields_consistent",
+      sql`(${table.variantId} is null and ${table.variantDelta} is null and ${table.variantBalanceAfter} is null) or (${table.variantId} is not null and ${table.variantDelta} is not null and ${table.variantBalanceAfter} is not null)`,
     ),
     check(
       "stock_movements_from_location_balance_nonnegative",
@@ -1990,7 +2086,7 @@ export const aiIdempotencyOperations = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     operation: varchar("operation", { length: 24 })
-      .$type<"analyze" | "count" | "cover" | "translate">()
+      .$type<"analyze" | "recognize" | "count" | "cover" | "translate">()
       .notNull(),
     idempotencyKey: uuid("idempotency_key").notNull(),
     resourceId: uuid("resource_id").notNull(),
@@ -2020,7 +2116,7 @@ export const aiIdempotencyOperations = pgTable(
     index("ai_idempotency_operations_resource_id_idx").on(table.resourceId),
     check(
       "ai_idempotency_operations_operation_check",
-      sql`${table.operation} in ('analyze', 'count', 'cover', 'translate')`,
+      sql`${table.operation} in ('analyze', 'recognize', 'count', 'cover', 'translate')`,
     ),
     check(
       "ai_idempotency_operations_status_check",
@@ -2049,7 +2145,7 @@ export const aiRateLimitBuckets = pgTable(
     }),
     check(
       "ai_rate_limit_buckets_operation_check",
-      sql`${table.operation} in ('analyze', 'count', 'cover', 'translate')`,
+      sql`${table.operation} in ('analyze', 'recognize', 'count', 'cover', 'translate')`,
     ),
     check(
       "ai_rate_limit_buckets_request_count_positive",
@@ -2058,6 +2154,386 @@ export const aiRateLimitBuckets = pgTable(
     check(
       "ai_rate_limit_buckets_subject_hash_check",
       sql`${table.subjectHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
+export const notificationPreferences = pgTable(
+  "notification_preferences",
+  {
+    recipientKey: varchar("recipient_key", { length: 320 }).primaryKey(),
+    recipientEmail: varchar("recipient_email", { length: 320 }),
+    recipientName: varchar("recipient_name", { length: 160 }),
+    enabledEventTypes: text("enabled_event_types")
+      .array()
+      .$type<NotificationEventType[]>()
+      .notNull()
+      .default(["low_stock", "expiry", "maintenance", "return_due"]),
+    frequency: varchar("frequency", { length: 24 })
+      .$type<NotificationFrequency>()
+      .notNull()
+      .default("daily"),
+    digestHour: integer("digest_hour").notNull().default(8),
+    timezone: varchar("timezone", { length: 80 }).notNull().default("UTC"),
+    locale: varchar("locale", { length: 8 })
+      .$type<NotificationLocale>()
+      .notNull()
+      .default("en"),
+    cooldownHours: integer("cooldown_hours").notNull().default(24),
+    lowStockThresholdPercent: integer("low_stock_threshold_percent")
+      .notNull()
+      .default(100),
+    expiryWindowDays: integer("expiry_window_days").notNull().default(30),
+    expiryFieldKey: varchar("expiry_field_key", { length: 120 })
+      .notNull()
+      .default("expiry_date"),
+    maintenanceWindowDays: integer("maintenance_window_days")
+      .notNull()
+      .default(7),
+    maintenanceFieldKey: varchar("maintenance_field_key", { length: 120 })
+      .notNull()
+      .default("maintenance_due"),
+    returnDueWindowDays: integer("return_due_window_days")
+      .notNull()
+      .default(3),
+    emailEnabled: boolean("email_enabled").notNull().default(false),
+    pushEnabled: boolean("push_enabled").notNull().default(false),
+    slackEnabled: boolean("slack_enabled").notNull().default(false),
+    teamsEnabled: boolean("teams_enabled").notNull().default(false),
+    webhookEnabled: boolean("webhook_enabled").notNull().default(false),
+    lastDigestAt: timestamp("last_digest_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      "notification_preferences_event_types_check",
+      sql`${table.enabledEventTypes} <@ array['low_stock', 'expiry', 'maintenance', 'return_due']::text[]`,
+    ),
+    check(
+      "notification_preferences_frequency_check",
+      sql`${table.frequency} in ('daily', 'immediate')`,
+    ),
+    check(
+      "notification_preferences_digest_hour_check",
+      sql`${table.digestHour} between 0 and 23`,
+    ),
+    check(
+      "notification_preferences_locale_check",
+      sql`${table.locale} in ('en', 'de')`,
+    ),
+    check(
+      "notification_preferences_cooldown_check",
+      sql`${table.cooldownHours} between 1 and 720`,
+    ),
+    check(
+      "notification_preferences_low_stock_threshold_check",
+      sql`${table.lowStockThresholdPercent} between 1 and 500`,
+    ),
+    check(
+      "notification_preferences_expiry_window_check",
+      sql`${table.expiryWindowDays} between 0 and 3650`,
+    ),
+    check(
+      "notification_preferences_maintenance_window_check",
+      sql`${table.maintenanceWindowDays} between 0 and 3650`,
+    ),
+    check(
+      "notification_preferences_return_due_window_check",
+      sql`${table.returnDueWindowDays} between 0 and 365`,
+    ),
+  ],
+);
+
+export const notificationInbox = pgTable(
+  "notification_inbox",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipientKey: varchar("recipient_key", { length: 320 })
+      .notNull()
+      .references(() => notificationPreferences.recipientKey, {
+        onDelete: "cascade",
+      }),
+    eventType: varchar("event_type", { length: 32 })
+      .$type<NotificationEventType>()
+      .notNull(),
+    resourceId: uuid("resource_id").references(() => resources.id, {
+      onDelete: "set null",
+    }),
+    assignmentId: uuid("assignment_id").references(
+      () => inventoryAssignments.id,
+      { onDelete: "set null" },
+    ),
+    sourceKey: varchar("source_key", { length: 420 }).notNull(),
+    dedupeBucket: varchar("dedupe_bucket", { length: 64 }).notNull(),
+    title: varchar("title", { length: 240 }).notNull(),
+    body: text("body").notNull(),
+    href: varchar("href", { length: 500 }),
+    metadata: jsonb("metadata")
+      .$type<NotificationMetadata>()
+      .notNull()
+      .default({}),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("notification_inbox_dedupe_unique").on(
+      table.recipientKey,
+      table.eventType,
+      table.sourceKey,
+      table.dedupeBucket,
+    ),
+    index("notification_inbox_recipient_created_idx").on(
+      table.recipientKey,
+      table.createdAt,
+    ),
+    index("notification_inbox_recipient_unread_idx").on(
+      table.recipientKey,
+      table.readAt,
+    ),
+    check(
+      "notification_inbox_event_type_check",
+      sql`${table.eventType} in ('low_stock', 'expiry', 'maintenance', 'return_due')`,
+    ),
+    check(
+      "notification_inbox_metadata_object",
+      sql`jsonb_typeof(${table.metadata}) = 'object'`,
+    ),
+  ],
+);
+
+export const notificationDispatches = pgTable(
+  "notification_dispatches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipientKey: varchar("recipient_key", { length: 320 })
+      .notNull()
+      .references(() => notificationPreferences.recipientKey, {
+        onDelete: "cascade",
+      }),
+    channel: varchar("channel", { length: 24 })
+      .$type<NotificationChannel>()
+      .notNull(),
+    dedupeKey: varchar("dedupe_key", { length: 64 }).notNull(),
+    status: varchar("status", { length: 24 }).notNull(),
+    eventCount: integer("event_count").notNull().default(0),
+    targetRedacted: varchar("target_redacted", { length: 500 }),
+    error: text("error"),
+    preview: boolean("preview").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("notification_dispatches_recipient_created_idx").on(
+      table.recipientKey,
+      table.createdAt,
+    ),
+    uniqueIndex("notification_dispatches_dedupe_unique").on(table.dedupeKey),
+    check(
+      "notification_dispatches_channel_check",
+      sql`${table.channel} in ('email', 'push', 'slack', 'teams', 'webhook')`,
+    ),
+    check(
+      "notification_dispatches_status_check",
+      sql`${table.status} in ('sending', 'sent', 'skipped', 'failed', 'preview')`,
+    ),
+    check(
+      "notification_dispatches_event_count_check",
+      sql`${table.eventCount} >= 0`,
+    ),
+  ],
+);
+
+export const notificationPushSubscriptions = pgTable(
+  "notification_push_subscriptions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipientKey: varchar("recipient_key", { length: 320 })
+      .notNull()
+      .references(() => notificationPreferences.recipientKey, {
+        onDelete: "cascade",
+      }),
+    endpointHash: varchar("endpoint_hash", { length: 64 }).notNull(),
+    encryptedSubscription: text("encrypted_subscription").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("notification_push_subscriptions_endpoint_unique").on(
+      table.endpointHash,
+    ),
+    index("notification_push_subscriptions_recipient_idx").on(
+      table.recipientKey,
+      table.revokedAt,
+    ),
+    check(
+      "notification_push_subscriptions_endpoint_hash_check",
+      sql`${table.endpointHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
+export const webhookDeliveryStatuses = [
+  "pending",
+  "processing",
+  "succeeded",
+  "failed",
+] as const;
+export type WebhookDeliveryStatus =
+  (typeof webhookDeliveryStatuses)[number];
+
+export const webhookEndpoints = pgTable(
+  "webhook_endpoints",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 120 }).notNull(),
+    encryptedUrl: text("encrypted_url").notNull(),
+    redactedUrl: varchar("redacted_url", { length: 500 }).notNull(),
+    encryptedSecret: text("encrypted_secret").notNull(),
+    eventTypes: text("event_types")
+      .array()
+      .$type<WebhookSubscriptionEventType[]>()
+      .notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    failureCount: integer("failure_count").notNull().default(0),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    lastFailureAt: timestamp("last_failure_at", { withTimezone: true }),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("webhook_endpoints_active_idx").on(table.enabled, table.revokedAt),
+    index("webhook_endpoints_revoked_idx")
+      .on(table.revokedAt)
+      .where(sql`${table.revokedAt} is not null`),
+    check(
+      "webhook_endpoints_event_types_nonempty",
+      sql`cardinality(${table.eventTypes}) > 0`,
+    ),
+    check(
+      "webhook_endpoints_event_types_check",
+      sql`${table.eventTypes} <@ array['inventory.resource.created', 'inventory.resource.updated', 'inventory.resource.deleted', 'inventory.resource.merged', 'inventory.stock.movement.created']::text[]`,
+    ),
+    check(
+      "webhook_endpoints_failure_count_nonnegative",
+      sql`${table.failureCount} >= 0`,
+    ),
+  ],
+);
+
+export const webhookEvents = pgTable(
+  "webhook_events",
+  {
+    id: uuid("id").primaryKey(),
+    type: varchar("type", { length: 80 }).$type<WebhookEventType>().notNull(),
+    apiVersion: varchar("api_version", { length: 8 }).notNull().default("1"),
+    aggregateType: varchar("aggregate_type", { length: 80 }),
+    aggregateId: varchar("aggregate_id", { length: 160 }),
+    actor: varchar("actor", { length: 320 }),
+    payload: jsonb("payload")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    body: text("body").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("webhook_events_occurred_idx").on(table.occurredAt),
+    index("webhook_events_created_idx").on(table.createdAt),
+    index("webhook_events_aggregate_idx").on(
+      table.aggregateType,
+      table.aggregateId,
+    ),
+    check("webhook_events_api_version_check", sql`${table.apiVersion} = '1'`),
+    check(
+      "webhook_events_type_check",
+      sql`${table.type} in ('inventory.resource.created', 'inventory.resource.updated', 'inventory.resource.deleted', 'inventory.resource.merged', 'inventory.stock.movement.created', 'inventory.webhook.test')`,
+    ),
+    check(
+      "webhook_events_payload_object",
+      sql`jsonb_typeof(${table.payload}) = 'object'`,
+    ),
+  ],
+);
+
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    webhookId: uuid("webhook_id")
+      .notNull()
+      .references(() => webhookEndpoints.id, { onDelete: "restrict" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => webhookEvents.id, { onDelete: "cascade" }),
+    encryptedSecret: text("encrypted_secret").notNull(),
+    status: varchar("status", { length: 24 })
+      .$type<WebhookDeliveryStatus>()
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    leaseToken: uuid("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    httpStatus: integer("http_status"),
+    error: text("error"),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("webhook_deliveries_endpoint_event_unique").on(
+      table.webhookId,
+      table.eventId,
+    ),
+    index("webhook_deliveries_due_idx").on(
+      table.status,
+      table.nextAttemptAt,
+    ),
+    index("webhook_deliveries_event_idx").on(table.eventId),
+    check(
+      "webhook_deliveries_status_check",
+      sql`${table.status} in ('pending', 'processing', 'succeeded', 'failed')`,
+    ),
+    check(
+      "webhook_deliveries_attempts_nonnegative",
+      sql`${table.attempts} >= 0`,
+    ),
+    check(
+      "webhook_deliveries_processing_lease_check",
+      sql`(${table.status} = 'processing' and ${table.leaseToken} is not null and ${table.leaseExpiresAt} is not null) or (${table.status} <> 'processing' and ${table.leaseToken} is null and ${table.leaseExpiresAt} is null)`,
+    ),
+    check(
+      "webhook_deliveries_http_status_check",
+      sql`${table.httpStatus} is null or ${table.httpStatus} between 100 and 599`,
     ),
   ],
 );
@@ -2095,6 +2571,8 @@ export const apiTokens = pgTable(
 
 export type ResourceRecord = typeof resources.$inferSelect;
 export type NewResource = typeof resources.$inferInsert;
+export type ResourceVariantRecord = typeof resourceVariants.$inferSelect;
+export type NewResourceVariant = typeof resourceVariants.$inferInsert;
 export type TranslationLanguageRecord =
   typeof translationLanguages.$inferSelect;
 export type ResourceTranslationRecord = typeof resourceTranslations.$inferSelect;
@@ -2106,6 +2584,16 @@ export type LabelSetupRecord = typeof labelSetups.$inferSelect;
 export type MediaRecord = typeof media.$inferSelect;
 export type ApiTokenRecord = typeof apiTokens.$inferSelect;
 export type PublicShareRecord = typeof publicShares.$inferSelect;
+export type NotificationPreferenceRecord =
+  typeof notificationPreferences.$inferSelect;
+export type NotificationInboxRecord = typeof notificationInbox.$inferSelect;
+export type NotificationDispatchRecord =
+  typeof notificationDispatches.$inferSelect;
+export type NotificationPushSubscriptionRecord =
+  typeof notificationPushSubscriptions.$inferSelect;
+export type WebhookEndpointRecord = typeof webhookEndpoints.$inferSelect;
+export type WebhookEventRecord = typeof webhookEvents.$inferSelect;
+export type WebhookDeliveryRecord = typeof webhookDeliveries.$inferSelect;
 export type StockSettingsRecord = typeof stockSettings.$inferSelect;
 export type StockMovementRecord = typeof stockMovements.$inferSelect;
 export type StockUnitRecord = typeof stockUnits.$inferSelect;

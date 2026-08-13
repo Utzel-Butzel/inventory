@@ -1,4 +1,47 @@
 {
+  "variants": {
+    "title": "Varianten",
+    "description": "Optionale Ausführungen mit eigener SKU, Barcode, Preis und Sammelbestand.",
+    "allocated": "{{value}} zugeordnet",
+    "unallocated": "{{value}} nicht zugeordnet",
+    "serializedDisabled": "Varianten sind bei serialisierter Bestandsführung deaktiviert. Identifizierte Einheiten bleiben auf Artikelebene.",
+    "empty": "Keine Varianten. Der übergeordnete Artikel funktioniert unverändert weiter.",
+    "optional": "optional",
+    "currency": "Währung",
+    "namePlaceholder": "z. B. Blau / Groß",
+    "openingAllocation": "Anfangszuordnung",
+    "openingAllocationHelp": "Aus dem bestehenden, noch nicht zugeordneten Artikelbestand",
+    "stockChange": "Bestandsänderung für {{name}}",
+    "stockHelp": "Positive Werte buchen Zugang, negative Werte Abgang. Artikel- und Variantenbestand werden atomar aktualisiert.",
+    "addTitle": "Variante hinzufügen",
+    "editTitle": "{{name}} bearbeiten",
+    "confirmDelete": "Variante „{{name}}“ löschen?",
+    "fields": {
+      "name": "Name",
+      "sku": "SKU",
+      "barcode": "Barcode",
+      "price": "Preis",
+      "stock": "Bestand"
+    },
+    "actions": {
+      "stock": "Bestand",
+      "edit": "Bearbeiten",
+      "delete": "Variante löschen",
+      "zeroFirst": "Zuerst Bestand auf null setzen",
+      "book": "Buchen",
+      "cancel": "Abbrechen",
+      "save": "Variante speichern",
+      "add": "Variante hinzufügen"
+    },
+    "errors": {
+      "load": "Varianten konnten nicht geladen werden.",
+      "save": "Variante konnte nicht gespeichert werden.",
+      "delete": "Variante konnte nicht gelöscht werden.",
+      "stock": "Bestand konnte nicht geändert werden.",
+      "invalidForm": "Gib einen Namen und eine nicht negative ganze Anfangsmenge ein.",
+      "invalidStock": "Gib eine von null verschiedene ganze Bestandsänderung ein."
+    }
+  },
   "actions": {
     "batchCapture": "Stapelerfassung",
     "addItem": "Eintrag hinzufügen",
@@ -49,6 +92,7 @@
     "item": "Eintrag",
     "status": "Status",
     "sku": "SKU",
+    "barcode": "Barcode",
     "location": "Ort",
     "value": "Wert"
   },
@@ -173,6 +217,9 @@
     "translationFallback_one": "{{value}} Feld wird weiterhin in der Standardsprache angezeigt, da die Übersetzung fehlt oder veraltet ist.",
     "translationFallback_other": "{{value}} Felder werden weiterhin in der Standardsprache angezeigt, da ihre Übersetzungen fehlen oder veraltet sind.",
     "emptyDescription": "Noch keine Beschreibung hinzugefügt.",
+    "articleImage": "Artikelbild",
+    "noArticleImage": "Noch kein Artikelbild",
+    "addArticleImage": "Artikelbild hinzufügen",
     "files_one": "{{value}} Datei",
     "files_other": "{{value}} Dateien",
     "priority": "{{value}} / 5",
@@ -182,6 +229,7 @@
     "sections": {
       "overview": "Überblick",
       "media": "Medien",
+      "additionalMedia": "Weitere Medien",
       "notes": "Notizen",
       "itemDetails": "Eintragsdetails",
       "classification": "Klassifizierung",

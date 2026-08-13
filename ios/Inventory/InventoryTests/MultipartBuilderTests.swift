@@ -62,6 +62,35 @@ final class MultipartBuilderTests: XCTestCase {
         XCTAssertTrue(text.hasSuffix("--\(body.boundary)--\r\n"))
     }
 
+    func testBuildsObjectRecognitionBodyWithExactlyOneImageField() throws {
+        let source = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("jpg")
+        try Data([0xff, 0xd8, 0x01, 0xff, 0xd9]).write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let body = try MultipartFormFileBuilder.buildObjectRecognition(
+            image: MediaUploadFile(fileURL: source, filename: "hair-dryer.jpg")
+        )
+        defer { try? FileManager.default.removeItem(at: body.fileURL) }
+
+        let text = String(
+            decoding: try Data(contentsOf: body.fileURL),
+            as: UTF8.self
+        )
+        XCTAssertEqual(text.components(separatedBy: "name=\"image\"").count - 1, 1)
+        XCTAssertTrue(text.contains("filename=\"hair-dryer.jpg\""))
+        XCTAssertTrue(text.contains("Content-Type: image/jpeg"))
+        XCTAssertTrue(text.hasSuffix("--\(body.boundary)--\r\n"))
+    }
+
+    func testUnifiedCameraIncludesRecognitionBetweenScanAndCount() {
+        XCTAssertEqual(
+            CameraMode.allCases.map(\.rawValue),
+            ["capture", "scan", "recognize", "count"]
+        )
+    }
+
     func testRoomScanBodyIncludesMultiRoomAndGeoreferenceContract() throws {
         let scanID = UUID()
         let directory = FileManager.default.temporaryDirectory

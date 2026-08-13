@@ -42,6 +42,10 @@ export type ResourceMediaUploadValidation =
   | { valid: true }
   | { valid: false; status: 413 | 415; error: string };
 
+export type ObjectScanImageValidation =
+  | { valid: true }
+  | { valid: false; status: 422; error: string };
+
 export const validateResourceMediaUpload = (
   file: { name: string; type: string; size: number },
   sizeLimit: number,
@@ -72,6 +76,37 @@ export const validateResourceMediaUpload = (
   }
 
   return { valid: true };
+};
+
+/**
+ * An inventory Object Capture model needs a regular image for cards, detail
+ * views, AI recognition, and cover generation. The image may already belong to
+ * the resource or be uploaded in the same multipart batch.
+ *
+ * This deliberately validates writes only. Legacy resources that contain a
+ * model without an image remain readable and can be repaired by adding one.
+ */
+export const validateObjectScanImage = (
+  existingMedia: ReadonlyArray<{ kind?: string; mimeType?: string }>,
+  uploads: ReadonlyArray<{ type: string }>,
+): ObjectScanImageValidation => {
+  if (!uploads.some((file) => isUsdzMediaType(file.type))) {
+    return { valid: true };
+  }
+
+  const hasExistingImage = existingMedia.some(
+    (item) =>
+      item.kind === "image" || item.mimeType?.startsWith("image/") === true,
+  );
+  const hasUploadedImage = uploads.some((file) => file.type.startsWith("image/"));
+  if (hasExistingImage || hasUploadedImage) return { valid: true };
+
+  return {
+    valid: false,
+    status: 422,
+    error:
+      "Apple Object Capture model uploads require an item image. Upload an image with the USDZ model, or add an image first.",
+  };
 };
 
 export const isInlinePublicMediaType = (mimeType: string) =>
