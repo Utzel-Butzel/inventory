@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ignore-pattern .next",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test:ai-rate-limit": "node --experimental-strip-types --test tests/ai-rate-limit-policy.test.mjs",
     "test:count": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/inventory-count-contract.test.mjs tests/replicate-count-contract.test.mjs tests/replicate-count-job.test.mjs",
     "test:recognition": "node --experimental-strip-types --test tests/inventory-recognition-contract.test.mjs tests/inventory-recognition-migration.test.mjs",
