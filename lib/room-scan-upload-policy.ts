@@ -30,6 +30,51 @@ export const roomScanWriteReceipt = (id: string, replayed: boolean) => ({
   replayed,
 });
 
+export type BoundedUploadLength =
+  | { valid: true; bytes: number }
+  | { valid: false; status: 400 | 411 | 413; error: string };
+
+/**
+ * Request body helpers buffer multipart/form-data before application-level
+ * validation. Requiring an explicit HTTP framing length closes the chunked or
+ * unknown-length path around the in-memory upload envelope.
+ */
+export const validateBoundedUploadLength = (
+  header: string | null,
+  maximumBytes: number,
+): BoundedUploadLength => {
+  if (header === null) {
+    return {
+      valid: false,
+      status: 411,
+      error: "Content-Length is required for this upload.",
+    };
+  }
+  if (!/^\d+$/.test(header)) {
+    return {
+      valid: false,
+      status: 400,
+      error: "Content-Length is invalid.",
+    };
+  }
+  const bytes = Number(header);
+  if (!Number.isSafeInteger(bytes) || bytes < 0) {
+    return {
+      valid: false,
+      status: 400,
+      error: "Content-Length is invalid.",
+    };
+  }
+  if (bytes > maximumBytes) {
+    return {
+      valid: false,
+      status: 413,
+      error: "The upload exceeds the size limit.",
+    };
+  }
+  return { valid: true, bytes };
+};
+
 export type RoomScanSpatialConflictKind =
   | "georeference"
   | "web-from-world"

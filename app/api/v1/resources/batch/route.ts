@@ -54,6 +54,7 @@ export async function PATCH(request: Request) {
     }
     const result = await updateResourcesBatch({
       ...parsed.data,
+      actor: authorization.identity.subject,
       authorize: async (current, proposed) =>
         (await canAccessResource(
           authorization.identity,

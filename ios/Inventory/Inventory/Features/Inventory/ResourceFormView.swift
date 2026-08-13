@@ -1,5 +1,18 @@
 import SwiftUI
 
+enum ObjectCaptureAIIdempotencyPolicy {
+    static func nextOperationID(
+        current: UUID,
+        after error: Error,
+        makeID: () -> UUID = UUID.init
+    ) -> UUID {
+        guard let apiError = error as? APIClientError,
+              let statusCode = apiError.statusCode,
+              statusCode != 202 else { return current }
+        return makeID()
+    }
+}
+
 struct ResourceFormView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var state: AppState
@@ -23,7 +36,12 @@ struct ResourceFormView: View {
     @State private var errorMessage: String?
     @State private var createOperationID = UUID()
     @State private var modelUploadOperationID = UUID()
+    @State private var analysisOperationID = UUID()
+    @State private var coverOperationID = UUID()
     @State private var createdResource: InventoryResource?
+    @State private var uploadedObjectMedia: MediaUploadResponse?
+    @State private var objectAnalysisCompleted = false
+    @State private var objectCoverCompleted = false
     @State private var confirmCloseAfterCreation = false
 
     init(
@@ -78,24 +96,27 @@ struct ResourceFormView: View {
 
                 if let objectModel {
                     Section("3D-Modell") {
-                        LabeledContent {
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text(objectModel.fileURL.lastPathComponent)
+                        HStack(spacing: 14) {
+                            LocalThumbnail(url: objectModel.articleImageURL, size: 76)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            VStack(alignment: .leading, spacing: 5) {
+                                Label("Apple Object Capture", systemImage: "cube.fill")
                                     .font(.subheadline.weight(.semibold))
-                                    .lineLimit(1)
-                                Text(objectModel.byteCount.formatted(.byteCount(style: .file)))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                Text(
+                                    objectModel.byteCount.formatted(.byteCount(style: .file))
+                                        + " · Artikelbild "
+                                        + objectModel.articleImageByteCount.formatted(.byteCount(style: .file))
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             }
-                        } label: {
-                            Label("Apple Object Capture", systemImage: "cube.fill")
                         }
 
                         if objectModel.shotCount > 0 {
                             LabeledContent("Aufnahmen", value: "\(objectModel.shotCount)")
                         }
 
-                        Text("Das reduzierte USDZ-Modell wird zusammen mit dem neuen Eintrag hochgeladen.")
+                        Text(objectCaptureProcessingDescription)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -158,23 +179,23 @@ struct ResourceFormView: View {
                         .disabled(saving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .interactiveDismissDisabled(saving)
+            .interactiveDismissDisabled(saving || createdResource != nil)
             .onDisappear(perform: cleanupObjectModel)
             .confirmationDialog(
-                "Eintrag ohne 3D-Modell schließen?",
+                closeAfterPartialCreationTitle,
                 isPresented: $confirmCloseAfterCreation,
                 titleVisibility: .visible
             ) {
-                Button("Ohne 3D-Modell behalten") {
+                Button(partialCreationKeepButtonTitle) {
                     if let createdResource {
                         onSaved(createdResource)
                     }
                     dismiss()
                 }
-                Button("Upload erneut versuchen") { save() }
+                Button(partialCreationRetryButtonTitle) { save() }
                 Button("Weiter bearbeiten", role: .cancel) { }
             } message: {
-                Text("Der Inventareintrag wurde bereits angelegt. Du kannst den Modell-Upload erneut versuchen oder den Eintrag ohne 3D-Modell behalten.")
+                Text(closeAfterPartialCreationMessage)
             }
             .alert(
                 "Speichern fehlgeschlagen",
@@ -237,12 +258,67 @@ struct ResourceFormView: View {
                         createdResource = created
                     }
                     if let objectModel {
-                        _ = try await client.uploadMedia(
-                            resourceID: created.id,
-                            files: [objectModel.uploadFile],
-                            idempotencyKey: modelUploadOperationID
-                        )
+                        let uploaded: MediaUploadResponse
+                        if let uploadedObjectMedia {
+                            uploaded = uploadedObjectMedia
+                        } else {
+                            uploaded = try await client.uploadMedia(
+                                resourceID: created.id,
+                                files: objectModel.uploadFiles,
+                                idempotencyKey: modelUploadOperationID
+                            )
+                            uploadedObjectMedia = uploaded
+                            createdResource = try await client.getResource(id: created.id)
+                        }
+
+                        if state.canUseAI {
+                            if !objectAnalysisCompleted {
+                                do {
+                                    let response = try await client.analyzeResource(
+                                        id: created.id,
+                                        overwrite: true,
+                                        idempotencyKey: analysisOperationID
+                                    )
+                                    objectAnalysisCompleted = true
+                                    createdResource = response.resource
+                                } catch {
+                                    analysisOperationID = ObjectCaptureAIIdempotencyPolicy
+                                        .nextOperationID(
+                                            current: analysisOperationID,
+                                            after: error
+                                        )
+                                    throw error
+                                }
+                            }
+                            if !objectCoverCompleted {
+                                guard let articleImage = uploaded.uploaded.first(where: {
+                                    $0.kind == .image && $0.source == .upload
+                                }) else {
+                                    throw APIClientError.invalidResponse
+                                }
+                                do {
+                                    let response = try await client.generateCover(
+                                        resourceID: created.id,
+                                        sourceMediaID: articleImage.id,
+                                        modelID: state.selectedImageModelID,
+                                        transparentBackground: true,
+                                        transparencyMethod: .differenceMatting,
+                                        idempotencyKey: coverOperationID
+                                    )
+                                    objectCoverCompleted = true
+                                    createdResource = response.resource
+                                } catch {
+                                    coverOperationID = ObjectCaptureAIIdempotencyPolicy
+                                        .nextOperationID(
+                                            current: coverOperationID,
+                                            after: error
+                                        )
+                                    throw error
+                                }
+                            }
+                        }
                         saved = try await client.getResource(id: created.id)
+                        createdResource = saved
                     } else {
                         saved = created
                     }
@@ -265,6 +341,39 @@ struct ResourceFormView: View {
                     .filter { !$0.isEmpty }
             )
         ).sorted()
+    }
+
+    private var objectCaptureProcessingDescription: String {
+        if state.canUseAI {
+            return "Artikelbild und USDZ-Modell werden hochgeladen. Anschließend folgen automatisch die übliche KI-Erkennung und eine transparente Freistellung."
+        }
+        return "Artikelbild und USDZ-Modell werden hochgeladen. KI-Erkennung und Freistellung bleiben aus, weil diesem Konto die KI-Berechtigung fehlt."
+    }
+
+    private var closeAfterPartialCreationTitle: String {
+        uploadedObjectMedia == nil
+            ? "Eintrag ohne Artikelbild und 3D-Modell schließen?"
+            : "Automatische Verarbeitung unvollständig"
+    }
+
+    private var partialCreationKeepButtonTitle: String {
+        uploadedObjectMedia == nil
+            ? "Eintrag trotzdem behalten"
+            : "Mit Artikelbild und 3D-Modell behalten"
+    }
+
+    private var partialCreationRetryButtonTitle: String {
+        uploadedObjectMedia == nil ? "Upload erneut versuchen" : "KI-Verarbeitung erneut versuchen"
+    }
+
+    private var closeAfterPartialCreationMessage: String {
+        if uploadedObjectMedia == nil {
+            return "Der Inventareintrag wurde bereits angelegt, aber Artikelbild und 3D-Modell wurden noch nicht hochgeladen. Du kannst den Upload erneut versuchen oder den Eintrag ohne diese Medien behalten."
+        }
+        if state.canUseAI, (!objectAnalysisCompleted || !objectCoverCompleted) {
+            return "Artikelbild und 3D-Modell sind bereits gespeichert. Die KI-Erkennung oder transparente Freistellung ist noch nicht vollständig. Du kannst sie erneut versuchen oder den Eintrag mit den vorhandenen Medien behalten."
+        }
+        return "Artikelbild und 3D-Modell sind bereits gespeichert."
     }
 
     private var selectableTypes: [InventoryResourceType] {

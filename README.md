@@ -48,6 +48,8 @@ Open Inventory is released under the [MIT License](LICENSE).
   placement for inventory captured with the native iPhone app
 - Navigable Three.js room models with searchable, clickable inventory markers
   under **Rooms 3D**
+- Photo-based recognition of existing inventory items with ranked, reviewable
+  matches in the native camera
 - Photo-based counting with a reviewable quantity before stock receipt or issue
 - OpenAI image-to-record analysis with structured title, description, type,
   tags, alt text, and confidence output
@@ -56,24 +58,170 @@ Open Inventory is released under the [MIT License](LICENSE).
 - Database-backed custom roles, granular permissions, conditional item rules,
   and optional Auth0
 - Hashed, scoped, expiring, revocable API tokens
+- Durable outgoing integration webhooks with HMAC signatures, delivery history,
+  bounded retries, secret rotation, and manual replay
 - Duplicate scoring and transactional record merging
 - Docker Compose deployment with PostgreSQL and persistent volumes
 
-## Local setup
+## Quick start with Docker
 
-Requirements: Node.js 22.13 or newer and PostgreSQL 15 or newer.
+This is the recommended installation for one machine. After cloning the
+repository, one installer command creates installation-specific secrets, starts
+PostgreSQL and Inventory, applies every migration, waits for the health check,
+and prints the initial sign-in details.
+
+Requirements: Git, Docker with Compose v2, OpenSSL, and `curl`.
 
 ```bash
-npm install
+git clone https://github.com/Utzel-Butzel/inventory.git
+cd inventory
+./scripts/install.sh
+```
+
+Open the URL printed by the installer and sign in with its generated email and
+password. The default is [http://localhost:3000](http://localhost:3000). To use a
+different local port, run `APP_PORT=8080 ./scripts/install.sh`. A server behind a
+TLS reverse proxy can instead use its exact public origin, for example
+`AUTH_URL=https://inventory.example.com ./scripts/install.sh`; the local Compose
+override still binds the application to loopback only.
+
+The installer creates a mode-`0600` `.env`, starts the stack in the background,
+and never replaces an existing `.env`. If that file already exists, review it
+and start the configured stack with:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+```
+
+Use [`.env.example`](.env.example) as the reference when adding optional
+providers to the generated file; keep its installation-specific secret values
+instead of copying the placeholders back over them.
+
+PostgreSQL data and local uploads live in separate project-scoped named volumes
+and survive container replacement. Do not run `docker compose down --volumes`
+unless you intentionally want to delete both datasets.
+
+### Secure first sign-in
+
+The installer and hosting templates generate a unique
+`BOOTSTRAP_ADMIN_PASSWORD` and set `BOOTSTRAP_ADMIN_PASSWORD_ONCE=true`. The
+production entrypoint accepts this cleartext value only in that explicit mode,
+converts it to a bcrypt hash before application code loads, and removes the
+cleartext variable from the application process. The first matching successful
+sign-in creates the database-backed administrator with only the bcrypt hash.
+
+After that first sign-in, change the administrator password under **Settings →
+Users**, remove `BOOTSTRAP_ADMIN_PASSWORD` and
+`BOOTSTRAP_ADMIN_PASSWORD_ONCE` from `.env` or the hosting platform, and
+redeploy. The database-backed account continues to work. Treat the generated
+value as a real secret until it has been removed.
+
+## One-click-ready hosting templates
+
+The checked-in Dokploy and Coolify templates deploy the same production image
+with PostgreSQL, health checks, automatic migrations, generated secrets, and
+separate persistent database and upload volumes. They are prepared for the
+platform catalogs, where selecting **Open Inventory** becomes the one-click
+path. Until they are accepted there, the direct path is one template import or
+copy/paste followed by **Deploy**—there is still no database wiring or secret
+generation to do by hand. Optional AI, Auth0, external storage, and notification
+providers can be added later. Both templates pull the multi-architecture
+`ghcr.io/utzel-butzel/inventory:latest` image published by the checked-in
+[`container-image.yml`](.github/workflows/container-image.yml) workflow.
+After the package is created for the first time, a repository maintainer must
+make it public once in GitHub's package settings so Dokploy and Coolify can pull
+it without registry credentials.
+[`deployment-check.yml`](.github/workflows/deployment-check.yml) builds a fresh
+Compose installation in pull requests, waits for readiness, verifies the
+generated first login, restarts the application, and verifies that login again.
+
+### Dokploy
+
+The [`deploy/dokploy`](deploy/dokploy) directory is a Dokploy template bundle:
+[`template.toml`](deploy/dokploy/template.toml) defines the generated values and
+domain, while [`docker-compose.yml`](deploy/dokploy/docker-compose.yml) defines
+the complete stack.
+
+1. In the target project and environment, create a **Docker Compose** service.
+2. Open **Advanced → Import**, paste the complete contents of
+   [`deploy/dokploy/base64.txt`](deploy/dokploy/base64.txt) into the Base64
+   import, and confirm it.
+3. Select the hostname Dokploy should secure with HTTPS and click **Deploy**.
+4. In the Compose service's **Environment** view, reveal
+   `BOOTSTRAP_ADMIN_PASSWORD` and use it with `admin@inventory.local` for the
+   first sign-in.
+5. Change the administrator password under **Settings → Users**, then edit the
+   imported Compose definition to remove both
+   `BOOTSTRAP_ADMIN_PASSWORD` and `BOOTSTRAP_ADMIN_PASSWORD_ONCE`, remove the
+   generated password from the environment, and redeploy.
+
+Dokploy generates `POSTGRES_PASSWORD`, `AUTH_SECRET`, and the initial admin
+password. The template routes the selected HTTPS domain to container port 3000,
+uses `/api/health`, and keeps both volumes attached across redeployments; no
+separate database service or manual connection string is required.
+
+### Coolify
+
+[`deploy/coolify/compose.yaml`](deploy/coolify/compose.yaml) is a complete
+Coolify service template using its generated password and FQDN variables.
+
+1. In a Coolify project, choose **New Resource → Docker Compose Empty**, paste
+   the contents of `deploy/coolify/compose.yaml`, and save it. This copy/paste is
+   needed only until the template is available in the Coolify catalog.
+2. Assign the generated or custom HTTPS domain to the `inventory` service on
+   port 3000, then click **Deploy**.
+3. Reveal `SERVICE_PASSWORD_64_ADMIN` in Coolify and sign in as
+   `admin@inventory.local`.
+4. Change the administrator password under **Settings → Users**, then edit the
+   Compose resource to remove the
+   `BOOTSTRAP_ADMIN_PASSWORD` and `BOOTSTRAP_ADMIN_PASSWORD_ONCE` mappings, then
+   delete or rotate the generated admin secret and redeploy.
+
+Coolify automatically supplies the application URL, database password,
+`AUTH_SECRET`, and initial admin password referenced by the template. Database
+and upload volumes remain isolated to the Coolify resource.
+
+## Local development with npm and PostgreSQL
+
+Requirements: Node.js 22.13 or newer, npm, and PostgreSQL 15 or newer. Create the
+local role and database once using a PostgreSQL administrator. The password
+below deliberately matches the development-only `DATABASE_URL` in
+`.env.example`:
+
+```bash
+psql postgres -c "CREATE ROLE inventory LOGIN PASSWORD 'inventory';"
+createdb --owner=inventory inventory
+```
+
+Skip either command when that role or database already exists, or put your
+existing PostgreSQL credentials in `.env.local`. Then prepare the app:
+
+```bash
+npm ci
 cp .env.example .env.local
-createdb inventory
 npm run db:migrate
 npm run db:seed
+```
+
+`npm run db:seed` is optional and adds sample inventory only when the workspace
+is empty. For a development-only local login, set these values in the ignored
+`.env.local` file before starting the server:
+
+```dotenv
+BOOTSTRAP_ADMIN_EMAIL=admin@inventory.local
+BOOTSTRAP_ADMIN_NAME=Inventory admin
+BOOTSTRAP_ADMIN_PASSWORD=choose-a-local-only-password
+```
+
+Start the development server, then open
+[http://localhost:3000](http://localhost:3000):
+
+```bash
 npm run dev
 ```
 
-Then open [http://localhost:3000](http://localhost:3000). Change the values in
-`.env.local` before using the app outside a local development machine.
+Do not reuse the local database password, placeholder `AUTH_SECRET`, or
+cleartext bootstrap password in a production deployment.
 
 ### SSH tunnel to a remote PostgreSQL database
 
@@ -92,148 +240,163 @@ If PostgreSQL is already published on the production server's loopback
 interface, replace `DB_TUNNEL_DOCKER_SERVICE` with
 `DB_TUNNEL_REMOTE_HOST=127.0.0.1`. An SSH config alias can be used as
 `DB_TUNNEL_SSH_HOST`; `DB_TUNNEL_IDENTITY_FILE` and `DB_TUNNEL_SSH_JUMP` are
-available when needed.
-
-Start the foreground tunnel and keep that terminal open:
+available when needed. Start the foreground tunnel and keep that terminal open:
 
 ```bash
-yarn db:tunnel
+npm run db:tunnel
 ```
 
 The command prints the loopback-only `DATABASE_URL` shape to use in a second
 terminal. Never commit production credentials, and use a restricted database
 role for routine local development.
 
-Set `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` to use Mapbox streets and satellite
-imagery. Without it, the map falls back to OpenFreeMap streets and Esri World
-Imagery. `NEXT_PUBLIC_MAP_STYLE_URL` and `NEXT_PUBLIC_SATELLITE_TILE_URL` can
-override those token-free fallback services.
+Set `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` before building to use Mapbox streets and
+satellite imagery. Without it, the map falls back to OpenFreeMap streets and
+Esri World Imagery. `NEXT_PUBLIC_MAP_STYLE_URL` and
+`NEXT_PUBLIC_SATELLITE_TILE_URL` can override those token-free services. Because
+all three are build-time `NEXT_PUBLIC_*` values in Docker, changing them requires
+a new image build.
 
-On an empty database, the first local administrator can be bootstrapped with:
+## Verify and operate a deployment
 
-```dotenv
-BOOTSTRAP_ADMIN_EMAIL=admin@inventory.local
-BOOTSTRAP_ADMIN_NAME=Inventory admin
-BOOTSTRAP_ADMIN_PASSWORD_HASH=$2b$12$...
-```
+### Verify
 
-The legacy `SIMPLE_AUTH_*` values remain a fallback while the user table is
-empty. Plaintext `BOOTSTRAP_ADMIN_PASSWORD` or `SIMPLE_AUTH_PASSWORD` is only
-intended for local development and is rejected by the production container.
-
-Generate a password hash with:
+The readiness endpoint returns 200 only when PostgreSQL is reachable, every
+bundled migration has been applied, and the configured storage is writable:
 
 ```bash
-npm run auth:hash -- "your new password"
+curl --fail http://localhost:3000/api/health
+docker compose -f docker-compose.yml -f docker-compose.local.yml ps
 ```
 
-## Docker
+Before relying on a new deployment, sign in, create a record, upload a file,
+restart the stack, and confirm both are still present. Also test API-token and
+stock-movement workflows when they are part of the intended use.
 
-The production Compose file has no default database password, application
-secret, public URL, or plaintext login password. Create a `.env` file and set at
-least:
+### Update
 
-```dotenv
-POSTGRES_PASSWORD=a-long-url-safe-random-value
-AUTH_SECRET=a-different-random-value-with-at-least-32-characters
-AUTH_URL=https://inventory.example.com
-SIMPLE_AUTH_EMAIL=admin@example.com
-SIMPLE_AUTH_PASSWORD_HASH='$2b$12$...'
-```
-
-Keep bcrypt hashes in single quotes in Compose `.env` files so their `$`
-characters remain literal. Generate both secrets before starting:
+Back up first, review the incoming release, and then rebuild from the updated
+checkout. Startup applies migrations under a PostgreSQL advisory lock before the
+new application begins serving requests.
 
 ```bash
-openssl rand -base64 48
-npm run auth:hash -- "your new password"
+git pull --ff-only
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+curl --fail http://localhost:3000/api/health
 ```
 
-For local access through port 3000, add the checked-in local port override:
+On Dokploy or Coolify, update or redeploy the template/image and wait for the
+same health check. Pin a released image tag instead of `latest` when the
+deployment requires a controlled promotion process.
+
+### Back up
+
+Database rows and stored files are one logical dataset. Capture both in the same
+quiet maintenance window and copy the resulting files off the Docker host:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+mkdir -p backups
+docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T db \
+  pg_dump -U inventory -d inventory -Fc > backups/inventory.dump
+docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T app \
+  tar -czf - -C /app/data/uploads . > backups/inventory-uploads.tar.gz
 ```
 
-Compose starts PostgreSQL, applies checked-in migrations, and starts Inventory
-at [http://localhost:3000](http://localhost:3000). Named volumes persist both
-PostgreSQL data and local uploads across container replacements. Their explicit
-names, `inventory_postgres` and `inventory_uploads`, remain stable even if the
-Compose project name changes. Override `POSTGRES_VOLUME_NAME` and
-`UPLOADS_VOLUME_NAME` when multiple installations share one Docker host.
+Dokploy and Coolify users can use platform-native scheduled backups, but must
+include both the PostgreSQL data and the upload volume. Regularly restore both
+artifacts into a separate test deployment; an untested backup is not a recovery
+plan.
 
-The production image validates its required configuration, verifies local
-storage permissions, applies migrations under a PostgreSQL advisory lock, and
-then starts Next.js. It refuses a placeholder/short `AUTH_SECRET`, a non-HTTPS
-remote `AUTH_URL`, plaintext `SIMPLE_AUTH_PASSWORD`, incomplete Auth0 settings,
-or incomplete storage-provider settings. The Compose migration service remains
-as an explicit deployment gate; the application repeats the idempotent check so
-the same image also works as a standalone container.
+### Troubleshooting
 
-### Dokploy
+- **The installer stops immediately:** install Docker Compose v2, OpenSSL, and
+  `curl`. If `.env` already exists, it is intentionally left unchanged.
+- **The application does not become healthy:** run
+  `docker compose -f docker-compose.yml -f docker-compose.local.yml logs --tail=200 db migrate app`.
+  Check the database connection, migration output, and upload-volume permissions.
+- **Production configuration is rejected:** use a non-placeholder
+  `AUTH_SECRET` of at least 32 characters and the exact public HTTPS origin in
+  `AUTH_URL`. URL-encode special characters inside a manual `DATABASE_URL`.
+- **The first sign-in fails:** use the generated bootstrap email and password
+  while the user table is still empty. Bootstrap values never reset an existing
+  user; use **Settings → Users** from another administrator instead.
+- **Uploads are not writable:** mount persistent storage at
+  `/app/data/uploads`. A host bind mount must be writable by container UID/GID
+  `1001`; named volumes from the supplied templates need no manual ownership
+  setup.
+- **Port 3000 is already in use:** remove an unintended conflicting service or
+  run a fresh install with `APP_PORT=8080 ./scripts/install.sh`.
 
-The simplest Dokploy setup is one **Application** built from this Dockerfile and
-a separate managed PostgreSQL service:
-
-1. Upload the project as a ZIP or connect a repository. Use the repository root
-   as build context, `Dockerfile` as the Dockerfile, and do not override its
-   start command.
-2. Attach a managed PostgreSQL database and set its full, URL-encoded connection
-   string as `DATABASE_URL`.
-3. Set `AUTH_SECRET`, the exact public HTTPS origin as `AUTH_URL`, and
-   `AUTH_TRUST_HOST=true`. For example, if the application is published at
-   `https://inventory.example.com`, that exact value must be used.
-4. Expose container port `3000` through the Dokploy domain and TLS settings. Set
-   the health-check path to `/api/health`; it returns 200 only when PostgreSQL,
-   every bundled migration, and the configured storage are ready.
-5. For local file storage, set `STORAGE_PROVIDER=local`,
-   `STORAGE_LOCAL_PATH=/app/data/uploads`, and attach a persistent volume at
-   `/app/data/uploads`. The container runs as UID/GID `1001`, so a host bind
-   mount must be writable by that identity. No upload volume is required when
-   `STORAGE_PROVIDER=openinary` is fully configured.
-6. Add a password hash/bootstrap administrator or complete Auth0 settings, then
-   add the optional AI provider credentials. Never configure
-   `SIMPLE_AUTH_PASSWORD` on the production container.
-
-The migration lock makes concurrent starts safe, and paid-AI limits are shared
-through PostgreSQL, so neither requires a single app replica. Back up PostgreSQL
-and `/app/data/uploads` together; database media rows and stored files form one
-logical dataset. A deployment is not complete until login, upload, API-token,
-stock-movement, container-recreation, and backup/restore smoke tests have passed.
+The production image also rejects plaintext `SIMPLE_AUTH_PASSWORD`, incomplete
+Auth0 settings, and incomplete storage-provider settings. Local-file deployments
+must keep PostgreSQL and `/app/data/uploads` together through backup, restore,
+and migration work.
 
 ## Authentication
 
 ### Local accounts
 
-For the first login on an empty database, configure:
+The installer and hosting templates use the recommended one-time bootstrap mode
+described under [Secure first sign-in](#secure-first-sign-in). For a manual
+production deployment on an empty database, configure a unique initial password
+of at least 12 characters:
 
 ```dotenv
 BOOTSTRAP_ADMIN_EMAIL=admin@example.com
 BOOTSTRAP_ADMIN_NAME=Inventory admin
-BOOTSTRAP_ADMIN_PASSWORD_HASH=$2b$12$...
+BOOTSTRAP_ADMIN_PASSWORD=a-unique-generated-initial-password
+BOOTSTRAP_ADMIN_PASSWORD_ONCE=true
 ```
 
-The first matching successful login creates the database-backed administrator.
+Alternatively, install dependencies and generate a bcrypt hash before deploying:
+
+```bash
+npm ci
+npm run auth:hash -- "your new password"
+```
+
+Then configure the hash instead of either password variable:
+
+```dotenv
+BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+BOOTSTRAP_ADMIN_NAME=Inventory admin
+BOOTSTRAP_ADMIN_PASSWORD_HASH='$2b$12$...'
+```
+
+Keep a bcrypt hash in single quotes when it is stored in a Compose `.env` file
+so its `$` characters remain literal. Do not add those quotes when a hosting
+platform stores the value directly. The legacy `SIMPLE_AUTH_*` variables remain
+only as a compatibility fallback while the user table is empty; production
+rejects `SIMPLE_AUTH_PASSWORD`.
+
+The first matching successful login creates the database-backed administrator,
+but only while the user table is empty. Bootstrap variables cannot overwrite or
+reset an existing account.
+
 That administrator can then create, disable, re-enable, reset, and assign roles
 to additional accounts under **Settings → Users**. Roles are configured under
 **Settings → Roles & access**. All accounts share the same inventory workspace:
 
-- `admin` manages users and API tokens and has full inventory and AI access.
+- `admin` manages users, API tokens, and integration webhooks and has full
+  inventory and AI access.
 - `editor` can read and change inventory and use AI features.
 - `viewer` has read-only access.
 
 These built-in roles preserve the original defaults. You can also create custom
 roles and select individual inventory, stock, assignment, count, spatial,
-purchasing, workflow, label, AI, settings, user, sharing, and token permissions.
+purchasing, workflow, label, AI, settings, user, sharing, token, and webhook
+permissions.
+
 Conditional inventory rules provide additive access to matching items. For
 example, a role without global item-update access can be allowed to update only
 items whose `tags` contain `xyz`. Rules support item ID, name, type, status, SKU,
 location, serial number, priority, tags, categories, creator, and
 `customFields.<key>` conditions. Every condition in a rule must match.
 
-After the first administrator exists, remove the bootstrap password hash from
-the deployment environment. Existing database users continue to work. Disabling
-a user or resetting a password invalidates that user’s existing sessions.
+After the first administrator exists, change its password under **Settings →
+Users**, remove all bootstrap password values from the deployment environment,
+and restart or redeploy. Existing database users continue to work. Disabling a
+user or resetting a password invalidates that user’s existing sessions.
 
 Native clients use the same local email and password at
 `POST /api/v1/auth/login`. Tokens expire after 30 days by default; configure
@@ -267,6 +430,170 @@ Auth0 identities are managed in Auth0 rather than the local user list. Restrict
 the enabled Auth0 connections or invitations at the tenant level; every
 successful Auth0 login receives `AUTH0_DEFAULT_ROLE`, unless the configured role
 claim contains an existing role key. Unknown role keys fail closed.
+
+## Notifications
+
+Every signed-in user has an in-app notification inbox for low stock, expiry,
+maintenance, and due returns. The defaults deliberately favor signal over
+volume: external delivery is disabled, eligible events are deduplicated with a
+24-hour cooldown, and enabled external channels use one daily digest at 08:00 in
+the recipient's configured timezone. Users can change thresholds, due-date
+windows, locale, cadence, and explicit channel opt-ins under **Settings →
+Notifications**. External digests show at most 20 details plus a remaining-item
+count; the complete event history stays in the in-app inbox.
+
+All destinations and credentials remain deployment environment variables. Slack,
+Teams, and generic webhook URLs are shared deployment targets and are redacted
+in the UI; identical team-channel digests are dispatched only once even when
+multiple users enable the same channel. Web Push subscriptions are encrypted at
+rest with `NOTIFICATION_ENCRYPTION_KEY`. Generate an independent 32-byte key and
+a VAPID pair, for example:
+
+```bash
+openssl rand -base64 32
+npx web-push generate-vapid-keys
+```
+
+Configure only the channels the deployment should offer:
+
+```dotenv
+NOTIFICATION_WORKER_ENABLED=true
+NOTIFICATION_WORKER_POLL_MS=900000
+NOTIFICATION_ENCRYPTION_KEY=...
+
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=inventory
+SMTP_PASSWORD=...
+NOTIFICATION_EMAIL_FROM=Inventory <inventory@example.com>
+
+WEB_PUSH_PUBLIC_KEY=...
+WEB_PUSH_PRIVATE_KEY=...
+WEB_PUSH_SUBJECT=mailto:admin@example.com
+
+NOTIFICATION_SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+NOTIFICATION_TEAMS_WEBHOOK_URL=https://...
+NOTIFICATION_WEBHOOK_URL=https://automation.example.com/inventory
+NOTIFICATION_WEBHOOK_SIGNING_SECRET=...
+```
+
+The Node process runs the detector and digest dispatcher by default. On a
+serverless or externally scheduled deployment, disable that loop and invoke the
+same idempotent cycle from a scheduler:
+
+```dotenv
+NOTIFICATION_WORKER_ENABLED=false
+NOTIFICATION_CRON_SECRET=replace-with-a-long-random-secret
+```
+
+```bash
+curl -X POST "https://inventory.example.com/api/v1/notifications/run" \
+  -H "Authorization: Bearer $NOTIFICATION_CRON_SECRET"
+```
+
+The channel test actions and `POST /api/v1/notifications/test` are preview-only:
+they never open SMTP, Push, Slack, Teams, or webhook connections. This makes
+configuration review and automated tests safe from accidental external sends.
+
+## Outgoing integration webhooks
+
+Outgoing webhooks provide durable event-driven integration alongside the REST
+API. They are separate from the optional generic notification-digest webhook
+above: each endpoint selects inventory event types, receives one durable delivery
+record per event (with one or more signed HTTP attempts), and has its own delivery
+history and signing secret.
+Configuration is available under **Settings → Webhooks** and through
+`/api/v1/webhooks`. Every management route requires an authenticated browser
+session with `webhooks.manage`; API bearer tokens cannot administer endpoints.
+This is a workspace-wide export permission: a holder can send complete resource
+and stock event snapshots to an external destination even without separate
+per-resource read grants. Assign it only to trusted administrators/integrators.
+The scheduler-only `POST /api/v1/webhooks/run` route instead accepts
+`WEBHOOK_CRON_SECRET` as its bearer credential.
+
+Supported subscriptions are:
+
+- `inventory.resource.created`: the new resource snapshot
+- `inventory.resource.updated`: the current resource plus `changedFields`
+- `inventory.resource.deleted`: the final resource snapshot
+- `inventory.resource.merged`: kept and removed snapshots and their IDs
+- `inventory.stock.movement.created`: the immutable stock movement snapshot
+
+The request body is an envelope with `id`, `type`, `apiVersion: "1"`,
+`occurredAt`, nullable `actor`, and event-specific `data`. Delivery is at least
+once. Store processed event IDs and return a 2xx response only after committing
+the corresponding work, because a timeout or lost acknowledgement can deliver
+the same event again.
+
+Every request includes this header:
+
+```text
+X-Inventory-Signature: t=<unix>,v1=<hex>
+```
+
+`v1` is the lowercase hexadecimal HMAC-SHA256 of
+`<unix>.<exact raw request body>` using the endpoint's secret. Verify the raw
+bytes before parsing or reserializing the JSON, compare the digest in constant
+time, and reject timestamps outside the receiver's chosen replay window. The
+same event, type, delivery, and timestamp values are also sent as
+`X-Inventory-Event-Id`, `X-Inventory-Event-Type`,
+`X-Inventory-Delivery-Id`, and `X-Inventory-Timestamp`. The secret is shown only
+when an endpoint is created or rotated and is encrypted at rest with
+`WEBHOOK_ENCRYPTION_KEY`; it cannot be retrieved later.
+Each queued delivery keeps the encrypted secret version active when it was
+created, so rotating a secret does not break retries already in flight.
+Keep that encryption key stable and backed up. Changing or losing it makes
+existing targets and signing secrets unreadable; rotate endpoints only after a
+controlled re-encryption migration.
+
+Configure the delivery worker independently from quiet notifications:
+Generate an independent value with `openssl rand -base64 32`, assign it to
+`WEBHOOK_ENCRYPTION_KEY`, and keep it stable across redeployments.
+
+```dotenv
+WEBHOOK_ENCRYPTION_KEY=...
+WEBHOOK_WORKER_ENABLED=true
+WEBHOOK_WORKER_POLL_MS=2000
+WEBHOOK_WORKER_CONCURRENCY=4
+WEBHOOK_DELIVERY_TIMEOUT_MS=10000
+WEBHOOK_MAX_ATTEMPTS=8
+WEBHOOK_RETENTION_DAYS=30
+WEBHOOK_ALLOW_PRIVATE_NETWORKS=false
+```
+
+The runtime bounds poll intervals to 500–60,000 ms, concurrency to 1–20,
+delivery timeouts to 1,000–60,000 ms, maximum attempts to 1–20, and retention
+to 1–365 days. Terminal delivery history and its plaintext event snapshots are
+removed after the configured retention period; pending work is never removed.
+
+Targets must use HTTPS and cannot contain credentials or URL fragments. Local
+and private-network destinations are blocked by default to reduce SSRF risk;
+set `WEBHOOK_ALLOW_PRIVATE_NETWORKS=true` only when the application is expected
+to call trusted internal services. Stored targets are redacted in API and UI
+responses.
+
+Network failures, timeouts, HTTP 408, 425, 429, and 5xx responses are retried
+with delays of 1 minute, 5 minutes, 30 minutes, 2 hours, 12 hours, and then 24
+hours, bounded by `WEBHOOK_MAX_ATTEMPTS`. Other non-2xx responses fail without
+an automatic retry. Failed deliveries remain visible and can be replayed
+manually. The endpoint test action is a real signed, queued HTTP delivery—not
+the preview-only test used by notification channels. It uses the dedicated
+`inventory.webhook.test` event type, which cannot be selected as a normal
+subscription and therefore cannot be mistaken for a resource update.
+
+The Node process runs the webhook worker by default. For serverless or externally
+scheduled deployments, disable it and invoke one bounded due-delivery cycle:
+
+```dotenv
+WEBHOOK_WORKER_ENABLED=false
+WEBHOOK_CRON_SECRET=replace-with-a-long-random-secret
+```
+
+```bash
+curl -X POST "https://inventory.example.com/api/v1/webhooks/run" \
+  -H "Authorization: Bearer $WEBHOOK_CRON_SECRET"
+```
 
 ## Stock management
 
@@ -354,6 +681,10 @@ relocalize. Independently captured or unrelocalized frames are never overlaid:
 local room bounds are combined only when all involved scans have the same
 explicit `coordinateSpaceId`.
 
+The scan list returns only a bounded `keyframeCount`; calibrated camera metadata
+is fetched with the selected room scene, and stored feature descriptors are not
+echoed into normal read responses.
+
 An item photo can optionally record `localizationEvidence` referencing a
 keyframe from that exact room scan. The backend checks this relationship before
 saving the placement, so a Vision feature-print match can corroborate ARWorldMap
@@ -367,9 +698,14 @@ not guess or align a reconstruction transform. Both can be included in the origi
 scan or attached/replaced later with `PUT
 /api/v1/room-scans/{scanId}/assets/{kind}` for an external reconstruction
 pipeline. Upload validation rejects external GLB resources, variable-length or
-extra PLY elements, malformed headers, and files above 80 MB. The web viewer
-uses these derivatives when present and keeps the measured RoomPlan scene as
-the authoritative geometry and placement frame.
+extra PLY elements, malformed headers, files above 80 MB, unsafe GLB accessor
+ranges/allocation counts, oversized embedded textures, and required codecs the
+bundled viewer does not support. The web viewer
+uses textured GLB directly. Its PLY path is deliberately a bounded point-splat
+preview (at most 250,000 sampled points), not a covariance-sorted full Gaussian
+Splat renderer; RoomPlan remains the authoritative geometry and placement
+frame. Linked-room derivative loading is sequential and capped by a shared
+120 MiB/two-asset browser budget, with RoomPlan retained for skipped rooms.
 
 RoomPlan is a measured parametric model rather than a photorealistic scan, and
 small tools are represented by location markers rather than automatically
@@ -379,7 +715,9 @@ assumed compatible with an older AR origin; old placements stay attached to the
 old revision until each item is captured again. `MAX_ROOM_SCAN_UPLOAD_MB` limits
 the combined world map, room/structure USDZ, guide image, RGB keyframes, and
 photorealistic derivatives for one upload and defaults to 100 MB. Each keyframe
-is additionally limited to 6 MiB and 4096×4096 encoded pixels.
+is additionally limited to 6 MiB and 4096×4096 encoded pixels. Room-scan and
+derivative uploads require `Content-Length` before their bodies are buffered;
+deployments should retain an equivalent request-body limit at the ingress.
 
 ### Assignments and reservations
 
@@ -506,14 +844,22 @@ create a second movement. The confirmation is bound to the workflow revision
 and the resource/unit versions shown in the preview; a concurrent change
 forces the operator to resolve and review the scan again.
 
-## CSV exchange and label printing
+## Inventory exchange and label printing
 
-The inventory screen exports the complete workspace as UTF-8 CSV and imports up
-to 1,000 rows or 5 MB per request. Import validates each row independently,
-never overwrites an existing SKU, reports row-level failures, and requires an
-idempotency key so retrying the same file does not duplicate records. Tags,
-categories, custom fields, related-resource IDs, and map features use JSON
-inside their CSV cells.
+The inventory screen exports the complete workspace as import-compatible UTF-8
+CSV, a formatted Excel workbook, or a compact paginated PDF report. The Excel
+workbook keeps identifiers as text, dates and numbers typed, enables filters,
+freezes navigation headers, and includes variants on a separate sheet. The CSV
+remains the default API response for backwards compatibility and includes
+the parent barcode plus variants as export-only JSON. CSV import round-trips the
+parent barcode, accepts the variants column, but does not create variants from
+it; variants continue to be managed through their dedicated API.
+CSV import accepts up to 1,000 rows or 5 MB per request,
+validates each row independently, never overwrites an existing SKU, reports
+row-level failures, and requires an idempotency key so retrying the same file
+does not duplicate records. Tags, categories, custom fields,
+related-resource IDs, map features, and variants use JSON inside their CSV
+cells.
 
 The **Labels** screen applies reusable setups that store the physical media size
 and the visibility, position, and size of each label element. Editors can use
@@ -796,11 +1142,13 @@ session or scoped API token.
 ## Commands
 
 ```text
+./scripts/install.sh  Install the local Docker stack and generate secure defaults
 npm run dev          Start the development server
 npm run build        Create a production build
 npm run start        Start the production server
 npm run lint         Run ESLint
 npm run typecheck    Run TypeScript checks
+npm run test:deployment Test one-time production bootstrap handling
 npm run test:locations   Test geographic containment and EXIF coordinates
 npm run test:translations Test language normalization and field freshness
 npm run test:room-scenes Test RoomPlan scene and placement contracts

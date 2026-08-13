@@ -19,7 +19,12 @@
     "batch": "Stapelstudio",
     "labels": "Etiketten",
     "duplicates": "Duplikate",
+    "notifications": "Benachrichtigungen",
     "settings": "Einstellungen"
+  },
+  "notifications": {
+    "title": "Benachrichtigungen",
+    "open": "Benachrichtigungen öffnen ({{count}} ungelesen)"
   },
   "badges": {
     "ai": "KI"
@@ -83,6 +88,14 @@
       "sharing": {
         "label": "Öffentliche Freigaben",
         "description": "Inventar über Freigabelinks veröffentlichen"
+      },
+      "notifications": {
+        "label": "Benachrichtigungen",
+        "description": "Ruhige Hinweise und Übersichten konfigurieren"
+      },
+      "webhooks": {
+        "label": "Webhooks",
+        "description": "Signierte Ereignisse an Integrationen senden"
       },
       "api": {
         "label": "API & Dienste",

@@ -183,7 +183,7 @@ final class SpatialCaptureStateTests: XCTestCase {
             updatedAt: now,
             placementCount: 0,
             assets: [],
-            keyframes: nil,
+            keyframeCount: nil,
             structureID: UUID(),
             structureName: "Testgebäude",
             floorIdentifier: "EG",

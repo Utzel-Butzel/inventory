@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import RealityKit
 import SwiftUI
 
@@ -10,6 +11,7 @@ struct ObjectCaptureWorkspace: Equatable, Sendable {
     let imagesDirectory: URL
     let checkpointDirectory: URL
     let modelURL: URL
+    let articleImageURL: URL
 
     static func create(
         in baseDirectory: URL? = nil,
@@ -41,7 +43,8 @@ struct ObjectCaptureWorkspace: Equatable, Sendable {
             rootURL: root,
             imagesDirectory: images,
             checkpointDirectory: checkpoints,
-            modelURL: root.appendingPathComponent("object.usdz")
+            modelURL: root.appendingPathComponent("object.usdz"),
+            articleImageURL: root.appendingPathComponent("article-image.jpg")
         )
     }
 
@@ -85,9 +88,11 @@ struct CapturedObjectModel: Identifiable, Equatable, Sendable {
 
     let id: UUID
     let fileURL: URL
+    let articleImageURL: URL
     let workspaceURL: URL
     let shotCount: Int
     let byteCount: Int64
+    let articleImageByteCount: Int64
 
     var uploadFile: MediaUploadFile {
         MediaUploadFile(
@@ -97,9 +102,103 @@ struct CapturedObjectModel: Identifiable, Equatable, Sendable {
         )
     }
 
+    var articleImageUploadFile: MediaUploadFile {
+        MediaUploadFile(
+            fileURL: articleImageURL,
+            filename: "object-\(id.uuidString.lowercased())-article.jpg",
+            mimeType: "image/jpeg"
+        )
+    }
+
+    /// Keep the representative image first so it becomes the resource cover
+    /// immediately, even when the account cannot run AI post-processing.
+    var uploadFiles: [MediaUploadFile] {
+        [articleImageUploadFile, uploadFile]
+    }
+
     func removeLocalFiles(fileManager: FileManager = .default) throws {
         guard fileManager.fileExists(atPath: workspaceURL.path) else { return }
         try fileManager.removeItem(at: workspaceURL)
+    }
+}
+
+enum ObjectCaptureArticleImageError: Error, LocalizedError, Sendable {
+    case noUsableCaptureImage
+
+    var errorDescription: String? {
+        switch self {
+        case .noUsableCaptureImage:
+            "Aus dem Objektscan konnte kein verwendbares Artikelbild erzeugt werden."
+        }
+    }
+}
+
+/// Builds a regular inventory JPEG from the Object Capture photo series before
+/// those large source images are discarded. Work runs on its own actor so ImageIO
+/// decoding never blocks SwiftUI's main actor.
+actor ObjectCaptureArticleImageBuilder {
+    private let maximumPixelSize: Int
+    private let compressionQuality: Double
+
+    init(maximumPixelSize: Int = 2_200, compressionQuality: Double = 0.86) {
+        self.maximumPixelSize = maximumPixelSize
+        self.compressionQuality = compressionQuality
+    }
+
+    func build(
+        from imagesDirectory: URL,
+        destinationURL: URL,
+        fileManager: FileManager = .default
+    ) async throws -> ProcessedJPEG {
+        try Task.checkCancellation()
+        let candidates = Self.imageCandidates(
+            in: imagesDirectory,
+            fileManager: fileManager
+        )
+        guard let sourceURL = Self.representativeImage(in: candidates) else {
+            throw ObjectCaptureArticleImageError.noUsableCaptureImage
+        }
+        try Task.checkCancellation()
+        let downsampler = try JPEGDownsampler(
+            maximumPixelSize: maximumPixelSize,
+            compressionQuality: compressionQuality
+        )
+        return try await downsampler.downsample(
+            sourceURL: sourceURL,
+            destinationURL: destinationURL
+        )
+    }
+
+    /// Object Capture names its samples sequentially. A middle image is normally
+    /// a clean, centered view and avoids setup/finish frames at either edge.
+    static func representativeImage(in candidates: [URL]) -> URL? {
+        let ordered = candidates.sorted {
+            $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+        }
+        guard !ordered.isEmpty else { return nil }
+        return ordered[(ordered.count - 1) / 2]
+    }
+
+    private static func imageCandidates(
+        in directory: URL,
+        fileManager: FileManager
+    ) -> [URL] {
+        let supportedExtensions = Set(["heic", "heif", "jpg", "jpeg", "png"])
+        guard let enumerator = fileManager.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+
+        var candidates: [URL] = []
+        for case let url as URL in enumerator {
+            guard supportedExtensions.contains(url.pathExtension.lowercased()),
+                  (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
+                  let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  CGImageSourceGetCount(source) > 0 else { continue }
+            candidates.append(url)
+        }
+        return candidates
     }
 }
 
@@ -150,8 +249,10 @@ private final class ObjectCaptureFlowModel: ObservableObject {
     private var captureTasks: [Task<Void, Never>] = []
     private var reconstructionTask: Task<Void, Never>?
     private var photogrammetrySession: PhotogrammetrySession?
+    private let articleImageBuilder = ObjectCaptureArticleImageBuilder()
     private var started = false
     private var reconstructionStarted = false
+    private var resultPreparationStarted = false
     private var ownsWorkspace = true
 
     var canRetryReconstruction: Bool {
@@ -247,6 +348,7 @@ private final class ObjectCaptureFlowModel: ObservableObject {
         workspace = nil
         started = true
         reconstructionStarted = false
+        resultPreparationStarted = false
         ownsWorkspace = true
 
         do {
@@ -431,20 +533,40 @@ private final class ObjectCaptureFlowModel: ObservableObject {
             return
         }
 
+        guard !resultPreparationStarted else { return }
+        resultPreparationStarted = true
         reconstructionProgress = 1
-        reconstructionStage = "3D-Modell ist fertig"
+        reconstructionStage = "Artikelbild wird vorbereitet"
         estimatedRemainingTime = nil
-        result = CapturedObjectModel(
-            id: workspace.id,
-            fileURL: modelURL,
-            workspaceURL: workspace.rootURL,
-            shotCount: shotCount,
-            byteCount: Int64(size)
-        )
-        try? FileManager.default.removeItem(at: workspace.imagesDirectory)
-        try? FileManager.default.removeItem(at: workspace.checkpointDirectory)
-        phase = .complete
-        photogrammetrySession = nil
+        reconstructionTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let articleImage = try await articleImageBuilder.build(
+                    from: workspace.imagesDirectory,
+                    destinationURL: workspace.articleImageURL
+                )
+                try Task.checkCancellation()
+                result = CapturedObjectModel(
+                    id: workspace.id,
+                    fileURL: modelURL,
+                    articleImageURL: articleImage.fileURL,
+                    workspaceURL: workspace.rootURL,
+                    shotCount: shotCount,
+                    byteCount: Int64(size),
+                    articleImageByteCount: articleImage.byteCount
+                )
+                try? FileManager.default.removeItem(at: workspace.imagesDirectory)
+                try? FileManager.default.removeItem(at: workspace.checkpointDirectory)
+                phase = .complete
+                photogrammetrySession = nil
+                reconstructionTask = nil
+            } catch is CancellationError {
+                return
+            } catch {
+                resultPreparationStarted = false
+                fail(error.localizedDescription, reconstructionCanRetry: true)
+            }
+        }
     }
 
     private func fail(_ message: String, reconstructionCanRetry: Bool) {

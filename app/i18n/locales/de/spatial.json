@@ -151,7 +151,8 @@
     "loading": "3D-Räume werden geladen…",
     "errors": {
       "loadRooms": "Die Räume konnten nicht geladen werden.",
-      "loadScene": "Die Raumszene konnte nicht geladen werden."
+      "loadScene": "Die Raumszene konnte nicht geladen werden.",
+      "saveLayout": "Der Etagenplan konnte nicht gespeichert werden."
     },
     "empty": {
       "title": "Noch keine Räume gescannt",
@@ -166,8 +167,8 @@
       "rooms_other": "{{value}} Räume",
       "items_one": "{{value}} positioniertes Objekt",
       "items_other": "{{value}} positionierte Objekte",
-      "linked_one": "{{value}} verknüpfter Raum · gemeinsamer AR-Bezugsrahmen",
-      "linked_other": "{{value}} verknüpfte Räume · gemeinsamer AR-Bezugsrahmen"
+      "linked_one": "{{value}} verbundener Raum auf dieser Etage",
+      "linked_other": "{{value}} verbundene Räume auf dieser Etage"
     },
     "structures": {
       "building": "Gebäude",
@@ -192,6 +193,21 @@
       "noItemsDescription": "Erfasse mit dem AR-Modus der iPhone-App ein Objekt in diesem Raum.",
       "roomFallback": "Raum",
       "downloadUsdz": "Original-USDZ herunterladen"
+    },
+    "layout": {
+      "open": "Räume anordnen",
+      "close": "Anordnung schließen",
+      "title": "Etage anordnen",
+      "description": "Verschiebe und drehe Räume, bis ihre Türen aufeinandertreffen.",
+      "room": "Raum zum Anordnen",
+      "automatic": "Automatische Anordnung nebeneinander wiederherstellen",
+      "forward": "Raum nach vorne verschieben",
+      "backward": "Raum nach hinten verschieben",
+      "left": "Raum nach links verschieben",
+      "right": "Raum nach rechts verschieben",
+      "step": "Bewegung: 25 cm · Drehung: 5°",
+      "cancel": "Abbrechen",
+      "save": "Anordnung speichern"
     },
     "placements": {
       "searchPlaceholder": "Positionierte Objekte suchen…",
@@ -218,12 +234,13 @@
     "modes": {
       "roomplan": "RoomPlan",
       "textured": "Texturiert",
-      "splat": "Foto-Splat"
+      "splat": "Splat-Vorschau"
     },
     "asset": {
       "loading": "Fotorealistische Ansicht wird geladen…",
       "failed": "Fotorealistisches Asset nicht verfügbar – RoomPlan bleibt sichtbar",
-      "tooLarge": "Asset ist für den Browser zu groß – RoomPlan bleibt sichtbar"
+      "tooLarge": "Asset ist für den Browser zu groß – RoomPlan bleibt sichtbar",
+      "partial": "Fotorealistische Ansicht ist speicherbegrenzt – übrige Räume nutzen RoomPlan"
     },
     "keyframes": {
       "toggle_one": "{{value}} Kamera",
@@ -236,6 +253,16 @@
     },
     "topView": "Draufsicht",
     "resetView": "Ansicht zurücksetzen",
-    "controlsHint": "Ziehen: drehen · zwei Finger: verschieben · scrollen: zoomen"
+    "controlsHint": "Ziehen: drehen · zwei Finger: verschieben · scrollen: zoomen",
+    "walk": {
+      "toggle": "Ego-Navigation umschalten",
+      "enter": "Begehen",
+      "exit": "Begehen beenden",
+      "hint": "Klicken zum Umschauen · WASD oder Pfeiltasten zum Gehen · Esc gibt die Maus frei",
+      "forward": "Vorwärts gehen",
+      "backward": "Rückwärts gehen",
+      "left": "Nach links gehen",
+      "right": "Nach rechts gehen"
+    }
   }
 }

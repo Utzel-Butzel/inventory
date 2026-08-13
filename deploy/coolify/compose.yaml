@@ -1,0 +1,60 @@
+# documentation: https://github.com/Utzel-Butzel/inventory#readme
+# slogan: Self-hosted inventory, stock control, media, labels, maps, and API
+# category: productivity
+# tags: inventory,asset-management,self-hosted,productivity
+# logo: svgs/open-inventory.svg
+# port: 3000
+
+services:
+  inventory:
+    image: ghcr.io/utzel-butzel/inventory:latest
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    environment:
+      - SERVICE_URL_INVENTORY_3000
+      - DATABASE_URL=postgresql://inventory:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/inventory
+      - AUTH_SECRET=${SERVICE_PASSWORD_64_AUTH}
+      - AUTH_URL=https://${SERVICE_FQDN_INVENTORY}
+      - AUTH_TRUST_HOST=true
+      - BOOTSTRAP_ADMIN_EMAIL=admin@inventory.local
+      - BOOTSTRAP_ADMIN_NAME=Inventory admin
+      - BOOTSTRAP_ADMIN_PASSWORD=${SERVICE_PASSWORD_64_ADMIN}
+      - BOOTSTRAP_ADMIN_PASSWORD_ONCE=true
+      - STORAGE_PROVIDER=local
+      - STORAGE_LOCAL_PATH=/app/data/uploads
+    volumes:
+      - inventory-uploads:/app/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  postgres:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=inventory
+      - POSTGRES_USER=inventory
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+    volumes:
+      - inventory-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  inventory-postgres:
+  inventory-uploads:

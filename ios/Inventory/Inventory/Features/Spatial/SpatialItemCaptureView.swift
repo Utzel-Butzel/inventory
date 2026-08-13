@@ -1,4 +1,6 @@
+import PhotosUI
 import SwiftUI
+import UIKit
 
 struct SpatialItemCaptureView: View {
     @EnvironmentObject private var state: AppState
@@ -19,6 +21,12 @@ struct SpatialItemCaptureView: View {
     @State private var selectionState = SpatialWorldMapSelectionState()
     @State private var worldMapLoadTask: Task<Void, Never>?
     @State private var keyframeIndexTask: Task<Void, Never>?
+    @State private var photoOnlyMatchTask: Task<Void, Never>?
+    @State private var photoOnlyPickerItem: PhotosPickerItem?
+    @State private var photoOnlyState = SpatialPhotoOnlyLocalizationState.unavailable
+    @State private var photoOnlyResult: SpatialPhotoOnlyMatchPresentation?
+    @State private var showingPhotoOnlyCamera = false
+    @State private var arRelocalizationUnavailable = false
     @State private var manualRoomScanID: UUID?
     @State private var manualRoomRequest = 0
 
@@ -76,11 +84,33 @@ struct SpatialItemCaptureView: View {
             }
             .task { await loadScans() }
             .onDisappear {
+                // UIImagePickerController temporarily covers this view. Keep
+                // the selected matcher alive until its captured photo returns.
+                guard !showingPhotoOnlyCamera else { return }
                 worldMapLoadTask?.cancel()
                 worldMapLoadTask = nil
                 keyframeIndexTask?.cancel()
                 keyframeIndexTask = nil
+                photoOnlyMatchTask?.cancel()
+                photoOnlyMatchTask = nil
                 selectionState.cancel()
+            }
+            .onChange(of: photoOnlyPickerItem) { _, item in
+                guard let item else { return }
+                photoOnlyPickerItem = nil
+                startPhotoOnlyLibraryMatch(item)
+            }
+            .fullScreenCover(isPresented: $showingPhotoOnlyCamera) {
+                SpatialPhotoOnlyCameraPicker { imageData in
+                    showingPhotoOnlyCamera = false
+                    if let imageData {
+                        startPhotoOnlyMatch(encodedData: imageData)
+                    }
+                }
+                .ignoresSafeArea()
+            }
+            .sheet(item: $photoOnlyResult) { result in
+                SpatialPhotoOnlyResultView(result: result)
             }
             .alert(
                 "Räumliche Erfassung fehlgeschlagen",
@@ -161,54 +191,70 @@ struct SpatialItemCaptureView: View {
         worldMap: LoadedSpatialWorldMap
     ) -> some View {
         ZStack {
-            ItemPlacementControllerView(
-                worldMapData: worldMap.data,
-                roomScan: scan,
-                roomCandidates: worldMap.candidates,
-                keyframeMatcher: worldMap.keyframeMatcher,
-                captureRequest: captureRequest,
-                manualRoomScanID: manualRoomScanID,
-                manualRoomRequest: manualRoomRequest,
-                onTracking: { message, ready in
-                    guard selectionState.accepts(
-                        scanID: scan.id,
-                        generation: worldMap.generation
-                    ) else { return }
-                    trackingMessage = message
-                    trackingReady = ready
-                },
-                onRoomChanged: { detectedScan in
-                    guard selectionState.accepts(
-                        scanID: scan.id,
-                        generation: worldMap.generation
-                    ) else { return }
-                    activeRoomScan = detectedScan
-                },
-                onCaptured: { result in
-                    guard selectionState.accepts(
-                        scanID: scan.id,
-                        generation: worldMap.generation
-                    ) else { return }
-                    capturing = false
-                    switch result {
-                    case .success(let payload):
-                        onCapture(payload.0, payload.1)
-                        dismiss()
-                    case .failure(let error):
-                        errorMessage = error.localizedDescription
-                        if (error as? SpatialCaptureError)?.requiresRoomReselection == true {
-                            resetSelection()
+            if let worldMapData = worldMap.data {
+                ItemPlacementControllerView(
+                    worldMapData: worldMapData,
+                    roomScan: scan,
+                    roomCandidates: worldMap.candidates,
+                    keyframeMatcher: worldMap.keyframeMatcher,
+                    captureRequest: captureRequest,
+                    manualRoomScanID: manualRoomScanID,
+                    manualRoomRequest: manualRoomRequest,
+                    onTracking: { message, ready in
+                        guard selectionState.accepts(
+                            scanID: scan.id,
+                            generation: worldMap.generation
+                        ), !arRelocalizationUnavailable else { return }
+                        trackingMessage = message
+                        trackingReady = ready
+                        if ready {
+                            arRelocalizationUnavailable = false
+                        }
+                    },
+                    onRoomChanged: { detectedScan in
+                        guard selectionState.accepts(
+                            scanID: scan.id,
+                            generation: worldMap.generation
+                        ) else { return }
+                        activeRoomScan = detectedScan
+                    },
+                    onCaptured: { result in
+                        guard selectionState.accepts(
+                            scanID: scan.id,
+                            generation: worldMap.generation
+                        ) else { return }
+                        capturing = false
+                        switch result {
+                        case .success(let payload):
+                            onCapture(payload.0, payload.1)
+                            dismiss()
+                        case .failure(let error):
+                            if let spatialError = error as? SpatialCaptureError {
+                                switch spatialError {
+                                case .worldMapUnavailable, .relocalizationFailed, .sessionFailed(_):
+                                    arRelocalizationUnavailable = true
+                                    trackingReady = false
+                                    trackingMessage = "AR-Ortung nicht verfügbar. Ordne stattdessen ein Foto grob einem Raum zu."
+                                case .imageUnavailable, .placementUnavailable, .structureUnavailable:
+                                    errorMessage = error.localizedDescription
+                                }
+                            } else {
+                                errorMessage = error.localizedDescription
+                            }
                         }
                     }
-                }
-            )
-            .id(
-                SpatialCaptureSessionIdentity(
-                    scanID: scan.id,
-                    generation: worldMap.generation
                 )
-            )
-            .ignoresSafeArea(edges: .bottom)
+                .id(
+                    SpatialCaptureSessionIdentity(
+                        scanID: scan.id,
+                        generation: worldMap.generation
+                    )
+                )
+                .ignoresSafeArea(edges: .bottom)
+            } else {
+                Color.black
+                    .ignoresSafeArea(edges: .bottom)
+            }
 
             LinearGradient(
                 colors: [.black.opacity(0.42), .clear, .black.opacity(0.62)],
@@ -217,7 +263,9 @@ struct SpatialItemCaptureView: View {
             )
             .allowsHitTesting(false)
 
-            reticle
+            if worldMap.data != nil, !arRelocalizationUnavailable {
+                reticle
+            }
 
             VStack {
                 VStack(spacing: 7) {
@@ -242,6 +290,11 @@ struct SpatialItemCaptureView: View {
 
                 Spacer()
 
+                if !trackingReady {
+                    photoOnlyControls
+                        .padding(.bottom, 12)
+                }
+
                 Button {
                     capturing = true
                     captureRequest += 1
@@ -252,7 +305,13 @@ struct SpatialItemCaptureView: View {
                         } else {
                             Image(systemName: "camera.fill")
                         }
-                        Text(capturing ? "Position wird gemessen" : "Foto + Position erfassen")
+                        Text(
+                            capturing
+                                ? "Position wird gemessen"
+                                : trackingReady
+                                    ? "Foto + Position erfassen"
+                                    : "AR-Position nicht verfügbar"
+                        )
                     }
                     .font(.headline)
                     .foregroundStyle(InventoryTheme.ink)
@@ -286,6 +345,200 @@ struct SpatialItemCaptureView: View {
         .allowsHitTesting(false)
     }
 
+    private var photoOnlyControls: some View {
+        VStack(spacing: 10) {
+            Label("Grobe Foto-Zuordnung", systemImage: "photo.badge.magnifyingglass")
+                .font(.subheadline.weight(.bold))
+
+            Text("Vergleicht ein neues Foto mit gespeicherten Raumansichten. Das Ergebnis ist keine Objektposition.")
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.82))
+
+            switch photoOnlyState {
+            case .unavailable:
+                Text("Für diesen Bereich sind nicht genug Referenzbilder verfügbar.")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.72))
+            case .indexing:
+                HStack(spacing: 8) {
+                    ProgressView().tint(.white)
+                    Text("Referenzbilder werden vorbereitet …")
+                }
+                .font(.caption)
+            case .matching:
+                HStack(spacing: 8) {
+                    ProgressView().tint(.white)
+                    Text("Foto wird grob zugeordnet …")
+                }
+                .font(.caption)
+            case .ready(let referenceCount):
+                Text("Vergleich mit \(referenceCount) Referenzbildern")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.72))
+
+                HStack(spacing: 10) {
+                    Button {
+                        arRelocalizationUnavailable = true
+                        trackingReady = false
+                        trackingMessage = "Foto wird ohne AR-Position grob zugeordnet."
+                        showingPhotoOnlyCamera = true
+                    } label: {
+                        Label("Aufnehmen", systemImage: "camera.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .disabled(
+                        !photoOnlyState.canMatch ||
+                            !UIImagePickerController.isSourceTypeAvailable(.camera)
+                    )
+
+                    PhotosPicker(
+                        selection: $photoOnlyPickerItem,
+                        matching: .images
+                    ) {
+                        Label("Auswählen", systemImage: "photo.on.rectangle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .disabled(!photoOnlyState.canMatch)
+                }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.bordered)
+                .tint(.white)
+
+                if !photoOnlyState.canMatch {
+                    Text("Für einen belastbaren Vergleich sind mindestens zwei Referenzbilder nötig.")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(14)
+        .frame(maxWidth: 430)
+        .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    @MainActor
+    private func startPhotoOnlyLibraryMatch(_ item: PhotosPickerItem) {
+        guard let context = loadedWorldMap,
+              let matcher = context.keyframeMatcher,
+              photoOnlyState.beginMatching()
+        else { return }
+
+        arRelocalizationUnavailable = true
+        trackingReady = false
+        trackingMessage = "Foto wird ohne AR-Position grob zugeordnet."
+        photoOnlyMatchTask?.cancel()
+        let generation = context.generation
+        photoOnlyMatchTask = Task { @MainActor in
+            defer {
+                if selectionState.accepts(
+                    scanID: context.scanID,
+                    generation: generation
+                ) {
+                    photoOnlyState.finishMatching()
+                    photoOnlyMatchTask = nil
+                }
+            }
+            do {
+                guard let encodedData = try await item.loadTransferable(type: Data.self) else {
+                    throw SpatialPhotoQueryError.unreadableImage
+                }
+                let result = try await matchPhotoOnly(
+                    encodedData: encodedData,
+                    context: context,
+                    matcher: matcher
+                )
+                try Task.checkCancellation()
+                guard selectionState.accepts(
+                    scanID: context.scanID,
+                    generation: generation
+                ) else { return }
+                photoOnlyResult = result
+            } catch is CancellationError {
+                return
+            } catch {
+                guard selectionState.accepts(
+                    scanID: context.scanID,
+                    generation: generation
+                ) else { return }
+                errorMessage = "Grobe Foto-Zuordnung: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    @MainActor
+    private func startPhotoOnlyMatch(encodedData: Data) {
+        guard let context = loadedWorldMap,
+              let matcher = context.keyframeMatcher,
+              photoOnlyState.beginMatching()
+        else { return }
+
+        photoOnlyMatchTask?.cancel()
+        let generation = context.generation
+        photoOnlyMatchTask = Task { @MainActor in
+            defer {
+                if selectionState.accepts(
+                    scanID: context.scanID,
+                    generation: generation
+                ) {
+                    photoOnlyState.finishMatching()
+                    photoOnlyMatchTask = nil
+                }
+            }
+            do {
+                let result = try await matchPhotoOnly(
+                    encodedData: encodedData,
+                    context: context,
+                    matcher: matcher
+                )
+                try Task.checkCancellation()
+                guard selectionState.accepts(
+                    scanID: context.scanID,
+                    generation: generation
+                ) else { return }
+                photoOnlyResult = result
+            } catch is CancellationError {
+                return
+            } catch {
+                guard selectionState.accepts(
+                    scanID: context.scanID,
+                    generation: generation
+                ) else { return }
+                errorMessage = "Grobe Foto-Zuordnung: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func matchPhotoOnly(
+        encodedData: Data,
+        context: LoadedSpatialWorldMap,
+        matcher: SpatialPhotoKeyframeMatcher
+    ) async throws -> SpatialPhotoOnlyMatchPresentation {
+        let normalizedData = try await Task.detached(priority: .userInitiated) {
+            try SpatialPhotoQueryProcessor.normalizedJPEG(from: encodedData)
+        }.value
+        try Task.checkCancellation()
+        guard let localization = await matcher.match(
+            imageData: normalizedData,
+            currentCameraTransform: nil,
+            roomScanID: nil
+        ),
+            let estimate = SpatialPhotoOnlyLocalizationPolicy.estimate(
+                from: localization
+            )
+        else {
+            throw SpatialPhotoOnlyMatchError.noReliableMatch
+        }
+        let roomName = context.candidates.first {
+            $0.scan.id == estimate.roomScanID
+        }?.scan.roomName ?? "Unbekannter Raum"
+        return SpatialPhotoOnlyMatchPresentation(
+            roomName: roomName,
+            estimate: estimate
+        )
+    }
+
     @MainActor
     private func loadScans() async {
         guard let client = state.client else {
@@ -307,6 +560,8 @@ struct SpatialItemCaptureView: View {
         worldMapLoadTask?.cancel()
         keyframeIndexTask?.cancel()
         keyframeIndexTask = nil
+        photoOnlyMatchTask?.cancel()
+        photoOnlyMatchTask = nil
         let scan = entry.sourceScan
         let generation = selectionState.begin(scanID: scan.id)
         selectedScan = scan
@@ -315,6 +570,11 @@ struct SpatialItemCaptureView: View {
         loadingWorldMap = true
         trackingReady = false
         capturing = false
+        photoOnlyPickerItem = nil
+        photoOnlyResult = nil
+        photoOnlyState.beginIndexing()
+        showingPhotoOnlyCamera = false
+        arRelocalizationUnavailable = false
         manualRoomScanID = nil
         manualRoomRequest = 0
 
@@ -329,6 +589,8 @@ struct SpatialItemCaptureView: View {
         worldMapLoadTask = nil
         keyframeIndexTask?.cancel()
         keyframeIndexTask = nil
+        photoOnlyMatchTask?.cancel()
+        photoOnlyMatchTask = nil
         selectionState.cancel()
         selectedScan = nil
         activeRoomScan = nil
@@ -336,6 +598,11 @@ struct SpatialItemCaptureView: View {
         loadingWorldMap = false
         trackingReady = false
         capturing = false
+        photoOnlyPickerItem = nil
+        photoOnlyResult = nil
+        photoOnlyState = .unavailable
+        showingPhotoOnlyCamera = false
+        arRelocalizationUnavailable = false
         manualRoomScanID = nil
         manualRoomRequest = 0
     }
@@ -354,7 +621,6 @@ struct SpatialItemCaptureView: View {
             }
         }
         do {
-            async let worldMapRequest = client.downloadRoomWorldMap(scanID: scan.id)
             let sourceResponse = try await client.roomScene(scanID: scan.id)
             let keyframeMatcher = SpatialPhotoKeyframeMatcher()
             var keyframeSources: [(UUID, [SpatialRoomKeyframe])] = [
@@ -389,7 +655,16 @@ struct SpatialItemCaptureView: View {
                     continue
                 }
             }
-            let downloadedWorldMap = try await worldMapRequest
+            let downloadedWorldMap: Data?
+            do {
+                downloadedWorldMap = try await client.downloadRoomWorldMap(scanID: scan.id)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // Stored keyframes remain useful as a bounded, coarse fallback
+                // even when the metric AR world map is missing or unreadable.
+                downloadedWorldMap = nil
+            }
             try Task.checkCancellation()
             guard selectionState.accepts(scanID: scan.id, generation: generation),
                   selectedScan?.id == scan.id
@@ -403,7 +678,10 @@ struct SpatialItemCaptureView: View {
                 candidates: candidates,
                 keyframeMatcher: keyframeMatcher
             )
-            trackingMessage = "Zeige auf bekannte Wände oder Möbel, bis der Raum erkannt ist."
+            arRelocalizationUnavailable = downloadedWorldMap == nil
+            trackingMessage = downloadedWorldMap == nil
+                ? "AR-Weltkarte nicht verfügbar. Ordne stattdessen ein Foto grob einem Raum zu."
+                : "Zeige auf bekannte Wände oder Möbel, bis der Raum erkannt ist."
             trackingReady = false
             keyframeIndexTask?.cancel()
             keyframeIndexTask = Task { @MainActor in
@@ -421,6 +699,7 @@ struct SpatialItemCaptureView: View {
                     )
                 }
                 if selectionState.accepts(scanID: scan.id, generation: generation) {
+                    photoOnlyState.finishIndexing(referenceCount: indexedCount)
                     keyframeIndexTask = nil
                 }
             }
@@ -435,6 +714,7 @@ struct SpatialItemCaptureView: View {
             selectionState.cancel()
             selectedScan = nil
             loadedWorldMap = nil
+            photoOnlyState = .unavailable
             errorMessage = error.localizedDescription
         }
     }
@@ -486,8 +766,9 @@ struct SpatialItemCaptureView: View {
             for reference in downloaded {
                 // The actor keeps only Vision observations; JPEG Data is
                 // released as soon as each feature print has been generated.
-                await matcher.add(reference)
-                count += 1
+                if await matcher.add(reference) {
+                    count += 1
+                }
             }
         }
         return count
@@ -518,7 +799,7 @@ struct SpatialItemCaptureView: View {
 private struct LoadedSpatialWorldMap {
     let scanID: UUID
     let generation: UUID
-    let data: Data
+    let data: Data?
     let candidates: [SpatialRoomDetectionCandidate]
     let keyframeMatcher: SpatialPhotoKeyframeMatcher?
 }
@@ -545,5 +826,153 @@ private struct SpatialRoomSelectionEntry: Identifiable {
             return "\(scans.count) Räume\(floor) · automatische Erkennung"
         }
         return "\(sourceScan.placementCount) Gegenstände · Scan \(sourceScan.revision)"
+    }
+}
+
+private struct SpatialPhotoOnlyMatchPresentation: Identifiable {
+    var id: UUID { estimate.keyframeID }
+
+    let roomName: String
+    let estimate: SpatialPhotoOnlyEstimate
+}
+
+private enum SpatialPhotoOnlyMatchError: Error, LocalizedError {
+    case noReliableMatch
+
+    var errorDescription: String? {
+        switch self {
+        case .noReliableMatch:
+            "Das Foto ähnelt keinem gespeicherten Referenzbild eindeutig genug. Versuche eine markante Ecke oder ein bekanntes Möbelstück."
+        }
+    }
+}
+
+private struct SpatialPhotoOnlyResultView: View {
+    @Environment(\.dismiss) private var dismiss
+    let result: SpatialPhotoOnlyMatchPresentation
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Label("Grobe Zuordnung", systemImage: "location.magnifyingglass")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(InventoryTheme.accent)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Wahrscheinlicher Raum")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(result.roomName)
+                            .font(.title3.weight(.semibold))
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Pose der gespeicherten Referenzkamera")
+                            .font(.headline)
+                        Text(referencePositionText)
+                            .font(.body.monospacedDigit())
+                        Text("Ähnlichkeits-Konfidenz \(result.estimate.confidence, format: .percent.precision(.fractionLength(0)))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        DisclosureGroup("Gespeicherte 4×4-Pose") {
+                            Text(referenceTransformText)
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                                .padding(.top, 8)
+                        }
+                        .font(.subheadline)
+                    }
+                    .padding(16)
+                    .background(
+                        InventoryTheme.canvas,
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    )
+
+                    Label {
+                        Text("Diese Pose gehört zum ähnlichsten gespeicherten Schlüsselbild. Sie ist nur eine grobe Ortsreferenz: Die Aufnahme berechnet keine neue präzise 6DoF-Pose und keine Position des Gegenstands. Das Ergebnis wird deshalb nicht als Inventar-Placement gespeichert.")
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                    .font(.footnote)
+                }
+                .padding(20)
+            }
+            .navigationTitle("Foto zuordnen")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Fertig") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var referencePositionText: String {
+        let position = result.estimate.referenceCameraPosition
+        return String(
+            format: "x %.2f m · y %.2f m · z %.2f m",
+            position[0],
+            position[1],
+            position[2]
+        )
+    }
+
+    private var referenceTransformText: String {
+        let transform = result.estimate.referenceCameraTransform
+        return (0 ..< 4).map { row in
+            (0 ..< 4).map { column in
+                String(format: "% .3f", transform[column * 4 + row])
+            }.joined(separator: "  ")
+        }.joined(separator: "\n")
+    }
+}
+
+private struct SpatialPhotoOnlyCameraPicker: UIViewControllerRepresentable {
+    let onComplete: @MainActor (Data?) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onComplete: onComplete)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let controller = UIImagePickerController()
+        controller.sourceType = .camera
+        controller.cameraCaptureMode = .photo
+        controller.allowsEditing = false
+        controller.delegate = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(
+        _ uiViewController: UIImagePickerController,
+        context: Context
+    ) {}
+
+    @MainActor
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate,
+        UINavigationControllerDelegate {
+        private let onComplete: @MainActor (Data?) -> Void
+
+        init(onComplete: @escaping @MainActor (Data?) -> Void) {
+            self.onComplete = onComplete
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            onComplete(nil)
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
+            let imageData = (info[.originalImage] as? UIImage)?
+                .jpegData(compressionQuality: 0.9)
+            onComplete(imageData)
+        }
     }
 }

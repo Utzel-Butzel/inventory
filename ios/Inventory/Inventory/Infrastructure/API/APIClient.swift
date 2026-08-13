@@ -420,6 +420,64 @@ public final class APIClient: Sendable {
         return try await execute(request)
     }
 
+    public func recognizeInventoryObject(
+        in image: MediaUploadFile,
+        idempotencyKey: UUID
+    ) async throws -> InventoryRecognitionResponse {
+        try Task.checkCancellation()
+        let body = try MultipartFormFileBuilder.buildObjectRecognition(image: image)
+        defer { try? FileManager.default.removeItem(at: body.fileURL) }
+
+        let url = try makeAPIURL(path: ["ai", "recognize"])
+        var request = try await authorizedRequest(url: url, method: "POST")
+        request.timeoutInterval = 150
+        request.setValue(
+            "multipart/form-data; boundary=\(body.boundary)",
+            forHTTPHeaderField: "Content-Type"
+        )
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        setIdempotencyKey(idempotencyKey, on: &request)
+
+        do {
+            let replayDeadline = Date().addingTimeInterval(150)
+            while true {
+                let (data, response) = try await session.upload(
+                    for: request,
+                    fromFile: body.fileURL
+                )
+                if let response = response as? HTTPURLResponse,
+                   response.statusCode == 202 {
+                    guard Date() < replayDeadline else {
+                        throw APIClientError.http(
+                            statusCode: 504,
+                            message: "Die Objekterkennung dauert zu lange. Bitte versuche es erneut.",
+                            retryAfter: nil,
+                            terminal: false
+                        )
+                    }
+                    let retryAfter = response.value(forHTTPHeaderField: "Retry-After")
+                        .flatMap(TimeInterval.init) ?? 2
+                    try await Task.sleep(for: .seconds(min(5, max(1, retryAfter))))
+                    try Task.checkCancellation()
+                    continue
+                }
+                return try decodeResponse(data: data, response: response)
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            guard Task.isCancelled else {
+                throw APIClientError.transport(error.localizedDescription)
+            }
+            throw CancellationError()
+        } catch let error as APIClientError {
+            await notifyIfUnauthorized(error, request: request)
+            throw error
+        } catch {
+            throw APIClientError.transport(error.localizedDescription)
+        }
+    }
+
     public func countObjects(
         in image: MediaUploadFile,
         itemHint: String? = nil,
@@ -597,6 +655,8 @@ public final class APIClient: Sendable {
         sourceMediaID: UUID? = nil,
         prompt: String? = nil,
         modelID: String? = nil,
+        transparentBackground: Bool = false,
+        transparencyMethod: CoverTransparencyMethod? = nil,
         idempotencyKey: UUID? = nil
     ) async throws -> CoverResourceResponse {
         let url = try makeAPIURL(path: [
@@ -610,7 +670,11 @@ public final class APIClient: Sendable {
             body: CoverRequest(
                 sourceMediaID: sourceMediaID,
                 prompt: prompt,
-                modelID: modelID
+                modelID: modelID,
+                transparentBackground: transparentBackground,
+                transparencyMethod: transparentBackground
+                    ? (transparencyMethod ?? .differenceMatting)
+                    : nil
             )
         )
         setIdempotencyKey(idempotencyKey, on: &request)
@@ -778,6 +842,67 @@ public final class APIClient: Sendable {
                 throw error
             }
             return data
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
+        } catch let error as APIClientError {
+            throw error
+        } catch {
+            throw APIClientError.transport(error.localizedDescription)
+        }
+    }
+
+    /// Downloads larger media (notably USDZ object scans) to a stable temporary
+    /// file without first buffering the complete model in memory.
+    public func mediaFile(for media: InventoryMedia) async throws -> URL {
+        let request = try await mediaRequest(for: media)
+        do {
+            let (temporaryURL, response) = try await session.download(for: request)
+            guard let response = response as? HTTPURLResponse else {
+                throw APIClientError.invalidResponse
+            }
+            guard (200 ... 299).contains(response.statusCode) else {
+                let data = (try? Data(contentsOf: temporaryURL)) ?? Data()
+                let payload = try? JSONDecoder().decode(ServerErrorResponse.self, from: data)
+                let error = APIClientError.http(
+                    statusCode: response.statusCode,
+                    message: payload?.error ?? HTTPURLResponse.localizedString(
+                        forStatusCode: response.statusCode
+                    ),
+                    retryAfter: response.value(forHTTPHeaderField: "Retry-After")
+                        .flatMap(TimeInterval.init)
+                )
+                await notifyIfUnauthorized(error, request: request)
+                throw error
+            }
+
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("InventoryMediaPreview", isDirectory: true)
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+            let candidateExtension = media.name.split(separator: ".").last
+                .map(String.init)?
+                .lowercased()
+            let safeExtension = candidateExtension.flatMap { value in
+                value.count <= 10 && value.allSatisfy(\.isLetter) ? value : nil
+            }
+            let fileExtension = media.mimeType == "model/vnd.usdz+zip"
+                ? "usdz"
+                : (safeExtension ?? "bin")
+            let destination = directory
+                .appendingPathComponent("preview")
+                .appendingPathExtension(fileExtension)
+            do {
+                try FileManager.default.moveItem(at: temporaryURL, to: destination)
+                return destination
+            } catch {
+                try? FileManager.default.removeItem(at: directory)
+                throw error
+            }
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as URLError where error.code == .cancelled {
@@ -1201,15 +1326,24 @@ private struct LoginRequest: Encodable, Sendable {
     let deviceName: String?
 }
 
-private struct CoverRequest: Encodable, Sendable {
+public enum CoverTransparencyMethod: String, Codable, Sendable {
+    case greenscreen
+    case differenceMatting = "difference-matting"
+}
+
+struct CoverRequest: Encodable, Sendable {
     let sourceMediaID: UUID?
     let prompt: String?
     let modelID: String?
+    let transparentBackground: Bool
+    let transparencyMethod: CoverTransparencyMethod?
 
     private enum CodingKeys: String, CodingKey {
         case sourceMediaID = "sourceMediaId"
         case prompt
         case modelID = "modelId"
+        case transparentBackground
+        case transparencyMethod
     }
 }
 

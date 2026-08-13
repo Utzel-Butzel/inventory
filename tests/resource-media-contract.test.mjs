@@ -7,6 +7,7 @@ import {
   resourceMediaKind,
   storageProviderSupportsMediaType,
   USDZ_MEDIA_TYPE,
+  validateObjectScanImage,
   validateResourceMediaUpload,
 } from "../lib/resource-media-contract.ts";
 
@@ -69,4 +70,35 @@ test("local storage supports USDZ and Openinary rejects it deterministically", (
   assert.equal(storageProviderSupportsMediaType("local", USDZ_MEDIA_TYPE), true);
   assert.equal(storageProviderSupportsMediaType("openinary", USDZ_MEDIA_TYPE), false);
   assert.equal(storageProviderSupportsMediaType("openinary", "image/jpeg"), true);
+});
+
+test("Object Capture model uploads require an item image", () => {
+  const model = { name: "captured-object.usdz", type: USDZ_MEDIA_TYPE, size: 10 };
+
+  const missing = validateObjectScanImage([], [model]);
+  assert.equal(missing.valid, false);
+  assert.equal(missing.status, 422);
+  assert.match(missing.error, /require an item image/i);
+
+  assert.deepEqual(
+    validateObjectScanImage([{ kind: "image", mimeType: "image/jpeg" }], [model]),
+    { valid: true },
+  );
+});
+
+test("Object Capture accepts an image and USDZ in either batch order", () => {
+  const model = { type: USDZ_MEDIA_TYPE };
+  const image = { type: "image/jpeg" };
+
+  assert.deepEqual(validateObjectScanImage([], [image, model]), { valid: true });
+  assert.deepEqual(validateObjectScanImage([], [model, image]), { valid: true });
+});
+
+test("ordinary media uploads and legacy model-only reads are unaffected", () => {
+  assert.deepEqual(validateObjectScanImage([], [{ type: "application/pdf" }]), {
+    valid: true,
+  });
+  assert.deepEqual(validateObjectScanImage([{ kind: "model" }], []), {
+    valid: true,
+  });
 });

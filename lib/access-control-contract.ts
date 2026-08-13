@@ -28,6 +28,7 @@ export const appPermissions = [
   "sharing.manage",
   "tokens.manage",
   "tokens.delegate",
+  "webhooks.manage",
 ] as const;
 
 export type AppPermission = (typeof appPermissions)[number];
@@ -118,7 +119,7 @@ export const permissionGroups: Array<{
       { key: "inventory.update", label: "Update items", description: "Edit item fields, media, relations, and bills of materials." },
       { key: "inventory.delete", label: "Delete items", description: "Permanently delete or merge inventory items." },
       { key: "inventory.import", label: "Import data", description: "Create and update items from CSV files." },
-      { key: "inventory.export", label: "Export data", description: "Download the inventory as CSV." },
+      { key: "inventory.export", label: "Export data", description: "Download the inventory as CSV, Excel, or PDF." },
     ],
   },
   {
@@ -156,6 +157,7 @@ export const permissionGroups: Array<{
       { key: "sharing.manage", label: "Manage public sharing", description: "Create and revoke public inventory links." },
       { key: "tokens.manage", label: "Manage API tokens", description: "Create and revoke workspace API credentials." },
       { key: "tokens.delegate", label: "Delegate token access", description: "Create API tokens whose scopes may exceed the creator's own permissions." },
+      { key: "webhooks.manage", label: "Manage webhooks", description: "Export workspace inventory events to external endpoints and manage signing secrets and retries." },
     ],
   },
 ];
@@ -178,7 +180,8 @@ const editorPermissions: AppPermission[] = appPermissions.filter(
     permission !== "roles.manage" &&
     permission !== "sharing.manage" &&
     permission !== "tokens.manage" &&
-    permission !== "tokens.delegate",
+    permission !== "tokens.delegate" &&
+    permission !== "webhooks.manage",
 );
 
 export const builtinRolePermissions: Record<
@@ -240,7 +243,8 @@ export function permissionsForScopes(scopes: readonly ApiScope[]) {
       permission !== "roles.manage" &&
       permission !== "sharing.manage" &&
       permission !== "tokens.manage" &&
-      permission !== "tokens.delegate",
+      permission !== "tokens.delegate" &&
+      permission !== "webhooks.manage",
   );
 }
 

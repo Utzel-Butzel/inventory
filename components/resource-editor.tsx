@@ -35,6 +35,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useT } from "next-i18next/client";
@@ -62,6 +63,7 @@ import {
   type CustomFieldValues,
 } from "@/lib/custom-field-contract";
 import type { CoverTransparencyMethod } from "@/lib/cover-generation-contract";
+import { getObjectCaptureUploadState } from "@/lib/object-capture-presentation";
 import { canonicalUsdzMimeType, isUsdzMedia } from "@/lib/usdz";
 
 type FormState = {
@@ -73,6 +75,7 @@ type FormState = {
   quantity: string;
   location: string;
   serialNumber: string;
+  barcode: string;
   value: string;
   currency: string;
   priority: string;
@@ -93,6 +96,7 @@ const emptyForm: FormState = {
   quantity: "1",
   location: "",
   serialNumber: "",
+  barcode: "",
   value: "",
   currency: "EUR",
   priority: "3",
@@ -135,6 +139,7 @@ const toForm = (resource: ClientResource): FormState => ({
   quantity: String(resource.quantity),
   location: resource.location ?? "",
   serialNumber: resource.serialNumber ?? "",
+  barcode: resource.barcode ?? "",
   value:
     resource.valueCents === null ? "" : (resource.valueCents / 100).toFixed(2),
   currency: resource.currency,
@@ -374,6 +379,17 @@ export function ResourceEditor({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const objectCaptureDefaultsApplied = useRef(false);
+  const aiPreferencesTouched = useRef({
+    analyze: false,
+    cover: false,
+    transparency: false,
+  });
+
+  const objectCaptureUploadState = useMemo(
+    () => getObjectCaptureUploadState(files),
+    [files],
+  );
 
   const loadResource = useCallback(async () => {
     if (!resourceId) return;
@@ -472,6 +488,7 @@ export function ResourceEditor({
     setForm((current) => ({ ...current, [field]: value }));
 
   const changeTransparentCover = (transparent: boolean) => {
+    aiPreferencesTouched.current.transparency = true;
     const title = resource?.name || form.name;
     if (!coverPromptCustomized) {
       setCoverPrompt(
@@ -482,6 +499,33 @@ export function ResourceEditor({
     }
     setTransparentCover(transparent);
   };
+
+  useEffect(() => {
+    if (
+      !isNew ||
+      !canUseAi ||
+      objectCaptureUploadState !== "bundle" ||
+      objectCaptureDefaultsApplied.current
+    ) {
+      return;
+    }
+
+    objectCaptureDefaultsApplied.current = true;
+    if (!aiPreferencesTouched.current.analyze) setAutoAnalyze(true);
+    if (!aiPreferencesTouched.current.cover) setAutoCover(true);
+    if (!aiPreferencesTouched.current.transparency) {
+      setTransparentCover(true);
+      if (!coverPromptCustomized) {
+        setCoverPrompt(defaultTransparentCoverPrompt(form.name));
+      }
+    }
+  }, [
+    canUseAi,
+    coverPromptCustomized,
+    form.name,
+    isNew,
+    objectCaptureUploadState,
+  ]);
 
   const categoryNames = useMemo(
     () =>
@@ -577,6 +621,7 @@ export function ResourceEditor({
     quantity: isNew ? Number(form.quantity || 1) : undefined,
     location: form.location.trim() || null,
     serialNumber: form.serialNumber.trim() || null,
+    barcode: form.barcode.trim() || null,
     valueCents: form.value ? Math.round(Number(form.value) * 100) : null,
     currency: form.currency.toUpperCase(),
     priority: Number(form.priority),
@@ -696,6 +741,11 @@ export function ResourceEditor({
       setError(
         t("errors.requiredCustomField", { label: missingCustomField.label }),
       );
+      return;
+    }
+    if (isNew && objectCaptureUploadState === "model-only") {
+      setError(t("errors.objectCaptureImageRequired"));
+      setNotice(null);
       return;
     }
     setSaving(true);
@@ -1118,6 +1168,36 @@ export function ResourceEditor({
               </div>
             </div>
 
+            {isNew && objectCaptureUploadState !== "none" ? (
+              <div
+                className={`mb-4 flex items-start gap-3 rounded-xl border px-4 py-3 ${
+                  objectCaptureUploadState === "bundle"
+                    ? "border-brand-border bg-brand-soft text-brand"
+                    : "border-warning-border bg-warning-soft text-warning"
+                }`}
+              >
+                <Box className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+                <div>
+                  <p className="text-xs font-semibold">
+                    {t(
+                      objectCaptureUploadState === "bundle"
+                        ? "media.objectCaptureReady"
+                        : "media.objectCaptureNeedsImage",
+                    )}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-current/80">
+                    {t(
+                      objectCaptureUploadState === "bundle"
+                        ? canUseAi
+                          ? "media.objectCaptureReadyDescriptionAi"
+                          : "media.objectCaptureReadyDescription"
+                        : "media.objectCaptureNeedsImageDescription",
+                    )}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
             {itemMedia.length ? (
               <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {itemMedia.map((item, index) => {
@@ -1197,6 +1277,7 @@ export function ResourceEditor({
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <label className={labelClass}>{t("operations.sku")}<input value={form.sku} onChange={(event) => setField("sku", event.target.value)} placeholder={t("operations.skuPlaceholder")} className={inputClass} /></label>
               <label className={labelClass}>{t("operations.serialNumber")}<input value={form.serialNumber} onChange={(event) => setField("serialNumber", event.target.value)} className={inputClass} /></label>
+              <label className={labelClass}>{t("operations.barcode")}<input value={form.barcode} onChange={(event) => setField("barcode", event.target.value)} placeholder={t("operations.barcodePlaceholder")} className={inputClass} /></label>
               {isNew ? (
                 <label className={labelClass}>{t("operations.openingQuantity")}<input type="number" min="0" value={form.quantity} onChange={(event) => setField("quantity", event.target.value)} className={inputClass} /></label>
               ) : (
@@ -1225,8 +1306,8 @@ export function ResourceEditor({
             <div className="mb-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-lg shadow-[var(--shadow-sm)]"><Sparkles size={19} /></div><div><h2 className="text-sm font-semibold text-foreground">{t("ai.title")}</h2><p className="text-xs text-brand">{t("ai.description")}</p></div></div>
             {isNew ? (
               <div className="space-y-3">
-                <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-surface/80 p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => setAutoAnalyze(event.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.analyzeDescription")}</span></span></label>
-                <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-surface/80 p-3"><input type="checkbox" checked={autoCover} onChange={(event) => setAutoCover(event.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.coverDescription")}</span></span></label>
+                <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-surface/80 p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => { aiPreferencesTouched.current.analyze = true; setAutoAnalyze(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.analyzeDescription")}</span></span></label>
+                <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-surface/80 p-3"><input type="checkbox" checked={autoCover} onChange={(event) => { aiPreferencesTouched.current.cover = true; setAutoCover(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.coverDescription")}</span></span></label>
                 {autoCover ? (
                   <div className="rounded-xl border border-brand-border bg-surface/80 p-3">
                     <CoverReferencePicker

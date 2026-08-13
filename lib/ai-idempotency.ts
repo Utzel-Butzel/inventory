@@ -6,7 +6,12 @@ import { aiIdempotencyOperations } from "@/db/schema";
 import { db } from "@/lib/db";
 import { idempotencyResponseHeaders } from "@/lib/idempotency";
 
-export type AiOperationName = "analyze" | "count" | "cover" | "translate";
+export type AiOperationName =
+  | "analyze"
+  | "recognize"
+  | "count"
+  | "cover"
+  | "translate";
 
 type StoredOperation = typeof aiIdempotencyOperations.$inferSelect;
 const processingLeaseMs = 10 * 60_000;

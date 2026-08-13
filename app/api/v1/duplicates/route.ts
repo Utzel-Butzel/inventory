@@ -109,6 +109,7 @@ export async function POST(request: Request) {
       message.includes("circular bill of materials") ||
       message.includes("assembly build history") ||
       message.includes("purchase-order history") ||
+      message.includes("with variants cannot be merged") ||
       message.includes("3D room scans");
     return Response.json(
       { error: message },

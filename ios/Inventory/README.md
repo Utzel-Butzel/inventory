@@ -6,7 +6,8 @@ WebRTC is not required for app-to-server uploads.
 
 ## Features
 
-- One native rear-camera session for fast still photos and code recognition
+- One native rear-camera session for fast still photos, code recognition, and
+  visual inventory matching
 - QR, EAN-8/EAN-13, UPC-E, Code 128, Data Matrix, PDF417, and Aztec scanning
 - Exact lookup by resource UUID/link, SKU, or serial number
 - Create a new item from an unknown code and continue in the same photo flow
@@ -17,6 +18,7 @@ WebRTC is not required for app-to-server uploads.
 - Inventory search, authenticated image loading, details, and manual editing
 - One-tap stock receipts plus confirmed stock issues from a scanned item
 - Camera-based part counting with confidence, manual correction, and reviewed stock +/-
+- Camera-based object recognition with ranked matches to existing inventory items
 - Email/password login with a device token stored in Keychain
 - Manual API token as an optional expert login
 - Optional GPS coordinates for new captures
@@ -153,6 +155,22 @@ those points on the full, uncropped photo in the same 3:4 viewport.
 The source photo remains only in the temporary directory for review and is
 removed when the sheet closes or another photo is taken. The detected count is
 editable before it is booked as a stock receipt or confirmed stock issue.
+
+## Photo recognition
+
+The shared camera has a fourth **Erkennen** mode between **Scannen** and
+**Zählen**. It sends one downsampled JPEG to `POST /api/v1/ai/recognize` with a
+stable idempotency key. The server first describes the dominant object, builds
+a bounded text shortlist from inventory metadata, and then compares the query
+with available reference photos. Results contain up to five ranked inventory
+items with confidence and matching evidence.
+
+Recognition is advisory: the app never opens or changes an item automatically.
+The user selects a proposed match to open its existing detail view, and a weak
+or ambiguous result is clearly marked for review. The query JPEG is transient,
+is not attached to an inventory item, and is deleted locally when the camera
+closes or a new photo is taken. Server access requires both `ai.use` and direct
+`inventory.read` permission.
 
 ## Tests
 

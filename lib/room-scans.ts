@@ -60,7 +60,6 @@ const serializeKeyframe = (frame: typeof roomScanKeyframes.$inferSelect) => ({
   height: frame.imageHeight,
   orientation: frame.orientation,
   quality: frame.quality,
-  featureDescriptor: frame.featureDescriptor,
   mimeType: frame.mimeType,
   size: frame.size,
   checksumSha256: frame.checksumSha256,
@@ -88,17 +87,17 @@ export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
 
   if (!rows.length) return { scans: [] };
   const scanIds = rows.map(({ scan }) => scan.id);
-  const [assetRows, keyframeRows, placementCounts] = await Promise.all([
+  const [assetRows, keyframeCounts, placementCounts] = await Promise.all([
     db
       .select()
       .from(roomScanAssets)
       .where(inArray(roomScanAssets.roomScanId, scanIds))
       .orderBy(asc(roomScanAssets.kind)),
     db
-      .select()
+      .select({ roomScanId: roomScanKeyframes.roomScanId, value: count() })
       .from(roomScanKeyframes)
       .where(inArray(roomScanKeyframes.roomScanId, scanIds))
-      .orderBy(asc(roomScanKeyframes.frameTimestamp)),
+      .groupBy(roomScanKeyframes.roomScanId),
     db
       .select({ roomScanId: resourceSpatialPlacements.roomScanId, value: count() })
       .from(resourceSpatialPlacements)
@@ -118,6 +117,7 @@ export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
       floorIndex: scan.floorIndex,
       roomIdentifier: scan.roomIdentifier,
       georeference: coordinateSpace?.georeference ?? null,
+      layoutTransform: scan.layoutTransform,
       revision: scan.revision,
       status: scan.status,
       capturedAt: scan.capturedAt,
@@ -129,9 +129,8 @@ export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
       assets: assetRows
         .filter((asset) => asset.roomScanId === scan.id)
         .map(serializeAsset),
-      keyframes: keyframeRows
-        .filter((frame) => frame.roomScanId === scan.id)
-        .map(serializeKeyframe),
+      keyframeCount:
+        keyframeCounts.find((item) => item.roomScanId === scan.id)?.value ?? 0,
     })),
   };
 }
@@ -205,6 +204,7 @@ export async function getRoomScene(scanId: string) {
       floorIndex: row.scan.floorIndex,
       roomIdentifier: row.scan.roomIdentifier,
       georeference: row.coordinateSpace?.georeference ?? null,
+      layoutTransform: row.scan.layoutTransform,
       revision: row.scan.revision,
       status: row.scan.status,
       scene: row.scan.scene,
@@ -344,6 +344,22 @@ export async function findRoomScan(scanId: string) {
     .from(roomScans)
     .where(eq(roomScans.id, scanId))
     .limit(1);
+  return scan ?? null;
+}
+
+export async function updateRoomLayoutTransform(
+  scanId: string,
+  transform: import("@/lib/room-scene-contract").SpatialMatrix4 | null,
+) {
+  const [scan] = await db
+    .update(roomScans)
+    .set({ layoutTransform: transform, updatedAt: new Date() })
+    .where(eq(roomScans.id, scanId))
+    .returning({
+      id: roomScans.id,
+      layoutTransform: roomScans.layoutTransform,
+      updatedAt: roomScans.updatedAt,
+    });
   return scan ?? null;
 }
 

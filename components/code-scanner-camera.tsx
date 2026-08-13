@@ -8,7 +8,7 @@ import {
   Keyboard,
   LoaderCircle,
   Play,
-  QrCode,
+  ScanBarcode,
   ShieldAlert,
 } from "lucide-react";
 import jsQR from "jsqr";
@@ -24,6 +24,7 @@ import {
 } from "react";
 
 import { Button, cn } from "@/components/ui";
+import { detectBarcodes } from "@/lib/barcode-scanner";
 
 type CameraStatus = "idle" | "requesting" | "active" | "paused" | "error";
 
@@ -88,6 +89,30 @@ function decodePixels(data: Uint8ClampedArray, width: number, height: number) {
   return null;
 }
 
+async function decodeCanvas(
+  canvas: HTMLCanvasElement,
+  imageData: ImageData,
+  usePhotoEnhancements = false,
+) {
+  try {
+    const [barcode] = await detectBarcodes(canvas);
+    if (barcode) return barcode.value;
+  } catch {
+    // Keep the original QR decoder as a lightweight offline fallback if the
+    // multi-format WebAssembly decoder cannot be initialized.
+  }
+
+  if (usePhotoEnhancements) {
+    return decodePixels(imageData.data, imageData.width, imageData.height);
+  }
+
+  return (
+    jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: "attemptBoth",
+    })?.data.trim() || null
+  );
+}
+
 async function decodePhoto(file: File) {
   const objectUrl = URL.createObjectURL(file);
   try {
@@ -113,7 +138,11 @@ async function decodePhoto(file: File) {
     context.imageSmoothingQuality = "high";
     context.drawImage(image, 0, 0, width, height);
 
-    return decodePixels(context.getImageData(0, 0, width, height).data, width, height);
+    return decodeCanvas(
+      canvas,
+      context.getImageData(0, 0, width, height),
+      true,
+    );
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -130,6 +159,7 @@ export function CodeScannerCamera({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const decodingFrameRef = useRef(false);
   const cameraGenerationRef = useRef(0);
   const photoGenerationRef = useRef(0);
   const onDetectedRef = useRef(onDetected);
@@ -261,6 +291,7 @@ export function CodeScannerCamera({
           animationFrameRef.current = requestAnimationFrame(scanFrame);
           if (timestamp - lastFrameAt < CAMERA_FRAME_INTERVAL) return;
           if (video.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) return;
+          if (decodingFrameRef.current) return;
           lastFrameAt = timestamp;
 
           const canvas = canvasRef.current;
@@ -278,16 +309,18 @@ export function CodeScannerCamera({
 
           context.drawImage(video, 0, 0, width, height);
           const frame = context.getImageData(0, 0, width, height);
-          const result = jsQR(frame.data, width, height, {
-            inversionAttempts: "attemptBoth",
-          });
-          const code = result?.data.trim();
-          if (!code) return;
-
-          setLastDetectedCode(code);
-          setCameraStatus("paused");
-          stopCamera();
-          onDetectedRef.current(code, "camera");
+          decodingFrameRef.current = true;
+          void decodeCanvas(canvas, frame)
+            .then((code) => {
+              if (!code || generation !== cameraGenerationRef.current) return;
+              setLastDetectedCode(code);
+              setCameraStatus("paused");
+              stopCamera();
+              onDetectedRef.current(code, "camera");
+            })
+            .finally(() => {
+              decodingFrameRef.current = false;
+            });
         };
 
         animationFrameRef.current = requestAnimationFrame(scanFrame);
@@ -408,7 +441,7 @@ export function CodeScannerCamera({
 
           {isCameraActive ? (
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 grid place-items-center">
-              <div className="relative size-[58%] max-h-64 max-w-64 rounded-[1.25rem] border border-white/35 shadow-[0_0_0_999px_rgb(10_13_18/0.3)]">
+              <div className="relative h-[48%] w-[72%] max-h-56 max-w-96 rounded-[1.25rem] border border-white/35 shadow-[0_0_0_999px_rgb(10_13_18/0.3)]">
                 <span className="absolute -left-px -top-px h-10 w-10 rounded-tl-[1.25rem] border-l-4 border-t-4 border-white" />
                 <span className="absolute -right-px -top-px h-10 w-10 rounded-tr-[1.25rem] border-r-4 border-t-4 border-white" />
                 <span className="absolute -bottom-px -left-px h-10 w-10 rounded-bl-[1.25rem] border-b-4 border-l-4 border-white" />
@@ -424,7 +457,7 @@ export function CodeScannerCamera({
               ) : isCameraBusy ? (
                 <LoaderCircle className="size-10 animate-spin text-white" aria-hidden="true" />
               ) : (
-                <QrCode className="size-10 text-white/80" aria-hidden="true" />
+                <ScanBarcode className="size-10 text-white/80" aria-hidden="true" />
               )}
               <p className="mt-3 text-sm font-semibold">
                 {cameraStatus === "paused"

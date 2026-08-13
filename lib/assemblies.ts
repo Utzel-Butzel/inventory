@@ -27,7 +27,12 @@ import {
   type StockUnitRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 import { BOM_WRITE_LOCK_ID } from "@/lib/inventory-locks";
+import {
+  allocatedVariantQuantity,
+  assertVariantAllocationFits,
+} from "@/lib/variant-stock-invariant";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 
@@ -713,6 +718,15 @@ export async function buildAssembly(
         const required = line.quantityPerAssembly * input.quantity;
         const balanceAfter = component.quantity - required;
         const mode = modeByResource.get(line.componentResourceId) ?? "bulk";
+        const variantAllocation = await allocatedVariantQuantity(
+          transaction,
+          line.componentResourceId,
+        );
+        assertVariantAllocationFits(
+          balanceAfter,
+          variantAllocation,
+          (message) => new AssemblyOperationError(message, 409),
+        );
 
         if (mode === "serialized") {
           const requestedIds = input.componentUnitIds?.[line.componentResourceId];
@@ -915,6 +929,7 @@ export async function buildAssembly(
             .values(allocationValues)
             .returning()
         : [];
+      await enqueueStockMovementWebhookEvents(transaction, allMovements);
       const unitsById = new Map<string, StockUnitRecord>();
       for (const unit of outputUnits) unitsById.set(unit.id, unit);
       const componentUnitIds = savedAllocations

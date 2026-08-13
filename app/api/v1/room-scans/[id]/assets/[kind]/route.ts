@@ -5,6 +5,7 @@ import {
   reconcileFailedRoomScanAssetReplacement,
   roomScanAssetContentDisposition,
   roomScanAssetMimeType,
+  validateBoundedUploadLength,
 } from "@/lib/room-scan-upload-policy";
 import {
   MAX_GAUSSIAN_SPLAT_BYTES,
@@ -115,9 +116,15 @@ export async function PUT(request: Request, context: Context) {
     typedKind === "textured_mesh"
       ? MAX_TEXTURED_MESH_BYTES
       : MAX_GAUSSIAN_SPLAT_BYTES;
-  const declaredLength = Number(request.headers.get("content-length"));
-  if (Number.isFinite(declaredLength) && declaredLength > limit) {
-    return Response.json({ error: "The photorealistic asset is too large." }, { status: 413 });
+  const declaredLength = validateBoundedUploadLength(
+    request.headers.get("content-length"),
+    limit,
+  );
+  if (!declaredLength.valid) {
+    return Response.json(
+      { error: declaredLength.error },
+      { status: declaredLength.status },
+    );
   }
   const bytes = Buffer.from(await request.arrayBuffer());
   if (!bytes.length) {

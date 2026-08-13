@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import {
+  validateGlbPayload,
+  type GlbValidation,
+} from "@/lib/glb-contract";
 import { spatialMatrix4Schema } from "@/lib/room-scene-contract";
 
 export const MAX_ROOM_SCAN_KEYFRAMES = 32;
@@ -116,63 +120,11 @@ export const photorealisticFileEnvelopeIsValid = (
     : file.type.toLowerCase() === "application/octet-stream" &&
       extension(file.name) === ".ply";
 
-const readUint32LE = (bytes: Uint8Array, offset: number) =>
-  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(
-    offset,
-    true,
-  );
-
-export type PhotorealisticAssetValidation =
-  | { valid: true }
-  | { valid: false; error: string };
+export type PhotorealisticAssetValidation = GlbValidation;
 
 export const validateGlb = (
   bytes: Uint8Array,
-): PhotorealisticAssetValidation => {
-  if (bytes.length < 20 || readUint32LE(bytes, 0) !== 0x46546c67) {
-    return { valid: false, error: "The textured mesh is not a GLB file." };
-  }
-  if (readUint32LE(bytes, 4) !== 2) {
-    return { valid: false, error: "Only GLB version 2 is supported." };
-  }
-  if (readUint32LE(bytes, 8) !== bytes.length) {
-    return { valid: false, error: "The GLB length header is invalid." };
-  }
-  const jsonLength = readUint32LE(bytes, 12);
-  if (
-    readUint32LE(bytes, 16) !== 0x4e4f534a ||
-    jsonLength === 0 ||
-    20 + jsonLength > bytes.length
-  ) {
-    return { valid: false, error: "The GLB JSON chunk is invalid." };
-  }
-  try {
-    const json = JSON.parse(
-      new TextDecoder("utf-8", { fatal: true })
-        .decode(bytes.subarray(20, 20 + jsonLength))
-        .replace(/\u0000+| +$/g, ""),
-    ) as {
-      asset?: { version?: unknown };
-      buffers?: Array<{ uri?: unknown }>;
-      images?: Array<{ uri?: unknown }>;
-    };
-    if (json.asset?.version !== "2.0") {
-      return { valid: false, error: "The GLB asset version is invalid." };
-    }
-    const externalUri = [...(json.buffers ?? []), ...(json.images ?? [])].find(
-      ({ uri }) => typeof uri === "string" && !uri.startsWith("data:"),
-    );
-    if (externalUri) {
-      return {
-        valid: false,
-        error: "Textured meshes must embed their buffers and images.",
-      };
-    }
-  } catch {
-    return { valid: false, error: "The GLB JSON chunk is malformed." };
-  }
-  return { valid: true };
-};
+): PhotorealisticAssetValidation => validateGlbPayload(bytes);
 
 const plyScalarByteWidths: Record<string, number> = {
   char: 1,

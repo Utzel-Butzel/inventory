@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   identitySpatialMatrix,
+  roomLayoutTransformPatchSchema,
   roomSceneSchema,
   spatialMatricesApproximatelyEqual,
   spatialPlacementInputSchema,
@@ -34,6 +35,22 @@ const validScene = {
 
 test("accepts the shared ARKit/RoomPlan scene contract", () => {
   assert.equal(roomSceneSchema.safeParse(validScene).success, true);
+});
+
+test("accepts bounded room layout transform patches", () => {
+  assert.equal(
+    roomLayoutTransformPatchSchema.safeParse({ transform: identitySpatialMatrix })
+      .success,
+    true,
+  );
+  assert.equal(
+    roomLayoutTransformPatchSchema.safeParse({ transform: [1, 2, 3] }).success,
+    false,
+  );
+  assert.equal(
+    roomLayoutTransformPatchSchema.safeParse({ transform: null }).success,
+    true,
+  );
 });
 
 test("normalizes RoomPlan's empty optional surface polygon", () => {

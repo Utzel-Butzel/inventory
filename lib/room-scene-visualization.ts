@@ -1,3 +1,5 @@
+import { validateGlbPayload } from "@/lib/glb-contract";
+
 export const roomPhotorealAssetKinds = [
   "textured_mesh",
   "gaussian_splat",
@@ -44,6 +46,33 @@ export const maximumTexturedMeshBytes = 80 * 1024 * 1024;
 export const maximumGaussianSplatBytes = 80 * 1024 * 1024;
 export const maximumGaussianSplatPoints = 250_000;
 export const maximumGaussianSplatSourcePoints = 2_000_000;
+export const maximumPhotorealAssets = 2;
+export const maximumPhotorealAggregateBytes = 120 * 1024 * 1024;
+
+/** Keeps linked-room viewers inside one bounded fetch/decode envelope. */
+export function selectPhotorealAssetBudget<T extends { size: number }>(
+  assets: readonly T[],
+  perAssetLimit: number,
+  aggregateLimit = maximumPhotorealAggregateBytes,
+  countLimit = maximumPhotorealAssets,
+) {
+  const selected: T[] = [];
+  let bytes = 0;
+  for (const asset of assets) {
+    if (
+      !Number.isSafeInteger(asset.size) ||
+      asset.size <= 0 ||
+      asset.size > perAssetLimit ||
+      selected.length >= countLimit ||
+      bytes + asset.size > aggregateLimit
+    ) {
+      continue;
+    }
+    selected.push(asset);
+    bytes += asset.size;
+  }
+  return { selected, bytes, skipped: assets.length - selected.length };
+}
 
 /**
  * Selects a spatially useful, deterministic subset without biasing the view
@@ -85,74 +114,12 @@ export function sampleRoomKeyframes<T extends Pick<RoomCameraKeyframe, "id" | "q
 
 const decoder = new TextDecoder();
 
-type GlbDocument = {
-  asset?: { version?: unknown };
-  buffers?: Array<{ uri?: unknown }>;
-  images?: Array<{ uri?: unknown }>;
-};
-
 /**
- * Validates enough of a GLB container to prevent GLTFLoader from following
- * untrusted external image or buffer URLs. Data URIs are self-contained and
- * remain allowed, although normal GLB exports use their binary chunk.
+ * Applies the same bounded, self-contained GLB contract as the upload route
+ * immediately before browser decoding.
  */
 export function validateEmbeddedGlb(bytes: ArrayBuffer) {
-  const view = new DataView(bytes);
-  if (view.byteLength < 20 || view.getUint32(0, true) !== 0x46546c67) {
-    return { valid: false, error: "The textured mesh is not a GLB file." } as const;
-  }
-  if (view.getUint32(4, true) !== 2) {
-    return { valid: false, error: "Only GLB version 2 is supported." } as const;
-  }
-  if (view.getUint32(8, true) !== view.byteLength) {
-    return { valid: false, error: "The GLB length header is invalid." } as const;
-  }
-
-  const jsonLength = view.getUint32(12, true);
-  const jsonType = view.getUint32(16, true);
-  if (
-    jsonType !== 0x4e4f534a ||
-    jsonLength === 0 ||
-    jsonLength % 4 !== 0 ||
-    20 + jsonLength > view.byteLength
-  ) {
-    return { valid: false, error: "The GLB JSON chunk is invalid." } as const;
-  }
-
-  let document: GlbDocument;
-  try {
-    document = JSON.parse(
-      decoder.decode(new Uint8Array(bytes, 20, jsonLength)).replace(/\u0000+$/g, ""),
-    ) as GlbDocument;
-  } catch {
-    return { valid: false, error: "The GLB metadata is not valid JSON." } as const;
-  }
-  if (document.asset?.version !== "2.0") {
-    return { valid: false, error: "The GLB asset version is invalid." } as const;
-  }
-
-  const buffers = document.buffers ?? [];
-  const uris = [
-    ...buffers.map((entry) => entry.uri),
-    ...(document.images ?? []).map((entry) => entry.uri),
-  ];
-  if (
-    uris.some(
-      (uri) => typeof uri === "string" && !uri.startsWith("data:"),
-    )
-  ) {
-    return {
-      valid: false,
-      error: "The GLB references external files.",
-    } as const;
-  }
-  if (buffers.length > 1) {
-    return {
-      valid: false,
-      error: "The GLB contains unsupported extra buffers.",
-    } as const;
-  }
-  return { valid: true } as const;
+  return validateGlbPayload(new Uint8Array(bytes));
 }
 
 export function hasPlyHeader(bytes: ArrayBuffer) {

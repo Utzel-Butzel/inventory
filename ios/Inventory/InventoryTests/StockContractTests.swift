@@ -165,6 +165,73 @@ final class StockContractTests: XCTestCase {
         XCTAssertTrue(result.markers.isEmpty)
     }
 
+    func testInventoryRecognitionResponseDecodesRankedResourceMatches() throws {
+        let data = Data(
+            #"""
+            {
+              "detected": {
+                "label": "Haartrockner",
+                "category": "Elektrogerät",
+                "brand": "Philips",
+                "model": "Series 5000",
+                "color": "schwarz",
+                "material": "Kunststoff",
+                "visibleText": ["Philips"],
+                "searchTerms": ["Fön", "hair dryer"],
+                "confidence": 0.95
+              },
+              "matches": [{
+                "resourceId": "11111111-1111-1111-1111-111111111111",
+                "confidence": 0.91,
+                "reason": "Marke, Modell und Form stimmen überein.",
+                "evidence": ["Philips", "schwarzes Gehäuse"],
+                "resource": {
+                  "id": "11111111-1111-1111-1111-111111111111",
+                  "name": "Philips Series 5000 Haartrockner",
+                  "description": "Fön im Materialschrank",
+                  "type": "object",
+                  "status": "available",
+                  "sku": "BHD510",
+                  "quantity": 1,
+                  "location": "Bad",
+                  "serialNumber": null,
+                  "valueCents": 5900,
+                  "currency": "EUR",
+                  "priority": 3,
+                  "tags": ["Fön"],
+                  "categories": [],
+                  "relatedResourceIds": [],
+                  "gpsLatitude": null,
+                  "gpsLongitude": null,
+                  "gpsAltitude": null,
+                  "notes": "",
+                  "aiMetadata": null,
+                  "createdBy": "test@example.com",
+                  "createdAt": "2026-08-10T10:00:00.000Z",
+                  "updatedAt": "2026-08-13T10:00:00.000Z",
+                  "media": [],
+                  "cover": null
+                }
+              }],
+              "isConfident": true,
+              "model": "vision-test",
+              "catalog": { "considered": 42, "truncated": false }
+            }
+            """#.utf8
+        )
+
+        let response = try stockDecoder().decode(
+            InventoryRecognitionResponse.self,
+            from: data
+        )
+
+        XCTAssertEqual(response.detected?.label, "Haartrockner")
+        XCTAssertEqual(response.matches.first?.resource.name, "Philips Series 5000 Haartrockner")
+        XCTAssertEqual(response.matches.first?.confidence, 0.91)
+        XCTAssertTrue(response.isConfident)
+        XCTAssertEqual(response.catalog.considered, 42)
+    }
+
     private func jsonObject<Value: Encodable>(for value: Value) throws -> [String: Any] {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601

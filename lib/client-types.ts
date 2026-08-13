@@ -5,6 +5,7 @@ import type {
 } from "@/db/schema";
 import type {
   RoomScene,
+  SpatialMatrix4,
   SpatialQuaternion,
   SpatialVector3,
 } from "@/lib/room-scene-contract";
@@ -88,7 +89,7 @@ export type ClientRoomKeyframe = {
     | "right-mirrored"
     | "left";
   quality: number;
-  featureDescriptor: RoomKeyframeFeatureDescriptor | null;
+  featureDescriptor?: RoomKeyframeFeatureDescriptor | null;
   mimeType: "image/jpeg";
   size: number;
   checksumSha256: string;
@@ -107,7 +108,7 @@ export type ClientRoomScanSummary = {
   updatedAt: string;
   placementCount: number;
   assets: ClientRoomScanAsset[];
-  keyframes?: ClientRoomKeyframe[];
+  keyframeCount: number;
   structureId?: string | null;
   structureName?: string | null;
   floorIdentifier?: string | null;
@@ -115,6 +116,7 @@ export type ClientRoomScanSummary = {
   roomIdentifier?: string | null;
   coordinateSpaceId?: string | null;
   georeference?: SpatialGeoreference | null;
+  layoutTransform?: SpatialMatrix4 | null;
 };
 
 export type ClientRoomPlacement = {
@@ -160,6 +162,7 @@ export type ClientRoomSceneScan = {
   roomIdentifier?: string | null;
   coordinateSpaceId?: string | null;
   georeference?: SpatialGeoreference | null;
+  layoutTransform?: SpatialMatrix4 | null;
 };
 
 export type ClientRoomSceneManifest = {

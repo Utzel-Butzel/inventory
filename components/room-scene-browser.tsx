@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useT } from "next-i18next/client";
 import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
   Box,
   Boxes,
   CalendarClock,
@@ -19,11 +23,21 @@ import {
   Building2,
   Layers3,
   Map as MapIcon,
+  Move3d,
+  RotateCcw,
+  Save,
+  Undo2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/components/ui";
 import { floorIdentifier } from "@/lib/spatial-map-features";
+import {
+  arrangeFloorRooms,
+  rotateRoomTransform,
+  translateRoomTransform,
+} from "@/lib/room-floor-layout";
+import type { SpatialMatrix4 } from "@/lib/room-scene-contract";
 import {
   fetchJson,
   type ClientRoomPlacement,
@@ -85,6 +99,9 @@ export function RoomSceneBrowser() {
   const [structureDetail, setStructureDetail] = useState<ClientSpatialStructureDetail | null>(null);
   const [selectedStructureId, setSelectedStructureId] = useState<string | null>(null);
   const [selectedFloorIdentifier, setSelectedFloorIdentifier] = useState<string | null>(null);
+  const [layoutDrafts, setLayoutDrafts] = useState<Record<string, SpatialMatrix4> | null>(null);
+  const [layoutRoomId, setLayoutRoomId] = useState<string | null>(null);
+  const [savingLayout, setSavingLayout] = useState(false);
   const sceneRequestRef = useRef(0);
 
   const updateUrl = useCallback(
@@ -137,8 +154,18 @@ export function RoomSceneBrowser() {
     const requestedStructureId = searchParams.get("structure");
     if (requestedStructureId && structures.some((item) => item.id === requestedStructureId)) {
       setSelectedStructureId(requestedStructureId);
+      return;
     }
-  }, [searchParams, structures]);
+    const requestedRoomId = searchParams.get("room");
+    const requestedRoom = scans.find((scan) => scan.id === requestedRoomId);
+    if (
+      !requestedStructureId &&
+      requestedRoom?.structureId &&
+      structures.some((item) => item.id === requestedRoom.structureId)
+    ) {
+      setSelectedStructureId(requestedRoom.structureId);
+    }
+  }, [scans, searchParams, structures]);
 
   useEffect(() => {
     if (!selectedStructureId) {
@@ -154,7 +181,13 @@ export function RoomSceneBrowser() {
       .then(({ structure }) => {
         setStructureDetail(structure);
         const requestedFloor = searchParams.get("floor");
-        const floor = structure.floors.find(
+        const requestedScan = searchParams.get("room");
+        const roomFloor = requestedScan
+          ? structure.floors.find((candidate) =>
+              candidate.rooms.some((room) => room.scan?.id === requestedScan),
+            )
+          : null;
+        const floor = roomFloor ?? structure.floors.find(
           (candidate) => floorIdentifier(candidate.identifier, candidate.index) === requestedFloor,
         )
           ?? structure.floors[0]
@@ -162,7 +195,6 @@ export function RoomSceneBrowser() {
         setSelectedFloorIdentifier(
           floor ? floorIdentifier(floor.identifier, floor.index) : null,
         );
-        const requestedScan = searchParams.get("room");
         const room = floor?.rooms.find((candidate) => candidate.scan?.id === requestedScan)
           ?? floor?.rooms.find((candidate) => candidate.scan)
           ?? null;
@@ -269,25 +301,21 @@ export function RoomSceneBrowser() {
     [selectedScanId, updateUrl],
   );
 
-  const selectedFloor = structureDetail?.floors.find(
-    (floor) => floorIdentifier(floor.identifier, floor.index) === selectedFloorIdentifier,
-  ) ?? null;
+  const selectedFloor = useMemo(
+    () => structureDetail?.floors.find(
+      (floor) => floorIdentifier(floor.identifier, floor.index) === selectedFloorIdentifier,
+    ) ?? null,
+    [selectedFloorIdentifier, structureDetail],
+  );
   const groupedScans = selectedFloor?.rooms.filter(
     (room): room is typeof room & { scan: NonNullable<typeof room.scan> } => Boolean(room.scan),
   ) ?? [];
 
-  const linkedManifests = useMemo<ClientRoomSceneManifest[]>(() => {
-    const linkedFloor = structureDetail?.floors.find(
-      (floor) => floorIdentifier(floor.identifier, floor.index) === selectedFloorIdentifier,
-    );
-    const coordinateSpaceId = manifest?.scan.coordinateSpaceId;
-    if (!manifest || !linkedFloor || !coordinateSpaceId) return [];
-    return linkedFloor.rooms.flatMap((room) => {
-      if (
-        !room.scan ||
-        room.scan.id === manifest.scan.id ||
-        (room.scan.coordinateSpaceId ?? room.coordinateSpaceId) !== coordinateSpaceId
-      ) return [];
+  const floorManifests = useMemo<ClientRoomSceneManifest[]>(() => {
+    if (!manifest || !selectedFloor) return manifest ? [manifest] : [];
+    return selectedFloor.rooms.flatMap((room) => {
+      if (!room.scan) return [];
+      if (room.scan.id === manifest.scan.id) return [manifest];
       return [{
         room: {
           id: room.roomResourceId,
@@ -296,20 +324,128 @@ export function RoomSceneBrowser() {
         },
         scan: room.scan,
         placements: room.placements,
-        structureId: structureDetail?.id,
-        structureName: structureDetail?.name,
-        floorIdentifier: linkedFloor.identifier,
-        floorIndex: linkedFloor.index,
+        structureId: structureDetail?.id ?? manifest.structureId,
+        structureName: structureDetail?.name ?? manifest.structureName,
+        floorIdentifier: selectedFloor.identifier,
+        floorIndex: selectedFloor.index,
         roomIdentifier: room.roomIdentifier,
-        coordinateSpaceId,
+        coordinateSpaceId: room.scan.coordinateSpaceId ?? room.coordinateSpaceId,
         georeference: room.georeference,
       }];
     });
-  }, [manifest, selectedFloorIdentifier, structureDetail]);
+  }, [manifest, selectedFloor, structureDetail]);
+
+  const automaticLayout = useMemo(
+    () => arrangeFloorRooms(floorManifests.map((item) => ({
+      id: item.scan.id,
+      coordinateSpaceId: item.scan.coordinateSpaceId,
+      bounds: item.scan.scene.bounds,
+      worldFromModel: item.scan.scene.worldFromModel,
+      layoutTransform: item.scan.layoutTransform,
+    }))),
+    [floorManifests],
+  );
+  const effectiveTransforms = useMemo(() => {
+    const transforms = new Map(automaticLayout.transforms);
+    if (layoutDrafts) {
+      for (const [scanId, transform] of Object.entries(layoutDrafts)) {
+        transforms.set(scanId, transform);
+      }
+    }
+    return transforms;
+  }, [automaticLayout, layoutDrafts]);
+  const visibleManifests = useMemo(
+    () => floorManifests.map((item) => ({
+      ...item,
+      scan: {
+        ...item.scan,
+        layoutTransform:
+          effectiveTransforms.get(item.scan.id) ?? item.scan.layoutTransform ?? null,
+      },
+    })),
+    [effectiveTransforms, floorManifests],
+  );
+  const visibleManifest = visibleManifests.find(
+    (item) => item.scan.id === manifest?.scan.id,
+  ) ?? manifest;
+  const linkedManifests = visibleManifests.filter(
+    (item) => item.scan.id !== visibleManifest?.scan.id,
+  );
+
+  const beginLayout = () => {
+    setLayoutDrafts(Object.fromEntries(effectiveTransforms) as Record<string, SpatialMatrix4>);
+    setLayoutRoomId(selectedScanId ?? floorManifests[0]?.scan.id ?? null);
+  };
+  const adjustRoomLayout = (
+    scanId: string,
+    change: (transform: SpatialMatrix4) => SpatialMatrix4,
+  ) => {
+    setLayoutDrafts((current) => {
+      if (!current) return current;
+      const transform = current[scanId] ?? effectiveTransforms.get(scanId);
+      return transform ? { ...current, [scanId]: change(transform) } : current;
+    });
+  };
+  const resetAutomaticLayout = () => {
+    const reset = arrangeFloorRooms(floorManifests.map((item) => ({
+      id: item.scan.id,
+      coordinateSpaceId: item.scan.coordinateSpaceId,
+      bounds: item.scan.scene.bounds,
+      worldFromModel: item.scan.scene.worldFromModel,
+      layoutTransform: null,
+    })));
+    setLayoutDrafts(Object.fromEntries(reset.transforms) as Record<string, SpatialMatrix4>);
+  };
+  const saveLayout = async () => {
+    if (!layoutDrafts) return;
+    setSavingLayout(true);
+    setError(null);
+    try {
+      await Promise.all(Object.entries(layoutDrafts).map(([scanId, transform]) =>
+        fetchJson(`/api/v1/room-scans/${encodeURIComponent(scanId)}/layout`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ transform }),
+        }),
+      ));
+      setManifest((current) => current
+        ? {
+            ...current,
+            scan: {
+              ...current.scan,
+              layoutTransform: layoutDrafts[current.scan.id] ?? current.scan.layoutTransform,
+            },
+          }
+        : current);
+      setStructureDetail((current) => current
+        ? {
+            ...current,
+            floors: current.floors.map((floor) => ({
+              ...floor,
+              rooms: floor.rooms.map((room) => room.scan
+                ? {
+                    ...room,
+                    scan: {
+                      ...room.scan,
+                      layoutTransform:
+                        layoutDrafts[room.scan.id] ?? room.scan.layoutTransform,
+                    },
+                  }
+                : room),
+            })),
+          }
+        : current);
+      setLayoutDrafts(null);
+    } catch {
+      setError(t("rooms.errors.saveLayout"));
+    } finally {
+      setSavingLayout(false);
+    }
+  };
 
   const visiblePlacements = useMemo(
-    () => [manifest, ...linkedManifests].flatMap((item) => item?.placements ?? []),
-    [linkedManifests, manifest],
+    () => [visibleManifest, ...linkedManifests].flatMap((item) => item?.placements ?? []),
+    [linkedManifests, visibleManifest],
   );
 
   const placements = useMemo(() => {
@@ -325,7 +461,10 @@ export function RoomSceneBrowser() {
   const selectedPlacement = visiblePlacements.find(
     (placement) => placement.resource.id === selectedResourceId,
   ) ?? null;
-  const modelAsset = manifest?.scan.assets.find((asset) => asset.kind === "model_usdz");
+  const modelAsset = visibleManifest?.scan.assets.find((asset) => asset.kind === "model_usdz");
+  const selectedLayoutManifest = floorManifests.find(
+    (item) => item.scan.id === layoutRoomId,
+  ) ?? null;
 
   if (loadingScans) {
     return (
@@ -460,6 +599,22 @@ export function RoomSceneBrowser() {
               <MapIcon className="size-3.5" aria-hidden="true" /> {t("rooms.structures.viewMap")}
             </Link>
           ) : null}
+          {floorManifests.length > 1 ? (
+            <button
+              type="button"
+              onClick={layoutDrafts ? () => setLayoutDrafts(null) : beginLayout}
+              className={cn(
+                "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-[11px] font-semibold transition",
+                layoutDrafts
+                  ? "border-brand-border bg-brand-soft text-brand-strong"
+                  : "border-border text-muted hover:bg-surface-hover",
+              )}
+              aria-pressed={Boolean(layoutDrafts)}
+            >
+              <Move3d className="size-3.5" aria-hidden="true" />
+              {layoutDrafts ? t("rooms.layout.close") : t("rooms.layout.open")}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -531,9 +686,9 @@ export function RoomSceneBrowser() {
         </aside>
 
         <section className="relative min-h-[430px] overflow-hidden bg-surface-muted">
-          {manifest && !loadingScene ? (
+          {visibleManifest && !loadingScene ? (
             <RoomSceneCanvas
-              manifest={manifest}
+              manifest={visibleManifest}
               linkedManifests={linkedManifests}
               selectedResourceId={selectedResourceId}
               onSelectResource={selectResource}
@@ -548,11 +703,131 @@ export function RoomSceneBrowser() {
             </div>
           )}
 
+          {layoutDrafts && selectedLayoutManifest ? (
+            <div className="absolute right-3 top-14 z-20 w-[min(310px,calc(100%-24px))] rounded-2xl border border-border bg-surface/95 p-3 shadow-xl backdrop-blur">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">
+                    {t("rooms.layout.title")}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted">
+                    {t("rooms.layout.description")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetAutomaticLayout}
+                  className="grid size-8 shrink-0 place-items-center rounded-lg border border-border text-muted hover:text-brand"
+                  title={t("rooms.layout.automatic")}
+                  aria-label={t("rooms.layout.automatic")}
+                >
+                  <Undo2 className="size-3.5" aria-hidden="true" />
+                </button>
+              </div>
+              <select
+                value={selectedLayoutManifest.scan.id}
+                onChange={(event) => setLayoutRoomId(event.target.value)}
+                className="mt-3 h-9 w-full rounded-xl border border-border bg-surface-subtle px-3 text-xs font-semibold text-foreground outline-none focus:border-focus"
+                aria-label={t("rooms.layout.room")}
+              >
+                {floorManifests.map((item) => (
+                  <option key={item.scan.id} value={item.scan.id}>
+                    {item.room.name}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => adjustRoomLayout(selectedLayoutManifest.scan.id, (matrix) =>
+                    rotateRoomTransform(matrix, -Math.PI / 36))}
+                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-border text-[10px] font-semibold text-muted hover:text-brand"
+                >
+                  <RotateCcw className="size-3.5" aria-hidden="true" /> -5°
+                </button>
+                <div className="grid grid-cols-3 gap-1">
+                  <span />
+                  <button
+                    type="button"
+                    onClick={() => adjustRoomLayout(selectedLayoutManifest.scan.id, (matrix) =>
+                      translateRoomTransform(matrix, [0, 0, -0.25]))}
+                    className="grid size-8 place-items-center rounded-lg bg-surface-muted text-muted hover:text-brand"
+                    aria-label={t("rooms.layout.forward")}
+                  >
+                    <ArrowUp className="size-3.5" aria-hidden="true" />
+                  </button>
+                  <span />
+                  <button
+                    type="button"
+                    onClick={() => adjustRoomLayout(selectedLayoutManifest.scan.id, (matrix) =>
+                      translateRoomTransform(matrix, [-0.25, 0, 0]))}
+                    className="grid size-8 place-items-center rounded-lg bg-surface-muted text-muted hover:text-brand"
+                    aria-label={t("rooms.layout.left")}
+                  >
+                    <ArrowLeft className="size-3.5" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => adjustRoomLayout(selectedLayoutManifest.scan.id, (matrix) =>
+                      translateRoomTransform(matrix, [0, 0, 0.25]))}
+                    className="grid size-8 place-items-center rounded-lg bg-surface-muted text-muted hover:text-brand"
+                    aria-label={t("rooms.layout.backward")}
+                  >
+                    <ArrowDown className="size-3.5" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => adjustRoomLayout(selectedLayoutManifest.scan.id, (matrix) =>
+                      translateRoomTransform(matrix, [0.25, 0, 0]))}
+                    className="grid size-8 place-items-center rounded-lg bg-surface-muted text-muted hover:text-brand"
+                    aria-label={t("rooms.layout.right")}
+                  >
+                    <ArrowRight className="size-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => adjustRoomLayout(selectedLayoutManifest.scan.id, (matrix) =>
+                    rotateRoomTransform(matrix, Math.PI / 36))}
+                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-border text-[10px] font-semibold text-muted hover:text-brand"
+                >
+                  +5° <RotateCcw className="size-3.5 scale-x-[-1]" aria-hidden="true" />
+                </button>
+              </div>
+              <p className="mt-2 text-center text-[9px] text-muted">
+                {t("rooms.layout.step")}
+              </p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLayoutDrafts(null)}
+                  disabled={savingLayout}
+                  className="h-9 flex-1 rounded-xl border border-border text-[11px] font-semibold text-muted hover:bg-surface-hover disabled:opacity-50"
+                >
+                  {t("rooms.layout.cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveLayout()}
+                  disabled={savingLayout}
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-solid text-[11px] font-semibold text-on-brand disabled:opacity-50"
+                >
+                  {savingLayout ? (
+                    <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Save className="size-3.5" aria-hidden="true" />
+                  )}
+                  {t("rooms.layout.save")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {selectedPlacement ? (
             <SelectedPlacementCard placement={selectedPlacement} />
           ) : null}
 
-          {manifest && !visiblePlacements.length ? (
+          {visibleManifest && !visiblePlacements.length ? (
             <div className="absolute inset-x-4 bottom-14 mx-auto max-w-md rounded-2xl border border-border bg-surface/90 p-4 text-center shadow-lg backdrop-blur">
               <MapPin className="mx-auto size-5 text-brand" aria-hidden="true" />
               <p className="mt-2 text-sm font-semibold text-foreground">{t("rooms.scene.noItemsTitle")}</p>
@@ -568,12 +843,12 @@ export function RoomSceneBrowser() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="truncate text-base font-semibold text-foreground">
-                  {manifest?.room.name ?? t("rooms.scene.roomFallback")}
+                  {visibleManifest?.room.name ?? t("rooms.scene.roomFallback")}
                 </h2>
-                {manifest ? (
+                {visibleManifest ? (
                   <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted">
                     <CalendarClock className="size-3.5" aria-hidden="true" />
-                    {formatDate(manifest.scan.capturedAt, locale)}
+                    {formatDate(visibleManifest.scan.capturedAt, locale)}
                   </p>
                 ) : null}
               </div>

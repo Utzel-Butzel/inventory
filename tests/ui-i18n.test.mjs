@@ -148,6 +148,7 @@ test("the locale proxy is scoped to the application, not the public website", as
     "/batch/:path*",
     "/labels/:path*",
     "/duplicates/:path*",
+    "/notifications/:path*",
     "/settings/:path*",
     "/share/:path*",
   ];

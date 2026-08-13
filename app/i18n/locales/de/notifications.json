@@ -1,0 +1,18 @@
+{
+  "eyebrow": "Aufmerksamkeitsliste",
+  "title": "Benachrichtigungen",
+  "description": "Ein ruhiges, dedupliziertes Postfach für Inventarereignisse, die Aufmerksamkeit brauchen.",
+  "showAll": "Alle anzeigen",
+  "showUnread": "Nur ungelesene",
+  "markAllRead": "Alle als gelesen",
+  "refresh": "Aktualisieren",
+  "new": "Neu",
+  "emptyTitle": "Nichts erfordert Aufmerksamkeit",
+  "emptyDescription": "Niedrige Bestände, Ablaufdaten, Wartungen und Rückgaben erscheinen hier.",
+  "emptyUnreadTitle": "Keine ungelesenen Hinweise",
+  "emptyUnreadDescription": "Alles erledigt. Wechsle zu allen Benachrichtigungen, um den Verlauf zu sehen.",
+  "errors": {
+    "load": "Benachrichtigungen konnten nicht geladen werden.",
+    "update": "Die Benachrichtigung konnte nicht aktualisiert werden."
+  }
+}

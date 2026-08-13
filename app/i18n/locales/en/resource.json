@@ -74,12 +74,19 @@
     "pendingUpload": "Pending upload",
     "removePending": "Remove pending file",
     "drop": "Drop files here or browse",
-    "formats": "JPG, PNG, WebP, HEIC, MP4, MOV, PDF or USDZ · up to 12 files"
+    "formats": "JPG, PNG, WebP, HEIC, MP4, MOV, PDF or USDZ · up to 12 files",
+    "objectCaptureReady": "Object Capture bundle ready",
+    "objectCaptureReadyDescription": "The photo becomes the item image and the USDZ file remains available as the interactive 3D model.",
+    "objectCaptureReadyDescriptionAi": "The existing AI workflow will identify the item from the selected photo and create a transparent item image. The USDZ file remains the interactive 3D model.",
+    "objectCaptureNeedsImage": "3D model selected",
+    "objectCaptureNeedsImageDescription": "Add at least one clear object photo to create the item image and enable AI identification and background removal."
   },
   "operations": {
     "title": "Operations",
     "description": "Tracking, value and internal notes",
     "serialNumber": "Serial number",
+    "barcode": "Barcode",
+    "barcodePlaceholder": "EAN, UPC or Code 128",
     "sku": "SKU",
     "skuPlaceholder": "TOOL-0042",
     "openingQuantity": "Opening quantity",
@@ -285,6 +292,7 @@
     "cover": "Cover generation failed.",
     "requiredCustomField": "Complete the required custom field “{{label}}”.",
     "nameOrImage": "Add a name or at least one image for AI analysis.",
+    "objectCaptureImageRequired": "Add at least one object photo before saving this 3D model.",
     "translation": "AI translation failed.",
     "save": "Unable to save item.",
     "removeFile": "Unable to remove file.",

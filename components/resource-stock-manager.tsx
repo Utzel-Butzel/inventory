@@ -112,6 +112,9 @@ type StockMovement = {
   createdAt: string;
   createdBy: string | null;
   unitId?: string | null;
+  variantId?: string | null;
+  variantDelta?: number | null;
+  variantBalanceAfter?: number | null;
   assemblyBuildId?: string | null;
   purchaseReceiptId?: string | null;
 };

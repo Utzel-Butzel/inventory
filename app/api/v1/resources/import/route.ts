@@ -25,6 +25,10 @@ import {
   inventoryStructureHttpError,
   synchronizeSpatialContainment,
 } from "@/lib/inventory-structure";
+import {
+  assertResourceIdentifiersAvailable,
+  ResourceIdentifierConflictError,
+} from "@/lib/resource-identifiers";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +45,7 @@ const writableHeaders = [
   "quantity",
   "location",
   "serial_number",
+  "barcode",
   "value_cents",
   "currency",
   "priority",
@@ -55,7 +60,9 @@ const writableHeaders = [
   "notes",
 ] as const;
 
-const readOnlyHeaders = ["id", "created_at", "updated_at"] as const;
+// Export-only data is accepted so a CSV produced by this app remains a valid
+// import source. It is deliberately ignored while new parent items are created.
+const readOnlyHeaders = ["id", "created_at", "updated_at", "variants"] as const;
 const supportedHeaders = new Set<string>([
   ...writableHeaders,
   ...readOnlyHeaders,
@@ -318,6 +325,7 @@ function payloadFromRow(
     ["sku", "sku"],
     ["location", "location"],
     ["serial_number", "serialNumber"],
+    ["barcode", "barcode"],
   ] as const) {
     if (has(header)) payload[property] = get(header).trim() ? get(header) : null;
   }
@@ -619,6 +627,7 @@ export async function POST(request: Request) {
       }
 
       await assertActiveInventoryType(parsed.data.type);
+      await assertResourceIdentifiersAvailable(parsed.data);
       const customFields = await validateCustomFieldValues({
         entityType: "inventory",
         target: {
@@ -640,6 +649,7 @@ export async function POST(request: Request) {
         values,
         idempotencyKey: rowIdempotencyKey,
         requestHash,
+        actor: authorization.identity.subject,
       });
       results.push({
         line: row.line,
@@ -676,6 +686,14 @@ export async function POST(request: Request) {
           status: "error",
           error:
             "This import key was already used with different data. Select the file again to start a new import.",
+        });
+        continue;
+      }
+      if (error instanceof ResourceIdentifierConflictError) {
+        results.push({
+          line: row.line,
+          status: "error",
+          error: `${error.message} Existing items are never overwritten by CSV import.`,
         });
         continue;
       }

@@ -21,8 +21,8 @@
     },
     "data": {
       "title": "Data transfer",
-      "metaDescription": "Import inventory from CSV or export workspace data.",
-      "description": "Move inventory data into or out of this workspace with a validated CSV workflow."
+      "metaDescription": "Import inventory from CSV or export it as CSV, Excel, and PDF.",
+      "description": "Move inventory data into this workspace with validated CSV import, or export it as CSV, Excel, or PDF."
     },
     "inventoryTypes": {
       "title": "Inventory types",
@@ -43,7 +43,274 @@
       "title": "Public sharing",
       "metaDescription": "Create and manage public links for inventory.",
       "description": "Publish all inventory, a custom-field filtered view, or one item through a revocable public link."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "metaDescription": "Configure quiet inventory notifications and digests.",
+      "description": "Choose attention events, thresholds, digest timing, and optional external delivery channels. The in-app inbox is always available."
+    },
+    "webhooks": {
+      "title": "Webhooks",
+      "metaDescription": "Connect inventory events to external systems with signed webhooks.",
+      "description": "Send signed inventory events to your own HTTPS endpoints, test integrations, and review delivery health."
     }
+  },
+  "notifications": {
+    "events": {
+      "title": "Events to watch",
+      "description": "Selected events enter the in-app inbox after threshold and cooldown checks.",
+      "low_stock": {
+        "label": "Low stock",
+        "description": "Notify when on-hand quantity reaches the configured share of minimum stock."
+      },
+      "expiry": {
+        "label": "Expiry",
+        "description": "Watch a date-valued custom field for upcoming or overdue expiry."
+      },
+      "maintenance": {
+        "label": "Maintenance",
+        "description": "Watch maintenance status and a configurable maintenance due-date field."
+      },
+      "return_due": {
+        "label": "Return due",
+        "description": "Notify before an active checkout, assignment, or reservation is due."
+      }
+    },
+    "noise": {
+      "title": "Cadence and noise control",
+      "description": "Daily digests and a 24-hour cooldown are the calm defaults. Immediate delivery still respects deduplication.",
+      "frequency": "External delivery",
+      "daily": "Daily digest (recommended)",
+      "immediate": "Immediate",
+      "digestHour": "Digest hour · 0–23",
+      "timezone": "IANA timezone",
+      "language": "Notification language",
+      "cooldown": "Cooldown · hours"
+    },
+    "thresholds": {
+      "lowStock": "Low-stock threshold · % of minimum",
+      "expiryWindow": "Expiry window · days",
+      "maintenanceWindow": "Maintenance window · days",
+      "returnWindow": "Return window · days",
+      "expiryField": "Expiry custom-field key",
+      "maintenanceField": "Maintenance custom-field key"
+    },
+    "channels": {
+      "title": "Delivery channels",
+      "description": "External channels are off until you explicitly enable them. Their destinations are deployment-managed and redacted here.",
+      "optIn": "Opt-in",
+      "alwaysOn": "Always on",
+      "configured": "Configured",
+      "notConfigured": "Not configured",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "inApp": {
+        "label": "In-app inbox",
+        "description": "Always receives deduplicated events; no external delivery required."
+      },
+      "email": {
+        "label": "Email",
+        "description": "Delivered to your signed-in email address."
+      },
+      "push": {
+        "label": "Web Push",
+        "description": "Subscribe this browser through the encrypted Push API flow."
+      },
+      "slack": {
+        "label": "Slack",
+        "description": "Deployment-wide incoming webhook."
+      },
+      "teams": {
+        "label": "Microsoft Teams",
+        "description": "Deployment-wide workflow webhook."
+      },
+      "webhook": {
+        "label": "Generic webhook",
+        "description": "Deployment-wide signed JSON endpoint."
+      }
+    },
+    "actions": {
+      "save": "Save settings",
+      "retry": "Try again",
+      "preview": "Preview only",
+      "enable": "Enable",
+      "disable": "Disable"
+    },
+    "notices": {
+      "saved": "Notification settings saved.",
+      "pushEnabled": "Web Push enabled for this browser.",
+      "pushDisabled": "Web Push disabled for this browser.",
+      "previewOnly": "Preview generated locally on the server. No message was sent."
+    },
+    "errors": {
+      "load": "Notification settings could not be loaded.",
+      "save": "Notification settings could not be saved.",
+      "preview": "The channel preview could not be generated.",
+      "pushUnsupported": "This browser does not support Web Push.",
+      "pushDenied": "Browser notification permission was not granted.",
+      "pushSubscribe": "This browser could not be subscribed to Web Push.",
+      "pushUnsubscribe": "This browser could not be unsubscribed from Web Push."
+    },
+    "unsaved": "Unsaved changes",
+    "savedState": "All changes saved"
+  },
+  "webhooks": {
+    "list": {
+      "title": "Integration webhooks",
+      "description": "Each endpoint receives a signed JSON request for the inventory events you select.",
+      "activeCount_one": "{{count}} active",
+      "activeCount_other": "{{count}} active",
+      "loading": "Loading webhooks",
+      "emptyTitle": "No webhooks yet",
+      "emptyDescription": "Create an endpoint to send inventory changes to another service in real time."
+    },
+    "form": {
+      "createTitle": "Create a webhook",
+      "createDescription": "Choose a destination and the events this integration should receive.",
+      "editTitle": "Edit webhook",
+      "editDescription": "Change its name, events, state, or replace the destination URL.",
+      "name": "Integration name",
+      "namePlaceholder": "Warehouse automation",
+      "nameHint": "Use a name that makes the receiving system easy to recognize.",
+      "url": "Endpoint URL",
+      "urlPlaceholder": "https://automation.example.com/hooks/inventory",
+      "urlEditPlaceholder": "Leave blank to keep the current URL",
+      "urlHint": "Use an HTTPS URL controlled by the receiving integration.",
+      "currentTarget": "Current target: {{target}}. Leave blank to keep it.",
+      "events": "Delivered events",
+      "eventsHint": "Select at least one event. You can change this set later.",
+      "enabled": "Enable immediately",
+      "enabledHint": "Disabled endpoints retain their configuration but receive no new deliveries."
+    },
+    "events": {
+      "inventory": {
+        "resource": {
+          "created": {
+            "label": "Item created",
+            "description": "A new inventory item was added."
+          },
+          "updated": {
+            "label": "Item updated",
+            "description": "Fields or metadata on an item changed."
+          },
+          "deleted": {
+            "label": "Item deleted",
+            "description": "An inventory item was permanently removed."
+          },
+          "merged": {
+            "label": "Items merged",
+            "description": "A duplicate was merged into another item."
+          }
+        },
+        "stock": {
+          "movement": {
+            "created": {
+              "label": "Stock movement",
+              "description": "Stock was received, issued, transferred, or adjusted."
+            }
+          }
+        },
+        "webhook": {
+          "test": {
+            "label": "Webhook test",
+            "description": "A manually requested connectivity test."
+          }
+        }
+      }
+    },
+    "secret": {
+      "eyebrow": "Shown once",
+      "title": "Signing secret for {{name}}",
+      "description": "Copy this secret now and store it in the receiving service's secret vault. It cannot be displayed again after you dismiss it.",
+      "copy": "Copy secret",
+      "copied": "Copied",
+      "dismiss": "Dismiss signing secret"
+    },
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "failureCount_one": "{{count}} consecutive failure",
+      "failureCount_other": "{{count}} consecutive failures"
+    },
+    "health": {
+      "lastSuccess": "Last success",
+      "lastFailure": "Last failure",
+      "created": "Created",
+      "never": "No delivery yet",
+      "unknown": "Unknown"
+    },
+    "actions": {
+      "create": "Create webhook",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "close": "Close editor",
+      "refresh": "Refresh webhooks",
+      "edit": "Edit",
+      "test": "Send test",
+      "deliveries": "Deliveries",
+      "retryDelivery": "Retry delivery",
+      "rotate": "Rotate secret",
+      "delete": "Delete",
+      "enable": "Enable",
+      "disable": "Disable",
+      "confirmRotate": "Rotate secret",
+      "confirmDelete": "Delete webhook",
+      "dismissError": "Dismiss error",
+      "dismissNotice": "Dismiss message"
+    },
+    "confirm": {
+      "rotateTitle": "Replace the signing secret?",
+      "rotateDescription": "New deliveries for {{name}} will use the new secret. Already queued deliveries keep their previous secret. Accept both during the transition.",
+      "deleteTitle": "Delete this webhook?",
+      "deleteDescription": "{{name}} will stop receiving events and disappear from settings. Delivery records remain available until the configured retention period expires."
+    },
+    "deliveries": {
+      "title": "Recent deliveries",
+      "description": "Latest attempts, response codes, and scheduled retries for this endpoint.",
+      "refresh": "Refresh deliveries",
+      "emptyTitle": "No delivery attempts",
+      "emptyDescription": "Send a test or wait for a selected inventory event.",
+      "unknownEvent": "Unknown event",
+      "httpStatus": "HTTP status",
+      "attempts_one": "{{count}} attempt",
+      "attempts_other": "{{count}} attempts",
+      "nextAttempt": "Next attempt {{date}}",
+      "status": {
+        "succeeded": "Delivered",
+        "processing": "Delivering",
+        "retrying": "Retrying",
+        "failed": "Failed",
+        "pending": "Pending"
+      }
+    },
+    "notices": {
+      "created": "Webhook “{{name}}” created.",
+      "updated": "Webhook “{{name}}” updated.",
+      "enabled": "Webhook “{{name}}” enabled.",
+      "disabled": "Webhook “{{name}}” disabled.",
+      "tested": "Test delivery for “{{name}}” queued.",
+      "retried": "Failed delivery for “{{name}}” queued again.",
+      "rotated": "Signing secret for “{{name}}” rotated.",
+      "deleted": "Webhook “{{name}}” deleted."
+    },
+    "errors": {
+      "load": "Webhooks could not be loaded.",
+      "nameRequired": "Give this webhook a recognizable name.",
+      "urlRequired": "Enter the receiving endpoint URL.",
+      "urlInvalid": "Enter a valid HTTPS endpoint URL.",
+      "eventsRequired": "Select at least one event to deliver.",
+      "create": "The webhook could not be created.",
+      "update": "The webhook could not be updated.",
+      "toggle": "The webhook state could not be changed.",
+      "test": "The test delivery failed.",
+      "retry": "The failed delivery could not be queued again.",
+      "rotate": "The signing secret could not be rotated.",
+      "delete": "The webhook could not be deleted.",
+      "deliveries": "Delivery history could not be loaded.",
+      "clipboard": "Clipboard access was blocked. Select and copy the secret manually."
+    },
+    "securityNote": "Signing secrets are only shown after creation or rotation. Verify every incoming signature before processing its payload, and use delivery event IDs for idempotency."
   },
   "sharing": {
     "create": {
@@ -448,7 +715,7 @@
       "inventory_update": { "label": "Update items", "description": "Edit item fields, media, relations, and bills of materials." },
       "inventory_delete": { "label": "Delete items", "description": "Permanently delete or merge inventory items." },
       "inventory_import": { "label": "Import data", "description": "Create and update items from CSV files." },
-      "inventory_export": { "label": "Export data", "description": "Download the inventory as CSV." },
+      "inventory_export": { "label": "Export data", "description": "Download the inventory as CSV, Excel, or PDF." },
       "stock_read": { "label": "View stock", "description": "View balances, movements, units, and locations." },
       "stock_manage": { "label": "Manage stock", "description": "Change balances, units, locations, and builds." },
       "assignments_read": { "label": "View assignments", "description": "View checkouts, reservations, and assignments." },
@@ -471,7 +738,8 @@
       "roles_manage": { "label": "Manage access", "description": "Create roles and conditional inventory access rules." },
       "sharing_manage": { "label": "Manage public sharing", "description": "Create and revoke public inventory links." },
       "tokens_manage": { "label": "Manage API tokens", "description": "Create and revoke workspace API credentials." },
-      "tokens_delegate": { "label": "Delegate token access", "description": "Create API tokens whose scopes may exceed the creator's own permissions." }
+      "tokens_delegate": { "label": "Delegate token access", "description": "Create API tokens whose scopes may exceed the creator's own permissions." },
+      "webhooks_manage": { "label": "Manage webhooks", "description": "Export workspace inventory events to external endpoints and manage signing secrets and retries." }
     },
     "fields": {
       "id": "ID",
@@ -667,10 +935,17 @@
     }
   },
   "csv": {
-    "title": "CSV import and export",
-    "description": "Export a safe spreadsheet, or preview up to 1,000 new inventory items before importing.",
-    "exportOnlyDescription": "Export the current inventory as a spreadsheet.",
-    "export": "Export CSV",
+    "title": "Inventory import and export",
+    "description": "Export inventory as CSV, Excel, or PDF, or preview up to 1,000 new inventory items before importing CSV.",
+    "exportOnlyDescription": "Export the current inventory as CSV, Excel, or PDF.",
+    "export": "Export",
+    "exporting": "Preparing {{format}}…",
+    "exportFormats": "Export formats",
+    "formats": {
+      "csv": { "label": "CSV data", "description": "Import-compatible UTF-8 data with all fields." },
+      "xlsx": { "label": "Excel workbook", "description": "Formatted workbook with filters, frozen headers, and typed cells." },
+      "pdf": { "label": "PDF report", "description": "Compact printable inventory overview with page numbers." }
+    },
     "chooseFile": "Choose a UTF-8 CSV file",
     "fileHint": "Use the exported headers; id and timestamps are ignored on import.",
     "reset": "Reset",
