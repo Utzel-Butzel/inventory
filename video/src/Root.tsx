@@ -19,8 +19,8 @@ export const RemotionRoot: React.FC = () => {
       defaultProps={
         {
           brandName: "Open Inventory",
-          tagline: "Take a photo. AI builds the record.",
-          badges: ["AI-native", "Self-hosted", "MIT licensed", "Native iOS"],
+          tagline: "Inventarisieren in Sekunden.",
+          badges: ["MIT Open Source", "Self-hosted", "Native iOS", "Offene API"],
         } satisfies OpenInventoryIntroProps
       }
     />

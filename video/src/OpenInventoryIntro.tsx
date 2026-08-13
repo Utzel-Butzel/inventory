@@ -370,7 +370,7 @@ const BrandHook = ({ brandName }: Pick<OpenInventoryIntroProps, "brandName">) =>
             color: colors.muted,
           }}
         >
-          AI-native inventory · open source
+          Inventar in Sekunden · MIT Open Source
         </div>
       </div>
     </Scene>
@@ -403,7 +403,7 @@ const CaptureScene = () => {
         }}
       >
         <Reveal frame={frame} from={0}>
-          <Eyebrow>One photo · one reviewable record</Eyebrow>
+          <Eyebrow>Ein Foto · ein prüfbarer Eintrag</Eyebrow>
         </Reveal>
         <Reveal frame={frame} from={10} distance={70}>
           <div
@@ -415,7 +415,7 @@ const CaptureScene = () => {
               fontWeight: 650,
             }}
           >
-            Take a photo.
+            Foto aufnehmen.
             <span
               style={{
                 display: "block",
@@ -423,7 +423,7 @@ const CaptureScene = () => {
                 color: colors.violetBright,
               }}
             >
-              AI builds the record.
+              Vorschlag prüfen.
             </span>
           </div>
         </Reveal>
@@ -438,19 +438,19 @@ const CaptureScene = () => {
               letterSpacing: "-0.018em",
             }}
           >
-            Recognize the item, create a clean cover, and review the structured
-            details.
+            Name, Typ, Tags und Details entstehen als Entwurf. Du entscheidest,
+            was gespeichert wird.
           </div>
         </Reveal>
         <div style={{ display: "flex", gap: 12, marginTop: 38 }}>
-          <Pill label="Recognize" frame={frame} delay={50} />
+          <Pill label="Erfassen" frame={frame} delay={50} />
           <Pill
-            label="Generate"
+            label="Prüfen"
             frame={frame}
             delay={59}
             accent={colors.violetBright}
           />
-          <Pill label="Count" frame={frame} delay={68} accent="#f2b86b" />
+          <Pill label="Speichern" frame={frame} delay={68} accent="#f2b86b" />
         </div>
       </div>
 
@@ -479,15 +479,14 @@ const CaptureScene = () => {
           }}
         >
           <Img
-            src={staticFile("marketing/og-open-inventory-ai.png")}
+            src={staticFile("marketing/usecase-makerspace.png")}
             style={{
               position: "absolute",
-              height: 720,
-              width: 1371,
-              maxWidth: "none",
-              left: -510,
-              top: 0,
+              inset: 0,
+              height: "100%",
+              width: "100%",
               objectFit: "cover",
+              objectPosition: "51% center",
             }}
           />
           <div
@@ -528,7 +527,7 @@ const CaptureScene = () => {
             boxShadow: "0 14px 36px rgba(0,0,0,0.26)",
           }}
         >
-          Ready to review
+          Bereit zur Prüfung
         </div>
       </div>
       <AbsoluteFill
@@ -572,7 +571,7 @@ const ProductProofScene = () => {
           zIndex: 5,
         }}
       >
-        <Eyebrow>Modern inventory · every movement traced</Eyebrow>
+        <Eyebrow>Konkrete Daten · jede Bewegung nachvollziehbar</Eyebrow>
         <div
           style={{
             marginTop: 16,
@@ -581,7 +580,7 @@ const ProductProofScene = () => {
             letterSpacing: "-0.06em",
           }}
         >
-          Scan it. Move it. <span style={{ color: colors.mint }}>Find it.</span>
+          Scannen. Buchen. <span style={{ color: colors.mint }}>Wiederfinden.</span>
         </div>
       </div>
 
@@ -613,7 +612,7 @@ const ProductProofScene = () => {
           }}
         >
           <Img
-            src={staticFile("marketing/stock-management.png")}
+            src={staticFile("marketing/inventory-mock-data.jpg")}
             style={{
               width: "100%",
               height: "auto",
@@ -652,7 +651,7 @@ const ProductProofScene = () => {
           }}
         >
           <Img
-            src={staticFile("marketing/mobile-orders.png")}
+            src={staticFile("marketing/mobile-inventory.jpg")}
             style={{ width: "100%", height: "auto", display: "block" }}
           />
         </div>
@@ -682,8 +681,8 @@ const ProductProofScene = () => {
         }}
       >
         {[
-          ["Bulk + serialized", colors.violetBright],
-          ["Web + native iOS", colors.mint],
+          ["Bulk + serialisiert", colors.violetBright],
+          ["Web + mobil", colors.mint],
         ].map(([label, accent]) => (
           <div
             key={label}
@@ -715,7 +714,7 @@ const EndCard = ({
   badges,
 }: OpenInventoryIntroProps) => {
   const frame = useCurrentFrame();
-  const opacity = sceneOpacity(frame, 22);
+  const opacity = sceneOpacity(frame, 22, 86, 104);
   const card = progress(frame, 0, 28);
   const text = progress(frame, 12, 38);
   const badgeProgress = progress(frame, 28, 60);
@@ -724,7 +723,7 @@ const EndCard = ({
     extrapolateRight: "clamp",
     easing: Easing.inOut(Easing.sin),
   });
-  const emphasizedTagline = "AI builds the record.";
+  const emphasizedTagline = "in Sekunden.";
   const taglineLead = tagline.endsWith(emphasizedTagline)
     ? tagline.slice(0, -emphasizedTagline.length).trim()
     : tagline;
@@ -827,7 +826,7 @@ const EndCard = ({
         }}
       >
         <Img
-          src={staticFile("marketing/ios-app-icon.png")}
+          src={staticFile("marketing/ios-app-icon-current.png")}
           style={{
             width: "100%",
             height: "100%",
@@ -864,7 +863,7 @@ const EndCard = ({
           textTransform: "uppercase",
         }}
       >
-        Everything, findable.
+        Alles wiederfindbar.
       </div>
     </Scene>
   );
