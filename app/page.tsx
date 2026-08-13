@@ -121,8 +121,6 @@ export default function HomePage() {
       <MarketingHeader />
 
       <main>
-        <HeroVideo />
-
         <section className="relative overflow-hidden border-b border-border">
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] bg-[size:56px_56px] opacity-55 [mask-image:linear-gradient(to_bottom,black,transparent_86%)]" />
           <div className="pointer-events-none absolute left-[2%] top-24 size-[340px] rounded-full bg-[#8ff0cc]/30 blur-[110px]" />
@@ -202,6 +200,8 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        <HeroVideo />
 
         <section className="overflow-hidden bg-[#121318] py-20 text-white sm:py-28">
           <div className="mx-auto max-w-[1240px] px-5 sm:px-8">
