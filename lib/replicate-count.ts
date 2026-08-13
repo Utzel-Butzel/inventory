@@ -165,7 +165,7 @@ async function maskCentroid(maskUrl: string) {
   }
   const bytes = Buffer.concat(chunks, total);
   const { data, info } = await sharp(bytes, {
-    failOnError: true,
+    failOn: "warning",
     limitInputPixels: 64_000_000,
   })
     .greyscale()

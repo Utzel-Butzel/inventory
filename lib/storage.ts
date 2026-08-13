@@ -95,7 +95,7 @@ export const assertStorageSupportsMediaType = (mimeType: string) => {
 const imageMetadata = async (bytes: Buffer, mimeType: string) => {
   if (!mimeType.startsWith("image/")) return { width: null, height: null };
   try {
-    const metadata = await sharp(bytes, { failOnError: false }).metadata();
+    const metadata = await sharp(bytes, { failOn: "none" }).metadata();
     return { width: metadata.width ?? null, height: metadata.height ?? null };
   } catch {
     return { width: null, height: null };

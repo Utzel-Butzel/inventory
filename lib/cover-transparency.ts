@@ -270,7 +270,7 @@ export function extractGreenScreenPixels(
 }
 
 const rgbaSquare = (bytes: Buffer) =>
-  sharp(bytes, { failOnError: false })
+  sharp(bytes, { failOn: "none" })
     .rotate()
     .resize({ width: outputSize, height: outputSize, fit: "cover" })
     .ensureAlpha()

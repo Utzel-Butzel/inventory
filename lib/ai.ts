@@ -451,7 +451,7 @@ async function prepareInventoryVisionImage(
   if (!source.length) throw new Error("The image is empty.");
 
   const image = sharp(source, {
-    failOnError: true,
+    failOn: "warning",
     limitInputPixels: maximumCountInputPixels,
   });
   const metadata = await image.metadata();
@@ -523,7 +523,7 @@ async function generateEditedImage(options: {
   prompt: string;
   imageModel: ImageGenerationModel;
 }) {
-  const normalized = await sharp(options.source, { failOnError: false })
+  const normalized = await sharp(options.source, { failOn: "none" })
     .rotate()
     .resize({
       width: 1024,
@@ -603,7 +603,7 @@ export async function generateCoverImage(options: {
       prompt: options.prompt,
       imageModel: options.imageModel,
     });
-    generatedBytes = await sharp(opaqueImage, { failOnError: false })
+    generatedBytes = await sharp(opaqueImage, { failOn: "none" })
       .resize({ width: 1024, height: 1024, fit: "cover" })
       .jpeg({ quality: 90, mozjpeg: true })
       .toBuffer();
