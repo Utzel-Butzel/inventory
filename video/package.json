@@ -22,8 +22,8 @@
   "scripts": {
     "dev": "remotion studio",
     "build": "remotion bundle",
-    "render": "remotion render OpenInventoryIntro out/open-inventory-intro.mp4 --codec=h264 --crf=18",
-    "still": "remotion still OpenInventoryIntro out/open-inventory-intro-preview.png --frame=405 --scale=0.5",
+    "render": "remotion render OpenInventoryIntro out/open-inventory-intro.mp4 --codec=h264 --crf=21 --muted",
+    "still": "remotion still OpenInventoryIntro out/open-inventory-intro-preview.png --frame=285 --scale=1",
     "upgrade": "remotion upgrade",
     "lint": "eslint src && tsc"
   },

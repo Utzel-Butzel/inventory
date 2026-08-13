@@ -13,34 +13,34 @@ export async function generateMetadata(): Promise<Metadata> {
   const fallback = process.env.AUTH_URL ?? "http://localhost:3000";
   const metadataBase = new URL(host ? `${protocol}://${host}` : fallback);
   const description =
-    "AI-native inventory that turns a photo into a structured record and a clean product cover. MIT licensed, self-hosted, with a native iOS app in the repository.";
+    "Inventarisieren in Sekunden statt Stunden: Foto aufnehmen, KI-Vorschlag prüfen und speichern. MIT Open Source, selbst hostbar und mit nativer iOS-App.";
 
   return {
     metadataBase,
     title: {
-      default: "Open Inventory",
+      default: "Open Inventory — Inventarisieren in Sekunden",
       template: "%s · Open Inventory",
     },
     description,
     applicationName: "Open Inventory",
     openGraph: {
       type: "website",
-      title: "Open Inventory — Take a photo. AI builds the record.",
+      title: "Open Inventory — Inventarisieren in Sekunden statt Stunden",
       description,
       images: [
         {
-          url: "/marketing/og-open-inventory-ai.png",
-          width: 1200,
-          height: 630,
-          alt: "Open Inventory — Take a photo. AI builds the record.",
+          url: "/og.png",
+          width: 1731,
+          height: 909,
+          alt: "Open Inventory — Inventarisieren in Sekunden statt Stunden",
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Open Inventory — Take a photo. AI builds the record.",
+      title: "Open Inventory — Inventarisieren in Sekunden statt Stunden",
       description,
-      images: ["/marketing/og-open-inventory-ai.png"],
+      images: ["/og.png"],
     },
   };
 }
