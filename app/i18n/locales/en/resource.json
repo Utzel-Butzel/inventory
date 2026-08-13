@@ -107,6 +107,8 @@
     "safety": "AI runs only after the original files are safely stored. You can always edit the result.",
     "rewrite": "Analyze & rewrite fields",
     "coverDirection": "Cover direction",
+    "referenceImage": "Reference image",
+    "referenceImageDescription": "Choose which image the cover should be based on.",
     "transparentBackground": "Transparent background",
     "transparentBackgroundDescription": "Extract the generated cover as a transparent PNG.",
     "transparencyMethod": "Transparency method",

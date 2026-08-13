@@ -52,6 +52,12 @@ export async function PUT(request: Request, context: Context) {
   if (result.kind === "resource-not-found") {
     return Response.json({ error: "Inventory item not found." }, { status: 404 });
   }
+  if (result.kind === "keyframe-not-found") {
+    return Response.json(
+      { error: "The matched camera keyframe does not belong to this room scan." },
+      { status: 422 },
+    );
+  }
   if (result.kind === "scan-superseded") {
     return Response.json(
       { error: "This room scan was replaced. Relocalize against the active scan." },

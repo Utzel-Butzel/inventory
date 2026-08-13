@@ -214,6 +214,26 @@
       "multiple_one": "3D-Modell von {{room}} und {{value}} verknüpftem Raum",
       "multiple_other": "3D-Modell von {{room}} und {{value}} verknüpften Räumen"
     },
+    "visualMode": "Raumdarstellung",
+    "modes": {
+      "roomplan": "RoomPlan",
+      "textured": "Texturiert",
+      "splat": "Foto-Splat"
+    },
+    "asset": {
+      "loading": "Fotorealistische Ansicht wird geladen…",
+      "failed": "Fotorealistisches Asset nicht verfügbar – RoomPlan bleibt sichtbar",
+      "tooLarge": "Asset ist für den Browser zu groß – RoomPlan bleibt sichtbar"
+    },
+    "keyframes": {
+      "toggle_one": "{{value}} Kamera",
+      "toggle_other": "{{value}} Kameras",
+      "select": "Referenzfoto auswählen",
+      "option": "Foto {{index}} · {{quality}} %",
+      "imageAlt": "Kamera-Referenzfoto für {{room}}",
+      "quality": "{{value}} % Qualität",
+      "close": "Referenzfoto schließen"
+    },
     "topView": "Draufsicht",
     "resetView": "Ansicht zurücksetzen",
     "controlsHint": "Ziehen: drehen · zwei Finger: verschieben · scrollen: zoomen"

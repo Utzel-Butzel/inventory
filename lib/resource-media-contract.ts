@@ -74,14 +74,6 @@ export const validateResourceMediaUpload = (
   return { valid: true };
 };
 
-/** USDZ is an uncompressed ZIP package and starts with a local ZIP file header. */
-export const hasUsdzFileSignature = (bytes: Uint8Array) =>
-  bytes.length >= 4 &&
-  bytes[0] === 0x50 &&
-  bytes[1] === 0x4b &&
-  bytes[2] === 0x03 &&
-  bytes[3] === 0x04;
-
 export const isInlinePublicMediaType = (mimeType: string) =>
   (mimeType.startsWith("image/") && mimeType !== "image/svg+xml") ||
   isUsdzMediaType(mimeType);

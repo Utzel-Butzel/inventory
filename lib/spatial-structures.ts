@@ -7,6 +7,7 @@ import {
   resources,
   resourceSpatialPlacements,
   roomScanAssets,
+  roomScanKeyframes,
   roomScans,
   spatialCoordinateSpaces,
   spatialStructures,
@@ -157,7 +158,7 @@ export async function getSpatialStructure(structureId: string) {
   ]);
 
   const scanIds = scanRows.map(({ scan }) => scan.id);
-  const [assetRows, placementRows] = scanIds.length
+  const [assetRows, keyframeRows, placementRows] = scanIds.length
     ? await Promise.all([
         db
           .select()
@@ -165,13 +166,18 @@ export async function getSpatialStructure(structureId: string) {
           .where(inArray(roomScanAssets.roomScanId, scanIds))
           .orderBy(asc(roomScanAssets.kind)),
         db
+          .select()
+          .from(roomScanKeyframes)
+          .where(inArray(roomScanKeyframes.roomScanId, scanIds))
+          .orderBy(asc(roomScanKeyframes.frameTimestamp)),
+        db
           .select({ placement: resourceSpatialPlacements, resource: resources })
           .from(resourceSpatialPlacements)
           .innerJoin(resources, eq(resources.id, resourceSpatialPlacements.resourceId))
           .where(inArray(resourceSpatialPlacements.roomScanId, scanIds))
           .orderBy(asc(resources.name)),
       ])
-    : [[], []];
+    : [[], [], []];
   const placementResourceIds = [
     ...new Set(placementRows.map(({ resource }) => resource.id)),
   ];
@@ -190,6 +196,7 @@ export async function getSpatialStructure(structureId: string) {
   const scenes = assembleRoomSceneManifests(
     scanRows,
     assetRows,
+    keyframeRows,
     placementRows,
     coverRows,
   );

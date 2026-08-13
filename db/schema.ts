@@ -32,6 +32,10 @@ import {
 } from "@/lib/custom-field-contract";
 import type { LabelElement } from "@/lib/label-setup-contract";
 import type { RoomScene } from "@/lib/room-scene-contract";
+import type {
+  RoomCameraIntrinsics,
+  RoomKeyframeFeatureDescriptor,
+} from "@/lib/room-keyframe-contract";
 import type { SpatialGeoreference } from "@/lib/spatial-structure-contract";
 import type {
   AccessRuleCondition,
@@ -221,6 +225,8 @@ export const roomScanAssetKinds = [
   "model_usdz",
   "structure_model",
   "guide_image",
+  "textured_mesh",
+  "gaussian_splat",
 ] as const;
 export type RoomScanAssetKind = (typeof roomScanAssetKinds)[number];
 
@@ -742,9 +748,66 @@ export const roomScanAssets = pgTable(
     index("room_scan_assets_scan_idx").on(table.roomScanId),
     check(
       "room_scan_assets_kind_check",
-      sql`${table.kind} in ('world_map', 'model_usdz', 'structure_model', 'guide_image')`,
+      sql`${table.kind} in ('world_map', 'model_usdz', 'structure_model', 'guide_image', 'textured_mesh', 'gaussian_splat')`,
     ),
     check("room_scan_assets_size_nonnegative", sql`${table.size} >= 0`),
+  ],
+);
+
+export const roomScanKeyframes = pgTable(
+  "room_scan_keyframes",
+  {
+    id: uuid("id").primaryKey(),
+    roomScanId: uuid("room_scan_id")
+      .notNull()
+      .references(() => roomScans.id, { onDelete: "cascade" }),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+    frameTimestamp: doublePrecision("frame_timestamp").notNull(),
+    cameraTransform: jsonb("camera_transform").$type<number[]>().notNull(),
+    intrinsics: jsonb("intrinsics").$type<RoomCameraIntrinsics>().notNull(),
+    imageWidth: integer("image_width").notNull(),
+    imageHeight: integer("image_height").notNull(),
+    orientation: varchar("orientation", { length: 24 }).notNull(),
+    quality: doublePrecision("quality").notNull(),
+    featureDescriptor: jsonb("feature_descriptor")
+      .$type<RoomKeyframeFeatureDescriptor | null>(),
+    storageKey: text("storage_key").notNull(),
+    storageUrl: text("storage_url").notNull(),
+    name: varchar("name", { length: 280 }).notNull(),
+    mimeType: varchar("mime_type", { length: 160 }).notNull(),
+    size: integer("size").notNull(),
+    checksumSha256: varchar("checksum_sha256", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("room_scan_keyframes_scan_time_idx").on(
+      table.roomScanId,
+      table.frameTimestamp,
+    ),
+    check("room_scan_keyframes_timestamp_nonnegative", sql`${table.frameTimestamp} >= 0`),
+    check(
+      "room_scan_keyframes_dimensions_range",
+      sql`${table.imageWidth} between 1 and 4096 and ${table.imageHeight} between 1 and 4096`,
+    ),
+    check(
+      "room_scan_keyframes_orientation_check",
+      sql`${table.orientation} in ('up', 'up-mirrored', 'down', 'down-mirrored', 'left-mirrored', 'right', 'right-mirrored', 'left')`,
+    ),
+    check(
+      "room_scan_keyframes_quality_range",
+      sql`${table.quality} between 0 and 1`,
+    ),
+    check(
+      "room_scan_keyframes_camera_transform_array",
+      sql`jsonb_typeof(${table.cameraTransform}) = 'array' and jsonb_array_length(${table.cameraTransform}) = 16`,
+    ),
+    check(
+      "room_scan_keyframes_intrinsics_array",
+      sql`jsonb_typeof(${table.intrinsics}) = 'array' and jsonb_array_length(${table.intrinsics}) = 9`,
+    ),
+    check("room_scan_keyframes_size_positive", sql`${table.size} > 0`),
   ],
 );
 
@@ -773,6 +836,12 @@ export const resourceSpatialPlacements = pgTable(
       .$type<SpatialPlacementMethod>()
       .notNull(),
     anchorIdentifier: uuid("anchor_identifier"),
+    localizationEvidence: jsonb("localization_evidence").$type<{
+      matchedKeyframeId: string;
+      distance: number;
+      confidence: number;
+      cameraPositionError?: number;
+    }>(),
     capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
     updatedBy: varchar("updated_by", { length: 320 }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -800,6 +869,10 @@ export const resourceSpatialPlacements = pgTable(
     check(
       "resource_spatial_placements_extent_nonnegative",
       sql`(${table.extentX} is null or ${table.extentX} between 0 and 100) and (${table.extentY} is null or ${table.extentY} between 0 and 100) and (${table.extentZ} is null or ${table.extentZ} between 0 and 100)`,
+    ),
+    check(
+      "resource_spatial_placements_localization_evidence_object",
+      sql`${table.localizationEvidence} is null or jsonb_typeof(${table.localizationEvidence}) = 'object'`,
     ),
   ],
 );
@@ -2063,5 +2136,6 @@ export type InventoryAccessRuleRecord =
   typeof inventoryAccessRules.$inferSelect;
 export type RoomScanRecord = typeof roomScans.$inferSelect;
 export type RoomScanAssetRecord = typeof roomScanAssets.$inferSelect;
+export type RoomScanKeyframeRecord = typeof roomScanKeyframes.$inferSelect;
 export type ResourceSpatialPlacementRecord =
   typeof resourceSpatialPlacements.$inferSelect;

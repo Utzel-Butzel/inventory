@@ -158,6 +158,7 @@ final class SpatialRoomLifecycleTests: XCTestCase {
             updatedAt: now,
             placementCount: 0,
             assets: [],
+            keyframes: nil,
             structureID: structureID,
             structureName: structureName,
             floorIdentifier: floorIdentifier,

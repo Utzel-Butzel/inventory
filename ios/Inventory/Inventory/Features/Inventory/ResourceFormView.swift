@@ -23,6 +23,8 @@ struct ResourceFormView: View {
     @State private var errorMessage: String?
     @State private var createOperationID = UUID()
     @State private var modelUploadOperationID = UUID()
+    @State private var createdResource: InventoryResource?
+    @State private var confirmCloseAfterCreation = false
 
     init(
         resource: InventoryResource? = nil,
@@ -114,6 +116,7 @@ struct ResourceFormView: View {
                     TextField("Beschreibung", text: $description, axis: .vertical)
                         .lineLimit(3 ... 8)
                 }
+                .disabled(createdResource != nil)
 
                 Section("Identifikation") {
                     TextField("SKU", text: $sku)
@@ -129,18 +132,26 @@ struct ResourceFormView: View {
                         LabeledContent("Menge", value: "\(quantity)")
                     }
                 }
+                .disabled(createdResource != nil)
 
                 Section("Weitere Angaben") {
                     TextField("Tags, mit Komma getrennt", text: $tags)
                     TextField("Notizen", text: $notes, axis: .vertical)
                         .lineLimit(3 ... 10)
                 }
+                .disabled(createdResource != nil)
             }
             .navigationTitle(resource == nil ? "Neuer Eintrag" : "Bearbeiten")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
+                    Button("Abbrechen") {
+                        if createdResource != nil {
+                            confirmCloseAfterCreation = true
+                        } else {
+                            dismiss()
+                        }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(saving ? "Speichert …" : "Speichern") { save() }
@@ -149,6 +160,22 @@ struct ResourceFormView: View {
             }
             .interactiveDismissDisabled(saving)
             .onDisappear(perform: cleanupObjectModel)
+            .confirmationDialog(
+                "Eintrag ohne 3D-Modell schließen?",
+                isPresented: $confirmCloseAfterCreation,
+                titleVisibility: .visible
+            ) {
+                Button("Ohne 3D-Modell behalten") {
+                    if let createdResource {
+                        onSaved(createdResource)
+                    }
+                    dismiss()
+                }
+                Button("Upload erneut versuchen") { save() }
+                Button("Weiter bearbeiten", role: .cancel) { }
+            } message: {
+                Text("Der Inventareintrag wurde bereits angelegt. Du kannst den Modell-Upload erneut versuchen oder den Eintrag ohne 3D-Modell behalten.")
+            }
             .alert(
                 "Speichern fehlgeschlagen",
                 isPresented: Binding(
@@ -188,21 +215,27 @@ struct ResourceFormView: View {
                         )
                     )
                 } else {
-                    let created = try await client.createResource(
-                        ResourceCreateRequest(
-                            name: normalized(name),
-                            description: normalized(description),
-                            type: type,
-                            status: status,
-                            sku: optional(sku),
-                            quantity: quantity,
-                            location: optional(location),
-                            serialNumber: optional(serialNumber),
-                            tags: parsedTags,
-                            notes: normalized(notes)
-                        ),
-                        idempotencyKey: createOperationID
-                    )
+                    let created: InventoryResource
+                    if let createdResource {
+                        created = createdResource
+                    } else {
+                        created = try await client.createResource(
+                            ResourceCreateRequest(
+                                name: normalized(name),
+                                description: normalized(description),
+                                type: type,
+                                status: status,
+                                sku: optional(sku),
+                                quantity: quantity,
+                                location: optional(location),
+                                serialNumber: optional(serialNumber),
+                                tags: parsedTags,
+                                notes: normalized(notes)
+                            ),
+                            idempotencyKey: createOperationID
+                        )
+                        createdResource = created
+                    }
                     if let objectModel {
                         _ = try await client.uploadMedia(
                             resourceID: created.id,

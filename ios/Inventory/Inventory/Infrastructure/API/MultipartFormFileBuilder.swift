@@ -6,6 +6,19 @@ struct MultipartBodyFile: Sendable {
 }
 
 enum MultipartFormFileBuilder {
+    private struct RoomKeyframeUploadMetadata: Encodable {
+        let id: String
+        let fileField: String
+        let capturedAt: Date
+        let timestamp: Double
+        let cameraTransform: SpatialMatrix4
+        let intrinsics: [Double]
+        let width: Int
+        let height: Int
+        let orientation: String
+        let quality: Double
+    }
+
     static func build(files: [MediaUploadFile]) throws -> MultipartBodyFile {
         let boundary = "InventoryBoundary-\(UUID().uuidString)"
         let outputURL = FileManager.default.temporaryDirectory
@@ -194,6 +207,32 @@ enum MultipartFormFileBuilder {
                 }
                 fields.append(("georeference", json))
             }
+            if !draft.keyframes.isEmpty {
+                let encoder = JSONEncoder()
+                encoder.dateEncodingStrategy = .iso8601
+                encoder.outputFormatting = [.sortedKeys]
+                let metadata = draft.keyframes.map { keyframe in
+                    RoomKeyframeUploadMetadata(
+                        id: keyframe.metadata.id.uuidString.lowercased(),
+                        fileField: "keyframe:\(keyframe.metadata.id.uuidString.lowercased())",
+                        capturedAt: keyframe.metadata.capturedAt,
+                        timestamp: keyframe.metadata.timestamp,
+                        cameraTransform: keyframe.metadata.cameraTransform,
+                        intrinsics: keyframe.metadata.intrinsics,
+                        width: keyframe.metadata.width,
+                        height: keyframe.metadata.height,
+                        orientation: keyframe.metadata.orientation,
+                        quality: keyframe.metadata.quality
+                    )
+                }
+                let data = try encoder.encode(metadata)
+                guard let json = String(data: data, encoding: .utf8) else {
+                    throw APIClientError.invalidUpload(
+                        "Die visuellen Raumreferenzen konnten nicht codiert werden."
+                    )
+                }
+                fields.append(("keyframes", json))
+            }
             for (name, value) in fields {
                 try write("--\(boundary)\r\n", to: output)
                 try write(
@@ -226,6 +265,19 @@ enum MultipartFormFileBuilder {
                 )
                 try write("Content-Type: \(asset.mimeType)\r\n\r\n", to: output)
                 try copy(asset.url, to: output)
+                try write("\r\n", to: output)
+            }
+
+            for keyframe in draft.keyframes {
+                try validateLocalFile(keyframe.imageURL)
+                let id = keyframe.metadata.id.uuidString.lowercased()
+                try write("--\(boundary)\r\n", to: output)
+                try write(
+                    "Content-Disposition: form-data; name=\"keyframe:\(id)\"; filename=\"\(id).jpg\"\r\n",
+                    to: output
+                )
+                try write("Content-Type: image/jpeg\r\n\r\n", to: output)
+                try copy(keyframe.imageURL, to: output)
                 try write("\r\n", to: output)
             }
 

@@ -214,6 +214,26 @@
       "multiple_one": "3D model of {{room}} and {{value}} linked room",
       "multiple_other": "3D model of {{room}} and {{value}} linked rooms"
     },
+    "visualMode": "Room visualization",
+    "modes": {
+      "roomplan": "RoomPlan",
+      "textured": "Textured",
+      "splat": "Photo splat"
+    },
+    "asset": {
+      "loading": "Loading photorealistic view…",
+      "failed": "Photorealistic asset unavailable — showing RoomPlan",
+      "tooLarge": "Asset is too large for the browser — showing RoomPlan"
+    },
+    "keyframes": {
+      "toggle_one": "{{value}} camera",
+      "toggle_other": "{{value}} cameras",
+      "select": "Select reference photo",
+      "option": "Photo {{index}} · {{quality}}%",
+      "imageAlt": "Camera reference photo for {{room}}",
+      "quality": "{{value}}% quality",
+      "close": "Close reference photo"
+    },
     "topView": "Top view",
     "resetView": "Reset view",
     "controlsHint": "Drag: rotate · two fingers: pan · scroll: zoom"

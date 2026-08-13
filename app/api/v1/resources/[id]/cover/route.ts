@@ -124,7 +124,9 @@ export async function POST(request: Request, context: Context) {
   if (!resource) return finish({ error: "Not found" }, 404);
   const source = parsed.data.sourceMediaId
     ? resource.media.find((item) => item.id === parsed.data.sourceMediaId)
-    : resource.media.find((item) => item.kind === "image");
+    : (resource.media.find(
+        (item) => item.kind === "image" && item.source !== "ai",
+      ) ?? resource.media.find((item) => item.kind === "image"));
   if (!source || source.kind !== "image") {
     return finish(
       { error: "Choose an image to use as the cover source." },

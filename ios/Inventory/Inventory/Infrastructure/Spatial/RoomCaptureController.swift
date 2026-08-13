@@ -44,12 +44,35 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
     private var captureRunning = false
     private var processingGeneration = UUID()
     private var georeferenceCaptureTask: Task<Void, Never>?
+    private var keyframeCaptureTask: Task<Void, Never>?
+    private var keyframeEncodingTask: Task<Void, Never>?
+    private var keyframeEncodingToken = UUID()
+    private var keyframeRoomGeneration = UUID()
+    private var currentRoomKeyframes: [SpatialRoomKeyframeDraft] = []
+    private var currentRoomKeyframeBytes = 0
+    private let keyframePolicy = SpatialKeyframeCapturePolicy.standard
+
+    /// Retaining the immutable frame buffer keeps ARKit's pool from reusing it
+    /// while Core Image encodes on the utility executor.
+    private struct KeyframeImageInput: @unchecked Sendable {
+        let pixelBuffer: CVPixelBuffer
+        let intrinsics: simd_float3x3
+    }
+
+    private struct EncodedKeyframe: Sendable {
+        let data: Data
+        let width: Int
+        let height: Int
+        let intrinsics: [Double]
+        let sharpness: Double
+    }
 
     private struct CapturedRoomRecord {
         let room: CapturedRoom
         let name: String
         let capturedAt: Date
         let guideImageURL: URL?
+        let keyframes: [SpatialRoomKeyframeDraft]
     }
 
     override func viewDidLoad() {
@@ -76,6 +99,7 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         captureView.captureSession.run(configuration: configuration)
         captureRunning = true
         scheduleGeoreferenceCapture()
+        scheduleKeyframeCapture()
         onHint?("Bewege das iPhone langsam entlang aller Wände und Möbel.")
     }
 
@@ -98,6 +122,12 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         processingGeneration = UUID()
         georeferenceCaptureTask?.cancel()
         georeferenceCaptureTask = nil
+        keyframeCaptureTask?.cancel()
+        keyframeCaptureTask = nil
+        keyframeEncodingTask?.cancel()
+        keyframeEncodingTask = nil
+        keyframeEncodingToken = UUID()
+        keyframeRoomGeneration = UUID()
         if shouldStopCapture {
             captureView?.captureSession.stop(pauseARSession: true)
         } else {
@@ -114,6 +144,7 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         self.batch = batch
         captureGeoreferenceIfPossible()
         scheduleGeoreferenceCapture()
+        scheduleKeyframeCapture()
     }
 
     func requestResume(_ request: Int) {
@@ -152,6 +183,11 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         captureGeoreferenceIfPossible(frame: frame)
         onProcessing?()
         captureRunning = false
+        keyframeCaptureTask?.cancel()
+        keyframeCaptureTask = nil
+        keyframeEncodingTask?.cancel()
+        keyframeEncodingTask = nil
+        keyframeEncodingToken = UUID()
         captureView.captureSession.stop(pauseARSession: false)
     }
 
@@ -179,10 +215,14 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
                 room: processedResult,
                 name: pendingRoomName,
                 capturedAt: Date(),
-                guideImageURL: pendingGuideImageURL
+                guideImageURL: pendingGuideImageURL,
+                keyframes: currentRoomKeyframes
             )
         )
         pendingGuideImageURL = nil
+        currentRoomKeyframes = []
+        currentRoomKeyframeBytes = 0
+        keyframeRoomGeneration = UUID()
         captureRunning = false
 
         if finalizingBatch {
@@ -287,6 +327,32 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
                     structureModelURL = destination
                 }
 
+                var keyframes: [SpatialRoomKeyframeDraft] = []
+                if !record.keyframes.isEmpty {
+                    let keyframeDirectory = directory.appendingPathComponent(
+                        "keyframes",
+                        isDirectory: true
+                    )
+                    try FileManager.default.createDirectory(
+                        at: keyframeDirectory,
+                        withIntermediateDirectories: true
+                    )
+                    for keyframe in record.keyframes {
+                        let destination = keyframeDirectory
+                            .appendingPathComponent(
+                                keyframe.metadata.id.uuidString.lowercased()
+                            )
+                            .appendingPathExtension("jpg")
+                        try FileManager.default.copyItem(at: keyframe.imageURL, to: destination)
+                        keyframes.append(
+                            SpatialRoomKeyframeDraft(
+                                metadata: keyframe.metadata,
+                                imageURL: destination
+                            )
+                        )
+                    }
+                }
+
                 drafts.append(
                     SpatialRoomScanDraft(
                         id: scanID,
@@ -304,7 +370,8 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
                         roomIdentifier: room.identifier.uuidString.lowercased(),
                         coordinateSpaceID: batch.coordinateSpaceID,
                         georeference: frozenGeoreference,
-                        structureModelURL: structureModelURL
+                        structureModelURL: structureModelURL,
+                        keyframes: keyframes
                     )
                 )
             }
@@ -313,6 +380,7 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
             throw error
         }
         records.compactMap(\.guideImageURL).forEach { try? FileManager.default.removeItem(at: $0) }
+        records.flatMap(\.keyframes).forEach { try? FileManager.default.removeItem(at: $0.imageURL) }
         if let structureSourceURL {
             try? FileManager.default.removeItem(at: structureSourceURL.deletingLastPathComponent())
             workingDirectories.removeAll {
@@ -408,6 +476,206 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         }
     }
 
+    /// RoomPlan owns the shared session delegate. Sampling `currentFrame`
+    /// avoids replacing that delegate while keeping RGB, pose, intrinsics and
+    /// RoomPlan geometry in exactly the same ARKit world coordinate system.
+    private func scheduleKeyframeCapture() {
+        guard isVisible,
+              captureRunning,
+              batch != nil,
+              keyframeCaptureTask == nil
+        else { return }
+        keyframeCaptureTask = Task { @MainActor [weak self] in
+            while let self,
+                  !Task.isCancelled,
+                  self.isVisible,
+                  self.captureRunning {
+                self.captureKeyframeIfPossible()
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+    }
+
+    private func captureKeyframeIfPossible() {
+        guard captureRunning,
+              batch != nil,
+              keyframeEncodingTask == nil,
+              let frame = arSession.currentFrame
+        else { return }
+        guard case .normal = frame.camera.trackingState else { return }
+        let trackingQuality: Double
+        switch frame.worldMappingStatus {
+        case .mapped:
+            trackingQuality = 1
+        case .extending:
+            trackingQuality = 0.84
+        case .limited, .notAvailable:
+            return
+        @unknown default:
+            return
+        }
+
+        let cameraTransform = Self.matrixValues(frame.camera.transform)
+        guard keyframePolicy.shouldCapture(
+            timestamp: frame.timestamp,
+            cameraTransform: cameraTransform,
+            previous: currentRoomKeyframes.last?.metadata,
+            frameCount: currentRoomKeyframes.count,
+            totalBytes: currentRoomKeyframeBytes
+        ) else { return }
+
+        let id = UUID()
+        let capturedAt = Date()
+        let timestamp = frame.timestamp
+        let roomGeneration = keyframeRoomGeneration
+        let encodingToken = UUID()
+        keyframeEncodingToken = encodingToken
+        let input = KeyframeImageInput(
+            pixelBuffer: frame.capturedImage,
+            intrinsics: frame.camera.intrinsics
+        )
+        keyframeEncodingTask = Task { @MainActor [weak self] in
+            let encoded = await Task.detached(priority: .utility) {
+                try? Self.makeKeyframe(from: input)
+            }.value
+            guard let self else { return }
+            defer {
+                if self.keyframeEncodingToken == encodingToken {
+                    self.keyframeEncodingTask = nil
+                }
+            }
+            guard !Task.isCancelled,
+                  self.isVisible,
+                  self.captureRunning,
+                  self.keyframeRoomGeneration == roomGeneration,
+                  let encoded,
+                  encoded.sharpness >= self.keyframePolicy.minimumSharpness,
+                  encoded.data.count <= 1_500_000,
+                  self.currentRoomKeyframeBytes + encoded.data.count
+                    <= self.keyframePolicy.maximumTotalBytes
+            else { return }
+
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("room-keyframe-\(id.uuidString.lowercased())")
+                .appendingPathExtension("jpg")
+            do {
+                try encoded.data.write(to: url, options: [.atomic])
+                let metadata = SpatialRoomKeyframe(
+                    id: id,
+                    capturedAt: capturedAt,
+                    timestamp: timestamp,
+                    cameraTransform: cameraTransform,
+                    intrinsics: encoded.intrinsics,
+                    width: encoded.width,
+                    height: encoded.height,
+                    orientation: "right",
+                    quality: min(
+                        trackingQuality,
+                        max(0, min(1, encoded.sharpness / 0.08))
+                    )
+                )
+                self.currentRoomKeyframes.append(
+                    SpatialRoomKeyframeDraft(metadata: metadata, imageURL: url)
+                )
+                self.currentRoomKeyframeBytes += encoded.data.count
+            } catch {
+                // Visual keyframes enrich a scan, but geometry and the
+                // ARWorldMap remain usable if one image cannot be written.
+            }
+        }
+    }
+
+    private nonisolated static func makeKeyframe(
+        from input: KeyframeImageInput
+    ) throws -> EncodedKeyframe {
+        let originalWidth = CVPixelBufferGetWidth(input.pixelBuffer)
+        let originalHeight = CVPixelBufferGetHeight(input.pixelBuffer)
+        guard originalWidth > 0, originalHeight > 0 else {
+            throw SpatialCaptureError.imageUnavailable
+        }
+
+        // Preserve ARKit's native camera raster. `orientation: right` tells
+        // display clients to rotate it clockwise, while the stored pinhole
+        // intrinsics remain diagonal and metrically unambiguous.
+        let native = CIImage(cvPixelBuffer: input.pixelBuffer)
+        let scale = min(1, 1_600 / max(native.extent.width, native.extent.height))
+        let scaled = native.transformed(
+            by: CGAffineTransform(scaleX: scale, y: scale)
+        )
+        let renderBounds = scaled.extent.integral
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        guard let cgImage = context.createCGImage(scaled, from: renderBounds) else {
+            throw SpatialCaptureError.imageUnavailable
+        }
+        let image = UIImage(cgImage: cgImage)
+        let qualities: [CGFloat] = [0.78, 0.68, 0.58]
+        guard let data = qualities.lazy
+            .compactMap({ image.jpegData(compressionQuality: $0) })
+            .first(where: { $0.count <= 1_500_000 })
+        else {
+            throw SpatialCaptureError.imageUnavailable
+        }
+
+        guard let intrinsics = SpatialCameraCalibration.scaledIntrinsics(
+            Self.matrixValues(input.intrinsics),
+            fromWidth: originalWidth,
+            fromHeight: originalHeight,
+            toWidth: cgImage.width,
+            toHeight: cgImage.height
+        ) else {
+            throw SpatialCaptureError.imageUnavailable
+        }
+
+        return EncodedKeyframe(
+            data: data,
+            width: cgImage.width,
+            height: cgImage.height,
+            intrinsics: intrinsics,
+            sharpness: Self.sharpness(of: scaled, context: context)
+        )
+    }
+
+    private nonisolated static func sharpness(
+        of image: CIImage,
+        context: CIContext
+    ) -> Double {
+        guard let edges = CIFilter(
+            name: "CIEdges",
+            parameters: [kCIInputImageKey: image, kCIInputIntensityKey: 1]
+        )?.outputImage,
+        let average = CIFilter(
+            name: "CIAreaAverage",
+            parameters: [
+                kCIInputImageKey: edges,
+                kCIInputExtentKey: CIVector(cgRect: edges.extent),
+            ]
+        )?.outputImage
+        else { return 0 }
+
+        var pixel = [UInt8](repeating: 0, count: 4)
+        context.render(
+            average,
+            toBitmap: &pixel,
+            rowBytes: 4,
+            bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+            format: .RGBA8,
+            colorSpace: CGColorSpaceCreateDeviceRGB()
+        )
+        return Double(Int(pixel[0]) + Int(pixel[1]) + Int(pixel[2])) / (3 * 255)
+    }
+
+    private nonisolated static func matrixValues(_ matrix: simd_float4x4) -> [Double] {
+        (0 ..< 4).flatMap { column in
+            (0 ..< 4).map { row in Double(matrix[column, row]) }
+        }
+    }
+
+    private nonisolated static func matrixValues(_ matrix: simd_float3x3) -> [Double] {
+        (0 ..< 3).flatMap { column in
+            (0 ..< 3).map { row in Double(matrix[column, row]) }
+        }
+    }
+
     private static func normalizedHeading(_ degrees: Double) -> Double {
         let remainder = degrees.truncatingRemainder(dividingBy: 360)
         return remainder >= 0 ? remainder : remainder + 360
@@ -427,8 +695,16 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
     }
 
     private func cleanupTemporaryFiles() {
+        keyframeEncodingTask?.cancel()
+        keyframeEncodingTask = nil
+        keyframeEncodingToken = UUID()
+        keyframeRoomGeneration = UUID()
         records.compactMap(\.guideImageURL).forEach { try? FileManager.default.removeItem(at: $0) }
+        records.flatMap(\.keyframes).forEach { try? FileManager.default.removeItem(at: $0.imageURL) }
         records.removeAll()
+        currentRoomKeyframes.forEach { try? FileManager.default.removeItem(at: $0.imageURL) }
+        currentRoomKeyframes.removeAll()
+        currentRoomKeyframeBytes = 0
         if let pendingGuideImageURL {
             try? FileManager.default.removeItem(at: pendingGuideImageURL)
             self.pendingGuideImageURL = nil

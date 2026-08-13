@@ -159,7 +159,6 @@ async function storeBytes(options: {
   originalName: string;
   folder: string;
 }) {
-  assertStorageSupportsMediaType(options.mimeType);
   const filename = `${randomUUID()}-${safeFilename(options.originalName)}`;
   const key = validateStorageKey(`${options.folder}/${filename}`);
 
@@ -185,6 +184,7 @@ export async function storeMedia(options: {
   originalName: string;
   resourceId: string;
 }): Promise<StoredMedia> {
+  assertStorageSupportsMediaType(options.mimeType);
   const dimensions = await imageMetadata(options.bytes, options.mimeType);
   const stored = await storeBytes({
     bytes: options.bytes,
@@ -303,6 +303,15 @@ export async function deleteStoredMedia(item: {
 export const maxUploadBytes = () => {
   const configured = Number(process.env.MAX_UPLOAD_MB ?? "25");
   return Math.max(1, Math.min(100, Number.isFinite(configured) ? configured : 25)) * 1024 * 1024;
+};
+
+export const maxUsdzUploadBytes = () => {
+  const configured = Number(process.env.MAX_USDZ_UPLOAD_MB ?? "100");
+  return (
+    Math.max(10, Math.min(500, Number.isFinite(configured) ? configured : 100)) *
+    1024 *
+    1024
+  );
 };
 
 export const maxRoomScanUploadBytes = () => {

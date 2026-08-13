@@ -5,6 +5,7 @@ import test from "node:test";
 register(new URL("./support/typescript-paths-loader.mjs", import.meta.url));
 
 const {
+  reconcileFailedRoomScanAssetReplacement,
   reconcileFailedRoomScanCreation,
   RoomScanSpatialConflictError,
   roomScanAssetContentDisposition,
@@ -24,6 +25,11 @@ test("room scan downloads use fixed non-executable MIME types and attachments", 
   assert.equal(roomScanAssetMimeType("model_usdz"), "model/vnd.usdz+zip");
   assert.equal(roomScanAssetMimeType("structure_model"), "model/vnd.usdz+zip");
   assert.equal(roomScanAssetMimeType("guide_image"), "image/jpeg");
+  assert.equal(roomScanAssetMimeType("textured_mesh"), "model/gltf-binary");
+  assert.equal(
+    roomScanAssetMimeType("gaussian_splat"),
+    "application/octet-stream",
+  );
 
   const disposition = roomScanAssetContentDisposition(
     "room.html\r\nX-Injection: yes",
@@ -141,6 +147,19 @@ const matchingReplayRequest = {
   assets: [...assets].reverse(),
 };
 
+const keyframe = {
+  id: "77777777-7777-4777-8777-777777777777",
+  capturedAt: new Date("2026-08-12T07:15:02.000Z"),
+  timestamp: 14.5,
+  cameraTransform: identity,
+  intrinsics: [800, 0, 0, 0, 800, 0, 400, 300, 1],
+  width: 800,
+  height: 600,
+  orientation: "right",
+  quality: 0.9,
+  checksumSha256: "d".repeat(64),
+};
+
 test("scan replay identity includes spatial grouping metadata", () => {
   assert.equal(
     roomScanMatchesSpatialMetadata(existingScan, {
@@ -206,6 +225,53 @@ test("exact scan replay covers scene, capture metadata, georeference, and asset 
       ],
     }),
     false,
+  );
+});
+
+test("exact scan replay covers calibrated keyframe metadata and image bytes", () => {
+  assert.equal(
+    roomScanMatchesReplayIdentity(
+      { ...existingReplayScan, keyframes: [keyframe] },
+      { ...matchingReplayRequest, keyframes: [{ ...keyframe }] },
+    ),
+    true,
+  );
+  assert.equal(
+    roomScanMatchesReplayIdentity(
+      { ...existingReplayScan, keyframes: [keyframe] },
+      {
+        ...matchingReplayRequest,
+        keyframes: [{ ...keyframe, checksumSha256: "e".repeat(64) }],
+      },
+    ),
+    false,
+  );
+  assert.equal(
+    roomScanMatchesReplayIdentity(
+      { ...existingReplayScan, keyframes: [keyframe] },
+      {
+        ...matchingReplayRequest,
+        keyframes: [{ ...keyframe, cameraTransform: [...identity.slice(0, 12), 1, 0, 0, 1] }],
+      },
+    ),
+    false,
+  );
+});
+
+test("photorealistic derivatives attached later do not change capture replay identity", () => {
+  assert.equal(
+    roomScanMatchesReplayIdentity(
+      {
+        ...existingReplayScan,
+        assets: [
+          ...assets,
+          { kind: "textured_mesh", checksumSha256: "f".repeat(64) },
+          { kind: "gaussian_splat", checksumSha256: "e".repeat(64) },
+        ],
+      },
+      matchingReplayRequest,
+    ),
+    true,
   );
 });
 
@@ -281,6 +347,81 @@ test("an unavailable commit check preserves assets for later reconciliation", as
       throw new Error("database unavailable");
     },
     cleanupUncommittedAssets: async () => {
+      cleanupCalls += 1;
+    },
+  });
+
+  assert.deepEqual(result, { kind: "unknown" });
+  assert.equal(cleanupCalls, 0);
+});
+
+const incomingReplacement = {
+  storageKey: "room-scans/scan-1/new-room.glb",
+  checksumSha256: "a".repeat(64),
+};
+
+test("an ambiguous replacement preserves bytes when the new asset committed", async () => {
+  let cleanupCalls = 0;
+  const committedAsset = {
+    ...incomingReplacement,
+    id: "asset-new",
+  };
+  const result = await reconcileFailedRoomScanAssetReplacement({
+    incoming: incomingReplacement,
+    findCurrentAsset: async () => committedAsset,
+    cleanupUncommittedAsset: async () => {
+      cleanupCalls += 1;
+    },
+  });
+
+  assert.deepEqual(result, { kind: "committed", asset: committedAsset });
+  assert.equal(cleanupCalls, 0);
+});
+
+test("a different current asset proves the new replacement bytes are unreferenced", async () => {
+  let cleanupCalls = 0;
+  const currentAsset = {
+    storageKey: "room-scans/scan-1/previous-room.glb",
+    checksumSha256: "b".repeat(64),
+    id: "asset-previous",
+  };
+  const result = await reconcileFailedRoomScanAssetReplacement({
+    incoming: incomingReplacement,
+    findCurrentAsset: async () => currentAsset,
+    cleanupUncommittedAsset: async () => {
+      cleanupCalls += 1;
+    },
+  });
+
+  assert.deepEqual(result, {
+    kind: "different-current-asset",
+    asset: currentAsset,
+  });
+  assert.equal(cleanupCalls, 1);
+});
+
+test("an absent asset proves the replacement did not commit and deletes new bytes", async () => {
+  let cleanupCalls = 0;
+  const result = await reconcileFailedRoomScanAssetReplacement({
+    incoming: incomingReplacement,
+    findCurrentAsset: async () => null,
+    cleanupUncommittedAsset: async () => {
+      cleanupCalls += 1;
+    },
+  });
+
+  assert.deepEqual(result, { kind: "not-committed" });
+  assert.equal(cleanupCalls, 1);
+});
+
+test("an unavailable replacement read preserves possibly committed bytes", async () => {
+  let cleanupCalls = 0;
+  const result = await reconcileFailedRoomScanAssetReplacement({
+    incoming: incomingReplacement,
+    findCurrentAsset: async () => {
+      throw new Error("database unavailable");
+    },
+    cleanupUncommittedAsset: async () => {
       cleanupCalls += 1;
     },
   });

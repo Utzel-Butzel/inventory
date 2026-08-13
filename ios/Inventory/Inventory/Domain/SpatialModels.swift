@@ -121,6 +121,127 @@ public struct SpatialRoomScanAsset: Codable, Equatable, Identifiable, Sendable {
     public let createdAt: Date
 }
 
+/// One RGB reference frame captured from RoomPlan's shared ARKit session.
+/// `cameraTransform` is the column-major world-from-camera transform in the
+/// scan's `coordinateSpaceID`; `intrinsics` maps camera coordinates into the
+/// stored JPEG's native pixels and `orientation` describes display rotation.
+public struct SpatialRoomKeyframe: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let capturedAt: Date
+    public let timestamp: Double
+    public let cameraTransform: SpatialMatrix4
+    public let intrinsics: [Double]
+    public let width: Int
+    public let height: Int
+    public let orientation: String
+    public let quality: Double
+    public let url: String?
+    public let mimeType: String?
+    public let size: Int?
+    public let checksumSha256: String?
+
+    public init(
+        id: UUID,
+        capturedAt: Date,
+        timestamp: Double,
+        cameraTransform: SpatialMatrix4,
+        intrinsics: [Double],
+        width: Int,
+        height: Int,
+        orientation: String = "up",
+        quality: Double,
+        url: String? = nil,
+        mimeType: String? = nil,
+        size: Int? = nil,
+        checksumSha256: String? = nil
+    ) {
+        self.id = id
+        self.capturedAt = capturedAt
+        self.timestamp = timestamp
+        self.cameraTransform = cameraTransform
+        self.intrinsics = intrinsics
+        self.width = width
+        self.height = height
+        self.orientation = orientation
+        self.quality = quality
+        self.url = url
+        self.mimeType = mimeType
+        self.size = size
+        self.checksumSha256 = checksumSha256
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, capturedAt, timestamp, cameraTransform, intrinsics
+        case width, height, imageWidth, imageHeight, pixelWidth, pixelHeight
+        case orientation, quality, trackingQuality, sharpness
+        case url, imageURL = "imageUrl", mimeType, size, checksumSha256
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(UUID.self, forKey: .id)
+        capturedAt = try values.decode(Date.self, forKey: .capturedAt)
+        timestamp = try values.decode(Double.self, forKey: .timestamp)
+        cameraTransform = try values.decode(SpatialMatrix4.self, forKey: .cameraTransform)
+        intrinsics = try values.decode([Double].self, forKey: .intrinsics)
+        width = try values.decodeIfPresent(Int.self, forKey: .width)
+            ?? values.decodeIfPresent(Int.self, forKey: .imageWidth)
+            ?? values.decode(Int.self, forKey: .pixelWidth)
+        height = try values.decodeIfPresent(Int.self, forKey: .height)
+            ?? values.decodeIfPresent(Int.self, forKey: .imageHeight)
+            ?? values.decode(Int.self, forKey: .pixelHeight)
+        orientation = try values.decodeIfPresent(String.self, forKey: .orientation) ?? "up"
+        let tracking = try values.decodeIfPresent(Double.self, forKey: .trackingQuality)
+        let sharpness = try values.decodeIfPresent(Double.self, forKey: .sharpness)
+        quality = try values.decodeIfPresent(Double.self, forKey: .quality)
+            ?? min(tracking ?? 1, max(0, min(1, (sharpness ?? 0.02) / 0.08)))
+        url = try values.decodeIfPresent(String.self, forKey: .url)
+            ?? values.decodeIfPresent(String.self, forKey: .imageURL)
+        mimeType = try values.decodeIfPresent(String.self, forKey: .mimeType)
+        size = try values.decodeIfPresent(Int.self, forKey: .size)
+        checksumSha256 = try values.decodeIfPresent(String.self, forKey: .checksumSha256)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(id, forKey: .id)
+        try values.encode(capturedAt, forKey: .capturedAt)
+        try values.encode(timestamp, forKey: .timestamp)
+        try values.encode(cameraTransform, forKey: .cameraTransform)
+        try values.encode(intrinsics, forKey: .intrinsics)
+        try values.encode(width, forKey: .width)
+        try values.encode(height, forKey: .height)
+        try values.encode(orientation, forKey: .orientation)
+        try values.encode(quality, forKey: .quality)
+        try values.encodeIfPresent(url, forKey: .url)
+        try values.encodeIfPresent(mimeType, forKey: .mimeType)
+        try values.encodeIfPresent(size, forKey: .size)
+        try values.encodeIfPresent(checksumSha256, forKey: .checksumSha256)
+    }
+}
+
+public struct SpatialRoomKeyframeDraft: Equatable, Sendable {
+    public let metadata: SpatialRoomKeyframe
+    public let imageURL: URL
+
+    public init(metadata: SpatialRoomKeyframe, imageURL: URL) {
+        self.metadata = metadata
+        self.imageURL = imageURL
+    }
+}
+
+public struct SpatialRoomKeyframeReference: Equatable, Sendable {
+    public let roomScanID: UUID
+    public let metadata: SpatialRoomKeyframe
+    public let imageData: Data
+
+    public init(roomScanID: UUID, metadata: SpatialRoomKeyframe, imageData: Data) {
+        self.roomScanID = roomScanID
+        self.metadata = metadata
+        self.imageData = imageData
+    }
+}
+
 public struct SpatialRoomScanSummary: Codable, Equatable, Identifiable, Sendable {
     public let id: UUID
     public let roomResourceID: UUID
@@ -133,6 +254,7 @@ public struct SpatialRoomScanSummary: Codable, Equatable, Identifiable, Sendable
     public let updatedAt: Date
     public let placementCount: Int
     public let assets: [SpatialRoomScanAsset]
+    public let keyframes: [SpatialRoomKeyframe]?
     public let structureID: UUID?
     public let structureName: String?
     public let floorIdentifier: String?
@@ -157,6 +279,7 @@ public struct SpatialRoomScanSummary: Codable, Equatable, Identifiable, Sendable
         case updatedAt
         case placementCount
         case assets
+        case keyframes
         case structureID = "structureId"
         case structureName
         case floorIdentifier
@@ -190,6 +313,7 @@ public struct SpatialRoomSceneManifest: Codable, Equatable, Sendable {
         public let capturedAt: Date
         public let deviceModel: String?
         public let assets: [SpatialRoomScanAsset]
+        public let keyframes: [SpatialRoomKeyframe]?
         public let structureID: UUID?
         public let structureName: String?
         public let floorIdentifier: String?
@@ -199,7 +323,7 @@ public struct SpatialRoomSceneManifest: Codable, Equatable, Sendable {
         public let georeference: SpatialStructureGeoreference?
 
         private enum CodingKeys: String, CodingKey {
-            case id, revision, status, scene, capturedAt, deviceModel, assets
+            case id, revision, status, scene, capturedAt, deviceModel, assets, keyframes
             case structureID = "structureId"
             case structureName, floorIdentifier, floorIndex, roomIdentifier
             case coordinateSpaceID = "coordinateSpaceId"
@@ -258,6 +382,7 @@ public struct SpatialRoomScanDraft: Sendable {
     public let coordinateSpaceID: UUID?
     public let georeference: SpatialStructureGeoreference?
     public let structureModelURL: URL?
+    public let keyframes: [SpatialRoomKeyframeDraft]
 
     public init(
         id: UUID,
@@ -275,7 +400,8 @@ public struct SpatialRoomScanDraft: Sendable {
         roomIdentifier: String? = nil,
         coordinateSpaceID: UUID? = nil,
         georeference: SpatialStructureGeoreference? = nil,
-        structureModelURL: URL? = nil
+        structureModelURL: URL? = nil,
+        keyframes: [SpatialRoomKeyframeDraft] = []
     ) {
         self.id = id
         self.roomName = roomName
@@ -293,6 +419,7 @@ public struct SpatialRoomScanDraft: Sendable {
         self.coordinateSpaceID = coordinateSpaceID
         self.georeference = georeference
         self.structureModelURL = structureModelURL
+        self.keyframes = keyframes
     }
 
     public func removeLocalArtifacts() {
@@ -307,7 +434,10 @@ public struct SpatialRoomScanDraft: Sendable {
               (
                   structureModelURL == nil ||
                   structureModelURL?.deletingLastPathComponent().standardizedFileURL == directory
-              )
+              ),
+              keyframes.allSatisfy({
+                  $0.imageURL.standardizedFileURL.path.hasPrefix(directory.path + "/")
+              })
         else {
             return
         }
@@ -320,6 +450,30 @@ public struct SpatialRoomScanUploadResponse: Codable, Equatable, Sendable {
 }
 
 public struct SpatialPlacementDraft: Codable, Equatable, Sendable {
+    public struct LocalizationEvidence: Codable, Equatable, Sendable {
+        public let matchedKeyframeID: UUID
+        public let distance: Double
+        public let confidence: Double
+        public let cameraPositionError: Double?
+
+        public init(
+            matchedKeyframeID: UUID,
+            distance: Double,
+            confidence: Double,
+            cameraPositionError: Double?
+        ) {
+            self.matchedKeyframeID = matchedKeyframeID
+            self.distance = distance
+            self.confidence = confidence
+            self.cameraPositionError = cameraPositionError
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case matchedKeyframeID = "matchedKeyframeId"
+            case distance, confidence, cameraPositionError
+        }
+    }
+
     public let roomScanID: UUID
     public let roomName: String
     public let position: SpatialVector3
@@ -329,6 +483,7 @@ public struct SpatialPlacementDraft: Codable, Equatable, Sendable {
     public let method: String
     public let anchorIdentifier: UUID
     public let capturedAt: Date
+    public let localizationEvidence: LocalizationEvidence?
 
     public init(
         roomScanID: UUID,
@@ -339,7 +494,8 @@ public struct SpatialPlacementDraft: Codable, Equatable, Sendable {
         confidence: Double,
         method: String,
         anchorIdentifier: UUID = UUID(),
-        capturedAt: Date = Date()
+        capturedAt: Date = Date(),
+        localizationEvidence: LocalizationEvidence? = nil
     ) {
         self.roomScanID = roomScanID
         self.roomName = roomName
@@ -350,6 +506,7 @@ public struct SpatialPlacementDraft: Codable, Equatable, Sendable {
         self.method = method
         self.anchorIdentifier = anchorIdentifier
         self.capturedAt = capturedAt
+        self.localizationEvidence = localizationEvidence
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -362,6 +519,7 @@ public struct SpatialPlacementDraft: Codable, Equatable, Sendable {
         case method
         case anchorIdentifier
         case capturedAt
+        case localizationEvidence
     }
 }
 
@@ -373,6 +531,7 @@ public struct SpatialPlacementRequest: Codable, Equatable, Sendable {
     public let method: String
     public let anchorIdentifier: UUID
     public let capturedAt: Date
+    public let localizationEvidence: SpatialPlacementDraft.LocalizationEvidence?
 
     public init(draft: SpatialPlacementDraft) {
         position = draft.position
@@ -382,6 +541,7 @@ public struct SpatialPlacementRequest: Codable, Equatable, Sendable {
         method = draft.method
         anchorIdentifier = draft.anchorIdentifier
         capturedAt = draft.capturedAt
+        localizationEvidence = draft.localizationEvidence
     }
 }
 

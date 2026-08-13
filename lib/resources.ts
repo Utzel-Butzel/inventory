@@ -24,6 +24,7 @@ import {
   resourceCreationRequests,
   resourceRelations,
   roomScanAssets,
+  roomScanKeyframes,
   roomScans,
   resources,
   stockLocationBalances,
@@ -373,16 +374,26 @@ export async function deleteResource(
     if (authorize && !(await authorize(locked))) {
       throw new Error("RESOURCE_PERMISSION_DENIED");
     }
-    const spatialAssets = await transaction
-      .select({
-        storageKey: roomScanAssets.storageKey,
-        url: roomScanAssets.storageUrl,
-      })
-      .from(roomScanAssets)
-      .innerJoin(roomScans, eq(roomScans.id, roomScanAssets.roomScanId))
-      .where(eq(roomScans.roomResourceId, id));
+    const [spatialAssets, keyframeImages] = await Promise.all([
+      transaction
+        .select({
+          storageKey: roomScanAssets.storageKey,
+          url: roomScanAssets.storageUrl,
+        })
+        .from(roomScanAssets)
+        .innerJoin(roomScans, eq(roomScans.id, roomScanAssets.roomScanId))
+        .where(eq(roomScans.roomResourceId, id)),
+      transaction
+        .select({
+          storageKey: roomScanKeyframes.storageKey,
+          url: roomScanKeyframes.storageUrl,
+        })
+        .from(roomScanKeyframes)
+        .innerJoin(roomScans, eq(roomScans.id, roomScanKeyframes.roomScanId))
+        .where(eq(roomScans.roomResourceId, id)),
+    ]);
     await transaction.delete(resources).where(eq(resources.id, id));
-    return spatialAssets;
+    return [...spatialAssets, ...keyframeImages];
   });
   return deleted ? { ...resource, roomScanAssets: deleted } : null;
 }

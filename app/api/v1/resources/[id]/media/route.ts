@@ -15,7 +15,6 @@ import {
 } from "@/lib/idempotency";
 import { getResource } from "@/lib/resources";
 import {
-  hasUsdzFileSignature,
   isUsdzMediaType,
   validateResourceMediaUpload,
 } from "@/lib/resource-media-contract";
@@ -23,10 +22,12 @@ import {
   assertStorageSupportsMediaType,
   deleteStoredMedia,
   maxUploadBytes,
+  maxUsdzUploadBytes,
   storeMedia,
   type StoredMedia,
   UnsupportedStorageMediaTypeError,
 } from "@/lib/storage";
+import { validateUsdzPackage } from "@/lib/usdz-package";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -121,9 +122,13 @@ export async function POST(request: Request, context: Context) {
       { status: 400 },
     );
   }
-  const sizeLimit = maxUploadBytes();
+  const regularSizeLimit = maxUploadBytes();
+  const usdzSizeLimit = maxUsdzUploadBytes();
   for (const file of files) {
-    const validation = validateResourceMediaUpload(file, sizeLimit);
+    const validation = validateResourceMediaUpload(
+      file,
+      isUsdzMediaType(file.type) ? usdzSizeLimit : regularSizeLimit,
+    );
     if (!validation.valid) {
       return Response.json(
         { error: validation.error },
@@ -131,10 +136,12 @@ export async function POST(request: Request, context: Context) {
       );
     }
     if (isUsdzMediaType(file.type)) {
-      const signature = new Uint8Array(await file.slice(0, 4).arrayBuffer());
-      if (!hasUsdzFileSignature(signature)) {
+      const packageValidation = validateUsdzPackage(
+        new Uint8Array(await file.arrayBuffer()),
+      );
+      if (!packageValidation.valid) {
         return Response.json(
-          { error: `${file.name} is not a readable USDZ package.` },
+          { error: `${file.name} is not a valid USDZ package: ${packageValidation.error}` },
           { status: 415 },
         );
       }

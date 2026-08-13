@@ -128,6 +128,24 @@ test("assembles multiple room manifests from shared batched detail rows", () => 
       resource: room("item-a", "Chair"),
     },
   ];
+  const keyframes = [
+    {
+      id: "77777777-7777-4777-8777-777777777777",
+      roomScanId: "scan-a",
+      capturedAt,
+      frameTimestamp: 12.5,
+      cameraTransform: scene.worldFromModel,
+      intrinsics: [800, 0, 0, 0, 800, 0, 400, 300, 1],
+      imageWidth: 800,
+      imageHeight: 600,
+      orientation: "right",
+      quality: 0.9,
+      featureDescriptor: null,
+      mimeType: "image/jpeg",
+      size: 1024,
+      checksumSha256: "c".repeat(64),
+    },
+  ];
   const covers = [
     {
       id: "cover-first",
@@ -146,6 +164,7 @@ test("assembles multiple room manifests from shared batched detail rows", () => 
   const manifests = assembleRoomSceneManifests(
     rows,
     assets,
+    keyframes,
     placements,
     covers,
   );
@@ -174,8 +193,12 @@ test("assembles multiple room manifests from shared batched detail rows", () => 
     manifests[1].scan.assets[0].url,
     "/api/v1/room-scans/scan-b/assets/model_usdz",
   );
+  assert.equal(
+    manifests[0].scan.keyframes[0].url,
+    "/api/v1/room-scans/scan-a/keyframes/77777777-7777-4777-8777-777777777777",
+  );
 });
 
 test("returns an empty manifest set for an empty structure batch", () => {
-  assert.deepEqual(assembleRoomSceneManifests([], [], [], []), []);
+  assert.deepEqual(assembleRoomSceneManifests([], [], [], [], []), []);
 });

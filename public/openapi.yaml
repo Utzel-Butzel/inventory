@@ -129,7 +129,7 @@ paths:
     post:
       tags: [Spatial rooms]
       summary: Upload a normalized RoomPlan scan and its native assets
-      description: Requires write scope. The client-generated scan id makes exact retries idempotent. The referenced resource must have type `place`.
+      description: Requires write scope. The client-generated scan id makes exact retries idempotent. The referenced resource must have type `place`. RGB keyframes carry ARKit camera poses and intrinsics in the scan's coordinate space; each JPEG part name must match its metadata fileField.
       requestBody:
         required: true
         content:
@@ -175,6 +175,18 @@ paths:
                   format: binary
                   description: Optional combined multi-room USDZ model produced by StructureBuilder.
                 guideImage: { type: string, format: binary }
+                keyframes:
+                  type: string
+                  contentMediaType: application/json
+                  description: UTF-8 JSON array of at most 32 RoomCameraKeyframeInput records. Each record references one JPEG multipart field named keyframe:<frame-id>.
+                texturedMesh:
+                  type: string
+                  format: binary
+                  description: Optional self-contained GLB v2 textured room mesh whose vertices are already in the scan's ARKit world frame in metres (model/gltf-binary, maximum 80 MB).
+                gaussianSplat:
+                  type: string
+                  format: binary
+                  description: Optional bounded binary-little-endian, vertex-only PLY Gaussian Splat whose vertices are already in the scan's ARKit world frame in metres (maximum 80 MB).
       responses:
         "201":
           description: Scan created and made the active revision for its room
@@ -189,6 +201,7 @@ paths:
         "404": { description: Room resource not found }
         "409": { description: Scan id belongs to another room }
         "413": { description: Combined upload exceeds the configured room-scan limit }
+        "415": { description: A keyframe or photorealistic derivative has an unsafe MIME type/extension pair }
         "422": { description: Invalid scene, identifier, date, or non-place resource }
   /room-scans/{scanId}:
     parameters:
@@ -220,7 +233,7 @@ paths:
       - name: kind
         in: path
         required: true
-        schema: { type: string, enum: [world_map, model_usdz, structure_model, guide_image] }
+        schema: { type: string, enum: [world_map, model_usdz, structure_model, guide_image, textured_mesh, gaussian_splat] }
     get:
       tags: [Spatial rooms]
       summary: Download an authenticated native room-scan asset
@@ -228,6 +241,45 @@ paths:
         "200": { description: Binary asset returned as an attachment }
         "404": { description: Scan asset or stored bytes not found }
         "422": { description: Invalid room scan identifier }
+    put:
+      tags: [Spatial rooms]
+      summary: Attach or replace a photorealistic room derivative
+      description: Accepts raw GLB bytes for textured_mesh or raw bounded PLY bytes for gaussian_splat. Vertices must already use the scan's shared ARKit world frame (metres, right-handed, Y-up); no alignment transform is inferred. This mutable enrichment does not change the idempotent identity of the original room capture.
+      requestBody:
+        required: true
+        content:
+          model/gltf-binary:
+            schema: { type: string, format: binary, maxLength: 80000000 }
+          application/octet-stream:
+            schema: { type: string, format: binary, maxLength: 80000000 }
+      responses:
+        "200": { description: Existing derivative replaced }
+        "201": { description: Derivative attached }
+        "404": { description: Room scan or mutable asset kind not found }
+        "413": { description: Asset exceeds its 80 MB limit }
+        "415": { description: Content-Type does not match the asset kind }
+        "422": { description: Invalid identifier or malformed GLB/PLY data }
+  /room-scans/{scanId}/keyframes/{keyframeId}:
+    parameters:
+      - name: scanId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: keyframeId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Spatial rooms]
+      summary: Download an authenticated RGB localization keyframe
+      responses:
+        "200":
+          description: Inline JPEG keyframe
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "404": { description: Keyframe or stored bytes not found }
+        "422": { description: Invalid room scan or keyframe identifier }
   /room-scans/{scanId}/placements/{resourceId}:
     parameters:
       - name: scanId
@@ -2138,8 +2190,8 @@ paths:
       responses:
         "200": { description: Replayed the existing upload batch }
         "201": { description: Uploaded }
-        "413": { description: A file exceeds the configured per-file upload limit }
-        "415": { description: Unsupported media type, invalid USDZ filename, or invalid USDZ package signature }
+        "413": { description: A file exceeds MAX_UPLOAD_MB, or a USDZ model exceeds MAX_USDZ_UPLOAD_MB }
+        "415": { description: Unsupported media type, invalid USDZ filename, or structurally invalid USDZ package }
         "409": { description: Idempotency key belongs to another resource }
         "503": { description: The configured storage provider cannot store the accepted media type }
     patch:
@@ -2203,7 +2255,10 @@ paths:
             schema:
               type: object
               properties:
-                sourceMediaId: { type: string, format: uuid }
+                sourceMediaId:
+                  type: string
+                  format: uuid
+                  description: Image to use as the visual reference. Defaults to the first non-AI image, then falls back to the first image.
                 prompt: { type: string, maxLength: 5000 }
                 modelId:
                   type: string
@@ -2681,7 +2736,7 @@ components:
       required: [id, kind, name, mimeType, size, checksumSha256, url, createdAt]
       properties:
         id: { type: string, format: uuid }
-        kind: { type: string, enum: [world_map, model_usdz, structure_model, guide_image] }
+        kind: { type: string, enum: [world_map, model_usdz, structure_model, guide_image, textured_mesh, gaussian_splat] }
         name: { type: string }
         mimeType: { type: string }
         size: { type: integer, minimum: 0 }
@@ -2690,7 +2745,7 @@ components:
         createdAt: { type: string, format: date-time }
     RoomScanSummary:
       type: object
-      required: [id, roomResourceId, roomName, revision, status, capturedAt, createdAt, updatedAt, placementCount, assets]
+      required: [id, roomResourceId, roomName, revision, status, capturedAt, createdAt, updatedAt, placementCount, assets, keyframes]
       properties:
         id: { type: string, format: uuid }
         roomResourceId: { type: string, format: uuid }
@@ -2715,6 +2770,10 @@ components:
         assets:
           type: array
           items: { $ref: "#/components/schemas/RoomScanAsset" }
+        keyframes:
+          type: array
+          maxItems: 32
+          items: { $ref: "#/components/schemas/RoomCameraKeyframe" }
     RoomScanUploadResult:
       type: object
       additionalProperties: false
@@ -2734,6 +2793,71 @@ components:
         method: { type: string, enum: [scene-depth, mesh-raycast, plane-raycast, manual] }
         anchorIdentifier: { type: string, format: uuid }
         capturedAt: { type: string, format: date-time }
+        localizationEvidence:
+          $ref: "#/components/schemas/PhotoLocalizationEvidence"
+    PhotoLocalizationEvidence:
+      type: object
+      additionalProperties: false
+      required: [matchedKeyframeId, distance, confidence]
+      properties:
+        matchedKeyframeId: { type: string, format: uuid }
+        distance: { type: number, minimum: 0, maximum: 1000000 }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        cameraPositionError: { type: number, minimum: 0, maximum: 100 }
+    RoomCameraKeyframeInput:
+      type: object
+      additionalProperties: false
+      required: [id, fileField, capturedAt, timestamp, cameraTransform, intrinsics, width, height, orientation, quality]
+      properties:
+        id: { type: string, format: uuid }
+        fileField:
+          type: string
+          description: Must exactly equal keyframe:<id> and name one JPEG multipart part.
+        capturedAt: { type: string, format: date-time }
+        timestamp: { type: number, minimum: 0, description: ARFrame session timestamp in seconds. }
+        cameraTransform:
+          allOf:
+            - { $ref: "#/components/schemas/SpatialMatrix4" }
+          description: Column-major worldFromCamera transform in the scan coordinate space.
+        intrinsics:
+          type: array
+          minItems: 9
+          maxItems: 9
+          items: { type: number }
+          description: Column-major ARKit 3x3 pinhole-camera matrix for the encoded native-raster pixel dimensions. Apply orientation only when displaying the JPEG.
+        width: { type: integer, minimum: 1, maximum: 4096 }
+        height: { type: integer, minimum: 1, maximum: 4096 }
+        orientation: { type: string, enum: [up, up-mirrored, down, down-mirrored, left-mirrored, right, right-mirrored, left] }
+        quality: { type: number, minimum: 0, maximum: 1 }
+        featureDescriptor:
+          type: [object, "null"]
+          properties:
+            format: { type: string, const: vision-feature-print-v1 }
+            dataBase64: { type: string, maxLength: 65536 }
+    RoomCameraKeyframe:
+      allOf:
+        - type: object
+          additionalProperties: false
+          required: [id, capturedAt, timestamp, cameraTransform, intrinsics, width, height, orientation, quality, mimeType, size, checksumSha256, url]
+          properties:
+            id: { type: string, format: uuid }
+            capturedAt: { type: string, format: date-time }
+            timestamp: { type: number, minimum: 0 }
+            cameraTransform: { $ref: "#/components/schemas/SpatialMatrix4" }
+            intrinsics:
+              type: array
+              minItems: 9
+              maxItems: 9
+              items: { type: number }
+            width: { type: integer, minimum: 1, maximum: 4096 }
+            height: { type: integer, minimum: 1, maximum: 4096 }
+            orientation: { type: string, enum: [up, up-mirrored, down, down-mirrored, left-mirrored, right, right-mirrored, left] }
+            quality: { type: number, minimum: 0, maximum: 1 }
+            featureDescriptor: { type: [object, "null"] }
+            mimeType: { type: string, const: image/jpeg }
+            size: { type: integer, minimum: 1, maximum: 6291456 }
+            checksumSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            url: { type: string }
     RoomSceneManifest:
       type: object
       required: [room, scan, placements]
@@ -2757,7 +2881,7 @@ components:
             description: { type: string }
         scan:
           type: object
-          required: [id, revision, status, scene, capturedAt, assets]
+          required: [id, revision, status, scene, capturedAt, assets, keyframes]
           properties:
             id: { type: string, format: uuid }
             structureId: { type: [string, "null"], format: uuid }
@@ -2778,6 +2902,10 @@ components:
             assets:
               type: array
               items: { $ref: "#/components/schemas/RoomScanAsset" }
+            keyframes:
+              type: array
+              maxItems: 32
+              items: { $ref: "#/components/schemas/RoomCameraKeyframe" }
         placements:
           type: array
           items:
@@ -2805,6 +2933,10 @@ components:
               confidence: { type: number, minimum: 0, maximum: 1 }
               method: { type: string, enum: [scene-depth, mesh-raycast, plane-raycast, manual] }
               anchorIdentifier: { type: [string, "null"], format: uuid }
+              localizationEvidence:
+                oneOf:
+                  - { $ref: "#/components/schemas/PhotoLocalizationEvidence" }
+                  - { type: "null" }
               capturedAt: { type: string, format: date-time }
               updatedAt: { type: string, format: date-time }
     DefinitionKey:

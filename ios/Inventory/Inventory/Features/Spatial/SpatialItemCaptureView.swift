@@ -18,6 +18,7 @@ struct SpatialItemCaptureView: View {
     @State private var errorMessage: String?
     @State private var selectionState = SpatialWorldMapSelectionState()
     @State private var worldMapLoadTask: Task<Void, Never>?
+    @State private var keyframeIndexTask: Task<Void, Never>?
     @State private var manualRoomScanID: UUID?
     @State private var manualRoomRequest = 0
 
@@ -77,6 +78,8 @@ struct SpatialItemCaptureView: View {
             .onDisappear {
                 worldMapLoadTask?.cancel()
                 worldMapLoadTask = nil
+                keyframeIndexTask?.cancel()
+                keyframeIndexTask = nil
                 selectionState.cancel()
             }
             .alert(
@@ -162,6 +165,7 @@ struct SpatialItemCaptureView: View {
                 worldMapData: worldMap.data,
                 roomScan: scan,
                 roomCandidates: worldMap.candidates,
+                keyframeMatcher: worldMap.keyframeMatcher,
                 captureRequest: captureRequest,
                 manualRoomScanID: manualRoomScanID,
                 manualRoomRequest: manualRoomRequest,
@@ -301,6 +305,8 @@ struct SpatialItemCaptureView: View {
     @MainActor
     private func startSelecting(_ entry: SpatialRoomSelectionEntry) {
         worldMapLoadTask?.cancel()
+        keyframeIndexTask?.cancel()
+        keyframeIndexTask = nil
         let scan = entry.sourceScan
         let generation = selectionState.begin(scanID: scan.id)
         selectedScan = scan
@@ -321,6 +327,8 @@ struct SpatialItemCaptureView: View {
     private func resetSelection() {
         worldMapLoadTask?.cancel()
         worldMapLoadTask = nil
+        keyframeIndexTask?.cancel()
+        keyframeIndexTask = nil
         selectionState.cancel()
         selectedScan = nil
         activeRoomScan = nil
@@ -348,6 +356,10 @@ struct SpatialItemCaptureView: View {
         do {
             async let worldMapRequest = client.downloadRoomWorldMap(scanID: scan.id)
             let sourceResponse = try await client.roomScene(scanID: scan.id)
+            let keyframeMatcher = SpatialPhotoKeyframeMatcher()
+            var keyframeSources: [(UUID, [SpatialRoomKeyframe])] = [
+                (scan.id, sourceResponse.scene.scan.keyframes ?? []),
+            ]
             var candidates = [
                 SpatialRoomDetectionCandidate(
                     scan: scan,
@@ -365,6 +377,9 @@ struct SpatialItemCaptureView: View {
                             scan: candidateScan,
                             scene: response.scene.scan.scene
                         )
+                    )
+                    keyframeSources.append(
+                        (candidateScan.id, response.scene.scan.keyframes ?? [])
                     )
                 } catch is CancellationError {
                     throw CancellationError()
@@ -385,10 +400,30 @@ struct SpatialItemCaptureView: View {
                 scanID: scan.id,
                 generation: generation,
                 data: downloadedWorldMap,
-                candidates: candidates
+                candidates: candidates,
+                keyframeMatcher: keyframeMatcher
             )
             trackingMessage = "Zeige auf bekannte Wände oder Möbel, bis der Raum erkannt ist."
             trackingReady = false
+            keyframeIndexTask?.cancel()
+            keyframeIndexTask = Task { @MainActor in
+                var indexedCount = 0
+                for (sourceScanID, keyframes) in keyframeSources where indexedCount < 24 {
+                    guard !Task.isCancelled,
+                          selectionState.accepts(scanID: scan.id, generation: generation)
+                    else { return }
+                    indexedCount += await indexKeyframes(
+                        keyframes,
+                        scanID: sourceScanID,
+                        client: client,
+                        matcher: keyframeMatcher,
+                        maximumCount: min(8, 24 - indexedCount)
+                    )
+                }
+                if selectionState.accepts(scanID: scan.id, generation: generation) {
+                    keyframeIndexTask = nil
+                }
+            }
         } catch is CancellationError {
             return
         } catch {
@@ -402,6 +437,60 @@ struct SpatialItemCaptureView: View {
             loadedWorldMap = nil
             errorMessage = error.localizedDescription
         }
+    }
+
+    @MainActor
+    private func indexKeyframes(
+        _ keyframes: [SpatialRoomKeyframe],
+        scanID: UUID,
+        client: APIClient,
+        matcher: SpatialPhotoKeyframeMatcher,
+        maximumCount: Int
+    ) async -> Int {
+        guard maximumCount > 0 else { return 0 }
+        var count = 0
+        let selected = Array(keyframes
+            .filter({
+                ($0.mimeType == nil || $0.mimeType == "image/jpeg") &&
+                    ($0.size.map { $0 <= 6 * 1_024 * 1_024 } ?? true)
+            })
+            .sorted(by: { $0.quality > $1.quality })
+            .prefix(maximumCount))
+        for batchStart in stride(from: 0, to: selected.count, by: 2) {
+            let batchEnd = min(batchStart + 2, selected.count)
+            let batch = Array(selected[batchStart ..< batchEnd])
+            let downloaded = await withTaskGroup(
+                of: SpatialRoomKeyframeReference?.self,
+                returning: [SpatialRoomKeyframeReference].self
+            ) { group in
+                for keyframe in batch {
+                    group.addTask {
+                        guard let data = try? await client.downloadRoomKeyframe(
+                            scanID: scanID,
+                            keyframeID: keyframe.id
+                        ), data.count <= 6 * 1_024 * 1_024 else { return nil }
+                        return SpatialRoomKeyframeReference(
+                            roomScanID: scanID,
+                            metadata: keyframe,
+                            imageData: data
+                        )
+                    }
+                }
+                var references: [SpatialRoomKeyframeReference] = []
+                for await reference in group {
+                    if let reference { references.append(reference) }
+                }
+                return references
+            }
+            if Task.isCancelled { return count }
+            for reference in downloaded {
+                // The actor keeps only Vision observations; JPEG Data is
+                // released as soon as each feature print has been generated.
+                await matcher.add(reference)
+                count += 1
+            }
+        }
+        return count
     }
 
     @MainActor
@@ -431,6 +520,7 @@ private struct LoadedSpatialWorldMap {
     let generation: UUID
     let data: Data
     let candidates: [SpatialRoomDetectionCandidate]
+    let keyframeMatcher: SpatialPhotoKeyframeMatcher?
 }
 
 private struct SpatialCaptureSessionIdentity: Hashable {

@@ -7,6 +7,7 @@ import {
   resources,
   resourceSpatialPlacements,
   roomScanAssets,
+  roomScanKeyframes,
   roomScans,
   spatialCoordinateSpaces,
   spatialStructures,
@@ -17,6 +18,7 @@ import type {
   RoomScene,
   SpatialPlacementInput,
 } from "@/lib/room-scene-contract";
+import type { RoomKeyframeInput } from "@/lib/room-keyframe-contract";
 import { spatialMatricesApproximatelyEqual } from "@/lib/room-scene-contract";
 import {
   RoomScanSpatialConflictError,
@@ -45,6 +47,26 @@ const serializeAsset = (asset: typeof roomScanAssets.$inferSelect) => ({
   createdAt: asset.createdAt,
 });
 
+const keyframeUrl = (scanId: string, keyframeId: string) =>
+  `/api/v1/room-scans/${encodeURIComponent(scanId)}/keyframes/${encodeURIComponent(keyframeId)}`;
+
+const serializeKeyframe = (frame: typeof roomScanKeyframes.$inferSelect) => ({
+  id: frame.id,
+  capturedAt: frame.capturedAt,
+  timestamp: frame.frameTimestamp,
+  cameraTransform: frame.cameraTransform,
+  intrinsics: frame.intrinsics,
+  width: frame.imageWidth,
+  height: frame.imageHeight,
+  orientation: frame.orientation,
+  quality: frame.quality,
+  featureDescriptor: frame.featureDescriptor,
+  mimeType: frame.mimeType,
+  size: frame.size,
+  checksumSha256: frame.checksumSha256,
+  url: keyframeUrl(frame.roomScanId, frame.id),
+});
+
 export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
   const activeOnly = options.activeOnly ?? true;
   const rows = await db
@@ -66,12 +88,17 @@ export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
 
   if (!rows.length) return { scans: [] };
   const scanIds = rows.map(({ scan }) => scan.id);
-  const [assetRows, placementCounts] = await Promise.all([
+  const [assetRows, keyframeRows, placementCounts] = await Promise.all([
     db
       .select()
       .from(roomScanAssets)
       .where(inArray(roomScanAssets.roomScanId, scanIds))
       .orderBy(asc(roomScanAssets.kind)),
+    db
+      .select()
+      .from(roomScanKeyframes)
+      .where(inArray(roomScanKeyframes.roomScanId, scanIds))
+      .orderBy(asc(roomScanKeyframes.frameTimestamp)),
     db
       .select({ roomScanId: resourceSpatialPlacements.roomScanId, value: count() })
       .from(resourceSpatialPlacements)
@@ -102,6 +129,9 @@ export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
       assets: assetRows
         .filter((asset) => asset.roomScanId === scan.id)
         .map(serializeAsset),
+      keyframes: keyframeRows
+        .filter((frame) => frame.roomScanId === scan.id)
+        .map(serializeKeyframe),
     })),
   };
 }
@@ -125,12 +155,17 @@ export async function getRoomScene(scanId: string) {
     .limit(1);
   if (!row) return null;
 
-  const [assetRows, placementRows] = await Promise.all([
+  const [assetRows, keyframeRows, placementRows] = await Promise.all([
     db
       .select()
       .from(roomScanAssets)
       .where(eq(roomScanAssets.roomScanId, scanId))
       .orderBy(asc(roomScanAssets.kind)),
+    db
+      .select()
+      .from(roomScanKeyframes)
+      .where(eq(roomScanKeyframes.roomScanId, scanId))
+      .orderBy(asc(roomScanKeyframes.frameTimestamp)),
     db
       .select({ placement: resourceSpatialPlacements, resource: resources })
       .from(resourceSpatialPlacements)
@@ -176,6 +211,7 @@ export async function getRoomScene(scanId: string) {
       capturedAt: row.scan.capturedAt,
       deviceModel: row.scan.deviceModel,
       assets: assetRows.map(serializeAsset),
+      keyframes: keyframeRows.map(serializeKeyframe),
     },
     placements: placementRows.map(({ placement, resource }) => {
       const cover = coverRows.find((item) => item.resourceId === resource.id) ?? null;
@@ -216,6 +252,7 @@ export async function getRoomScene(scanId: string) {
         confidence: placement.confidence,
         method: placement.method,
         anchorIdentifier: placement.anchorIdentifier,
+        localizationEvidence: placement.localizationEvidence,
         capturedAt: placement.capturedAt,
         updatedAt: placement.updatedAt,
       };
@@ -235,6 +272,70 @@ export async function getRoomScanAsset(
     )
     .limit(1);
   return asset ?? null;
+}
+
+export async function replaceRoomScanAsset(options: {
+  scanId: string;
+  kind: "textured_mesh" | "gaussian_splat";
+  stored: StoredBinaryAsset;
+}) {
+  return db.transaction(async (transaction) => {
+    const locked = await transaction.execute(
+      sql`select ${roomScans.id} from ${roomScans} where ${roomScans.id} = ${options.scanId} for update`,
+    );
+    if (locked.length === 0) return { kind: "scan-not-found" } as const;
+
+    const [previous] = await transaction
+      .select()
+      .from(roomScanAssets)
+      .where(
+        and(
+          eq(roomScanAssets.roomScanId, options.scanId),
+          eq(roomScanAssets.kind, options.kind),
+        ),
+      )
+      .limit(1);
+    const [asset] = await transaction
+      .insert(roomScanAssets)
+      .values({
+        roomScanId: options.scanId,
+        kind: options.kind,
+        storageKey: options.stored.storageKey,
+        storageUrl: options.stored.url,
+        name: options.stored.name,
+        mimeType: options.stored.mimeType,
+        size: options.stored.size,
+        checksumSha256: options.stored.checksumSha256,
+      })
+      .onConflictDoUpdate({
+        target: [roomScanAssets.roomScanId, roomScanAssets.kind],
+        set: {
+          storageKey: options.stored.storageKey,
+          storageUrl: options.stored.url,
+          name: options.stored.name,
+          mimeType: options.stored.mimeType,
+          size: options.stored.size,
+          checksumSha256: options.stored.checksumSha256,
+          createdAt: new Date(),
+        },
+      })
+      .returning();
+    return { kind: "ok", asset, previous: previous ?? null } as const;
+  });
+}
+
+export async function getRoomScanKeyframe(scanId: string, keyframeId: string) {
+  const [frame] = await db
+    .select()
+    .from(roomScanKeyframes)
+    .where(
+      and(
+        eq(roomScanKeyframes.roomScanId, scanId),
+        eq(roomScanKeyframes.id, keyframeId),
+      ),
+    )
+    .limit(1);
+  return frame ?? null;
 }
 
 export async function findRoomScan(scanId: string) {
@@ -262,17 +363,36 @@ export async function findRoomScanReplayIdentity(
     .where(eq(roomScans.id, scanId))
     .limit(1);
   if (!row) return null;
-  const assets = await db
-    .select({
-      kind: roomScanAssets.kind,
-      checksumSha256: roomScanAssets.checksumSha256,
-    })
-    .from(roomScanAssets)
-    .where(eq(roomScanAssets.roomScanId, scanId));
+  const [assets, keyframes] = await Promise.all([
+    db
+      .select({
+        kind: roomScanAssets.kind,
+        checksumSha256: roomScanAssets.checksumSha256,
+      })
+      .from(roomScanAssets)
+      .where(eq(roomScanAssets.roomScanId, scanId)),
+    db
+      .select()
+      .from(roomScanKeyframes)
+      .where(eq(roomScanKeyframes.roomScanId, scanId)),
+  ]);
   return {
     ...row.scan,
     coordinateSpaceGeoreference: row.coordinateSpaceGeoreference ?? null,
     assets,
+    keyframes: keyframes.map((frame) => ({
+      id: frame.id,
+      capturedAt: frame.capturedAt,
+      timestamp: frame.frameTimestamp,
+      cameraTransform: frame.cameraTransform,
+      intrinsics: frame.intrinsics,
+      width: frame.imageWidth,
+      height: frame.imageHeight,
+      orientation: frame.orientation as RoomKeyframeInput["orientation"],
+      quality: frame.quality,
+      featureDescriptor: frame.featureDescriptor,
+      checksumSha256: frame.checksumSha256,
+    })),
   };
 }
 
@@ -287,6 +407,10 @@ export async function createRoomScan(options: {
     kind: RoomScanAssetKind;
     stored: StoredBinaryAsset;
   }>;
+  keyframes?: Array<{
+    metadata: RoomKeyframeInput;
+    stored: StoredBinaryAsset;
+  }>;
   spatial?: RoomScanSpatialMetadata;
 }) {
   const replayRequest: RoomScanReplayRequest = {
@@ -297,6 +421,19 @@ export async function createRoomScan(options: {
     spatial: options.spatial,
     assets: options.assets.map(({ kind, stored }) => ({
       kind,
+      checksumSha256: stored.checksumSha256,
+    })),
+    keyframes: (options.keyframes ?? []).map(({ metadata, stored }) => ({
+      id: metadata.id,
+      capturedAt: new Date(metadata.capturedAt),
+      timestamp: metadata.timestamp,
+      cameraTransform: metadata.cameraTransform,
+      intrinsics: metadata.intrinsics,
+      width: metadata.width,
+      height: metadata.height,
+      orientation: metadata.orientation,
+      quality: metadata.quality,
+      featureDescriptor: metadata.featureDescriptor,
       checksumSha256: stored.checksumSha256,
     })),
   };
@@ -328,13 +465,19 @@ export async function createRoomScan(options: {
       .where(eq(roomScans.id, options.id))
       .limit(1);
     if (lockedExisting) {
-      const existingAssets = await transaction
-        .select({
-          kind: roomScanAssets.kind,
-          checksumSha256: roomScanAssets.checksumSha256,
-        })
-        .from(roomScanAssets)
-        .where(eq(roomScanAssets.roomScanId, options.id));
+      const [existingAssets, existingKeyframes] = await Promise.all([
+        transaction
+          .select({
+            kind: roomScanAssets.kind,
+            checksumSha256: roomScanAssets.checksumSha256,
+          })
+          .from(roomScanAssets)
+          .where(eq(roomScanAssets.roomScanId, options.id)),
+        transaction
+          .select()
+          .from(roomScanKeyframes)
+          .where(eq(roomScanKeyframes.roomScanId, options.id)),
+      ]);
       if (
         !roomScanMatchesReplayIdentity(
           {
@@ -342,6 +485,19 @@ export async function createRoomScan(options: {
             coordinateSpaceGeoreference:
               lockedExisting.coordinateSpaceGeoreference ?? null,
             assets: existingAssets,
+            keyframes: existingKeyframes.map((frame) => ({
+              id: frame.id,
+              capturedAt: frame.capturedAt,
+              timestamp: frame.frameTimestamp,
+              cameraTransform: frame.cameraTransform,
+              intrinsics: frame.intrinsics,
+              width: frame.imageWidth,
+              height: frame.imageHeight,
+              orientation: frame.orientation as RoomKeyframeInput["orientation"],
+              quality: frame.quality,
+              featureDescriptor: frame.featureDescriptor,
+              checksumSha256: frame.checksumSha256,
+            })),
           },
           replayRequest,
         )
@@ -566,6 +722,29 @@ export async function createRoomScan(options: {
         })),
       );
     }
+    if (options.keyframes?.length) {
+      await transaction.insert(roomScanKeyframes).values(
+        options.keyframes.map(({ metadata, stored }) => ({
+          id: metadata.id,
+          roomScanId: options.id,
+          capturedAt: new Date(metadata.capturedAt),
+          frameTimestamp: metadata.timestamp,
+          cameraTransform: metadata.cameraTransform,
+          intrinsics: metadata.intrinsics,
+          imageWidth: metadata.width,
+          imageHeight: metadata.height,
+          orientation: metadata.orientation,
+          quality: metadata.quality,
+          featureDescriptor: metadata.featureDescriptor ?? null,
+          storageKey: stored.storageKey,
+          storageUrl: stored.url,
+          name: stored.name,
+          mimeType: stored.mimeType,
+          size: stored.size,
+          checksumSha256: stored.checksumSha256,
+        })),
+      );
+    }
     return { kind: "created", scanId: options.id } as const;
   });
 }
@@ -604,6 +783,23 @@ export async function upsertSpatialPlacement(options: {
       .limit(1);
     if (!resource) return { kind: "resource-not-found" } as const;
 
+    if (options.placement.localizationEvidence) {
+      const [matchedFrame] = await transaction
+        .select({ id: roomScanKeyframes.id })
+        .from(roomScanKeyframes)
+        .where(
+          and(
+            eq(
+              roomScanKeyframes.id,
+              options.placement.localizationEvidence.matchedKeyframeId,
+            ),
+            eq(roomScanKeyframes.roomScanId, scan.id),
+          ),
+        )
+        .limit(1);
+      if (!matchedFrame) return { kind: "keyframe-not-found" } as const;
+    }
+
     const [x, y, zValue] = options.placement.position;
     const [qx, qy, qz, qw] = options.placement.orientation;
     const [extentX, extentY, extentZ] = options.placement.extent ?? [null, null, null];
@@ -623,6 +819,7 @@ export async function upsertSpatialPlacement(options: {
       confidence: options.placement.confidence,
       method: options.placement.method,
       anchorIdentifier: options.placement.anchorIdentifier,
+      localizationEvidence: options.placement.localizationEvidence,
       capturedAt: new Date(options.placement.capturedAt),
       updatedBy: options.actor,
       updatedAt: new Date(),

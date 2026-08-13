@@ -238,6 +238,18 @@ public final class APIClient: Sendable {
         return try await executeBytes(request)
     }
 
+    public func downloadRoomKeyframe(scanID: UUID, keyframeID: UUID) async throws -> Data {
+        let url = try makeAPIURL(path: [
+            "room-scans",
+            scanID.uuidString.lowercased(),
+            "keyframes",
+            keyframeID.uuidString.lowercased(),
+        ])
+        var request = try await authorizedRequest(url: url, method: "GET")
+        request.setValue("image/jpeg", forHTTPHeaderField: "Accept")
+        return try await executeBytes(request)
+    }
+
     public func saveSpatialPlacement(
         resourceID: UUID,
         draft: SpatialPlacementDraft

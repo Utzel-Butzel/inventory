@@ -71,9 +71,19 @@ final class MultipartBuilderTests: XCTestCase {
         let worldMapURL = directory.appendingPathComponent("room.arworldmap")
         let modelURL = directory.appendingPathComponent("room.usdz")
         let structureURL = directory.appendingPathComponent("structure.usdz")
+        let keyframeID = UUID()
+        let keyframeDirectory = directory.appendingPathComponent("keyframes")
+        try FileManager.default.createDirectory(
+            at: keyframeDirectory,
+            withIntermediateDirectories: true
+        )
+        let keyframeURL = keyframeDirectory
+            .appendingPathComponent(keyframeID.uuidString.lowercased())
+            .appendingPathExtension("jpg")
         try Data([0x01]).write(to: worldMapURL)
         try Data([0x02]).write(to: modelURL)
         try Data([0x03]).write(to: structureURL)
+        try Data([0xff, 0xd8, 0x01, 0xff, 0xd9]).write(to: keyframeURL)
 
         let structureID = UUID()
         let coordinateSpaceID = UUID()
@@ -110,7 +120,23 @@ final class MultipartBuilderTests: XCTestCase {
             roomIdentifier: "room-a",
             coordinateSpaceID: coordinateSpaceID,
             georeference: georeference,
-            structureModelURL: structureURL
+            structureModelURL: structureURL,
+            keyframes: [
+                SpatialRoomKeyframeDraft(
+                    metadata: SpatialRoomKeyframe(
+                        id: keyframeID,
+                        capturedAt: Date(timeIntervalSince1970: 1_800_000_000),
+                        timestamp: 12.5,
+                        cameraTransform: SpatialRoomScene.identityMatrix,
+                        intrinsics: [900, 0, 0, 0, 900, 0, 800, 600, 1],
+                        width: 1600,
+                        height: 1200,
+                        orientation: "right",
+                        quality: 0.9
+                    ),
+                    imageURL: keyframeURL
+                ),
+            ]
         )
 
         let body = try MultipartFormFileBuilder.buildRoomScan(
@@ -128,5 +154,14 @@ final class MultipartBuilderTests: XCTestCase {
         XCTAssertTrue(text.contains("\"headingDegrees\":28"))
         XCTAssertTrue(text.contains("\"localReferencePosition\":[1,1.5,-2]"))
         XCTAssertTrue(text.contains("name=\"structureModel\"; filename=\"structure.usdz\""))
+        XCTAssertTrue(text.contains("name=\"keyframes\""))
+        XCTAssertTrue(text.contains("\"id\":\"\(keyframeID.uuidString.lowercased())\""))
+        XCTAssertTrue(text.contains("\"fileField\":\"keyframe:\(keyframeID.uuidString.lowercased())\""))
+        XCTAssertTrue(text.contains("\"orientation\":\"right\""))
+        XCTAssertTrue(
+            text.contains(
+                "name=\"keyframe:\(keyframeID.uuidString.lowercased())\"; filename=\"\(keyframeID.uuidString.lowercased()).jpg\""
+            )
+        )
     }
 }
