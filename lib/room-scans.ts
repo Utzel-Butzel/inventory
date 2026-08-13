@@ -66,7 +66,10 @@ const serializeKeyframe = (frame: typeof roomScanKeyframes.$inferSelect) => ({
   url: keyframeUrl(frame.roomScanId, frame.id),
 });
 
-export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
+export async function listRoomScans(
+  organizationId: string,
+  options: { activeOnly?: boolean } = {},
+) {
   const activeOnly = options.activeOnly ?? true;
   const rows = await db
     .select({
@@ -76,13 +79,35 @@ export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
       coordinateSpace: spatialCoordinateSpaces,
     })
     .from(roomScans)
-    .innerJoin(resources, eq(resources.id, roomScans.roomResourceId))
-    .leftJoin(spatialStructures, eq(spatialStructures.id, roomScans.structureId))
+    .innerJoin(
+      resources,
+      and(
+        eq(resources.id, roomScans.roomResourceId),
+        eq(resources.organizationId, organizationId),
+      ),
+    )
+    .leftJoin(
+      spatialStructures,
+      and(
+        eq(spatialStructures.id, roomScans.structureId),
+        eq(spatialStructures.organizationId, organizationId),
+      ),
+    )
     .leftJoin(
       spatialCoordinateSpaces,
-      eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+      and(
+        eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+        eq(spatialCoordinateSpaces.organizationId, organizationId),
+      ),
     )
-    .where(activeOnly ? eq(roomScans.status, "active") : undefined)
+    .where(
+      activeOnly
+        ? and(
+            eq(roomScans.organizationId, organizationId),
+            eq(roomScans.status, "active"),
+          )
+        : eq(roomScans.organizationId, organizationId),
+    )
     .orderBy(desc(roomScans.capturedAt));
 
   if (!rows.length) return { scans: [] };
@@ -91,17 +116,32 @@ export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
     db
       .select()
       .from(roomScanAssets)
-      .where(inArray(roomScanAssets.roomScanId, scanIds))
+      .where(
+        and(
+          eq(roomScanAssets.organizationId, organizationId),
+          inArray(roomScanAssets.roomScanId, scanIds),
+        ),
+      )
       .orderBy(asc(roomScanAssets.kind)),
     db
       .select({ roomScanId: roomScanKeyframes.roomScanId, value: count() })
       .from(roomScanKeyframes)
-      .where(inArray(roomScanKeyframes.roomScanId, scanIds))
+      .where(
+        and(
+          eq(roomScanKeyframes.organizationId, organizationId),
+          inArray(roomScanKeyframes.roomScanId, scanIds),
+        ),
+      )
       .groupBy(roomScanKeyframes.roomScanId),
     db
       .select({ roomScanId: resourceSpatialPlacements.roomScanId, value: count() })
       .from(resourceSpatialPlacements)
-      .where(inArray(resourceSpatialPlacements.roomScanId, scanIds))
+      .where(
+        and(
+          eq(resourceSpatialPlacements.organizationId, organizationId),
+          inArray(resourceSpatialPlacements.roomScanId, scanIds),
+        ),
+      )
       .groupBy(resourceSpatialPlacements.roomScanId),
   ]);
 
@@ -135,7 +175,7 @@ export async function listRoomScans(options: { activeOnly?: boolean } = {}) {
   };
 }
 
-export async function getRoomScene(scanId: string) {
+export async function getRoomScene(organizationId: string, scanId: string) {
   const [row] = await db
     .select({
       scan: roomScans,
@@ -144,13 +184,33 @@ export async function getRoomScene(scanId: string) {
       coordinateSpace: spatialCoordinateSpaces,
     })
     .from(roomScans)
-    .innerJoin(resources, eq(resources.id, roomScans.roomResourceId))
-    .leftJoin(spatialStructures, eq(spatialStructures.id, roomScans.structureId))
+    .innerJoin(
+      resources,
+      and(
+        eq(resources.id, roomScans.roomResourceId),
+        eq(resources.organizationId, organizationId),
+      ),
+    )
+    .leftJoin(
+      spatialStructures,
+      and(
+        eq(spatialStructures.id, roomScans.structureId),
+        eq(spatialStructures.organizationId, organizationId),
+      ),
+    )
     .leftJoin(
       spatialCoordinateSpaces,
-      eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+      and(
+        eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+        eq(spatialCoordinateSpaces.organizationId, organizationId),
+      ),
     )
-    .where(eq(roomScans.id, scanId))
+    .where(
+      and(
+        eq(roomScans.organizationId, organizationId),
+        eq(roomScans.id, scanId),
+      ),
+    )
     .limit(1);
   if (!row) return null;
 
@@ -158,18 +218,39 @@ export async function getRoomScene(scanId: string) {
     db
       .select()
       .from(roomScanAssets)
-      .where(eq(roomScanAssets.roomScanId, scanId))
+      .where(
+        and(
+          eq(roomScanAssets.organizationId, organizationId),
+          eq(roomScanAssets.roomScanId, scanId),
+        ),
+      )
       .orderBy(asc(roomScanAssets.kind)),
     db
       .select()
       .from(roomScanKeyframes)
-      .where(eq(roomScanKeyframes.roomScanId, scanId))
+      .where(
+        and(
+          eq(roomScanKeyframes.organizationId, organizationId),
+          eq(roomScanKeyframes.roomScanId, scanId),
+        ),
+      )
       .orderBy(asc(roomScanKeyframes.frameTimestamp)),
     db
       .select({ placement: resourceSpatialPlacements, resource: resources })
       .from(resourceSpatialPlacements)
-      .innerJoin(resources, eq(resources.id, resourceSpatialPlacements.resourceId))
-      .where(eq(resourceSpatialPlacements.roomScanId, scanId))
+      .innerJoin(
+        resources,
+        and(
+          eq(resources.id, resourceSpatialPlacements.resourceId),
+          eq(resources.organizationId, organizationId),
+        ),
+      )
+      .where(
+        and(
+          eq(resourceSpatialPlacements.organizationId, organizationId),
+          eq(resourceSpatialPlacements.roomScanId, scanId),
+        ),
+      )
       .orderBy(asc(resources.name)),
   ]);
 
@@ -178,7 +259,13 @@ export async function getRoomScene(scanId: string) {
     ? await db
         .select()
         .from(media)
-        .where(and(inArray(media.resourceId, resourceIds), eq(media.kind, "image")))
+        .where(
+          and(
+            eq(media.organizationId, organizationId),
+            inArray(media.resourceId, resourceIds),
+            eq(media.kind, "image"),
+          ),
+        )
         .orderBy(asc(media.position))
     : [];
 
@@ -261,27 +348,40 @@ export async function getRoomScene(scanId: string) {
 }
 
 export async function getRoomScanAsset(
+  organizationId: string,
   scanId: string,
   kind: RoomScanAssetKind,
 ) {
-  const [asset] = await db
-    .select()
+  const [row] = await db
+    .select({ asset: roomScanAssets })
     .from(roomScanAssets)
+    .innerJoin(
+      roomScans,
+      and(
+        eq(roomScans.id, roomScanAssets.roomScanId),
+        eq(roomScans.organizationId, organizationId),
+      ),
+    )
     .where(
-      and(eq(roomScanAssets.roomScanId, scanId), eq(roomScanAssets.kind, kind)),
+      and(
+        eq(roomScanAssets.organizationId, organizationId),
+        eq(roomScanAssets.roomScanId, scanId),
+        eq(roomScanAssets.kind, kind),
+      ),
     )
     .limit(1);
-  return asset ?? null;
+  return row?.asset ?? null;
 }
 
 export async function replaceRoomScanAsset(options: {
+  organizationId: string;
   scanId: string;
   kind: "textured_mesh" | "gaussian_splat";
   stored: StoredBinaryAsset;
 }) {
   return db.transaction(async (transaction) => {
     const locked = await transaction.execute(
-      sql`select ${roomScans.id} from ${roomScans} where ${roomScans.id} = ${options.scanId} for update`,
+      sql`select ${roomScans.id} from ${roomScans} where ${roomScans.id} = ${options.scanId} and ${roomScans.organizationId} = ${options.organizationId} for update`,
     );
     if (locked.length === 0) return { kind: "scan-not-found" } as const;
 
@@ -292,12 +392,14 @@ export async function replaceRoomScanAsset(options: {
         and(
           eq(roomScanAssets.roomScanId, options.scanId),
           eq(roomScanAssets.kind, options.kind),
+          eq(roomScanAssets.organizationId, options.organizationId),
         ),
       )
       .limit(1);
     const [asset] = await transaction
       .insert(roomScanAssets)
       .values({
+        organizationId: options.organizationId,
         roomScanId: options.scanId,
         kind: options.kind,
         storageKey: options.stored.storageKey,
@@ -310,6 +412,7 @@ export async function replaceRoomScanAsset(options: {
       .onConflictDoUpdate({
         target: [roomScanAssets.roomScanId, roomScanAssets.kind],
         set: {
+          organizationId: options.organizationId,
           storageKey: options.stored.storageKey,
           storageUrl: options.stored.url,
           name: options.stored.name,
@@ -324,37 +427,60 @@ export async function replaceRoomScanAsset(options: {
   });
 }
 
-export async function getRoomScanKeyframe(scanId: string, keyframeId: string) {
-  const [frame] = await db
-    .select()
+export async function getRoomScanKeyframe(
+  organizationId: string,
+  scanId: string,
+  keyframeId: string,
+) {
+  const [row] = await db
+    .select({ frame: roomScanKeyframes })
     .from(roomScanKeyframes)
+    .innerJoin(
+      roomScans,
+      and(
+        eq(roomScans.id, roomScanKeyframes.roomScanId),
+        eq(roomScans.organizationId, organizationId),
+      ),
+    )
     .where(
       and(
+        eq(roomScanKeyframes.organizationId, organizationId),
         eq(roomScanKeyframes.roomScanId, scanId),
         eq(roomScanKeyframes.id, keyframeId),
       ),
     )
     .limit(1);
-  return frame ?? null;
+  return row?.frame ?? null;
 }
 
-export async function findRoomScan(scanId: string) {
+export async function findRoomScan(organizationId: string, scanId: string) {
   const [scan] = await db
     .select()
     .from(roomScans)
-    .where(eq(roomScans.id, scanId))
+    .where(
+      and(
+        eq(roomScans.organizationId, organizationId),
+        eq(roomScans.id, scanId),
+      ),
+    )
     .limit(1);
   return scan ?? null;
 }
 
 export async function updateRoomLayoutTransform(
+  organizationId: string,
   scanId: string,
   transform: import("@/lib/room-scene-contract").SpatialMatrix4 | null,
 ) {
   const [scan] = await db
     .update(roomScans)
     .set({ layoutTransform: transform, updatedAt: new Date() })
-    .where(eq(roomScans.id, scanId))
+    .where(
+      and(
+        eq(roomScans.organizationId, organizationId),
+        eq(roomScans.id, scanId),
+      ),
+    )
     .returning({
       id: roomScans.id,
       layoutTransform: roomScans.layoutTransform,
@@ -364,6 +490,7 @@ export async function updateRoomLayoutTransform(
 }
 
 export async function findRoomScanReplayIdentity(
+  organizationId: string,
   scanId: string,
 ): Promise<ExistingRoomScanReplayIdentity | null> {
   const [row] = await db
@@ -374,9 +501,17 @@ export async function findRoomScanReplayIdentity(
     .from(roomScans)
     .leftJoin(
       spatialCoordinateSpaces,
-      eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+      and(
+        eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+        eq(spatialCoordinateSpaces.organizationId, organizationId),
+      ),
     )
-    .where(eq(roomScans.id, scanId))
+    .where(
+      and(
+        eq(roomScans.organizationId, organizationId),
+        eq(roomScans.id, scanId),
+      ),
+    )
     .limit(1);
   if (!row) return null;
   const [assets, keyframes] = await Promise.all([
@@ -386,11 +521,21 @@ export async function findRoomScanReplayIdentity(
         checksumSha256: roomScanAssets.checksumSha256,
       })
       .from(roomScanAssets)
-      .where(eq(roomScanAssets.roomScanId, scanId)),
+      .where(
+        and(
+          eq(roomScanAssets.organizationId, organizationId),
+          eq(roomScanAssets.roomScanId, scanId),
+        ),
+      ),
     db
       .select()
       .from(roomScanKeyframes)
-      .where(eq(roomScanKeyframes.roomScanId, scanId)),
+      .where(
+        and(
+          eq(roomScanKeyframes.organizationId, organizationId),
+          eq(roomScanKeyframes.roomScanId, scanId),
+        ),
+      ),
   ]);
   return {
     ...row.scan,
@@ -413,6 +558,7 @@ export async function findRoomScanReplayIdentity(
 }
 
 export async function createRoomScan(options: {
+  organizationId: string;
   id: string;
   roomResourceId: string;
   scene: RoomScene;
@@ -453,7 +599,10 @@ export async function createRoomScan(options: {
       checksumSha256: stored.checksumSha256,
     })),
   };
-  const existing = await findRoomScanReplayIdentity(options.id);
+  const existing = await findRoomScanReplayIdentity(
+    options.organizationId,
+    options.id,
+  );
   if (existing) {
     if (!roomScanMatchesReplayIdentity(existing, replayRequest)) {
       throw new Error("That scan identifier belongs to a different upload payload.");
@@ -463,7 +612,7 @@ export async function createRoomScan(options: {
 
   return db.transaction(async (transaction) => {
     await transaction.execute(
-      sql`select ${resources.id} from ${resources} where ${resources.id} = ${options.roomResourceId} for update`,
+      sql`select ${resources.id} from ${resources} where ${resources.id} = ${options.roomResourceId} and ${resources.organizationId} = ${options.organizationId} for update`,
     );
     // The first idempotency check happens before files are stored. Repeat it
     // under the room lock so two simultaneous uploads for the same scan do not
@@ -476,9 +625,17 @@ export async function createRoomScan(options: {
       .from(roomScans)
       .leftJoin(
         spatialCoordinateSpaces,
-        eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+        and(
+          eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+          eq(spatialCoordinateSpaces.organizationId, options.organizationId),
+        ),
       )
-      .where(eq(roomScans.id, options.id))
+      .where(
+        and(
+          eq(roomScans.organizationId, options.organizationId),
+          eq(roomScans.id, options.id),
+        ),
+      )
       .limit(1);
     if (lockedExisting) {
       const [existingAssets, existingKeyframes] = await Promise.all([
@@ -488,11 +645,21 @@ export async function createRoomScan(options: {
             checksumSha256: roomScanAssets.checksumSha256,
           })
           .from(roomScanAssets)
-          .where(eq(roomScanAssets.roomScanId, options.id)),
+          .where(
+            and(
+              eq(roomScanAssets.organizationId, options.organizationId),
+              eq(roomScanAssets.roomScanId, options.id),
+            ),
+          ),
         transaction
           .select()
           .from(roomScanKeyframes)
-          .where(eq(roomScanKeyframes.roomScanId, options.id)),
+          .where(
+            and(
+              eq(roomScanKeyframes.organizationId, options.organizationId),
+              eq(roomScanKeyframes.roomScanId, options.id),
+            ),
+          ),
       ]);
       if (
         !roomScanMatchesReplayIdentity(
@@ -526,7 +693,12 @@ export async function createRoomScan(options: {
     const [room] = await transaction
       .select()
       .from(resources)
-      .where(eq(resources.id, options.roomResourceId))
+      .where(
+        and(
+          eq(resources.organizationId, options.organizationId),
+          eq(resources.id, options.roomResourceId),
+        ),
+      )
       .limit(1);
     if (!room) throw new Error("Room resource not found.");
     if (room.type !== "place") {
@@ -540,12 +712,18 @@ export async function createRoomScan(options: {
       let [existingStructure] = await transaction
         .select()
         .from(spatialStructures)
-        .where(eq(spatialStructures.id, structureId))
+        .where(
+          and(
+            eq(spatialStructures.organizationId, options.organizationId),
+            eq(spatialStructures.id, structureId),
+          ),
+        )
         .limit(1);
       if (!existingStructure) {
         await transaction
           .insert(spatialStructures)
           .values({
+            organizationId: options.organizationId,
             id: structureId,
             name: options.spatial.structureName ?? "Untitled structure",
             georeference: options.spatial.georeference ?? null,
@@ -556,11 +734,16 @@ export async function createRoomScan(options: {
         [existingStructure] = await transaction
           .select()
           .from(spatialStructures)
-          .where(eq(spatialStructures.id, structureId))
+          .where(
+            and(
+              eq(spatialStructures.organizationId, options.organizationId),
+              eq(spatialStructures.id, structureId),
+            ),
+          )
           .limit(1);
       }
       if (!existingStructure) {
-        throw new Error("Unable to resolve the spatial structure.");
+        throw new Error("Spatial structure not found.");
       }
       if (!existingStructure.georeference && options.spatial.georeference) {
         await transaction
@@ -570,7 +753,12 @@ export async function createRoomScan(options: {
             updatedBy: options.actor,
             updatedAt: new Date(),
           })
-          .where(eq(spatialStructures.id, structureId));
+          .where(
+            and(
+              eq(spatialStructures.organizationId, options.organizationId),
+              eq(spatialStructures.id, structureId),
+            ),
+          );
       }
 
       // A grouped upload without an explicit coordinate-space id is isolated
@@ -580,12 +768,21 @@ export async function createRoomScan(options: {
       let [existingSpace] = await transaction
         .select()
         .from(spatialCoordinateSpaces)
-        .where(eq(spatialCoordinateSpaces.id, coordinateSpaceId))
+        .where(
+          and(
+            eq(
+              spatialCoordinateSpaces.organizationId,
+              options.organizationId,
+            ),
+            eq(spatialCoordinateSpaces.id, coordinateSpaceId),
+          ),
+        )
         .limit(1);
       if (!existingSpace) {
         await transaction
           .insert(spatialCoordinateSpaces)
           .values({
+            organizationId: options.organizationId,
             id: coordinateSpaceId,
             structureId,
             georeference: options.spatial.georeference ?? null,
@@ -596,25 +793,41 @@ export async function createRoomScan(options: {
         [existingSpace] = await transaction
           .select()
           .from(spatialCoordinateSpaces)
-          .where(eq(spatialCoordinateSpaces.id, coordinateSpaceId))
+          .where(
+            and(
+              eq(
+                spatialCoordinateSpaces.organizationId,
+                options.organizationId,
+              ),
+              eq(spatialCoordinateSpaces.id, coordinateSpaceId),
+            ),
+          )
           .limit(1);
         if (!existingSpace) {
-          throw new Error("Unable to resolve the coordinate space.");
+          throw new Error("Coordinate space not found.");
         }
       }
       // Serialize grouped uploads through the coordinate-space row. The web
       // viewer and map both rely on one immutable frame definition for every
       // room in a shared AR coordinate space.
       await transaction.execute(
-        sql`select ${spatialCoordinateSpaces.id} from ${spatialCoordinateSpaces} where ${spatialCoordinateSpaces.id} = ${coordinateSpaceId} for update`,
+        sql`select ${spatialCoordinateSpaces.id} from ${spatialCoordinateSpaces} where ${spatialCoordinateSpaces.id} = ${coordinateSpaceId} and ${spatialCoordinateSpaces.organizationId} = ${options.organizationId} for update`,
       );
       [existingSpace] = await transaction
         .select()
         .from(spatialCoordinateSpaces)
-        .where(eq(spatialCoordinateSpaces.id, coordinateSpaceId))
+        .where(
+          and(
+            eq(
+              spatialCoordinateSpaces.organizationId,
+              options.organizationId,
+            ),
+            eq(spatialCoordinateSpaces.id, coordinateSpaceId),
+          ),
+        )
         .limit(1);
       if (!existingSpace) {
-        throw new Error("Unable to resolve the coordinate space.");
+        throw new Error("Coordinate space not found.");
       }
       if (existingSpace.structureId !== structureId) {
         throw new Error("That coordinate space belongs to another structure.");
@@ -640,13 +853,26 @@ export async function createRoomScan(options: {
             updatedBy: options.actor,
             updatedAt: new Date(),
           })
-          .where(eq(spatialCoordinateSpaces.id, coordinateSpaceId));
+          .where(
+            and(
+              eq(
+                spatialCoordinateSpaces.organizationId,
+                options.organizationId,
+              ),
+              eq(spatialCoordinateSpaces.id, coordinateSpaceId),
+            ),
+          );
       }
 
       const [existingCoordinateScene] = await transaction
         .select({ scene: roomScans.scene })
         .from(roomScans)
-        .where(eq(roomScans.coordinateSpaceId, coordinateSpaceId))
+        .where(
+          and(
+            eq(roomScans.organizationId, options.organizationId),
+            eq(roomScans.coordinateSpaceId, coordinateSpaceId),
+          ),
+        )
         .limit(1);
       if (
         existingCoordinateScene &&
@@ -671,9 +897,16 @@ export async function createRoomScan(options: {
       const [existingWorldMap] = await transaction
         .select({ checksumSha256: roomScanAssets.checksumSha256 })
         .from(roomScanAssets)
-        .innerJoin(roomScans, eq(roomScans.id, roomScanAssets.roomScanId))
+        .innerJoin(
+          roomScans,
+          and(
+            eq(roomScans.id, roomScanAssets.roomScanId),
+            eq(roomScans.organizationId, options.organizationId),
+          ),
+        )
         .where(
           and(
+            eq(roomScanAssets.organizationId, options.organizationId),
             eq(roomScans.coordinateSpaceId, coordinateSpaceId),
             eq(roomScanAssets.kind, "world_map"),
           ),
@@ -697,7 +930,12 @@ export async function createRoomScan(options: {
         highestRevision: sql<number>`coalesce(max(${roomScans.revision}), 0)::int`,
       })
       .from(roomScans)
-      .where(eq(roomScans.roomResourceId, room.id));
+      .where(
+        and(
+          eq(roomScans.organizationId, options.organizationId),
+          eq(roomScans.roomResourceId, room.id),
+        ),
+      );
     const revision = Number(highestRevision ?? 0) + 1;
 
     await transaction
@@ -705,11 +943,13 @@ export async function createRoomScan(options: {
       .set({ status: "superseded", updatedAt: new Date() })
       .where(
         and(
+          eq(roomScans.organizationId, options.organizationId),
           eq(roomScans.roomResourceId, room.id),
           eq(roomScans.status, "active"),
         ),
       );
     await transaction.insert(roomScans).values({
+      organizationId: options.organizationId,
       id: options.id,
       roomResourceId: room.id,
       structureId,
@@ -727,6 +967,7 @@ export async function createRoomScan(options: {
     if (options.assets.length) {
       await transaction.insert(roomScanAssets).values(
         options.assets.map(({ kind, stored }) => ({
+          organizationId: options.organizationId,
           roomScanId: options.id,
           kind,
           storageKey: stored.storageKey,
@@ -741,6 +982,7 @@ export async function createRoomScan(options: {
     if (options.keyframes?.length) {
       await transaction.insert(roomScanKeyframes).values(
         options.keyframes.map(({ metadata, stored }) => ({
+          organizationId: options.organizationId,
           id: metadata.id,
           roomScanId: options.id,
           capturedAt: new Date(metadata.capturedAt),
@@ -766,6 +1008,7 @@ export async function createRoomScan(options: {
 }
 
 export async function upsertSpatialPlacement(options: {
+  organizationId: string;
   scanId: string;
   resourceId: string;
   placement: SpatialPlacementInput;
@@ -775,19 +1018,29 @@ export async function upsertSpatialPlacement(options: {
     const [candidate] = await transaction
       .select()
       .from(roomScans)
-      .where(eq(roomScans.id, options.scanId))
+      .where(
+        and(
+          eq(roomScans.organizationId, options.organizationId),
+          eq(roomScans.id, options.scanId),
+        ),
+      )
       .limit(1);
     if (!candidate) return { kind: "scan-not-found" } as const;
 
     // Room scans and placements take the same resource-row lock. A rescan can
     // therefore never supersede a scan between the active check and the upsert.
     await transaction.execute(
-      sql`select ${resources.id} from ${resources} where ${resources.id} = ${candidate.roomResourceId} for update`,
+      sql`select ${resources.id} from ${resources} where ${resources.id} = ${candidate.roomResourceId} and ${resources.organizationId} = ${options.organizationId} for update`,
     );
     const [scan] = await transaction
       .select()
       .from(roomScans)
-      .where(eq(roomScans.id, options.scanId))
+      .where(
+        and(
+          eq(roomScans.organizationId, options.organizationId),
+          eq(roomScans.id, options.scanId),
+        ),
+      )
       .limit(1);
     if (!scan) return { kind: "scan-not-found" } as const;
     if (scan.status !== "active") return { kind: "scan-superseded" } as const;
@@ -795,7 +1048,12 @@ export async function upsertSpatialPlacement(options: {
     const [resource] = await transaction
       .select({ id: resources.id })
       .from(resources)
-      .where(eq(resources.id, options.resourceId))
+      .where(
+        and(
+          eq(resources.organizationId, options.organizationId),
+          eq(resources.id, options.resourceId),
+        ),
+      )
       .limit(1);
     if (!resource) return { kind: "resource-not-found" } as const;
 
@@ -805,6 +1063,7 @@ export async function upsertSpatialPlacement(options: {
         .from(roomScanKeyframes)
         .where(
           and(
+            eq(roomScanKeyframes.organizationId, options.organizationId),
             eq(
               roomScanKeyframes.id,
               options.placement.localizationEvidence.matchedKeyframeId,
@@ -820,6 +1079,7 @@ export async function upsertSpatialPlacement(options: {
     const [qx, qy, qz, qw] = options.placement.orientation;
     const [extentX, extentY, extentZ] = options.placement.extent ?? [null, null, null];
     const values = {
+      organizationId: options.organizationId,
       resourceId: resource.id,
       roomScanId: scan.id,
       positionX: x,
@@ -853,11 +1113,16 @@ export async function upsertSpatialPlacement(options: {
   });
 }
 
-export async function deleteSpatialPlacement(resourceId: string, scanId: string) {
+export async function deleteSpatialPlacement(
+  organizationId: string,
+  resourceId: string,
+  scanId: string,
+) {
   const [deleted] = await db
     .delete(resourceSpatialPlacements)
     .where(
       and(
+        eq(resourceSpatialPlacements.organizationId, organizationId),
         eq(resourceSpatialPlacements.resourceId, resourceId),
         eq(resourceSpatialPlacements.roomScanId, scanId),
       ),

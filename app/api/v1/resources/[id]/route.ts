@@ -36,10 +36,14 @@ export async function GET(request: Request, context: Context) {
   const authorization = await requirePermission(request, "inventory.read");
   if (authorization.response) return authorization.response;
   const { id } = await context.params;
-  const resource = await getResource(id);
+  const resource = await getResource(
+    authorization.identity.organizationId,
+    id,
+  );
   if (!resource) return Response.json({ error: "Not found" }, { status: 404 });
   try {
     const localized = await localizeResource(
+      authorization.identity.organizationId,
       resource,
       new URL(request.url).searchParams.get("language"),
     );
@@ -125,10 +129,17 @@ export async function PATCH(request: Request, context: Context) {
 
   try {
     if (parsed.data.type !== undefined) {
-      await assertActiveInventoryType(parsed.data.type);
+      await assertActiveInventoryType(
+        authorization.identity.organizationId,
+        parsed.data.type,
+      );
     }
     if (parsed.data.sku !== undefined || parsed.data.barcode !== undefined) {
-      await assertResourceIdentifiersAvailable(parsed.data, id);
+      await assertResourceIdentifiersAvailable(
+        authorization.identity.organizationId,
+        parsed.data,
+        id,
+      );
     }
     const validateCustomFields =
       parsed.data.customFields !== undefined ||
@@ -141,6 +152,7 @@ export async function PATCH(request: Request, context: Context) {
         : {}),
     };
     const resource = await updateResourceWithCustomFieldValidation({
+      organizationId: authorization.identity.organizationId,
       id,
       values,
       validateCustomFields,
@@ -186,7 +198,10 @@ export async function PATCH(request: Request, context: Context) {
     });
     if (!resource) return Response.json({ error: "Not found" }, { status: 404 });
     if (spatialDataChanged) {
-      await synchronizeSpatialContainment(authorization.identity.subject);
+      await synchronizeSpatialContainment(
+        authorization.identity.organizationId,
+        authorization.identity.subject,
+      );
     }
     const translationRelevant = [
       "name",
@@ -267,6 +282,7 @@ export async function DELETE(request: Request, context: Context) {
   let resource;
   try {
     resource = await deleteResource(
+      authorization.identity.organizationId,
       id,
       (current) =>
         canAccessResource(

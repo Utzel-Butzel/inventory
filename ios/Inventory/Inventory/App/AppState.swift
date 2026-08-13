@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 @MainActor
@@ -7,6 +8,9 @@ final class AppState: ObservableObject {
     @Published private(set) var client: APIClient?
     @Published private(set) var configurationError: String?
     @Published private(set) var grantedScopes: Set<String> = []
+    @Published private(set) var organizations: [InventoryOrganization] = []
+    @Published private(set) var activeOrganization: InventoryOrganization?
+    @Published private(set) var isSwitchingOrganization = false
     @Published private(set) var availableImageModels: [ImageGenerationModelOption] = []
     @Published private(set) var defaultImageModelID: String?
     @Published private(set) var selectedImageModelID: String?
@@ -23,6 +27,7 @@ final class AppState: ObservableObject {
     private let scopesKey = "inventory.tokenScopes"
     private let authenticationMethodKey = "inventory.authenticationMethod"
     private let tokenExpiresAtKey = "inventory.tokenExpiresAt"
+    private let organizationPreferencesKey = "inventory.organizationPreferences"
     private let imageModelPreferencesKey = "inventory.imageGenerationModelPreferences"
     private var authenticationMethod: StoredAuthenticationMethod?
     private var tokenExpiresAt: Date?
@@ -46,6 +51,12 @@ final class AppState: ObservableObject {
 
     var isConfigured: Bool { client != nil && hasStoredToken }
     var canUseAI: Bool { grantedScopes.contains("ai") }
+    var canWrite: Bool { grantedScopes.contains("write") }
+    var organizationContextIdentifier: String { client?.contextIdentifier ?? "unconfigured" }
+
+    nonisolated static func supportsInventory(scopes: Set<String>) -> Bool {
+        scopes.contains("read")
+    }
 
     func selectImageModel(_ modelID: String?) {
         guard let client else { return }
@@ -59,9 +70,9 @@ final class AppState: ObservableObject {
         var preferences = defaults.dictionary(forKey: imageModelPreferencesKey)?
             .compactMapValues { $0 as? String } ?? [:]
         if let selection {
-            preferences[client.serverURL.absoluteString] = selection
+            preferences[client.contextIdentifier] = selection
         } else {
-            preferences.removeValue(forKey: client.serverURL.absoluteString)
+            preferences.removeValue(forKey: client.contextIdentifier)
         }
         if preferences.isEmpty {
             defaults.removeObject(forKey: imageModelPreferencesKey)
@@ -153,15 +164,18 @@ final class AppState: ObservableObject {
         operationID: UUID
     ) async throws -> ResourceListResponse {
         let previousCredential = credentialSnapshot
-        let candidateClient = try makeClient(serverURL: serverURL, token: token)
+        let bootstrapClient = try makeClient(serverURL: serverURL, token: token)
+        let organizationContext = try await resolveOrganizationContext(
+            using: bootstrapClient,
+            token: token
+        )
 
-        let capabilities = try await candidateClient.capabilities()
         try ensureCurrent(operationID)
-        let candidateScopes = Set(capabilities.scopes)
-        guard candidateScopes.contains("read"), candidateScopes.contains("write") else {
-            throw APIClientError.invalidRequest("Dieses Konto darf Inventar nicht bearbeiten.")
+        let candidateScopes = Set(organizationContext.capabilities.scopes)
+        guard Self.supportsInventory(scopes: candidateScopes) else {
+            throw APIClientError.invalidRequest("Dieses Konto darf Inventar nicht anzeigen.")
         }
-        let testResult = try await candidateClient.listResources(page: 1, pageSize: 1)
+        let testResult = try await organizationContext.client.listResources(page: 1, pageSize: 1)
         try ensureCurrent(operationID)
 
         var previousLoginWasRevoked = false
@@ -169,7 +183,7 @@ final class AppState: ObservableObject {
            previousCredential.method == .login,
            isCredentialSwitch(
                from: previousCredential,
-               toServerURL: candidateClient.serverURL,
+               toServerURL: organizationContext.client.serverURL,
                token: token
            ) {
             let previousClient = try makeClient(
@@ -206,8 +220,10 @@ final class AppState: ObservableObject {
         }
 
         let (nextClient, nextClientID) = try makeActiveClient(
-            serverURL: candidateClient.serverURL,
-            token: token
+            serverURL: organizationContext.client.serverURL,
+            token: token,
+            organizationID: organizationContext.activeOrganization?.id,
+            principalIdentifier: organizationContext.principalIdentifier
         )
         defaults.set(nextClient.serverURL.absoluteString, forKey: serverKey)
         defaults.set(Array(candidateScopes).sorted(), forKey: scopesKey)
@@ -220,6 +236,12 @@ final class AppState: ObservableObject {
         serverAddress = nextClient.serverURL.absoluteString
         hasStoredToken = true
         grantedScopes = candidateScopes
+        organizations = organizationContext.organizations
+        activeOrganization = organizationContext.activeOrganization
+        rememberActiveOrganization(
+            organizationContext.activeOrganization,
+            for: nextClient.serverURL
+        )
         authenticationMethod = method
         tokenExpiresAt = expiresAt
         currentToken = token
@@ -227,10 +249,12 @@ final class AppState: ObservableObject {
         client = nextClient
         selectedTab = .inventory
         presentedTool = nil
+        pendingScanCode = nil
+        pendingCaptureCode = nil
         configurationError = nil
-        intakeQueue.configure(client: nextClient)
+        intakeQueue.configure(client: nextClient, canWrite: candidateScopes.contains("write"))
         scheduleImageModelDiscovery(
-            using: candidateClient,
+            using: nextClient,
             activeClient: nextClient,
             scopes: candidateScopes
         )
@@ -240,6 +264,79 @@ final class AppState: ObservableObject {
     func testConnection() async throws -> ResourceListResponse {
         guard let client else { throw APIClientError.missingCredential }
         return try await client.listResources(page: 1, pageSize: 1)
+    }
+
+    func switchOrganization(to organizationID: UUID) async throws {
+        guard activeOrganization?.id != organizationID else { return }
+        guard organizations.contains(where: { $0.id == organizationID }),
+              let token = currentToken,
+              let serverURL = URL(string: serverAddress) else {
+            throw APIClientError.invalidRequest("Die Organisation ist nicht verfügbar.")
+        }
+
+        let operationID = beginAuthenticationOperation()
+        isSwitchingOrganization = true
+        defer { isSwitchingOrganization = false }
+
+        let bootstrapClient = try makeClient(serverURL: serverURL, token: token)
+        let selection = try await bootstrapClient.selectOrganization(id: organizationID)
+        try ensureCurrent(operationID)
+        guard selection.organization.id == organizationID else {
+            throw APIClientError.invalidResponse
+        }
+
+        let nextOrganizations = normalizedOrganizations(
+            organizations.map { organization in
+                organization.id == selection.organization.id
+                    ? selection.organization
+                    : organization
+            }
+        )
+        guard nextOrganizations.contains(where: { $0.id == organizationID }) else {
+            throw APIClientError.invalidRequest("Du bist kein Mitglied dieser Organisation.")
+        }
+        let nextOrganization = selection.organization
+
+        let validationClient = try makeClient(
+            serverURL: serverURL,
+            token: token,
+            organizationID: organizationID
+        )
+        let capabilities = try await validationClient.capabilities()
+        let nextScopes = Set(capabilities.scopes)
+        guard Self.supportsInventory(scopes: nextScopes) else {
+            throw APIClientError.invalidRequest("Dieses Konto darf Inventar nicht anzeigen.")
+        }
+        _ = try await validationClient.listResources(page: 1, pageSize: 1)
+        try ensureCurrent(operationID)
+
+        let (nextClient, nextClientID) = try makeActiveClient(
+            serverURL: serverURL,
+            token: token,
+            organizationID: organizationID,
+            principalIdentifier: principalIdentifier(
+                from: capabilities,
+                token: token
+            )
+        )
+        organizations = nextOrganizations
+        activeOrganization = nextOrganization
+        rememberActiveOrganization(nextOrganization, for: nextClient.serverURL)
+        grantedScopes = nextScopes
+        defaults.set(Array(nextScopes).sorted(), forKey: scopesKey)
+        activeClientID = nextClientID
+        client = nextClient
+        selectedTab = .inventory
+        presentedTool = nil
+        pendingScanCode = nil
+        pendingCaptureCode = nil
+        configurationError = nil
+        intakeQueue.configure(client: nextClient, canWrite: nextScopes.contains("write"))
+        scheduleImageModelDiscovery(
+            using: nextClient,
+            activeClient: nextClient,
+            scopes: nextScopes
+        )
     }
 
     func disconnect() async throws {
@@ -269,7 +366,7 @@ final class AppState: ObservableObject {
                 if authenticationOperationID == operationID,
                    activeClientID == currentClientID,
                    self.client === currentClient {
-                    intakeQueue.configure(client: currentClient)
+                    intakeQueue.configure(client: currentClient, canWrite: grantedScopes.contains("write"))
                     configurationError = error.localizedDescription
                 }
                 throw error
@@ -293,7 +390,10 @@ final class AppState: ObservableObject {
             if authenticationOperationID == operationID,
                activeClientID == currentClientID,
                let currentClient {
-                intakeQueue.configure(client: currentClient)
+                intakeQueue.configure(
+                    client: currentClient,
+                    canWrite: grantedScopes.contains("write")
+                )
                 configurationError = error.localizedDescription
             }
             throw error
@@ -309,7 +409,7 @@ final class AppState: ObservableObject {
             return
         }
         if let client {
-            intakeQueue.configure(client: client)
+            intakeQueue.configure(client: client, canWrite: grantedScopes.contains("write"))
             return
         }
         guard hasStoredToken else { return }
@@ -375,27 +475,38 @@ final class AppState: ObservableObject {
         defer { isVerifyingStoredCredential = false }
 
         do {
-            let candidateClient = try makeClient(serverURL: serverURL, token: token)
-            let response = try await candidateClient.capabilities()
+            let bootstrapClient = try makeClient(serverURL: serverURL, token: token)
+            let organizationContext = try await resolveOrganizationContext(
+                using: bootstrapClient,
+                token: token
+            )
             try ensureCurrent(operationID)
             guard currentToken == token else { throw CancellationError() }
-            let scopes = Set(response.scopes)
-            guard scopes.contains("read"), scopes.contains("write") else {
-                throw APIClientError.invalidRequest("Dieses Konto darf Inventar nicht bearbeiten.")
+            let scopes = Set(organizationContext.capabilities.scopes)
+            guard Self.supportsInventory(scopes: scopes) else {
+                throw APIClientError.invalidRequest("Dieses Konto darf Inventar nicht anzeigen.")
             }
             let (restoredClient, restoredClientID) = try makeActiveClient(
-                serverURL: candidateClient.serverURL,
-                token: token
+                serverURL: organizationContext.client.serverURL,
+                token: token,
+                organizationID: organizationContext.activeOrganization?.id,
+                principalIdentifier: organizationContext.principalIdentifier
             )
             activeClientID = restoredClientID
             client = restoredClient
             hasStoredToken = true
             grantedScopes = scopes
+            organizations = organizationContext.organizations
+            activeOrganization = organizationContext.activeOrganization
+            rememberActiveOrganization(
+                organizationContext.activeOrganization,
+                for: restoredClient.serverURL
+            )
             defaults.set(Array(scopes).sorted(), forKey: scopesKey)
             configurationError = nil
-            intakeQueue.configure(client: restoredClient)
+            intakeQueue.configure(client: restoredClient, canWrite: scopes.contains("write"))
             scheduleImageModelDiscovery(
-                using: candidateClient,
+                using: restoredClient,
                 activeClient: restoredClient,
                 scopes: scopes
             )
@@ -412,6 +523,8 @@ final class AppState: ObservableObject {
             guard authenticationOperationID == operationID else { return }
             client = nil
             grantedScopes = []
+            organizations = []
+            activeOrganization = nil
             resetImageModelState()
             configurationError = error.localizedDescription
             intakeQueue.configure(client: nil)
@@ -465,12 +578,115 @@ final class AppState: ObservableObject {
         defaults.removeObject(forKey: tokenExpiresAtKey)
         hasStoredToken = false
         grantedScopes = []
+        organizations = []
+        activeOrganization = nil
+        isSwitchingOrganization = false
         resetImageModelState()
         authenticationMethod = nil
         tokenExpiresAt = nil
         currentToken = nil
         client = nil
         configurationError = message
+    }
+
+    private func resolveOrganizationContext(
+        using bootstrapClient: APIClient,
+        token: String
+    ) async throws -> ResolvedOrganizationContext {
+        let organizationResponse: OrganizationListResponse
+        do {
+            organizationResponse = try await bootstrapClient.organizations()
+        } catch let error as APIClientError where error.statusCode == 404 {
+            // Keep the current app usable with pre-organization Inventory servers.
+            let capabilities = try await bootstrapClient.capabilities()
+            return ResolvedOrganizationContext(
+                organizations: [],
+                activeOrganization: nil,
+                capabilities: capabilities,
+                client: bootstrapClient,
+                principalIdentifier: principalIdentifier(
+                    from: capabilities,
+                    token: token
+                )
+            )
+        }
+
+        let listedOrganizations = normalizedOrganizations(organizationResponse.organizations)
+        guard !listedOrganizations.isEmpty else {
+            throw APIClientError.invalidRequest(
+                "Diesem Konto ist noch keine Organisation zugeordnet."
+            )
+        }
+        let preferredID = storedOrganizationID(for: bootstrapClient.serverURL)
+        let selectedOrganization = preferredID.flatMap { identifier in
+            listedOrganizations.first(where: { $0.id == identifier })
+        } ?? organizationResponse.activeOrganizationId.flatMap { identifier in
+            listedOrganizations.first(where: { $0.id == identifier })
+        } ?? listedOrganizations[0]
+
+        let selection = try await bootstrapClient.selectOrganization(
+            id: selectedOrganization.id
+        )
+        guard selection.organization.id == selectedOrganization.id else {
+            throw APIClientError.invalidResponse
+        }
+        let scopedClient = try makeClient(
+            serverURL: bootstrapClient.serverURL,
+            token: token,
+            organizationID: selection.organization.id
+        )
+        let capabilities = try await scopedClient.capabilities()
+        if let reportedOrganization = capabilities.activeOrganization,
+           reportedOrganization.id != selection.organization.id {
+            throw APIClientError.invalidResponse
+        }
+        let reportedOrganizations = normalizedOrganizations(
+            capabilities.organizations ?? listedOrganizations
+        )
+        guard reportedOrganizations.contains(where: { $0.id == selectedOrganization.id }) else {
+            throw APIClientError.invalidResponse
+        }
+        let activeOrganization = capabilities.activeOrganization
+            ?? reportedOrganizations.first(where: { $0.id == selectedOrganization.id })
+            ?? selection.organization
+        return ResolvedOrganizationContext(
+            organizations: reportedOrganizations,
+            activeOrganization: activeOrganization,
+            capabilities: capabilities,
+            client: scopedClient,
+            principalIdentifier: principalIdentifier(
+                from: capabilities,
+                token: token
+            )
+        )
+    }
+
+    private func normalizedOrganizations(
+        _ candidates: [InventoryOrganization]
+    ) -> [InventoryOrganization] {
+        var seen = Set<UUID>()
+        return candidates.filter { organization in
+            !organization.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && seen.insert(organization.id).inserted
+        }
+    }
+
+    private func storedOrganizationID(for serverURL: URL) -> UUID? {
+        let stored = defaults.dictionary(forKey: organizationPreferencesKey)?[
+            serverURL.absoluteString
+        ] as? String
+        return stored.flatMap(UUID.init(uuidString:))
+    }
+
+    private func rememberActiveOrganization(
+        _ organization: InventoryOrganization?,
+        for serverURL: URL
+    ) {
+        guard let organization else { return }
+        var preferences = defaults.dictionary(forKey: organizationPreferencesKey)?
+            .compactMapValues { $0 as? String } ?? [:]
+        preferences[serverURL.absoluteString] = organization.id.uuidString.lowercased()
+        defaults.set(preferences, forKey: organizationPreferencesKey)
     }
 
     private func scheduleImageModelDiscovery(
@@ -510,9 +726,7 @@ final class AppState: ObservableObject {
                 models.contains(where: { $0.id == identifier }) ? identifier : nil
             }
 
-            let storedSelection = defaults.dictionary(forKey: imageModelPreferencesKey)?[
-                activeClient.serverURL.absoluteString
-            ] as? String
+            let storedSelection = storedImageModelID(for: activeClient)
             if let storedSelection,
                models.contains(where: { $0.id == storedSelection }) {
                 selectedImageModelID = storedSelection
@@ -532,9 +746,9 @@ final class AppState: ObservableObject {
     }
 
     private func storedImageModelID(for client: APIClient) -> String? {
-        defaults.dictionary(forKey: imageModelPreferencesKey)?[
-            client.serverURL.absoluteString
-        ] as? String
+        let preferences = defaults.dictionary(forKey: imageModelPreferencesKey)
+        return preferences?[client.contextIdentifier] as? String
+            ?? preferences?[client.serverURL.absoluteString] as? String
     }
 
     private func resetImageModelState() {
@@ -609,29 +823,60 @@ final class AppState: ObservableObject {
     private func makeClient(
         serverURL: URL,
         token: String?,
+        organizationID: UUID? = nil,
+        principalIdentifier: String? = nil,
         onUnauthorized: (@Sendable () async -> Void)? = nil
     ) throws -> APIClient {
         try APIClient(
             serverURL: serverURL,
             credentialStore: InMemoryCredentialStore(token: token),
+            organizationID: organizationID,
+            principalIdentifier: principalIdentifier,
             onUnauthorized: onUnauthorized
         )
     }
 
     private func makeActiveClient(
         serverURL: URL,
-        token: String
+        token: String,
+        organizationID: UUID?,
+        principalIdentifier: String
     ) throws -> (client: APIClient, identifier: UUID) {
         let identifier = UUID()
         let client = try makeClient(
             serverURL: serverURL,
             token: token,
+            organizationID: organizationID,
+            principalIdentifier: principalIdentifier,
             onUnauthorized: { [weak self] in
                 await self?.handleUnauthorized(clientID: identifier, token: token)
             }
         )
         return (client, identifier)
     }
+
+    private func principalIdentifier(
+        from capabilities: CapabilitiesResponse,
+        token: String
+    ) -> String {
+        let reported = capabilities.principal?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let reported, !reported.isEmpty { return reported }
+
+        // Pre-principal servers cannot identify a user independently of their
+        // credential. A one-way token fingerprint still prevents another local
+        // account from inheriting its durable upload jobs.
+        let digest = SHA256.hash(data: Data(token.utf8))
+        return "legacy-token:" + digest.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+private struct ResolvedOrganizationContext {
+    let organizations: [InventoryOrganization]
+    let activeOrganization: InventoryOrganization?
+    let capabilities: CapabilitiesResponse
+    let client: APIClient
+    let principalIdentifier: String
 }
 
 private struct CredentialSnapshot {

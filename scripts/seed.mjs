@@ -4,6 +4,9 @@ const databaseUrl =
   process.env.DATABASE_URL ??
   "postgresql://inventory:inventory@localhost:5432/inventory";
 const sql = postgres(databaseUrl, { max: 1 });
+const organizationId =
+  process.env.SEED_ORGANIZATION_ID ??
+  "00000000-0000-4000-8000-000000000001";
 
 const samples = [
   {
@@ -53,15 +56,19 @@ const samples = [
 ];
 
 try {
-  const [{ count }] = await sql`SELECT count(*)::int AS count FROM resources`;
+  const [{ count }] = await sql`
+    SELECT count(*)::int AS count
+    FROM resources
+    WHERE organization_id = ${organizationId}
+  `;
   if (count === 0) {
     for (const sample of samples) {
       await sql`
         INSERT INTO resources (
-          name, type, status, sku, quantity, location, description, tags,
+          organization_id, name, type, status, sku, quantity, location, description, tags,
           value_cents, created_by
         ) VALUES (
-          ${sample.name}, ${sample.type}, ${sample.status}, ${sample.sku},
+          ${organizationId}, ${sample.name}, ${sample.type}, ${sample.status}, ${sample.sku},
           ${sample.quantity}, ${sample.location}, ${sample.description},
           ${sample.tags}, ${sample.value}, 'seed'
         )

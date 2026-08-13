@@ -27,7 +27,10 @@ export async function GET(request: Request, context: Context) {
   }
 
   try {
-    const workflow = await getScanWorkflow(id);
+    const workflow = await getScanWorkflow(
+      authorization.identity.organizationId,
+      id,
+    );
     if (!workflow) {
       return Response.json({ error: "Workflow not found." }, { status: 404 });
     }
@@ -70,6 +73,7 @@ export async function PATCH(request: Request, context: Context) {
 
   try {
     const workflow = await updateScanWorkflow(
+      authorization.identity.organizationId,
       id,
       parsed.data,
       authorization.identity.subject,
@@ -108,7 +112,11 @@ export async function DELETE(request: Request, context: Context) {
   }
 
   try {
-    const deleted = await deleteScanWorkflow(id, revision.data);
+    const deleted = await deleteScanWorkflow(
+      authorization.identity.organizationId,
+      id,
+      revision.data,
+    );
     if (!deleted) {
       return Response.json({ error: "Workflow not found." }, { status: 404 });
     }

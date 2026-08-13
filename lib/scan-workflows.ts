@@ -148,32 +148,50 @@ const assertWorkflowConfiguration = (workflow: StockScanWorkflowRecord) => {
   }
 };
 
-export async function listScanWorkflows() {
+export async function listScanWorkflows(organizationId: string) {
   const rows = await db
     .select()
     .from(stockScanWorkflows)
+    .where(eq(stockScanWorkflows.organizationId, organizationId))
     .orderBy(asc(stockScanWorkflows.name), asc(stockScanWorkflows.id));
   return rows.map(workflowDto);
 }
 
-export async function getScanWorkflow(id: string) {
+export async function getScanWorkflow(organizationId: string, id: string) {
   const [row] = await db
     .select()
     .from(stockScanWorkflows)
-    .where(eq(stockScanWorkflows.id, id))
+    .where(
+      and(
+        eq(stockScanWorkflows.organizationId, organizationId),
+        eq(stockScanWorkflows.id, id),
+      ),
+    )
     .limit(1);
   return row ? workflowDto(row) : null;
 }
 
 export async function createScanWorkflow(
+  organizationId: string,
   input: ScanWorkflowCreateInput,
   actor: string,
 ) {
   const [resource] = await db
     .select({ id: resources.id, trackingMode: stockSettings.trackingMode })
     .from(resources)
-    .leftJoin(stockSettings, eq(stockSettings.resourceId, resources.id))
-    .where(eq(resources.id, input.resourceId))
+    .leftJoin(
+      stockSettings,
+      and(
+        eq(stockSettings.organizationId, organizationId),
+        eq(stockSettings.resourceId, resources.id),
+      ),
+    )
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, input.resourceId),
+      ),
+    )
     .limit(1);
   if (!resource) {
     throw new ScanWorkflowError("The selected inventory item does not exist.", 422);
@@ -187,12 +205,13 @@ export async function createScanWorkflow(
 
   const [created] = await db
     .insert(stockScanWorkflows)
-    .values({ ...input, createdBy: actor, updatedBy: actor })
+    .values({ organizationId, ...input, createdBy: actor, updatedBy: actor })
     .returning();
   return workflowDto(created);
 }
 
 export async function updateScanWorkflow(
+  organizationId: string,
   id: string,
   patch: ScanWorkflowPatchInput,
   actor: string,
@@ -200,7 +219,12 @@ export async function updateScanWorkflow(
   const [current] = await db
     .select()
     .from(stockScanWorkflows)
-    .where(eq(stockScanWorkflows.id, id))
+    .where(
+      and(
+        eq(stockScanWorkflows.organizationId, organizationId),
+        eq(stockScanWorkflows.id, id),
+      ),
+    )
     .limit(1);
   if (!current) throw new ScanWorkflowError("Workflow not found.", 404);
   if (current.revision !== patch.revision) {
@@ -235,8 +259,19 @@ export async function updateScanWorkflow(
     const [resource] = await db
       .select({ id: resources.id, trackingMode: stockSettings.trackingMode })
       .from(resources)
-      .leftJoin(stockSettings, eq(stockSettings.resourceId, resources.id))
-      .where(eq(resources.id, merged.data.resourceId))
+      .leftJoin(
+        stockSettings,
+        and(
+          eq(stockSettings.organizationId, organizationId),
+          eq(stockSettings.resourceId, resources.id),
+        ),
+      )
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, merged.data.resourceId),
+        ),
+      )
       .limit(1);
     if (!resource) {
       throw new ScanWorkflowError(
@@ -263,6 +298,7 @@ export async function updateScanWorkflow(
     })
     .where(
       and(
+        eq(stockScanWorkflows.organizationId, organizationId),
         eq(stockScanWorkflows.id, id),
         eq(stockScanWorkflows.revision, revision),
       ),
@@ -273,7 +309,12 @@ export async function updateScanWorkflow(
     const [latest] = await db
       .select({ revision: stockScanWorkflows.revision })
       .from(stockScanWorkflows)
-      .where(eq(stockScanWorkflows.id, id))
+      .where(
+        and(
+          eq(stockScanWorkflows.organizationId, organizationId),
+          eq(stockScanWorkflows.id, id),
+        ),
+      )
       .limit(1);
     if (!latest) throw new ScanWorkflowError("Workflow not found.", 404);
     throw new ScanWorkflowError(
@@ -285,11 +326,16 @@ export async function updateScanWorkflow(
   return workflowDto(saved);
 }
 
-export async function deleteScanWorkflow(id: string, revision: number) {
+export async function deleteScanWorkflow(
+  organizationId: string,
+  id: string,
+  revision: number,
+) {
   const [deleted] = await db
     .delete(stockScanWorkflows)
     .where(
       and(
+        eq(stockScanWorkflows.organizationId, organizationId),
         eq(stockScanWorkflows.id, id),
         eq(stockScanWorkflows.revision, revision),
       ),
@@ -300,7 +346,12 @@ export async function deleteScanWorkflow(id: string, revision: number) {
   const [current] = await db
     .select({ revision: stockScanWorkflows.revision })
     .from(stockScanWorkflows)
-    .where(eq(stockScanWorkflows.id, id))
+    .where(
+      and(
+        eq(stockScanWorkflows.organizationId, organizationId),
+        eq(stockScanWorkflows.id, id),
+      ),
+    )
     .limit(1);
   if (!current) throw new ScanWorkflowError("Workflow not found.", 404);
   throw new ScanWorkflowError(
@@ -494,11 +545,20 @@ const assertResolvedUnitGuard = (
   }
 };
 
-export async function resolveStockScan(workflowId: string, scannedValue: string) {
+export async function resolveStockScan(
+  organizationId: string,
+  workflowId: string,
+  scannedValue: string,
+) {
   const [workflow] = await db
     .select()
     .from(stockScanWorkflows)
-    .where(eq(stockScanWorkflows.id, workflowId))
+    .where(
+      and(
+        eq(stockScanWorkflows.organizationId, organizationId),
+        eq(stockScanWorkflows.id, workflowId),
+      ),
+    )
     .limit(1);
   if (!workflow) throw new ScanWorkflowError("Workflow not found.", 404);
   if (!workflow.enabled) {
@@ -516,8 +576,19 @@ export async function resolveStockScan(workflowId: string, scannedValue: string)
       trackingMode: stockSettings.trackingMode,
     })
     .from(resources)
-    .leftJoin(stockSettings, eq(stockSettings.resourceId, resources.id))
-    .where(eq(resources.id, workflow.resourceId))
+    .leftJoin(
+      stockSettings,
+      and(
+        eq(stockSettings.organizationId, organizationId),
+        eq(stockSettings.resourceId, resources.id),
+      ),
+    )
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, workflow.resourceId),
+      ),
+    )
     .limit(1);
   if (!resource) {
     throw new ScanWorkflowError("The workflow inventory item no longer exists.", 409);
@@ -534,6 +605,7 @@ export async function resolveStockScan(workflowId: string, scannedValue: string)
     .from(stockUnits)
     .where(
       and(
+        eq(stockUnits.organizationId, organizationId),
         eq(stockUnits.resourceId, workflow.resourceId),
         eq(stockUnits.code, identifier),
       ),
@@ -578,6 +650,7 @@ type ExecutionIdempotency = {
 };
 
 export async function executeStockScan(
+  organizationId: string,
   input: StockScanExecuteInput,
   actor: string,
   idempotency: ExecutionIdempotency,
@@ -603,14 +676,24 @@ export async function executeStockScan(
           response: stockScanExecutions.response,
         })
         .from(stockScanExecutions)
-        .where(eq(stockScanExecutions.idempotencyKey, idempotency.key))
+        .where(
+          and(
+            eq(stockScanExecutions.organizationId, organizationId),
+            eq(stockScanExecutions.idempotencyKey, idempotency.key),
+          ),
+        )
         .limit(1);
       if (existingExecution) return validateReplay(existingExecution);
 
       const [initialWorkflow] = await transaction
         .select()
         .from(stockScanWorkflows)
-        .where(eq(stockScanWorkflows.id, input.workflowId))
+        .where(
+          and(
+            eq(stockScanWorkflows.organizationId, organizationId),
+            eq(stockScanWorkflows.id, input.workflowId),
+          ),
+        )
         .limit(1);
       if (!initialWorkflow) throw new ScanWorkflowError("Workflow not found.", 404);
 
@@ -625,7 +708,12 @@ export async function executeStockScan(
           updatedAt: resources.updatedAt,
         })
         .from(resources)
-        .where(eq(resources.id, initialWorkflow.resourceId))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, initialWorkflow.resourceId),
+          ),
+        )
         .limit(1)
         .for("update");
       if (!resource) {
@@ -642,7 +730,12 @@ export async function executeStockScan(
           response: stockScanExecutions.response,
         })
         .from(stockScanExecutions)
-        .where(eq(stockScanExecutions.idempotencyKey, idempotency.key))
+        .where(
+          and(
+            eq(stockScanExecutions.organizationId, organizationId),
+            eq(stockScanExecutions.idempotencyKey, idempotency.key),
+          ),
+        )
         .limit(1);
       if (executionAfterLock) return validateReplay(executionAfterLock);
 
@@ -652,7 +745,12 @@ export async function executeStockScan(
       const [workflow] = await transaction
         .select()
         .from(stockScanWorkflows)
-        .where(eq(stockScanWorkflows.id, input.workflowId))
+        .where(
+          and(
+            eq(stockScanWorkflows.organizationId, organizationId),
+            eq(stockScanWorkflows.id, input.workflowId),
+          ),
+        )
         .limit(1)
         .for("update");
       if (!workflow) throw new ScanWorkflowError("Workflow not found.", 404);
@@ -685,7 +783,12 @@ export async function executeStockScan(
       const [settings] = await transaction
         .select({ trackingMode: stockSettings.trackingMode })
         .from(stockSettings)
-        .where(eq(stockSettings.resourceId, resource.id))
+        .where(
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            eq(stockSettings.resourceId, resource.id),
+          ),
+        )
         .limit(1);
       if (settings?.trackingMode !== "serialized") {
         throw new ScanWorkflowError(
@@ -707,6 +810,7 @@ export async function executeStockScan(
         .from(stockUnits)
         .where(
           and(
+            eq(stockUnits.organizationId, organizationId),
             eq(stockUnits.resourceId, resource.id),
             eq(stockUnits.code, identifier),
           ),
@@ -719,6 +823,7 @@ export async function executeStockScan(
           .from(inventoryAssignments)
           .where(
             and(
+              eq(inventoryAssignments.organizationId, organizationId),
               eq(inventoryAssignments.stockUnitId, existingUnit.id),
               eq(inventoryAssignments.status, "active"),
             ),
@@ -766,12 +871,18 @@ export async function executeStockScan(
             lastMovedAt: now,
             updatedAt: now,
           })
-          .where(eq(stockUnits.id, existingUnit.id))
+          .where(
+            and(
+              eq(stockUnits.organizationId, organizationId),
+              eq(stockUnits.id, existingUnit.id),
+            ),
+          )
           .returning();
       } else {
         [savedUnit] = await transaction
           .insert(stockUnits)
           .values({
+            organizationId,
             resourceId: resource.id,
             code: identifier,
             status: nextStatus,
@@ -786,12 +897,18 @@ export async function executeStockScan(
       await transaction
         .update(resources)
         .set({ quantity: balanceAfter, updatedAt: now })
-        .where(eq(resources.id, resource.id));
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, resource.id),
+          ),
+        );
       const statusChanged =
         existingUnit !== undefined && existingUnit.status !== nextStatus;
       const [movement] = await transaction
         .insert(stockMovements)
         .values({
+          organizationId,
           resourceId: resource.id,
           unitId: savedUnit.id,
           delta,
@@ -831,6 +948,7 @@ export async function executeStockScan(
       };
       const storedResponse = jsonRecord(response);
       await transaction.insert(stockScanExecutions).values({
+        organizationId,
         idempotencyKey: idempotency.key,
         workflowId: workflow.id,
         workflowRevision: workflow.revision,
@@ -855,7 +973,12 @@ export async function executeStockScan(
         response: stockScanExecutions.response,
       })
       .from(stockScanExecutions)
-      .where(eq(stockScanExecutions.idempotencyKey, idempotency.key))
+      .where(
+        and(
+          eq(stockScanExecutions.organizationId, organizationId),
+          eq(stockScanExecutions.idempotencyKey, idempotency.key),
+        ),
+      )
       .limit(1);
     if (winner) return validateReplay(winner);
     throw error;

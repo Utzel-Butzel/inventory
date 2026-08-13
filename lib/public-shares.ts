@@ -181,8 +181,11 @@ function attachPublicMedia(
   });
 }
 
-async function publicCustomFieldDefinitions() {
-  const definitions = await listCustomFieldDefinitions({ entityType: "inventory" });
+async function publicCustomFieldDefinitions(organizationId: string) {
+  const definitions = await listCustomFieldDefinitions({
+    organizationId,
+    entityType: "inventory",
+  });
   return definitions
     .filter((definition) => definition.fieldType !== "reference")
     .map(
@@ -212,17 +215,23 @@ function redactReferenceFields(
   }));
 }
 
-export async function listPublicShares() {
+export async function listPublicShares(organizationId: string) {
   const rows = await db
     .select({ share: publicShares, resourceName: resources.name })
     .from(publicShares)
     .leftJoin(resources, eq(publicShares.resourceId, resources.id))
-    .where(isNull(publicShares.revokedAt))
+    .where(
+      and(
+        eq(publicShares.organizationId, organizationId),
+        isNull(publicShares.revokedAt),
+      ),
+    )
     .orderBy(desc(publicShares.createdAt));
   return rows.map((row) => summaryDto(row.share, row.resourceName));
 }
 
 export async function createPublicShare(
+  organizationId: string,
   input: PublicShareCreateInput,
   actor: string,
 ) {
@@ -230,11 +239,17 @@ export async function createPublicShare(
     const [resource] = await db
       .select({ id: resources.id })
       .from(resources)
-      .where(eq(resources.id, input.resourceId))
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, input.resourceId),
+        ),
+      )
       .limit(1);
     if (!resource) throw new PublicShareError("Inventory item not found.", 404);
   } else if (input.filter) {
     const definitions = await listCustomFieldDefinitions({
+      organizationId,
       entityType: "inventory",
     });
     const definition = definitions.find(
@@ -257,6 +272,7 @@ export async function createPublicShare(
   const [created] = await db
     .insert(publicShares)
     .values({
+      organizationId,
       name: input.name,
       scope: input.scope,
       resourceId: input.scope === "item" ? input.resourceId : null,
@@ -270,19 +286,30 @@ export async function createPublicShare(
     const [resource] = await db
       .select({ name: resources.name })
       .from(resources)
-      .where(eq(resources.id, created.resourceId))
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, created.resourceId),
+        ),
+      )
       .limit(1);
     resourceName = resource?.name ?? null;
   }
   return summaryDto(created, resourceName);
 }
 
-export async function revokePublicShare(id: string) {
+export async function revokePublicShare(organizationId: string, id: string) {
   if (!publicShareIdSchema.safeParse(id).success) return false;
   const [revoked] = await db
     .update(publicShares)
     .set({ revokedAt: new Date() })
-    .where(and(eq(publicShares.id, id), isNull(publicShares.revokedAt)))
+    .where(
+      and(
+        eq(publicShares.organizationId, organizationId),
+        eq(publicShares.id, id),
+        isNull(publicShares.revokedAt),
+      ),
+    )
     .returning({ id: publicShares.id });
   return Boolean(revoked);
 }
@@ -320,7 +347,10 @@ export async function listPublicShareResources(options: {
       pagination: { page, pageSize, total: 0, pages: 1 },
     };
   }
-  const conditions: SQL[] = [shareCondition];
+  const conditions: SQL[] = [
+    eq(resources.organizationId, options.share.organizationId),
+    shareCondition,
+  ];
   if (query) {
     const pattern = `%${query}%`;
     conditions.push(
@@ -348,11 +378,18 @@ export async function listPublicShareResources(options: {
     ? await db
         .select()
         .from(media)
-        .where(inArray(media.resourceId, rows.map((row) => row.id)))
+        .where(
+          and(
+            eq(media.organizationId, options.share.organizationId),
+            inArray(media.resourceId, rows.map((row) => row.id)),
+          ),
+        )
         .orderBy(asc(media.position))
     : [];
   const total = totalRows[0]?.value ?? 0;
-  const definitions = await publicCustomFieldDefinitions();
+  const definitions = await publicCustomFieldDefinitions(
+    options.share.organizationId,
+  );
   return {
     resources: redactReferenceFields(
       attachPublicMedia(options.share.id, rows, mediaRows),
@@ -380,16 +417,25 @@ export async function getPublicSharedResource(
     .select()
     .from(resources)
     .where(
-      and(eq(resources.id, requestedId), shareCondition),
+      and(
+        eq(resources.organizationId, share.organizationId),
+        eq(resources.id, requestedId),
+        shareCondition,
+      ),
     )
     .limit(1);
   if (!row) return null;
   const mediaRows = await db
     .select()
     .from(media)
-    .where(eq(media.resourceId, row.id))
+    .where(
+      and(
+        eq(media.organizationId, share.organizationId),
+        eq(media.resourceId, row.id),
+      ),
+    )
     .orderBy(asc(media.position));
-  const definitions = await publicCustomFieldDefinitions();
+  const definitions = await publicCustomFieldDefinitions(share.organizationId);
   const resource = redactReferenceFields(
     attachPublicMedia(share.id, [row], mediaRows),
     definitions,
@@ -406,7 +452,14 @@ export async function getPublicSharedMedia(shareId: string, mediaId: string) {
     .select({ item: media })
     .from(media)
     .innerJoin(resources, eq(media.resourceId, resources.id))
-    .where(and(eq(media.id, mediaId), shareCondition))
+    .where(
+      and(
+        eq(media.organizationId, share.organizationId),
+        eq(resources.organizationId, share.organizationId),
+        eq(media.id, mediaId),
+        shareCondition,
+      ),
+    )
     .limit(1);
   return row?.item ?? null;
 }

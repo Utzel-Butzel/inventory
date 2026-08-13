@@ -5,6 +5,10 @@ import { getEffectiveRole } from "@/lib/access-control";
 import { hashApiToken } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { authenticateLocalUser } from "@/lib/local-auth";
+import {
+  listOrganizationsForUser,
+  selectOrganization,
+} from "@/lib/organizations";
 import { checkRateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { nativeLoginInputSchema } from "@/lib/validators";
 
@@ -118,6 +122,22 @@ export async function POST(request: Request) {
     );
   }
 
+  const organizations = await listOrganizationsForUser(user.id);
+  const organization = selectOrganization(
+    organizations,
+    parsed.data.organizationId,
+  );
+  if (!organization) {
+    return Response.json(
+      {
+        error: parsed.data.organizationId
+          ? "Organization not found."
+          : "This account does not belong to an organization.",
+      },
+      { status: parsed.data.organizationId ? 404 : 403, headers: noStoreHeaders },
+    );
+  }
+
   resetRateLimit(accountLimitKey);
   resetRateLimit(pairLimitKey);
 
@@ -125,7 +145,10 @@ export async function POST(request: Request) {
   const expiresAt = new Date(
     Date.now() + nativeTokenLifetimeDays() * 24 * 60 * 60_000,
   );
-  const effectiveRole = await getEffectiveRole(user.role);
+  const effectiveRole = await getEffectiveRole(
+    organization.role,
+    organization.id,
+  );
   if (!effectiveRole) {
     return Response.json(
       { error: "This account is assigned to a role that no longer exists." },
@@ -146,6 +169,7 @@ export async function POST(request: Request) {
     createdBy: user.email,
     userId: user.id,
     userSessionVersion: user.sessionVersion,
+    organizationId: organization.id,
     expiresAt,
   });
 
@@ -156,10 +180,12 @@ export async function POST(request: Request) {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        role: organization.role,
       },
       scopes,
       expiresAt: expiresAt.toISOString(),
+      organization,
+      organizations,
     },
     { status: 201, headers: noStoreHeaders },
   );

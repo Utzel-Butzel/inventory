@@ -1,7 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
+import {
+  OrganizationLink as Link,
+  useOrganizationHref,
+} from "@/components/organization-routing";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useT } from "next-i18next/client";
 import {
@@ -86,6 +89,7 @@ export function RoomSceneBrowser() {
     [locale],
   );
   const router = useRouter();
+  const organizationHref = useOrganizationHref();
   const searchParams = useSearchParams();
   const [scans, setScans] = useState<ClientRoomScanSummary[]>([]);
   const [manifest, setManifest] = useState<ClientRoomSceneManifest | null>(null);
@@ -112,9 +116,12 @@ export function RoomSceneBrowser() {
       if (resourceId) params.set("resource", resourceId);
       else params.delete("resource");
       const suffix = params.toString();
-      router.replace(suffix ? `/spaces?${suffix}` : "/spaces", { scroll: false });
+      router.replace(
+        organizationHref(suffix ? `/spaces?${suffix}` : "/spaces"),
+        { scroll: false },
+      );
     },
-    [router, searchParams],
+    [organizationHref, router, searchParams],
   );
 
   useEffect(() => {
@@ -271,7 +278,10 @@ export function RoomSceneBrowser() {
     params.delete("room");
     params.delete("resource");
     const suffix = params.toString();
-    router.replace(suffix ? `/spaces?${suffix}` : "/spaces", { scroll: false });
+    router.replace(
+      organizationHref(suffix ? `/spaces?${suffix}` : "/spaces"),
+      { scroll: false },
+    );
   };
 
   const selectFloor = (identifier: string) => {
@@ -290,7 +300,9 @@ export function RoomSceneBrowser() {
     if (scanId) params.set("room", scanId);
     else params.delete("room");
     params.delete("resource");
-    router.replace(`/spaces?${params.toString()}`, { scroll: false });
+    router.replace(organizationHref(`/spaces?${params.toString()}`), {
+      scroll: false,
+    });
   };
 
   const selectResource = useCallback(

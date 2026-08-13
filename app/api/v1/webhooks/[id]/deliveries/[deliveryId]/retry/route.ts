@@ -15,7 +15,11 @@ export async function POST(request: Request, context: Context) {
   ) {
     return Response.json({ error: "Invalid webhook or delivery id." }, { status: 422 });
   }
-  const delivery = await retryWebhookDelivery(id, deliveryId);
+  const delivery = await retryWebhookDelivery(
+    authorization.identity.organizationId,
+    id,
+    deliveryId,
+  );
   if (!delivery) {
     return Response.json(
       { error: "Failed delivery not found." },

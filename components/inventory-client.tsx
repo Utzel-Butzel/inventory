@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { OrganizationLink as Link } from "@/components/organization-routing";
 import { useT } from "next-i18next/client";
 import {
   ArrowRight,

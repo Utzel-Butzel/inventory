@@ -81,6 +81,7 @@ export async function POST(request: Request, context: Context) {
 
   try {
     const result = await receivePurchaseOrderLine(
+      authorization.identity.organizationId,
       id,
       lineId,
       {

@@ -15,9 +15,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function DataSettingsPage() {
-  const [identity, inventoryTypes, { t }] = await Promise.all([
-    getSessionIdentity(),
-    listInventoryTypes(),
+  const identity = await getSessionIdentity();
+  const [inventoryTypes, { t }] = await Promise.all([
+    identity ? listInventoryTypes(identity.organizationId) : Promise.resolve([]),
     getT("settings"),
   ]);
 

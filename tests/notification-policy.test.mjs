@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 
 import {
   notificationPreferencePatchSchema,
@@ -129,5 +130,22 @@ test("editable preference payloads omit database and identity fields", () => {
       emailEnabled: false,
     }),
     { frequency: "daily", digestHour: 8, emailEnabled: false },
+  );
+});
+
+test("session-triggered notification cycles stay in the active organization", async () => {
+  const [route, service] = await Promise.all([
+    readFile(
+      new URL("../app/api/v1/notifications/run/route.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../lib/notifications.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(route, /organizationId = authorization\.identity\.organizationId/);
+  assert.match(route, /runNotificationCycle\(new Date\(\), organizationId\)/);
+  assert.match(
+    service,
+    /eq\(notificationPreferences\.organizationId, organizationId\)/,
   );
 });

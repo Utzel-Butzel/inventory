@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { media } from "@/db/schema";
 import { requirePermission } from "@/lib/api-auth";
@@ -18,7 +18,12 @@ export async function GET(request: Request, context: Context) {
   const [item] = await db
     .select()
     .from(media)
-    .where(eq(media.storageKey, storageKey))
+    .where(
+      and(
+        eq(media.organizationId, authorization.identity.organizationId),
+        eq(media.storageKey, storageKey),
+      ),
+    )
     .limit(1);
   if (!item || !item.url.startsWith("/api/files/")) {
     return Response.json({ error: "Not found" }, { status: 404 });

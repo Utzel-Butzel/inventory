@@ -1,7 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
+import {
+  OrganizationLink as Link,
+  useOrganizationHref,
+} from "@/components/organization-routing";
 import { useT } from "next-i18next/client";
 import {
   Box,
@@ -127,6 +130,7 @@ async function loadEveryResource() {
 }
 
 export function InventoryMap({ canEdit }: { canEdit: boolean }) {
+  const organizationHref = useOrganizationHref();
   const { t, i18n } = useT("spatial");
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
@@ -185,8 +189,12 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
     if (floor) params.set("floor", floor);
     else params.delete("floor");
     const suffix = params.toString();
-    window.history.replaceState(null, "", suffix ? `/map?${suffix}` : "/map");
-  }, []);
+    window.history.replaceState(
+      null,
+      "",
+      organizationHref(suffix ? `/map?${suffix}` : "/map"),
+    );
+  }, [organizationHref]);
 
   useEffect(() => {
     const controller = new AbortController();

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requirePermission, requireResourcePermission } from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import { resourceVariantCreateSchema } from "@/lib/resource-variant-contract";
 import {
   createResourceVariant,
@@ -13,13 +13,20 @@ type Context = { params: Promise<{ id: string }> };
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requirePermission(request, "inventory.read");
-  if (authorization.response) return authorization.response;
   const { id } = await context.params;
   if (!z.string().uuid().safeParse(id).success) {
     return Response.json({ error: "Invalid resource id." }, { status: 422 });
   }
-  const result = await listResourceVariants(id);
+  const authorization = await requireResourcePermission(
+    request,
+    "inventory.read",
+    id,
+  );
+  if (authorization.response) return authorization.response;
+  const result = await listResourceVariants(
+    authorization.identity.organizationId,
+    id,
+  );
   if (!result) return Response.json({ error: "Not found" }, { status: 404 });
   return Response.json(result);
 }
@@ -51,6 +58,7 @@ export async function POST(request: Request, context: Context) {
   }
   try {
     const variant = await createResourceVariant(
+      authorization.identity.organizationId,
       id,
       parsed.data,
       authorization.identity.subject,

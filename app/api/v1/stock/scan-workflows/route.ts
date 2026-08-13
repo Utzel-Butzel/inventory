@@ -13,7 +13,11 @@ export async function GET(request: Request) {
   if (authorization.response) return authorization.response;
 
   try {
-    return Response.json({ workflows: await listScanWorkflows() });
+    return Response.json({
+      workflows: await listScanWorkflows(
+        authorization.identity.organizationId,
+      ),
+    });
   } catch {
     return Response.json(
       { error: "Unable to load scan workflows." },
@@ -48,6 +52,7 @@ export async function POST(request: Request) {
 
   try {
     const workflow = await createScanWorkflow(
+      authorization.identity.organizationId,
       parsed.data,
       authorization.identity.subject,
     );

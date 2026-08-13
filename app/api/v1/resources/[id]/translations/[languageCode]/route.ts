@@ -71,6 +71,7 @@ export async function PATCH(request: Request, context: Context) {
   }
   try {
     const result = await updateManualResourceTranslation({
+      organizationId: authorization.identity.organizationId,
       resourceId: id,
       languageCode,
       expectedRevision: parsed.data.expectedRevision,
@@ -82,7 +83,10 @@ export async function PATCH(request: Request, context: Context) {
     }
     return Response.json({
       result,
-      translations: await getResourceTranslationOverview(id),
+      translations: await getResourceTranslationOverview(
+        authorization.identity.organizationId,
+        id,
+      ),
     });
   } catch (error) {
     if (error instanceof TranslationRevisionConflictError) {

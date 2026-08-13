@@ -1,8 +1,14 @@
 openapi: 3.1.0
 info:
   title: Inventory API
-  version: 1.14.0
-  description: Scoped API for configurable inventory structures, localized content, indoor 3D room scans, location-aware stock, cycle counts, assignments, CSV exchange, typed custom fields, label setups, media, AI, outgoing integration webhooks, and data quality.
+  version: 1.15.0
+  description: >-
+    Organization-scoped API for configurable inventory structures, localized
+    content, indoor 3D room scans, location-aware stock, cycle counts,
+    assignments, CSV exchange, typed custom fields, label setups, media, AI,
+    outgoing integration webhooks, and data quality. User-bound credentials may
+    select one of their memberships with X-Organization-ID. Standalone API
+    tokens are pinned to their issuing organization.
   license:
     name: MIT License
     identifier: MIT
@@ -13,6 +19,8 @@ security:
 tags:
   - name: Authentication
     description: Native sign-in, token revocation, and scope discovery.
+  - name: Organizations
+    description: Membership discovery, active-organization selection, creation, and administration.
   - name: Access control
     description: Session-administered roles, granular permissions, and conditional inventory-item access rules.
   - name: Resources
@@ -53,6 +61,8 @@ tags:
     description: Session-administered outgoing integration events with durable at-least-once delivery, HMAC signatures, retry history, and manual replay.
 paths:
   /notifications:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Notifications]
       summary: List the current user's in-app notifications
@@ -81,6 +91,7 @@ paths:
         "403": { description: An authenticated browser session is required }
   /notifications/{id}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: id
         in: path
         required: true
@@ -93,6 +104,8 @@ paths:
         "200": { description: Notification marked read }
         "404": { description: Notification not found for this user }
   /notifications/read-all:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Notifications]
       summary: Mark every notification for the current user read
@@ -100,6 +113,8 @@ paths:
       responses:
         "200": { description: Number of updated inbox entries }
   /notifications/preferences:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Notifications]
       summary: Read personal anti-noise and channel preferences
@@ -121,6 +136,8 @@ paths:
         "200": { description: Preferences updated }
         "422": { description: Invalid thresholds, cadence, fields, locale, or channel opt-ins }
   /notifications/push-subscriptions:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Notifications]
       summary: Subscribe the current browser to Web Push
@@ -136,6 +153,8 @@ paths:
       responses:
         "200": { description: Subscription revoked when present }
   /notifications/test:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Notifications]
       summary: Preview one delivery channel without sending
@@ -154,6 +173,8 @@ paths:
       responses:
         "200": { description: Redacted sample payload with dryRun true }
   /notifications/run:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Notifications]
       summary: Run notification detection and due digest dispatch
@@ -170,6 +191,8 @@ paths:
         "401": { description: Missing or invalid cron secret or browser session }
         "403": { description: Browser session lacks tokens.manage }
   /webhooks:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Webhooks]
       summary: List outgoing webhook endpoints
@@ -206,6 +229,7 @@ paths:
         "503": { description: Webhook at-rest encryption is not configured }
   /webhooks/{id}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/WebhookId" }
     get:
       tags: [Webhooks]
@@ -257,6 +281,7 @@ paths:
         "422": { description: Invalid webhook endpoint identifier }
   /webhooks/{id}/test:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/WebhookId" }
     post:
       tags: [Webhooks]
@@ -276,6 +301,7 @@ paths:
         "503": { description: Webhook at-rest encryption is not configured }
   /webhooks/{id}/rotate-secret:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/WebhookId" }
     post:
       tags: [Webhooks]
@@ -295,6 +321,7 @@ paths:
         "503": { description: Webhook at-rest encryption is not configured }
   /webhooks/{id}/deliveries:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/WebhookId" }
     get:
       tags: [Webhooks]
@@ -318,6 +345,7 @@ paths:
         "422": { description: Invalid webhook endpoint identifier or delivery limit }
   /webhooks/{id}/deliveries/{deliveryId}/retry:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/WebhookId" }
       - { $ref: "#/components/parameters/WebhookDeliveryId" }
     post:
@@ -336,6 +364,8 @@ paths:
         "404": { description: Enabled webhook endpoint or failed delivery not found }
         "422": { description: Invalid webhook endpoint or delivery identifier }
   /webhooks/run:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Webhooks]
       summary: Process due outgoing webhook deliveries
@@ -358,6 +388,8 @@ paths:
         "401": { description: Missing, invalid, or unconfigured webhook cron secret }
         "422": { description: Limit must be an integer between 1 and 100 }
   /spatial-structures:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Spatial rooms]
       summary: List buildings and their active indoor-scan coverage
@@ -389,6 +421,7 @@ paths:
         "422": { description: Invalid structure or georeference }
   /spatial-structures/{structureId}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: structureId
         in: path
         required: true
@@ -414,6 +447,8 @@ paths:
         "404": { description: Spatial structure not found }
         "422": { description: Invalid structure change or georeference }
   /room-scans:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Spatial rooms]
       summary: List active 3D room scans
@@ -515,6 +550,7 @@ paths:
         "422": { description: Invalid scene, identifier, date, or non-place resource }
   /room-scans/{scanId}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: scanId
         in: path
         required: true
@@ -536,6 +572,7 @@ paths:
         "422": { description: Invalid room scan identifier }
   /room-scans/{scanId}/layout:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: scanId
         in: path
         required: true
@@ -555,6 +592,7 @@ paths:
         "422": { description: Invalid room scan identifier or layout transform }
   /room-scans/{scanId}/assets/{kind}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: scanId
         in: path
         required: true
@@ -591,6 +629,7 @@ paths:
         "422": { description: Invalid identifier or malformed GLB/PLY data }
   /room-scans/{scanId}/keyframes/{keyframeId}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: scanId
         in: path
         required: true
@@ -612,6 +651,7 @@ paths:
         "422": { description: Invalid room scan or keyframe identifier }
   /room-scans/{scanId}/placements/{resourceId}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: scanId
         in: path
         required: true
@@ -657,6 +697,10 @@ paths:
                 email: { type: string, format: email, maxLength: 320 }
                 password: { type: string, format: password, minLength: 1, maxLength: 72 }
                 deviceName: { type: string, minLength: 1, maxLength: 80, default: iOS }
+                organizationId:
+                  type: string
+                  format: uuid
+                  description: Optional membership to select when signing in. The first membership is used when omitted.
       responses:
         "201":
           description: Signed in and issued a revocable user-bound bearer token
@@ -671,6 +715,8 @@ paths:
             Retry-After:
               schema: { type: integer, minimum: 1 }
   /auth/logout:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Authentication]
       summary: Revoke the current bearer token
@@ -678,6 +724,8 @@ paths:
         "204": { description: Token revoked }
         "401": { description: Missing or invalid bearer token }
   /auth/capabilities:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Authentication]
       summary: Inspect the authenticated token's available scopes
@@ -688,9 +736,12 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [name, scopes, role, roleName, permissions]
+                required: [name, principal, scopes, role, roleName, permissions, organization, organizations]
                 properties:
                   name: { type: string }
+                  principal:
+                    type: string
+                    description: Opaque organization-scoped principal identifier for binding durable client state.
                   scopes:
                     type: array
                     items: { type: string, enum: [read, write, ai] }
@@ -705,8 +756,121 @@ paths:
                     type: array
                     description: Granular workspace-wide permissions available through this token.
                     items: { $ref: "#/components/schemas/AppPermission" }
+                  organization: { $ref: "#/components/schemas/OrganizationMembership" }
+                  organizations:
+                    type: array
+                    items: { $ref: "#/components/schemas/OrganizationMembership" }
         "401": { description: Missing or invalid token }
+  /organizations:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    get:
+      tags: [Organizations]
+      summary: List organizations available to the current identity
+      responses:
+        "200":
+          description: Memberships and the organization active for this request
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organizations, activeOrganizationId]
+                properties:
+                  organizations:
+                    type: array
+                    items: { $ref: "#/components/schemas/OrganizationMembership" }
+                  activeOrganizationId: { type: string, format: uuid }
+        "401": { description: Missing or invalid authentication }
+    post:
+      tags: [Organizations]
+      summary: Create an organization for the current browser user
+      security: [{ adminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+      responses:
+        "201":
+          description: Organization created with the current user as admin
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organization]
+                properties:
+                  organization: { $ref: "#/components/schemas/OrganizationMembership" }
+        "403": { description: A browser session is required }
+        "422": { description: Invalid organization name }
+  /organizations/select:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    post:
+      tags: [Organizations]
+      summary: Select one of the current user's organizations
+      description: Browser sessions persist the choice in an HTTP-only cookie. Native clients should send X-Organization-ID on subsequent requests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [organizationId]
+              properties:
+                organizationId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Selected organization
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organization]
+                properties:
+                  organization: { $ref: "#/components/schemas/OrganizationMembership" }
+        "404": { description: Organization is not available to this identity }
+  /organizations/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Organizations]
+      summary: Rename an organization
+      security: [{ adminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+      responses:
+        "200":
+          description: Updated organization
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organization]
+                properties:
+                  organization: { $ref: "#/components/schemas/OrganizationMembership" }
+        "403": { description: Browser user lacks organization administration permission }
+        "404": { description: Organization not found or not available to this user }
   /api/access/roles:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     servers:
       - url: /
     get:
@@ -769,6 +933,7 @@ paths:
     servers:
       - url: /
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: key
         in: path
         required: true
@@ -814,6 +979,8 @@ paths:
         "404": { description: Role not found }
         "409": { description: Built-in role or role still assigned to one or more users }
   /api/access/rules:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     servers:
       - url: /
     post:
@@ -845,6 +1012,7 @@ paths:
     servers:
       - url: /
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: id
         in: path
         required: true
@@ -889,6 +1057,8 @@ paths:
         "403": { description: A browser session with the roles.manage permission is required }
         "404": { description: Inventory access rule not found }
   /custom-fields:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Custom fields]
       summary: List custom-field definitions
@@ -944,6 +1114,7 @@ paths:
         "422": { description: Invalid custom-field definition }
   /custom-fields/{id}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/CustomFieldId" }
     get:
       tags: [Custom fields]
@@ -1016,6 +1187,7 @@ paths:
         "422": { description: Invalid definition id }
   /custom-fields/{id}/options:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/CustomFieldId" }
     get:
       tags: [Custom fields]
@@ -1055,6 +1227,8 @@ paths:
         "404": { description: Custom-field definition not found }
         "422": { description: Invalid query or the definition is not a reference field }
   /label-setups:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Label setups]
       summary: List reusable label setups
@@ -1099,6 +1273,7 @@ paths:
         "422": { description: Invalid label setup }
   /label-setups/{id}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: id
         in: path
         required: true
@@ -1165,6 +1340,8 @@ paths:
         "409": { description: Setup revision changed; reload before deleting }
         "422": { description: Invalid label setup id or revision }
   /inventory-types:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Inventory structure]
       summary: List configured inventory types
@@ -1213,6 +1390,7 @@ paths:
         "422": { description: Invalid inventory type definition }
   /inventory-types/{key}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: key
         in: path
         required: true
@@ -1265,6 +1443,8 @@ paths:
         "409": { description: The fallback type cannot be archived }
         "422": { description: Invalid type key }
   /relation-types:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Inventory structure]
       summary: List configured relationship types
@@ -1313,6 +1493,7 @@ paths:
         "422": { description: Invalid relationship type definition }
   /relation-types/{key}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: key
         in: path
         required: true
@@ -1344,6 +1525,8 @@ paths:
         "409": { description: A built-in relationship type cannot be archived }
         "422": { description: Invalid or empty relationship type update }
   /ai/recognize:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [AI]
       summary: Match one photographed object to existing inventory items
@@ -1380,6 +1563,8 @@ paths:
         "502": { description: Vision provider or structured-output error }
         "503": { description: Inventory catalog, retry protection, or shared rate limiter unavailable }
   /ai/count:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [AI]
       summary: Count matching physical items in one transient image
@@ -1443,6 +1628,8 @@ paths:
         "503": { description: Replicate configuration, billing, authentication, capacity, or shared rate limiter unavailable }
         "504": { description: Replicate prediction exceeded the configured deadline }
   /ai/count/jobs:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [AI]
       summary: Poll one signed Replicate count job
@@ -1487,6 +1674,8 @@ paths:
         "503": { description: Replicate authentication/configuration error, or a transient capacity/poll timeout marked with Retry-After }
         "504": { description: Prediction exceeded its deadline }
   /ai/count-models:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [AI]
       summary: List Replicate counting models enabled for this deployment
@@ -1509,6 +1698,8 @@ paths:
         "401": { description: Missing or invalid token }
         "403": { description: Token is missing the ai scope }
   /ai/image-models:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [AI]
       summary: List image-generation models enabled for this deployment
@@ -1530,6 +1721,8 @@ paths:
         "401": { description: Missing or invalid token }
         "403": { description: Token is missing the ai scope }
   /languages:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Content translations]
       summary: List active content languages
@@ -1560,6 +1753,7 @@ paths:
         "422": { description: Invalid language }
   /languages/{code}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { name: code, in: path, required: true, schema: { type: string, maxLength: 35 } }
     patch:
       tags: [Content translations]
@@ -1577,6 +1771,8 @@ paths:
         "200": { description: Language archived }
         "409": { description: The default language cannot be archived }
   /translations/regenerate:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Content translations, AI]
       summary: Queue a durable translation backfill
@@ -1596,6 +1792,8 @@ paths:
         "200": { description: No target-language jobs were needed }
         "202": { description: Durable translation jobs queued }
   /resources:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Resources]
       summary: List inventory items
@@ -1638,6 +1836,8 @@ paths:
                   resource: { $ref: "#/components/schemas/Resource" }
         "409": { description: Idempotency key was used with a different request }
   /resources/import:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Data exchange]
       summary: Import inventory items from UTF-8 CSV
@@ -1679,6 +1879,8 @@ paths:
         "415": { description: Unsupported media type }
         "422": { description: Missing rows or invalid CSV headers }
   /resources/export:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Data exchange]
       summary: Export the complete inventory as CSV, Excel, or PDF
@@ -1709,6 +1911,8 @@ paths:
         "400": { description: "Unsupported export format" }
         "413": { description: "The workspace contains more than 100,000 records" }
   /resources/batch:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     patch:
       tags: [Resources]
       summary: Apply shared fields and additional tags to multiple inventory items atomically
@@ -1742,6 +1946,7 @@ paths:
         "422": { description: Invalid or empty batch update }
   /resources/{id}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Resources]
@@ -1780,6 +1985,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
   /resources/{id}/variants:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Resources, Stock]
@@ -1812,6 +2018,7 @@ paths:
         "422": { description: Invalid variant }
   /resources/{id}/variants/{variantId}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
       - name: variantId
         in: path
@@ -1838,6 +2045,7 @@ paths:
         "409": { description: Variant has stock or movement history }
   /resources/{id}/variants/{variantId}/stock/movements:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
       - name: variantId
         in: path
@@ -1859,6 +2067,7 @@ paths:
         "422": { description: Invalid stock movement }
   /resources/{id}/translations:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Content translations]
@@ -1888,6 +2097,7 @@ paths:
         "422": { description: Invalid or inactive target language }
   /resources/{id}/translations/{languageCode}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
       - { name: languageCode, in: path, required: true, schema: { type: string, maxLength: 35 } }
     patch:
@@ -1922,6 +2132,7 @@ paths:
         "422": { description: Invalid language, field, or operation }
   /resources/{id}/relations:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Inventory structure]
@@ -1962,6 +2173,7 @@ paths:
         "422": { description: Invalid relationship or a relationship type that disallows manual use }
   /relations/{relationId}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: relationId
         in: path
         required: true
@@ -1981,6 +2193,8 @@ paths:
         "404": { description: Manual relationship not found }
         "422": { description: Invalid relationship or resource id }
   /resources/lookup:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Resources]
       summary: Resolve a scanned QR or barcode to an inventory item
@@ -2005,6 +2219,8 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Serial number is ambiguous }
   /stock:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Stock]
       summary: Retrieve stock health and replenishment forecasts
@@ -2032,6 +2248,8 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/StockOverviewItem" }
   /stock/scan-workflows:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Scan workflows]
       summary: List configurable stock scan workflows
@@ -2069,6 +2287,7 @@ paths:
         "422": { description: Invalid workflow definition }
   /stock/scan-workflows/{workflowId}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: workflowId
         in: path
         required: true
@@ -2123,6 +2342,8 @@ paths:
         "409": { description: Workflow revision changed; reload before deleting }
         "422": { description: The workflow id or required single positive revision is invalid }
   /stock/scans/resolve:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Scan workflows]
       summary: Resolve and preview a scanned code without changing stock
@@ -2147,6 +2368,8 @@ paths:
         "409": { description: Workflow disabled or target is not serialized }
         "422": { description: Invalid request or the code does not match the configured extractor }
   /stock/scans/execute:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Scan workflows]
       summary: Atomically apply a previously reviewed stock scan
@@ -2174,6 +2397,7 @@ paths:
         "422": { description: Invalid code or operator input }
   /resources/{id}/stock:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Stock]
@@ -2187,6 +2411,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
   /resources/{id}/stock/locations:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Stock]
@@ -2201,6 +2426,8 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { description: Invalid resource id }
   /inventory-counts/due:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Inventory cycles]
       summary: List inventory cycles that are currently due
@@ -2216,6 +2443,7 @@ paths:
                   due: { type: array, items: { $ref: "#/components/schemas/DueInventoryCycle" } }
   /resources/{id}/inventory-cycle:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Inventory cycles]
@@ -2254,6 +2482,7 @@ paths:
         "422": { description: Invalid resource id or count interval }
   /resources/{id}/inventory-counts:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Inventory cycles]
@@ -2297,6 +2526,7 @@ paths:
         "422": { description: Invalid count or structured location }
   /resources/{id}/assignments:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Assignments]
@@ -2337,6 +2567,7 @@ paths:
         "422": { description: "Invalid recipient, quantity, dates, or tracking-mode combination" }
   /assignments/{assignmentId}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: assignmentId
         in: path
         required: true
@@ -2364,6 +2595,7 @@ paths:
         "422": { description: Invalid status or completion date }
   /resources/{id}/stock/config:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     patch:
       tags: [Stock]
@@ -2379,6 +2611,7 @@ paths:
         "409": { description: Tracking mode transition would break serialized-unit integrity }
   /resources/{id}/bom:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Manufacturing]
@@ -2411,6 +2644,7 @@ paths:
         "422": { description: "Invalid, duplicate, missing, or self-referencing component list" }
   /resources/{id}/stock/builds:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Manufacturing]
@@ -2447,6 +2681,7 @@ paths:
         "422": { description: Invalid build request }
   /resources/{id}/stock/movements:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Stock]
@@ -2486,6 +2721,7 @@ paths:
         "422": { description: "Invalid quantity, movement direction, or structured location transfer" }
   /resources/{id}/stock/units:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Stock]
@@ -2513,6 +2749,7 @@ paths:
         "409": { description: Duplicate code or incompatible tracking mode }
   /resources/{id}/stock/units/{unitId}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
       - { name: unitId, in: path, required: true, schema: { type: string, format: uuid } }
     patch:
@@ -2527,6 +2764,8 @@ paths:
         "200": { description: Unit updated and movement recorded }
         "404": { $ref: "#/components/responses/NotFound" }
   /purchase-orders:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Purchasing]
       summary: List purchase orders and their open incoming quantities
@@ -2565,6 +2804,7 @@ paths:
         "422": { description: "Invalid purchase order, duplicate line, or missing inventory item" }
   /purchase-orders/{orderId}:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: orderId
         in: path
         required: true
@@ -2604,6 +2844,7 @@ paths:
         "409": { description: Invalid lifecycle transition }
   /purchase-orders/{orderId}/lines/{lineId}/receipts:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - name: orderId
         in: path
         required: true
@@ -2629,6 +2870,7 @@ paths:
         "409": { description: "Over-receipt, order-state, serialized-unit, or idempotency conflict" }
   /resources/{id}/media:
     parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     post:
       tags: [Media]
@@ -2670,6 +2912,8 @@ paths:
       responses:
         "200": { description: Reordered }
   /resources/{id}/media/{mediaId}:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     delete:
       tags: [Media]
       summary: Remove one media file
@@ -2679,6 +2923,8 @@ paths:
       responses:
         "204": { description: Removed }
   /resources/{id}/analyze:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [AI]
       summary: Generate structured item fields from the first three images
@@ -2704,6 +2950,8 @@ paths:
         "502": { description: AI provider error }
         "503": { description: Shared AI rate limiter unavailable }
   /resources/{id}/cover:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [AI]
       summary: Generate a square studio or transparent cover from an item image
@@ -2747,12 +2995,16 @@ paths:
         "502": { description: AI provider error }
         "503": { description: Shared AI rate limiter unavailable }
   /stats:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Insights]
       summary: Retrieve aggregate dashboard statistics
       responses:
         "200": { description: Statistics }
   /duplicates:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
     get:
       tags: [Insights]
       summary: Find likely duplicate item pairs
@@ -2848,6 +3100,15 @@ components:
       bearerFormat: WEBHOOK_CRON_SECRET
       description: Deployment-level scheduler secret used only by the outgoing webhook run endpoint.
   parameters:
+    OrganizationId:
+      name: X-Organization-ID
+      in: header
+      required: false
+      description: >-
+        Organization membership selected for this request. User-bound
+        credentials may select any active membership; standalone tokens may
+        only repeat their pinned organization ID.
+      schema: { type: string, format: uuid }
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -2884,6 +3145,21 @@ components:
     NotFound:
       description: Resource not found
   schemas:
+    OrganizationMembership:
+      type: object
+      additionalProperties: false
+      required: [id, name, slug, role, roleName]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        slug: { type: string, minLength: 1, maxLength: 180 }
+        role:
+          type: [string, "null"]
+          pattern: '^[a-z][a-z0-9_-]{0,63}$'
+        roleName: { type: [string, "null"] }
+        canManage:
+          type: boolean
+          description: Present on organization-list responses; true when the current identity can administer that active organization.
     NotificationEventType:
       type: string
       enum: [low_stock, expiry, maintenance, return_due]
@@ -4464,7 +4740,7 @@ components:
           items: { type: string, maxLength: 180 }
     NativeLoginResponse:
       type: object
-      required: [token, user, scopes, expiresAt]
+      required: [token, user, scopes, expiresAt, organization, organizations]
       properties:
         token:
           type: string
@@ -4481,6 +4757,11 @@ components:
           type: array
           items: { type: string, enum: [read, write, ai] }
         expiresAt: { type: string, format: date-time }
+        organization: { $ref: "#/components/schemas/OrganizationMembership" }
+        organizations:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/OrganizationMembership" }
     Pagination:
       type: object
       required: [page, pageSize, total, pages]

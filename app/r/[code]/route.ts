@@ -1,4 +1,5 @@
 import { getSessionIdentity } from "@/lib/api-auth";
+import { organizationPath } from "@/lib/organization-path";
 import { resourceIdFromShortCode } from "@/lib/resource-short-link";
 
 type Context = { params: Promise<{ code: string }> };
@@ -16,8 +17,10 @@ export async function GET(request: Request, context: Context) {
     );
   }
 
-  const destination = `/inventory/${resourceId}`;
   const identity = await getSessionIdentity();
+  const destination = identity
+    ? organizationPath(identity.organizationId, `/inventory/${resourceId}`)
+    : `/inventory/${resourceId}`;
   const redirectUrl = identity
     ? new URL(destination, request.url)
     : new URL(`/login?callbackUrl=${encodeURIComponent(destination)}`, request.url);

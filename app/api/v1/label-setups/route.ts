@@ -13,7 +13,11 @@ export async function GET(request: Request) {
   if (authorization.response) return authorization.response;
 
   try {
-    return Response.json({ labelSetups: await listLabelSetups() });
+    return Response.json({
+      labelSetups: await listLabelSetups(
+        authorization.identity.organizationId,
+      ),
+    });
   } catch {
     return Response.json(
       { error: "Unable to load label setups." },
@@ -42,6 +46,7 @@ export async function POST(request: Request) {
 
   try {
     const labelSetup = await createLabelSetup(
+      authorization.identity.organizationId,
       parsed.data,
       authorization.identity.subject,
     );

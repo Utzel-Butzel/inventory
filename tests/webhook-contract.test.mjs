@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -19,6 +20,21 @@ const expectedEventTypes = [
   "inventory.resource.merged",
   "inventory.stock.movement.created",
 ];
+
+test("durable webhook worker joins and mutations preserve tenant consistency", async () => {
+  const worker = await readFile(
+    new URL("../lib/webhooks.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(worker, /webhookEvents\.organizationId, claimed\.organizationId/);
+  assert.match(worker, /webhookEndpoints\.organizationId, claimed\.organizationId/);
+  assert.match(worker, /webhookDeliveries\.organizationId, delivery\.organizationId/);
+  assert.match(
+    worker,
+    /webhookDeliveries\.organizationId} = \$\{webhookEvents\.organizationId/,
+  );
+});
 
 test("the webhook event allowlist is explicit and stable", () => {
   assert.deepEqual([...WEBHOOK_EVENT_TYPES], expectedEventTypes);

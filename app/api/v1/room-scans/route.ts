@@ -101,7 +101,9 @@ export async function GET(request: Request) {
   const authorization = await requirePermission(request, "spatial.read");
   if (authorization.response) return authorization.response;
   const activeOnly = new URL(request.url).searchParams.get("includeSuperseded") !== "true";
-  return Response.json(await listRoomScans({ activeOnly }));
+  return Response.json(
+    await listRoomScans(authorization.identity.organizationId, { activeOnly }),
+  );
 }
 
 export async function POST(request: Request) {
@@ -417,7 +419,10 @@ export async function POST(request: Request) {
       checksumSha256: createHash("sha256").update(bytes).digest("hex"),
     } satisfies RoomScanKeyframeFingerprint)),
   };
-  const existing = await findRoomScanReplayIdentity(identifiers.data.id);
+  const existing = await findRoomScanReplayIdentity(
+    authorization.identity.organizationId,
+    identifiers.data.id,
+  );
   if (existing) {
     if (!roomScanMatchesReplayIdentity(existing, replayRequest)) {
       return Response.json(
@@ -475,6 +480,7 @@ export async function POST(request: Request) {
   let result: Awaited<ReturnType<typeof createRoomScan>>;
   try {
     result = await createRoomScan({
+      organizationId: authorization.identity.organizationId,
       id: identifiers.data.id,
       roomResourceId: identifiers.data.roomResourceId,
       scene: parsedScene.data,
@@ -489,7 +495,11 @@ export async function POST(request: Request) {
     const settlement = await reconcileFailedRoomScanCreation({
       scanId: identifiers.data.id,
       request: replayRequest,
-      findScan: findRoomScanReplayIdentity,
+      findScan: (scanId) =>
+        findRoomScanReplayIdentity(
+          authorization.identity.organizationId,
+          scanId,
+        ),
       cleanupUncommittedAssets: async () => {
         await Promise.allSettled(
           [...stored, ...storedKeyframes].map(({ stored: item }) =>

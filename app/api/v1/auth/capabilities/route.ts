@@ -1,4 +1,4 @@
-import { getRequestIdentity } from "@/lib/api-auth";
+import { getRequestIdentity, hashRequestIdentity } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,9 +9,12 @@ export async function GET(request: Request) {
   }
   return Response.json({
     name: identity.name,
+    principal: hashRequestIdentity(identity),
     scopes: identity.scopes,
     role: identity.role,
     roleName: identity.roleName,
     permissions: identity.permissions,
+    organization: identity.organization,
+    organizations: identity.organizations,
   });
 }

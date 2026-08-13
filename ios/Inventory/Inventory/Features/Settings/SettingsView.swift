@@ -112,6 +112,35 @@ struct SettingsView: View {
 
     private var settingsMenu: some View {
         List {
+            if let activeOrganization = state.activeOrganization {
+                Section {
+                    if state.organizations.count > 1 {
+                        Menu {
+                            ForEach(state.organizations) { organization in
+                                Button {
+                                    switchOrganization(to: organization)
+                                } label: {
+                                    if organization.id == activeOrganization.id {
+                                        Label(organization.name, systemImage: "checkmark")
+                                    } else {
+                                        Text(organization.name)
+                                    }
+                                }
+                                .disabled(state.isSwitchingOrganization)
+                            }
+                        } label: {
+                            organizationRow(activeOrganization, showsDisclosure: true)
+                        }
+                    } else {
+                        organizationRow(activeOrganization, showsDisclosure: false)
+                    }
+                } header: {
+                    Text("Organisation")
+                } footer: {
+                    Text("Inventar, Räume, Einstellungen und Uploads sind immer der ausgewählten Organisation zugeordnet.")
+                }
+            }
+
             Section("Aktivität") {
                 NavigationLink {
                     UploadJobsView()
@@ -253,6 +282,34 @@ struct SettingsView: View {
         }
     }
 
+    private func organizationRow(
+        _ organization: InventoryOrganization,
+        showsDisclosure: Bool
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "building.2.fill")
+                .foregroundStyle(InventoryTheme.accent)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(organization.name)
+                    .foregroundStyle(.primary)
+                Text(organization.roleName ?? organization.role ?? organization.slug)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if state.isSwitchingOrganization {
+                ProgressView()
+                    .controlSize(.small)
+            } else if showsDisclosure {
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
     private var imageModelSelection: Binding<String> {
         Binding(
             get: { state.selectedImageModelID ?? "" },
@@ -324,6 +381,21 @@ struct SettingsView: View {
         }
     }
 
+    private func switchOrganization(to organization: InventoryOrganization) {
+        guard organization.id != state.activeOrganization?.id,
+              !state.isSwitchingOrganization else { return }
+        errorMessage = nil
+        Task {
+            do {
+                try await state.switchOrganization(to: organization.id)
+            } catch is CancellationError {
+                return
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
     private func saveAndTest() {
         saving = true
         errorMessage = nil
@@ -383,8 +455,8 @@ private struct UploadSettingsLabel: View {
                     Text("\(activeCount)")
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(.secondary)
-                } else if !queue.jobs.isEmpty {
-                    Text("\(queue.jobs.count)")
+                } else if !queue.visibleJobs.isEmpty {
+                    Text("\(queue.visibleJobs.count)")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
@@ -395,6 +467,6 @@ private struct UploadSettingsLabel: View {
     }
 
     private var activeCount: Int {
-        queue.jobs.filter { !$0.stage.isTerminal }.count
+        queue.visibleJobs.filter { !$0.stage.isTerminal }.count
     }
 }

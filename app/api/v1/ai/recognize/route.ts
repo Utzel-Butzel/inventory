@@ -186,6 +186,7 @@ export async function POST(request: Request) {
     let claim;
     try {
       claim = await claimAiOperation({
+        organizationId: authorization.identity.organizationId,
         operation: "recognize",
         idempotencyKey: idempotency.key,
         resourceId: idempotency.key,
@@ -218,6 +219,7 @@ export async function POST(request: Request) {
     const responseHeaders = { ...noStoreHeaders, ...headers };
     if (operationId) {
       await finishAiOperation({
+        organizationId: authorization.identity.organizationId,
         operationId,
         body,
         status,
@@ -237,7 +239,10 @@ export async function POST(request: Request) {
     headers?: Record<string, string>,
   ) => {
     if (operationId) {
-      await releaseAiOperation(operationId).catch((error) => {
+      await releaseAiOperation(
+        authorization.identity.organizationId,
+        operationId,
+      ).catch((error) => {
         console.error("Unable to release the recognition claim.", error);
       });
     }
@@ -256,7 +261,9 @@ export async function POST(request: Request) {
 
   let inventoryTotal;
   try {
-    inventoryTotal = await countResourcesForRecognition();
+    inventoryTotal = await countResourcesForRecognition(
+      authorization.identity.organizationId,
+    );
   } catch (error) {
     console.error("Unable to inspect the recognition catalog.", error);
     return releaseAndRespond(
@@ -280,6 +287,7 @@ export async function POST(request: Request) {
   let limit;
   try {
     limit = await consumePaidAiRateLimit({
+      organizationId: authorization.identity.organizationId,
       operation: "recognize",
       identity: authorization.identity,
     });
@@ -324,6 +332,7 @@ export async function POST(request: Request) {
   >["resources"];
   try {
     catalog = await listResourcesForRecognition(
+      authorization.identity.organizationId,
       [
         described.observation.label,
         described.observation.category,
@@ -337,7 +346,10 @@ export async function POST(request: Request) {
     if (authorization.identity.permissions.includes("ai.use")) {
       visibleResources = catalog.resources;
     } else if (authorization.identity.role) {
-      const rules = await listRulesForRole(authorization.identity.role);
+      const rules = await listRulesForRole(
+        authorization.identity.role,
+        authorization.identity.organizationId,
+      );
       visibleResources = catalog.resources.filter((resource) =>
         ruleGrantsResourcePermission({
           roleKey: authorization.identity.role!,

@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import Link from "next/link";
+import { OrganizationLink as Link } from "@/components/organization-routing";
 import {
   AlertTriangle,
   Aperture,

@@ -31,6 +31,7 @@ import type {
   NotificationPreferencePatch,
 } from "@/lib/notification-contract";
 import { db } from "@/lib/db";
+import { organizationPath } from "@/lib/organization-path";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   boundedDigest,
@@ -44,6 +45,7 @@ import {
 } from "@/lib/notification-policy";
 
 type Recipient = {
+  organizationId: string;
   key: string;
   email?: string | null;
   name?: string | null;
@@ -78,12 +80,18 @@ export async function ensureNotificationPreferences(recipient: Recipient) {
   let [preference] = await db
     .select()
     .from(notificationPreferences)
-    .where(eq(notificationPreferences.recipientKey, recipient.key))
+    .where(
+      and(
+        eq(notificationPreferences.organizationId, recipient.organizationId),
+        eq(notificationPreferences.recipientKey, recipient.key),
+      ),
+    )
     .limit(1);
   if (!preference) {
     [preference] = await db
       .insert(notificationPreferences)
       .values({
+        organizationId: recipient.organizationId,
         recipientKey: recipient.key,
         recipientEmail: email,
         recipientName: name,
@@ -97,7 +105,12 @@ export async function ensureNotificationPreferences(recipient: Recipient) {
       [preference] = await db
         .select()
         .from(notificationPreferences)
-        .where(eq(notificationPreferences.recipientKey, recipient.key))
+        .where(
+          and(
+            eq(notificationPreferences.organizationId, recipient.organizationId),
+            eq(notificationPreferences.recipientKey, recipient.key),
+          ),
+        )
         .limit(1);
     }
   } else if (
@@ -107,7 +120,12 @@ export async function ensureNotificationPreferences(recipient: Recipient) {
     [preference] = await db
       .update(notificationPreferences)
       .set({ recipientEmail: email, recipientName: name, updatedAt: now })
-      .where(eq(notificationPreferences.recipientKey, recipient.key))
+      .where(
+        and(
+          eq(notificationPreferences.organizationId, recipient.organizationId),
+          eq(notificationPreferences.recipientKey, recipient.key),
+        ),
+      )
       .returning();
   }
   if (!preference) throw new Error("Unable to initialize notification preferences.");
@@ -158,6 +176,10 @@ export async function getNotificationSettings(recipient: Recipient) {
     .where(
       and(
         eq(notificationPushSubscriptions.recipientKey, recipient.key),
+        eq(
+          notificationPushSubscriptions.organizationId,
+          recipient.organizationId,
+        ),
         isNull(notificationPushSubscriptions.revokedAt),
       ),
     );
@@ -189,7 +211,12 @@ export async function updateNotificationPreferences(
       ...(externalChanged ? { lastDigestAt: new Date() } : {}),
       updatedAt: new Date(),
     })
-    .where(eq(notificationPreferences.recipientKey, current.recipientKey))
+    .where(
+      and(
+        eq(notificationPreferences.organizationId, recipient.organizationId),
+        eq(notificationPreferences.recipientKey, current.recipientKey),
+      ),
+    )
     .returning();
   return updated ?? current;
 }
@@ -203,9 +230,13 @@ export async function listInbox(
   const where = options.unreadOnly
     ? and(
         eq(notificationInbox.recipientKey, recipient.key),
+        eq(notificationInbox.organizationId, recipient.organizationId),
         isNull(notificationInbox.readAt),
       )
-    : eq(notificationInbox.recipientKey, recipient.key);
+    : and(
+        eq(notificationInbox.organizationId, recipient.organizationId),
+        eq(notificationInbox.recipientKey, recipient.key),
+      );
   const [notifications, [{ value: unread }]] = await Promise.all([
     db
       .select()
@@ -219,6 +250,7 @@ export async function listInbox(
       .where(
         and(
           eq(notificationInbox.recipientKey, recipient.key),
+          eq(notificationInbox.organizationId, recipient.organizationId),
           isNull(notificationInbox.readAt),
         ),
       ),
@@ -226,27 +258,29 @@ export async function listInbox(
   return { notifications, unread: Number(unread ?? 0) };
 }
 
-export async function markNotificationRead(recipientKey: string, id: string) {
+export async function markNotificationRead(recipient: Recipient, id: string) {
   const [notification] = await db
     .update(notificationInbox)
     .set({ readAt: new Date() })
     .where(
       and(
         eq(notificationInbox.id, id),
-        eq(notificationInbox.recipientKey, recipientKey),
+        eq(notificationInbox.organizationId, recipient.organizationId),
+        eq(notificationInbox.recipientKey, recipient.key),
       ),
     )
     .returning();
   return notification ?? null;
 }
 
-export async function markAllNotificationsRead(recipientKey: string) {
+export async function markAllNotificationsRead(recipient: Recipient) {
   const result = await db
     .update(notificationInbox)
     .set({ readAt: new Date() })
     .where(
       and(
-        eq(notificationInbox.recipientKey, recipientKey),
+        eq(notificationInbox.organizationId, recipient.organizationId),
+        eq(notificationInbox.recipientKey, recipient.key),
         isNull(notificationInbox.readAt),
       ),
     )
@@ -312,12 +346,16 @@ export async function savePushSubscription(
   const [saved] = await db
     .insert(notificationPushSubscriptions)
     .values({
+      organizationId: recipient.organizationId,
       recipientKey: recipient.key,
       endpointHash: hash,
       encryptedSubscription: encryptSubscription(subscription),
     })
     .onConflictDoUpdate({
-      target: notificationPushSubscriptions.endpointHash,
+      target: [
+        notificationPushSubscriptions.organizationId,
+        notificationPushSubscriptions.endpointHash,
+      ],
       set: {
         recipientKey: recipient.key,
         encryptedSubscription: encryptSubscription(subscription),
@@ -330,7 +368,7 @@ export async function savePushSubscription(
 }
 
 export async function revokePushSubscription(
-  recipientKey: string,
+  recipient: Recipient,
   endpoint: string,
 ) {
   const [revoked] = await db
@@ -338,7 +376,11 @@ export async function revokePushSubscription(
     .set({ revokedAt: new Date(), updatedAt: new Date() })
     .where(
       and(
-        eq(notificationPushSubscriptions.recipientKey, recipientKey),
+        eq(
+          notificationPushSubscriptions.organizationId,
+          recipient.organizationId,
+        ),
+        eq(notificationPushSubscriptions.recipientKey, recipient.key),
         eq(notificationPushSubscriptions.endpointHash, endpointHash(endpoint)),
       ),
     )
@@ -368,6 +410,8 @@ async function loadCandidates(preference: PreferenceRecord, now: Date) {
           .where(
             and(
               gt(stockSettings.minimumStock, 0),
+              eq(stockSettings.organizationId, preference.organizationId),
+              eq(resources.organizationId, preference.organizationId),
               ne(resources.status, "archived"),
             ),
           )
@@ -381,7 +425,12 @@ async function loadCandidates(preference: PreferenceRecord, now: Date) {
             customFields: resources.customFields,
           })
           .from(resources)
-          .where(ne(resources.status, "archived"))
+          .where(
+            and(
+              eq(resources.organizationId, preference.organizationId),
+              ne(resources.status, "archived"),
+            ),
+          )
       : Promise.resolve([]),
     enabled.has("return_due")
       ? db
@@ -397,6 +446,11 @@ async function loadCandidates(preference: PreferenceRecord, now: Date) {
           .where(
             and(
               eq(inventoryAssignments.status, "active"),
+              eq(
+                inventoryAssignments.organizationId,
+                preference.organizationId,
+              ),
+              eq(resources.organizationId, preference.organizationId),
               sql`${inventoryAssignments.dueAt} is not null`,
             ),
           )
@@ -478,8 +532,16 @@ async function loadCandidates(preference: PreferenceRecord, now: Date) {
   return candidates;
 }
 
-export async function detectNotifications(now = new Date()) {
-  const preferences = await db.select().from(notificationPreferences);
+export async function detectNotifications(
+  now = new Date(),
+  organizationId?: string,
+) {
+  const preferences = organizationId
+    ? await db
+        .select()
+        .from(notificationPreferences)
+        .where(eq(notificationPreferences.organizationId, organizationId))
+    : await db.select().from(notificationPreferences);
   let created = 0;
   for (const preference of preferences) {
     const candidates = await loadCandidates(preference, now);
@@ -496,6 +558,7 @@ export async function detectNotifications(now = new Date()) {
       .where(
         and(
           eq(notificationInbox.recipientKey, preference.recipientKey),
+          eq(notificationInbox.organizationId, preference.organizationId),
           gt(notificationInbox.createdAt, recentSince),
         ),
       );
@@ -514,6 +577,7 @@ export async function detectNotifications(now = new Date()) {
           preference.locale,
         );
         return {
+          organizationId: preference.organizationId,
           recipientKey: preference.recipientKey,
           eventType: candidate.eventType,
           resourceId: candidate.resourceId ?? null,
@@ -584,16 +648,22 @@ function digestPayload(
       ? `Inventar-Tagesübersicht (${notifications.length})`
       : `Inventory daily digest (${notifications.length})`;
   const bounded = boundedDigest(notifications);
+  const inboxPath = organizationPath(
+    preference.organizationId,
+    "/notifications",
+  );
   return {
     subject,
     text: digestText(notifications, preference.locale),
-    url: `${process.env.AUTH_URL?.replace(/\/$/, "") || ""}/notifications`,
+    url: `${process.env.AUTH_URL?.replace(/\/$/, "") || ""}${inboxPath}`,
     events: bounded.items.map((item) => ({
       id: item.id,
       eventType: item.eventType,
       title: item.title,
       body: item.body,
-      href: item.href,
+      href: item.href
+        ? organizationPath(preference.organizationId, item.href)
+        : null,
       createdAt: item.createdAt.toISOString(),
     })),
     remainingCount: bounded.remainingCount,
@@ -647,6 +717,10 @@ async function sendPush(preference: PreferenceRecord, payload: ReturnType<typeof
     .where(
       and(
         eq(notificationPushSubscriptions.recipientKey, preference.recipientKey),
+        eq(
+          notificationPushSubscriptions.organizationId,
+          preference.organizationId,
+        ),
         isNull(notificationPushSubscriptions.revokedAt),
       ),
     );
@@ -657,7 +731,11 @@ async function sendPush(preference: PreferenceRecord, payload: ReturnType<typeof
     try {
       await webpush.sendNotification(
         decryptSubscription(row.encryptedSubscription),
-        JSON.stringify({ title: payload.subject, body: payload.text.slice(0, 240), url: "/notifications" }),
+        JSON.stringify({
+          title: payload.subject,
+          body: payload.text.slice(0, 240),
+          url: organizationPath(preference.organizationId, "/notifications"),
+        }),
         { TTL: 3_600, urgency: "normal" },
       );
       delivered += 1;
@@ -667,7 +745,15 @@ async function sendPush(preference: PreferenceRecord, payload: ReturnType<typeof
         await db
           .update(notificationPushSubscriptions)
           .set({ revokedAt: new Date(), updatedAt: new Date() })
-          .where(eq(notificationPushSubscriptions.id, row.id));
+          .where(
+            and(
+              eq(
+                notificationPushSubscriptions.organizationId,
+                preference.organizationId,
+              ),
+              eq(notificationPushSubscriptions.id, row.id),
+            ),
+          );
         continue;
       }
       throw error;
@@ -734,8 +820,16 @@ function channelTarget(channel: NotificationChannel, preference: PreferenceRecor
   return redactTarget(process.env.NOTIFICATION_WEBHOOK_URL);
 }
 
-export async function dispatchDueDigests(now = new Date()) {
-  const preferences = await db.select().from(notificationPreferences);
+export async function dispatchDueDigests(
+  now = new Date(),
+  organizationId?: string,
+) {
+  const preferences = organizationId
+    ? await db
+        .select()
+        .from(notificationPreferences)
+        .where(eq(notificationPreferences.organizationId, organizationId))
+    : await db.select().from(notificationPreferences);
   let sent = 0;
   let failed = 0;
   for (const preference of preferences) {
@@ -747,6 +841,7 @@ export async function dispatchDueDigests(now = new Date()) {
       .where(
         and(
           eq(notificationInbox.recipientKey, preference.recipientKey),
+          eq(notificationInbox.organizationId, preference.organizationId),
           gt(notificationInbox.createdAt, since),
         ),
       )
@@ -766,13 +861,14 @@ export async function dispatchDueDigests(now = new Date()) {
         const dedupeKey = createHash("sha256")
           .update(
             globalChannel
-              ? `${channel}:deployment:${dispatchWindow}`
-              : `${channel}:${preference.recipientKey}:${dispatchWindow}:${eventFingerprint}`,
+              ? `${channel}:${preference.organizationId}:${dispatchWindow}`
+              : `${channel}:${preference.organizationId}:${preference.recipientKey}:${dispatchWindow}:${eventFingerprint}`,
           )
           .digest("hex");
         const [reserved] = await db
           .insert(notificationDispatches)
           .values({
+            organizationId: preference.organizationId,
             recipientKey: preference.recipientKey,
             channel,
             dedupeKey,
@@ -803,15 +899,26 @@ export async function dispatchDueDigests(now = new Date()) {
       await db
         .update(notificationPreferences)
         .set({ lastDigestAt: now, updatedAt: now })
-        .where(eq(notificationPreferences.recipientKey, preference.recipientKey));
+        .where(
+          and(
+            eq(
+              notificationPreferences.organizationId,
+              preference.organizationId,
+            ),
+            eq(notificationPreferences.recipientKey, preference.recipientKey),
+          ),
+        );
     }
   }
   return { recipients: preferences.length, sent, failed };
 }
 
-export async function runNotificationCycle(now = new Date()) {
-  const detection = await detectNotifications(now);
-  const dispatch = await dispatchDueDigests(now);
+export async function runNotificationCycle(
+  now = new Date(),
+  organizationId?: string,
+) {
+  const detection = await detectNotifications(now, organizationId);
+  const dispatch = await dispatchDueDigests(now, organizationId);
   return { detection, dispatch };
 }
 

@@ -66,6 +66,7 @@ export async function PATCH(request: Request, context: Context) {
 
   try {
     const result = await updateStockUnit(
+      authorization.identity.organizationId,
       id,
       unitId,
       {

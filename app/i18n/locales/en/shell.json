@@ -9,6 +9,13 @@
     "workspace": "Workspace",
     "manage": "Manage"
   },
+  "organizations": {
+    "label": "Organization",
+    "switcherLabel": "Switch organization",
+    "errors": {
+      "switch": "The organization could not be switched."
+    }
+  },
   "navigation": {
     "mainLabel": "Main navigation",
     "overview": "Overview",
@@ -61,6 +68,10 @@
       "developer": "Developer"
     },
     "items": {
+      "organization": {
+        "label": "Organization",
+        "description": "Manage organizations and names"
+      },
       "data": {
         "label": "Data transfer",
         "description": "Import and export inventory"

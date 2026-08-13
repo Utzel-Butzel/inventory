@@ -1,7 +1,7 @@
 "use client";
 
 import { Bell, CheckCheck, Clock3, PackageMinus, RefreshCw, ShieldAlert, Wrench } from "lucide-react";
-import Link from "next/link";
+import { OrganizationLink as Link } from "@/components/organization-routing";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "next-i18next/client";
 

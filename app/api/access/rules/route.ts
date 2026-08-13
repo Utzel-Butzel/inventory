@@ -9,6 +9,7 @@ import { inventoryAccessRuleInputSchema } from "@/lib/validators";
 export async function POST(request: Request) {
   const authorization = await requireSessionPermission(request, "roles.manage");
   if (authorization.response) return authorization.response;
+  const organizationId = authorization.identity.organizationId;
   let payload: unknown;
   try {
     payload = await request.json();
@@ -26,13 +27,19 @@ export async function POST(request: Request) {
     db
       .select({ permissions: accessRoles.permissions })
       .from(accessRoles)
-      .where(eq(accessRoles.key, parsed.data.roleKey))
+      .where(
+        and(
+          eq(accessRoles.organizationId, organizationId),
+          eq(accessRoles.key, parsed.data.roleKey),
+        ),
+      )
       .limit(1),
     db
       .select({ permissions: inventoryAccessRules.permissions })
       .from(inventoryAccessRules)
       .where(
         and(
+          eq(inventoryAccessRules.organizationId, organizationId),
           eq(inventoryAccessRules.roleKey, parsed.data.roleKey),
           eq(inventoryAccessRules.enabled, true),
         ),
@@ -64,11 +71,12 @@ export async function POST(request: Request) {
       .insert(inventoryAccessRules)
       .values({
         ...parsed.data,
+        organizationId,
         createdBy: authorization.identity.subject,
         updatedBy: authorization.identity.subject,
       })
       .returning();
-    await revokeApiTokensForRoles([rule.roleKey]);
+    await revokeApiTokensForRoles([rule.roleKey], organizationId);
     return Response.json({ rule }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";

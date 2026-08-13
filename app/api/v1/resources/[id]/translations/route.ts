@@ -5,7 +5,7 @@ import {
   enqueueResourceTranslations,
   getResourceTranslationOverview,
 } from "@/lib/content-translations";
-import { requirePermission, requireResourcePermission } from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -19,9 +19,17 @@ const translationRequestSchema = z
 export const runtime = "nodejs";
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requirePermission(request, "inventory.read");
+  const { id } = await context.params;
+  const authorization = await requireResourcePermission(
+    request,
+    "inventory.read",
+    id,
+  );
   if (authorization.response) return authorization.response;
-  const overview = await getResourceTranslationOverview((await context.params).id);
+  const overview = await getResourceTranslationOverview(
+    authorization.identity.organizationId,
+    id,
+  );
   if (!overview) return Response.json({ error: "Not found" }, { status: 404 });
   return Response.json({ translations: overview });
 }
@@ -49,6 +57,7 @@ export async function POST(request: Request, context: Context) {
   }
   try {
     const result = await enqueueResourceTranslations({
+      organizationId: authorization.identity.organizationId,
       resourceId: id,
       requestedBy: authorization.identity.subject,
       languageCodes: parsed.data.languageCodes,
@@ -57,7 +66,10 @@ export async function POST(request: Request, context: Context) {
     if (result.status === "not_found") {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
-    const overview = await getResourceTranslationOverview(id);
+    const overview = await getResourceTranslationOverview(
+      authorization.identity.organizationId,
+      id,
+    );
     return Response.json(
       { result, translations: overview },
       { status: result.status === "queued" ? 202 : 200 },

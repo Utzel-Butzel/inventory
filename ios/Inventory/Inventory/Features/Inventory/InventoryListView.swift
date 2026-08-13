@@ -50,7 +50,7 @@ struct InventoryListView: View {
                     } actions: {
                         if hasActiveSearchOrFilters {
                             Button("Suche und Filter zurücksetzen") { resetSearchAndFilters() }
-                        } else {
+                        } else if state.canWrite {
                             creationMenu
                                 .buttonStyle(.borderedProminent)
                         }
@@ -83,22 +83,26 @@ struct InventoryListView: View {
                 }
 
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button(action: onCapture) {
-                        Image(systemName: "camera")
+                    if state.canWrite {
+                        Button(action: onCapture) {
+                            Image(systemName: "camera")
+                        }
+                        .accessibilityLabel("Erfassen")
                     }
-                    .accessibilityLabel("Erfassen")
 
                     Button(action: onScan) {
                         Image(systemName: "barcode.viewfinder")
                     }
                     .accessibilityLabel("Scannen")
 
-                    Menu {
-                        creationMenuActions
-                    } label: {
-                        Image(systemName: "plus")
+                    if state.canWrite {
+                        Menu {
+                            creationMenuActions
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("Neuer Eintrag")
                     }
-                    .accessibilityLabel("Neuer Eintrag")
                 }
             }
             .task(id: searchKey) {
@@ -261,12 +265,14 @@ struct InventoryListView: View {
             if resource.id == resources.last?.id { loadNextPage() }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) {
-                resourcePendingDeletion = resource
-            } label: {
-                Label("Löschen", systemImage: "trash")
+            if state.canWrite {
+                Button(role: .destructive) {
+                    resourcePendingDeletion = resource
+                } label: {
+                    Label("Löschen", systemImage: "trash")
+                }
+                .disabled(deletingResourceID != nil)
             }
-            .disabled(deletingResourceID != nil)
         }
     }
 
@@ -335,7 +341,12 @@ struct InventoryListView: View {
     }
 
     private var searchKey: SearchKey {
-        SearchKey(query: query, type: typeFilter, status: statusFilter)
+        SearchKey(
+            query: query,
+            type: typeFilter,
+            status: statusFilter,
+            contextIdentifier: state.client?.contextIdentifier
+        )
     }
 
     private var selectableTypeFilters: [InventoryResourceType] {
@@ -385,7 +396,9 @@ struct InventoryListView: View {
     }
 
     private func delete(_ resource: InventoryResource) async {
-        guard let client = state.client, deletingResourceID == nil else { return }
+        guard state.canWrite,
+              let client = state.client,
+              deletingResourceID == nil else { return }
         deletingResourceID = resource.id
         defer { deletingResourceID = nil }
 
@@ -420,4 +433,5 @@ private struct SearchKey: Hashable {
     let query: String
     let type: InventoryResourceType?
     let status: InventoryResourceStatus?
+    let contextIdentifier: String?
 }

@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import {
   aiIdempotencyOperations,
@@ -52,6 +52,7 @@ export async function POST(request: Request, context: Context) {
   let operationId: string | null = null;
   if (idempotency.key) {
     const claim = await claimAiOperation({
+      organizationId: authorization.identity.organizationId,
       operation: "analyze",
       idempotencyKey: idempotency.key,
       resourceId: id,
@@ -73,7 +74,13 @@ export async function POST(request: Request, context: Context) {
     headers?: Record<string, string>,
   ) => {
     if (operationId) {
-      await finishAiOperation({ operationId, body, status, headers });
+      await finishAiOperation({
+        organizationId: authorization.identity.organizationId,
+        operationId,
+        body,
+        status,
+        headers,
+      });
     }
     return respondToFinishedAiOperation({
       body,
@@ -89,7 +96,10 @@ export async function POST(request: Request, context: Context) {
   ) => {
     if (operationId) {
       try {
-        await releaseAiOperation(operationId);
+        await releaseAiOperation(
+          authorization.identity.organizationId,
+          operationId,
+        );
       } catch (error) {
         console.error("Unable to release the transient AI analysis claim.", error);
       }
@@ -102,7 +112,10 @@ export async function POST(request: Request, context: Context) {
     });
   };
 
-  const resource = await getResource(id);
+  const resource = await getResource(
+    authorization.identity.organizationId,
+    id,
+  );
   if (!resource) return finish({ error: "Not found" }, 404);
   const imageMedia = resource.media
     .filter((item) => item.kind === "image")
@@ -130,6 +143,7 @@ export async function POST(request: Request, context: Context) {
   let limit;
   try {
     limit = await consumePaidAiRateLimit({
+      organizationId: authorization.identity.organizationId,
       operation: "analyze",
       identity: authorization.identity,
     });
@@ -197,17 +211,32 @@ export async function POST(request: Request, context: Context) {
       await transaction
         .update(media)
         .set({ altText: result.altText })
-        .where(inArray(media.id, imageMedia.map((item) => item.id)));
+        .where(
+          and(
+            eq(media.organizationId, authorization.identity.organizationId),
+            inArray(media.id, imageMedia.map((item) => item.id)),
+          ),
+        );
       const [updated] = await transaction
         .update(resources)
         .set({ ...values, updatedAt: new Date() })
-        .where(eq(resources.id, resource.id))
+        .where(
+          and(
+            eq(resources.organizationId, authorization.identity.organizationId),
+            eq(resources.id, resource.id),
+          ),
+        )
         .returning();
       if (!updated) throw new Error("Resource disappeared during AI analysis.");
       const mediaRows = await transaction
         .select()
         .from(media)
-        .where(eq(media.resourceId, resource.id))
+        .where(
+          and(
+            eq(media.organizationId, authorization.identity.organizationId),
+            eq(media.resourceId, resource.id),
+          ),
+        )
         .orderBy(asc(media.position));
       const resourceSnapshot = {
         ...updated,
@@ -220,6 +249,7 @@ export async function POST(request: Request, context: Context) {
         model,
       };
       await enqueueWebhookEvent(transaction, {
+        organizationId: authorization.identity.organizationId,
         type: "inventory.resource.updated",
         aggregateType: "resource",
         aggregateId: updated.id,
@@ -233,7 +263,15 @@ export async function POST(request: Request, context: Context) {
         await transaction
           .update(aiIdempotencyOperations)
           .set(aiOperationResponseValues({ body, status: 200 }))
-          .where(eq(aiIdempotencyOperations.id, operationId));
+          .where(
+            and(
+              eq(
+                aiIdempotencyOperations.organizationId,
+                authorization.identity.organizationId,
+              ),
+              eq(aiIdempotencyOperations.id, operationId),
+            ),
+          );
       }
       return body;
     });

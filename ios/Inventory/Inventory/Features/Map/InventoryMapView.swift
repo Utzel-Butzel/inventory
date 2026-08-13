@@ -55,7 +55,7 @@ struct InventoryMapView: View {
             .safeAreaInset(edge: .bottom, spacing: 8) {
                 footer
             }
-            .task(id: state.client?.serverURL) {
+            .task(id: state.client?.contextIdentifier) {
                 await loadResources()
             }
             .onChange(of: query) { _, _ in

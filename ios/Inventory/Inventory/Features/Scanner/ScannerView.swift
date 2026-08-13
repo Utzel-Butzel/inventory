@@ -167,23 +167,29 @@ struct ScannerView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
                     .textSelection(.enabled)
-                Button {
-                    state.pendingCaptureCode = code
-                    unmatchedCode = nil
-                    state.presentedTool = .capture
-                } label: {
-                    Label("Mit Fotos erfassen", systemImage: "camera.fill")
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                if state.canWrite {
+                    Button {
+                        state.pendingCaptureCode = code
+                        unmatchedCode = nil
+                        state.presentedTool = .capture
+                    } label: {
+                        Label("Mit Fotos erfassen", systemImage: "camera.fill")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(InventoryTheme.ink)
+                    Button {
+                        showCreateForm = true
+                    } label: {
+                        Label("Nur Stammdaten anlegen", systemImage: "doc.badge.plus")
+                            .frame(maxWidth: .infinity, minHeight: 42)
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    Label("Nur Lesezugriff", systemImage: "lock.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(InventoryTheme.ink)
-                Button {
-                    showCreateForm = true
-                } label: {
-                    Label("Nur Stammdaten anlegen", systemImage: "doc.badge.plus")
-                        .frame(maxWidth: .infinity, minHeight: 42)
-                }
-                .buttonStyle(.bordered)
                 Button("Anderen Code scannen") {
                     unmatchedCode = nil
                     resumeScanning()

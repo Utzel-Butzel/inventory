@@ -1,6 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import {
+  OrganizationLink as Link,
+  useOrganizationHref,
+} from "@/components/organization-routing";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
@@ -339,6 +342,7 @@ export function ResourceEditor({
   canManageSpatial?: boolean;
 }) {
   const router = useRouter();
+  const organizationHref = useOrganizationHref();
   const { t, i18n } = useT("resource");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const isNew = !resourceId;
@@ -785,7 +789,7 @@ export function ResourceEditor({
             (await runCover(created.resource.id, uploadedCoverSourceId)) ??
             latest;
         }
-        router.push(`/inventory/${latest.id}`);
+        router.push(organizationHref(`/inventory/${latest.id}`));
         router.refresh();
       } else {
         const saved = await fetchJson<{
@@ -869,7 +873,7 @@ export function ResourceEditor({
     }
     try {
       await fetchJson(`/api/v1/resources/${resourceId}`, { method: "DELETE" });
-      router.push("/inventory");
+      router.push(organizationHref("/inventory"));
       router.refresh();
     } catch (deleteError) {
       setError(

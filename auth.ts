@@ -29,12 +29,6 @@ function localAuthUser(user: UserRecord) {
   };
 }
 
-function configuredAuth0Role(profile: Record<string, unknown> | undefined) {
-  const fallback = normalizeUserRole(process.env.AUTH0_DEFAULT_ROLE, "editor");
-  const claim = process.env.AUTH0_ROLE_CLAIM?.trim();
-  return claim ? normalizeUserRole(profile?.[claim], fallback) : fallback;
-}
-
 const providers: NextAuthConfig["providers"] = [
   Credentials({
     name: "Password",
@@ -74,17 +68,22 @@ export const authConfig = {
   trustHost: true,
   callbacks: {
     jwt({ token, user, account, profile }) {
-      if (user?.id) token.userId = user.id;
       if (account?.provider === "credentials" && user) {
+        token.userId = user.id;
         token.authProvider = "local";
         token.role = normalizeUserRole(user.role, "viewer");
         token.sessionVersion = user.sessionVersion ?? 1;
+        token.auth0EmailVerified = true;
       } else if (account?.provider === "auth0") {
+        // Auth0 subject identifiers are not local user UUIDs. The API links a
+        // verified Auth0 email to an explicitly provisioned local membership.
+        delete token.userId;
         token.authProvider = "auth0";
-        token.role = configuredAuth0Role(
-          profile as Record<string, unknown> | undefined,
-        );
+        token.role = "viewer";
         token.sessionVersion = 1;
+        token.auth0EmailVerified =
+          (profile as Record<string, unknown> | undefined)?.email_verified ===
+          true;
       }
       return token;
     },
@@ -95,6 +94,7 @@ export const authConfig = {
         session.user.authProvider =
           token.authProvider === "local" ? "local" : "auth0";
         session.user.sessionVersion = Number(token.sessionVersion ?? 1);
+        session.user.auth0EmailVerified = token.auth0EmailVerified === true;
       }
       return session;
     },

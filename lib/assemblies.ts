@@ -121,7 +121,7 @@ const movementDto = (row: StockMovementRecord) => ({
   createdBy: row.createdBy,
 });
 
-export async function getBom(resourceId: string) {
+export async function getBom(organizationId: string, resourceId: string) {
   const [resource] = await db
     .select({
       id: resources.id,
@@ -130,8 +130,19 @@ export async function getBom(resourceId: string) {
       trackingMode: stockSettings.trackingMode,
     })
     .from(resources)
-    .leftJoin(stockSettings, eq(stockSettings.resourceId, resources.id))
-    .where(eq(resources.id, resourceId))
+    .leftJoin(
+      stockSettings,
+      and(
+        eq(stockSettings.organizationId, organizationId),
+        eq(stockSettings.resourceId, resources.id),
+      ),
+    )
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, resourceId),
+      ),
+    )
     .limit(1);
   if (!resource) return null;
 
@@ -148,9 +159,26 @@ export async function getBom(resourceId: string) {
       trackingMode: stockSettings.trackingMode,
     })
     .from(bomLines)
-    .innerJoin(resources, eq(resources.id, bomLines.componentResourceId))
-    .leftJoin(stockSettings, eq(stockSettings.resourceId, resources.id))
-    .where(eq(bomLines.assemblyResourceId, resourceId))
+    .innerJoin(
+      resources,
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, bomLines.componentResourceId),
+      ),
+    )
+    .leftJoin(
+      stockSettings,
+      and(
+        eq(stockSettings.organizationId, organizationId),
+        eq(stockSettings.resourceId, resources.id),
+      ),
+    )
+    .where(
+      and(
+        eq(bomLines.organizationId, organizationId),
+        eq(bomLines.assemblyResourceId, resourceId),
+      ),
+    )
     .orderBy(asc(bomLines.position), asc(resources.name), asc(bomLines.id));
 
   const componentIds = rows.map((row) => row.resourceId);
@@ -160,6 +188,7 @@ export async function getBom(resourceId: string) {
         .from(stockUnits)
         .where(
           and(
+            eq(stockUnits.organizationId, organizationId),
             inArray(stockUnits.resourceId, componentIds),
             eq(stockUnits.status, "available"),
           ),
@@ -219,6 +248,7 @@ const graphContainsPath = (
 };
 
 export async function replaceBom(
+  organizationId: string,
   assemblyResourceId: string,
   components: BomComponentInput[],
 ) {
@@ -235,7 +265,12 @@ export async function replaceBom(
     const lockedResources = await transaction
       .select({ id: resources.id })
       .from(resources)
-      .where(inArray(resources.id, ids))
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          inArray(resources.id, ids),
+        ),
+      )
       .orderBy(asc(resources.id))
       .for("update");
     if (!lockedResources.some((item) => item.id === assemblyResourceId)) {
@@ -265,7 +300,8 @@ export async function replaceBom(
         parent: bomLines.assemblyResourceId,
         child: bomLines.componentResourceId,
       })
-      .from(bomLines);
+      .from(bomLines)
+      .where(eq(bomLines.organizationId, organizationId));
     const adjacency = new Map<string, string[]>();
     for (const edge of existingEdges) {
       if (edge.parent === assemblyResourceId) continue;
@@ -288,11 +324,17 @@ export async function replaceBom(
 
     await transaction
       .delete(bomLines)
-      .where(eq(bomLines.assemblyResourceId, assemblyResourceId));
+      .where(
+        and(
+          eq(bomLines.organizationId, organizationId),
+          eq(bomLines.assemblyResourceId, assemblyResourceId),
+        ),
+      );
     if (components.length) {
       const now = new Date();
       await transaction.insert(bomLines).values(
         components.map((component, index) => ({
+          organizationId,
           assemblyResourceId,
           componentResourceId: component.resourceId,
           quantityPerAssembly: component.quantityPerAssembly,
@@ -304,7 +346,7 @@ export async function replaceBom(
     }
   });
 
-  const result = await getBom(assemblyResourceId);
+  const result = await getBom(organizationId, assemblyResourceId);
   if (!result) throw new AssemblyOperationError("Not found", 404);
   return result;
 }
@@ -397,20 +439,31 @@ const buildDto = (
 };
 
 export async function listAssemblyBuilds(
+  organizationId: string,
   assemblyResourceId: string,
   options: { limit?: number } = {},
 ) {
   const [resource] = await db
     .select({ id: resources.id })
     .from(resources)
-    .where(eq(resources.id, assemblyResourceId))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, assemblyResourceId),
+      ),
+    )
     .limit(1);
   if (!resource) return null;
 
   const builds = await db
     .select()
     .from(assemblyBuilds)
-    .where(eq(assemblyBuilds.assemblyResourceId, assemblyResourceId))
+    .where(
+      and(
+        eq(assemblyBuilds.organizationId, organizationId),
+        eq(assemblyBuilds.assemblyResourceId, assemblyResourceId),
+      ),
+    )
     .orderBy(desc(assemblyBuilds.occurredAt), desc(assemblyBuilds.createdAt))
     .limit(Math.min(100, Math.max(1, options.limit ?? 50)));
   if (!builds.length) return { builds: [] };
@@ -419,7 +472,12 @@ export async function listAssemblyBuilds(
   const componentRows = await db
     .select()
     .from(assemblyBuildComponents)
-    .where(inArray(assemblyBuildComponents.buildId, buildIds))
+    .where(
+      and(
+        eq(assemblyBuildComponents.organizationId, organizationId),
+        inArray(assemblyBuildComponents.buildId, buildIds),
+      ),
+    )
     .orderBy(asc(assemblyBuildComponents.createdAt), asc(assemblyBuildComponents.id));
   const unitIds = Array.from(
     new Set(
@@ -429,7 +487,15 @@ export async function listAssemblyBuilds(
     ),
   );
   const unitRows = unitIds.length
-    ? await db.select().from(stockUnits).where(inArray(stockUnits.id, unitIds))
+    ? await db
+        .select()
+        .from(stockUnits)
+        .where(
+          and(
+            eq(stockUnits.organizationId, organizationId),
+            inArray(stockUnits.id, unitIds),
+          ),
+        )
     : [];
   const unitsById = new Map(unitRows.map((unit) => [unit.id, unit]));
   const componentsByBuild = new Map<string, AssemblyBuildComponentRecord[]>();
@@ -463,6 +529,7 @@ const bomSignature = (
   );
 
 export async function buildAssembly(
+  organizationId: string,
   assemblyResourceId: string,
   input: AssemblyBuildInput,
   actor: string,
@@ -494,7 +561,12 @@ export async function buildAssembly(
           position: bomLines.position,
         })
         .from(bomLines)
-        .where(eq(bomLines.assemblyResourceId, assemblyResourceId));
+        .where(
+          and(
+            eq(bomLines.organizationId, organizationId),
+            eq(bomLines.assemblyResourceId, assemblyResourceId),
+          ),
+        );
 
       const resourceIds = Array.from(
         new Set([
@@ -505,7 +577,12 @@ export async function buildAssembly(
       const lockedResources = await transaction
         .select()
         .from(resources)
-        .where(inArray(resources.id, resourceIds))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            inArray(resources.id, resourceIds),
+          ),
+        )
         .orderBy(asc(resources.id))
         .for("update");
       if (!lockedResources.some((resource) => resource.id === assemblyResourceId)) {
@@ -530,7 +607,12 @@ export async function buildAssembly(
       const [replayAfterLock] = await transaction
         .select()
         .from(assemblyBuilds)
-        .where(eq(assemblyBuilds.idempotencyKey, idempotency.key))
+        .where(
+          and(
+            eq(assemblyBuilds.organizationId, organizationId),
+            eq(assemblyBuilds.idempotencyKey, idempotency.key),
+          ),
+        )
         .limit(1);
       if (replayAfterLock) return validateReplay(replayAfterLock);
 
@@ -552,8 +634,19 @@ export async function buildAssembly(
           sku: resources.sku,
         })
         .from(bomLines)
-        .innerJoin(resources, eq(resources.id, bomLines.componentResourceId))
-        .where(eq(bomLines.assemblyResourceId, assemblyResourceId))
+        .innerJoin(
+          resources,
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, bomLines.componentResourceId),
+          ),
+        )
+        .where(
+          and(
+            eq(bomLines.organizationId, organizationId),
+            eq(bomLines.assemblyResourceId, assemblyResourceId),
+          ),
+        )
         .orderBy(asc(bomLines.position), asc(bomLines.id));
       if (bomSignature(initialBom) !== bomSignature(currentBom)) {
         throw new AssemblyOperationError(
@@ -568,7 +661,12 @@ export async function buildAssembly(
           trackingMode: stockSettings.trackingMode,
         })
         .from(stockSettings)
-        .where(inArray(stockSettings.resourceId, resourceIds));
+        .where(
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            inArray(stockSettings.resourceId, resourceIds),
+          ),
+        );
       const modeByResource = new Map(
         settingsRows.map((row) => [row.resourceId, row.trackingMode]),
       );
@@ -578,7 +676,12 @@ export async function buildAssembly(
           quantity: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
         })
         .from(stockLocationBalances)
-        .where(inArray(stockLocationBalances.resourceId, resourceIds))
+        .where(
+          and(
+            eq(stockLocationBalances.organizationId, organizationId),
+            inArray(stockLocationBalances.resourceId, resourceIds),
+          ),
+        )
         .groupBy(stockLocationBalances.resourceId);
       const locatedByResource = new Map(
         locatedRows.map((row) => [row.resourceId, Number(row.quantity)]),
@@ -658,6 +761,7 @@ export async function buildAssembly(
       const [build] = await transaction
         .insert(assemblyBuilds)
         .values({
+          organizationId,
           assemblyResourceId,
           quantity: input.quantity,
           occurredAt,
@@ -690,6 +794,7 @@ export async function buildAssembly(
           .insert(stockUnits)
           .values(
             outputCodes.map((code) => ({
+              organizationId,
               resourceId: assemblyResourceId,
               code,
               status: "available" as const,
@@ -737,6 +842,7 @@ export async function buildAssembly(
               .from(stockUnits)
               .where(
                 and(
+                  eq(stockUnits.organizationId, organizationId),
                   eq(stockUnits.resourceId, line.componentResourceId),
                   inArray(stockUnits.id, requestedIds),
                 ),
@@ -762,6 +868,7 @@ export async function buildAssembly(
               .from(stockUnits)
               .where(
                 and(
+                  eq(stockUnits.organizationId, organizationId),
                   eq(stockUnits.resourceId, line.componentResourceId),
                   eq(stockUnits.status, "available"),
                 ),
@@ -780,15 +887,26 @@ export async function buildAssembly(
           await transaction
             .update(stockUnits)
             .set({ status: "in-use", lastMovedAt: occurredAt, updatedAt: now })
-            .where(inArray(stockUnits.id, selectedUnits.map((unit) => unit.id)));
+            .where(
+              and(
+                eq(stockUnits.organizationId, organizationId),
+                inArray(stockUnits.id, selectedUnits.map((unit) => unit.id)),
+              ),
+            );
           await transaction
             .update(resources)
             .set({ quantity: balanceAfter, updatedAt: now })
-            .where(eq(resources.id, line.componentResourceId));
+            .where(
+              and(
+                eq(resources.organizationId, organizationId),
+                eq(resources.id, line.componentResourceId),
+              ),
+            );
           const movements = await transaction
             .insert(stockMovements)
             .values(
               selectedUnits.map((unit, index) => ({
+                organizationId,
                 resourceId: line.componentResourceId,
                 unitId: unit.id,
                 assemblyBuildId: build.id,
@@ -811,6 +929,7 @@ export async function buildAssembly(
           );
           selectedUnits.forEach((unit, index) => {
             allocationValues.push({
+              organizationId,
               buildId: build.id,
               componentResourceId: line.componentResourceId,
               componentName: line.name,
@@ -827,10 +946,16 @@ export async function buildAssembly(
           await transaction
             .update(resources)
             .set({ quantity: balanceAfter, updatedAt: now })
-            .where(eq(resources.id, line.componentResourceId));
+            .where(
+              and(
+                eq(resources.organizationId, organizationId),
+                eq(resources.id, line.componentResourceId),
+              ),
+            );
           const [movement] = await transaction
             .insert(stockMovements)
             .values({
+              organizationId,
               resourceId: line.componentResourceId,
               assemblyBuildId: build.id,
               delta: -required,
@@ -848,6 +973,7 @@ export async function buildAssembly(
           if (outputUnits.length) {
             outputUnits.forEach((unit) => {
               allocationValues.push({
+                organizationId,
                 buildId: build.id,
                 componentResourceId: line.componentResourceId,
                 componentName: line.name,
@@ -860,6 +986,7 @@ export async function buildAssembly(
             });
           } else {
             allocationValues.push({
+              organizationId,
               buildId: build.id,
               componentResourceId: line.componentResourceId,
               componentName: line.name,
@@ -881,12 +1008,18 @@ export async function buildAssembly(
       await transaction
         .update(resources)
         .set({ quantity: assemblyBalanceAfter, updatedAt: now })
-        .where(eq(resources.id, assemblyResourceId));
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, assemblyResourceId),
+          ),
+        );
       if (outputUnits.length) {
         const movements = await transaction
           .insert(stockMovements)
           .values(
             outputUnits.map((unit, index) => ({
+              organizationId,
               resourceId: assemblyResourceId,
               unitId: unit.id,
               assemblyBuildId: build.id,
@@ -907,6 +1040,7 @@ export async function buildAssembly(
         const [movement] = await transaction
           .insert(stockMovements)
           .values({
+            organizationId,
             resourceId: assemblyResourceId,
             assemblyBuildId: build.id,
             delta: input.quantity,
@@ -939,7 +1073,12 @@ export async function buildAssembly(
         const installedRows = await transaction
           .select()
           .from(stockUnits)
-          .where(inArray(stockUnits.id, componentUnitIds));
+          .where(
+            and(
+              eq(stockUnits.organizationId, organizationId),
+              inArray(stockUnits.id, componentUnitIds),
+            ),
+          );
         for (const unit of installedRows) unitsById.set(unit.id, unit);
       }
       const response = {
@@ -958,7 +1097,12 @@ export async function buildAssembly(
       await transaction
         .update(assemblyBuilds)
         .set({ response: storedResponse })
-        .where(eq(assemblyBuilds.id, build.id));
+        .where(
+          and(
+            eq(assemblyBuilds.organizationId, organizationId),
+            eq(assemblyBuilds.id, build.id),
+          ),
+        );
       return { response: storedResponse, replayed: false } as const;
     });
   } catch (error) {
@@ -966,7 +1110,12 @@ export async function buildAssembly(
       const [winner] = await db
         .select()
         .from(assemblyBuilds)
-        .where(eq(assemblyBuilds.idempotencyKey, idempotency.key))
+        .where(
+          and(
+            eq(assemblyBuilds.organizationId, organizationId),
+            eq(assemblyBuilds.idempotencyKey, idempotency.key),
+          ),
+        )
         .limit(1);
       if (winner) return validateReplay(winner);
     }

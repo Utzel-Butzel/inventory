@@ -1,4 +1,4 @@
-import { desc, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 
 import { apiTokens } from "@/db/schema";
@@ -23,7 +23,13 @@ export async function GET(request: Request) {
       createdAt: apiTokens.createdAt,
     })
     .from(apiTokens)
-    .where(isNull(apiTokens.revokedAt))
+    .where(
+      and(
+        eq(apiTokens.organizationId, authorization.identity.organizationId),
+        isNull(apiTokens.userId),
+        isNull(apiTokens.revokedAt),
+      ),
+    )
     .orderBy(desc(apiTokens.createdAt));
   return Response.json({ tokens });
 }
@@ -67,6 +73,7 @@ export async function POST(request: Request) {
       scopes: parsed.data.scopes,
       expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
       createdBy: authorization.identity.subject,
+      organizationId: authorization.identity.organizationId,
     })
     .returning({
       id: apiTokens.id,

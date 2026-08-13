@@ -14,7 +14,10 @@ export async function GET(request: Request, context: Context) {
   if (!z.uuid().safeParse(id).success) {
     return Response.json({ error: "Invalid room scan identifier." }, { status: 422 });
   }
-  const scene = await getRoomScene(id);
+  const scene = await getRoomScene(
+    authorization.identity.organizationId,
+    id,
+  );
   if (!scene) return Response.json({ error: "Room scan not found." }, { status: 404 });
   return Response.json({ scene });
 }

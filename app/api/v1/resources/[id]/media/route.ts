@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import {
   media,
@@ -36,27 +36,51 @@ type Context = { params: Promise<{ id: string }> };
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function loadUploadBatch(idempotencyKey: string) {
+async function loadUploadBatch(
+  organizationId: string,
+  idempotencyKey: string,
+) {
   const [batch] = await db
     .select()
     .from(mediaUploadBatches)
-    .where(eq(mediaUploadBatches.idempotencyKey, idempotencyKey))
+    .where(
+      and(
+        eq(mediaUploadBatches.organizationId, organizationId),
+        eq(mediaUploadBatches.idempotencyKey, idempotencyKey),
+      ),
+    )
     .limit(1);
   if (!batch) return null;
   const uploaded = await db
     .select({ item: media })
     .from(mediaUploadBatchItems)
-    .innerJoin(media, eq(media.id, mediaUploadBatchItems.mediaId))
-    .where(eq(mediaUploadBatchItems.batchId, batch.id))
+    .innerJoin(
+      media,
+      and(
+        eq(media.organizationId, mediaUploadBatchItems.organizationId),
+        eq(media.id, mediaUploadBatchItems.mediaId),
+      ),
+    )
+    .where(
+      and(
+        eq(mediaUploadBatchItems.organizationId, organizationId),
+        eq(mediaUploadBatchItems.batchId, batch.id),
+      ),
+    )
     .orderBy(asc(media.position));
   return { batch, uploaded: uploaded.map((row) => row.item) };
 }
 
-async function listResourceMedia(resourceId: string) {
+async function listResourceMedia(organizationId: string, resourceId: string) {
   return db
     .select()
     .from(media)
-    .where(eq(media.resourceId, resourceId))
+    .where(
+      and(
+        eq(media.organizationId, organizationId),
+        eq(media.resourceId, resourceId),
+      ),
+    )
     .orderBy(asc(media.position));
 }
 
@@ -80,11 +104,17 @@ export async function POST(request: Request, context: Context) {
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
-  const resource = await getResource(id);
+  const resource = await getResource(
+    authorization.identity.organizationId,
+    id,
+  );
   if (!resource) return Response.json({ error: "Not found" }, { status: 404 });
 
   if (idempotency.key) {
-    const replay = await loadUploadBatch(idempotency.key);
+    const replay = await loadUploadBatch(
+      authorization.identity.organizationId,
+      idempotency.key,
+    );
     if (replay) {
       if (replay.batch.resourceId !== id) {
         return Response.json(
@@ -94,7 +124,10 @@ export async function POST(request: Request, context: Context) {
       }
       return Response.json(
         {
-          media: await listResourceMedia(id),
+          media: await listResourceMedia(
+            authorization.identity.organizationId,
+            id,
+          ),
           uploaded: replay.uploaded,
           batch: {
             id: replay.batch.id,
@@ -206,14 +239,31 @@ export async function POST(request: Request, context: Context) {
       if (idempotency.key) {
         const [batch] = await transaction
           .insert(mediaUploadBatches)
-          .values({ idempotencyKey: idempotency.key, resourceId: id })
-          .onConflictDoNothing({ target: mediaUploadBatches.idempotencyKey })
+          .values({
+            organizationId: authorization.identity.organizationId,
+            idempotencyKey: idempotency.key,
+            resourceId: id,
+          })
+          .onConflictDoNothing({
+            target: [
+              mediaUploadBatches.organizationId,
+              mediaUploadBatches.idempotencyKey,
+            ],
+          })
           .returning();
         if (!batch) {
           const [winner] = await transaction
             .select()
             .from(mediaUploadBatches)
-            .where(eq(mediaUploadBatches.idempotencyKey, idempotency.key))
+            .where(
+              and(
+                eq(
+                  mediaUploadBatches.organizationId,
+                  authorization.identity.organizationId,
+                ),
+                eq(mediaUploadBatches.idempotencyKey, idempotency.key),
+              ),
+            )
             .limit(1);
           if (!winner || winner.resourceId !== id) return { kind: "conflict" };
           return { kind: "replay", batchId: winner.id };
@@ -226,7 +276,12 @@ export async function POST(request: Request, context: Context) {
       const [currentResource] = await transaction
         .select()
         .from(resources)
-        .where(eq(resources.id, id))
+        .where(
+          and(
+            eq(resources.organizationId, authorization.identity.organizationId),
+            eq(resources.id, id),
+          ),
+        )
         .limit(1)
         .for("update");
       if (!currentResource) {
@@ -235,11 +290,17 @@ export async function POST(request: Request, context: Context) {
       const [{ highest }] = await transaction
         .select({ highest: sql<number>`coalesce(max(${media.position}), -1)::int` })
         .from(media)
-        .where(eq(media.resourceId, id));
+        .where(
+          and(
+            eq(media.organizationId, authorization.identity.organizationId),
+            eq(media.resourceId, id),
+          ),
+        );
       const uploaded = await transaction
         .insert(media)
         .values(
           storedFiles.map((stored, index) => ({
+            organizationId: authorization.identity.organizationId,
             resourceId: id,
             ...stored,
             position: Number(highest ?? -1) + index + 1,
@@ -249,15 +310,25 @@ export async function POST(request: Request, context: Context) {
         .returning();
       if (batchId) {
         await transaction.insert(mediaUploadBatchItems).values(
-          uploaded.map((item) => ({ batchId, mediaId: item.id })),
+          uploaded.map((item) => ({
+            organizationId: authorization.identity.organizationId,
+            batchId,
+            mediaId: item.id,
+          })),
         );
       }
       const allMedia = await transaction
         .select()
         .from(media)
-        .where(eq(media.resourceId, id))
+        .where(
+          and(
+            eq(media.organizationId, authorization.identity.organizationId),
+            eq(media.resourceId, id),
+          ),
+        )
         .orderBy(asc(media.position));
       await enqueueWebhookEvent(transaction, {
+        organizationId: authorization.identity.organizationId,
         type: "inventory.resource.updated",
         aggregateType: "resource",
         aggregateId: id,
@@ -293,13 +364,19 @@ export async function POST(request: Request, context: Context) {
         { status: 409 },
       );
     }
-    const replay = await loadUploadBatch(idempotency.key!);
+    const replay = await loadUploadBatch(
+      authorization.identity.organizationId,
+      idempotency.key!,
+    );
     if (!replay) {
       return Response.json({ error: "Unable to replay upload batch." }, { status: 500 });
     }
     return Response.json(
       {
-        media: await listResourceMedia(id),
+        media: await listResourceMedia(
+          authorization.identity.organizationId,
+          id,
+        ),
         uploaded: replay.uploaded,
         batch: {
           id: replay.batch.id,
@@ -314,7 +391,7 @@ export async function POST(request: Request, context: Context) {
   }
 
   const response = {
-    media: await listResourceMedia(id),
+    media: await listResourceMedia(authorization.identity.organizationId, id),
     uploaded: committed.uploaded,
     batch: idempotency.key
       ? { id: committed.batchId, idempotencyKey: idempotency.key }
@@ -336,7 +413,10 @@ export async function PATCH(request: Request, context: Context) {
     id,
   );
   if (authorization.response) return authorization.response;
-  const resource = await getResource(id);
+  const resource = await getResource(
+    authorization.identity.organizationId,
+    id,
+  );
   if (!resource) return Response.json({ error: "Not found" }, { status: 404 });
 
   let body: { order?: unknown };
@@ -360,7 +440,12 @@ export async function PATCH(request: Request, context: Context) {
     const [currentResource] = await transaction
       .select()
       .from(resources)
-      .where(eq(resources.id, id))
+      .where(
+        and(
+          eq(resources.organizationId, authorization.identity.organizationId),
+          eq(resources.id, id),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!currentResource) {
@@ -370,14 +455,26 @@ export async function PATCH(request: Request, context: Context) {
       await transaction
         .update(media)
         .set({ position })
-        .where(eq(media.id, mediaId as string));
+        .where(
+          and(
+            eq(media.organizationId, authorization.identity.organizationId),
+            eq(media.resourceId, id),
+            eq(media.id, mediaId as string),
+          ),
+        );
     }
     const orderedMedia = await transaction
       .select()
       .from(media)
-      .where(eq(media.resourceId, id))
+      .where(
+        and(
+          eq(media.organizationId, authorization.identity.organizationId),
+          eq(media.resourceId, id),
+        ),
+      )
       .orderBy(asc(media.position));
     await enqueueWebhookEvent(transaction, {
+      organizationId: authorization.identity.organizationId,
       type: "inventory.resource.updated",
       aggregateType: "resource",
       aggregateId: id,
@@ -392,5 +489,7 @@ export async function PATCH(request: Request, context: Context) {
       },
     });
   });
-  return Response.json({ resource: await getResource(id) });
+  return Response.json({
+    resource: await getResource(authorization.identity.organizationId, id),
+  });
 }

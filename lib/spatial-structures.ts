@@ -43,10 +43,11 @@ const compatibleBounds = (
     }),
   )?.bounds ?? null;
 
-export async function listSpatialStructures() {
+export async function listSpatialStructures(organizationId: string) {
   const structures = await db
     .select()
     .from(spatialStructures)
+    .where(eq(spatialStructures.organizationId, organizationId))
     .orderBy(asc(spatialStructures.name), asc(spatialStructures.id));
   if (!structures.length) return [];
 
@@ -64,6 +65,7 @@ export async function listSpatialStructures() {
       .from(roomScans)
       .where(
         and(
+          eq(roomScans.organizationId, organizationId),
           inArray(roomScans.structureId, ids),
           eq(roomScans.status, "active"),
         ),
@@ -71,7 +73,12 @@ export async function listSpatialStructures() {
     db
       .select()
       .from(spatialCoordinateSpaces)
-      .where(inArray(spatialCoordinateSpaces.structureId, ids)),
+      .where(
+        and(
+          eq(spatialCoordinateSpaces.organizationId, organizationId),
+          inArray(spatialCoordinateSpaces.structureId, ids),
+        ),
+      ),
   ]);
 
   return structures.map((structure) => {
@@ -116,11 +123,19 @@ export async function listSpatialStructures() {
   });
 }
 
-export async function getSpatialStructure(structureId: string) {
+export async function getSpatialStructure(
+  organizationId: string,
+  structureId: string,
+) {
   const [structure] = await db
     .select()
     .from(spatialStructures)
-    .where(eq(spatialStructures.id, structureId))
+    .where(
+      and(
+        eq(spatialStructures.organizationId, organizationId),
+        eq(spatialStructures.id, structureId),
+      ),
+    )
     .limit(1);
   if (!structure) return null;
 
@@ -133,14 +148,30 @@ export async function getSpatialStructure(structureId: string) {
         coordinateSpace: spatialCoordinateSpaces,
       })
       .from(roomScans)
-      .innerJoin(resources, eq(resources.id, roomScans.roomResourceId))
-      .leftJoin(spatialStructures, eq(spatialStructures.id, roomScans.structureId))
+      .innerJoin(
+        resources,
+        and(
+          eq(resources.id, roomScans.roomResourceId),
+          eq(resources.organizationId, organizationId),
+        ),
+      )
+      .leftJoin(
+        spatialStructures,
+        and(
+          eq(spatialStructures.id, roomScans.structureId),
+          eq(spatialStructures.organizationId, organizationId),
+        ),
+      )
       .leftJoin(
         spatialCoordinateSpaces,
-        eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+        and(
+          eq(spatialCoordinateSpaces.id, roomScans.coordinateSpaceId),
+          eq(spatialCoordinateSpaces.organizationId, organizationId),
+        ),
       )
       .where(
         and(
+          eq(roomScans.organizationId, organizationId),
           eq(roomScans.structureId, structureId),
           eq(roomScans.status, "active"),
         ),
@@ -153,7 +184,12 @@ export async function getSpatialStructure(structureId: string) {
     db
       .select()
       .from(spatialCoordinateSpaces)
-      .where(eq(spatialCoordinateSpaces.structureId, structureId))
+      .where(
+        and(
+          eq(spatialCoordinateSpaces.organizationId, organizationId),
+          eq(spatialCoordinateSpaces.structureId, structureId),
+        ),
+      )
       .orderBy(asc(spatialCoordinateSpaces.createdAt)),
   ]);
 
@@ -163,18 +199,39 @@ export async function getSpatialStructure(structureId: string) {
         db
           .select()
           .from(roomScanAssets)
-          .where(inArray(roomScanAssets.roomScanId, scanIds))
+          .where(
+            and(
+              eq(roomScanAssets.organizationId, organizationId),
+              inArray(roomScanAssets.roomScanId, scanIds),
+            ),
+          )
           .orderBy(asc(roomScanAssets.kind)),
         db
           .select()
           .from(roomScanKeyframes)
-          .where(inArray(roomScanKeyframes.roomScanId, scanIds))
+          .where(
+            and(
+              eq(roomScanKeyframes.organizationId, organizationId),
+              inArray(roomScanKeyframes.roomScanId, scanIds),
+            ),
+          )
           .orderBy(asc(roomScanKeyframes.frameTimestamp)),
         db
           .select({ placement: resourceSpatialPlacements, resource: resources })
           .from(resourceSpatialPlacements)
-          .innerJoin(resources, eq(resources.id, resourceSpatialPlacements.resourceId))
-          .where(inArray(resourceSpatialPlacements.roomScanId, scanIds))
+          .innerJoin(
+            resources,
+            and(
+              eq(resources.id, resourceSpatialPlacements.resourceId),
+              eq(resources.organizationId, organizationId),
+            ),
+          )
+          .where(
+            and(
+              eq(resourceSpatialPlacements.organizationId, organizationId),
+              inArray(resourceSpatialPlacements.roomScanId, scanIds),
+            ),
+          )
           .orderBy(asc(resources.name)),
       ])
     : [[], [], []];
@@ -187,6 +244,7 @@ export async function getSpatialStructure(structureId: string) {
         .from(media)
         .where(
           and(
+            eq(media.organizationId, organizationId),
             inArray(media.resourceId, placementResourceIds),
             eq(media.kind, "image"),
           ),
@@ -303,12 +361,14 @@ export async function getSpatialStructure(structureId: string) {
 }
 
 export async function createSpatialStructure(
+  organizationId: string,
   input: SpatialStructureCreate,
   actor: string,
 ) {
   const [created] = await db
     .insert(spatialStructures)
     .values({
+      organizationId,
       id: input.id,
       name: input.name,
       description: input.description,
@@ -321,6 +381,7 @@ export async function createSpatialStructure(
 }
 
 export async function updateSpatialStructure(
+  organizationId: string,
   structureId: string,
   input: SpatialStructurePatch,
   actor: string,
@@ -342,7 +403,12 @@ export async function updateSpatialStructure(
   const [updated] = await db
     .update(spatialStructures)
     .set(values)
-    .where(eq(spatialStructures.id, structureId))
+    .where(
+      and(
+        eq(spatialStructures.organizationId, organizationId),
+        eq(spatialStructures.id, structureId),
+      ),
+    )
     .returning();
   return updated ?? null;
 }

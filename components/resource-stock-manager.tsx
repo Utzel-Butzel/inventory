@@ -1,7 +1,7 @@
 "use client";
 
 import type { TFunction } from "i18next";
-import Link from "next/link";
+import { OrganizationLink as Link } from "@/components/organization-routing";
 import {
   AlertTriangle,
   ArrowDownRight,

@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-import {
-  requirePermission,
-  requireResourcePermission,
-} from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import {
   hashIdempotentPayload,
   idempotencyResponseHeaders,
@@ -69,12 +66,16 @@ const movementSchema = z
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requirePermission(request, "stock.read");
-  if (authorization.response) return authorization.response;
   const { id } = await context.params;
   if (!z.string().uuid().safeParse(id).success) {
     return Response.json({ error: "Invalid resource id." }, { status: 422 });
   }
+  const authorization = await requireResourcePermission(
+    request,
+    "stock.read",
+    id,
+  );
+  if (authorization.response) return authorization.response;
 
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit") ?? "100");
@@ -85,7 +86,11 @@ export async function GET(request: Request, context: Context) {
   }
 
   try {
-    const movements = await listStockMovements(id, { limit, before });
+    const movements = await listStockMovements(
+      authorization.identity.organizationId,
+      id,
+      { limit, before },
+    );
     if (!movements) return Response.json({ error: "Not found" }, { status: 404 });
     return Response.json({ movements });
   } catch {
@@ -126,6 +131,7 @@ export async function POST(request: Request, context: Context) {
 
   try {
     const result = await bookStockMovement(
+      authorization.identity.organizationId,
       id,
       {
         ...parsed.data,

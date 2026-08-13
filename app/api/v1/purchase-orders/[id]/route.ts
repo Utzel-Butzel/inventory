@@ -34,7 +34,10 @@ export async function GET(request: Request, context: Context) {
   }
 
   try {
-    const order = await getPurchaseOrder(id);
+    const order = await getPurchaseOrder(
+      authorization.identity.organizationId,
+      id,
+    );
     if (!order) return Response.json({ error: "Not found" }, { status: 404 });
     return Response.json({ order });
   } catch (error) {
@@ -66,18 +69,22 @@ export async function PATCH(request: Request, context: Context) {
   }
 
   try {
-    const order = await updatePurchaseOrder(id, {
-      ...parsed.data,
-      orderedAt: parsed.data.orderedAt
-        ? new Date(parsed.data.orderedAt)
-        : undefined,
-      expectedAt:
-        parsed.data.expectedAt === undefined
-          ? undefined
-          : parsed.data.expectedAt === null
-            ? null
-            : new Date(parsed.data.expectedAt),
-    });
+    const order = await updatePurchaseOrder(
+      authorization.identity.organizationId,
+      id,
+      {
+        ...parsed.data,
+        orderedAt: parsed.data.orderedAt
+          ? new Date(parsed.data.orderedAt)
+          : undefined,
+        expectedAt:
+          parsed.data.expectedAt === undefined
+            ? undefined
+            : parsed.data.expectedAt === null
+              ? null
+              : new Date(parsed.data.expectedAt),
+      },
+    );
     if (!order) return Response.json({ error: "Not found" }, { status: 404 });
     return Response.json({ order });
   } catch (error) {

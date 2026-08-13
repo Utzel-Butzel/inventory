@@ -18,6 +18,7 @@ struct RootView: View {
 
     private var configuredContent: some View {
         configuredTabs
+            .id(state.organizationContextIdentifier)
             .fullScreenCover(isPresented: toolIsPresented) {
                 presentedTool
             }
@@ -149,11 +150,13 @@ struct RootView: View {
     private var presentedTool: some View {
         switch state.presentedTool {
         case .capture:
-            UnifiedCameraView(
-                initialMode: .capture,
-                onClose: { state.presentedTool = nil },
-                onSubmit: { state.intakeQueue.enqueue($0) }
-            )
+            if state.canWrite {
+                UnifiedCameraView(
+                    initialMode: .capture,
+                    onClose: { state.presentedTool = nil },
+                    onSubmit: { state.intakeQueue.enqueue($0) }
+                )
+            }
         case .scanner:
             UnifiedCameraView(
                 initialMode: .scan,

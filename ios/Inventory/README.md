@@ -21,6 +21,8 @@ WebRTC is not required for app-to-server uploads.
 - Camera-based object recognition with ranked matches to existing inventory items
 - Email/password login with a device token stored in Keychain
 - Manual API token as an optional expert login
+- Organization discovery and switching with a remembered selection per server
+- Organization-pinned uploads and media caches that cannot cross workspace boundaries
 - Optional GPS coordinates for new captures
 - Continuous LiDAR multi-room capture with RoomPlan `CapturedStructure` USDZ models
 - Bounded RGB room keyframes with ARKit pose, intrinsics, and shared coordinates

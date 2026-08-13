@@ -23,7 +23,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await lookupResourceByCode(parsed.data);
+    const result = await lookupResourceByCode(
+      authorization.identity.organizationId,
+      parsed.data,
+    );
     if (!result) {
       return Response.json({ error: "No inventory item matches this code." }, { status: 404 });
     }

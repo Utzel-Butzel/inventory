@@ -39,7 +39,10 @@ const countDto = (row: typeof inventoryCounts.$inferSelect) => ({
   createdAt: row.createdAt.toISOString(),
 });
 
-export async function getInventoryCycle(resourceId: string) {
+export async function getInventoryCycle(
+  organizationId: string,
+  resourceId: string,
+) {
   const [resource] = await db
     .select({
       id: resources.id,
@@ -48,20 +51,41 @@ export async function getInventoryCycle(resourceId: string) {
       trackingMode: stockSettings.trackingMode,
     })
     .from(resources)
-    .leftJoin(stockSettings, eq(stockSettings.resourceId, resources.id))
-    .where(eq(resources.id, resourceId))
+    .leftJoin(
+      stockSettings,
+      and(
+        eq(stockSettings.organizationId, organizationId),
+        eq(stockSettings.resourceId, resources.id),
+      ),
+    )
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, resourceId),
+      ),
+    )
     .limit(1);
   if (!resource) return null;
   const [policyRows, history] = await Promise.all([
     db
       .select()
       .from(inventoryCyclePolicies)
-      .where(eq(inventoryCyclePolicies.resourceId, resourceId))
+      .where(
+        and(
+          eq(inventoryCyclePolicies.organizationId, organizationId),
+          eq(inventoryCyclePolicies.resourceId, resourceId),
+        ),
+      )
       .limit(1),
     db
       .select()
       .from(inventoryCounts)
-      .where(eq(inventoryCounts.resourceId, resourceId))
+      .where(
+        and(
+          eq(inventoryCounts.organizationId, organizationId),
+          eq(inventoryCounts.resourceId, resourceId),
+        ),
+      )
       .orderBy(desc(inventoryCounts.countedAt))
       .limit(25),
   ]);
@@ -73,6 +97,7 @@ export async function getInventoryCycle(resourceId: string) {
 }
 
 export async function saveInventoryCyclePolicy(
+  organizationId: string,
   resourceId: string,
   input: { intervalDays: number; enabled: boolean },
   actor: string,
@@ -80,13 +105,19 @@ export async function saveInventoryCyclePolicy(
   const [resource] = await db
     .select({ id: resources.id })
     .from(resources)
-    .where(eq(resources.id, resourceId))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, resourceId),
+      ),
+    )
     .limit(1);
   if (!resource) throw new StockOperationError("Not found", 404);
   const now = new Date();
   const [saved] = await db
     .insert(inventoryCyclePolicies)
     .values({
+      organizationId,
       resourceId,
       intervalDays: input.intervalDays,
       enabled: input.enabled,
@@ -97,6 +128,7 @@ export async function saveInventoryCyclePolicy(
     .onConflictDoUpdate({
       target: inventoryCyclePolicies.resourceId,
       set: {
+        organizationId,
         intervalDays: input.intervalDays,
         enabled: input.enabled,
         nextDueAt: sql`coalesce(${inventoryCyclePolicies.lastCompletedAt}, ${now}) + (${input.intervalDays} * interval '1 day')`,
@@ -109,6 +141,7 @@ export async function saveInventoryCyclePolicy(
 }
 
 export async function recordInventoryCount(
+  organizationId: string,
   resourceId: string,
   input: {
     countedQuantity: number;
@@ -143,7 +176,12 @@ export async function recordInventoryCount(
       const [existing] = await transaction
         .select()
         .from(inventoryCounts)
-        .where(eq(inventoryCounts.idempotencyKey, idempotencyKey))
+        .where(
+          and(
+            eq(inventoryCounts.organizationId, organizationId),
+            eq(inventoryCounts.idempotencyKey, idempotencyKey),
+          ),
+        )
         .limit(1);
       if (existing) return replay(existing);
     }
@@ -154,7 +192,12 @@ export async function recordInventoryCount(
         quantity: resources.quantity,
       })
       .from(resources)
-      .where(eq(resources.id, resourceId))
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resourceId),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!resource) throw new StockOperationError("Not found", 404);
@@ -162,14 +205,24 @@ export async function recordInventoryCount(
       const [existing] = await transaction
         .select()
         .from(inventoryCounts)
-        .where(eq(inventoryCounts.idempotencyKey, idempotencyKey))
+        .where(
+          and(
+            eq(inventoryCounts.organizationId, organizationId),
+            eq(inventoryCounts.idempotencyKey, idempotencyKey),
+          ),
+        )
         .limit(1);
       if (existing) return replay(existing);
     }
     const [settings] = await transaction
       .select({ trackingMode: stockSettings.trackingMode })
       .from(stockSettings)
-      .where(eq(stockSettings.resourceId, resourceId))
+      .where(
+        and(
+          eq(stockSettings.organizationId, organizationId),
+          eq(stockSettings.resourceId, resourceId),
+        ),
+      )
       .limit(1);
     const serialized = settings?.trackingMode === "serialized";
     if (serialized && input.locationResourceId) {
@@ -199,10 +252,18 @@ export async function recordInventoryCount(
         .from(resources)
         .innerJoin(
           inventoryTypeDefinitions,
-          eq(resources.type, inventoryTypeDefinitions.key),
+          and(
+            eq(resources.type, inventoryTypeDefinitions.key),
+            eq(
+              resources.organizationId,
+              inventoryTypeDefinitions.organizationId,
+            ),
+          ),
         )
         .where(
           and(
+            eq(resources.organizationId, organizationId),
+            eq(inventoryTypeDefinitions.organizationId, organizationId),
             eq(resources.id, input.locationResourceId),
             ne(resources.status, "archived"),
             eq(inventoryTypeDefinitions.canContain, true),
@@ -221,6 +282,7 @@ export async function recordInventoryCount(
         .from(stockLocationBalances)
         .where(
           and(
+            eq(stockLocationBalances.organizationId, organizationId),
             eq(stockLocationBalances.resourceId, resourceId),
             eq(stockLocationBalances.locationResourceId, input.locationResourceId),
           ),
@@ -235,7 +297,12 @@ export async function recordInventoryCount(
           assigned: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
         })
         .from(stockLocationBalances)
-        .where(eq(stockLocationBalances.resourceId, resourceId));
+        .where(
+          and(
+            eq(stockLocationBalances.organizationId, organizationId),
+            eq(stockLocationBalances.resourceId, resourceId),
+          ),
+        );
       if (input.countedQuantity < Number(assigned ?? 0)) {
         throw new StockOperationError(
           `The total count cannot be below the ${assigned} units already assigned to locations. Count a specific location instead.`,
@@ -264,16 +331,27 @@ export async function recordInventoryCount(
     await transaction
       .update(resources)
       .set({ quantity: balanceAfter, updatedAt: new Date() })
-      .where(eq(resources.id, resourceId));
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resourceId),
+        ),
+      );
 
     if (input.locationResourceId) {
       if (locationBalanceId) {
         await transaction
           .update(stockLocationBalances)
           .set({ quantity: input.countedQuantity, updatedAt: new Date() })
-          .where(eq(stockLocationBalances.id, locationBalanceId));
+          .where(
+            and(
+              eq(stockLocationBalances.organizationId, organizationId),
+              eq(stockLocationBalances.id, locationBalanceId),
+            ),
+          );
       } else if (input.countedQuantity > 0) {
         await transaction.insert(stockLocationBalances).values({
+          organizationId,
           resourceId,
           locationResourceId: input.locationResourceId,
           quantity: input.countedQuantity,
@@ -284,6 +362,7 @@ export async function recordInventoryCount(
     const [movement] = await transaction
       .insert(stockMovements)
       .values({
+        organizationId,
         resourceId,
         delta: variance,
         quantity: Math.abs(variance),
@@ -307,6 +386,7 @@ export async function recordInventoryCount(
     const [count] = await transaction
       .insert(inventoryCounts)
       .values({
+        organizationId,
         resourceId,
         locationResourceId: input.locationResourceId ?? null,
         expectedQuantity,
@@ -323,7 +403,12 @@ export async function recordInventoryCount(
     const [policy] = await transaction
       .select()
       .from(inventoryCyclePolicies)
-      .where(eq(inventoryCyclePolicies.resourceId, resourceId))
+      .where(
+        and(
+          eq(inventoryCyclePolicies.organizationId, organizationId),
+          eq(inventoryCyclePolicies.resourceId, resourceId),
+        ),
+      )
       .limit(1)
       .for("update");
     if (policy) {
@@ -335,7 +420,12 @@ export async function recordInventoryCount(
           updatedBy: actor,
           updatedAt: new Date(),
         })
-        .where(eq(inventoryCyclePolicies.resourceId, resourceId));
+        .where(
+          and(
+            eq(inventoryCyclePolicies.organizationId, organizationId),
+            eq(inventoryCyclePolicies.resourceId, resourceId),
+          ),
+        );
     }
     return { count: countDto(count), movementId: movement.id, replayed: false };
     });
@@ -344,7 +434,12 @@ export async function recordInventoryCount(
       const [existing] = await db
         .select()
         .from(inventoryCounts)
-        .where(eq(inventoryCounts.idempotencyKey, idempotencyKey))
+        .where(
+          and(
+            eq(inventoryCounts.organizationId, organizationId),
+            eq(inventoryCounts.idempotencyKey, idempotencyKey),
+          ),
+        )
         .limit(1);
       if (existing) return replay(existing);
     }
@@ -352,7 +447,7 @@ export async function recordInventoryCount(
   }
 }
 
-export async function listDueInventoryCycles() {
+export async function listDueInventoryCycles(organizationId: string) {
   const rows = await db
     .select({
       resourceId: resources.id,
@@ -367,6 +462,8 @@ export async function listDueInventoryCycles() {
     .innerJoin(resources, eq(resources.id, inventoryCyclePolicies.resourceId))
     .where(
       and(
+        eq(inventoryCyclePolicies.organizationId, organizationId),
+        eq(resources.organizationId, organizationId),
         eq(inventoryCyclePolicies.enabled, true),
         lte(inventoryCyclePolicies.nextDueAt, new Date()),
       ),

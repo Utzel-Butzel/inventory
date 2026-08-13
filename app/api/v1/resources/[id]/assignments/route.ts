@@ -1,10 +1,7 @@
 import { z } from "zod";
 
 import { assignmentKinds } from "@/db/schema";
-import {
-  requirePermission,
-  requireResourcePermission,
-} from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import {
   createInventoryAssignment,
   inventoryAssignmentHttpError,
@@ -56,15 +53,22 @@ const createSchema = z
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requirePermission(request, "assignments.read");
-  if (authorization.response) return authorization.response;
   const id = z.string().uuid().safeParse((await context.params).id);
   if (!id.success) {
     return Response.json({ error: "Invalid resource id." }, { status: 422 });
   }
+  const authorization = await requireResourcePermission(
+    request,
+    "assignments.read",
+    id.data,
+  );
+  if (authorization.response) return authorization.response;
 
   try {
-    const result = await listInventoryAssignments(id.data);
+    const result = await listInventoryAssignments(
+      authorization.identity.organizationId,
+      id.data,
+    );
     if (!result) return Response.json({ error: "Not found" }, { status: 404 });
     return Response.json(result, {
       headers: { "Cache-Control": "no-store" },
@@ -113,6 +117,7 @@ export async function POST(request: Request, context: Context) {
 
   try {
     const result = await createInventoryAssignment(
+      authorization.identity.organizationId,
       id.data,
       {
         ...parsed.data,

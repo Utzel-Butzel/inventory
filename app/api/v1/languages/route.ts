@@ -27,7 +27,10 @@ export async function GET(request: Request) {
     authorization.identity.permissions.includes("settings.languages.manage") &&
     new URL(request.url).searchParams.get("includeArchived") === "true";
   return Response.json({
-    languages: await listTranslationLanguages(includeArchived),
+    languages: await listTranslationLanguages(
+      authorization.identity.organizationId,
+      includeArchived,
+    ),
   });
 }
 
@@ -49,6 +52,7 @@ export async function POST(request: Request) {
   }
   try {
     const language = await createTranslationLanguage(
+      authorization.identity.organizationId,
       parsed.data,
       authorization.identity.subject,
     );

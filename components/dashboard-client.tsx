@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { OrganizationLink as Link } from "@/components/organization-routing";
 import { useT } from "next-i18next/client";
 import {
   AlertTriangle,

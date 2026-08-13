@@ -49,6 +49,7 @@ export async function PATCH(request: Request, context: Context) {
   }
   try {
     const type = await updateInventoryType(
+      authorization.identity.organizationId,
       key.data,
       parsed.data,
       authorization.identity.subject,
@@ -70,6 +71,7 @@ export async function DELETE(request: Request, context: Context) {
   if (!key.success) return Response.json({ error: "Invalid type key." }, { status: 422 });
   try {
     const type = await updateInventoryType(
+      authorization.identity.organizationId,
       key.data,
       { archived: true },
       authorization.identity.subject,

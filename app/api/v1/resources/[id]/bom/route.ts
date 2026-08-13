@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-import {
-  requirePermission,
-  requireResourcePermission,
-} from "@/lib/api-auth";
+import { requireResourcePermission } from "@/lib/api-auth";
 import {
   assemblyHttpError,
   getBom,
@@ -45,15 +42,19 @@ const bomSchema = z
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: Context) {
-  const authorization = await requirePermission(request, "inventory.read");
-  if (authorization.response) return authorization.response;
   const { id } = await context.params;
   if (!z.string().uuid().safeParse(id).success) {
     return Response.json({ error: "Invalid resource id." }, { status: 422 });
   }
+  const authorization = await requireResourcePermission(
+    request,
+    "inventory.read",
+    id,
+  );
+  if (authorization.response) return authorization.response;
 
   try {
-    const result = await getBom(id);
+    const result = await getBom(authorization.identity.organizationId, id);
     if (!result) return Response.json({ error: "Not found" }, { status: 404 });
     return Response.json(result);
   } catch (error) {
@@ -89,7 +90,13 @@ export async function PUT(request: Request, context: Context) {
   }
 
   try {
-    return Response.json(await replaceBom(id, parsed.data.components));
+    return Response.json(
+      await replaceBom(
+        authorization.identity.organizationId,
+        id,
+        parsed.data.components,
+      ),
+    );
   } catch (error) {
     const failure = assemblyHttpError(error, "Unable to replace this bill of materials.");
     return Response.json({ error: failure.message }, { status: failure.status });

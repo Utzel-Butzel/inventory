@@ -1,11 +1,14 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import {
+  OrganizationLink as Link,
+  useOrganizationPathname,
+} from "@/components/organization-routing";
 import { useT } from "next-i18next/client";
 import {
   Bell,
   Braces,
+  Building2,
   Boxes,
   DatabaseZap,
   KeyRound,
@@ -35,6 +38,12 @@ const navigationGroups: Array<{
   {
     labelKey: "settings.groups.workspace",
     items: [
+      {
+        labelKey: "settings.items.organization.label",
+        descriptionKey: "settings.items.organization.description",
+        href: "/settings/organization",
+        icon: Building2,
+      },
       {
         labelKey: "settings.items.data.label",
         descriptionKey: "settings.items.data.description",
@@ -120,7 +129,7 @@ export function SettingsNavigation({
 }: {
   permissions: AppPermission[];
 }) {
-  const pathname = usePathname();
+  const pathname = useOrganizationPathname();
   const { t } = useT("shell");
   const visibleGroups = navigationGroups
     .map((group) => ({

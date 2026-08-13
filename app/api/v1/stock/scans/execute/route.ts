@@ -46,6 +46,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await executeStockScan(
+      authorization.identity.organizationId,
       parsed.data,
       authorization.identity.subject,
       {

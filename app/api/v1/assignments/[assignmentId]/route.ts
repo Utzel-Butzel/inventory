@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { inventoryAssignments } from "@/db/schema";
@@ -50,7 +50,15 @@ export async function PATCH(request: Request, context: Context) {
   const [assignment] = await db
     .select({ resourceId: inventoryAssignments.resourceId })
     .from(inventoryAssignments)
-    .where(eq(inventoryAssignments.id, assignmentId.data))
+    .where(
+      and(
+        eq(
+          inventoryAssignments.organizationId,
+          authentication.identity.organizationId,
+        ),
+        eq(inventoryAssignments.id, assignmentId.data),
+      ),
+    )
     .limit(1);
   if (!assignment) {
     return Response.json({ error: "Assignment not found" }, { status: 404 });
@@ -78,6 +86,7 @@ export async function PATCH(request: Request, context: Context) {
 
   try {
     const result = await completeInventoryAssignment(
+      authorization.identity.organizationId,
       assignmentId.data,
       {
         ...parsed.data,

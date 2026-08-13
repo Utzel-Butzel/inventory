@@ -106,6 +106,38 @@ test("greenscreen keying removes yellow-green edge spill beside the matte", () =
   assert.deepEqual([...result.subarray(8, 12)], [255, 0, 0, 255]);
 });
 
+test("greenscreen keying removes a uniform fallback background when the model ignores green", () => {
+  const width = 12;
+  const height = 12;
+  const pixels = Buffer.alloc(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * 4;
+      pixels[offset] = 244 + (y % 2);
+      pixels[offset + 1] = 239;
+      pixels[offset + 2] = 245;
+      pixels[offset + 3] = 255;
+    }
+  }
+  for (let y = 4; y <= 7; y += 1) {
+    for (let x = 4; x <= 7; x += 1) {
+      const offset = (y * width + x) * 4;
+      pixels[offset] = 30;
+      pixels[offset + 1] = 80;
+      pixels[offset + 2] = 120;
+    }
+  }
+
+  const result = extractGreenScreenPixels(pixels, width, height);
+  assert.equal(result[3], 0);
+  assert.equal(result[(11 * width + 11) * 4 + 3], 0);
+  assert.equal(result[(5 * width + 5) * 4 + 3], 255);
+  assert.deepEqual(
+    [...result.subarray((5 * width + 5) * 4, (5 * width + 5) * 4 + 4)],
+    [30, 80, 120, 255],
+  );
+});
+
 test("greenscreen output is encoded as a PNG with an alpha channel", async () => {
   const input = await sharp({
     create: {

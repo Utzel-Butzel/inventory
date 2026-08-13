@@ -24,6 +24,7 @@ export async function DELETE(request: Request, context: Context) {
   if (authorization.response) return authorization.response;
   try {
     await deleteManualResourceRelation(
+      authorization.identity.organizationId,
       relationId.data,
       resourceId.data,
       authorization.identity.subject,

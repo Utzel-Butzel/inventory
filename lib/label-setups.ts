@@ -51,31 +51,43 @@ const labelSetupDto = (row: LabelSetupRecord): LabelSetupDto => ({
   updatedAt: row.updatedAt.toISOString(),
 });
 
-export async function listLabelSetups() {
+export async function listLabelSetups(organizationId: string) {
   const rows = await db
     .select()
     .from(labelSetups)
+    .where(eq(labelSetups.organizationId, organizationId))
     .orderBy(asc(labelSetups.name), asc(labelSetups.id));
   return rows.map(labelSetupDto);
 }
 
-export async function getLabelSetup(id: string) {
+export async function getLabelSetup(organizationId: string, id: string) {
   const [row] = await db
     .select()
     .from(labelSetups)
-    .where(eq(labelSetups.id, id))
+    .where(
+      and(
+        eq(labelSetups.organizationId, organizationId),
+        eq(labelSetups.id, id),
+      ),
+    )
     .limit(1);
   return row ? labelSetupDto(row) : null;
 }
 
 export async function createLabelSetup(
+  organizationId: string,
   input: LabelSetupCreate,
   actor: string,
 ) {
   try {
     const [created] = await db
       .insert(labelSetups)
-      .values({ ...input, createdBy: actor, updatedBy: actor })
+      .values({
+        ...input,
+        organizationId,
+        createdBy: actor,
+        updatedBy: actor,
+      })
       .returning();
     return labelSetupDto(created);
   } catch (error) {
@@ -88,6 +100,7 @@ export async function createLabelSetup(
 }
 
 export async function updateLabelSetup(
+  organizationId: string,
   id: string,
   patch: LabelSetupPatch,
   actor: string,
@@ -96,7 +109,12 @@ export async function updateLabelSetup(
     const [current] = await transaction
       .select()
       .from(labelSetups)
-      .where(eq(labelSetups.id, id))
+      .where(
+        and(
+          eq(labelSetups.organizationId, organizationId),
+          eq(labelSetups.id, id),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!current) {
@@ -121,7 +139,11 @@ export async function updateLabelSetup(
           updatedAt: new Date(),
         })
         .where(
-          and(eq(labelSetups.id, id), eq(labelSetups.revision, revision)),
+          and(
+            eq(labelSetups.organizationId, organizationId),
+            eq(labelSetups.id, id),
+            eq(labelSetups.revision, revision),
+          ),
         )
         .returning();
       if (!saved) {
@@ -141,12 +163,21 @@ export async function updateLabelSetup(
   });
 }
 
-export async function deleteLabelSetup(id: string, revision: number) {
+export async function deleteLabelSetup(
+  organizationId: string,
+  id: string,
+  revision: number,
+) {
   return db.transaction(async (transaction) => {
     const [current] = await transaction
       .select({ revision: labelSetups.revision })
       .from(labelSetups)
-      .where(eq(labelSetups.id, id))
+      .where(
+        and(
+          eq(labelSetups.organizationId, organizationId),
+          eq(labelSetups.id, id),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!current) throw new LabelSetupError("Label setup not found.", 404);
@@ -160,7 +191,13 @@ export async function deleteLabelSetup(id: string, revision: number) {
 
     const [deleted] = await transaction
       .delete(labelSetups)
-      .where(and(eq(labelSetups.id, id), eq(labelSetups.revision, revision)))
+      .where(
+        and(
+          eq(labelSetups.organizationId, organizationId),
+          eq(labelSetups.id, id),
+          eq(labelSetups.revision, revision),
+        ),
+      )
       .returning({ id: labelSetups.id });
     if (!deleted) {
       throw new LabelSetupError(

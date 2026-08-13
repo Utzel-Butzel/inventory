@@ -1,6 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import {
+  OrganizationLink as Link,
+  useOrganizationHref,
+} from "@/components/organization-routing";
 import { useRouter } from "next/navigation";
 import { useT } from "next-i18next/client";
 import {
@@ -181,6 +184,7 @@ export function ResourceDetails({
   canViewStock: boolean;
 }) {
   const router = useRouter();
+  const organizationHref = useOrganizationHref();
   const { t, i18n } = useT("inventory");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
@@ -244,7 +248,7 @@ export function ResourceDetails({
     }
     try {
       await fetchJson(`/api/v1/resources/${resource.id}`, { method: "DELETE" });
-      router.push("/inventory");
+      router.push(organizationHref("/inventory"));
       router.refresh();
     } catch (deleteError) {
       setError(

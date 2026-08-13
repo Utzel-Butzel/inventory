@@ -4,10 +4,9 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 
 import {
   accessRoles,
-  apiTokens,
   inventoryAccessRules,
+  organizationMemberships,
   resources,
-  users,
   type AccessRoleRecord,
   type InventoryAccessRuleRecord,
   type ResourceRecord,
@@ -52,21 +51,40 @@ function normalizedRole(role: AccessRoleRecord): EffectiveRole {
   };
 }
 
-export async function getEffectiveRole(roleKey: string) {
+export async function getEffectiveRole(
+  roleKey: string,
+  organizationId: string,
+) {
   const [role] = await db
     .select()
     .from(accessRoles)
-    .where(eq(accessRoles.key, roleKey))
+    .where(
+      and(
+        eq(accessRoles.organizationId, organizationId),
+        eq(accessRoles.key, roleKey),
+      ),
+    )
     .limit(1);
   return role ? normalizedRole(role) : builtinRole(roleKey);
 }
 
-export async function listAccessRolesWithCounts() {
-  const roles = await db.select().from(accessRoles).orderBy(asc(accessRoles.name));
+export async function listAccessRolesWithCounts(
+  organizationId: string,
+) {
+  const roles = await db
+    .select()
+    .from(accessRoles)
+    .where(eq(accessRoles.organizationId, organizationId))
+    .orderBy(asc(accessRoles.name));
   const members = await db
-    .select({ role: users.role, id: users.id })
-    .from(users)
-    .where(eq(users.isActive, true));
+    .select({ role: organizationMemberships.roleKey, id: organizationMemberships.userId })
+    .from(organizationMemberships)
+    .where(
+      and(
+        eq(organizationMemberships.organizationId, organizationId),
+        eq(organizationMemberships.isActive, true),
+      ),
+    );
   const counts = new Map<string, number>();
   for (const member of members) {
     counts.set(member.role, (counts.get(member.role) ?? 0) + 1);
@@ -85,27 +103,50 @@ export function permissionsForStandaloneTokenScopes(scopes: readonly ("read" | "
   return permissionsForScopes(scopes);
 }
 
-export async function getResourceRecord(id: string) {
+export async function getResourceRecord(
+  id: string,
+  organizationId: string,
+) {
   const [resource] = await db
     .select()
     .from(resources)
-    .where(eq(resources.id, id))
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, id),
+      ),
+    )
     .limit(1);
   return resource ?? null;
 }
 
-export async function getResourceRecords(ids: readonly string[]) {
+export async function getResourceRecords(
+  ids: readonly string[],
+  organizationId: string,
+) {
   const uniqueIds = Array.from(new Set(ids));
   if (!uniqueIds.length) return [];
-  return db.select().from(resources).where(inArray(resources.id, uniqueIds));
+  return db
+    .select()
+    .from(resources)
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        inArray(resources.id, uniqueIds),
+      ),
+    );
 }
 
-export async function listRulesForRole(roleKey: string) {
+export async function listRulesForRole(
+  roleKey: string,
+  organizationId: string,
+) {
   return db
     .select()
     .from(inventoryAccessRules)
     .where(
       and(
+        eq(inventoryAccessRules.organizationId, organizationId),
         eq(inventoryAccessRules.roleKey, roleKey),
         eq(inventoryAccessRules.enabled, true),
       ),
@@ -113,26 +154,27 @@ export async function listRulesForRole(roleKey: string) {
     .orderBy(asc(inventoryAccessRules.priority), asc(inventoryAccessRules.name));
 }
 
-export async function conditionalScopesForRole(roleKey: string) {
-  const rules = await listRulesForRole(roleKey);
+export async function conditionalScopesForRole(
+  roleKey: string,
+  organizationId: string,
+) {
+  const rules = await listRulesForRole(roleKey, organizationId);
   const permissions = rules.flatMap((rule) =>
     rule.permissions.filter(isResourceRulePermission),
   );
   return scopesForPermissions(permissions);
 }
 
-export async function revokeApiTokensForRoles(roleKeys: readonly string[]) {
-  const uniqueKeys = Array.from(new Set(roleKeys));
-  if (!uniqueKeys.length) return;
-  const members = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(inArray(users.role, uniqueKeys));
-  if (!members.length) return;
-  await db
-    .update(apiTokens)
-    .set({ revokedAt: new Date() })
-    .where(inArray(apiTokens.userId, members.map((member) => member.id)));
+export async function revokeApiTokensForRoles(
+  roleKeys: readonly string[],
+  organizationId: string,
+) {
+  // User-bound tokens are account-owned and can select any live membership.
+  // Authorization is recomputed from the current organization role/rules on
+  // every request, so tenant policy changes do not require token revocation.
+  // Standalone tokens have no role membership and are unaffected here.
+  void roleKeys;
+  void organizationId;
 }
 
 export function ruleGrantsResourcePermission(options: {

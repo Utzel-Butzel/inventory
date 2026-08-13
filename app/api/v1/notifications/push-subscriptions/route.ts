@@ -57,7 +57,7 @@ export async function DELETE(request: Request) {
     );
   }
   const revoked = await revokePushSubscription(
-    authorization.recipient.key,
+    authorization.recipient,
     parsed.data.endpoint,
   );
   return Response.json({ revoked }, { headers: notificationNoStoreHeaders });

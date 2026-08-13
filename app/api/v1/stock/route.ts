@@ -8,7 +8,9 @@ export async function GET(request: Request) {
   if (authorization.response) return authorization.response;
 
   try {
-    return Response.json(await getStockOverview());
+    return Response.json(
+      await getStockOverview(authorization.identity.organizationId),
+    );
   } catch {
     return Response.json(
       { error: "Unable to load the stock overview." },

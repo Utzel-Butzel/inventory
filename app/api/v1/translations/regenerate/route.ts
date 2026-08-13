@@ -40,6 +40,7 @@ export async function POST(request: Request) {
   }
   try {
     const result = await enqueueTranslationBackfill({
+      organizationId: authorization.identity.organizationId,
       requestedBy: authorization.identity.subject,
       languageCodes: parsed.data.languageCodes,
       force: parsed.data.force,

@@ -45,8 +45,10 @@ struct ResourceDetailView: View {
         .navigationTitle(current.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("Bearbeiten") { showEditor = true }
+            if state.canWrite {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Bearbeiten") { showEditor = true }
+                }
             }
         }
         .task { await refresh() }
@@ -175,50 +177,52 @@ struct ResourceDetailView: View {
                 Text("\(current.quantity)")
                     .font(.title2.monospacedDigit().bold())
             }
-            HStack(spacing: 12) {
-                Button {
-                    confirmIssue = true
-                } label: {
-                    Label("Entnehmen", systemImage: "minus.circle.fill")
-                        .frame(maxWidth: .infinity, minHeight: 42)
+            if state.canWrite {
+                HStack(spacing: 12) {
+                    Button {
+                        confirmIssue = true
+                    } label: {
+                        Label("Entnehmen", systemImage: "minus.circle.fill")
+                            .frame(maxWidth: .infinity, minHeight: 42)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(booking || current.quantity == 0)
+
+                    Button {
+                        book(delta: 1, type: "receipt", reason: "Zugang per iOS-App")
+                    } label: {
+                        Label("Zugang", systemImage: "plus.circle.fill")
+                            .frame(maxWidth: .infinity, minHeight: 42)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(InventoryTheme.ink)
+                    .disabled(booking)
                 }
-                .buttonStyle(.bordered)
-                .disabled(booking || current.quantity == 0)
 
                 Button {
-                    book(delta: 1, type: "receipt", reason: "Zugang per iOS-App")
+                    showStockManagement = true
                 } label: {
-                    Label("Zugang", systemImage: "plus.circle.fill")
-                        .frame(maxWidth: .infinity, minHeight: 42)
+                    Label("Bestand verwalten", systemImage: "slider.horizontal.3")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(InventoryTheme.ink)
                 .disabled(booking)
+
+                Divider()
+
+                Button {
+                    showStockCounter = true
+                } label: {
+                    Label("Teile per Foto zählen", systemImage: "camera.viewfinder")
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                }
+                .buttonStyle(.bordered)
+                .tint(InventoryTheme.ink)
+                .disabled(booking || !state.canUseAI)
             }
 
-            Button {
-                showStockManagement = true
-            } label: {
-                Label("Bestand verwalten", systemImage: "slider.horizontal.3")
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(InventoryTheme.ink)
-            .disabled(booking)
-
-            Divider()
-
-            Button {
-                showStockCounter = true
-            } label: {
-                Label("Teile per Foto zählen", systemImage: "camera.viewfinder")
-                    .frame(maxWidth: .infinity, minHeight: 42)
-            }
-            .buttonStyle(.bordered)
-            .tint(InventoryTheme.ink)
-            .disabled(booking || !state.canUseAI)
-
-            if !state.canUseAI {
+            if state.canWrite && !state.canUseAI {
                 Label(
                     "Die Fotozählung benötigt die KI-Berechtigung für dieses Konto.",
                     systemImage: "lock.fill"
@@ -377,6 +381,7 @@ struct ResourceDetailView: View {
     }
 
     private func book(delta: Int, type: String, reason: String) {
+        guard state.canWrite else { return }
         let action = PendingStockAction(
             id: UUID(),
             delta: delta,
@@ -394,7 +399,7 @@ struct ResourceDetailView: View {
     }
 
     private func performStockAction(_ action: PendingStockAction) {
-        guard let client = state.client else { return }
+        guard state.canWrite, let client = state.client else { return }
         booking = true
         Task {
             do {
@@ -538,7 +543,7 @@ struct AuthenticatedInventoryImage: View {
     }
 
     private var cacheKey: String {
-        "\(client.serverURL.absoluteString)|\(media.id.uuidString)|\(media.url)"
+        "\(client.contextIdentifier)|\(media.id.uuidString)|\(media.url)"
     }
 
     private static func downsampledImage(from data: Data) -> UIImage? {

@@ -610,6 +610,7 @@ export async function POST(request: Request) {
         resource: { ...parsed.data, customFields: parsedCustomFields.data },
       });
       const replay = await replayResourceCreation({
+        organizationId: authorization.identity.organizationId,
         idempotencyKey: rowIdempotencyKey,
         requestHash,
       });
@@ -626,9 +627,16 @@ export async function POST(request: Request) {
         continue;
       }
 
-      await assertActiveInventoryType(parsed.data.type);
-      await assertResourceIdentifiersAvailable(parsed.data);
+      await assertActiveInventoryType(
+        authorization.identity.organizationId,
+        parsed.data.type,
+      );
+      await assertResourceIdentifiersAvailable(
+        authorization.identity.organizationId,
+        parsed.data,
+      );
       const customFields = await validateCustomFieldValues({
+        organizationId: authorization.identity.organizationId,
         entityType: "inventory",
         target: {
           type: parsed.data.type,
@@ -639,6 +647,7 @@ export async function POST(request: Request) {
       });
       const values: NewResource = {
         ...parsed.data,
+        organizationId: authorization.identity.organizationId,
         customFields,
         ...(parsed.data.mapFeatures.length
           ? positionFromMapFeatures(parsed.data.mapFeatures)
@@ -646,6 +655,7 @@ export async function POST(request: Request) {
         createdBy: authorization.identity.subject,
       };
       const result = await createResourceIdempotently({
+        organizationId: authorization.identity.organizationId,
         values,
         idempotencyKey: rowIdempotencyKey,
         requestHash,
@@ -725,7 +735,10 @@ export async function POST(request: Request) {
     return index >= 0 && dataRows.some((row) => row.cells[index]?.trim());
   });
   if (summary.created > 0 && createdSpatialData) {
-    await synchronizeSpatialContainment(authorization.identity.subject);
+    await synchronizeSpatialContainment(
+      authorization.identity.organizationId,
+      authorization.identity.subject,
+    );
   }
 
   return Response.json(

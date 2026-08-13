@@ -75,6 +75,7 @@ const attachMedia = (
 };
 
 export async function listResources(options: {
+  organizationId: string;
   query?: string;
   type?: string;
   status?: string;
@@ -83,7 +84,7 @@ export async function listResources(options: {
 }) {
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 24));
-  const conditions = [];
+  const conditions = [eq(resources.organizationId, options.organizationId)];
 
   if (options.query?.trim()) {
     const pattern = `%${options.query.trim()}%`;
@@ -91,10 +92,13 @@ export async function listResources(options: {
       .select({ resourceId: resourceVariants.resourceId })
       .from(resourceVariants)
       .where(
-        or(
-          ilike(resourceVariants.name, pattern),
-          ilike(resourceVariants.sku, pattern),
-          ilike(resourceVariants.barcode, pattern),
+        and(
+          eq(resourceVariants.organizationId, options.organizationId),
+          or(
+            ilike(resourceVariants.name, pattern),
+            ilike(resourceVariants.sku, pattern),
+            ilike(resourceVariants.barcode, pattern),
+          ),
         ),
       );
     conditions.push(
@@ -107,7 +111,7 @@ export async function listResources(options: {
         sql`${resources.tags}::text ILIKE ${pattern}`,
         sql`${resources.customFields}::text ILIKE ${pattern}`,
         inArray(resources.id, variantMatches),
-      ),
+      )!,
     );
   }
   if (options.type && options.type !== "all") {
@@ -133,7 +137,12 @@ export async function listResources(options: {
     ? await db
         .select()
         .from(media)
-        .where(inArray(media.resourceId, rows.map((row) => row.id)))
+        .where(
+          and(
+            eq(media.organizationId, options.organizationId),
+            inArray(media.resourceId, rows.map((row) => row.id)),
+          ),
+        )
         .orderBy(asc(media.position))
     : [];
 
@@ -148,8 +157,11 @@ export async function listResources(options: {
   };
 }
 
-export async function countResourcesForRecognition() {
-  const [row] = await db.select({ value: count() }).from(resources);
+export async function countResourcesForRecognition(organizationId: string) {
+  const [row] = await db
+    .select({ value: count() })
+    .from(resources)
+    .where(eq(resources.organizationId, organizationId));
   return row?.value ?? 0;
 }
 
@@ -160,6 +172,7 @@ export async function countResourcesForRecognition() {
  * for the final shortlist in the route.
  */
 export async function listResourcesForRecognition(
+  organizationId: string,
   searchTerms: readonly string[],
   limit = 2_000,
 ) {
@@ -200,17 +213,26 @@ export async function listResourcesForRecognition(
     .from(media)
     .where(
       and(
+        eq(media.organizationId, organizationId),
         eq(media.kind, "image"),
         or(...patterns.map((pattern) => ilike(media.altText, pattern))),
       ),
     );
   const recognitionWhere = patterns.length
-    ? or(...resourceMatches, inArray(resources.id, matchingMedia))
+    ? and(
+        eq(resources.organizationId, organizationId),
+        or(...resourceMatches, inArray(resources.id, matchingMedia)),
+      )
     : sql`false`;
   const resourcesWithImages = db
     .select({ resourceId: media.resourceId })
     .from(media)
-    .where(eq(media.kind, "image"))
+    .where(
+      and(
+        eq(media.organizationId, organizationId),
+        eq(media.kind, "image"),
+      ),
+    )
     .groupBy(media.resourceId);
   const fallbackLimit = Math.min(40, boundedLimit);
   const [
@@ -230,14 +252,27 @@ export async function listResourcesForRecognition(
       db
         .select()
         .from(resources)
-        .where(inArray(resources.id, resourcesWithImages))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            inArray(resources.id, resourcesWithImages),
+          ),
+        )
         .orderBy(desc(resources.updatedAt))
         .limit(fallbackLimit),
       db
         .select({ value: count() })
         .from(resources)
-        .where(inArray(resources.id, resourcesWithImages)),
-      db.select({ value: count() }).from(resources),
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            inArray(resources.id, resourcesWithImages),
+          ),
+        ),
+      db
+        .select({ value: count() })
+        .from(resources)
+        .where(eq(resources.organizationId, organizationId)),
     ]);
   const fallbackIds = new Set(fallbackRows.map((row) => row.id));
   const rows = Array.from(
@@ -251,6 +286,7 @@ export async function listResourcesForRecognition(
         .from(media)
         .where(
           and(
+            eq(media.organizationId, organizationId),
             inArray(media.resourceId, rows.map((row) => row.id)),
             eq(media.kind, "image"),
           ),
@@ -268,26 +304,44 @@ export async function listResourcesForRecognition(
   };
 }
 
-export async function getResource(id: string) {
+export async function getResource(organizationId: string, id: string) {
   const [row] = await db
     .select()
     .from(resources)
-    .where(eq(resources.id, id))
+    .where(
+      and(
+        eq(resources.id, id),
+        eq(resources.organizationId, organizationId),
+      ),
+    )
     .limit(1);
   if (!row) return null;
 
   const mediaRows = await db
     .select()
     .from(media)
-    .where(eq(media.resourceId, id))
+    .where(
+      and(
+        eq(media.resourceId, id),
+        eq(media.organizationId, organizationId),
+      ),
+    )
     .orderBy(asc(media.position));
   return attachMedia([row], mediaRows)[0];
 }
 
-export async function createResource(values: NewResource, actor?: string | null) {
+export async function createResource(
+  organizationId: string,
+  values: NewResource,
+  actor?: string | null,
+) {
   const created = await db.transaction(async (transaction) => {
-    const [row] = await transaction.insert(resources).values(values).returning();
+    const [row] = await transaction
+      .insert(resources)
+      .values({ ...values, organizationId })
+      .returning();
     await enqueueWebhookEvent(transaction, {
+      organizationId,
       type: "inventory.resource.created",
       aggregateType: "resource",
       aggregateId: row.id,
@@ -311,20 +365,32 @@ type StoredCreationResponse = { resource: ResourceWithMedia };
 const deserializeCreationResponse = (value: Record<string, unknown>) =>
   value as unknown as StoredCreationResponse;
 
-async function findResourceCreationRequest(idempotencyKey: string) {
+async function findResourceCreationRequest(
+  organizationId: string,
+  idempotencyKey: string,
+) {
   const [existing] = await db
     .select()
     .from(resourceCreationRequests)
-    .where(eq(resourceCreationRequests.idempotencyKey, idempotencyKey))
+    .where(
+      and(
+        eq(resourceCreationRequests.organizationId, organizationId),
+        eq(resourceCreationRequests.idempotencyKey, idempotencyKey),
+      ),
+    )
     .limit(1);
   return existing ?? null;
 }
 
 export async function replayResourceCreation(options: {
+  organizationId: string;
   idempotencyKey: string;
   requestHash: string;
 }) {
-  const existing = await findResourceCreationRequest(options.idempotencyKey);
+  const existing = await findResourceCreationRequest(
+    options.organizationId,
+    options.idempotencyKey,
+  );
   if (!existing) return null;
   if (existing.requestHash !== options.requestHash) {
     throw new IdempotencyConflictError();
@@ -336,6 +402,7 @@ export async function replayResourceCreation(options: {
 }
 
 export async function createResourceIdempotently(options: {
+  organizationId: string;
   values: NewResource;
   idempotencyKey: string;
   requestHash: string;
@@ -350,7 +417,7 @@ export async function createResourceIdempotently(options: {
     const response = await db.transaction(async (transaction) => {
       const [created] = await transaction
         .insert(resources)
-        .values(options.values)
+        .values({ ...options.values, organizationId: options.organizationId })
         .returning();
       const envelope = {
         resource: { ...created, media: [], cover: null },
@@ -360,12 +427,14 @@ export async function createResourceIdempotently(options: {
         unknown
       >;
       await transaction.insert(resourceCreationRequests).values({
+        organizationId: options.organizationId,
         idempotencyKey: options.idempotencyKey,
         requestHash: options.requestHash,
         resourceId: created.id,
         response: snapshot,
       });
       await enqueueWebhookEvent(transaction, {
+        organizationId: options.organizationId,
         type: "inventory.resource.created",
         aggregateType: "resource",
         aggregateId: created.id,
@@ -385,6 +454,7 @@ export async function createResourceIdempotently(options: {
 }
 
 export async function updateResource(
+  organizationId: string,
   id: string,
   values: Partial<NewResource>,
   actor?: string | null,
@@ -393,14 +463,24 @@ export async function updateResource(
     const [current] = await transaction
       .select()
       .from(resources)
-      .where(eq(resources.id, id))
+      .where(
+        and(
+          eq(resources.id, id),
+          eq(resources.organizationId, organizationId),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!current) return null;
     const [saved] = await transaction
       .update(resources)
       .set({ ...values, updatedAt: new Date() })
-      .where(eq(resources.id, id))
+      .where(
+        and(
+          eq(resources.id, id),
+          eq(resources.organizationId, organizationId),
+        ),
+      )
       .returning();
     if (!saved) return null;
     const changedFields = Object.keys(values).filter(
@@ -412,6 +492,7 @@ export async function updateResource(
         ),
     );
     await enqueueWebhookEvent(transaction, {
+      organizationId,
       type: "inventory.resource.updated",
       aggregateType: "resource",
       aggregateId: saved.id,
@@ -421,10 +502,11 @@ export async function updateResource(
     return saved;
   });
   if (!updated) return null;
-  return getResource(updated.id);
+  return getResource(organizationId, updated.id);
 }
 
 export async function updateResourceWithCustomFieldValidation(options: {
+  organizationId: string;
   id: string;
   values: Partial<NewResource>;
   validateCustomFields: boolean;
@@ -439,7 +521,12 @@ export async function updateResourceWithCustomFieldValidation(options: {
     const [current] = await transaction
       .select()
       .from(resources)
-      .where(eq(resources.id, options.id))
+      .where(
+        and(
+          eq(resources.id, options.id),
+          eq(resources.organizationId, options.organizationId),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!current) return null;
@@ -449,7 +536,12 @@ export async function updateResourceWithCustomFieldValidation(options: {
       const [spatialScan] = await transaction
         .select({ id: roomScans.id })
         .from(roomScans)
-        .where(eq(roomScans.roomResourceId, current.id))
+        .where(
+          and(
+            eq(roomScans.organizationId, options.organizationId),
+            eq(roomScans.roomResourceId, current.id),
+          ),
+        )
         .limit(1);
       if (spatialScan) {
         throw new Error("RESOURCE_HAS_ROOM_SCANS");
@@ -457,6 +549,7 @@ export async function updateResourceWithCustomFieldValidation(options: {
     }
     if (options.validateCustomFields) {
       const customFields = await validateCustomFieldValues({
+        organizationId: options.organizationId,
         entityType: "inventory",
         target: {
           type: values.type ?? current.type,
@@ -485,7 +578,12 @@ export async function updateResourceWithCustomFieldValidation(options: {
     const [saved] = await transaction
       .update(resources)
       .set({ ...values, updatedAt: new Date() })
-      .where(eq(resources.id, options.id))
+      .where(
+        and(
+          eq(resources.id, options.id),
+          eq(resources.organizationId, options.organizationId),
+        ),
+      )
       .returning();
     if (saved) {
       const changedFields = Object.keys(values).filter(
@@ -497,6 +595,7 @@ export async function updateResourceWithCustomFieldValidation(options: {
           ),
       );
       await enqueueWebhookEvent(transaction, {
+        organizationId: options.organizationId,
         type: "inventory.resource.updated",
         aggregateType: "resource",
         aggregateId: saved.id,
@@ -507,10 +606,11 @@ export async function updateResourceWithCustomFieldValidation(options: {
     return saved ?? null;
   });
 
-  return updated ? getResource(updated.id) : null;
+  return updated ? getResource(options.organizationId, updated.id) : null;
 }
 
 export async function updateResourcesBatch(options: {
+  organizationId: string;
   ids: string[];
   changes: Partial<Pick<NewResource, "type" | "status" | "location" | "priority">>;
   addTags: string[];
@@ -525,7 +625,12 @@ export async function updateResourcesBatch(options: {
     const rows = await transaction
       .select()
       .from(resources)
-      .where(inArray(resources.id, ids))
+      .where(
+        and(
+          eq(resources.organizationId, options.organizationId),
+          inArray(resources.id, ids),
+        ),
+      )
       .orderBy(asc(resources.id))
       .for("update");
 
@@ -554,9 +659,15 @@ export async function updateResourcesBatch(options: {
           ...(normalizedTags.length ? { tags: nextTags } : {}),
           updatedAt: new Date(),
         })
-        .where(eq(resources.id, row.id))
+        .where(
+          and(
+            eq(resources.organizationId, options.organizationId),
+            eq(resources.id, row.id),
+          ),
+        )
         .returning();
       await enqueueWebhookEvent(transaction, {
+        organizationId: options.organizationId,
         type: "inventory.resource.updated",
         aggregateType: "resource",
         aggregateId: saved.id,
@@ -576,17 +687,23 @@ export async function updateResourcesBatch(options: {
 }
 
 export async function deleteResource(
+  organizationId: string,
   id: string,
   authorize?: (resource: ResourceRecord) => boolean | Promise<boolean>,
   actor?: string | null,
 ) {
-  const resource = await getResource(id);
+  const resource = await getResource(organizationId, id);
   if (!resource) return null;
   const deleted = await db.transaction(async (transaction) => {
     const [locked] = await transaction
       .select()
       .from(resources)
-      .where(eq(resources.id, id))
+      .where(
+        and(
+          eq(resources.id, id),
+          eq(resources.organizationId, organizationId),
+        ),
+      )
       .for("update");
     if (!locked) return null;
     if (authorize && !(await authorize(locked))) {
@@ -599,19 +716,47 @@ export async function deleteResource(
           url: roomScanAssets.storageUrl,
         })
         .from(roomScanAssets)
-        .innerJoin(roomScans, eq(roomScans.id, roomScanAssets.roomScanId))
-        .where(eq(roomScans.roomResourceId, id)),
+        .innerJoin(
+          roomScans,
+          and(
+            eq(roomScans.organizationId, roomScanAssets.organizationId),
+            eq(roomScans.id, roomScanAssets.roomScanId),
+          ),
+        )
+        .where(
+          and(
+            eq(roomScans.organizationId, organizationId),
+            eq(roomScans.roomResourceId, id),
+          ),
+        ),
       transaction
         .select({
           storageKey: roomScanKeyframes.storageKey,
           url: roomScanKeyframes.storageUrl,
         })
         .from(roomScanKeyframes)
-        .innerJoin(roomScans, eq(roomScans.id, roomScanKeyframes.roomScanId))
-        .where(eq(roomScans.roomResourceId, id)),
+        .innerJoin(
+          roomScans,
+          and(
+            eq(roomScans.organizationId, roomScanKeyframes.organizationId),
+            eq(roomScans.id, roomScanKeyframes.roomScanId),
+          ),
+        )
+        .where(
+          and(
+            eq(roomScans.organizationId, organizationId),
+            eq(roomScans.roomResourceId, id),
+          ),
+        ),
     ]);
-    await transaction.delete(resources).where(eq(resources.id, id));
+    await transaction.delete(resources).where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, id),
+      ),
+    );
     await enqueueWebhookEvent(transaction, {
+      organizationId,
       type: "inventory.resource.deleted",
       aggregateType: "resource",
       aggregateId: locked.id,
@@ -623,7 +768,7 @@ export async function deleteResource(
   return deleted ? { ...resource, roomScanAssets: deleted } : null;
 }
 
-export async function getDashboardStats() {
+export async function getDashboardStats(organizationId: string) {
   const [totals] = await db
     .select({
       resources: count(),
@@ -632,11 +777,13 @@ export async function getDashboardStats() {
       available: sql<number>`count(*) filter (where ${resources.status} = 'available')::int`,
       attention: sql<number>`count(*) filter (where ${resources.status} = 'maintenance')::int`,
     })
-    .from(resources);
+    .from(resources)
+    .where(eq(resources.organizationId, organizationId));
 
   const byType = await db
     .select({ type: resources.type, value: count() })
     .from(resources)
+    .where(eq(resources.organizationId, organizationId))
     .groupBy(resources.type)
     .orderBy(desc(count()));
 
@@ -676,17 +823,23 @@ const diceSimilarity = (left: string, right: string) => {
   return (2 * overlap) / (leftSet.size + rightSet.size);
 };
 
-export async function findDuplicateResources() {
+export async function findDuplicateResources(organizationId: string) {
   const rows = await db
     .select()
     .from(resources)
+    .where(eq(resources.organizationId, organizationId))
     .orderBy(desc(resources.updatedAt))
     .limit(1_000);
   const mediaRows = rows.length
     ? await db
         .select()
         .from(media)
-        .where(inArray(media.resourceId, rows.map((row) => row.id)))
+        .where(
+          and(
+            eq(media.organizationId, organizationId),
+            inArray(media.resourceId, rows.map((row) => row.id)),
+          ),
+        )
     : [];
   const enriched = attachMedia(rows, mediaRows);
   const pairs: Array<{
@@ -722,6 +875,7 @@ export async function findDuplicateResources() {
 }
 
 export async function mergeResources(
+  organizationId: string,
   keepId: string,
   duplicateId: string,
   actor?: string,
@@ -746,7 +900,12 @@ export async function mergeResources(
     const lockedResources = await transaction
       .select()
       .from(resources)
-      .where(inArray(resources.id, [keepId, duplicateId]))
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          inArray(resources.id, [keepId, duplicateId]),
+        ),
+      )
       .orderBy(asc(resources.id))
       .for("update");
     const lockedKeep = lockedResources.find((item) => item.id === keepId);
@@ -796,7 +955,12 @@ export async function mergeResources(
     const [spatialScan] = await transaction
       .select({ id: roomScans.id })
       .from(roomScans)
-      .where(inArray(roomScans.roomResourceId, [keepId, duplicateId]))
+      .where(
+        and(
+          eq(roomScans.organizationId, organizationId),
+          inArray(roomScans.roomResourceId, [keepId, duplicateId]),
+        ),
+      )
       .limit(1);
     if (spatialScan) {
       throw new Error("Rooms with 3D room scans cannot be merged.");
@@ -805,7 +969,12 @@ export async function mergeResources(
     const [variant] = await transaction
       .select({ id: resourceVariants.id })
       .from(resourceVariants)
-      .where(inArray(resourceVariants.resourceId, [keepId, duplicateId]))
+      .where(
+        and(
+          eq(resourceVariants.organizationId, organizationId),
+          inArray(resourceVariants.resourceId, [keepId, duplicateId]),
+        ),
+      )
       .limit(1);
     if (variant) {
       throw new Error(
@@ -825,9 +994,12 @@ export async function mergeResources(
         .select({ id: resourceRelations.id })
         .from(resourceRelations)
         .where(
-          or(
-            eq(resourceRelations.sourceResourceId, duplicateId),
-            eq(resourceRelations.targetResourceId, duplicateId),
+          and(
+            eq(resourceRelations.organizationId, organizationId),
+            or(
+              eq(resourceRelations.sourceResourceId, duplicateId),
+              eq(resourceRelations.targetResourceId, duplicateId),
+            ),
           ),
         )
         .limit(1),
@@ -835,36 +1007,57 @@ export async function mergeResources(
         .select({ id: stockLocationBalances.id })
         .from(stockLocationBalances)
         .where(
-          or(
-            eq(stockLocationBalances.resourceId, duplicateId),
-            eq(stockLocationBalances.locationResourceId, duplicateId),
+          and(
+            eq(stockLocationBalances.organizationId, organizationId),
+            or(
+              eq(stockLocationBalances.resourceId, duplicateId),
+              eq(stockLocationBalances.locationResourceId, duplicateId),
+            ),
           ),
         )
         .limit(1),
       transaction
         .select({ id: inventoryCounts.id })
         .from(inventoryCounts)
-        .where(eq(inventoryCounts.resourceId, duplicateId))
+        .where(
+          and(
+            eq(inventoryCounts.organizationId, organizationId),
+            eq(inventoryCounts.resourceId, duplicateId),
+          ),
+        )
         .limit(1),
       transaction
         .select({ resourceId: inventoryCyclePolicies.resourceId })
         .from(inventoryCyclePolicies)
-        .where(eq(inventoryCyclePolicies.resourceId, duplicateId))
+        .where(
+          and(
+            eq(inventoryCyclePolicies.organizationId, organizationId),
+            eq(inventoryCyclePolicies.resourceId, duplicateId),
+          ),
+        )
         .limit(1),
       transaction
         .select({ id: inventoryAssignments.id })
         .from(inventoryAssignments)
         .where(
-          or(
-            eq(inventoryAssignments.resourceId, duplicateId),
-            eq(inventoryAssignments.assigneeResourceId, duplicateId),
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            or(
+              eq(inventoryAssignments.resourceId, duplicateId),
+              eq(inventoryAssignments.assigneeResourceId, duplicateId),
+            ),
           ),
         )
         .limit(1),
       transaction
         .select({ id: stockUnits.id })
         .from(stockUnits)
-        .where(eq(stockUnits.locationResourceId, duplicateId))
+        .where(
+          and(
+            eq(stockUnits.organizationId, organizationId),
+            eq(stockUnits.locationResourceId, duplicateId),
+          ),
+        )
         .limit(1),
     ]);
     if (
@@ -885,7 +1078,8 @@ export async function mergeResources(
         parent: bomLines.assemblyResourceId,
         child: bomLines.componentResourceId,
       })
-      .from(bomLines);
+      .from(bomLines)
+      .where(eq(bomLines.organizationId, organizationId));
     const adjacency = new Map<string, Set<string>>();
     for (const edge of bomEdges) {
       const parent = edge.parent === duplicateId ? keepId : edge.parent;
@@ -932,7 +1126,12 @@ export async function mergeResources(
       const affectedAssemblies = await transaction
         .select()
         .from(resources)
-        .where(inArray(resources.id, affectedAssemblyIds))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            inArray(resources.id, affectedAssemblyIds),
+          ),
+        )
         .orderBy(asc(resources.id))
         .for("update");
       if (affectedAssemblies.length !== affectedAssemblyIds.length) {
@@ -955,12 +1154,22 @@ export async function mergeResources(
     const [historicalBuild] = await transaction
       .select({ id: assemblyBuilds.id })
       .from(assemblyBuilds)
-      .where(eq(assemblyBuilds.assemblyResourceId, duplicateId))
+      .where(
+        and(
+          eq(assemblyBuilds.organizationId, organizationId),
+          eq(assemblyBuilds.assemblyResourceId, duplicateId),
+        ),
+      )
       .limit(1);
     const [historicalComponent] = await transaction
       .select({ id: assemblyBuildComponents.id })
       .from(assemblyBuildComponents)
-      .where(eq(assemblyBuildComponents.componentResourceId, duplicateId))
+      .where(
+        and(
+          eq(assemblyBuildComponents.organizationId, organizationId),
+          eq(assemblyBuildComponents.componentResourceId, duplicateId),
+        ),
+      )
       .limit(1);
     if (historicalBuild || historicalComponent) {
       throw new Error(
@@ -971,7 +1180,12 @@ export async function mergeResources(
     const duplicateOrderLines = await transaction
       .select()
       .from(purchaseOrderLines)
-      .where(eq(purchaseOrderLines.resourceId, duplicateId))
+      .where(
+        and(
+          eq(purchaseOrderLines.organizationId, organizationId),
+          eq(purchaseOrderLines.resourceId, duplicateId),
+        ),
+      )
       .orderBy(asc(purchaseOrderLines.id))
       .for("update");
     const receivedOrderLine = duplicateOrderLines.find(
@@ -993,7 +1207,12 @@ export async function mergeResources(
     const mediaRows = await transaction
       .select()
       .from(media)
-      .where(inArray(media.resourceId, [keepId, duplicateId]));
+      .where(
+        and(
+          eq(media.organizationId, organizationId),
+          inArray(media.resourceId, [keepId, duplicateId]),
+        ),
+      );
     const keepMedia = mediaRows.filter((item) => item.resourceId === keepId);
     const duplicateMedia = mediaRows.filter((item) => item.resourceId === duplicateId);
     const highestPosition = keepMedia.reduce(
@@ -1004,7 +1223,12 @@ export async function mergeResources(
       await transaction
         .update(media)
         .set({ resourceId: keepId, position: highestPosition + index + 1 })
-        .where(eq(media.id, item.id));
+        .where(
+          and(
+            eq(media.organizationId, organizationId),
+            eq(media.id, item.id),
+          ),
+        );
     }
 
     // Repoint structured relationships before deleting the duplicate. BOM
@@ -1014,10 +1238,20 @@ export async function mergeResources(
     const duplicateParentLines = await transaction
       .select()
       .from(bomLines)
-      .where(eq(bomLines.assemblyResourceId, duplicateId));
+      .where(
+        and(
+          eq(bomLines.organizationId, organizationId),
+          eq(bomLines.assemblyResourceId, duplicateId),
+        ),
+      );
     for (const line of duplicateParentLines) {
       if (line.componentResourceId === keepId) {
-        await transaction.delete(bomLines).where(eq(bomLines.id, line.id));
+        await transaction.delete(bomLines).where(
+          and(
+            eq(bomLines.organizationId, organizationId),
+            eq(bomLines.id, line.id),
+          ),
+        );
         continue;
       }
       const [collision] = await transaction
@@ -1025,28 +1259,49 @@ export async function mergeResources(
         .from(bomLines)
         .where(
           and(
+            eq(bomLines.organizationId, organizationId),
             eq(bomLines.assemblyResourceId, keepId),
             eq(bomLines.componentResourceId, line.componentResourceId),
           ),
         )
         .limit(1);
       if (collision) {
-        await transaction.delete(bomLines).where(eq(bomLines.id, line.id));
+        await transaction.delete(bomLines).where(
+          and(
+            eq(bomLines.organizationId, organizationId),
+            eq(bomLines.id, line.id),
+          ),
+        );
       } else {
         await transaction
           .update(bomLines)
           .set({ assemblyResourceId: keepId, updatedAt: new Date() })
-          .where(eq(bomLines.id, line.id));
+          .where(
+            and(
+              eq(bomLines.organizationId, organizationId),
+              eq(bomLines.id, line.id),
+            ),
+          );
       }
     }
 
     const duplicateComponentLines = await transaction
       .select()
       .from(bomLines)
-      .where(eq(bomLines.componentResourceId, duplicateId));
+      .where(
+        and(
+          eq(bomLines.organizationId, organizationId),
+          eq(bomLines.componentResourceId, duplicateId),
+        ),
+      );
     for (const line of duplicateComponentLines) {
       if (line.assemblyResourceId === keepId) {
-        await transaction.delete(bomLines).where(eq(bomLines.id, line.id));
+        await transaction.delete(bomLines).where(
+          and(
+            eq(bomLines.organizationId, organizationId),
+            eq(bomLines.id, line.id),
+          ),
+        );
         continue;
       }
       const [collision] = await transaction
@@ -1054,6 +1309,7 @@ export async function mergeResources(
         .from(bomLines)
         .where(
           and(
+            eq(bomLines.organizationId, organizationId),
             eq(bomLines.assemblyResourceId, line.assemblyResourceId),
             eq(bomLines.componentResourceId, keepId),
           ),
@@ -1067,13 +1323,28 @@ export async function mergeResources(
               collision.quantityPerAssembly + line.quantityPerAssembly,
             updatedAt: new Date(),
           })
-          .where(eq(bomLines.id, collision.id));
-        await transaction.delete(bomLines).where(eq(bomLines.id, line.id));
+          .where(
+            and(
+              eq(bomLines.organizationId, organizationId),
+              eq(bomLines.id, collision.id),
+            ),
+          );
+        await transaction.delete(bomLines).where(
+          and(
+            eq(bomLines.organizationId, organizationId),
+            eq(bomLines.id, line.id),
+          ),
+        );
       } else {
         await transaction
           .update(bomLines)
           .set({ componentResourceId: keepId, updatedAt: new Date() })
-          .where(eq(bomLines.id, line.id));
+          .where(
+            and(
+              eq(bomLines.organizationId, organizationId),
+              eq(bomLines.id, line.id),
+            ),
+          );
       }
     }
 
@@ -1083,6 +1354,7 @@ export async function mergeResources(
         .from(purchaseOrderLines)
         .where(
           and(
+            eq(purchaseOrderLines.organizationId, organizationId),
             eq(purchaseOrderLines.purchaseOrderId, line.purchaseOrderId),
             eq(purchaseOrderLines.resourceId, keepId),
           ),
@@ -1096,22 +1368,42 @@ export async function mergeResources(
             receivedQuantity: collision.receivedQuantity + line.receivedQuantity,
             updatedAt: new Date(),
           })
-          .where(eq(purchaseOrderLines.id, collision.id));
+          .where(
+            and(
+              eq(purchaseOrderLines.organizationId, organizationId),
+              eq(purchaseOrderLines.id, collision.id),
+            ),
+          );
         await transaction
           .delete(purchaseOrderLines)
-          .where(eq(purchaseOrderLines.id, line.id));
+          .where(
+            and(
+              eq(purchaseOrderLines.organizationId, organizationId),
+              eq(purchaseOrderLines.id, line.id),
+            ),
+          );
       } else {
         await transaction
           .update(purchaseOrderLines)
           .set({ resourceId: keepId, updatedAt: new Date() })
-          .where(eq(purchaseOrderLines.id, line.id));
+          .where(
+            and(
+              eq(purchaseOrderLines.organizationId, organizationId),
+              eq(purchaseOrderLines.id, line.id),
+            ),
+          );
       }
     }
 
     const settingsRows = await transaction
       .select()
       .from(stockSettings)
-      .where(inArray(stockSettings.resourceId, [keepId, duplicateId]));
+      .where(
+        and(
+          eq(stockSettings.organizationId, organizationId),
+          inArray(stockSettings.resourceId, [keepId, duplicateId]),
+        ),
+      );
     const keepSettings = settingsRows.find((item) => item.resourceId === keepId);
     const duplicateSettings = settingsRows.find(
       (item) => item.resourceId === duplicateId,
@@ -1135,6 +1427,7 @@ export async function mergeResources(
         .insert(stockUnits)
         .values(
           Array.from({ length: resource.quantity }, (_, index) => ({
+            organizationId,
             resourceId: resource.id,
             code: `${prefix}-${String(index + 1).padStart(width, "0")}`,
             status: "available" as const,
@@ -1149,6 +1442,7 @@ export async function mergeResources(
         .insert(stockMovements)
         .values(
           createdUnits.map((unit) => ({
+            organizationId,
             resourceId: resource.id,
             unitId: unit.id,
             delta: 0,
@@ -1179,11 +1473,21 @@ export async function mergeResources(
       transaction
         .select({ id: stockUnits.id, code: stockUnits.code })
         .from(stockUnits)
-        .where(eq(stockUnits.resourceId, keepId)),
+        .where(
+          and(
+            eq(stockUnits.organizationId, organizationId),
+            eq(stockUnits.resourceId, keepId),
+          ),
+        ),
       transaction
         .select({ id: stockUnits.id, code: stockUnits.code })
         .from(stockUnits)
-        .where(eq(stockUnits.resourceId, duplicateId)),
+        .where(
+          and(
+            eq(stockUnits.organizationId, organizationId),
+            eq(stockUnits.resourceId, duplicateId),
+          ),
+        ),
     ]);
     const usedCodes = new Set(keepUnitRows.map((unit) => unit.code));
     for (const unit of duplicateUnitRows) {
@@ -1195,22 +1499,38 @@ export async function mergeResources(
       await transaction
         .update(stockUnits)
         .set({ code: mergedCode, updatedAt: now })
-        .where(eq(stockUnits.id, unit.id));
+        .where(
+          and(
+            eq(stockUnits.organizationId, organizationId),
+            eq(stockUnits.id, unit.id),
+          ),
+        );
       usedCodes.add(mergedCode);
     }
 
     await transaction
       .update(stockUnits)
       .set({ resourceId: keepId, updatedAt: now })
-      .where(eq(stockUnits.resourceId, duplicateId));
+      .where(
+        and(
+          eq(stockUnits.organizationId, organizationId),
+          eq(stockUnits.resourceId, duplicateId),
+        ),
+      );
     await transaction
       .update(stockMovements)
       .set({ resourceId: keepId })
-      .where(eq(stockMovements.resourceId, duplicateId));
+      .where(
+        and(
+          eq(stockMovements.organizationId, organizationId),
+          eq(stockMovements.resourceId, duplicateId),
+        ),
+      );
 
     await transaction
       .insert(stockSettings)
       .values({
+        organizationId,
         resourceId: keepId,
         trackingMode: finalTrackingMode,
         minimumStock: Math.max(
@@ -1268,10 +1588,16 @@ export async function mergeResources(
         customFields: finalKeep.customFields,
         updatedAt: finalKeep.updatedAt,
       })
-      .where(eq(resources.id, keepId));
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, keepId),
+        ),
+      );
     const [mergeMovement] = await transaction
       .insert(stockMovements)
       .values({
+        organizationId,
         resourceId: keepId,
         // The duplicate ledger is repointed above, so its deltas already explain
         // the transferred quantity. This row is an audit marker, not another receipt.
@@ -1296,6 +1622,7 @@ export async function mergeResources(
       })),
     ].sort((left, right) => left.position - right.position);
     await enqueueWebhookEvent(transaction, {
+      organizationId,
       type: "inventory.resource.merged",
       aggregateType: "resource",
       aggregateId: keepId,
@@ -1315,9 +1642,14 @@ export async function mergeResources(
         removedResourceId: duplicateId,
       },
     });
-    await transaction.delete(resources).where(eq(resources.id, duplicateId));
+    await transaction.delete(resources).where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, duplicateId),
+      ),
+    );
     return true;
   });
 
-  return merged ? getResource(keepId) : null;
+  return merged ? getResource(organizationId, keepId) : null;
 }

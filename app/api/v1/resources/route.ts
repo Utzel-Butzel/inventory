@@ -41,6 +41,7 @@ export async function GET(request: Request) {
   const page = Number(url.searchParams.get("page") ?? "1");
   const pageSize = Number(url.searchParams.get("pageSize") ?? "24");
   const result = await listResources({
+    organizationId: authorization.identity.organizationId,
     query: url.searchParams.get("q") ?? undefined,
     type: url.searchParams.get("type") ?? undefined,
     status: url.searchParams.get("status") ?? undefined,
@@ -49,6 +50,7 @@ export async function GET(request: Request) {
   });
   try {
     const localized = await localizeResourceList(
+      authorization.identity.organizationId,
       result.resources,
       url.searchParams.get("language"),
     );
@@ -111,6 +113,7 @@ export async function POST(request: Request) {
     });
     if (idempotency.key) {
       const replay = await replayResourceCreation({
+        organizationId: authorization.identity.organizationId,
         idempotencyKey: idempotency.key,
         requestHash,
       });
@@ -122,9 +125,16 @@ export async function POST(request: Request) {
       }
     }
 
-    await assertActiveInventoryType(parsed.data.type);
-    await assertResourceIdentifiersAvailable(parsed.data);
+    await assertActiveInventoryType(
+      authorization.identity.organizationId,
+      parsed.data.type,
+    );
+    await assertResourceIdentifiersAvailable(
+      authorization.identity.organizationId,
+      parsed.data,
+    );
     const customFields = await validateCustomFieldValues({
+      organizationId: authorization.identity.organizationId,
       entityType: "inventory",
       target: { type: parsed.data.type, categories: parsed.data.categories },
       values: parsed.data.customFields ?? {},
@@ -132,6 +142,7 @@ export async function POST(request: Request) {
     });
     const values = {
       ...parsed.data,
+      organizationId: authorization.identity.organizationId,
       customFields,
       ...(parsed.data.mapFeatures.length
         ? positionFromMapFeatures(parsed.data.mapFeatures)
@@ -140,6 +151,7 @@ export async function POST(request: Request) {
     };
     if (idempotency.key) {
       const result = await createResourceIdempotently({
+        organizationId: authorization.identity.organizationId,
         values,
         idempotencyKey: idempotency.key,
         requestHash,
@@ -153,7 +165,10 @@ export async function POST(request: Request) {
             parsed.data.gpsLongitude !== null &&
             parsed.data.gpsLongitude !== undefined))
       ) {
-        await synchronizeSpatialContainment(authorization.identity.subject);
+        await synchronizeSpatialContainment(
+          authorization.identity.organizationId,
+          authorization.identity.subject,
+        );
       }
       return Response.json(
         {
@@ -172,7 +187,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const resource = await createResource(values, authorization.identity.subject);
+    const resource = await createResource(
+      authorization.identity.organizationId,
+      values,
+      authorization.identity.subject,
+    );
     if (
       parsed.data.mapFeatures.length > 0 ||
       (parsed.data.gpsLatitude !== null &&
@@ -180,7 +199,10 @@ export async function POST(request: Request) {
         parsed.data.gpsLongitude !== null &&
         parsed.data.gpsLongitude !== undefined)
     ) {
-      await synchronizeSpatialContainment(authorization.identity.subject);
+      await synchronizeSpatialContainment(
+        authorization.identity.organizationId,
+        authorization.identity.subject,
+      );
     }
     return Response.json(
       { resource, translation: { status: "queued" as const } },

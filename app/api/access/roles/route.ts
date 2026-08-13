@@ -1,4 +1,4 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
 import { accessRoles, inventoryAccessRules } from "@/db/schema";
 import { permissionGroups, resourceRulePermissions } from "@/lib/access-control-contract";
@@ -12,12 +12,14 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const authorization = await requireSessionPermission(request, "roles.manage");
   if (authorization.response) return authorization.response;
+  const organizationId = authorization.identity.organizationId;
 
   const [roles, rules] = await Promise.all([
-    listAccessRolesWithCounts(),
+    listAccessRolesWithCounts(organizationId),
     db
       .select()
       .from(inventoryAccessRules)
+      .where(eq(inventoryAccessRules.organizationId, organizationId))
       .orderBy(asc(inventoryAccessRules.priority), asc(inventoryAccessRules.name)),
   ]);
   return Response.json({
@@ -31,6 +33,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const authorization = await requireSessionPermission(request, "roles.manage");
   if (authorization.response) return authorization.response;
+  const organizationId = authorization.identity.organizationId;
 
   let payload: unknown;
   try {
@@ -59,10 +62,13 @@ export async function POST(request: Request) {
     .insert(accessRoles)
     .values({
       ...parsed.data,
+      organizationId,
       createdBy: authorization.identity.subject,
       updatedBy: authorization.identity.subject,
     })
-    .onConflictDoNothing({ target: accessRoles.key })
+    .onConflictDoNothing({
+      target: [accessRoles.organizationId, accessRoles.key],
+    })
     .returning();
   if (!role) {
     return Response.json({ error: "A role with this key already exists." }, { status: 409 });

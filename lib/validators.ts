@@ -431,7 +431,22 @@ export const nativeLoginInputSchema = z.object({
       "Password must contain at most 72 UTF-8 bytes.",
     ),
   deviceName: z.string().trim().min(1).max(80).optional().default("iOS"),
+  organizationId: z.string().uuid().optional(),
 });
+
+export const organizationCreateInputSchema = z
+  .object({
+    name: z.string().trim().min(1).max(160),
+  })
+  .strict();
+
+export const organizationUpdateInputSchema = organizationCreateInputSchema;
+
+export const organizationSelectInputSchema = z
+  .object({
+    organizationId: z.string().uuid(),
+  })
+  .strict();
 
 export const coverInputSchema = z.object({
   sourceMediaId: z.string().uuid().optional(),

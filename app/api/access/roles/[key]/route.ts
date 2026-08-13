@@ -1,6 +1,10 @@
 import { and, count, eq } from "drizzle-orm";
 
-import { accessRoles, inventoryAccessRules, users } from "@/db/schema";
+import {
+  accessRoles,
+  inventoryAccessRules,
+  organizationMemberships,
+} from "@/db/schema";
 import { appPermissions } from "@/lib/access-control-contract";
 import { revokeApiTokensForRoles } from "@/lib/access-control";
 import { requireSessionPermission } from "@/lib/api-auth";
@@ -12,6 +16,7 @@ type Context = { params: Promise<{ key: string }> };
 export async function PATCH(request: Request, context: Context) {
   const authorization = await requireSessionPermission(request, "roles.manage");
   if (authorization.response) return authorization.response;
+  const organizationId = authorization.identity.organizationId;
   const { key } = await context.params;
 
   let payload: unknown;
@@ -31,13 +36,19 @@ export async function PATCH(request: Request, context: Context) {
     db
       .select()
       .from(accessRoles)
-      .where(eq(accessRoles.key, key))
+      .where(
+        and(
+          eq(accessRoles.organizationId, organizationId),
+          eq(accessRoles.key, key),
+        ),
+      )
       .limit(1),
     db
       .select({ permissions: inventoryAccessRules.permissions })
       .from(inventoryAccessRules)
       .where(
         and(
+          eq(inventoryAccessRules.organizationId, organizationId),
           eq(inventoryAccessRules.roleKey, key),
           eq(inventoryAccessRules.enabled, true),
         ),
@@ -92,7 +103,12 @@ export async function PATCH(request: Request, context: Context) {
     const [existing] = await transaction
       .select()
       .from(accessRoles)
-      .where(eq(accessRoles.key, key))
+      .where(
+        and(
+          eq(accessRoles.organizationId, organizationId),
+          eq(accessRoles.key, key),
+        ),
+      )
       .limit(1)
       .for("update");
     if (!existing) return null;
@@ -103,14 +119,19 @@ export async function PATCH(request: Request, context: Context) {
         updatedBy: authorization.identity.subject,
         updatedAt: new Date(),
       })
-      .where(eq(accessRoles.key, key))
+      .where(
+        and(
+          eq(accessRoles.organizationId, organizationId),
+          eq(accessRoles.key, key),
+        ),
+      )
       .returning();
 
     return saved ?? null;
   });
   if (!role) return Response.json({ error: "Role not found." }, { status: 404 });
   if (parsed.data.permissions !== undefined) {
-    await revokeApiTokensForRoles([key]);
+    await revokeApiTokensForRoles([key], organizationId);
   }
   return Response.json({ role });
 }
@@ -118,15 +139,26 @@ export async function PATCH(request: Request, context: Context) {
 export async function DELETE(request: Request, context: Context) {
   const authorization = await requireSessionPermission(request, "roles.manage");
   if (authorization.response) return authorization.response;
+  const organizationId = authorization.identity.organizationId;
   const { key } = await context.params;
 
   const [[role], roleRules] = await Promise.all([
-    db.select().from(accessRoles).where(eq(accessRoles.key, key)).limit(1),
+    db
+      .select()
+      .from(accessRoles)
+      .where(
+        and(
+          eq(accessRoles.organizationId, organizationId),
+          eq(accessRoles.key, key),
+        ),
+      )
+      .limit(1),
     db
       .select({ permissions: inventoryAccessRules.permissions })
       .from(inventoryAccessRules)
       .where(
         and(
+          eq(inventoryAccessRules.organizationId, organizationId),
           eq(inventoryAccessRules.roleKey, key),
           eq(inventoryAccessRules.enabled, true),
         ),
@@ -153,13 +185,28 @@ export async function DELETE(request: Request, context: Context) {
   if (role.isSystem) {
     return Response.json({ error: "Built-in roles cannot be deleted." }, { status: 409 });
   }
-  const [{ value }] = await db.select({ value: count() }).from(users).where(eq(users.role, key));
+  const [{ value }] = await db
+    .select({ value: count() })
+    .from(organizationMemberships)
+    .where(
+      and(
+        eq(organizationMemberships.organizationId, organizationId),
+        eq(organizationMemberships.roleKey, key),
+      ),
+    );
   if (value > 0) {
     return Response.json(
       { error: "Move all users to another role before deleting this role." },
       { status: 409 },
     );
   }
-  await db.delete(accessRoles).where(eq(accessRoles.key, key));
+  await db
+    .delete(accessRoles)
+    .where(
+      and(
+        eq(accessRoles.organizationId, organizationId),
+        eq(accessRoles.key, key),
+      ),
+    );
   return new Response(null, { status: 204 });
 }

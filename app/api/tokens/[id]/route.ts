@@ -13,7 +13,14 @@ export async function DELETE(request: Request, context: Context) {
   const [revoked] = await db
     .update(apiTokens)
     .set({ revokedAt: new Date() })
-    .where(and(eq(apiTokens.id, id), isNull(apiTokens.revokedAt)))
+    .where(
+      and(
+        eq(apiTokens.organizationId, authorization.identity.organizationId),
+        eq(apiTokens.id, id),
+        isNull(apiTokens.userId),
+        isNull(apiTokens.revokedAt),
+      ),
+    )
     .returning({ id: apiTokens.id });
   if (!revoked) return Response.json({ error: "Not found" }, { status: 404 });
   return new Response(null, { status: 204 });

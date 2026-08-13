@@ -41,6 +41,7 @@ export async function PUT(request: Request, context: Context) {
   }
 
   const result = await upsertSpatialPlacement({
+    organizationId: authorization.identity.organizationId,
     scanId: id,
     resourceId,
     placement: parsed.data,
@@ -81,7 +82,11 @@ export async function DELETE(request: Request, context: Context) {
   if (!identifiers.success) {
     return Response.json({ error: "Invalid room scan or item identifier." }, { status: 422 });
   }
-  const deleted = await deleteSpatialPlacement(resourceId, id);
+  const deleted = await deleteSpatialPlacement(
+    authorization.identity.organizationId,
+    resourceId,
+    id,
+  );
   if (!deleted) return Response.json({ error: "Placement not found." }, { status: 404 });
   return new Response(null, { status: 204 });
 }

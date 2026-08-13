@@ -33,6 +33,8 @@ struct IntakeJob: Identifiable, Codable, Equatable, Sendable {
     var sourceFilePaths: [String]?
     var expectedFileCount: Int?
     var serverOrigin: String?
+    var organizationID: UUID?
+    var principalIdentifier: String?
     var shouldAnalyze: Bool
     var shouldGenerateCover: Bool
     var imageModelID: String?
@@ -57,6 +59,8 @@ struct IntakeJob: Identifiable, Codable, Equatable, Sendable {
 final class IntakeQueue: ObservableObject {
     @Published private(set) var jobs: [IntakeJob] = []
     @Published private(set) var storageError: String?
+    @Published private(set) var activeContextIdentifier: String?
+    @Published private(set) var canProcessJobs = false
 
     private var client: APIClient?
     private var worker: Task<Void, Never>?
@@ -96,22 +100,25 @@ final class IntakeQueue: ObservableObject {
 
     deinit { worker?.cancel() }
 
-    func configure(client: APIClient?) {
+    var visibleJobs: [IntakeJob] {
+        guard let client,
+              let principalIdentifier = client.principalIdentifier else { return [] }
+        return Self.jobs(
+            jobs,
+            matchingServerOrigin: client.serverURL.absoluteString,
+            organizationID: client.organizationID,
+            principalIdentifier: principalIdentifier
+        )
+    }
+
+    func configure(client: APIClient?, canWrite: Bool = false) {
         configurationID = UUID()
         worker?.cancel()
         worker = nil
         self.client = client
-        if let origin = client?.serverURL.absoluteString {
-            var changed = false
-            for index in jobs.indices where
-                !jobs[index].stage.isTerminal &&
-                jobs[index].serverOrigin != origin {
-                jobs[index].stage = .failed
-                jobs[index].progress = 1
-                jobs[index].message = "Upload pausiert: Dieser Auftrag gehört zu einem anderen Server."
-                changed = true
-            }
-            if changed { persist() }
+        canProcessJobs = client != nil && canWrite
+        activeContextIdentifier = client?.contextIdentifier
+        if client != nil {
             Task { [weak self] in
                 await self?.resumePreparingJobs()
             }
@@ -120,6 +127,7 @@ final class IntakeQueue: ObservableObject {
     }
 
     func enqueue(_ submission: IntakeSubmission) {
+        guard canProcessJobs, client?.principalIdentifier != nil else { return }
         var job = IntakeJob(
             id: submission.id,
             createdAt: Date(),
@@ -128,6 +136,8 @@ final class IntakeQueue: ObservableObject {
             sourceFilePaths: submission.photos.map(\.fileURL.path),
             expectedFileCount: submission.photos.count,
             serverOrigin: client?.serverURL.absoluteString,
+            organizationID: client?.organizationID,
+            principalIdentifier: client?.principalIdentifier,
             shouldAnalyze: submission.analyze,
             shouldGenerateCover: submission.generateCover,
             imageModelID: submission.imageModelID,
@@ -159,18 +169,21 @@ final class IntakeQueue: ObservableObject {
                 )
                 job.filenames = filenames
                 job.sourceFilePaths = []
-                if job.serverOrigin == nil {
+                if job.serverOrigin == nil || job.principalIdentifier == nil {
                     job.stage = .failed
                     job.progress = 1
-                    job.message = "Kein Inventory-Server ist diesem Auftrag zugeordnet."
-                } else if job.serverOrigin != client?.serverURL.absoluteString {
-                    job.stage = .failed
-                    job.progress = 1
-                    job.message = "Fotos sind gesichert; der Auftrag gehört jedoch zu einem anderen Server."
+                    job.message = "Kein sicherer Konto- und Serverkontext ist diesem Auftrag zugeordnet."
                 } else {
                     job.stage = .queued
                     job.progress = 0.08
-                    job.message = "Bereit zum Hochladen."
+                    job.message = Self.matchesContext(
+                        job,
+                        serverOrigin: client?.serverURL.absoluteString,
+                        organizationID: client?.organizationID,
+                        principalIdentifier: client?.principalIdentifier
+                    )
+                        ? "Bereit zum Hochladen."
+                        : "Fotos sind gesichert. Wechsle zum zugehörigen Konto, um den Upload fortzusetzen."
                 }
                 let persisted = replace(job)
                 if persisted {
@@ -192,21 +205,23 @@ final class IntakeQueue: ObservableObject {
     }
 
     func retry(_ id: UUID) {
-        guard var job = jobs.first(where: { $0.id == id }) else { return }
-        guard let client else {
+        guard var job = visibleJobs.first(where: { $0.id == id }) else { return }
+        guard let client, canProcessJobs else {
             job.stage = .failed
-            job.message = "Für den erneuten Versuch zuerst mit Inventory verbinden."
+            job.message = "Für den erneuten Versuch ist Schreibzugriff auf dieses Inventar erforderlich."
             replace(job)
             return
         }
         let currentOrigin = client.serverURL.absoluteString
-        if job.serverOrigin == nil {
-            job.serverOrigin = currentOrigin
-        }
-        guard job.serverOrigin == currentOrigin else {
+        guard Self.matchesContext(
+            job,
+            serverOrigin: currentOrigin,
+            organizationID: client.organizationID,
+            principalIdentifier: client.principalIdentifier
+        ) else {
             job.stage = .failed
-            let assignedOrigin = job.serverOrigin ?? "einem anderen Server"
-            job.message = "Dieser Auftrag gehört zu \(assignedOrigin). Wechsle dorthin zurück, um ihn fortzusetzen."
+            job.message =
+                "Dieser Auftrag gehört zu einem anderen Server oder einer anderen Organisation. Wechsle dorthin zurück, um ihn fortzusetzen."
             replace(job)
             return
         }
@@ -242,7 +257,7 @@ final class IntakeQueue: ObservableObject {
     }
 
     func remove(_ id: UUID) {
-        guard let job = jobs.first(where: { $0.id == id }), job.stage.isTerminal else { return }
+        guard let job = visibleJobs.first(where: { $0.id == id }), job.stage.isTerminal else { return }
         let previousJobs = jobs
         jobs.removeAll { $0.id == id }
         guard persist() else {
@@ -256,12 +271,20 @@ final class IntakeQueue: ObservableObject {
     }
 
     private func startWorkerIfNeeded() {
-        guard let client, worker == nil else {
+        guard let client, canProcessJobs, worker == nil,
+              let principalIdentifier = client.principalIdentifier else {
             return
         }
         let origin = client.serverURL.absoluteString
+        let organizationID = client.organizationID
         guard jobs.contains(where: {
-            $0.stage == .queued && $0.serverOrigin == origin
+            $0.stage == .queued &&
+                Self.matchesContext(
+                    $0,
+                    serverOrigin: origin,
+                    organizationID: organizationID,
+                    principalIdentifier: principalIdentifier
+                )
         }) else { return }
         let generation = configurationID
         worker = Task { [weak self] in
@@ -269,6 +292,8 @@ final class IntakeQueue: ObservableObject {
             await self.processQueuedJobs(
                 using: client,
                 origin: origin,
+                organizationID: organizationID,
+                principalIdentifier: principalIdentifier,
                 generation: generation
             )
             guard self.configurationID == generation else { return }
@@ -280,11 +305,21 @@ final class IntakeQueue: ObservableObject {
     private func processQueuedJobs(
         using client: APIClient,
         origin: String,
+        organizationID: UUID?,
+        principalIdentifier: String,
         generation: UUID
     ) async {
         while !Task.isCancelled, configurationID == generation {
             let candidates = jobs
-                .filter({ $0.stage == .queued && $0.serverOrigin == origin })
+                .filter({
+                    $0.stage == .queued &&
+                        Self.matchesContext(
+                            $0,
+                            serverOrigin: origin,
+                            organizationID: organizationID,
+                            principalIdentifier: principalIdentifier
+                        )
+                })
                 .sorted(by: { $0.createdAt < $1.createdAt })
             guard !candidates.isEmpty else { return }
 
@@ -461,16 +496,9 @@ final class IntakeQueue: ObservableObject {
                 cleanupPhotoFiles(for: job.id)
             }
         } catch is CancellationError {
-            let activeOrigin = clientForCurrentConfiguration?.serverURL.absoluteString
-            if let activeOrigin, job.serverOrigin != activeOrigin {
-                job.stage = .failed
-                job.progress = 1
-                job.message = "Upload pausiert: Dieser Auftrag gehört zu einem anderen Server."
-            } else {
-                job.stage = .queued
-                job.nextAttemptAt = nil
-                job.message = "Upload pausiert."
-            }
+            job.stage = .queued
+            job.nextAttemptAt = nil
+            job.message = "Upload pausiert."
             replace(job)
         } catch {
             let attempt = (job.attemptCount ?? 0) + 1
@@ -606,10 +634,10 @@ final class IntakeQueue: ObservableObject {
         var job = source
         guard !job.stage.isTerminal else { return job }
 
-        guard job.serverOrigin != nil else {
+        guard job.serverOrigin != nil, job.principalIdentifier != nil else {
             job.stage = .failed
             job.progress = 1
-            job.message = "Der unterbrochene Auftrag hat keine sichere Serverzuordnung."
+            job.message = "Der unterbrochene Auftrag hat keine sichere Konto- und Serverzuordnung."
             return job
         }
 
@@ -650,6 +678,34 @@ final class IntakeQueue: ObservableObject {
         return job
     }
 
+    nonisolated static func matchesContext(
+        _ job: IntakeJob,
+        serverOrigin: String?,
+        organizationID: UUID?,
+        principalIdentifier: String?
+    ) -> Bool {
+        guard let principalIdentifier else { return false }
+        return job.serverOrigin == serverOrigin &&
+            job.organizationID == organizationID &&
+            job.principalIdentifier == principalIdentifier
+    }
+
+    nonisolated static func jobs(
+        _ jobs: [IntakeJob],
+        matchingServerOrigin serverOrigin: String?,
+        organizationID: UUID?,
+        principalIdentifier: String?
+    ) -> [IntakeJob] {
+        jobs.filter {
+            matchesContext(
+                $0,
+                serverOrigin: serverOrigin,
+                organizationID: organizationID,
+                principalIdentifier: principalIdentifier
+            )
+        }
+    }
+
     private static func filesExist(for job: IntakeJob, rootURL: URL) -> Bool {
         let expected = job.expectedFileCount ?? job.filenames.count
         guard expected > 0, job.filenames.count == expected else { return false }
@@ -669,8 +725,16 @@ final class IntakeQueue: ObservableObject {
 
     private func resumePreparingJobs() async {
         let origin = client?.serverURL.absoluteString
+        let organizationID = client?.organizationID
+        let principalIdentifier = client?.principalIdentifier
         let identifiers = jobs.filter {
-            $0.stage == .preparing && $0.serverOrigin == origin
+            $0.stage == .preparing &&
+                Self.matchesContext(
+                    $0,
+                    serverOrigin: origin,
+                    organizationID: organizationID,
+                    principalIdentifier: principalIdentifier
+                )
         }.map(\.id)
         for id in identifiers {
             await resumePreparingJob(id)
@@ -692,15 +756,16 @@ final class IntakeQueue: ObservableObject {
             let filenames = try await Self.importPhotos(photos, to: jobDirectory)
             job.filenames = filenames
             job.sourceFilePaths = []
-            if job.serverOrigin == client?.serverURL.absoluteString {
-                job.stage = .queued
-                job.progress = 0.08
-                job.message = "Fotos vollständig wiederhergestellt und bereit."
-            } else {
-                job.stage = .failed
-                job.progress = 1
-                job.message = "Fotos sind wiederhergestellt; der Auftrag gehört zu einem anderen Server."
-            }
+            job.stage = .queued
+            job.progress = 0.08
+            job.message = Self.matchesContext(
+                job,
+                serverOrigin: client?.serverURL.absoluteString,
+                organizationID: client?.organizationID,
+                principalIdentifier: client?.principalIdentifier
+            )
+                ? "Fotos vollständig wiederhergestellt und bereit."
+                : "Fotos sind wiederhergestellt. Wechsle zum zugehörigen Konto, um den Upload fortzusetzen."
             if replace(job) {
                 Self.cleanupImportedSources(photos)
                 startWorkerIfNeeded()
@@ -750,6 +815,4 @@ final class IntakeQueue: ObservableObject {
         let base = min(120, pow(2, Double(attempt)))
         return base + Double.random(in: 0 ... min(3, base * 0.2))
     }
-
-    private var clientForCurrentConfiguration: APIClient? { client }
 }

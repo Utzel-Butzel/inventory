@@ -13,7 +13,7 @@ private struct UploadJobsContent: View {
 
     var body: some View {
         Group {
-            if queue.jobs.isEmpty {
+            if queue.visibleJobs.isEmpty {
                 ContentUnavailableView("Keine Uploads", systemImage: "arrow.up.circle")
             } else {
                 ScrollView {
@@ -25,7 +25,7 @@ private struct UploadJobsContent: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .inventoryCard()
                         }
-                        ForEach(queue.jobs) { job in
+                        ForEach(queue.visibleJobs) { job in
                             jobCard(job)
                         }
                     }
@@ -89,6 +89,7 @@ private struct UploadJobsContent: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(InventoryTheme.ink)
+                    .disabled(!queue.canProcessJobs)
 
                     Spacer()
 

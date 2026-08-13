@@ -10,6 +10,84 @@ const smoothstep = (minimum: number, maximum: number, value: number) => {
   return position * position * (3 - 2 * position);
 };
 
+type Rgb = { red: number; green: number; blue: number };
+
+const rgbDistance = (
+  red: number,
+  green: number,
+  blue: number,
+  background: Rgb,
+) =>
+  Math.sqrt(
+    (red - background.red) ** 2 +
+      (green - background.green) ** 2 +
+      (blue - background.blue) ** 2,
+  );
+
+const median = (values: number[]) => {
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.floor(sorted.length / 2)] ?? 0;
+};
+
+const estimateScreenBackground = (
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+) => {
+  // The generation prompt keeps the subject away from the image edge. Sampling
+  // all four corners therefore identifies the actual screen even when the
+  // provider ignores #00FF00 and returns an off-white or tinted backdrop.
+  const sampleDepth = Math.max(2, Math.round(Math.min(width, height) * 0.04));
+  const reds: number[] = [];
+  const greens: number[] = [];
+  const blues: number[] = [];
+  for (let y = 0; y < height; y += 1) {
+    if (y >= sampleDepth && y < height - sampleDepth) continue;
+    for (let x = 0; x < width; x += 1) {
+      if (x >= sampleDepth && x < width - sampleDepth) continue;
+      const offset = (y * width + x) * 4;
+      reds.push(pixels[offset]!);
+      greens.push(pixels[offset + 1]!);
+      blues.push(pixels[offset + 2]!);
+    }
+  }
+  const background = {
+    red: median(reds),
+    green: median(greens),
+    blue: median(blues),
+  };
+  const deviations = reds.map((red, index) =>
+    rgbDistance(red, greens[index]!, blues[index]!, background),
+  );
+  deviations.sort((left, right) => left - right);
+  const deviation90 =
+    deviations[Math.floor(deviations.length * 0.9)] ?? 0;
+  const transparentDistance = Math.max(7, deviation90 * 1.35);
+  const opaqueDistance = transparentDistance + Math.max(42, deviation90 * 2);
+  return { background, opaqueDistance, transparentDistance };
+};
+
+const minimumCompositeAlpha = (
+  red: number,
+  green: number,
+  blue: number,
+  background: Rgb,
+) => {
+  let alpha = 0;
+  for (const [color, screen] of [
+    [red, background.red],
+    [green, background.green],
+    [blue, background.blue],
+  ] as const) {
+    if (color < screen && screen > 0) {
+      alpha = Math.max(alpha, 1 - color / screen);
+    } else if (color > screen && screen < 255) {
+      alpha = Math.max(alpha, (color - screen) / (255 - screen));
+    }
+  }
+  return clampUnit(alpha);
+};
+
 export function extractDifferenceMattePixels(
   whitePixels: Uint8Array,
   blackPixels: Uint8Array,
@@ -93,6 +171,18 @@ export function extractGreenScreenPixels(
     throw new Error("Greenscreen image dimensions do not match its pixels.");
   }
 
+  const estimatedScreen =
+    width && height && width >= 8 && height >= 8
+      ? estimateScreenBackground(pixels, width, height)
+      : null;
+  const screen = estimatedScreen?.background ?? {
+    red: 0,
+    green: 255,
+    blue: 0,
+  };
+  const screenIsGreen =
+    screen.green - Math.max(screen.red, screen.blue) >= 60;
+
   const alphaValues = new Float32Array(pixelCount);
   for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1) {
     const offset = pixelIndex * 4;
@@ -100,15 +190,21 @@ export function extractGreenScreenPixels(
     const green = pixels[offset + 1]!;
     const blue = pixels[offset + 2]!;
     const sourceAlpha = pixels[offset + 3]! / 255;
-    const greenDominance = Math.max(0, green - Math.max(red, blue));
-    const distanceFromGreen = Math.sqrt(
-      red * red + (255 - green) * (255 - green) + blue * blue,
+    const distanceFromScreen = rgbDistance(red, green, blue, screen);
+    const distanceAlpha = smoothstep(
+      estimatedScreen?.transparentDistance ?? 18,
+      estimatedScreen?.opaqueDistance ?? 150,
+      distanceFromScreen,
     );
-    const dominanceAlpha = 1 - smoothstep(12, 235, greenDominance);
-    const distanceAlpha = smoothstep(18, 150, distanceFromGreen);
-    alphaValues[pixelIndex] = clampUnit(
-      Math.min(dominanceAlpha, distanceAlpha) * sourceAlpha,
-    );
+    if (screenIsGreen) {
+      const greenDominance = Math.max(0, green - Math.max(red, blue));
+      const dominanceAlpha = 1 - smoothstep(12, 235, greenDominance);
+      alphaValues[pixelIndex] = clampUnit(
+        Math.min(dominanceAlpha, distanceAlpha) * sourceAlpha,
+      );
+    } else {
+      alphaValues[pixelIndex] = clampUnit(distanceAlpha * sourceAlpha);
+    }
   }
 
   const output = Buffer.alloc(pixels.length);
@@ -118,49 +214,54 @@ export function extractGreenScreenPixels(
     const green = pixels[offset + 1]!;
     const blue = pixels[offset + 2]!;
     const sourceAlpha = pixels[offset + 3]! / 255;
-    const greenDominance = Math.max(0, green - Math.max(red, blue));
+    const greenDominance = green - Math.max(red, blue);
     const colorSpread = green - Math.min(red, blue);
-    const isKeyEdge = Boolean(
+    const hasClearNeighbour = Boolean(
       width &&
         height &&
-        colorSpread > 12 &&
+        hasTransparentNeighbour(alphaValues, pixelIndex, width, height),
+    );
+    const isKeyEdge = Boolean(
+      hasClearNeighbour &&
         alphaValues[pixelIndex]! > 0.05 &&
-        hasTransparentNeighbour(
-          alphaValues,
-          pixelIndex,
-          width,
-          height,
-        ),
+        (alphaValues[pixelIndex]! < 0.98 ||
+          (screenIsGreen && colorSpread > 12)),
     );
     let alpha = alphaValues[pixelIndex]!;
-    if (isKeyEdge && greenDominance <= 12) {
-      // A red or blue antialiased edge mixed 50/50 with green is no longer
-      // green-dominant, so a chroma-distance key alone mistakes it for an
-      // opaque yellow/cyan halo. Near the transparent matte, recover the
-      // minimum plausible foreground alpha from the screen composite.
-      const edgeAlpha =
-        (Math.max(red, blue, 255 - green) / 255) * sourceAlpha;
-      alpha = Math.min(alpha, edgeAlpha);
+    if (isKeyEdge && (!screenIsGreen || greenDominance <= 12)) {
+      // Chroma distance alone can mistake an antialiased foreground edge for
+      // an opaque halo. Recover the smallest alpha compatible with a composite
+      // over the detected screen color.
+      alpha = Math.min(
+        alpha,
+        minimumCompositeAlpha(red, green, blue, screen) * sourceAlpha,
+      );
     }
 
     if (alpha > 0.01) {
-      let recoveredRed = Math.min(255, red / alpha);
-      let recoveredBlue = Math.min(255, blue / alpha);
-      const recoveredGreen = Math.min(
+      let recoveredRed = Math.min(
         255,
-        Math.max(0, (green - (1 - alpha) * 255) / alpha),
+        Math.max(0, (red - (1 - alpha) * screen.red) / alpha),
       );
-      const greenLimit = isKeyEdge
-        ? (recoveredRed + recoveredBlue) / 2
-        : Math.max(recoveredRed, recoveredBlue);
-      const cleanedGreen = Math.min(recoveredGreen, greenLimit);
-      if (isKeyEdge && cleanedGreen < recoveredGreen) {
-        const removedSpill = recoveredGreen - cleanedGreen;
-        recoveredRed = Math.min(255, recoveredRed + removedSpill * 0.15);
-        recoveredBlue = Math.min(255, recoveredBlue + removedSpill * 0.15);
+      let recoveredGreen = Math.min(
+        255,
+        Math.max(0, (green - (1 - alpha) * screen.green) / alpha),
+      );
+      let recoveredBlue = Math.min(
+        255,
+        Math.max(0, (blue - (1 - alpha) * screen.blue) / alpha),
+      );
+      if (screenIsGreen && isKeyEdge) {
+        const greenLimit = (recoveredRed + recoveredBlue) / 2;
+        if (recoveredGreen > greenLimit) {
+          const removedSpill = recoveredGreen - greenLimit;
+          recoveredGreen = greenLimit;
+          recoveredRed = Math.min(255, recoveredRed + removedSpill * 0.15);
+          recoveredBlue = Math.min(255, recoveredBlue + removedSpill * 0.15);
+        }
       }
       output[offset] = Math.round(recoveredRed);
-      output[offset + 1] = Math.round(cleanedGreen);
+      output[offset + 1] = Math.round(recoveredGreen);
       output[offset + 2] = Math.round(recoveredBlue);
     }
     output[offset + 3] = Math.round(alpha * 255);
@@ -198,7 +299,15 @@ export async function extractDifferenceMatte(
 
 export async function extractGreenScreen(image: Buffer) {
   const pixels = await rgbaSquare(image);
-  return encodeRgbaPng(
-    extractGreenScreenPixels(pixels, outputSize, outputSize),
-  );
+  const extracted = extractGreenScreenPixels(pixels, outputSize, outputSize);
+  let transparentPixelCount = 0;
+  for (let offset = 3; offset < extracted.length; offset += 4) {
+    if (extracted[offset]! <= 4) transparentPixelCount += 1;
+  }
+  if (transparentPixelCount < outputSize * outputSize * 0.01) {
+    throw new Error(
+      "The generated screen background could not be separated reliably. Try difference matting or regenerate the cover.",
+    );
+  }
+  return encodeRgbaPng(extracted);
 }

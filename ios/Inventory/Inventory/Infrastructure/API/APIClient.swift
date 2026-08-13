@@ -53,6 +53,14 @@ public enum APIClientError: Error, LocalizedError, Sendable {
 public final class APIClient: Sendable {
     public let serverURL: URL
     public let apiBaseURL: URL
+    public let organizationID: UUID?
+    public let principalIdentifier: String?
+
+    public var contextIdentifier: String {
+        let organization = organizationID?.uuidString.lowercased() ?? "legacy"
+        let principal = principalIdentifier ?? "anonymous"
+        return "\(serverURL.absoluteString)#\(organization)#\(principal)"
+    }
 
     private let credentialStore: any CredentialStore
     private let session: URLSession
@@ -66,6 +74,8 @@ public final class APIClient: Sendable {
     public init(
         serverURL: URL,
         credentialStore: any CredentialStore,
+        organizationID: UUID? = nil,
+        principalIdentifier: String? = nil,
         session: URLSession? = nil,
         onUnauthorized: (@Sendable () async -> Void)? = nil
     ) throws {
@@ -76,6 +86,8 @@ public final class APIClient: Sendable {
         self.apiBaseURL = normalizedURL
             .appendingPathComponent("api", isDirectory: true)
             .appendingPathComponent("v1", isDirectory: true)
+        self.organizationID = organizationID
+        self.principalIdentifier = principalIdentifier
         self.credentialStore = credentialStore
         if let session {
             // Preserve the injected configuration (including URLProtocol test doubles),
@@ -131,6 +143,24 @@ public final class APIClient: Sendable {
     public func capabilities() async throws -> CapabilitiesResponse {
         let url = try makeAPIURL(path: ["auth", "capabilities"])
         let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func organizations() async throws -> OrganizationListResponse {
+        let url = try makeAPIURL(path: ["organizations"])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func selectOrganization(id: UUID) async throws -> OrganizationSelectionResponse {
+        let url = try makeAPIURL(path: ["organizations", "select"])
+        let request = try await jsonRequest(
+            url: url,
+            method: "POST",
+            body: OrganizationSelectionRequest(
+                organizationID: id.uuidString.lowercased()
+            )
+        )
         return try await execute(request)
     }
 
@@ -808,15 +838,19 @@ public final class APIClient: Sendable {
     /// are never sent to an absolute media URL on another origin.
     public func mediaRequest(for media: InventoryMedia) async throws -> URLRequest {
         let url = try resolveMediaURL(media.url)
+        let isProtectedInventoryMedia = isSameOrigin(url)
         var request = URLRequest(
             url: url,
-            cachePolicy: .returnCacheDataElseLoad,
+            cachePolicy: isProtectedInventoryMedia
+                ? .reloadIgnoringLocalCacheData
+                : .returnCacheDataElseLoad,
             timeoutInterval: 60
         )
         request.setValue(media.mimeType, forHTTPHeaderField: "Accept")
-        if isSameOrigin(url) {
+        if isProtectedInventoryMedia {
             let token = try await requiredBearerToken()
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            setOrganizationHeader(on: &request)
         }
         return request
     }
@@ -1059,7 +1093,16 @@ public final class APIClient: Sendable {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        setOrganizationHeader(on: &request)
         return request
+    }
+
+    private func setOrganizationHeader(on request: inout URLRequest) {
+        guard let organizationID else { return }
+        request.setValue(
+            organizationID.uuidString.lowercased(),
+            forHTTPHeaderField: "X-Organization-ID"
+        )
     }
 
     private func requiredBearerToken() async throws -> String {
@@ -1324,6 +1367,14 @@ private struct LoginRequest: Encodable, Sendable {
     let email: String
     let password: String
     let deviceName: String?
+}
+
+struct OrganizationSelectionRequest: Encodable, Sendable {
+    let organizationID: String
+
+    private enum CodingKeys: String, CodingKey {
+        case organizationID = "organizationId"
+    }
 }
 
 public enum CoverTransparencyMethod: String, Codable, Sendable {

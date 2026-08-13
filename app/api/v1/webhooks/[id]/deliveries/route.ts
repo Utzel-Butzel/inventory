@@ -16,7 +16,11 @@ export async function GET(request: Request, context: Context) {
   if (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1) {
     return Response.json({ error: "Invalid delivery limit." }, { status: 422 });
   }
-  const deliveries = await listWebhookDeliveries(id, requestedLimit);
+  const deliveries = await listWebhookDeliveries(
+    authorization.identity.organizationId,
+    id,
+    requestedLimit,
+  );
   if (!deliveries) return Response.json({ error: "Not found" }, { status: 404 });
   return Response.json({ deliveries }, { headers: { "Cache-Control": "no-store" } });
 }
