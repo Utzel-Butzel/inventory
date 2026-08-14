@@ -342,12 +342,12 @@
 }
 
 @media print {
-  :global([data-label-designer]) {
+  .page :global([data-label-designer]) {
     display: none !important;
   }
 
-  :global(html),
-  :global(body) {
+  :global(html):has(.page),
+  :global(body):has(.page) {
     width: auto !important;
     min-width: 0 !important;
     margin: 0 !important;
@@ -355,12 +355,12 @@
     background: #fff !important;
   }
 
-  :global(body aside),
-  :global(body header) {
+  :global(body):has(.page) :global(aside),
+  :global(body):has(.page) :global(header) {
     display: none !important;
   }
 
-  :global(body > div > div) {
+  :global(body):has(.page) > :global(div) > :global(div) {
     padding-left: 0 !important;
   }
 
