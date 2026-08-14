@@ -288,6 +288,19 @@ private struct RoomSceneViewport: UIViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject {
+        private enum TexturePattern {
+            case plaster
+            case grain
+            case speckle
+        }
+
+        private struct SurfaceRect {
+            let left: Float
+            let right: Float
+            let bottom: Float
+            let top: Float
+        }
+
         struct MarkerStyle {
             let node: SCNNode
             let dotMaterial: SCNMaterial
@@ -302,6 +315,30 @@ private struct RoomSceneViewport: UIViewRepresentable {
         private var cameraNode: SCNNode?
         private var sceneCenter = SCNVector3Zero
         private var sceneRadius: Float = 1.5
+        private lazy var wallTexture = proceduralTexture(
+            base: (242, 239, 233),
+            variation: 7,
+            pattern: .plaster,
+            seed: 11
+        )
+        private lazy var floorTexture = proceduralTexture(
+            base: (112, 91, 69),
+            variation: 15,
+            pattern: .grain,
+            seed: 43
+        )
+        private lazy var doorTexture = proceduralTexture(
+            base: (177, 137, 96),
+            variation: 18,
+            pattern: .grain,
+            seed: 59
+        )
+        private lazy var objectTexture = proceduralTexture(
+            base: (246, 242, 235),
+            variation: 9,
+            pattern: .speckle,
+            seed: 71
+        )
 
         init(parent: RoomSceneViewport) {
             self.parent = parent
@@ -314,7 +351,7 @@ private struct RoomSceneViewport: UIViewRepresentable {
 
             let scene = makeScene(from: parent.manifest)
             view.scene = scene
-            view.backgroundColor = UIColor(red: 0.94, green: 0.95, blue: 0.96, alpha: 1)
+            view.backgroundColor = UIColor(red: 0.953, green: 0.961, blue: 0.969, alpha: 1)
             view.allowsCameraControl = true
             configureInteractionTracking(for: view)
             view.defaultCameraController.interactionMode = .orbitTurntable
@@ -349,9 +386,17 @@ private struct RoomSceneViewport: UIViewRepresentable {
 
         private func makeScene(from manifest: SpatialRoomSceneManifest) -> SCNScene {
             let scene = SCNScene()
-            scene.background.contents = UIColor(red: 0.94, green: 0.95, blue: 0.96, alpha: 1)
+            let background = UIColor(red: 0.953, green: 0.961, blue: 0.969, alpha: 1)
+            scene.background.contents = background
+            scene.fogColor = background
+            scene.fogStartDistance = 18
+            scene.fogEndDistance = 55
 
-            addLights(to: scene.rootNode)
+            let framedBounds = transformedBounds(for: manifest.scan.scene)
+            sceneCenter = framedBounds.center
+            let size = framedBounds.size
+            sceneRadius = max(sqrt(size.x * size.x + size.y * size.y + size.z * size.z) * 0.5, 1.5)
+            addLights(to: scene.rootNode, center: sceneCenter, radius: sceneRadius)
 
             let webRoot = SCNNode()
             webRoot.simdTransform = matrix(from: manifest.scan.scene.webFromWorld)
@@ -361,8 +406,22 @@ private struct RoomSceneViewport: UIViewRepresentable {
             modelRoot.simdTransform = matrix(from: manifest.scan.scene.worldFromModel)
             webRoot.addChildNode(modelRoot)
 
+            let aperturesByWall = wallApertures(manifest.scan.scene.surfaces)
             for surface in manifest.scan.scene.surfaces {
-                modelRoot.addChildNode(makeSurfaceNode(surface))
+                switch surface.category {
+                case "wall":
+                    modelRoot.addChildNode(
+                        makeWallNode(surface, apertures: aperturesByWall[surface.id] ?? [])
+                    )
+                case "door":
+                    modelRoot.addChildNode(makeDoorNode(surface))
+                case "window":
+                    modelRoot.addChildNode(makeWindowNode(surface))
+                case "opening":
+                    modelRoot.addChildNode(makeOpeningNode(surface))
+                default:
+                    modelRoot.addChildNode(makeSurfaceNode(surface))
+                }
             }
             for object in manifest.scan.scene.objects {
                 modelRoot.addChildNode(makeObjectNode(object))
@@ -371,10 +430,6 @@ private struct RoomSceneViewport: UIViewRepresentable {
                 addMarker(for: placement, to: webRoot)
             }
 
-            let framedBounds = transformedBounds(for: manifest.scan.scene)
-            sceneCenter = framedBounds.center
-            let size = framedBounds.size
-            sceneRadius = max(sqrt(size.x * size.x + size.y * size.y + size.z * size.z) * 0.5, 1.5)
             scene.rootNode.addChildNode(makeGrid(for: framedBounds))
 
             let camera = SCNCamera()
@@ -389,29 +444,28 @@ private struct RoomSceneViewport: UIViewRepresentable {
         }
 
         private func makeSurfaceNode(_ surface: SpatialRoomSurface) -> SCNNode {
-            let dimensions = normalizedDimensions(surface.dimensions, minimum: surface.category == "floor" ? 0.025 : 0.035)
+            let minimum = surface.category == "floor" ? 0.025 : 0.035
+            let dimensions = normalizedDimensions(surface.dimensions, minimum: minimum)
             let geometry = SCNBox(
                 width: CGFloat(dimensions.x),
                 height: CGFloat(dimensions.y),
                 length: CGFloat(dimensions.z),
                 chamferRadius: 0
             )
-            let material = SCNMaterial()
-            material.lightingModel = .physicallyBased
-            material.diffuse.contents = surfaceColor(surface.category)
-            material.roughness.contents = 0.9
-            material.metalness.contents = 0.02
-            material.isDoubleSided = true
-            switch surface.category {
-            case "window":
-                material.transparency = 0.28
-            case "opening":
-                material.transparency = 0.12
-            case "wall":
-                material.transparency = 0.72
-            default:
-                material.transparency = 1
-            }
+            let material = surface.category == "floor"
+                ? texturedMaterial(
+                    texture: floorTexture,
+                    repeatX: 6,
+                    repeatY: 4,
+                    roughness: 0.76,
+                    metalness: 0.01
+                )
+                : texturedMaterial(
+                    texture: wallTexture,
+                    repeatX: 5,
+                    repeatY: 5,
+                    roughness: 0.96
+                )
             geometry.materials = [material]
             let node = SCNNode(geometry: geometry)
             node.simdTransform = matrix(from: surface.transform)
@@ -420,27 +474,523 @@ private struct RoomSceneViewport: UIViewRepresentable {
             return node
         }
 
+        private func makeWallNode(
+            _ surface: SpatialRoomSurface,
+            apertures: [SurfaceRect]
+        ) -> SCNNode {
+            let dimensions = normalizedDimensions(surface.dimensions, minimum: 0.035)
+            var pieces = [
+                SurfaceRect(
+                    left: -dimensions.x / 2,
+                    right: dimensions.x / 2,
+                    bottom: -dimensions.y / 2,
+                    top: dimensions.y / 2
+                ),
+            ]
+            for aperture in apertures {
+                pieces = pieces.flatMap { subtract($0, cutout: aperture) }
+            }
+
+            let wall = SCNNode()
+            wall.simdTransform = matrix(from: surface.transform)
+            let material = texturedMaterial(
+                texture: wallTexture,
+                repeatX: 5,
+                repeatY: 5,
+                roughness: 0.96
+            )
+            for piece in pieces {
+                let width = piece.right - piece.left
+                let height = piece.top - piece.bottom
+                guard width > 0.002, height > 0.002 else { continue }
+                let node = boxNode(
+                    size: SCNVector3(width, height, dimensions.z),
+                    position: SCNVector3(
+                        (piece.left + piece.right) / 2,
+                        (piece.bottom + piece.top) / 2,
+                        0
+                    ),
+                    material: material
+                )
+                node.castsShadow = false
+                wall.addChildNode(node)
+            }
+            return wall
+        }
+
+        private func makeDoorNode(_ surface: SpatialRoomSurface) -> SCNNode {
+            let dimensions = normalizedDimensions(surface.dimensions, minimum: 0.065)
+            let width = dimensions.x
+            let height = dimensions.y
+            let measuredDepth = dimensions.z
+            let frameWidth = min(max(min(width, height) * 0.075, 0.035), 0.085)
+            let frameDepth = max(measuredDepth, 0.10)
+            let gap = min(0.012, width * 0.025)
+            let panelWidth = max(width - frameWidth * 2 - gap * 2, 0.025)
+            let panelHeight = max(height - frameWidth - gap * 2, 0.025)
+            // Extend past even an unassociated wall on both sides. This avoids
+            // coplanar faces when RoomPlan reports identical wall/door depths.
+            let panelDepth = min(max(measuredDepth + 0.012, 0.055), 0.085)
+
+            let door = SCNNode()
+            door.simdTransform = matrix(from: surface.transform)
+            let frameMaterial = texturedMaterial(
+                texture: wallTexture,
+                repeatX: 4,
+                repeatY: 4,
+                roughness: 0.78
+            )
+            let panelMaterial = texturedMaterial(
+                texture: doorTexture,
+                repeatX: 4,
+                repeatY: 2,
+                roughness: 0.68,
+                metalness: 0.01
+            )
+            let detailMaterial = coloredMaterial(
+                UIColor(red: 0.753, green: 0.553, blue: 0.365, alpha: 1),
+                roughness: 0.76
+            )
+            let hardwareMaterial = coloredMaterial(
+                UIColor(red: 0.725, green: 0.647, blue: 0.435, alpha: 1),
+                roughness: 0.27,
+                metalness: 0.82
+            )
+
+            addBox(
+                to: door,
+                size: SCNVector3(frameWidth, height, frameDepth),
+                position: SCNVector3(-width / 2 + frameWidth / 2, 0, 0),
+                material: frameMaterial,
+                castsShadow: true
+            )
+            addBox(
+                to: door,
+                size: SCNVector3(frameWidth, height, frameDepth),
+                position: SCNVector3(width / 2 - frameWidth / 2, 0, 0),
+                material: frameMaterial,
+                castsShadow: true
+            )
+            addBox(
+                to: door,
+                size: SCNVector3(width - frameWidth * 2, frameWidth, frameDepth),
+                position: SCNVector3(0, height / 2 - frameWidth / 2, 0),
+                material: frameMaterial,
+                castsShadow: true
+            )
+            addBox(
+                to: door,
+                size: SCNVector3(panelWidth, panelHeight, panelDepth),
+                position: SCNVector3(0, -frameWidth / 2, 0),
+                material: panelMaterial,
+                castsShadow: true
+            )
+
+            if panelWidth > 0.32, panelHeight > 0.75 {
+                let detailDepth: Float = 0.009
+                for direction: Float in [-1, 1] {
+                    for y in [-panelHeight * 0.22, panelHeight * 0.2] {
+                        addBox(
+                            to: door,
+                            size: SCNVector3(panelWidth * 0.68, panelHeight * 0.28, detailDepth),
+                            position: SCNVector3(
+                                0,
+                                y - frameWidth / 2,
+                                direction * (panelDepth / 2 + detailDepth / 2)
+                            ),
+                            material: detailMaterial,
+                            castsShadow: true
+                        )
+                    }
+                }
+            }
+
+            if panelWidth > 0.24, panelHeight > 0.5 {
+                let handleX = panelWidth * 0.34
+                let handleY = -height / 2 + min(1, height * 0.48)
+                let radius = min(max(width * 0.032, 0.018), 0.032)
+                for direction: Float in [-1, 1] {
+                    let rosette = SCNNode(
+                        geometry: SCNCylinder(
+                            radius: CGFloat(radius),
+                            height: 0.014
+                        )
+                    )
+                    rosette.geometry?.materials = [hardwareMaterial]
+                    rosette.position = SCNVector3(
+                        handleX,
+                        handleY,
+                        direction * (panelDepth / 2 + 0.009)
+                    )
+                    rosette.eulerAngles.x = .pi / 2
+                    rosette.castsShadow = true
+                    door.addChildNode(rosette)
+                    addBox(
+                        to: door,
+                        size: SCNVector3(radius * 2.6, radius * 0.48, 0.018),
+                        position: SCNVector3(
+                            handleX - radius * 0.8,
+                            handleY,
+                            direction * (panelDepth / 2 + 0.022)
+                        ),
+                        material: hardwareMaterial,
+                        castsShadow: true
+                    )
+                }
+            }
+            return door
+        }
+
+        private func makeWindowNode(_ surface: SpatialRoomSurface) -> SCNNode {
+            let dimensions = normalizedDimensions(surface.dimensions, minimum: 0.045)
+            let width = dimensions.x
+            let height = dimensions.y
+            let frameWidth = min(max(min(width, height) * 0.085, 0.032), 0.075)
+            let frameDepth = max(dimensions.z, 0.085)
+            let glassWidth = max(width - frameWidth * 2, 0.02)
+            let glassHeight = max(height - frameWidth * 2, 0.02)
+
+            let window = SCNNode()
+            window.simdTransform = matrix(from: surface.transform)
+            let frameMaterial = coloredMaterial(
+                UIColor(red: 0.906, green: 0.918, blue: 0.922, alpha: 1),
+                roughness: 0.50,
+                metalness: 0.06
+            )
+            let glassMaterial = coloredMaterial(
+                UIColor(red: 0.510, green: 0.706, blue: 0.784, alpha: 1),
+                roughness: 0.12,
+                transparency: 0.46
+            )
+            glassMaterial.writesToDepthBuffer = false
+            glassMaterial.blendMode = .alpha
+
+            addBox(to: window, size: SCNVector3(frameWidth, height, frameDepth), position: SCNVector3(-width / 2 + frameWidth / 2, 0, 0), material: frameMaterial)
+            addBox(to: window, size: SCNVector3(frameWidth, height, frameDepth), position: SCNVector3(width / 2 - frameWidth / 2, 0, 0), material: frameMaterial)
+            addBox(to: window, size: SCNVector3(glassWidth, frameWidth, frameDepth), position: SCNVector3(0, height / 2 - frameWidth / 2, 0), material: frameMaterial)
+            addBox(to: window, size: SCNVector3(glassWidth, frameWidth, frameDepth), position: SCNVector3(0, -height / 2 + frameWidth / 2, 0), material: frameMaterial)
+            addBox(
+                to: window,
+                size: SCNVector3(glassWidth, glassHeight, 0.012),
+                position: SCNVector3Zero,
+                material: glassMaterial
+            )
+            return window
+        }
+
+        private func makeOpeningNode(_ surface: SpatialRoomSurface) -> SCNNode {
+            let dimensions = normalizedDimensions(surface.dimensions, minimum: 0.035)
+            let width = dimensions.x
+            let height = dimensions.y
+            let trimWidth = min(max(min(width, height) * 0.055, 0.025), 0.055)
+            let depth = max(dimensions.z, 0.075)
+            let opening = SCNNode()
+            opening.simdTransform = matrix(from: surface.transform)
+            let material = coloredMaterial(
+                UIColor(red: 0.851, green: 0.831, blue: 0.792, alpha: 1),
+                roughness: 0.86
+            )
+            addBox(to: opening, size: SCNVector3(trimWidth, height, depth), position: SCNVector3(-width / 2 + trimWidth / 2, 0, 0), material: material)
+            addBox(to: opening, size: SCNVector3(trimWidth, height, depth), position: SCNVector3(width / 2 - trimWidth / 2, 0, 0), material: material)
+            addBox(to: opening, size: SCNVector3(width - trimWidth * 2, trimWidth, depth), position: SCNVector3(0, height / 2 - trimWidth / 2, 0), material: material)
+            return opening
+        }
+
         private func makeObjectNode(_ object: SpatialRoomObject) -> SCNNode {
             let dimensions = normalizedDimensions(object.dimensions, minimum: 0.035)
+            let shortestSide = min(dimensions.x, min(dimensions.y, dimensions.z))
+            let chamfer = min(max(shortestSide * 0.035, 0.008), 0.03)
             let geometry = SCNBox(
                 width: CGFloat(dimensions.x),
                 height: CGFloat(dimensions.y),
                 length: CGFloat(dimensions.z),
-                chamferRadius: 0.015
+                chamferRadius: CGFloat(chamfer)
             )
-            let material = SCNMaterial()
-            material.lightingModel = .physicallyBased
-            material.diffuse.contents = objectColor(object.category)
-            material.roughness.contents = 0.78
-            material.metalness.contents = 0.02
-            material.transparency = 0.78
-            material.isDoubleSided = true
+            let material = texturedMaterial(
+                texture: objectTexture,
+                color: objectColor(object.category),
+                repeatX: 3,
+                repeatY: 3,
+                roughness: 0.70,
+                metalness: 0.025
+            )
             geometry.materials = [material]
             let node = SCNNode(geometry: geometry)
             node.simdTransform = matrix(from: object.transform)
             node.castsShadow = true
             node.categoryBitMask = 1
             return node
+        }
+
+        private func boxNode(
+            size: SCNVector3,
+            position: SCNVector3,
+            material: SCNMaterial
+        ) -> SCNNode {
+            let geometry = SCNBox(
+                width: CGFloat(max(size.x, 0.002)),
+                height: CGFloat(max(size.y, 0.002)),
+                length: CGFloat(max(size.z, 0.002)),
+                chamferRadius: 0
+            )
+            geometry.materials = [material]
+            let node = SCNNode(geometry: geometry)
+            node.position = position
+            node.categoryBitMask = 1
+            return node
+        }
+
+        private func addBox(
+            to parent: SCNNode,
+            size: SCNVector3,
+            position: SCNVector3,
+            material: SCNMaterial,
+            castsShadow: Bool = false
+        ) {
+            let node = boxNode(size: size, position: position, material: material)
+            node.castsShadow = castsShadow
+            parent.addChildNode(node)
+        }
+
+        private func coloredMaterial(
+            _ color: UIColor,
+            roughness: CGFloat,
+            metalness: CGFloat = 0,
+            transparency: CGFloat = 1
+        ) -> SCNMaterial {
+            let material = SCNMaterial()
+            material.lightingModel = .physicallyBased
+            material.diffuse.contents = color
+            material.roughness.contents = roughness
+            material.metalness.contents = metalness
+            material.transparency = transparency
+            material.isDoubleSided = true
+            return material
+        }
+
+        private func texturedMaterial(
+            texture: UIImage,
+            color: UIColor = .white,
+            repeatX: Float,
+            repeatY: Float,
+            roughness: CGFloat,
+            metalness: CGFloat = 0
+        ) -> SCNMaterial {
+            let material = coloredMaterial(
+                color,
+                roughness: roughness,
+                metalness: metalness
+            )
+            material.diffuse.contents = texture
+            material.diffuse.wrapS = .repeat
+            material.diffuse.wrapT = .repeat
+            material.diffuse.minificationFilter = .linear
+            material.diffuse.magnificationFilter = .linear
+            material.diffuse.mipFilter = .linear
+            material.diffuse.maxAnisotropy = 8
+            material.diffuse.contentsTransform = SCNMatrix4MakeScale(repeatX, repeatY, 1)
+            material.multiply.contents = color
+            return material
+        }
+
+        private func proceduralTexture(
+            base: (Int, Int, Int),
+            variation: Int,
+            pattern: TexturePattern,
+            seed: Int
+        ) -> UIImage {
+            let size = 128
+            var pixels = [UInt8](repeating: 255, count: size * size * 4)
+            for y in 0 ..< size {
+                for x in 0 ..< size {
+                    let value = patternValue(pattern, x: x, y: y, seed: seed)
+                    let offset = Int((value * Double(variation)).rounded())
+                    let index = (y * size + x) * 4
+                    pixels[index] = UInt8(clamping: base.0 + offset)
+                    pixels[index + 1] = UInt8(clamping: base.1 + offset)
+                    pixels[index + 2] = UInt8(clamping: base.2 + offset)
+                }
+            }
+
+            let data = Data(pixels) as CFData
+            guard let provider = CGDataProvider(data: data),
+                  let image = CGImage(
+                    width: size,
+                    height: size,
+                    bitsPerComponent: 8,
+                    bitsPerPixel: 32,
+                    bytesPerRow: size * 4,
+                    space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGBitmapInfo(
+                        rawValue: CGImageAlphaInfo.last.rawValue
+                    ),
+                    provider: provider,
+                    decode: nil,
+                    shouldInterpolate: true,
+                    intent: .defaultIntent
+                  ) else {
+                return UIImage()
+            }
+            return UIImage(cgImage: image)
+        }
+
+        private func patternValue(
+            _ pattern: TexturePattern,
+            x: Int,
+            y: Int,
+            seed: Int
+        ) -> Double {
+            let fine = textureNoise(x: x, y: y, seed: seed) * 2 - 1
+            let broad = textureNoise(x: x / 9, y: y / 9, seed: seed + 17) * 2 - 1
+            switch pattern {
+            case .grain:
+                let grain = sin(Double(x) * 0.38 + sin(Double(y) * 0.09 + Double(seed)) * 2.4)
+                return grain * 0.68 + fine * 0.2 + broad * 0.12
+            case .plaster:
+                return fine * 0.36 + broad * 0.64
+            case .speckle:
+                return fine * 0.7 + broad * 0.3
+            }
+        }
+
+        private func textureNoise(x: Int, y: Int, seed: Int) -> Double {
+            let value = sin(
+                Double(x) * 12.9898 +
+                    Double(y) * 78.233 +
+                    Double(seed) * 37.719
+            ) * 43_758.5453
+            return value - floor(value)
+        }
+
+        private func wallApertures(
+            _ surfaces: [SpatialRoomSurface]
+        ) -> [UUID: [SurfaceRect]] {
+            let walls = surfaces.filter { $0.category == "wall" }
+            let apertures = surfaces.filter {
+                ["door", "window", "opening"].contains($0.category)
+            }
+            var matches: [UUID: [SurfaceRect]] = [:]
+
+            for aperture in apertures {
+                let apertureDimensions = normalizedDimensions(aperture.dimensions, minimum: 0.04)
+                var best: (wall: SpatialRoomSurface, rect: SurfaceRect, score: Float)?
+
+                for wall in walls {
+                    let wallDimensions = normalizedDimensions(wall.dimensions, minimum: 0.04)
+                    let wallFromAperture = simd_inverse(matrix(from: wall.transform)) *
+                        matrix(from: aperture.transform)
+                    let rawNormal = wallFromAperture * SIMD4<Float>(0, 0, 1, 0)
+                    let normalLength = max(simd_length(SIMD3(rawNormal.x, rawNormal.y, rawNormal.z)), 0.001)
+                    let normalAlignment = abs(rawNormal.z / normalLength)
+                    guard normalAlignment >= 0.82 else { continue }
+
+                    let localCorners = [
+                        SIMD4<Float>(-apertureDimensions.x / 2, -apertureDimensions.y / 2, 0, 1),
+                        SIMD4<Float>(apertureDimensions.x / 2, -apertureDimensions.y / 2, 0, 1),
+                        SIMD4<Float>(apertureDimensions.x / 2, apertureDimensions.y / 2, 0, 1),
+                        SIMD4<Float>(-apertureDimensions.x / 2, apertureDimensions.y / 2, 0, 1),
+                    ]
+                    let corners = localCorners.map { wallFromAperture * $0 }
+                    let planeDistance = corners.map { abs($0.z) }.max() ?? .greatestFiniteMagnitude
+                    guard planeDistance <= 0.24 else { continue }
+
+                    let projected = SurfaceRect(
+                        left: corners.map(\.x).min() ?? 0,
+                        right: corners.map(\.x).max() ?? 0,
+                        bottom: corners.map(\.y).min() ?? 0,
+                        top: corners.map(\.y).max() ?? 0
+                    )
+                    let wallBounds = SurfaceRect(
+                        left: -wallDimensions.x / 2,
+                        right: wallDimensions.x / 2,
+                        bottom: -wallDimensions.y / 2,
+                        top: wallDimensions.y / 2
+                    )
+                    let overlapWidth = min(projected.right, wallBounds.right) -
+                        max(projected.left, wallBounds.left)
+                    let overlapHeight = min(projected.top, wallBounds.top) -
+                        max(projected.bottom, wallBounds.bottom)
+                    guard overlapWidth >= 0.04, overlapHeight >= 0.04 else { continue }
+
+                    let outside =
+                        max(0, wallBounds.left - projected.left) +
+                        max(0, projected.right - wallBounds.right) +
+                        max(0, wallBounds.bottom - projected.bottom) +
+                        max(0, projected.top - wallBounds.top)
+                    let padding: Float = 0.012
+                    let rect = SurfaceRect(
+                        left: max(wallBounds.left, projected.left - padding),
+                        right: min(wallBounds.right, projected.right + padding),
+                        bottom: max(wallBounds.bottom, projected.bottom - padding),
+                        top: min(wallBounds.top, projected.top + padding)
+                    )
+                    let score = planeDistance * 5 + (1 - normalAlignment) * 2 + outside * 3
+                    if best == nil || score < best!.score {
+                        best = (wall, rect, score)
+                    }
+                }
+
+                if let best {
+                    matches[best.wall.id, default: []].append(best.rect)
+                }
+            }
+            return matches
+        }
+
+        private func subtract(_ source: SurfaceRect, cutout: SurfaceRect) -> [SurfaceRect] {
+            let overlap = SurfaceRect(
+                left: max(source.left, cutout.left),
+                right: min(source.right, cutout.right),
+                bottom: max(source.bottom, cutout.bottom),
+                top: min(source.top, cutout.top)
+            )
+            guard overlap.right - overlap.left > 0.001,
+                  overlap.top - overlap.bottom > 0.001 else {
+                return [source]
+            }
+
+            var pieces: [SurfaceRect] = []
+            if overlap.left - source.left > 0.001 {
+                pieces.append(
+                    SurfaceRect(
+                        left: source.left,
+                        right: overlap.left,
+                        bottom: source.bottom,
+                        top: source.top
+                    )
+                )
+            }
+            if source.right - overlap.right > 0.001 {
+                pieces.append(
+                    SurfaceRect(
+                        left: overlap.right,
+                        right: source.right,
+                        bottom: source.bottom,
+                        top: source.top
+                    )
+                )
+            }
+            if overlap.bottom - source.bottom > 0.001 {
+                pieces.append(
+                    SurfaceRect(
+                        left: overlap.left,
+                        right: overlap.right,
+                        bottom: source.bottom,
+                        top: overlap.bottom
+                    )
+                )
+            }
+            if source.top - overlap.top > 0.001 {
+                pieces.append(
+                    SurfaceRect(
+                        left: overlap.left,
+                        right: overlap.right,
+                        bottom: overlap.top,
+                        top: source.top
+                    )
+                )
+            }
+            return pieces
         }
 
         private func addMarker(for placement: SpatialRoomPlacement, to root: SCNNode) {
@@ -571,26 +1121,69 @@ private struct RoomSceneViewport: UIViewRepresentable {
             "inventory-marker:\(id.uuidString.lowercased())"
         }
 
-        private func addLights(to root: SCNNode) {
+        private func addLights(
+            to root: SCNNode,
+            center: SCNVector3,
+            radius: Float
+        ) {
             let ambient = SCNLight()
             ambient.type = .ambient
-            ambient.color = UIColor(white: 0.92, alpha: 1)
-            ambient.intensity = 650
+            ambient.color = UIColor(red: 1, green: 0.98, blue: 0.945, alpha: 1)
+            ambient.intensity = 480
             let ambientNode = SCNNode()
             ambientNode.light = ambient
             root.addChildNode(ambientNode)
 
             let sun = SCNLight()
             sun.type = .directional
-            sun.color = UIColor.white
-            sun.intensity = 1_250
+            sun.color = UIColor(red: 1, green: 0.945, blue: 0.863, alpha: 1)
+            sun.intensity = 1_350
             sun.castsShadow = true
-            sun.shadowRadius = 4
-            sun.shadowColor = UIColor.black.withAlphaComponent(0.18)
+            sun.shadowMapSize = CGSize(width: 2_048, height: 2_048)
+            sun.shadowSampleCount = 16
+            sun.shadowBias = 0.004
+            sun.shadowRadius = 8
+            sun.shadowColor = UIColor.black.withAlphaComponent(0.20)
+            sun.orthographicScale = Double(radius * 2.9)
+            sun.zNear = Double(max(0.1, radius * 0.05))
+            sun.zFar = Double(max(20, radius * 6))
             let sunNode = SCNNode()
             sunNode.light = sun
-            sunNode.eulerAngles = SCNVector3(-0.95, 0.65, 0)
+            sunNode.position = center + SCNVector3(radius * 1.25, radius * 2.4, radius * 1.15)
+            sunNode.look(
+                at: center,
+                up: SCNVector3(0, 1, 0),
+                localFront: SCNVector3(0, 0, -1)
+            )
             root.addChildNode(sunNode)
+
+            let fill = SCNLight()
+            fill.type = .directional
+            fill.color = UIColor(red: 0.863, green: 0.925, blue: 1, alpha: 1)
+            fill.intensity = 520
+            let fillNode = SCNNode()
+            fillNode.light = fill
+            fillNode.position = center + SCNVector3(-radius * 1.6, radius * 1.1, -radius * 0.9)
+            fillNode.look(
+                at: center,
+                up: SCNVector3(0, 1, 0),
+                localFront: SCNVector3(0, 0, -1)
+            )
+            root.addChildNode(fillNode)
+
+            let rim = SCNLight()
+            rim.type = .directional
+            rim.color = UIColor(red: 1, green: 0.886, blue: 0.761, alpha: 1)
+            rim.intensity = 300
+            let rimNode = SCNNode()
+            rimNode.light = rim
+            rimNode.position = center + SCNVector3(radius * 0.25, radius * 1.4, -radius * 1.8)
+            rimNode.look(
+                at: center,
+                up: SCNVector3(0, 1, 0),
+                localFront: SCNVector3(0, 0, -1)
+            )
+            root.addChildNode(rimNode)
         }
 
         private func makeGrid(for bounds: SceneBounds) -> SCNNode {
@@ -674,26 +1267,25 @@ private struct RoomSceneViewport: UIViewRepresentable {
             )
         }
 
-        private func surfaceColor(_ category: String) -> UIColor {
-            switch category {
-            case "wall": UIColor(red: 0.76, green: 0.80, blue: 0.84, alpha: 1)
-            case "floor": UIColor(red: 0.63, green: 0.68, blue: 0.73, alpha: 1)
-            case "door": UIColor(red: 0.60, green: 0.40, blue: 0.25, alpha: 1)
-            case "window": UIColor(red: 0.34, green: 0.67, blue: 0.84, alpha: 1)
-            case "opening": UIColor(red: 0.48, green: 0.54, blue: 0.62, alpha: 1)
-            default: UIColor(red: 0.69, green: 0.72, blue: 0.76, alpha: 1)
-            }
-        }
-
         private func objectColor(_ category: String) -> UIColor {
             switch category {
-            case "storage": UIColor(red: 0.48, green: 0.40, blue: 0.31, alpha: 1)
-            case "table": UIColor(red: 0.61, green: 0.43, blue: 0.28, alpha: 1)
-            case "chair": UIColor(red: 0.39, green: 0.48, blue: 0.39, alpha: 1)
-            case "sofa": UIColor(red: 0.38, green: 0.43, blue: 0.58, alpha: 1)
-            case "bed": UIColor(red: 0.55, green: 0.49, blue: 0.65, alpha: 1)
-            case "refrigerator": UIColor(red: 0.56, green: 0.63, blue: 0.70, alpha: 1)
-            default: UIColor(red: 0.55, green: 0.49, blue: 0.43, alpha: 1)
+            case "storage": UIColor(red: 0.718, green: 0.604, blue: 0.447, alpha: 1)
+            case "table": UIColor(red: 0.757, green: 0.584, blue: 0.400, alpha: 1)
+            case "chair": UIColor(red: 0.663, green: 0.529, blue: 0.408, alpha: 1)
+            case "sofa": UIColor(red: 0.529, green: 0.573, blue: 0.659, alpha: 1)
+            case "bed": UIColor(red: 0.678, green: 0.624, blue: 0.733, alpha: 1)
+            case "refrigerator": UIColor(red: 0.761, green: 0.796, blue: 0.820, alpha: 1)
+            case "stove": UIColor(red: 0.455, green: 0.494, blue: 0.525, alpha: 1)
+            case "oven": UIColor(red: 0.451, green: 0.482, blue: 0.510, alpha: 1)
+            case "dishwasher": UIColor(red: 0.667, green: 0.710, blue: 0.741, alpha: 1)
+            case "washer-dryer": UIColor(red: 0.710, green: 0.745, blue: 0.769, alpha: 1)
+            case "sink": UIColor(red: 0.824, green: 0.816, blue: 0.788, alpha: 1)
+            case "toilet": UIColor(red: 0.851, green: 0.843, blue: 0.816, alpha: 1)
+            case "bathtub": UIColor(red: 0.843, green: 0.831, blue: 0.800, alpha: 1)
+            case "fireplace": UIColor(red: 0.612, green: 0.490, blue: 0.408, alpha: 1)
+            case "television": UIColor(red: 0.333, green: 0.361, blue: 0.396, alpha: 1)
+            case "stairs": UIColor(red: 0.624, green: 0.592, blue: 0.533, alpha: 1)
+            default: UIColor(red: 0.690, green: 0.608, blue: 0.518, alpha: 1)
             }
         }
     }
