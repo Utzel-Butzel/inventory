@@ -10,6 +10,7 @@ export type ActiveOrganization = {
   id: string;
   name: string;
   slug: string;
+  isReadOnly: boolean;
 };
 
 export type OrganizationMembershipSummary = ActiveOrganization & {

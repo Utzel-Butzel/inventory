@@ -69,6 +69,12 @@ export async function POST(request: Request) {
       { status: 403, headers: noStoreHeaders },
     );
   }
+  if (identity.organization.isReadOnly) {
+    return Response.json(
+      { error: "This organization is read-only." },
+      { status: 403, headers: noStoreHeaders },
+    );
+  }
 
   let payload: unknown;
   try {

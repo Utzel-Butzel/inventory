@@ -1,7 +1,7 @@
 import "next-auth";
 
 type InventoryUserRole = string;
-type InventoryAuthProvider = "local" | "auth0";
+type InventoryAuthProvider = "local" | "auth0" | "demo";
 
 declare module "next-auth" {
   interface User {

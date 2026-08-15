@@ -80,6 +80,7 @@ export const organizations = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 160 }).notNull(),
     slug: varchar("slug", { length: 80 }).notNull(),
+    isReadOnly: boolean("is_read_only").notNull().default(false),
     createdBy: varchar("created_by", { length: 320 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

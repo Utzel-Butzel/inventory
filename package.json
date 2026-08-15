@@ -27,6 +27,8 @@
     "test:scanner": "node --experimental-strip-types --test tests/barcode-scanner-contract.test.mjs",
     "test:notifications": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/notification-policy.test.mjs",
     "test:deployment": "node --test tests/bootstrap-credential.test.mjs",
+    "test:demo-seed": "node --test tests/demo-seed-manifest.test.mjs",
+    "test:demo-read-only": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/organization-read-only.test.mjs",
     "test:webhooks": "node --experimental-strip-types --test tests/webhook-contract.test.mjs",
     "test:exports": "node --experimental-strip-types --test tests/inventory-export.test.mjs",
     "qa:exports": "node --experimental-strip-types scripts/generate-sample-inventory-exports.mjs",
@@ -38,6 +40,8 @@
     "db:tunnel": "node scripts/db-tunnel.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "node scripts/seed.mjs",
+    "db:seed:demo": "node scripts/seed-demo.mjs",
+    "db:seed:demo:remove": "node scripts/seed-demo.mjs --remove",
     "smoke:assemblies-orders": "node scripts/smoke-assemblies-orders.mjs",
     "auth:hash": "node scripts/hash-password.mjs"
   },

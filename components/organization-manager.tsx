@@ -14,8 +14,11 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
 
-import { Badge, Button, Card, EmptyState, Skeleton } from "@/components/ui";
-import { useOrganizationHref } from "@/components/organization-routing";
+import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
+import {
+  useOrganizationHref,
+  useOrganizationReadOnly,
+} from "@/components/organization-routing";
 import { organizationPath } from "@/lib/organization-path";
 
 type ManagedOrganization = {
@@ -58,6 +61,7 @@ function roleFallback(role: string) {
 export function OrganizationManager() {
   const { t } = useT("settings");
   const organizationHref = useOrganizationHref();
+  const isReadOnly = useOrganizationReadOnly();
   const [organizations, setOrganizations] = useState<ManagedOrganization[]>([]);
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -203,7 +207,13 @@ export function OrganizationManager() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
+    <div
+      className={cn(
+        "grid gap-6",
+        !isReadOnly &&
+          "xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]",
+      )}
+    >
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">
@@ -299,8 +309,10 @@ export function OrganizationManager() {
                 const active = organization.id === activeOrganizationId;
                 const editing = editingId === organization.id;
                 const canManage =
-                  organization.canManage ??
-                  (organization.role === "admin" || organization.role === "owner");
+                  !isReadOnly &&
+                  (organization.canManage ??
+                    (organization.role === "admin" ||
+                      organization.role === "owner"));
                 return (
                   <article key={organization.id} className="rounded-2xl px-3 py-4 transition hover:bg-surface-subtle sm:px-4">
                     {editing ? (
@@ -358,7 +370,7 @@ export function OrganizationManager() {
         </div>
       </Card>
 
-      <Card className="h-fit overflow-hidden">
+      {!isReadOnly ? <Card className="h-fit overflow-hidden">
         <div className="border-b border-border px-5 py-5 sm:px-6">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -411,7 +423,7 @@ export function OrganizationManager() {
             {t("organizations.create.hint")}
           </div>
         )}
-      </Card>
+      </Card> : null}
     </div>
   );
 }
