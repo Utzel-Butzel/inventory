@@ -29,6 +29,7 @@
     "test:deployment": "node --test tests/bootstrap-credential.test.mjs",
     "test:demo-seed": "node --test tests/demo-seed-manifest.test.mjs",
     "test:demo-read-only": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/organization-read-only.test.mjs",
+    "test:route-motion": "node --test tests/route-motion.test.mjs",
     "test:webhooks": "node --experimental-strip-types --test tests/webhook-contract.test.mjs",
     "test:exports": "node --experimental-strip-types --test tests/inventory-export.test.mjs",
     "qa:exports": "node --experimental-strip-types scripts/generate-sample-inventory-exports.mjs",

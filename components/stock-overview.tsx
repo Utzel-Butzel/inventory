@@ -458,7 +458,7 @@ export function StockOverview() {
     <div className="mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <StockSectionNav />
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div className="animate-fade-up">
+        <div>
           <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
             <Warehouse className="size-3.5 text-brand" aria-hidden="true" />
             {t("overview.eyebrow")}
@@ -525,7 +525,7 @@ export function StockOverview() {
       ) : null}
 
       {!loading && !error ? (
-        <div className="space-y-5 animate-fade-up animation-delay-1">
+        <div className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {[
               {
