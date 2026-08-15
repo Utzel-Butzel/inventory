@@ -14,6 +14,7 @@ import {
   organizationPath,
   stripOrganizationPathname,
 } from "@/lib/organization-path";
+import { ORGANIZATION_HEADER } from "@/lib/organizations";
 import { getResources, getT } from "@/lib/ui-i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +54,8 @@ export default async function DashboardLayout({
   if (!organizationIdentity.organization) redirect("/login");
   const originalPath =
     requestHeaders.get("x-inventory-original-path") ?? "/dashboard";
-  if (!organizationIdFromPathname(originalPath)) {
+  const routedOrganizationId = requestHeaders.get(ORGANIZATION_HEADER);
+  if (!organizationIdFromPathname(originalPath) && !routedOrganizationId) {
     const [pathname, query] = originalPath.split("?", 2);
     redirect(
       `${organizationPath(identity.organizationId, stripOrganizationPathname(pathname))}${query ? `?${query}` : ""}`,
@@ -69,12 +71,18 @@ export default async function DashboardLayout({
         },
       ];
   const resources = getResources(translation.i18n);
+  const configuredWebsiteUrl = process.env.WEBSITE_URL?.trim();
+  const websiteUrl =
+    configuredWebsiteUrl && /^https?:\/\//i.test(configuredWebsiteUrl)
+      ? configuredWebsiteUrl
+      : "https://github.com/Utzel-Butzel/open-inventory-website";
 
   return (
     <UiI18nProvider language={translation.lng} resources={resources}>
       <AppShell
         organization={organizationIdentity.organization}
         organizations={organizations}
+        websiteUrl={websiteUrl}
         user={{
           name: identity.name,
           email: identity.subject,

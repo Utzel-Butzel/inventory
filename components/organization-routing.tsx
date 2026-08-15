@@ -15,30 +15,48 @@ import {
   stripOrganizationPathname,
 } from "@/lib/organization-path";
 
-const OrganizationRoutingContext = createContext<string | null>(null);
+type OrganizationRoutingContextValue = {
+  organizationId: string;
+  isReadOnly: boolean;
+};
+
+const OrganizationRoutingContext =
+  createContext<OrganizationRoutingContextValue | null>(null);
 
 export function OrganizationRoutingProvider({
   organizationId,
+  isReadOnly = false,
   children,
 }: {
   organizationId: string;
+  isReadOnly?: boolean;
   children: ReactNode;
 }) {
   return (
-    <OrganizationRoutingContext.Provider value={organizationId}>
+    <OrganizationRoutingContext.Provider value={{ organizationId, isReadOnly }}>
       {children}
     </OrganizationRoutingContext.Provider>
   );
 }
 
 export function useOrganizationId() {
-  const organizationId = useContext(OrganizationRoutingContext);
-  if (!organizationId) {
+  const organization = useContext(OrganizationRoutingContext);
+  if (!organization) {
     throw new Error(
       "Organization routing must be used inside OrganizationRoutingProvider.",
     );
   }
-  return organizationId;
+  return organization.organizationId;
+}
+
+export function useOrganizationReadOnly() {
+  const organization = useContext(OrganizationRoutingContext);
+  if (!organization) {
+    throw new Error(
+      "Organization routing must be used inside OrganizationRoutingProvider.",
+    );
+  }
+  return organization.isReadOnly;
 }
 
 export function useOrganizationHref() {

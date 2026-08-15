@@ -20,6 +20,7 @@ import {
   notificationInbox,
   notificationPreferences,
   notificationPushSubscriptions,
+  organizations,
   resources,
   stockSettings,
 } from "@/db/schema";
@@ -132,6 +133,62 @@ export async function ensureNotificationPreferences(recipient: Recipient) {
   return preference;
 }
 
+async function readNotificationPreferences(recipient: Recipient) {
+  const [preference] = await db
+    .select()
+    .from(notificationPreferences)
+    .where(
+      and(
+        eq(notificationPreferences.organizationId, recipient.organizationId),
+        eq(notificationPreferences.recipientKey, recipient.key),
+      ),
+    )
+    .limit(1);
+  return preference ?? null;
+}
+
+function defaultNotificationPreference(recipient: Recipient): PreferenceRecord {
+  const timestamp = new Date(0);
+  return {
+    organizationId: recipient.organizationId,
+    recipientKey: recipient.key,
+    recipientEmail:
+      recipient.email?.trim().toLocaleLowerCase("en-US") || null,
+    recipientName: recipient.name?.trim() || null,
+    ...DEFAULT_NOTIFICATION_PREFERENCES,
+    locale: recipient.locale ?? DEFAULT_NOTIFICATION_PREFERENCES.locale,
+    lastDigestAt: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+async function notificationPreferenceForRead(recipient: Recipient) {
+  return (
+    (await readNotificationPreferences(recipient)) ??
+    defaultNotificationPreference(recipient)
+  );
+}
+
+// Background notification jobs must not mutate read-only organizations.
+async function writableNotificationPreferences(organizationId?: string) {
+  const joinCondition = and(
+    eq(organizations.id, notificationPreferences.organizationId),
+    eq(organizations.isReadOnly, false),
+  );
+  const rows = organizationId
+    ? await db
+        .select({ preference: notificationPreferences })
+        .from(notificationPreferences)
+        .innerJoin(organizations, joinCondition)
+        .where(eq(notificationPreferences.organizationId, organizationId))
+    : await db
+        .select({ preference: notificationPreferences })
+        .from(notificationPreferences)
+        .innerJoin(organizations, joinCondition);
+  return rows.map((row) => row.preference);
+}
+
 export function notificationRuntimeConfiguration() {
   const emailTarget = process.env.NOTIFICATION_EMAIL_FROM?.trim() || null;
   const pushSubject = process.env.WEB_PUSH_SUBJECT?.trim() || null;
@@ -168,8 +225,14 @@ export function notificationRuntimeConfiguration() {
   };
 }
 
-export async function getNotificationSettings(recipient: Recipient) {
-  const preference = await ensureNotificationPreferences(recipient);
+export async function getNotificationSettings(
+  recipient: Recipient,
+  options: { initializePreference?: boolean } = {},
+) {
+  const preference =
+    options.initializePreference === false
+      ? await notificationPreferenceForRead(recipient)
+      : await ensureNotificationPreferences(recipient);
   const [{ value: subscriptionCount }] = await db
     .select({ value: count() })
     .from(notificationPushSubscriptions)
@@ -223,9 +286,15 @@ export async function updateNotificationPreferences(
 
 export async function listInbox(
   recipient: Recipient,
-  options: { limit?: number; unreadOnly?: boolean } = {},
+  options: {
+    limit?: number;
+    unreadOnly?: boolean;
+    initializePreference?: boolean;
+  } = {},
 ) {
-  await ensureNotificationPreferences(recipient);
+  if (options.initializePreference !== false) {
+    await ensureNotificationPreferences(recipient);
+  }
   const limit = Math.min(100, Math.max(1, options.limit ?? 30));
   const where = options.unreadOnly
     ? and(
@@ -536,12 +605,7 @@ export async function detectNotifications(
   now = new Date(),
   organizationId?: string,
 ) {
-  const preferences = organizationId
-    ? await db
-        .select()
-        .from(notificationPreferences)
-        .where(eq(notificationPreferences.organizationId, organizationId))
-    : await db.select().from(notificationPreferences);
+  const preferences = await writableNotificationPreferences(organizationId);
   let created = 0;
   for (const preference of preferences) {
     const candidates = await loadCandidates(preference, now);
@@ -824,12 +888,7 @@ export async function dispatchDueDigests(
   now = new Date(),
   organizationId?: string,
 ) {
-  const preferences = organizationId
-    ? await db
-        .select()
-        .from(notificationPreferences)
-        .where(eq(notificationPreferences.organizationId, organizationId))
-    : await db.select().from(notificationPreferences);
+  const preferences = await writableNotificationPreferences(organizationId);
   let sent = 0;
   let failed = 0;
   for (const preference of preferences) {

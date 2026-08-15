@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requireNotificationRecipient, notificationNoStoreHeaders } from "@/lib/notification-api";
+import { requireWritableNotificationRecipient, notificationNoStoreHeaders } from "@/lib/notification-api";
 import { markNotificationRead } from "@/lib/notifications";
 
 const idSchema = z.uuid();
@@ -9,7 +9,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const authorization = await requireNotificationRecipient(request);
+  const authorization = await requireWritableNotificationRecipient(request);
   if (authorization.response) return authorization.response;
   const parsed = idSchema.safeParse((await context.params).id);
   if (!parsed.success) {

@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { OrganizationLink as Link } from "@/components/organization-routing";
+import {
+  OrganizationLink as Link,
+  useOrganizationReadOnly,
+} from "@/components/organization-routing";
 import { useT } from "next-i18next/client";
 import {
   AlertTriangle,
@@ -97,6 +100,7 @@ function DashboardLoading() {
 
 export function DashboardClient() {
   const { t, i18n } = useT("dashboard");
+  const isReadOnly = useOrganizationReadOnly();
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [resources, setResources] = useState<Resource[]>([]);
@@ -226,7 +230,7 @@ export function DashboardClient() {
             {t("subtitle")}
           </p>
         </div>
-        <div className="flex animate-fade-up gap-2 animation-delay-1">
+        {!isReadOnly ? <div className="flex animate-fade-up gap-2 animation-delay-1">
           <Link
             href="/batch"
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-[13px] font-semibold text-foreground shadow-sm transition hover:border-border-strong hover:bg-surface-hover"
@@ -241,7 +245,7 @@ export function DashboardClient() {
             <PackagePlus className="size-4" aria-hidden="true" />
             {t("actions.addItem")}
           </Link>
-        </div>
+        </div> : null}
       </div>
 
       {loading ? <DashboardLoading /> : null}
@@ -411,7 +415,7 @@ export function DashboardClient() {
                   icon={<PackagePlus className="size-5" aria-hidden="true" />}
                   title={t("recent.empty.title")}
                   description={t("recent.empty.description")}
-                  action={
+                  action={!isReadOnly ? (
                     <Link
                       href="/inventory/new"
                       className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand-solid px-3.5 text-[12px] font-semibold text-on-brand shadow-sm hover:bg-brand-hover"
@@ -419,7 +423,7 @@ export function DashboardClient() {
                       <PlusIcon />
                       {t("actions.addFirstItem")}
                     </Link>
-                  }
+                  ) : undefined}
                 />
               )}
             </Card>
@@ -470,7 +474,7 @@ export function DashboardClient() {
                 )}
               </Card>
 
-              <Card className="relative overflow-hidden border-brand-border bg-gradient-to-br from-brand-soft to-surface p-5 sm:p-6">
+              {!isReadOnly ? <Card className="relative overflow-hidden border-brand-border bg-gradient-to-br from-brand-soft to-surface p-5 sm:p-6">
                 <div className="absolute -right-12 -top-14 size-32 rounded-full bg-brand-solid/10 blur-2xl" />
                 <span className="relative grid size-9 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-[var(--shadow-sm)]">
                   <Sparkles className="size-4" aria-hidden="true" />
@@ -488,7 +492,7 @@ export function DashboardClient() {
                   {t("batchCard.action")}
                   <ArrowRight className="size-3.5" aria-hidden="true" />
                 </Link>
-              </Card>
+              </Card> : null}
             </div>
           </div>
         </div>

@@ -33,6 +33,11 @@
     "title": "Benachrichtigungen",
     "open": "Benachrichtigungen öffnen ({{count}} ungelesen)"
   },
+  "demo": {
+    "bannerLabel": "Live-Demo · schreibgeschützt",
+    "bannerDescription": "Du kannst alles ansehen; Änderungen sind deaktiviert.",
+    "backToWebsite": "Zur Produktseite"
+  },
   "badges": {
     "ai": "KI"
   },

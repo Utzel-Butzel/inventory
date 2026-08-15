@@ -11,6 +11,7 @@ export async function GET(request: Request) {
   const result = await listInbox(authorization.recipient, {
     limit: Number.isSafeInteger(parsedLimit) ? parsedLimit : 30,
     unreadOnly: url.searchParams.get("unreadOnly") === "true",
+    initializePreference: !authorization.identity.organization.isReadOnly,
   });
   return Response.json(result, { headers: notificationNoStoreHeaders });
 }

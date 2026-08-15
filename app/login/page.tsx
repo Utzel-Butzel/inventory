@@ -8,13 +8,14 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { auth0Enabled } from "@/auth";
+import { auth0Enabled, demoAccessEnabled } from "@/auth";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { LoginForm } from "@/components/login-form";
 import { LocalizedThemeToggle } from "@/components/theme-toggle";
 import { UiI18nProvider } from "@/components/ui-i18n-provider";
 import { getSessionIdentity } from "@/lib/api-auth";
 import { organizationPath } from "@/lib/organization-path";
+import { PUBLIC_DEMO_ORGANIZATION_ID } from "@/lib/organization-read-only";
 import { getResources, getT } from "@/lib/ui-i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -42,7 +43,10 @@ function safeCallback(value: string | string[] | undefined) {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string | string[] }>;
+  searchParams: Promise<{
+    callbackUrl?: string | string[];
+    demo?: string | string[];
+  }>;
 }) {
   const [identity, translation, resolvedSearchParams] = await Promise.all([
     getSessionIdentity(),
@@ -51,6 +55,14 @@ export default async function LoginPage({
   ]);
   if (identity) redirect(organizationPath(identity.organizationId, "/dashboard"));
   const callbackUrl = safeCallback(resolvedSearchParams.callbackUrl);
+  const demoValue = Array.isArray(resolvedSearchParams.demo)
+    ? resolvedSearchParams.demo[0]
+    : resolvedSearchParams.demo;
+  const demoHighlighted = demoValue === "1" || demoValue === "true";
+  const demoCallbackUrl = organizationPath(
+    PUBLIC_DEMO_ORGANIZATION_ID,
+    "/dashboard",
+  );
   const resources = getResources(translation.i18n, ["auth", "common"]);
   const { t } = translation;
   const analysisTags = ["workshop", "powerTool", "voltage"] as const;
@@ -90,7 +102,10 @@ export default async function LoginPage({
           <div className="mt-9 animate-fade-up animation-delay-1">
             <LoginForm
               auth0Enabled={auth0Enabled}
+              demoEnabled={demoAccessEnabled}
+              demoHighlighted={demoHighlighted}
               callbackUrl={callbackUrl}
+              demoCallbackUrl={demoCallbackUrl}
             />
           </div>
         </div>

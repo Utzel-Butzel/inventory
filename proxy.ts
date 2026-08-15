@@ -58,6 +58,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const routeOrganizationId = organizationIdFromPathname(pathname);
   const internalPathname = stripOrganizationPathname(pathname);
+  const routedOrganizationId = request.headers.get(ORGANIZATION_HEADER)?.trim();
 
   if (
     routeOrganizationId &&
@@ -79,7 +80,10 @@ export function proxy(request: NextRequest) {
     return response;
   }
 
-  if (isOrganizationPagePath(pathname)) {
+  // Rewrites of organization-scoped URLs pass through this proxy again with
+  // the tenant header already attached. Do not canonicalize that internal
+  // route back to the same public URL or it becomes a redirect loop.
+  if (isOrganizationPagePath(pathname) && !routedOrganizationId) {
     const cookieOrganizationId = request.cookies.get(ORGANIZATION_COOKIE)?.value;
     if (cookieOrganizationId && isOrganizationId(cookieOrganizationId)) {
       const redirectUrl = request.nextUrl.clone();

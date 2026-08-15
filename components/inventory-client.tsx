@@ -1,6 +1,9 @@
 "use client";
 
-import { OrganizationLink as Link } from "@/components/organization-routing";
+import {
+  OrganizationLink as Link,
+  useOrganizationReadOnly,
+} from "@/components/organization-routing";
 import { useT } from "next-i18next/client";
 import {
   ArrowRight,
@@ -101,6 +104,7 @@ export function InventoryClient({
   initialQuery?: string;
 }) {
   const { t, i18n } = useT("inventory");
+  const isReadOnly = useOrganizationReadOnly();
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const normalizedInitialQuery = initialQuery.trim();
@@ -219,7 +223,7 @@ export function InventoryClient({
             {t("list.title")}
           </h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        {!isReadOnly ? <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/batch"
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-muted-strong shadow-sm transition hover:border-border-strong hover:bg-surface-subtle"
@@ -232,7 +236,7 @@ export function InventoryClient({
           >
             <Plus size={16} /> {t("actions.addItem")}
           </Link>
-        </div>
+        </div> : null}
       </div>
 
       <section className="mb-5 rounded-2xl border border-border/80 bg-surface p-3 shadow-[var(--shadow-sm)]">
@@ -371,7 +375,7 @@ export function InventoryClient({
               ? t("empty.filteredDescription")
               : t("empty.description")}
           </p>
-          <div className="mt-5 flex gap-2">
+          {activeFilters || !isReadOnly ? <div className="mt-5 flex gap-2">
             {activeFilters ? (
               <button
                 type="button"
@@ -396,7 +400,7 @@ export function InventoryClient({
                 </Link>
               </>
             )}
-          </div>
+          </div> : null}
         </div>
       ) : view === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">

@@ -55,6 +55,11 @@ if (!authUrl) {
 const bootstrapCredential = validateBootstrapCredential();
 errors.push(...bootstrapCredential.errors);
 
+const demoAccessEnabled = value("DEMO_ACCESS_ENABLED").toLowerCase();
+if (demoAccessEnabled && !["true", "false"].includes(demoAccessEnabled)) {
+  errors.push("DEMO_ACCESS_ENABLED must be either true or false when set.");
+}
+
 for (const variableName of [
   "SIMPLE_AUTH_PASSWORD_HASH",
   "BOOTSTRAP_ADMIN_PASSWORD_HASH",
@@ -108,5 +113,9 @@ if (await prepareBootstrapCredential(process.env, bootstrapCredential.password))
 
 console.log("Applying database migrations...");
 await import("./migrate.mjs");
+if (demoAccessEnabled === "true") {
+  console.log("Reconciling the read-only product demo...");
+  await import("./seed-demo.mjs");
+}
 console.log("Database migrations are current. Starting Inventory...");
 await import("../server.js");

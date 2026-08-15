@@ -33,6 +33,11 @@
     "title": "Notifications",
     "open": "Open notifications ({{count}} unread)"
   },
+  "demo": {
+    "bannerLabel": "Live demo · read only",
+    "bannerDescription": "You can explore everything; changes are disabled.",
+    "backToWebsite": "Back to product site"
+  },
   "badges": {
     "ai": "AI"
   },

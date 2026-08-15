@@ -22,6 +22,7 @@ export type OrganizationSummary = {
   id: string;
   name: string;
   slug: string;
+  isReadOnly: boolean;
 };
 
 export type OrganizationMembershipSummary = OrganizationSummary & {
@@ -168,11 +169,15 @@ const canonicalRelationTypes = [
 ] as const;
 
 export const organizationSummary = (
-  organization: Pick<typeof organizations.$inferSelect, "id" | "name" | "slug">,
+  organization: Pick<
+    typeof organizations.$inferSelect,
+    "id" | "name" | "slug" | "isReadOnly"
+  >,
 ): OrganizationSummary => ({
   id: organization.id,
   name: organization.name,
   slug: organization.slug,
+  isReadOnly: organization.isReadOnly,
 });
 
 export async function getOrganization(id: string) {

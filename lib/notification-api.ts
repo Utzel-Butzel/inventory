@@ -45,3 +45,19 @@ export async function requireNotificationRecipient(request: Request) {
     },
   } as const;
 }
+
+export async function requireWritableNotificationRecipient(request: Request) {
+  const authorization = await requireNotificationRecipient(request);
+  if (authorization.response) return authorization;
+  if (authorization.identity.organization.isReadOnly) {
+    return {
+      identity: null,
+      recipient: null,
+      response: Response.json(
+        { error: "This organization is read-only." },
+        { status: 403, headers: notificationNoStoreHeaders },
+      ),
+    } as const;
+  }
+  return authorization;
+}

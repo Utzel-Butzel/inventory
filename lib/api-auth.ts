@@ -4,7 +4,7 @@ import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { createHash } from "node:crypto";
 
-import { auth } from "@/auth";
+import { auth, demoAccessEnabled } from "@/auth";
 import { apiTokens, users, type ResourceRecord, type UserRole } from "@/db/schema";
 import type { ApiScope } from "@/lib/auth-roles";
 import {
@@ -22,6 +22,14 @@ import {
   type AppPermission,
 } from "@/lib/access-control-contract";
 import { db } from "@/lib/db";
+import {
+  isPinnedReadOnlyDemoMembershipSet,
+  organizationAllowsPermission,
+  PUBLIC_DEMO_ORGANIZATION_ID,
+  PUBLIC_DEMO_USER_ID,
+  restrictOrganizationPermissions,
+  restrictOrganizationScopes,
+} from "@/lib/organization-read-only";
 import {
   getOrganization,
   listOrganizationsForUser,
@@ -86,38 +94,78 @@ async function identityForUser(options: {
   allowRequestedFallback?: boolean;
   tokenScopes?: ApiScope[];
   tokenId?: string;
+  demoOrganizationId?: string;
+  demoOrganizationSlug?: string;
 }) {
   const memberships = await listOrganizationsForUser(options.user.id);
-  let selected = selectOrganization(
-    memberships,
-    options.requestedOrganizationId,
-    options.fallbackOrganizationId,
-  );
-  if (!selected && options.allowRequestedFallback) {
-    selected = selectOrganization(memberships, null, options.fallbackOrganizationId);
+  const demoOrganizationSlug = options.demoOrganizationSlug
+    ?.trim()
+    .toLowerCase();
+  let selected: OrganizationMembershipSummary | null | undefined;
+  if (demoOrganizationSlug) {
+    if (
+      !options.demoOrganizationId ||
+      !isPinnedReadOnlyDemoMembershipSet(
+        memberships,
+        demoOrganizationSlug,
+        options.demoOrganizationId,
+      )
+    ) {
+      return null;
+    }
+    selected = memberships[0];
+    if (!selected) return null;
+    const requested = options.requestedOrganizationId?.trim();
+    if (requested && requested !== selected.id) return null;
+  } else {
+    selected = selectOrganization(
+      memberships,
+      options.requestedOrganizationId,
+      options.fallbackOrganizationId,
+    );
+    if (!selected && options.allowRequestedFallback) {
+      selected = selectOrganization(
+        memberships,
+        null,
+        options.fallbackOrganizationId,
+      );
+    }
   }
   if (!selected) return null;
 
   const effectiveRole = await getEffectiveRole(selected.role, selected.id);
   if (!effectiveRole) return null;
-  const conditionalScopes = await conditionalScopesForRole(
-    selected.role,
-    selected.id,
-  );
+  if (
+    demoOrganizationSlug &&
+    (effectiveRole.key !== "viewer" || effectiveRole.isSystem !== true)
+  ) {
+    return null;
+  }
+  const conditionalScopes = selected.isReadOnly
+    ? []
+    : await conditionalScopesForRole(selected.role, selected.id);
   const roleScopes = Array.from(
     new Set([
       ...roleScopesForPermissions(effectiveRole.permissions),
       ...conditionalScopes,
     ]),
   );
-  const scopes = options.tokenScopes
+  const unrestrictedScopes = options.tokenScopes
     ? roleScopes.filter((scope) => options.tokenScopes?.includes(scope))
     : roleScopes;
-  const permissions = options.tokenScopes
+  const unrestrictedPermissions = options.tokenScopes
     ? effectiveRole.permissions.filter((permission) =>
         options.tokenScopes?.includes(permissionScope(permission)),
       )
     : effectiveRole.permissions;
+  const scopes = restrictOrganizationScopes(
+    unrestrictedScopes,
+    selected.isReadOnly,
+  );
+  const permissions = restrictOrganizationPermissions(
+    unrestrictedPermissions,
+    selected.isReadOnly,
+  );
   const organization = identityOrganization(selected);
 
   return {
@@ -178,14 +226,9 @@ export async function getRequestIdentity(
       linkedUser = user;
     }
 
-    await db
-      .update(apiTokens)
-      .set({ lastUsedAt: now })
-      .where(eq(apiTokens.id, token.id));
-
     const tokenScopes = transportScopes(token.scopes);
     if (linkedUser) {
-      return identityForUser({
+      const identity = await identityForUser({
         kind: "token",
         user: linkedUser,
         requestedOrganizationId,
@@ -193,6 +236,13 @@ export async function getRequestIdentity(
         tokenScopes,
         tokenId: token.id,
       });
+      if (identity && !identity.organization.isReadOnly) {
+        await db
+          .update(apiTokens)
+          .set({ lastUsedAt: now })
+          .where(eq(apiTokens.id, token.id));
+      }
+      return identity;
     }
 
     // Standalone credentials are permanently pinned to their issuing
@@ -210,19 +260,33 @@ export async function getRequestIdentity(
       role: null,
       roleName: null,
     };
-    return {
+    const scopes = restrictOrganizationScopes(
+      tokenScopes,
+      organization.isReadOnly,
+    );
+    const identity = {
       kind: "token",
       subject: "token:" + token.id,
       name: token.name,
-      scopes: tokenScopes,
+      scopes,
       role: null,
       roleName: null,
-      permissions: permissionsForStandaloneTokenScopes(tokenScopes),
+      permissions: restrictOrganizationPermissions(
+        permissionsForStandaloneTokenScopes(scopes),
+        organization.isReadOnly,
+      ),
       organizationId: organization.id,
       organization,
       organizations: [organization],
       tokenId: token.id,
-    };
+    } satisfies RequestIdentity;
+    if (!organization.isReadOnly) {
+      await db
+        .update(apiTokens)
+        .set({ lastUsedAt: now })
+        .where(eq(apiTokens.id, token.id));
+    }
+    return identity;
   }
 
   return getSessionIdentity(requestedOrganizationId);
@@ -233,6 +297,8 @@ export async function getSessionIdentity(
 ): Promise<RequestIdentity | null> {
   const session = await auth();
   if (!session?.user) return null;
+  const isDemoSession = session.user.authProvider === "demo";
+  if (isDemoSession && !demoAccessEnabled) return null;
 
   let selectedOrganizationId = requestedOrganizationId?.trim();
   let selectedFromCookie = false;
@@ -247,19 +313,20 @@ export async function getSessionIdentity(
 
   let user: typeof users.$inferSelect | undefined;
   const sessionUserId = session.user.id?.trim();
-  const localUserId =
-    session.user.authProvider === "local" &&
+  const databaseUserId =
+    (session.user.authProvider === "local" || isDemoSession) &&
     sessionUserId &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       sessionUserId,
     )
       ? sessionUserId
       : null;
-  if (localUserId) {
+  if (isDemoSession && databaseUserId !== PUBLIC_DEMO_USER_ID) return null;
+  if (databaseUserId) {
     [user] = await db
       .select()
       .from(users)
-      .where(eq(users.id, localUserId))
+      .where(eq(users.id, databaseUserId))
       .limit(1);
   }
 
@@ -268,7 +335,7 @@ export async function getSessionIdentity(
   // This keeps the identity provider from becoming an implicit tenant invite.
   const mayLinkByEmail =
     session.user.authProvider === "local" || session.user.auth0EmailVerified;
-  if (!user && mayLinkByEmail && session.user.email) {
+  if (!user && !isDemoSession && mayLinkByEmail && session.user.email) {
     [user] = await db
       .select()
       .from(users)
@@ -279,7 +346,7 @@ export async function getSessionIdentity(
   if (user) {
     if (!user.isActive) return null;
     if (
-      session.user.authProvider === "local" &&
+      (session.user.authProvider === "local" || isDemoSession) &&
       user.sessionVersion !== session.user.sessionVersion
     ) {
       return null;
@@ -289,6 +356,13 @@ export async function getSessionIdentity(
       user,
       requestedOrganizationId: selectedOrganizationId,
       allowRequestedFallback: selectedFromCookie,
+      ...(isDemoSession
+        ? {
+            demoOrganizationId: PUBLIC_DEMO_ORGANIZATION_ID,
+            demoOrganizationSlug:
+              process.env.DEMO_ORGANIZATION_SLUG?.trim() || "demo",
+          }
+        : {}),
     });
   }
 
@@ -385,6 +459,14 @@ export async function canAccessResource(
   resource: ResourceRecord,
 ) {
   if (resource.organizationId !== identity.organizationId) return false;
+  if (
+    !organizationAllowsPermission(
+      identity.organization.isReadOnly,
+      permission,
+    )
+  ) {
+    return false;
+  }
   if (identity.permissions.includes(permission)) return true;
   if (!identity.role || !isResourceRulePermission(permission)) return false;
   const rules = await listRulesForRole(

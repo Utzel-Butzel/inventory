@@ -1,9 +1,9 @@
 import { pushSubscriptionDeleteSchema, pushSubscriptionSchema } from "@/lib/notification-contract";
-import { requireNotificationRecipient, notificationNoStoreHeaders } from "@/lib/notification-api";
+import { requireWritableNotificationRecipient, notificationNoStoreHeaders } from "@/lib/notification-api";
 import { notificationRuntimeConfiguration, revokePushSubscription, savePushSubscription } from "@/lib/notifications";
 
 export async function POST(request: Request) {
-  const authorization = await requireNotificationRecipient(request);
+  const authorization = await requireWritableNotificationRecipient(request);
   if (authorization.response) return authorization.response;
   if (!notificationRuntimeConfiguration().push.configured) {
     return Response.json(
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const authorization = await requireNotificationRecipient(request);
+  const authorization = await requireWritableNotificationRecipient(request);
   if (authorization.response) return authorization.response;
   let payload: unknown;
   try {
