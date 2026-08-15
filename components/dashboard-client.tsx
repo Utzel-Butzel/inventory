@@ -216,7 +216,7 @@ export function DashboardClient() {
   return (
     <div className="mx-auto max-w-[1540px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-9">
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div className="animate-fade-up">
+        <div>
           <div className="mb-2 flex items-center gap-2">
             <span className="size-1.5 rounded-full bg-success ring-4 ring-success-border" />
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
@@ -230,7 +230,7 @@ export function DashboardClient() {
             {t("subtitle")}
           </p>
         </div>
-        {!isReadOnly ? <div className="flex animate-fade-up gap-2 animation-delay-1">
+        {!isReadOnly ? <div className="flex gap-2">
           <Link
             href="/batch"
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-[13px] font-semibold text-foreground shadow-sm transition hover:border-border-strong hover:bg-surface-hover"
@@ -267,7 +267,7 @@ export function DashboardClient() {
       ) : null}
 
       {!loading && !error && stats ? (
-        <div className="space-y-5 animate-fade-up animation-delay-1">
+        <div className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[
               {
