@@ -1,4 +1,5 @@
 import { ResourceAssignmentsManager } from "@/components/resource-assignments-manager";
+import { ResourceConnectionDiagram } from "@/components/resource-connection-diagram";
 import { ResourceDetails } from "@/components/resource-details";
 import { ResourceFamilyManager } from "@/components/resource-family-manager";
 import { ResourceRelationsManager } from "@/components/resource-relations-manager";
@@ -47,6 +48,16 @@ export default async function InventoryItemPage({ params }: Props) {
         canEdit={canEdit}
         canViewStock={canViewStock}
       />
+      {resource ? (
+        <ResourceConnectionDiagram
+          resource={{
+            id: resource.id,
+            name: resource.name,
+            type: resource.type,
+            status: resource.status,
+          }}
+        />
+      ) : null}
       <ResourceRelationsManager resourceId={id} canEdit={canEdit} />
       <ResourceVariantsManager
         resourceId={id}

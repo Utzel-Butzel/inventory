@@ -223,6 +223,42 @@
       "remove": "Beziehung konnte nicht entfernt werden."
     }
   },
+  "connectionDiagram": {
+    "title": "Verbindungsfluss",
+    "description": "Variantenfamilie, Stückliste, Enthaltensein und zugehöriges Inventar dieses Eintrags visualisieren.",
+    "current": "Aktueller Eintrag",
+    "connections_one": "{{value}} Verbindung",
+    "connections_other": "{{value}} Verbindungen",
+    "loading": "Verbindungen werden geladen…",
+    "refresh": "Aktualisieren",
+    "retry": "Erneut versuchen",
+    "partial": "Einige Verbindungsarten sind mit deinem aktuellen Zugriff nicht verfügbar. Der übrige Teil des Diagramms wird weiterhin angezeigt.",
+    "openItem": "{{name}} öffnen",
+    "more_one": "{{count}} weitere Verbindung",
+    "more_other": "{{count}} weitere Verbindungen",
+    "legend": {
+      "family": "Variantenfamilie",
+      "bom": "Stückliste",
+      "containment": "Enthaltensein",
+      "relationship": "Beziehung"
+    },
+    "kinds": {
+      "primary": "Haupteintrag",
+      "variant": "Variante",
+      "sibling": "Gleiche Familie",
+      "component_one": "{{value}} pro fertigem Eintrag",
+      "component_other": "{{value}} pro fertigem Eintrag",
+      "located-in": "Behälter",
+      "contains": "Enthaltener Eintrag"
+    },
+    "empty": {
+      "title": "Noch keine Verbindungen",
+      "description": "Variantenverknüpfungen, Stücklistenkomponenten, Behälter und gewöhnliche Beziehungen erscheinen hier automatisch."
+    },
+    "errors": {
+      "load": "Das Verbindungsdiagramm konnte nicht geladen werden."
+    }
+  },
   "assignments": {
     "title": "Zuweisungen & Reservierungen",
     "description": "Verfügbares Inventar ausgeben, reservieren oder dauerhaft zuweisen – mit vollständiger Bestandsverfolgung.",

@@ -38,6 +38,7 @@
     "test:room-scenes": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/room-floor-layout.test.mjs tests/room-keyframe-contract.test.mjs tests/room-scene-contract.test.mjs tests/room-scan-upload-policy.test.mjs tests/room-scene-read-model.test.mjs tests/room-scene-visualization.test.mjs tests/spatial-structure-contract.test.mjs",
     "test:resource-media": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/resource-media-contract.test.mjs tests/object-capture-presentation.test.mjs tests/usdz-package.test.mjs",
     "test:variants": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/resource-variant-contract.test.mjs tests/variant-stock-invariant.test.mjs tests/label-barcode.test.mjs tests/first-class-resource-variant-contract.test.mjs",
+    "test:connections": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/resource-connection-diagram.test.mjs",
     "db:generate": "drizzle-kit generate",
     "db:tunnel": "node scripts/db-tunnel.mjs",
     "db:migrate": "node scripts/migrate.mjs",

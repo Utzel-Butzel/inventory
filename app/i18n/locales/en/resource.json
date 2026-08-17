@@ -223,6 +223,42 @@
       "remove": "Unable to remove relationship."
     }
   },
+  "connectionDiagram": {
+    "title": "Connection flow",
+    "description": "Visualize this item's family, bill of materials, containment, and related inventory.",
+    "current": "Current item",
+    "connections_one": "{{value}} connection",
+    "connections_other": "{{value}} connections",
+    "loading": "Loading connections…",
+    "refresh": "Refresh",
+    "retry": "Try again",
+    "partial": "Some connection types are unavailable with your current access. The rest of the diagram is still shown.",
+    "openItem": "Open {{name}}",
+    "more_one": "{{count}} more connection",
+    "more_other": "{{count}} more connections",
+    "legend": {
+      "family": "Variant family",
+      "bom": "Bill of materials",
+      "containment": "Containment",
+      "relationship": "Relationship"
+    },
+    "kinds": {
+      "primary": "Primary item",
+      "variant": "Variant",
+      "sibling": "Same family",
+      "component_one": "{{value}} per finished item",
+      "component_other": "{{value}} per finished item",
+      "located-in": "Container",
+      "contains": "Contained item"
+    },
+    "empty": {
+      "title": "No connections yet",
+      "description": "Variant links, BOM components, containers, and ordinary relationships will appear here automatically."
+    },
+    "errors": {
+      "load": "Unable to load the connection diagram."
+    }
+  },
   "assignments": {
     "title": "Assignments & reservations",
     "description": "Check out, reserve, or permanently assign available inventory with a complete stock trail.",
