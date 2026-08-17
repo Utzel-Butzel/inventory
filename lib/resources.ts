@@ -44,11 +44,57 @@ import {
   enqueueWebhookEvent,
 } from "@/lib/webhooks";
 import { validateCustomFieldValues } from "@/lib/custom-fields";
-import { BOM_WRITE_LOCK_ID } from "@/lib/inventory-locks";
+import {
+  BOM_WRITE_LOCK_ID,
+  VARIANT_FAMILY_WRITE_LOCK_ID,
+} from "@/lib/inventory-locks";
+import {
+  findResourceVariantMembership,
+  overriddenFieldsFromAttributes,
+  VARIANT_INHERITED_CATALOG_FIELDS,
+  VARIANT_RELATION_TYPE,
+} from "@/lib/resource-families";
 
 export type ResourceWithMedia = ResourceRecord & {
   media: MediaRecord[];
   cover: MediaRecord | null;
+};
+
+type VariantInheritedCatalogField =
+  (typeof VARIANT_INHERITED_CATALOG_FIELDS)[number];
+
+const variantInheritedCatalogFieldSet = new Set<string>(
+  VARIANT_INHERITED_CATALOG_FIELDS,
+);
+
+const changedResourceFields = (
+  current: ResourceRecord,
+  proposed: ResourceRecord,
+  candidateFields: string[],
+) =>
+  candidateFields.filter(
+    (field) =>
+      field !== "updatedAt" &&
+      !isDeepStrictEqual(
+        current[field as keyof ResourceRecord],
+        proposed[field as keyof ResourceRecord],
+      ),
+  );
+
+const inheritedCatalogFieldsAmong = (fields: string[]) =>
+  fields.filter((field): field is VariantInheritedCatalogField =>
+    variantInheritedCatalogFieldSet.has(field),
+  );
+
+const inheritedCatalogPatch = (
+  source: ResourceRecord,
+  fields: VariantInheritedCatalogField[],
+) => {
+  const patch: Partial<NewResource> = {};
+  for (const field of fields) {
+    (patch as Record<string, unknown>)[field] = source[field];
+  }
+  return patch;
 };
 
 const attachMedia = (
@@ -459,50 +505,14 @@ export async function updateResource(
   values: Partial<NewResource>,
   actor?: string | null,
 ) {
-  const updated = await db.transaction(async (transaction) => {
-    const [current] = await transaction
-      .select()
-      .from(resources)
-      .where(
-        and(
-          eq(resources.id, id),
-          eq(resources.organizationId, organizationId),
-        ),
-      )
-      .limit(1)
-      .for("update");
-    if (!current) return null;
-    const [saved] = await transaction
-      .update(resources)
-      .set({ ...values, updatedAt: new Date() })
-      .where(
-        and(
-          eq(resources.id, id),
-          eq(resources.organizationId, organizationId),
-        ),
-      )
-      .returning();
-    if (!saved) return null;
-    const changedFields = Object.keys(values).filter(
-      (key) =>
-        key !== "updatedAt" &&
-        !isDeepStrictEqual(
-          current[key as keyof ResourceRecord],
-          saved[key as keyof ResourceRecord],
-        ),
-    );
-    await enqueueWebhookEvent(transaction, {
-      organizationId,
-      type: "inventory.resource.updated",
-      aggregateType: "resource",
-      aggregateId: saved.id,
-      actor: actor ?? null,
-      data: { resource: saved, changedFields },
-    });
-    return saved;
+  return updateResourceWithCustomFieldValidation({
+    organizationId,
+    id,
+    values,
+    validateCustomFields: false,
+    customFieldsProvided: false,
+    actor,
   });
-  if (!updated) return null;
-  return getResource(organizationId, updated.id);
 }
 
 export async function updateResourceWithCustomFieldValidation(options: {
@@ -518,6 +528,9 @@ export async function updateResourceWithCustomFieldValidation(options: {
   actor?: string | null;
 }) {
   const updated = await db.transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(${VARIANT_FAMILY_WRITE_LOCK_ID})`,
+    );
     const [current] = await transaction
       .select()
       .from(resources)
@@ -563,11 +576,17 @@ export async function updateResourceWithCustomFieldValidation(options: {
       values = { ...values, customFields };
     }
 
+    const now = new Date();
     const proposed = {
       ...current,
       ...values,
-      updatedAt: new Date(),
+      updatedAt: now,
     } satisfies ResourceRecord;
+    const changedFields = changedResourceFields(
+      current,
+      proposed,
+      Object.keys(values),
+    );
     if (
       options.authorize &&
       (!(await options.authorize(current, proposed)))
@@ -575,9 +594,169 @@ export async function updateResourceWithCustomFieldValidation(options: {
       throw new Error("RESOURCE_PERMISSION_DENIED");
     }
 
+    const membership = await findResourceVariantMembership(
+      transaction,
+      options.organizationId,
+      current.id,
+    );
+    const inheritedChangedFields = inheritedCatalogFieldsAmong(changedFields);
+    let nextVariantOverrides: string[] | null = null;
+    const propagatedVariantUpdates: Array<{
+      current: ResourceRecord;
+      proposed: ResourceRecord;
+      values: Partial<NewResource>;
+      changedFields: string[];
+    }> = [];
+
+    if (membership && inheritedChangedFields.length) {
+      const [primary] = await transaction
+        .select()
+        .from(resources)
+        .where(
+          and(
+            eq(resources.organizationId, options.organizationId),
+            eq(resources.id, membership.primaryResourceId),
+          ),
+        )
+        .limit(1);
+      if (!primary) {
+        throw new Error("VARIANT_PRIMARY_NOT_FOUND");
+      }
+      const overrides = new Set(
+        membership.overriddenFields.filter((field) =>
+          variantInheritedCatalogFieldSet.has(field),
+        ),
+      );
+      for (const field of inheritedChangedFields) {
+        if (isDeepStrictEqual(proposed[field], primary[field])) {
+          overrides.delete(field);
+        } else {
+          overrides.add(field);
+        }
+      }
+      nextVariantOverrides = VARIANT_INHERITED_CATALOG_FIELDS.filter((field) =>
+        overrides.has(field),
+      );
+    } else if (!membership && inheritedChangedFields.length) {
+      const familyRelations = await transaction
+        .select({
+          sourceResourceId: resourceRelations.sourceResourceId,
+          attributes: resourceRelations.attributes,
+        })
+        .from(resourceRelations)
+        .where(
+          and(
+            eq(resourceRelations.organizationId, options.organizationId),
+            eq(resourceRelations.targetResourceId, current.id),
+            eq(resourceRelations.relationTypeKey, VARIANT_RELATION_TYPE),
+          ),
+        )
+        .orderBy(asc(resourceRelations.sourceResourceId))
+        .for("update");
+      const variantIds = familyRelations.map(
+        (relation) => relation.sourceResourceId,
+      );
+      const variants = variantIds.length
+        ? await transaction
+            .select()
+            .from(resources)
+            .where(
+              and(
+                eq(resources.organizationId, options.organizationId),
+                inArray(resources.id, variantIds),
+              ),
+            )
+            .orderBy(asc(resources.id))
+            .for("update")
+        : [];
+      if (variants.length !== variantIds.length) {
+        throw new Error("VARIANT_FAMILY_MEMBER_NOT_FOUND");
+      }
+      const attributesByVariantId = new Map(
+        familyRelations.map((relation) => [
+          relation.sourceResourceId,
+          new Set(overriddenFieldsFromAttributes(relation.attributes)),
+        ]),
+      );
+
+      for (const variant of variants) {
+        const overrides = attributesByVariantId.get(variant.id) ?? new Set();
+        const inheritedFields = inheritedChangedFields.filter(
+          (field) => !overrides.has(field),
+        );
+        if (!inheritedFields.length) continue;
+
+        let variantValues = inheritedCatalogPatch(proposed, inheritedFields);
+        let proposedVariant = {
+          ...variant,
+          ...variantValues,
+          updatedAt: now,
+        } satisfies ResourceRecord;
+        if (
+          proposedVariant.type !== "place" &&
+          proposedVariant.type !== variant.type
+        ) {
+          const [spatialScan] = await transaction
+            .select({ id: roomScans.id })
+            .from(roomScans)
+            .where(
+              and(
+                eq(roomScans.organizationId, options.organizationId),
+                eq(roomScans.roomResourceId, variant.id),
+              ),
+            )
+            .limit(1);
+          if (spatialScan) {
+            throw new Error("RESOURCE_HAS_ROOM_SCANS");
+          }
+        }
+        if (
+          inheritedFields.some((field) =>
+            ["type", "categories", "customFields"].includes(field),
+          )
+        ) {
+          const customFields = await validateCustomFieldValues({
+            organizationId: options.organizationId,
+            entityType: "inventory",
+            target: {
+              type: proposedVariant.type,
+              categories: proposedVariant.categories,
+            },
+            values: proposedVariant.customFields,
+            currentValues: variant.customFields,
+            enforceRequired: true,
+            executor: transaction,
+          });
+          variantValues = { ...variantValues, customFields };
+          proposedVariant = {
+            ...proposedVariant,
+            customFields,
+          };
+        }
+        const variantChangedFields = changedResourceFields(
+          variant,
+          proposedVariant,
+          Object.keys(variantValues),
+        );
+        if (!variantChangedFields.length) continue;
+        if (
+          options.authorize &&
+          (!(await options.authorize(variant, proposedVariant)))
+        ) {
+          throw new Error("RESOURCE_PERMISSION_DENIED");
+        }
+        propagatedVariantUpdates.push({
+          current: variant,
+          proposed: proposedVariant,
+          values: variantValues,
+          changedFields: variantChangedFields,
+        });
+      }
+    }
+
     const [saved] = await transaction
       .update(resources)
-      .set({ ...values, updatedAt: new Date() })
+      .set({ ...values, updatedAt: now })
       .where(
         and(
           eq(resources.id, options.id),
@@ -586,14 +765,6 @@ export async function updateResourceWithCustomFieldValidation(options: {
       )
       .returning();
     if (saved) {
-      const changedFields = Object.keys(values).filter(
-        (key) =>
-          key !== "updatedAt" &&
-          !isDeepStrictEqual(
-            current[key as keyof ResourceRecord],
-            saved[key as keyof ResourceRecord],
-          ),
-      );
       await enqueueWebhookEvent(transaction, {
         organizationId: options.organizationId,
         type: "inventory.resource.updated",
@@ -602,6 +773,50 @@ export async function updateResourceWithCustomFieldValidation(options: {
         actor: options.actor ?? null,
         data: { resource: saved, changedFields },
       });
+      if (membership && nextVariantOverrides) {
+        await transaction
+          .update(resourceRelations)
+          .set({
+            attributes: {
+              overriddenFields: nextVariantOverrides,
+              protected: true,
+            },
+          })
+          .where(
+            and(
+              eq(resourceRelations.organizationId, options.organizationId),
+              eq(resourceRelations.id, membership.relationId),
+              eq(resourceRelations.relationTypeKey, VARIANT_RELATION_TYPE),
+            ),
+          );
+      }
+      for (const variantUpdate of propagatedVariantUpdates) {
+        const [variantSaved] = await transaction
+          .update(resources)
+          .set({ ...variantUpdate.values, updatedAt: now })
+          .where(
+            and(
+              eq(resources.organizationId, options.organizationId),
+              eq(resources.id, variantUpdate.current.id),
+            ),
+          )
+          .returning();
+        if (!variantSaved) {
+          throw new Error("VARIANT_FAMILY_MEMBER_NOT_FOUND");
+        }
+        await enqueueWebhookEvent(transaction, {
+          organizationId: options.organizationId,
+          type: "inventory.resource.updated",
+          aggregateType: "resource",
+          aggregateId: variantSaved.id,
+          actor: options.actor ?? null,
+          data: {
+            resource: variantSaved,
+            changedFields: variantUpdate.changedFields,
+            inheritedFromResourceId: saved.id,
+          },
+        });
+      }
     }
     return saved ?? null;
   });
@@ -622,6 +837,9 @@ export async function updateResourcesBatch(options: {
 }) {
   const ids = Array.from(new Set(options.ids));
   return db.transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(${VARIANT_FAMILY_WRITE_LOCK_ID})`,
+    );
     const rows = await transaction
       .select()
       .from(resources)
@@ -639,6 +857,29 @@ export async function updateResourcesBatch(options: {
     }
 
     const normalizedTags = options.addTags.map((tag) => tag.toLowerCase());
+    const changesInheritedCatalogData =
+      options.changes.type !== undefined ||
+      options.changes.priority !== undefined ||
+      normalizedTags.length > 0;
+    if (changesInheritedCatalogData) {
+      const [familyMember] = await transaction
+        .select({ id: resourceRelations.id })
+        .from(resourceRelations)
+        .where(
+          and(
+            eq(resourceRelations.organizationId, options.organizationId),
+            eq(resourceRelations.relationTypeKey, VARIANT_RELATION_TYPE),
+            or(
+              inArray(resourceRelations.sourceResourceId, ids),
+              inArray(resourceRelations.targetResourceId, ids),
+            ),
+          ),
+        )
+        .limit(1);
+      if (familyMember) {
+        throw new Error("VARIANT_FAMILY_BATCH_INHERITANCE_UNSUPPORTED");
+      }
+    }
     for (const row of rows) {
       const nextTags = normalizedTags.length
         ? Array.from(new Set([...row.tags, ...normalizedTags]))
@@ -695,6 +936,9 @@ export async function deleteResource(
   const resource = await getResource(organizationId, id);
   if (!resource) return null;
   const deleted = await db.transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(${VARIANT_FAMILY_WRITE_LOCK_ID})`,
+    );
     const [locked] = await transaction
       .select()
       .from(resources)
@@ -708,6 +952,20 @@ export async function deleteResource(
     if (!locked) return null;
     if (authorize && !(await authorize(locked))) {
       throw new Error("RESOURCE_PERMISSION_DENIED");
+    }
+    const [linkedVariant] = await transaction
+      .select({ id: resourceRelations.id })
+      .from(resourceRelations)
+      .where(
+        and(
+          eq(resourceRelations.organizationId, organizationId),
+          eq(resourceRelations.relationTypeKey, "variant_of"),
+          eq(resourceRelations.targetResourceId, id),
+        ),
+      )
+      .limit(1);
+    if (linkedVariant) {
+      throw new Error("RESOURCE_HAS_FIRST_CLASS_VARIANTS");
     }
     const [spatialAssets, keyframeImages] = await Promise.all([
       transaction
@@ -896,6 +1154,9 @@ export async function mergeResources(
     await transaction.execute(
       sql`select pg_advisory_xact_lock(${BOM_WRITE_LOCK_ID})`,
     );
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(${VARIANT_FAMILY_WRITE_LOCK_ID})`,
+    );
 
     const lockedResources = await transaction
       .select()
@@ -964,6 +1225,26 @@ export async function mergeResources(
       .limit(1);
     if (spatialScan) {
       throw new Error("Rooms with 3D room scans cannot be merged.");
+    }
+
+    const [familyLink] = await transaction
+      .select({ id: resourceRelations.id })
+      .from(resourceRelations)
+      .where(
+        and(
+          eq(resourceRelations.organizationId, organizationId),
+          eq(resourceRelations.relationTypeKey, "variant_of"),
+          or(
+            inArray(resourceRelations.sourceResourceId, [keepId, duplicateId]),
+            inArray(resourceRelations.targetResourceId, [keepId, duplicateId]),
+          ),
+        ),
+      )
+      .limit(1);
+    if (familyLink) {
+      throw new Error(
+        "Items in a first-class variant family cannot be merged. Archive the duplicate or remove its family membership first.",
+      );
     }
 
     const [variant] = await transaction

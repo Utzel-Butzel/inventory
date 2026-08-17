@@ -1,12 +1,12 @@
 {
   "meta": {
     "title": "Etiketten",
-    "description": "QR- und Barcode-Etiketten für Inventarelemente erstellen und drucken."
+    "description": "QR- und Barcode-Etiketten für Einträge erstellen und drucken."
   },
   "header": {
-    "eyebrow": "Etikettenstudio",
-    "title": "Etiketten drucken, die sich scannen lassen.",
-    "description": "Wähle Inventarelemente aus, verwende eine wiederverwendbare Vorlage und drucke kompakte QR-Links, Barcodes, Text und Objektbilder im Browser."
+    "eyebrow": "Etiketten",
+    "title": "Etiketten drucken",
+    "description": "Wähle Einträge und eine Vorlage aus und drucke QR-Codes, Barcodes, Text und Bilder im Browser."
   },
   "print": {
     "preparing": "Bilder werden vorbereitet…",
@@ -15,17 +15,17 @@
     "button_other": "{{count}} Etiketten drucken"
   },
   "selection": {
-    "title": "1. Elemente auswählen",
+    "title": "1. Einträge auswählen",
     "description": "Die Auswahl bleibt beim Suchen und Wechseln der Seite erhalten.",
     "clear": "{{count}} entfernen",
     "search": "Inventar durchsuchen",
     "searchPlaceholder": "Name, SKU oder Standort suchen…",
     "clearSearch": "Suche leeren",
     "selectPage": "Seite auswählen",
-    "itemCount_one": "{{count}} Element",
-    "itemCount_other": "{{count}} Elemente",
+    "itemCount_one": "{{count}} Eintrag",
+    "itemCount_other": "{{count}} Einträge",
     "loading": "Inventar wird geladen",
-    "empty": "Keine passenden Elemente",
+    "empty": "Keine passenden Einträge",
     "emptyDescription": "Versuche einen anderen Namen, eine SKU oder einen Standort.",
     "noSku": "Keine SKU",
     "pagination": "Seite {{page}} von {{pages}}",
@@ -52,13 +52,13 @@
     "new": "Neu",
     "summary_one": "{{width}} × {{height}} mm · {{count}} sichtbares Element",
     "summary_other": "{{width}} × {{height}} mm · {{count}} sichtbare Elemente",
-    "imagesEnabled": " · Objektbilder aktiviert",
+    "imagesEnabled": " · Bilder aktiviert",
     "emptyTitle": "Etikettenvorlage erstellen",
     "emptyDescription": "Eine Vorlage legt die Papiermaße und die Position der einzelnen Etikettenelemente fest.",
     "openDesigner": "Designer öffnen"
   },
   "preview": {
-    "title": "Element für die Vorschau auswählen",
+    "title": "Eintrag für die Vorschau auswählen",
     "description": "Die ausgewählte Vorlage bestimmt, welche Details, Codes und Bilder erscheinen."
   },
   "printer": {
@@ -92,8 +92,8 @@
     "save": "Vorlage speichern",
     "elements": {
       "qr": "QR-Code",
-      "image": "Objektbild",
-      "name": "Objektname",
+      "image": "Titelbild",
+      "name": "Eintragsname",
       "identifier": "SKU / ID",
       "barcode": "Barcode",
       "url": "Kurzlink",
@@ -127,15 +127,15 @@
   },
   "errors": {
     "loadSetups": "Etikettenvorlagen konnten nicht geladen werden.",
-    "loadItems": "Inventarelemente konnten nicht geladen werden.",
+    "loadItems": "Einträge konnten nicht geladen werden.",
     "saveSetup": "Die Etikettenvorlage konnte nicht gespeichert werden.",
     "deleteSetup": "Die Etikettenvorlage konnte nicht gelöscht werden.",
-    "overlapShort": "Das Objektbild überlappt den QR-Code. Bearbeite die Vorlage vor dem Drucken.",
-    "overlap": "Das Objektbild überlappt in dieser Vorlage den QR-Code. Öffne den Designer und verschiebe oder skaliere eines der Elemente vor dem Drucken.",
+    "overlapShort": "Das Titelbild überlappt den QR-Code. Bearbeite die Vorlage vor dem Drucken.",
+    "overlap": "Das Titelbild überlappt in dieser Vorlage den QR-Code. Öffne den Designer und verschiebe oder skaliere eines der Elemente vor dem Drucken.",
     "urlTooLong": "Die Deployment-URL ist für den QR-Code auf dem Etikett zu lang. Verwende vor dem Drucken eine kürzere öffentliche URL.",
-    "missingImages_one": "Für {{examples}} fehlt ein Objektbild. Deaktiviere das Bildelement oder füge das fehlende Bild vor dem Drucken hinzu.",
-    "missingImages_other": "Für {{examples}} fehlen Objektbilder. Deaktiviere das Bildelement oder füge die fehlenden Bilder vor dem Drucken hinzu.",
-    "imageRender": "Mindestens ein Objektbild konnte nicht gerendert werden. Prüfe die Vorschau und versuche es erneut.",
-    "imageLoad": "Mindestens ein Objektbild wurde nicht vollständig geladen. Es wurde nichts gedruckt; prüfe die Bilddateien und versuche es erneut."
+    "missingImages_one": "Für {{examples}} fehlt ein Titelbild. Deaktiviere das Bildelement oder füge das fehlende Bild vor dem Drucken hinzu.",
+    "missingImages_other": "Für {{examples}} fehlen Titelbilder. Deaktiviere das Bildelement oder füge die fehlenden Bilder vor dem Drucken hinzu.",
+    "imageRender": "Mindestens ein Titelbild konnte nicht gerendert werden. Prüfe die Vorschau und versuche es erneut.",
+    "imageLoad": "Mindestens ein Titelbild wurde nicht vollständig geladen. Es wurde nichts gedruckt; prüfe die Bilddateien und versuche es erneut."
   }
 }

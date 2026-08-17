@@ -57,7 +57,7 @@ struct UnifiedCameraView: View {
     @EnvironmentObject private var state: AppState
     @Environment(\.dismiss) private var dismiss
     @StateObject private var camera = CameraService()
-    @StateObject private var captureModel = CaptureViewModel()
+    @StateObject private var captureModel: CaptureViewModel
     @StateObject private var recognitionModel = ResourceRecognitionViewModel()
     @StateObject private var countModel: StockCountViewModel
 
@@ -91,6 +91,7 @@ struct UnifiedCameraView: View {
 
     init(
         initialMode: CameraMode,
+        maximumUploadImagePixelSize: Int,
         initialCountResource: InventoryResource? = nil,
         onClose: (() -> Void)? = nil,
         onSubmit: @escaping (IntakeSubmission) -> Void,
@@ -98,6 +99,11 @@ struct UnifiedCameraView: View {
     ) {
         _mode = State(initialValue: initialMode)
         _countResource = State(initialValue: initialCountResource)
+        _captureModel = StateObject(
+            wrappedValue: CaptureViewModel(
+                maximumPixelSize: maximumUploadImagePixelSize
+            )
+        )
         _countModel = StateObject(
             wrappedValue: StockCountViewModel(
                 itemHint: initialCountResource?.name ?? "",
@@ -1863,7 +1869,12 @@ struct UnifiedCameraView: View {
         guard state.canWrite,
               captureModel.canSubmit,
               captureModel.processingCount == 0 else { return }
-        let submission = captureModel.makeSubmission(imageModelID: state.selectedImageModelID)
+        let submission = captureModel.makeSubmission(
+            imageModelID: state.selectedImageModelID,
+            maximumAIGeneratedImagePixelSize: state.maximumAIGeneratedImagePixelSize,
+            analysisPrompt: state.analysisPrompt,
+            coverPrompt: state.coverPrompt
+        )
         onSubmit(submission)
         withAnimation {
             captureModel.resetAfterSubmitting()

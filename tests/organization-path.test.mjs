@@ -3,33 +3,37 @@ import test from "node:test";
 
 import {
   isOrganizationPagePath,
+  isOrganizationScopedPagePath,
   organizationIdFromPathname,
   organizationPath,
+  organizationReferenceFromPathname,
+  slugifyOrganizationName,
   stripOrganizationPathname,
 } from "../lib/organization-path.ts";
 
 const organizationId = "11111111-1111-4111-8111-111111111111";
+const organizationSlug = "workshop-berlin";
 
-test("organization paths prefix tenant pages and preserve query strings", () => {
+test("organization paths use short slugs and preserve query strings", () => {
   assert.equal(
-    organizationPath(organizationId, "/inventory/item-id?tab=stock"),
-    `/${organizationId}/inventory/item-id?tab=stock`,
+    organizationPath(organizationSlug, "/inventory/item-id?tab=stock"),
+    `/${organizationSlug}/inventory/item-id?tab=stock`,
   );
   assert.equal(
-    organizationPath(organizationId, `/${organizationId}/dashboard`),
-    `/${organizationId}/dashboard`,
+    organizationPath(organizationSlug, `/${organizationId}/dashboard`),
+    `/${organizationSlug}/dashboard`,
   );
   assert.equal(
-    organizationPath(organizationId, `/${organizationId}?view=compact`),
-    `/${organizationId}/dashboard?view=compact`,
+    organizationPath(organizationSlug, `/${organizationId}?view=compact`),
+    `/${organizationSlug}/dashboard?view=compact`,
   );
   assert.equal(
-    organizationPath(organizationId.toUpperCase(), "/dashboard"),
-    `/${organizationId}/dashboard`,
+    organizationPath(organizationSlug.toUpperCase(), "/dashboard"),
+    `/${organizationSlug}/dashboard`,
   );
   assert.equal(
-    organizationPath(organizationId, "/"),
-    `/${organizationId}/dashboard`,
+    organizationPath(organizationSlug, "/"),
+    `/${organizationSlug}/dashboard`,
   );
 });
 
@@ -44,18 +48,36 @@ test("public, authentication, and API paths remain outside organization URLs", (
   assert.equal(organizationPath(organizationId, "/r/short-code"), "/r/short-code");
 });
 
-test("organization path parsing recognizes and removes only UUID prefixes", () => {
-  const pathname = `/${organizationId}/settings/organization`;
-  assert.equal(organizationIdFromPathname(pathname), organizationId);
-  assert.equal(stripOrganizationPathname(pathname), "/settings/organization");
+test("organization path parsing recognizes slug and legacy UUID prefixes", () => {
+  const slugPathname = `/${organizationSlug}/settings/organization`;
+  const uuidPathname = `/${organizationId}/settings/organization`;
+  assert.equal(organizationReferenceFromPathname(slugPathname), organizationSlug);
+  assert.equal(organizationIdFromPathname(slugPathname), null);
+  assert.equal(organizationIdFromPathname(uuidPathname), organizationId);
+  assert.equal(stripOrganizationPathname(slugPathname), "/settings/organization");
   assert.equal(stripOrganizationPathname("/settings/organization"), "/settings/organization");
-  assert.equal(isOrganizationPagePath(pathname), true);
+  assert.equal(isOrganizationPagePath(slugPathname), true);
+  assert.equal(isOrganizationScopedPagePath(slugPathname), true);
   assert.equal(isOrganizationPagePath("/share/public-id"), false);
+});
+
+test("app-root slugs remain unambiguous", () => {
+  assert.equal(organizationPath("inventory", "/inventory"), "/inventory/inventory");
+  assert.equal(isOrganizationScopedPagePath("/inventory"), false);
+  assert.equal(isOrganizationScopedPagePath("/inventory/dashboard"), true);
+  assert.equal(stripOrganizationPathname("/inventory/dashboard"), "/dashboard");
+});
+
+test("organization names produce short URL-safe slugs", () => {
+  assert.equal(slugifyOrganizationName("Werkstatt München"), "werkstatt-munchen");
+  assert.equal(slugifyOrganizationName("Login"), "login-org");
+  assert.equal(slugifyOrganizationName(organizationId), `${organizationId}-org`);
+  assert.ok(slugifyOrganizationName("x".repeat(100)).length <= 48);
 });
 
 test("organization paths reject malformed tenant identifiers", () => {
   assert.throws(
-    () => organizationPath("not-an-organization", "/dashboard"),
-    /valid organization UUID/,
+    () => organizationPath("not_an_organization", "/dashboard"),
+    /valid organization slug or UUID/,
   );
 });

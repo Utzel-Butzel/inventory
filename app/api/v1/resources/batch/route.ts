@@ -104,6 +104,18 @@ export async function PATCH(request: Request) {
         { status: 403 },
       );
     }
+    if (
+      error instanceof Error &&
+      error.message === "VARIANT_FAMILY_BATCH_INHERITANCE_UNSUPPORTED"
+    ) {
+      return Response.json(
+        {
+          error:
+            "Edit shared type, priority, or tags from the item page so variant inheritance remains explicit. Batch updates can still change status and location.",
+        },
+        { status: 409 },
+      );
+    }
     return Response.json(
       { error: error instanceof Error ? error.message : "Unable to update selected items." },
       { status: 500 },

@@ -1,0 +1,215 @@
+require "base64"
+require "shellwords"
+require "tempfile"
+
+opt_out_usage
+
+default_platform(:ios)
+
+REPOSITORY_ROOT = File.expand_path("..", __dir__)
+IOS_PROJECT = File.join(REPOSITORY_ROOT, "ios/Inventory/Inventory.xcodeproj")
+IOS_SHARED_SCHEME = File.join(
+  IOS_PROJECT,
+  "xcshareddata/xcschemes/Inventory.xcscheme"
+)
+IOS_SCHEME = "Inventory"
+IOS_TARGET = "Inventory"
+IOS_APP_IDENTIFIER = "digital.congru.inventory.scan"
+IOS_TEAM_ID = "6CXYQL7FXP"
+IOS_OUTPUT_DIRECTORY = File.join(REPOSITORY_ROOT, "build/ios")
+
+platform :ios do
+  before_all do
+    ensure_bundle_exec
+    verify_project
+  end
+
+  private_lane :verify_project do
+    missing_paths = [IOS_PROJECT, IOS_SHARED_SCHEME].reject { |path| File.exist?(path) }
+    unless missing_paths.empty?
+      UI.user_error!("Missing required iOS deployment files: #{missing_paths.join(', ')}")
+    end
+
+    sh(
+      "xcodebuild",
+      "-project",
+      IOS_PROJECT,
+      "-scheme",
+      IOS_SCHEME,
+      "-configuration",
+      "Release",
+      "-showBuildSettings",
+      log: false
+    )
+  end
+
+  private_lane :app_store_api_key do
+    key_id = ENV.fetch("APP_STORE_CONNECT_API_KEY_KEY_ID", "").strip
+    issuer_id = ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID", "").strip
+    key_filepath = ENV.fetch("APP_STORE_CONNECT_API_KEY_KEY_FILEPATH", "").strip
+    key_content = ENV.fetch("APP_STORE_CONNECT_API_KEY_KEY", "").strip
+
+    missing_variables = []
+    missing_variables << "APP_STORE_CONNECT_API_KEY_KEY_ID" if key_id.empty?
+    missing_variables << "APP_STORE_CONNECT_API_KEY_ISSUER_ID" if issuer_id.empty?
+    unless missing_variables.empty?
+      UI.user_error!("Missing App Store Connect variables: #{missing_variables.join(', ')}")
+    end
+
+    if key_filepath.empty? == key_content.empty?
+      UI.user_error!(
+        "Set exactly one of APP_STORE_CONNECT_API_KEY_KEY_FILEPATH or " \
+        "APP_STORE_CONNECT_API_KEY_KEY"
+      )
+    end
+
+    expanded_key_filepath = key_filepath.empty? ? nil : File.expand_path(key_filepath, REPOSITORY_ROOT)
+    if expanded_key_filepath && !File.file?(expanded_key_filepath)
+      UI.user_error!("APP_STORE_CONNECT_API_KEY_KEY_FILEPATH does not point to a file")
+    end
+
+    app_store_connect_api_key(
+      key_id: key_id,
+      issuer_id: issuer_id,
+      key_filepath: expanded_key_filepath,
+      key_content: key_content.empty? ? nil : key_content,
+      is_key_content_base64: ENV.fetch(
+        "APP_STORE_CONNECT_API_KEY_IS_KEY_CONTENT_BASE64",
+        "false"
+      ).casecmp?("true")
+    )
+  end
+
+  private_lane :validated_build_number do |options|
+    build_number = options[:value].to_s.strip
+    unless build_number.match?(/\A[1-9]\d*\z/)
+      UI.user_error!("The iOS build number must be a positive integer")
+    end
+    build_number
+  end
+
+  private_lane :build_ipa do |options|
+    build_number = validated_build_number(value: options[:build_number])
+    xcodebuild_arguments = [
+      "-allowProvisioningUpdates",
+      "CURRENT_PROJECT_VERSION=#{build_number}"
+    ]
+    temporary_auth_key = nil
+
+    begin
+      api_key = options[:api_key]
+      if api_key
+        key_content = api_key.fetch(:key)
+        if api_key[:is_key_content_base64]
+          begin
+            key_content = Base64.strict_decode64(key_content.gsub(/\s+/, ""))
+          rescue ArgumentError
+            UI.user_error!("The Base64 App Store Connect API key is invalid")
+          end
+        end
+
+        temporary_auth_key = Tempfile.new(["AuthKey_", ".p8"])
+        temporary_auth_key.binmode
+        temporary_auth_key.chmod(0o600)
+        temporary_auth_key.write(key_content)
+        temporary_auth_key.flush
+
+        xcodebuild_arguments.concat(
+          [
+            "-authenticationKeyPath",
+            Shellwords.escape(temporary_auth_key.path),
+            "-authenticationKeyID",
+            Shellwords.escape(api_key.fetch(:key_id)),
+            "-authenticationKeyIssuerID",
+            Shellwords.escape(api_key.fetch(:issuer_id))
+          ]
+        )
+      end
+
+      build_app(
+        project: IOS_PROJECT,
+        scheme: IOS_SCHEME,
+        configuration: "Release",
+        clean: true,
+        archive_path: File.join(
+          IOS_OUTPUT_DIRECTORY,
+          "Inventory-#{build_number}.xcarchive"
+        ),
+        derived_data_path: File.join(IOS_OUTPUT_DIRECTORY, "DerivedData"),
+        buildlog_path: File.join(IOS_OUTPUT_DIRECTORY, "logs"),
+        output_directory: IOS_OUTPUT_DIRECTORY,
+        output_name: "Inventory-#{build_number}.ipa",
+        xcargs: xcodebuild_arguments.join(" "),
+        export_team_id: IOS_TEAM_ID,
+        export_options: {
+          # Fastlane 2.238.0 still validates the legacy name. Xcode 26 accepts it
+          # as the backwards-compatible alias for `app-store-connect`.
+          method: "app-store",
+          destination: "export",
+          signingStyle: "automatic",
+          manageAppVersionAndBuildNumber: false,
+          teamID: IOS_TEAM_ID,
+          stripSwiftSymbols: true,
+          uploadSymbols: true
+        }
+      )
+    ensure
+      temporary_auth_key&.close!
+    end
+  end
+
+  desc "Validate the local Xcode project and shared deployment scheme"
+  lane :check do
+    UI.success("The iOS project and shared deployment scheme are valid")
+  end
+
+  desc "Build a signed App Store IPA without uploading it"
+  lane :build do
+    build_number = ENV.fetch("IOS_BUILD_NUMBER", "").strip
+    build_number = get_build_number(xcodeproj: IOS_PROJECT) if build_number.empty?
+    build_ipa(build_number: build_number)
+  end
+
+  desc "Build and upload the next iOS build to TestFlight"
+  lane :deploy do
+    api_key = app_store_api_key
+    version = get_version_number(
+      xcodeproj: IOS_PROJECT,
+      target: IOS_TARGET,
+      configuration: "Release"
+    )
+    latest_build_number = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: IOS_APP_IDENTIFIER,
+      version: version,
+      initial_build_number: 0
+    ).to_i
+
+    requested_build_number = ENV.fetch("IOS_BUILD_NUMBER", "").strip
+    build_number = if requested_build_number.empty?
+                     (latest_build_number + 1).to_s
+                   else
+                     validated_build_number(value: requested_build_number)
+                   end
+
+    if build_number.to_i <= latest_build_number
+      UI.user_error!(
+        "IOS_BUILD_NUMBER must be greater than the latest TestFlight build " \
+        "(#{latest_build_number})"
+      )
+    end
+
+    ipa = build_ipa(build_number: build_number, api_key: api_key)
+    changelog = ENV.fetch("TESTFLIGHT_CHANGELOG", "").strip
+    changelog = nil if changelog.empty?
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: IOS_APP_IDENTIFIER,
+      ipa: ipa,
+      changelog: changelog,
+      distribute_external: false,
+      notify_external_testers: false,
+      skip_waiting_for_build_processing: true
+    )
+  end
+end

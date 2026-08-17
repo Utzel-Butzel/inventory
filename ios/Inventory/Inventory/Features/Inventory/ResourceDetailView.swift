@@ -61,6 +61,7 @@ struct ResourceDetailView: View {
         .fullScreenCover(isPresented: $showStockCounter) {
             UnifiedCameraView(
                 initialMode: .count,
+                maximumUploadImagePixelSize: state.maximumUploadImagePixelSize,
                 initialCountResource: current,
                 onClose: { showStockCounter = false },
                 onSubmit: { state.intakeQueue.enqueue($0) },

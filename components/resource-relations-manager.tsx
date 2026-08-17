@@ -8,7 +8,6 @@ import {
   MapPin,
   Plus,
   RefreshCw,
-  Sparkles,
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -108,7 +107,10 @@ export function ResourceRelationsManager({
       setTypes(typeResponse.types);
       setRelationTypes(
         relationTypeResponse.relationTypes.filter(
-          (relationType) => relationType.allowManual && relationType.key !== "contains",
+          (relationType) =>
+            relationType.allowManual &&
+            relationType.key !== "contains" &&
+            relationType.key !== "variant_of",
         ),
       );
     } catch (loadError) {
@@ -141,7 +143,11 @@ export function ResourceRelationsManager({
       relation.relationTypeKey === "contains" &&
       relation.sourceResourceId === resourceId,
   );
-  const others = relations.filter((relation) => relation.relationTypeKey !== "contains");
+  const others = relations.filter(
+    (relation) =>
+      relation.relationTypeKey !== "contains" &&
+      relation.relationTypeKey !== "variant_of",
+  );
 
   async function addRelation(payload: {
     sourceResourceId: string;
@@ -383,7 +389,7 @@ function RelationRow({
         </p>
       </div>
       {relation.origin === "spatial" ? (
-        <Badge tone="brand"><Sparkles className="mr-1 size-3" /> {t("relations.automatic")}</Badge>
+        <Badge tone="brand"><Link2 className="mr-1 size-3" /> {t("relations.automatic")}</Badge>
       ) : (
         <Badge>{t("relations.manual")}</Badge>
       )}

@@ -1,13 +1,12 @@
 {
-  "brand": "Inventory",
+  "brand": "Open Inventory",
   "metadata": {
     "title": "Inventory",
     "template": "%s · Inventory",
     "description": "Manage inventory, stock, locations, and operations."
   },
   "sections": {
-    "workspace": "Workspace",
-    "manage": "Manage"
+    "workspace": "Sections"
   },
   "organizations": {
     "label": "Organization",
@@ -20,10 +19,11 @@
     "mainLabel": "Main navigation",
     "overview": "Overview",
     "inventory": "Inventory",
+    "entries": "Items",
     "stock": "Stock",
     "locations": "Locations",
+    "map": "Map",
     "rooms": "Rooms 3D",
-    "batch": "Batch studio",
     "labels": "Labels",
     "duplicates": "Duplicates",
     "notifications": "Notifications",
@@ -33,16 +33,21 @@
     "title": "Notifications",
     "open": "Open notifications ({{count}} unread)"
   },
-  "badges": {
-    "ai": "AI"
+  "demo": {
+    "bannerLabel": "Live demo · read only",
+    "bannerDescription": "You can explore everything; changes are disabled.",
+    "backToWebsite": "Back to product site"
   },
   "actions": {
-    "addInventoryItem": "Add inventory item",
-    "addItem": "Add item",
+    "new": "New",
+    "createMenu": "Create a new item",
+    "manualEntry": "Enter manually",
+    "manualEntryDescription": "Add the details yourself",
+    "photoCapture": "Capture with photos",
+    "photoCaptureDescription": "Take or upload photos",
     "signOut": "Sign out",
     "openNavigation": "Open navigation",
-    "closeNavigation": "Close navigation",
-    "helpAndConfiguration": "Help and configuration"
+    "closeNavigation": "Close navigation"
   },
   "user": {
     "generic": "User",
@@ -59,13 +64,14 @@
     "action": "Search"
   },
   "settings": {
-    "eyebrow": "Workspace",
     "title": "Settings",
     "description": "Configure data, access, and integrations.",
     "navigationLabel": "Settings navigation",
     "groups": {
-      "workspace": "Workspace",
-      "developer": "Developer"
+      "general": "General",
+      "inventory": "Inventory",
+      "peopleAccess": "People & access",
+      "integrationsAdvanced": "Integrations & advanced"
     },
     "items": {
       "organization": {

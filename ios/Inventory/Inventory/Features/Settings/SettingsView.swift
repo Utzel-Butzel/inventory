@@ -149,6 +149,20 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Bilder") {
+                Picker("Maximale Bildkante", selection: maximumUploadImagePixelSizeSelection) {
+                    ForEach(ImageSizePreferences.uploadPixelSizes, id: \.self) { pixelSize in
+                        Text(imageSizeLabel(pixelSize))
+                            .tag(pixelSize)
+                    }
+                }
+                .pickerStyle(.navigationLink)
+
+                Text("Größere neue Inventarbilder werden proportional verkleinert. Kleinere Bilder bleiben unverändert.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Arbeitsbereich") {
                 NavigationLink {
                     InventoryTypesSettingsView(client: state.client)
@@ -212,6 +226,72 @@ struct SettingsView: View {
                     Text(imageModelHelpText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    Picker(
+                        "Maximale generierte Bildkante",
+                        selection: maximumAIGeneratedImagePixelSizeSelection
+                    ) {
+                        ForEach(ImageSizePreferences.aiGeneratedPixelSizes, id: \.self) { pixelSize in
+                            Text(imageSizeLabel(pixelSize))
+                                .tag(pixelSize)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+
+                    Text("Die Auswahl gilt für neue KI-Cover. Bereits wartende Uploads behalten ihre gespeicherte Größe.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section {
+                    NavigationLink {
+                        AIPromptEditorView(
+                            title: "Analyse-Prompt",
+                            prompt: state.analysisPrompt,
+                            helpText: "Ersetzt den Server-Standard für die Auswertung von Fotos und die Formulierung der Inventardaten.",
+                            onSave: state.setAnalysisPrompt
+                        )
+                    } label: {
+                        settingsRow(
+                            title: "Analyse",
+                            subtitle: promptStatus(state.analysisPrompt),
+                            systemImage: "text.magnifyingglass"
+                        )
+                    }
+
+                    NavigationLink {
+                        AIPromptEditorView(
+                            title: "Cover-Prompt",
+                            prompt: state.coverPrompt,
+                            helpText: "Ersetzt den Server-Standard für die Erzeugung normaler KI-Cover.",
+                            onSave: state.setCoverPrompt
+                        )
+                    } label: {
+                        settingsRow(
+                            title: "Cover",
+                            subtitle: promptStatus(state.coverPrompt),
+                            systemImage: "photo.badge.plus"
+                        )
+                    }
+
+                    NavigationLink {
+                        AIPromptEditorView(
+                            title: "Prompt für transparente Cover",
+                            prompt: state.transparentCoverPrompt,
+                            helpText: "Ersetzt den Server-Standard für transparente Cover aus 3D-Objekterfassungen. Technische Freistell-Anweisungen ergänzt der Server automatisch.",
+                            onSave: state.setTransparentCoverPrompt
+                        )
+                    } label: {
+                        settingsRow(
+                            title: "Transparentes Cover",
+                            subtitle: promptStatus(state.transparentCoverPrompt),
+                            systemImage: "square.dashed"
+                        )
+                    }
+                } header: {
+                    Text("KI-Prompts")
+                } footer: {
+                    Text("Eigene Prompts ersetzen den jeweiligen Server-Standard vollständig. Leere Felder verwenden den dynamischen Server-Standard. Neue Uploads speichern die aktuelle Auswahl für zuverlässige Wiederholungen.")
                 }
             }
 
@@ -315,6 +395,28 @@ struct SettingsView: View {
             get: { state.selectedImageModelID ?? "" },
             set: { state.selectImageModel($0.isEmpty ? nil : $0) }
         )
+    }
+
+    private var maximumUploadImagePixelSizeSelection: Binding<Int> {
+        Binding(
+            get: { state.maximumUploadImagePixelSize },
+            set: { state.setMaximumUploadImagePixelSize($0) }
+        )
+    }
+
+    private var maximumAIGeneratedImagePixelSizeSelection: Binding<Int> {
+        Binding(
+            get: { state.maximumAIGeneratedImagePixelSize },
+            set: { state.setMaximumAIGeneratedImagePixelSize($0) }
+        )
+    }
+
+    private func imageSizeLabel(_ pixelSize: Int) -> String {
+        "\(pixelSize.formatted()) px"
+    }
+
+    private func promptStatus(_ prompt: String?) -> String {
+        prompt == nil ? "Server-Standard" : "Eigener Prompt"
     }
 
     private var serverDefaultModelLabel: String {
@@ -439,6 +541,71 @@ struct SettingsView: View {
         let hasPassword = !password.isEmpty
         if hasEmail || hasPassword { return hasEmail && hasPassword }
         return state.hasStoredToken
+    }
+}
+
+private struct AIPromptEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: String
+
+    let title: String
+    let helpText: String
+    let onSave: (String?) -> Void
+
+    init(
+        title: String,
+        prompt: String?,
+        helpText: String,
+        onSave: @escaping (String?) -> Void
+    ) {
+        self.title = title
+        self.helpText = helpText
+        self.onSave = onSave
+        _draft = State(initialValue: prompt ?? "")
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                TextEditor(text: $draft)
+                    .frame(minHeight: 260)
+                    .textInputAutocapitalization(.sentences)
+                    .autocorrectionDisabled(false)
+            } header: {
+                HStack {
+                    Text("Prompt")
+                    Spacer()
+                    Text("\(draft.utf16.count.formatted()) / \(AIPromptPreferences.maximumUTF16Length.formatted())")
+                        .foregroundStyle(isTooLong ? Color.red : Color.secondary)
+                        .monospacedDigit()
+                }
+            } footer: {
+                Text("\(helpText) Lasse das Feld leer, um den Server-Standard zu verwenden.")
+            }
+
+            if !draft.isEmpty {
+                Section {
+                    Button("Server-Standard verwenden") {
+                        draft = ""
+                    }
+                }
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Speichern") {
+                    onSave(draft)
+                    dismiss()
+                }
+                .disabled(isTooLong)
+            }
+        }
+    }
+
+    private var isTooLong: Bool {
+        draft.utf16.count > AIPromptPreferences.maximumUTF16Length
     }
 }
 

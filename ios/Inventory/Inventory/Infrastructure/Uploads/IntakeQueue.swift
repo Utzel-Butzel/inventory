@@ -47,6 +47,9 @@ struct IntakeJob: Identifiable, Codable, Equatable, Sendable {
     var coverCompleted: Bool
     var analysisOperationID: UUID?
     var coverOperationID: UUID?
+    var maximumAIGeneratedImagePixelSize: Int? = nil
+    var analysisPrompt: String? = nil
+    var coverPrompt: String? = nil
     var spatialPlacement: SpatialPlacementDraft? = nil
     var placementCompleted: Bool? = nil
     var placementWarning: String? = nil
@@ -150,6 +153,9 @@ final class IntakeQueue: ObservableObject {
             coverCompleted: !submission.generateCover,
             analysisOperationID: submission.analyze ? UUID() : nil,
             coverOperationID: submission.generateCover ? UUID() : nil,
+            maximumAIGeneratedImagePixelSize: submission.maximumAIGeneratedImagePixelSize,
+            analysisPrompt: submission.analyze ? submission.analysisPrompt : nil,
+            coverPrompt: submission.generateCover ? submission.coverPrompt : nil,
             spatialPlacement: submission.spatialPlacement,
             placementCompleted: submission.spatialPlacement == nil,
             placementWarning: nil,
@@ -434,6 +440,7 @@ final class IntakeQueue: ObservableObject {
                     let response = try await client.analyzeResource(
                         id: resourceID,
                         overwrite: true,
+                        prompt: job.analysisPrompt,
                         idempotencyKey: job.analysisOperationID ?? job.id
                     )
                     job.resourceName = response.resource.name
@@ -464,7 +471,9 @@ final class IntakeQueue: ObservableObject {
                 do {
                     let response = try await client.generateCover(
                         resourceID: resourceID,
+                        prompt: job.coverPrompt,
                         modelID: job.imageModelID,
+                        maximumImageSize: job.maximumAIGeneratedImagePixelSize,
                         idempotencyKey: job.coverOperationID ?? job.id
                     )
                     job.resourceName = response.resource.name

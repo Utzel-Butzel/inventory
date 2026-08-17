@@ -2,6 +2,8 @@
   "variants": {
     "title": "Variants",
     "description": "Optional choices with their own SKU, barcode, price and bulk stock.",
+    "legacyTitle": "Legacy variants",
+    "legacyDescription": "Earlier lightweight variants retained for compatibility. New variants are full inventory items in the family above.",
     "allocated": "{{value}} allocated",
     "unallocated": "{{value}} unallocated",
     "serializedDisabled": "Variants are disabled for serialized tracking. Identified units continue to use the item-level stock workflow.",
@@ -42,14 +44,70 @@
       "invalidStock": "Enter a non-zero whole stock change."
     }
   },
+  "family": {
+    "title": "Variant family",
+    "description": "Linked variants are full inventory items with their own operations.",
+    "variantDescription": "Variant of {{name}}, with its own stock and history.",
+    "primaryItem": "Primary item",
+    "variantOf": "Variant of {{name}}",
+    "siblings": "Other variants",
+    "noSiblings": "There are no other variants in this family yet.",
+    "legacyCount_one": "{{value}} legacy variant",
+    "legacyCount_other": "{{value}} legacy variants",
+    "variantCount_one": "{{value}} variant",
+    "variantCount_other": "{{value}} variants",
+    "overrides_one": "{{value}} override",
+    "overrides_other": "{{value}} overrides",
+    "optional": "optional",
+    "loading": "Loading variant family",
+    "tracking": {
+      "bulk": "Bulk",
+      "serialized": "Serialized"
+    },
+    "fields": {
+      "name": "Name",
+      "sku": "SKU",
+      "barcode": "Barcode"
+    },
+    "create": {
+      "title": "Create variant",
+      "namePlaceholder": "e.g. Blue / Large",
+      "inheritanceHelp": "Shared details and the bill of materials inherit from the primary item. Stock, locations, serialization, relationships, and manufacturing history remain independent."
+    },
+    "detach": {
+      "confirm": "Detach this variant from {{name}}? Its current shared details and effective bill of materials will be kept. Stock, locations, serial units, relationships, assignments, and build history will stay with this item.",
+      "success": "Detached from {{name}}. This item and all of its operational history remain intact."
+    },
+    "empty": {
+      "title": "No linked variants",
+      "description": "Create a variant to keep shared details connected while managing its operations independently."
+    },
+    "actions": {
+      "add": "Add variant",
+      "createAndEdit": "Create & edit",
+      "creating": "Creating…",
+      "detach": "Detach",
+      "detaching": "Detaching…",
+      "cancel": "Cancel",
+      "open": "Open",
+      "edit": "Edit {{name}}",
+      "stock": "Manage stock for {{name}}",
+      "dismissError": "Dismiss variant family error"
+    },
+    "errors": {
+      "load": "Unable to load the variant family.",
+      "create": "Unable to create the variant.",
+      "detach": "Unable to detach the variant.",
+      "nameRequired": "Enter a name for the variant."
+    }
+  },
   "actions": {
     "batchCapture": "Batch capture",
     "addItem": "Add item",
     "addAnItem": "Add an item"
   },
   "list": {
-    "eyebrow": "Inventory library",
-    "title": "Everything, findable."
+    "title": "Inventory"
   },
   "search": {
     "label": "Search inventory",
@@ -78,11 +136,10 @@
   "empty": {
     "filteredTitle": "No matching items",
     "filteredDescription": "Try a broader search or clear the active filters.",
-    "title": "Your inventory is ready",
-    "description": "Add your first record manually, or use batch capture to photograph and catalogue it with AI."
+    "title": "No items yet",
+    "description": "Add your first item."
   },
   "item": {
-    "aiEnriched": "AI enriched",
     "noDescription": "No description yet.",
     "noLocation": "No location",
     "units_one": "{{value}} unit",

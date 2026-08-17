@@ -1,6 +1,8 @@
 import sharp from "sharp";
 
-const outputSize = 1024;
+import { squareImageSizeAtMost } from "@/lib/cover-image-output";
+import { defaultMaximumGeneratedImageSize } from "@/lib/image-generation-size";
+
 const maximumRgbDistance = Math.sqrt(3 * 255 * 255);
 
 const clampUnit = (value: number) => Math.max(0, Math.min(1, value));
@@ -269,15 +271,20 @@ export function extractGreenScreenPixels(
   return output;
 }
 
-const rgbaSquare = (bytes: Buffer) =>
+const rgbaSquare = (bytes: Buffer, outputSize: number) =>
   sharp(bytes, { failOn: "none" })
     .rotate()
-    .resize({ width: outputSize, height: outputSize, fit: "cover" })
+    .resize({
+      width: outputSize,
+      height: outputSize,
+      fit: "cover",
+      withoutEnlargement: true,
+    })
     .ensureAlpha()
     .raw()
     .toBuffer();
 
-const encodeRgbaPng = (pixels: Buffer) =>
+const encodeRgbaPng = (pixels: Buffer, outputSize: number) =>
   sharp(pixels, {
     raw: { width: outputSize, height: outputSize, channels: 4 },
   })
@@ -287,18 +294,28 @@ const encodeRgbaPng = (pixels: Buffer) =>
 export async function extractDifferenceMatte(
   whiteImage: Buffer,
   blackImage: Buffer,
+  maximumImageSize = defaultMaximumGeneratedImageSize,
 ) {
+  const outputSize = await squareImageSizeAtMost(
+    [whiteImage, blackImage],
+    maximumImageSize,
+  );
   const [whitePixels, blackPixels] = await Promise.all([
-    rgbaSquare(whiteImage),
-    rgbaSquare(blackImage),
+    rgbaSquare(whiteImage, outputSize),
+    rgbaSquare(blackImage, outputSize),
   ]);
   return encodeRgbaPng(
     extractDifferenceMattePixels(whitePixels, blackPixels),
+    outputSize,
   );
 }
 
-export async function extractGreenScreen(image: Buffer) {
-  const pixels = await rgbaSquare(image);
+export async function extractGreenScreen(
+  image: Buffer,
+  maximumImageSize = defaultMaximumGeneratedImageSize,
+) {
+  const outputSize = await squareImageSizeAtMost([image], maximumImageSize);
+  const pixels = await rgbaSquare(image, outputSize);
   const extracted = extractGreenScreenPixels(pixels, outputSize, outputSize);
   let transparentPixelCount = 0;
   for (let offset = 3; offset < extracted.length; offset += 4) {
@@ -309,5 +326,5 @@ export async function extractGreenScreen(image: Buffer) {
       "The generated screen background could not be separated reliably. Try difference matting or regenerate the cover.",
     );
   }
-  return encodeRgbaPng(extracted);
+  return encodeRgbaPng(extracted, outputSize);
 }

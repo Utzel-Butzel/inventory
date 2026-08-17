@@ -2,17 +2,19 @@
   "variants": {
     "title": "Varianten",
     "description": "Optionale Ausführungen mit eigener SKU, Barcode, Preis und Sammelbestand.",
+    "legacyTitle": "Alte Varianten",
+    "legacyDescription": "Frühere einfache Varianten bleiben aus Kompatibilitätsgründen erhalten. Neue Varianten sind vollständige Inventareinträge in der obigen Familie.",
     "allocated": "{{value}} zugeordnet",
     "unallocated": "{{value}} nicht zugeordnet",
-    "serializedDisabled": "Varianten sind bei serialisierter Bestandsführung deaktiviert. Identifizierte Einheiten bleiben auf Artikelebene.",
-    "empty": "Keine Varianten. Der übergeordnete Artikel funktioniert unverändert weiter.",
+    "serializedDisabled": "Varianten sind bei serialisierter Bestandsführung deaktiviert. Identifizierte Einheiten bleiben dem Eintrag zugeordnet.",
+    "empty": "Keine Varianten. Der übergeordnete Eintrag bleibt unverändert.",
     "optional": "optional",
     "currency": "Währung",
     "namePlaceholder": "z. B. Blau / Groß",
     "openingAllocation": "Anfangszuordnung",
-    "openingAllocationHelp": "Aus dem bestehenden, noch nicht zugeordneten Artikelbestand",
+    "openingAllocationHelp": "Aus dem bestehenden, noch nicht zugeordneten Bestand des Eintrags",
     "stockChange": "Bestandsänderung für {{name}}",
-    "stockHelp": "Positive Werte buchen Zugang, negative Werte Abgang. Artikel- und Variantenbestand werden atomar aktualisiert.",
+    "stockHelp": "Positive Werte buchen Zugang, negative Werte Abgang. Eintrags- und Variantenbestand werden gemeinsam aktualisiert.",
     "addTitle": "Variante hinzufügen",
     "editTitle": "{{name}} bearbeiten",
     "confirmDelete": "Variante „{{name}}“ löschen?",
@@ -42,18 +44,74 @@
       "invalidStock": "Gib eine von null verschiedene ganze Bestandsänderung ein."
     }
   },
+  "family": {
+    "title": "Variantenfamilie",
+    "description": "Verknüpfte Varianten sind vollständige Inventareinträge mit eigenen Vorgängen.",
+    "variantDescription": "Variante von {{name}} mit eigenem Bestand und Verlauf.",
+    "primaryItem": "Haupteintrag",
+    "variantOf": "Variante von {{name}}",
+    "siblings": "Weitere Varianten",
+    "noSiblings": "In dieser Familie gibt es noch keine weiteren Varianten.",
+    "legacyCount_one": "{{value}} alte Variante",
+    "legacyCount_other": "{{value}} alte Varianten",
+    "variantCount_one": "{{value}} Variante",
+    "variantCount_other": "{{value}} Varianten",
+    "overrides_one": "{{value}} Abweichung",
+    "overrides_other": "{{value}} Abweichungen",
+    "optional": "optional",
+    "loading": "Variantenfamilie wird geladen",
+    "tracking": {
+      "bulk": "Sammelbestand",
+      "serialized": "Serialisiert"
+    },
+    "fields": {
+      "name": "Name",
+      "sku": "SKU",
+      "barcode": "Barcode"
+    },
+    "create": {
+      "title": "Variante erstellen",
+      "namePlaceholder": "z. B. Blau / Groß",
+      "inheritanceHelp": "Gemeinsame Details und die Stückliste werden vom Haupteintrag geerbt. Bestand, Standorte, Serialisierung, Beziehungen und Fertigungsverlauf werden unabhängig geführt."
+    },
+    "detach": {
+      "confirm": "Diese Variante von {{name}} trennen? Die aktuellen gemeinsamen Details und die wirksame Stückliste bleiben erhalten. Bestand, Standorte, Serienexemplare, Beziehungen, Zuweisungen und Fertigungsverlauf bleiben bei diesem Eintrag.",
+      "success": "Von {{name}} getrennt. Dieser Eintrag und sein gesamter Vorgangsverlauf bleiben erhalten."
+    },
+    "empty": {
+      "title": "Keine verknüpften Varianten",
+      "description": "Erstelle eine Variante, um gemeinsame Details verbunden zu halten und ihre Vorgänge unabhängig zu verwalten."
+    },
+    "actions": {
+      "add": "Variante hinzufügen",
+      "createAndEdit": "Erstellen und bearbeiten",
+      "creating": "Wird erstellt…",
+      "detach": "Trennen",
+      "detaching": "Wird getrennt…",
+      "cancel": "Abbrechen",
+      "open": "Öffnen",
+      "edit": "{{name}} bearbeiten",
+      "stock": "Bestand für {{name}} verwalten",
+      "dismissError": "Fehler der Variantenfamilie schließen"
+    },
+    "errors": {
+      "load": "Die Variantenfamilie konnte nicht geladen werden.",
+      "create": "Die Variante konnte nicht erstellt werden.",
+      "detach": "Die Variante konnte nicht getrennt werden.",
+      "nameRequired": "Gib einen Namen für die Variante ein."
+    }
+  },
   "actions": {
-    "batchCapture": "Stapelerfassung",
+    "batchCapture": "Fotoerfassung",
     "addItem": "Eintrag hinzufügen",
     "addAnItem": "Eintrag hinzufügen"
   },
   "list": {
-    "eyebrow": "Inventarbibliothek",
-    "title": "Alles. Jederzeit auffindbar."
+    "title": "Inventar"
   },
   "search": {
     "label": "Inventar durchsuchen",
-    "placeholder": "Name, Beschreibung, SKU, Schlagwort oder Ort suchen…",
+    "placeholder": "Name, Beschreibung, SKU, Schlagwort oder Standort suchen…",
     "clear": "Suche leeren"
   },
   "filters": {
@@ -78,13 +136,12 @@
   "empty": {
     "filteredTitle": "Keine passenden Einträge",
     "filteredDescription": "Versuche eine allgemeinere Suche oder setze die aktiven Filter zurück.",
-    "title": "Dein Inventar ist bereit",
-    "description": "Füge den ersten Eintrag manuell hinzu oder fotografiere und katalogisiere ihn per Stapelerfassung mit KI."
+    "title": "Noch keine Einträge",
+    "description": "Füge deinen ersten Eintrag hinzu."
   },
   "item": {
-    "aiEnriched": "Mit KI angereichert",
     "noDescription": "Noch keine Beschreibung.",
-    "noLocation": "Kein Ort",
+    "noLocation": "Kein Standort",
     "units_one": "{{value}} Einheit",
     "units_other": "{{value}} Einheiten"
   },
@@ -93,7 +150,7 @@
     "status": "Status",
     "sku": "SKU",
     "barcode": "Barcode",
-    "location": "Ort",
+    "location": "Standort",
     "value": "Wert"
   },
   "pagination": {
@@ -135,7 +192,7 @@
     "quantity": "Menge",
     "sku": "SKU",
     "serialNumber": "Seriennummer",
-    "location": "Ort",
+    "location": "Standort",
     "value": "Wert",
     "priority": "Priorität",
     "created": "Erstellt"
@@ -217,9 +274,9 @@
     "translationFallback_one": "{{value}} Feld wird weiterhin in der Standardsprache angezeigt, da die Übersetzung fehlt oder veraltet ist.",
     "translationFallback_other": "{{value}} Felder werden weiterhin in der Standardsprache angezeigt, da ihre Übersetzungen fehlen oder veraltet sind.",
     "emptyDescription": "Noch keine Beschreibung hinzugefügt.",
-    "articleImage": "Artikelbild",
-    "noArticleImage": "Noch kein Artikelbild",
-    "addArticleImage": "Artikelbild hinzufügen",
+    "articleImage": "Titelbild",
+    "noArticleImage": "Noch kein Titelbild",
+    "addArticleImage": "Titelbild hinzufügen",
     "files_one": "{{value}} Datei",
     "files_other": "{{value}} Dateien",
     "priority": "{{value}} / 5",
@@ -260,7 +317,7 @@
     "dismissError": "Fehlermeldung schließen",
     "loadingMatches": "Duplikatvorschläge werden geladen",
     "empty": {
-      "title": "Alles ist aufgeräumt",
+      "title": "Keine Duplikate gefunden",
       "description": "Es wurden keine wahrscheinlichen Duplikate gefunden. Starte die Suche nach dem Import oder der Erstellung weiterer Einträge erneut."
     },
     "potentialMatch": "Potenzielle Übereinstimmung {{value}}",

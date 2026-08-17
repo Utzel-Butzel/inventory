@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   organizationCreateInputSchema,
   organizationSelectInputSchema,
+  organizationUpdateInputSchema,
 } from "../lib/validators.ts";
 
 const read = (path) =>
@@ -20,6 +21,23 @@ test("organization request validators reject ambiguous or malformed input", () =
       .success,
     false,
   );
+  assert.deepEqual(
+    organizationCreateInputSchema.parse({
+      name: "Workshop Berlin",
+      slug: "  Workshop-Berlin  ",
+    }),
+    { name: "Workshop Berlin", slug: "workshop-berlin" },
+  );
+  assert.equal(
+    organizationCreateInputSchema.safeParse({ name: "Workshop", slug: "login" })
+      .success,
+    false,
+  );
+  assert.deepEqual(
+    organizationUpdateInputSchema.parse({ slug: "new-workshop" }),
+    { slug: "new-workshop" },
+  );
+  assert.equal(organizationUpdateInputSchema.safeParse({}).success, false);
   assert.deepEqual(
     organizationSelectInputSchema.parse({
       organizationId: "11111111-1111-4111-8111-111111111111",

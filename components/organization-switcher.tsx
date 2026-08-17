@@ -10,6 +10,7 @@ export type ActiveOrganization = {
   id: string;
   name: string;
   slug: string;
+  isReadOnly: boolean;
 };
 
 export type OrganizationMembershipSummary = ActiveOrganization & {
@@ -66,7 +67,15 @@ export function OrganizationSwitcher({
 
       // Organization selection changes the authorization boundary for every
       // client-side data source. A full navigation clears stale workspace state.
-      window.location.assign(organizationPath(organizationId, "/dashboard"));
+      const selectedOrganization = organizations.find(
+        (candidate) => candidate.id === organizationId,
+      );
+      window.location.assign(
+        organizationPath(
+          selectedOrganization?.slug ?? organization.slug,
+          "/dashboard",
+        ),
+      );
     } catch (switchError) {
       setSelectedId(organization.id);
       setSwitching(false);

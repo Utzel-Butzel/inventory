@@ -14,9 +14,9 @@ import {
   LockKeyhole,
   Plus,
   RefreshCw,
+  ScanSearch,
   Server,
   ShieldCheck,
-  Sparkles,
   SquareTerminal,
   Trash2,
   X,
@@ -361,7 +361,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
             <div className="group rounded-2xl border border-border/80 bg-surface p-4 shadow-[var(--shadow-sm)] transition hover:border-border-strong hover:shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <span className="grid size-10 place-items-center rounded-xl bg-brand-soft text-brand">
-                  <Sparkles className="size-5" />
+                  <ScanSearch className="size-5" />
                 </span>
                 <StatusPill
                   ready={runtime.ai.analysis}

@@ -137,6 +137,12 @@ export async function POST(request: Request) {
       { status: parsed.data.organizationId ? 404 : 403, headers: noStoreHeaders },
     );
   }
+  if (organization.isReadOnly) {
+    return Response.json(
+      { error: "Native API access is disabled for read-only organizations." },
+      { status: 403, headers: noStoreHeaders },
+    );
+  }
 
   resetRateLimit(accountLimitKey);
   resetRateLimit(pairLimitKey);

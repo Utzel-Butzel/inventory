@@ -46,8 +46,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=dependencies --chown=nextjs:nodejs /app/node_modules/postgres ./node_modules/postgres
 COPY --from=dependencies --chown=nextjs:nodejs /app/node_modules/bcryptjs ./node_modules/bcryptjs
 COPY --from=builder --chown=nextjs:nodejs /app/db/migrations ./db/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/demo ./demo
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrate.mjs ./scripts/migrate.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/bootstrap-credential.mjs ./scripts/bootstrap-credential.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/demo-seed-manifest.mjs ./scripts/demo-seed-manifest.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/seed-demo.mjs ./scripts/seed-demo.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/start-production.mjs ./scripts/start-production.mjs
 RUN mkdir -p /app/data/uploads && chown -R nextjs:nodejs /app/data
 

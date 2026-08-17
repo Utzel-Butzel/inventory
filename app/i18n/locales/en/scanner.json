@@ -159,7 +159,7 @@
       "selectField": "Select {{field}}",
       "metadataPreview": "Metadata preview",
       "updateErrorTitle": "Update was not completed",
-      "retryHelp": "You can retry safely; the same idempotency key is reused.",
+      "retryHelp": "You can try again without creating a duplicate stock entry.",
       "unitUnavailable": "No unit with this EPD number exists, and this workflow is not allowed to create one. Change the workflow or create the unit before trying again.",
       "readOnly": "This is a read-only preview. Your role cannot execute stock changes.",
       "scanAgain": "Scan again",

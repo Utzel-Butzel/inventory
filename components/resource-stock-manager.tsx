@@ -35,7 +35,6 @@ import {
   ShieldAlert,
   ShoppingCart,
   SlidersHorizontal,
-  Sparkles,
   TrendingDown,
   X,
 } from "lucide-react";
@@ -1693,7 +1692,7 @@ export function ResourceStockManager({
                     : "bg-brand-soft text-brand"
                 }`}
               >
-                <Sparkles className="size-4" aria-hidden="true" />
+                <TrendingDown className="size-4" aria-hidden="true" />
               </span>
             </div>
             <div className="relative mt-6 h-2 rounded-full bg-surface-muted">

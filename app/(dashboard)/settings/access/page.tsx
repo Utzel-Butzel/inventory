@@ -19,7 +19,7 @@ export default async function AccessSettingsPage() {
   const identity = await getSessionIdentity();
   if (!identity) redirect("/login");
   if (!identity.permissions.includes("roles.manage")) {
-    redirect(organizationPath(identity.organizationId, "/settings/data"));
+    redirect(organizationPath(identity.organization.slug, "/settings/data"));
   }
   const { t } = await getT("settings");
 

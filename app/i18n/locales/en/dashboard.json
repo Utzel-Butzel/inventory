@@ -2,17 +2,12 @@
   "metadata": {
     "title": "Overview"
   },
-  "eyebrow": "Workspace overview",
   "greeting": {
     "morning": "Good morning",
     "afternoon": "Good afternoon",
     "evening": "Good evening"
   },
-  "subtitle": "Here’s what’s happening across your inventory.",
   "actions": {
-    "batchUpload": "Batch upload",
-    "addItem": "Add item",
-    "addFirstItem": "Add first item",
     "retry": "Try again",
     "viewAll": "View all"
   },
@@ -47,19 +42,14 @@
     "subtitle": "Latest additions and updates",
     "quantity": "Qty {{value}}",
     "empty": {
-      "title": "Your inventory is ready",
-      "description": "Add your first item manually, or upload a group of images and let AI do the repetitive work."
+      "title": "No items yet",
+      "description": "Add your first item."
     }
   },
   "mix": {
     "title": "Inventory mix",
     "subtitle": "Items by type",
     "empty": "Item types will appear here."
-  },
-  "batchCard": {
-    "title": "Turn photos into records",
-    "description": "Upload images in batches, then generate titles, details, tags, and polished covers with AI.",
-    "action": "Open batch studio"
   },
   "relative": {
     "recently": "Recently",

@@ -14,6 +14,11 @@ final class AppState: ObservableObject {
     @Published private(set) var availableImageModels: [ImageGenerationModelOption] = []
     @Published private(set) var defaultImageModelID: String?
     @Published private(set) var selectedImageModelID: String?
+    @Published private(set) var maximumUploadImagePixelSize: Int
+    @Published private(set) var maximumAIGeneratedImagePixelSize: Int
+    @Published private(set) var analysisPrompt: String?
+    @Published private(set) var coverPrompt: String?
+    @Published private(set) var transparentCoverPrompt: String?
     @Published var selectedTab: RootTab = .inventory
     @Published var presentedTool: PresentedTool?
     @Published var pendingScanCode: String?
@@ -43,6 +48,13 @@ final class AppState: ObservableObject {
         self.credentialStore = credentialStore
         self.defaults = defaults
         self.serverAddress = defaults.string(forKey: serverKey) ?? ""
+        self.maximumUploadImagePixelSize = ImageSizePreferences
+            .maximumUploadImagePixelSize(in: defaults)
+        self.maximumAIGeneratedImagePixelSize = ImageSizePreferences
+            .maximumAIGeneratedImagePixelSize(in: defaults)
+        self.analysisPrompt = nil
+        self.coverPrompt = nil
+        self.transparentCoverPrompt = nil
         self.authenticationMethod = defaults.string(forKey: authenticationMethodKey)
             .flatMap(StoredAuthenticationMethod.init(rawValue:))
         self.tokenExpiresAt = defaults.object(forKey: tokenExpiresAtKey) as? Date
@@ -79,6 +91,44 @@ final class AppState: ObservableObject {
         } else {
             defaults.set(preferences, forKey: imageModelPreferencesKey)
         }
+    }
+
+    func setMaximumUploadImagePixelSize(_ pixelSize: Int) {
+        maximumUploadImagePixelSize = ImageSizePreferences
+            .setMaximumUploadImagePixelSize(pixelSize, in: defaults)
+    }
+
+    func setMaximumAIGeneratedImagePixelSize(_ pixelSize: Int) {
+        maximumAIGeneratedImagePixelSize = ImageSizePreferences
+            .setMaximumAIGeneratedImagePixelSize(pixelSize, in: defaults)
+    }
+
+    func setAnalysisPrompt(_ prompt: String?) {
+        guard let contextIdentifier = client?.contextIdentifier else { return }
+        analysisPrompt = AIPromptPreferences.setAnalysisPrompt(
+            prompt,
+            for: contextIdentifier,
+            in: defaults
+        )
+    }
+
+    func setCoverPrompt(_ prompt: String?) {
+        guard let contextIdentifier = client?.contextIdentifier else { return }
+        coverPrompt = AIPromptPreferences.setCoverPrompt(
+            prompt,
+            for: contextIdentifier,
+            in: defaults
+        )
+    }
+
+    func setTransparentCoverPrompt(_ prompt: String?) {
+        guard let contextIdentifier = client?.contextIdentifier else { return }
+        transparentCoverPrompt = AIPromptPreferences
+            .setTransparentCoverPrompt(
+                prompt,
+                for: contextIdentifier,
+                in: defaults
+            )
     }
 
     @discardableResult
@@ -701,6 +751,7 @@ final class AppState: ObservableObject {
         availableImageModels = []
         defaultImageModelID = nil
         selectedImageModelID = storedImageModelID(for: activeClient)
+        loadPromptPreferences(for: activeClient)
         Task { [weak self] in
             await self?.loadImageModels(
                 using: discoveryClient,
@@ -751,10 +802,28 @@ final class AppState: ObservableObject {
             ?? preferences?[client.serverURL.absoluteString] as? String
     }
 
+    private func loadPromptPreferences(for client: APIClient) {
+        analysisPrompt = AIPromptPreferences.analysisPrompt(
+            for: client.contextIdentifier,
+            in: defaults
+        )
+        coverPrompt = AIPromptPreferences.coverPrompt(
+            for: client.contextIdentifier,
+            in: defaults
+        )
+        transparentCoverPrompt = AIPromptPreferences.transparentCoverPrompt(
+            for: client.contextIdentifier,
+            in: defaults
+        )
+    }
+
     private func resetImageModelState() {
         availableImageModels = []
         defaultImageModelID = nil
         selectedImageModelID = nil
+        analysisPrompt = nil
+        coverPrompt = nil
+        transparentCoverPrompt = nil
     }
 
     private func revokeBestEffort(serverURL: URL, token: String) async {

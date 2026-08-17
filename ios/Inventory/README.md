@@ -11,7 +11,8 @@ WebRTC is not required for app-to-server uploads.
 - QR, EAN-8/EAN-13, UPC-E, Code 128, Data Matrix, PDF417, and Aztec scanning
 - Exact lookup by resource UUID/link, SKU, or serial number
 - Create a new item from an unknown code and continue in the same photo flow
-- Capture or select up to 12 photos, downsampled with ImageIO to 2,200 px JPEG
+- Capture or select up to 12 photos, downsampled with ImageIO to a configurable
+  largest-side JPEG limit (1,024, 1,600, 2,200 by default, or 4,096 px)
 - Persistent, crash-safe upload pipeline: create → media → analysis → optional cover
 - Server-approved image-model selection, remembered separately for each server
 - Automatic retry with backoff and end-to-end idempotency for every queued stage
@@ -119,6 +120,23 @@ field up to 180 characters. External URLs are never opened automatically.
 
 ## Upload behavior
 
+The iOS settings keep two validated, device-local image-size preferences. New
+inventory photos and Object Capture representative images use a maximum largest
+side of 1,024, 1,600, 2,200 (the default), or 4,096 pixels. Images below the
+selected limit are not enlarged. Recognition, counting, and spatial keyframes
+retain their own fixed processing bounds because they are transient or carry
+camera-calibration metadata.
+
+Generated AI covers use a separate 1,024 (the default), 2,048, or 4,096-pixel
+maximum. Both the selected cover model and generated-image size are copied into
+each new upload job, so later settings changes do not alter a queued retry.
+
+The AI settings also support separate prompt overrides for inventory analysis,
+regular covers, and transparent Object Capture covers. Overrides are kept per
+server, organization, and signed-in account; an empty prompt uses the server's
+dynamic default. New upload jobs snapshot their prompts so retries keep the
+same idempotent request.
+
 Before a job starts, prepared JPEGs are copied to Application Support. The job
 manifest and backup record each completed server stage, so a relaunch verifies
 the complete local photo set before it resumes. Multipart bodies are streamed
@@ -130,8 +148,6 @@ Each job is pinned to the canonical server origin and carries stable operation
 IDs for resource creation, media, analysis, and cover generation. The matching
 API routes persist these idempotency keys, so a lost response can be retried
 without creating a second item, duplicate media, or another paid AI operation.
-The selected cover model is copied into the queued job as well, so changing the
-app preference does not alter work that is already waiting to upload.
 Transient network and rate-limit errors use bounded exponential backoff.
 
 ## Photo counting
@@ -173,6 +189,55 @@ or ambiguous result is clearly marked for review. The query JPEG is transient,
 is not attached to an inventory item, and is deleted locally when the camera
 closes or a new photo is taken. Server access requires both `ai.use` and direct
 `inventory.read` permission.
+
+## TestFlight deployment
+
+Fastlane is pinned through the root `Gemfile`, and all commands run from the
+repository root. The initial setup needs Ruby 3.2 or newer with Bundler (Ruby
+3.3 or newer is recommended), Xcode 26 or newer, and an Apple Distribution
+signing identity for team `6CXYQL7FXP`. Automatic signing also expects the team
+to be signed in and configured in Xcode. Xcode is allowed to refresh the
+matching App Store provisioning profile during IPA export; this is necessary
+whenever the team's Apple Distribution certificate changes.
+
+Create an App Store Connect Team API key with the **App Manager** role. Download
+and back up its `.p8` file immediately because Apple only offers it once. Keep
+the key outside this repository, then prepare the ignored local environment:
+
+```bash
+cp fastlane/.env.example fastlane/.env
+gem install bundler -v 4.0.8
+npm run fastlane:install
+```
+
+Fill in the key ID, issuer ID, and absolute `.p8` path in `fastlane/.env`. A
+Base64-encoded key is supported as an alternative for CI secret stores. Verify
+the local project and shared Xcode scheme without uploading anything:
+
+```bash
+npm run ios:check
+```
+
+Create a signed IPA under `build/ios` without contacting TestFlight:
+
+```bash
+npm run ios:build
+```
+
+Deploy the next build to TestFlight with either equivalent command:
+
+```bash
+npm run deploy
+npm run deploy:ios
+```
+
+The deploy lane reads the latest build number for the current marketing version
+from TestFlight and uses the next integer only for that `xcodebuild` invocation;
+it does not edit `project.pbxproj`. Set `IOS_BUILD_NUMBER` only when an external
+system allocates build numbers, and do not run two deployments concurrently.
+`TESTFLIGHT_CHANGELOG` optionally supplies the "What to Test" text. The command
+uploads for internal TestFlight use and never submits the app for App Review or
+notifies external testers.
 
 ## Tests
 

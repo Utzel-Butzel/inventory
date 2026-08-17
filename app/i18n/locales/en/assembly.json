@@ -5,11 +5,13 @@
     "loadBuilds": "Unable to load recent builds.",
     "componentQuantity": "Every component quantity must be a whole number of at least one.",
     "saveBom": "Unable to save the BOM.",
+    "resetBom": "Unable to reset the BOM to the primary item.",
     "invalidDate": "Choose a valid build date and time.",
     "build": "Unable to build assembly."
   },
   "notices": {
     "bomSaved": "Bill of materials saved.",
+    "bomReset": "Bill of materials reset to the primary item.",
     "built_one": "{{count}} {{name}} built successfully.",
     "built_other": "{{count}} {{name}} built successfully."
   },
@@ -29,6 +31,8 @@
     "refreshing": "Refreshing…",
     "saveBom": "Save BOM",
     "saveChanges": "Save changes",
+    "resetToPrimary": "Reset to primary",
+    "resettingPrimary": "Resetting…",
     "building": "Building…",
     "build": "Build {{count}}"
   },
@@ -37,7 +41,17 @@
     "description": "Define the exact inventory consumed by one finished item.",
     "emptyTitle": "No components yet",
     "emptyDescription": "Search inventory above to define what one finished item consumes.",
-    "unsavedDescription": "Unsaved BOM changes do not affect stock or builds."
+    "unsavedDescription": "Unsaved BOM changes do not affect stock or builds.",
+    "inheritance": {
+      "basedOn": "Based on {{name}}",
+      "description": "This variant inherits its BOM. Only differences are saved.",
+      "resetConfirm": "Reset this variant’s BOM to {{name}}? Its BOM differences will be removed.",
+      "origins": {
+        "inherited": "Inherited",
+        "override": "Override",
+        "variant": "Variant only"
+      }
+    }
   },
   "buildableNow_one": "{{count}} buildable now",
   "buildableNow_other": "{{count}} buildable now",

@@ -9,11 +9,11 @@
   "overview": {
     "metadata": {
       "title": "Bestand",
-      "description": "Überwachen Sie Lagerbestände, Reichweite und Nachbestellrisiken."
+      "description": "Überwache Lagerbestände, Reichweite und Nachbestellrisiken."
     },
     "eyebrow": "Bestandskontrolle",
     "title": "Bestandsübersicht",
-    "description": "Überwachen Sie Bestände, erwartete Lieferungen und die geschätzte Reichweite aller erfassten Artikel.",
+    "description": "Überwache Bestände, erwartete Lieferungen und die geschätzte Reichweite aller erfassten Einträge.",
     "actions": {
       "scanCode": "Code scannen",
       "scanWorkflows": "Scan-Workflows",
@@ -31,17 +31,17 @@
     "empty": {
       "unavailableTitle": "Die Bestandsübersicht ist nicht verfügbar",
       "noStockTitle": "Es werden noch keine Bestände erfasst",
-      "noStockDescription": "Öffnen Sie einen Inventarartikel, konfigurieren Sie die Bestandserfassung und buchen Sie die erste Bewegung.",
-      "noMatchesTitle": "Keine passenden Bestandsartikel",
-      "noMatchesDescription": "Versuchen Sie eine andere Suche oder setzen Sie den aktiven Filter zurück."
+      "noStockDescription": "Öffne einen Eintrag, konfiguriere die Bestandserfassung und buche die erste Bewegung.",
+      "noMatchesTitle": "Keine passenden Einträge",
+      "noMatchesDescription": "Versuche eine andere Suche oder setze den aktiven Filter zurück."
     },
     "metrics": {
-      "trackedItems": "Erfasste Artikel",
+      "trackedItems": "Erfasste Einträge",
       "unitsOnHand_one": "{{value}} Einheit auf Lager",
       "unitsOnHand_other": "{{value}} Einheiten auf Lager",
       "incoming": "Im Zulauf",
-      "itemsOnOrder_one": "{{value}} Artikel bestellt",
-      "itemsOnOrder_other": "{{value}} Artikel bestellt",
+      "itemsOnOrder_one": "{{value}} Eintrag bestellt",
+      "itemsOnOrder_other": "{{value}} Einträge bestellt",
       "healthyStock": "Ausreichender Bestand",
       "aboveThresholds": "Über den festgelegten Grenzwerten",
       "lowStock": "Niedriger Bestand",
@@ -52,17 +52,17 @@
       "nothingBlocked": "Derzeit keine Engpässe"
     },
     "attention": {
-      "title_one": "{{value}} Artikel erfordert Aufmerksamkeit",
-      "title_other": "{{value}} Artikel erfordern Aufmerksamkeit",
+      "title_one": "{{value}} Eintrag erfordert Aufmerksamkeit",
+      "title_other": "{{value}} Einträge erfordern Aufmerksamkeit",
       "outAndLow": "{{out}} nicht auf Lager · {{low}} mit niedrigem Bestand",
-      "lowOnly": "Diese Artikel liegen am oder unter dem festgelegten Mindestbestand.",
+      "lowOnly": "Diese Einträge liegen am oder unter dem festgelegten Mindestbestand.",
       "viewOut": "Nicht verfügbare anzeigen",
       "viewLow": "Niedrige Bestände anzeigen"
     },
     "counts": {
       "due_one": "{{value}} Inventurzählung ist fällig",
       "due_other": "{{value}} Inventurzählungen sind fällig",
-      "description": "Prüfen Sie den physischen Bestand und gleichen Sie Abweichungen ab.",
+      "description": "Prüfe den physischen Bestand und gleiche Abweichungen ab.",
       "schedule_one": "Alle {{interval}} Tag · fällig {{date}}",
       "schedule_other": "Alle {{interval}} Tage · fällig {{date}}",
       "now": "jetzt",
@@ -70,7 +70,7 @@
     },
     "search": {
       "label": "Bestand durchsuchen",
-      "placeholder": "Artikel, Typen oder Erfassungsarten suchen…",
+      "placeholder": "Einträge, Typen oder Erfassungsarten suchen…",
       "clear": "Bestandssuche löschen"
     },
     "filters": {
@@ -81,7 +81,7 @@
       "incoming": "Im Zulauf"
     },
     "table": {
-      "item": "Artikel",
+      "item": "Eintrag",
       "onHand": "Auf Lager",
       "incoming": "Im Zulauf",
       "minimum": "Minimum",
@@ -99,7 +99,7 @@
       "outNow": "Jetzt leer",
       "since": "Seit {{date}}",
       "notForecast": "Keine Prognose",
-      "addUsage": "Fügen Sie Verbrauchsdaten hinzu, um die Reichweite zu schätzen.",
+      "addUsage": "Füge Verbrauchsdaten hinzu, um die Reichweite zu schätzen.",
       "lessThanDay": "Weniger als 1 Tag",
       "days_one": "{{count}} Tag",
       "days_other": "{{count}} Tage",
@@ -119,7 +119,7 @@
       "units": "Einheiten"
     },
     "footer": {
-      "showing": "{{shown}} von {{total}} erfassten Artikeln werden angezeigt",
+      "showing": "{{shown}} von {{total}} erfassten Einträgen werden angezeigt",
       "runwayBasis": "Die Reichweite basiert auf dem durchschnittlichen Tagesverbrauch"
     },
     "values": {
@@ -143,19 +143,19 @@
     "loading": "Bestand wird geladen…",
     "unavailable": {
       "title": "Der Bestand ist nicht verfügbar",
-      "description": "Die Bestandsdaten für diesen Artikel konnten nicht geladen werden."
+      "description": "Die Bestandsdaten für diesen Eintrag konnten nicht geladen werden."
     },
     "inventory": "Inventar",
     "stock": "Bestand",
     "title": "Bestand",
-    "description": "Buchen Sie Bewegungen, konfigurieren Sie Bestellregeln und verwalten Sie einzelne Einheiten.",
+    "description": "Buche Bewegungen, konfiguriere Bestellregeln und verwalte einzelne Einheiten.",
     "system": "System",
     "unit": "Einheit",
     "optional": "optional",
     "actions": {
       "retry": "Erneut versuchen",
-      "backToItem": "Zurück zum Artikel",
-      "itemDetails": "Artikeldetails",
+      "backToItem": "Zurück zum Eintrag",
+      "itemDetails": "Eintragsdetails",
       "scanCode": "Code scannen",
       "refresh": "Bestand aktualisieren",
       "dismissError": "Fehler schließen",
@@ -182,22 +182,22 @@
       "minimumStock": "Der Mindestbestand muss null oder größer sein.",
       "reorderQuantity": "Die Bestellmenge muss null oder größer sein.",
       "leadTime": "Die Vorlaufzeit muss eine nicht negative ganze Zahl sein.",
-      "unitName": "Geben Sie eine Einheitenbezeichnung ein.",
+      "unitName": "Gib eine Einheitenbezeichnung ein.",
       "saveSettings": "Die Bestandseinstellungen konnten nicht gespeichert werden.",
-      "validQuantity": "Geben Sie eine Menge größer als null ein.",
-      "validMovementDate": "Wählen Sie ein gültiges Datum und eine gültige Uhrzeit für die Bewegung.",
+      "validQuantity": "Gib eine Menge größer als null ein.",
+      "validMovementDate": "Wähle ein gültiges Datum und eine gültige Uhrzeit für die Bewegung.",
       "serializedBooking": "Bewegungen serialisierter Bestände müssen für einzelne Einheiten erfasst werden.",
       "bookMovement": "Die Bestandsbewegung konnte nicht gebucht werden.",
-      "checkBooking": "Prüfen Sie die Buchungsdetails und versuchen Sie es erneut.",
-      "generatedUnitRange": "Geben Sie zwischen 1 und 100 Einheiten ein.",
-      "customUnitRange": "Geben Sie zwischen 1 und 100 eigene Einheiten-IDs ein.",
+      "checkBooking": "Prüfe die Buchungsdetails und versuche es erneut.",
+      "generatedUnitRange": "Gib zwischen 1 und 100 Einheiten ein.",
+      "customUnitRange": "Gib zwischen 1 und 100 eigene Einheiten-IDs ein.",
       "uniqueUnitIds": "Jede Einheiten-ID muss eindeutig sein.",
       "unitIdLength": "Einheiten-IDs dürfen höchstens 160 Zeichen lang sein.",
-      "validAcquisitionDate": "Wählen Sie ein gültiges Anschaffungsdatum mit Uhrzeit.",
+      "validAcquisitionDate": "Wähle ein gültiges Anschaffungsdatum mit Uhrzeit.",
       "metadataObject": "Erweiterte Metadaten müssen ein JSON-Objekt sein.",
       "createUnits": "Die Einheiten konnten nicht registriert werden.",
       "onlyAvailable": "Nur verfügbare Einheiten können in einen anderen Status verschoben werden.",
-      "validBookingDate": "Wählen Sie ein gültiges Wirksamkeitsdatum mit Uhrzeit.",
+      "validBookingDate": "Wähle ein gültiges Wirksamkeitsdatum mit Uhrzeit.",
       "updateUnit": "Die Einheit konnte nicht aktualisiert werden."
     },
     "notices": {
@@ -213,7 +213,7 @@
       "switchBulk": "Beim Wechsel zum Mengenbestand entfallen die Steuerelemente für einzelne Einheiten. Fortfahren?",
       "leaveAvailable": "Einheit {{code}} von „Verfügbar“ zu „{{status}}“ verschieben? Dadurch wird ein Bestandsabgang gebucht.",
       "outgoingTitle": "Bestandsabgang bestätigen",
-      "outgoingDescription": "Sie sind dabei, {{quantity}} aus dem verfügbaren Bestand zu entnehmen.",
+      "outgoingDescription": "Du entnimmst {{quantity}} aus dem verfügbaren Bestand.",
       "before": "Vorher",
       "change": "Änderung",
       "after": "Nachher",
@@ -242,7 +242,7 @@
     },
     "booking": {
       "title": "Bewegung buchen",
-      "description": "Erfassen Sie Zu- und Abgänge mit einem datierten Prüfpfad.",
+      "description": "Erfasse Zu- und Abgänge mit einem datierten Prüfpfad.",
       "stockIn": "Zugang",
       "stockOut": "Abgang",
       "quantity": "Menge",
@@ -251,15 +251,15 @@
       "reason": "Grund",
       "reasonInPlaceholder": "z. B. Lieferantenlieferung",
       "reasonOutPlaceholder": "z. B. an Werkstatt ausgegeben",
-      "location": "Ort",
+      "location": "Standort",
       "locationPlaceholder": "z. B. Hauptlager · Regal B2",
       "note": "Interne Notiz",
       "notePlaceholder": "Optionaler Kontext für den Prüfpfad",
       "projectedBalance": "Voraussichtlicher Bestand",
       "unitControlsBelow": "Einheitenverwaltung unten",
       "available": "{{quantity}} verfügbar",
-      "serializedBeforeLink": "Aktualisieren Sie bei serialisiertem Bestand eine einzelne Einheit oder",
-      "serializedAfterLink": " oder scannen Sie den Code."
+      "serializedBeforeLink": "Aktualisiere bei serialisiertem Bestand eine einzelne Einheit oder",
+      "serializedAfterLink": " oder scanne den Code."
     },
     "movements": {
       "title": "Bewegungsverlauf",
@@ -285,14 +285,14 @@
       "balance": "Bestand",
       "photoAssisted": "Fotogestützte Zählung",
       "stockUpdate": "Bestandsaktualisierung",
-      "locationUnit": "Ort / Einheit",
+      "locationUnit": "Standort / Einheit",
       "emptyTitle": "Noch keine Bewegungen",
-      "noMovements": "Buchen Sie die erste Bestandsbewegung, um den Prüfpfad zu beginnen.",
+      "noMovements": "Buche die erste Bestandsbewegung, um den Prüfpfad zu beginnen.",
       "noMatches": "Keine Bewegungen entsprechen diesem Filter."
     },
     "settings": {
       "title": "Bestandseinstellungen",
-      "description": "Konfigurieren Sie Erfassung, Grenzwerte und Einkaufsvorgaben.",
+      "description": "Konfiguriere Erfassung, Grenzwerte und Einkaufsvorgaben.",
       "trackingMode": "Erfassungsart",
       "bulkHelp": "Erfasst die Gesamtmenge ohne einzelne IDs.",
       "serializedHelp": "Erfasst jede physische Einheit mit eigener ID und eigenem Status.",
@@ -304,7 +304,7 @@
       "dayUnit": "T",
       "unitName": "Einheitenbezeichnung",
       "unitNamePlaceholder": "z. B. Stück, Rollen, Liter",
-      "cannotReturnBulk": "Installierte serialisierte Einheiten müssen aus ihren Baugruppen entfernt werden, bevor Sie zum Mengenbestand zurückkehren können."
+      "cannotReturnBulk": "Installierte serialisierte Einheiten müssen aus ihren Baugruppen entfernt werden, bevor du zum Mengenbestand zurückkehren kannst."
     },
     "forecast": {
       "title": "Bestellprognose",
@@ -322,20 +322,20 @@
       "title": "Serialisierte Einheiten",
       "availableCount_one": "{{value}} verfügbare Einheit",
       "availableCount_other": "{{value}} verfügbare Einheiten",
-      "description": "Verwalten Sie IDs, Orte, Status und Metadaten jeder physischen Einheit.",
-      "descriptionDisabled": "Aktivieren Sie die serialisierte Erfassung, um einzelne Einheiten zu registrieren und zu verwalten.",
+      "description": "Verwalte IDs, Standorte, Status und Metadaten jeder physischen Einheit.",
+      "descriptionDisabled": "Aktiviere die serialisierte Erfassung, um einzelne Einheiten zu registrieren und zu verwalten.",
       "notEnabledTitle": "Serialisierte Erfassung ist nicht aktiviert",
-      "notEnabledDescription": "Wählen Sie in den Bestandseinstellungen „Serialisiert“, um einzelne Einheiten-IDs zu verwalten.",
+      "notEnabledDescription": "Wähle in den Bestandseinstellungen „Serialisiert“, um einzelne Einheiten-IDs zu verwalten.",
       "registerTitle": "Einheiten registrieren",
-      "registerDescription": "Generieren Sie IDs oder geben Sie die bereits an Ihren Objekten vorhandenen Kennungen ein.",
+      "registerDescription": "Erzeuge IDs oder gib die bereits an den physischen Einheiten vorhandenen Kennungen ein.",
       "generateIds": "IDs generieren",
       "customIds": "Eigene IDs",
       "numberOfUnits": "Anzahl der Einheiten",
       "unitIds": "Einheiten-IDs",
       "onePerLine": "eine pro Zeile",
-      "inventoryLocation": "Inventarort",
+      "inventoryLocation": "Standort",
       "notAssigned": "Nicht zugewiesen",
-      "locationNote": "Ortsnotiz",
+      "locationNote": "Standortnotiz",
       "locationNotePlaceholder": "z. B. Regal B2 oder Fahrzeug 4",
       "acquiredOn": "Angeschafft am",
       "customFields": "Benutzerdefinierte Felder",
@@ -343,17 +343,17 @@
       "customFieldsEditHelp": "Strukturierte Details, die für diesen Inventartyp oder diese Kategorie konfiguriert sind.",
       "customFieldsUnavailable": "Benutzerdefinierte Felder sind vorübergehend nicht verfügbar.",
       "advancedMetadata": "Erweiterte Metadaten",
-      "noLocation": "Kein Ort",
+      "noLocation": "Kein Standort",
       "acquired": "Angeschafft {{date}}",
       "moved": "Verschoben {{date}}",
       "installedIn": "Installiert in {{assembly}}",
       "installedManagedHelp": "Installierte Einheiten werden über den Verlauf ihrer Baugruppe verwaltet.",
-      "editHelp": "Der Wechsel zwischen „Verfügbar“ und jedem anderen Status erzeugt automatisch eine datierte Bestandsbewegung von ±1. Änderungen an Ort, benutzerdefinierten Feldern oder Metadaten erzeugen einen Prüfeintrag ohne Mengenänderung.",
+      "editHelp": "Der Wechsel zwischen „Verfügbar“ und jedem anderen Status erzeugt automatisch eine datierte Bestandsbewegung von ±1. Änderungen an Standort, benutzerdefinierten Feldern oder Metadaten erzeugen einen Prüfeintrag ohne Mengenänderung.",
       "statusLabel": "Status",
       "status": {
         "available": "Verfügbar",
         "reserved": "Reserviert",
-        "inUse": "In Verwendung",
+        "inUse": "In Benutzung",
         "maintenance": "Wartung",
         "consumed": "Verbraucht",
         "lost": "Verloren",
@@ -365,7 +365,7 @@
       "internalNote": "Interne Notiz",
       "registeredUpdated": "Registriert {{registered}} · aktualisiert {{updated}}",
       "emptyTitle": "Noch keine Einheiten erfasst",
-      "emptyDescription": "Registrieren Sie generierte IDs oder geben Sie die bereits an Ihrem physischen Inventar angebrachten Objektcodes ein.",
+      "emptyDescription": "Registriere erzeugte IDs oder gib die bereits an den physischen Einheiten angebrachten Codes ein.",
       "record": "Einheit"
     },
     "locationTypes": {
@@ -378,50 +378,50 @@
     }
   },
   "locations": {
-    "title": "Bestandsorte",
-    "description": "Sehen Sie, wo verfügbare Mengen zugewiesen sind, und lagern Sie Mengenbestände zwischen Orten um.",
-    "readOnly": "Sie benötigen Schreibzugriff, um Bestand umzulagern.",
+    "title": "Bestandsstandorte",
+    "description": "Sieh, welchen Standorten verfügbare Mengen zugewiesen sind, und lagere Mengenbestände um.",
+    "readOnly": "Du benötigst Schreibzugriff, um Bestand umzulagern.",
     "unit": "Einheit",
-    "locationFallback": "Ort",
+    "locationFallback": "Standort",
     "unassigned": "Nicht zugewiesen",
     "transferReason": "Bestandsumlagerung",
     "actions": {
-      "refresh": "Orte aktualisieren",
+      "refresh": "Standorte aktualisieren",
       "tryAgain": "Erneut versuchen",
       "dismissError": "Fehler schließen",
       "dismissMessage": "Meldung schließen"
     },
     "errors": {
-      "load": "Die Bestandsorte konnten nicht geladen werden.",
-      "validTransfer": "Wählen Sie unterschiedliche Quell- und Zielorte und geben Sie eine gültige Menge ein.",
+      "load": "Die Bestandsstandorte konnten nicht geladen werden.",
+      "validTransfer": "Wähle unterschiedliche Quell- und Zielstandorte und gib eine gültige Menge ein.",
       "move": "Der Bestand konnte nicht umgelagert werden."
     },
     "notices": {
       "moved": "{{quantity}} von {{source}} nach {{destination}} verschoben."
     },
     "unavailable": {
-      "title": "Die Ortsaufteilung ist nicht verfügbar",
-      "description": "Die Ortsdaten konnten nicht geladen werden."
+      "title": "Die Standortaufteilung ist nicht verfügbar",
+      "description": "Die Standortdaten konnten nicht geladen werden."
     },
     "metrics": {
       "total": "Gesamtbestand",
-      "assigned": "Orten zugewiesen"
+      "assigned": "Standorten zugewiesen"
     },
     "empty": {
-      "title": "Noch keine Ortszuweisungen",
-      "description": "Bestand ohne Ortszuweisung wird als nicht zugewiesen angezeigt."
+      "title": "Noch keine Standortzuweisungen",
+      "description": "Bestand ohne Standortzuweisung wird als nicht zugewiesen angezeigt."
     },
     "move": {
       "title": "Bestand umlagern",
-      "description": "Verschieben Sie verfügbare Mengen, ohne den Gesamtbestand zu ändern.",
-      "serializedHelp": "Verschieben Sie serialisierten Bestand, indem Sie oben den Inventarort jeder Einheit aktualisieren.",
+      "description": "Verschiebe verfügbare Mengen, ohne den Gesamtbestand zu ändern.",
+      "serializedHelp": "Verschiebe serialisierten Bestand, indem du oben den Standort jeder Einheit aktualisierst.",
       "noStock": "Es ist kein verfügbarer Bestand zum Umlagern vorhanden.",
-      "noDestination": "Fügen Sie einen weiteren aktiven Ort hinzu, bevor Sie Bestand umlagern.",
+      "noDestination": "Füge einen weiteren aktiven Standort hinzu, bevor du Bestand umlagerst.",
       "from": "Von",
       "to": "Nach",
       "quantity": "Menge",
-      "noneAtSource": "Kein Bestand an diesem Quellort",
-      "availableAtSource": "{{quantity}} am Quellort verfügbar",
+      "noneAtSource": "Kein Bestand an diesem Quellstandort",
+      "availableAtSource": "{{quantity}} am Quellstandort verfügbar",
       "action": "Bestand umlagern"
     },
     "tracking": {
@@ -439,7 +439,7 @@
   },
   "cycle": {
     "title": "Inventurzyklus",
-    "description": "Planen Sie wiederkehrende physische Zählungen und gleichen Sie Abweichungen ab.",
+    "description": "Plane wiederkehrende physische Zählungen und gleiche Abweichungen ab.",
     "currentSchedule": "Aktueller Zeitplan",
     "lastCompleted": "Zuletzt abgeschlossen",
     "noPhysicalCounts": "Noch keine physischen Zählungen",
@@ -462,8 +462,8 @@
       "load": "Der Inventurzyklus konnte nicht geladen werden.",
       "intervalRange": "Der Zyklus muss zwischen 1 und 3.650 ganzen Tagen liegen.",
       "save": "Der Inventurzyklus konnte nicht gespeichert werden.",
-      "validCount": "Geben Sie eine nicht negative ganze Zählmenge ein.",
-      "validDate": "Wählen Sie ein gültiges Zähldatum mit Uhrzeit.",
+      "validCount": "Gib eine nicht negative ganze Zählmenge ein.",
+      "validDate": "Wähle ein gültiges Zähldatum mit Uhrzeit.",
       "record": "Diese Inventurzählung konnte nicht erfasst werden.",
       "serializedReview": "Die Prüfung des serialisierten Inventars konnte nicht abgeschlossen werden."
     },
@@ -480,11 +480,11 @@
     "targets": {
       "entireInventory": "Gesamtes Inventar",
       "entireInventorySentence": "das gesamte Inventar",
-      "selectedLocation": "den ausgewählten Ort"
+      "selectedLocation": "den ausgewählten Standort"
     },
     "schedule": {
       "notScheduled": "Nicht geplant",
-      "notScheduledDetail": "Wählen Sie einen Rhythmus für regelmäßige physische Prüfungen.",
+      "notScheduledDetail": "Wähle einen Rhythmus für regelmäßige physische Prüfungen.",
       "paused": "Pausiert",
       "pausedDetail_one": "Der gespeicherte Rhythmus ist alle {{value}} Tag.",
       "pausedDetail_other": "Der gespeicherte Rhythmus ist alle {{value}} Tage.",
@@ -510,8 +510,8 @@
     },
     "count": {
       "title": "Physische Zählung",
-      "description": "Erfassen Sie die beobachtete Menge und gleichen Sie Abweichungen automatisch ab.",
-      "readOnly": "Sie benötigen Schreibzugriff, um Inventurzählungen zu erfassen.",
+      "description": "Erfasse die beobachtete Menge und gleiche Abweichungen automatisch ab.",
+      "readOnly": "Du benötigst Schreibzugriff, um Inventurzählungen zu erfassen.",
       "scope": "Zählbereich",
       "entireExpected": "Gesamtes Inventar · erwartet {{quantity}}",
       "locationExpected": "{{name}} · erwartet {{quantity}}",
@@ -521,15 +521,15 @@
       "countedAt": "Gezählt am",
       "note": "Notiz",
       "notePlaceholder": "Optionaler Kontext für diese Zählung",
-      "totalHelp": "Eine Zählung des gesamten Inventars gleicht die Gesamtmenge des Artikels ab."
+      "totalHelp": "Eine Zählung des gesamten Inventars gleicht die Gesamtmenge des Eintrags ab."
     },
     "history": {
       "title": "Zählverlauf",
       "system": "System",
-      "unknownLocation": "Unbekannter Ort",
+      "unknownLocation": "Unbekannter Standort",
       "quantities": "Erwartet {{expected}} · gezählt {{counted}}",
       "emptyTitle": "Noch keine Zählungen erfasst",
-      "emptyDescription": "Schließen Sie die erste physische Zählung ab, um einen Abgleichsverlauf zu erstellen."
+      "emptyDescription": "Schließe die erste physische Zählung ab, um einen Abgleichsverlauf zu erstellen."
     },
     "unavailable": {
       "title": "Der Inventurzyklus ist nicht verfügbar",
@@ -539,12 +539,12 @@
   "orders": {
     "metadata": {
       "title": "Bestellungen | Inventree",
-      "description": "Verfolgen Sie erwartete Bestände und buchen Sie Teillieferungen in den Bestand ein."
+      "description": "Verfolge erwartete Bestände und buche Teillieferungen in den Bestand ein."
     },
     "eyebrow": "Beschaffung",
     "title": "Bestellungen",
-    "titleForItem": "Bestellungen für diesen Artikel",
-    "description": "Verfolgen Sie erwartete Bestände und buchen Sie Teillieferungen direkt in den Bestand ein.",
+    "titleForItem": "Bestellungen für diesen Eintrag",
+    "description": "Verfolge erwartete Bestände und buche Teillieferungen direkt in den Bestand ein.",
     "optional": "optional",
     "noSku": "Keine SKU",
     "inTransit": "Unterwegs",
@@ -567,14 +567,14 @@
     },
     "errors": {
       "loadOrders": "Die Bestellungen konnten nicht geladen werden.",
-      "loadItem": "Die Artikeldetails konnten nicht geladen werden.",
-      "addLine": "Fügen Sie der Bestellung mindestens einen Artikel hinzu.",
-      "wholeQuantity": "Geben Sie für {{name}} eine positive ganzzahlige Menge ein.",
-      "validOrderDate": "Wählen Sie ein gültiges Bestelldatum.",
+      "loadItem": "Die Eintragsdetails konnten nicht geladen werden.",
+      "addLine": "Füge der Bestellung mindestens einen Eintrag hinzu.",
+      "wholeQuantity": "Gib für {{name}} eine positive ganzzahlige Menge ein.",
+      "validOrderDate": "Wähle ein gültiges Bestelldatum.",
       "create": "Die Bestellung konnte nicht erstellt werden.",
-      "receiptRange": "Geben Sie eine ganzzahlige Eingangsmenge innerhalb der offenen Menge ein.",
-      "validReceiptDate": "Wählen Sie ein gültiges Eingangsdatum mit Uhrzeit.",
-      "unitCodeCount": "Geben Sie für jede angenommene serialisierte Einheit genau einen Einheitscode ein.",
+      "receiptRange": "Gib eine ganzzahlige Eingangsmenge innerhalb der offenen Menge ein.",
+      "validReceiptDate": "Wähle ein gültiges Eingangsdatum mit Uhrzeit.",
+      "unitCodeCount": "Gib für jede angenommene serialisierte Einheit genau einen Einheitscode ein.",
       "uniqueCodes": "Jeder angenommene Einheitscode muss eindeutig sein.",
       "receive": "Diese Lieferung konnte nicht angenommen werden."
     },
@@ -593,7 +593,7 @@
     },
     "create": {
       "title": "Bestellung erstellen",
-      "description": "Fügen Sie einen oder mehrere Inventarartikel mit ihren erwarteten Mengen hinzu.",
+      "description": "Füge einen oder mehrere Einträge mit den erwarteten Mengen hinzu.",
       "reference": "Referenz",
       "supplier": "Lieferant",
       "supplierPlaceholder": "z. B. Nord Industriebedarf",
@@ -601,23 +601,23 @@
       "expectedArrival": "Erwartete Ankunft",
       "orderNote": "Bestellnotiz",
       "orderNotePlaceholder": "Optionale Notizen für diese Bestellung",
-      "addLineTitle": "Inventarartikel hinzufügen",
+      "addLineTitle": "Eintrag hinzufügen",
       "addLineDescription": "Nach Name oder SKU suchen.",
-      "searchItemsLabel": "Inventarartikel suchen",
+      "searchItemsLabel": "Einträge suchen",
       "searchItemsPlaceholder": "Inventar durchsuchen…",
       "searching": "Suche läuft…",
-      "noItemsFound": "Keine Artikel gefunden",
+      "noItemsFound": "Keine Einträge gefunden",
       "available": "{{quantity}} verfügbar",
       "orderQuantity": "Bestellmenge",
       "lineEta": "Positionstermin",
       "lineNote": "Positionsnotiz",
       "lineNotePlaceholder": "Optionale Positionsnotiz",
       "removeLine": "{{name}} aus Bestellung entfernen",
-      "summary": "{{items}} Artikel · {{units}} Einheiten"
+      "summary": "{{items}} Einträge · {{units}} Einheiten"
     },
     "search": {
       "label": "Bestellungen durchsuchen",
-      "placeholder": "Lieferant, Referenz oder Artikel suchen…",
+      "placeholder": "Lieferant, Referenz oder Eintrag suchen…",
       "clear": "Bestellungssuche löschen"
     },
     "filters": {
@@ -658,21 +658,21 @@
       "maximum": "Maximal {{maximum}}",
       "quantity": "Erhaltene Menge",
       "receivedAt": "Erhalten am",
-      "location": "Ort",
+      "location": "Standort",
       "locationPlaceholder": "z. B. Wareneingang",
       "note": "Eingangsnotiz",
       "notePlaceholder": "Optionaler Kontext zur Lieferung",
       "unitCodes": "Einheitscodes",
-      "exactCodes_one": "Geben Sie genau {{value}} Code ein.",
-      "exactCodes_other": "Geben Sie genau {{value}} Codes ein.",
+      "exactCodes_one": "Gib genau {{value}} Code ein.",
+      "exactCodes_other": "Gib genau {{value}} Codes ein.",
       "unitCodesPlaceholder": "Ein Einheitscode pro Zeile"
     },
     "empty": {
       "noOrdersTitle": "Noch keine Bestellungen",
-      "noOrdersDescription": "Erstellen Sie die erste Bestellung, um erwartete Bestände zu verfolgen.",
-      "noItemOrdersTitle": "Keine Bestellungen für diesen Artikel",
+      "noOrdersDescription": "Erstelle die erste Bestellung, um erwartete Bestände zu verfolgen.",
+      "noItemOrdersTitle": "Keine Bestellungen für diesen Eintrag",
       "noMatchesTitle": "Keine passenden Bestellungen",
-      "noMatchesDescription": "Versuchen Sie eine andere Suche oder setzen Sie den aktiven Filter zurück."
+      "noMatchesDescription": "Versuche eine andere Suche oder setze den aktiven Filter zurück."
     }
   }
 }

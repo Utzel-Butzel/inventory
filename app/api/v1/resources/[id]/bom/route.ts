@@ -5,6 +5,7 @@ import {
   assemblyHttpError,
   getBom,
   replaceBom,
+  resetVariantBomOverrides,
 } from "@/lib/assemblies";
 
 type Context = { params: Promise<{ id: string }> };
@@ -16,6 +17,13 @@ const bomSchema = z
         z
           .object({
             resourceId: z.string().uuid(),
+            slotKey: z
+              .string()
+              .trim()
+              .min(1)
+              .max(80)
+              .regex(/^[A-Za-z0-9_-]+$/)
+              .optional(),
             quantityPerAssembly: z.number().int().min(1).max(2_000_000_000),
             position: z.number().int().min(0).max(2_000_000_000).optional(),
             note: z.string().trim().max(20_000).optional(),
@@ -26,16 +34,25 @@ const bomSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    const seen = new Set<string>();
+    const seenResources = new Set<string>();
+    const seenSlots = new Set<string>();
     value.components.forEach((component, index) => {
-      if (seen.has(component.resourceId)) {
+      if (seenResources.has(component.resourceId)) {
         context.addIssue({
           code: "custom",
           path: ["components", index, "resourceId"],
           message: "Each component may appear only once in a bill of materials.",
         });
       }
-      seen.add(component.resourceId);
+      seenResources.add(component.resourceId);
+      if (component.slotKey && seenSlots.has(component.slotKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["components", index, "slotKey"],
+          message: "Each bill-of-materials slot key may appear only once.",
+        });
+      }
+      if (component.slotKey) seenSlots.add(component.slotKey);
     });
   });
 
@@ -99,6 +116,34 @@ export async function PUT(request: Request, context: Context) {
     );
   } catch (error) {
     const failure = assemblyHttpError(error, "Unable to replace this bill of materials.");
+    return Response.json({ error: failure.message }, { status: failure.status });
+  }
+}
+
+export async function DELETE(request: Request, context: Context) {
+  const { id } = await context.params;
+  if (!z.string().uuid().safeParse(id).success) {
+    return Response.json({ error: "Invalid resource id." }, { status: 422 });
+  }
+  const authorization = await requireResourcePermission(
+    request,
+    "inventory.update",
+    id,
+  );
+  if (authorization.response) return authorization.response;
+
+  try {
+    return Response.json(
+      await resetVariantBomOverrides(
+        authorization.identity.organizationId,
+        id,
+      ),
+    );
+  } catch (error) {
+    const failure = assemblyHttpError(
+      error,
+      "Unable to reset this bill of materials.",
+    );
     return Response.json({ error: failure.message }, { status: failure.status });
   }
 }

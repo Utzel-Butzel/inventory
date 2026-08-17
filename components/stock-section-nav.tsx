@@ -23,9 +23,9 @@ export function StockSectionNav() {
   return (
     <nav
       aria-label={t("nav.label")}
-      className="mb-6 overflow-x-auto rounded-2xl border border-border bg-surface p-1.5 shadow-[var(--shadow-sm)]"
+      className="mb-6 rounded-xl border border-border bg-surface p-1.5"
     >
-      <div className="grid min-w-[500px] grid-cols-4 gap-1">
+      <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
         {stockSections.map((section) => {
           const active =
             section.href === "/stock"
@@ -39,9 +39,9 @@ export function StockSectionNav() {
               href={section.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex h-10 items-center justify-center gap-2 rounded-xl px-3 text-[12px] font-semibold transition",
+                "flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition",
                 active
-                  ? "bg-brand-soft text-brand shadow-sm"
+                  ? "bg-brand-soft text-brand"
                   : "text-muted hover:bg-surface-hover hover:text-foreground",
               )}
             >

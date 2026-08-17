@@ -13,6 +13,29 @@ enum ObjectCaptureAIIdempotencyPolicy {
     }
 }
 
+struct ObjectCaptureAISettingsSnapshot: Equatable, Sendable {
+    let analysisPrompt: String?
+    let transparentCoverPrompt: String?
+    let imageModelID: String?
+    let maximumImageSize: Int
+
+    init(
+        analysisPrompt: String?,
+        transparentCoverPrompt: String?,
+        imageModelID: String?,
+        maximumImageSize: Int
+    ) {
+        self.analysisPrompt = AIPromptPreferences.validatedPrompt(analysisPrompt)
+        self.transparentCoverPrompt = AIPromptPreferences
+            .validatedPrompt(transparentCoverPrompt)
+        let normalizedModelID = imageModelID?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        self.imageModelID = normalizedModelID.flatMap { $0.isEmpty ? nil : $0 }
+        self.maximumImageSize = ImageSizePreferences
+            .validatedAIGeneratedPixelSize(maximumImageSize)
+    }
+}
+
 struct ResourceFormView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var state: AppState
@@ -42,6 +65,7 @@ struct ResourceFormView: View {
     @State private var uploadedObjectMedia: MediaUploadResponse?
     @State private var objectAnalysisCompleted = false
     @State private var objectCoverCompleted = false
+    @State private var objectAISettingsSnapshot: ObjectCaptureAISettingsSnapshot?
     @State private var confirmCloseAfterCreation = false
 
     init(
@@ -220,6 +244,23 @@ struct ResourceFormView: View {
             errorMessage = "Keine Serververbindung eingerichtet."
             return
         }
+        let aiSettings: ObjectCaptureAISettingsSnapshot?
+        if objectModel != nil {
+            if let objectAISettingsSnapshot {
+                aiSettings = objectAISettingsSnapshot
+            } else {
+                let snapshot = ObjectCaptureAISettingsSnapshot(
+                    analysisPrompt: state.analysisPrompt,
+                    transparentCoverPrompt: state.transparentCoverPrompt,
+                    imageModelID: state.selectedImageModelID,
+                    maximumImageSize: state.maximumAIGeneratedImagePixelSize
+                )
+                objectAISettingsSnapshot = snapshot
+                aiSettings = snapshot
+            }
+        } else {
+            aiSettings = nil
+        }
         saving = true
         Task {
             do {
@@ -281,6 +322,7 @@ struct ResourceFormView: View {
                                     let response = try await client.analyzeResource(
                                         id: created.id,
                                         overwrite: true,
+                                        prompt: aiSettings?.analysisPrompt,
                                         idempotencyKey: analysisOperationID
                                     )
                                     objectAnalysisCompleted = true
@@ -304,7 +346,9 @@ struct ResourceFormView: View {
                                     let response = try await client.generateCover(
                                         resourceID: created.id,
                                         sourceMediaID: articleImage.id,
-                                        modelID: state.selectedImageModelID,
+                                        prompt: aiSettings?.transparentCoverPrompt,
+                                        modelID: aiSettings?.imageModelID,
+                                        maximumImageSize: aiSettings?.maximumImageSize,
                                         transparentBackground: true,
                                         transparencyMethod: .differenceMatting,
                                         idempotencyKey: coverOperationID

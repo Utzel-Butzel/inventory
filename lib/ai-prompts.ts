@@ -1,3 +1,19 @@
+export const defaultInventoryAnalysisPrompt = (
+  language: string,
+  allowedResourceTypes: readonly string[],
+) => `You are cataloguing an inventory item from one or more photos.
+
+Identify the dominant item and ignore background clutter. Write in ${language}.
+- Create a concise, specific title.
+- Write a useful inventory description with short bullet lines covering category, brand, model, material, color, visible condition, accessories and readable labels.
+- Never invent facts. Say "unknown" when a detail is not reliably visible.
+- Return 5–12 short lowercase tags without #.
+- Classify it as exactly one of: ${allowedResourceTypes.join(", ")}.
+- Write accessible alt text describing what is visibly shown.
+- Give a confidence score between 0 and 1.
+
+Return only the requested JSON object.`;
+
 export const defaultCoverPrompt = (title?: string) =>
   `Isolate the "${
     title?.trim() || "inventory item"

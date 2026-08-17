@@ -3,12 +3,12 @@
     "scanTitle": "Bestand scannen | Inventory",
     "scanDescription": "QR-Codes und Barcodes scannen und konfigurierte Eigenschaften auf Bestandseinheiten anwenden.",
     "workflowsTitle": "Scan-Workflows | Inventory",
-    "workflowsDescription": "Code-gesteuerte Bestands-Workflows visuell konfigurieren."
+    "workflowsDescription": "Code-gesteuerte Bestands-Workflows konfigurieren."
   },
   "statuses": {
     "available": "Verfügbar",
     "reserved": "Reserviert",
-    "in-use": "In Verwendung",
+    "in-use": "In Benutzung",
     "maintenance": "Wartung",
     "consumed": "Verbraucht",
     "lost": "Verloren",
@@ -76,7 +76,7 @@
   "scan": {
     "fallbacks": {
       "untitledWorkflow": "Unbenannter Workflow",
-      "unknownResource": "Unbekanntes Inventarobjekt"
+      "unknownResource": "Unbekannter Eintrag"
     },
     "errors": {
       "workflowsLoad": "Die Scan-Workflows konnten nicht geladen werden.",
@@ -93,8 +93,8 @@
       "none": "Keine Metadaten"
     },
     "header": {
-      "eyebrow": "Bestandsautomatisierung",
-      "title": "In den Bestand scannen",
+      "eyebrow": "Bestand",
+      "title": "Code scannen",
       "description": "Scanne den vollständigen Code-Inhalt, lass den ausgewählten Workflow die Kennung extrahieren und prüfe jede Änderung, bevor sie in das Inventar übernommen wird."
     },
     "setup": {
@@ -109,9 +109,9 @@
       "created": "Eine neue Bestandseinheit wurde montiert und hinzugefügt.",
       "updated": "Die vorhandene Bestandseinheit wurde aktualisiert.",
       "unit": "Einheit",
-      "resource": "Inventarobjekt",
+      "resource": "Eintrag",
       "metadata": "Gespeicherte Metadaten",
-      "next": "Nächstes Objekt scannen"
+      "next": "Nächsten Code scannen"
     },
     "resolving": "EPD-Nummer und Workflow werden aufgelöst…",
     "resolveErrorTitle": "Code konnte nicht aufgelöst werden",
@@ -159,7 +159,7 @@
       "selectField": "{{field}} auswählen",
       "metadataPreview": "Metadatenvorschau",
       "updateErrorTitle": "Aktualisierung wurde nicht abgeschlossen",
-      "retryHelp": "Du kannst den Vorgang sicher wiederholen; derselbe Idempotenzschlüssel wird erneut verwendet.",
+      "retryHelp": "Du kannst den Vorgang erneut versuchen. Es entsteht keine doppelte Buchung.",
       "unitUnavailable": "Es existiert keine Einheit mit dieser EPD-Nummer und dieser Workflow darf keine erstellen. Ändere den Workflow oder erstelle die Einheit, bevor du es erneut versuchst.",
       "readOnly": "Dies ist eine schreibgeschützte Vorschau. Deine Rolle darf keine Bestandsänderungen ausführen.",
       "scanAgain": "Erneut scannen",
@@ -170,7 +170,7 @@
   },
   "workflows": {
     "fallbacks": {
-      "resourceUnavailable": "Inventarobjekt nicht verfügbar",
+      "resourceUnavailable": "Eintrag nicht verfügbar",
       "untitled": "Unbenannter Workflow",
       "input": "Eingabe",
       "identifier": "Kennung",
@@ -192,7 +192,7 @@
     },
     "validation": {
       "name": "Gib diesem Workflow einen Namen.",
-      "resource": "Wähle ein serialisiertes Inventarobjekt aus.",
+      "resource": "Wähle einen serialisierten Eintrag aus.",
       "identifier": "Lege einen Eigenschaftsschlüssel für die Kennung fest.",
       "propertyKey": "Eigenschaftsschlüssel dürfen nur Buchstaben, Zahlen, Unterstriche, Bindestriche und Punkte enthalten.",
       "queryParameter": "Lege den zu extrahierenden URL-Abfrageparameter fest.",
@@ -229,7 +229,7 @@
     },
     "confirmDiscard": "Ungespeicherte Workflow-Änderungen verwerfen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "notices": {
-      "templateLoaded": "Paperless-Paper-Vorlage geladen. Wähle das Inventarobjekt aus und speichere anschließend.",
+      "templateLoaded": "Paperless-Paper-Vorlage geladen. Wähle den Eintrag aus und speichere anschließend.",
       "viewerReadOnly": "Der Betrachterzugriff ist schreibgeschützt.",
       "updated": "Workflow aktualisiert.",
       "created": "Workflow erstellt und zum Scannen bereit.",
@@ -238,9 +238,9 @@
       "deleted": "Workflow gelöscht."
     },
     "header": {
-      "eyebrow": "Scan-Automatisierung",
-      "title": "Scan-Workflows visuell erstellen.",
-      "description": "Verwandle einen gescannten Code mit geführten Eingaben und einheitlichen Eigenschaften in eine identifizierte Bestandseinheit – ganz ohne Programmierung.",
+      "eyebrow": "Scan-Workflows",
+      "title": "Scan-Workflow erstellen",
+      "description": "Lege fest, wie ein gescannter Code ausgewertet und auf eine Bestandseinheit angewendet wird.",
       "readOnly": "Schreibgeschützt",
       "refresh": "Aktualisieren",
       "newTemplate": "Neu aus Vorlage"
@@ -254,7 +254,7 @@
       "emptyTitle": "Keine gespeicherten Workflows",
       "emptyManager": "Die Paperless-Paper-Vorlage steht im Editor bereit.",
       "emptyViewer": "Ein Manager kann hier den ersten Scan-Workflow erstellen.",
-      "safeTitle": "Sicher konzipiert",
+      "safeTitle": "Zulässige Aktionen",
       "safeDescription": "Nach einem Scan werden nur konfigurierte Felder und erlaubte Bestandsaktionen ausgeführt."
     },
     "editor": {
@@ -264,7 +264,7 @@
       "unsaved": "Ungespeicherte Änderungen",
       "template": "Vorlage",
       "revision": "Revision {{value}}",
-      "basedOnTemplate": "Basiert auf dem beigefügten Paperless-Paper-QR-Code-Anwendungsfall",
+      "basedOnTemplate": "Basiert auf der Paperless-Paper-QR-Code-Vorlage",
       "pause": "Pausieren",
       "enable": "Aktivieren",
       "delete": "Löschen",
@@ -311,14 +311,14 @@
       "prefixPlaceholder": "EPD-"
       },
       "target": {
-        "title": "Ziel-Inventarobjekt auswählen",
+        "title": "Zieleintrag auswählen",
         "description": "Nur Inventar mit serialisierter Bestandserfassung kann identifizierte Einheiten aufnehmen.",
-        "field": "Serialisiertes Inventarobjekt",
-        "select": "Inventarobjekt auswählen…",
+        "field": "Serialisierter Eintrag",
+        "select": "Eintrag auswählen…",
         "resourceQuantity": "{{name}} · {{quantity}} {{unit}}",
         "units_one": "Einheit",
         "units_other": "Einheiten",
-        "none": "Noch keine serialisierten Inventarobjekte verfügbar.",
+        "none": "Noch keine serialisierten Einträge verfügbar.",
         "configure": "Inventar konfigurieren",
         "selected": "{{name}} verwendet serialisierte Erfassung."
       },

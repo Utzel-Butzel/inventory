@@ -28,6 +28,12 @@
     "description": "Create manually or let images do the first draft.",
     "stock": "Stock"
   },
+  "variantInheritance": {
+    "title": "Variant of",
+    "description": "Shared details stay synchronized with the primary item. Changing a shared field here overrides only that field for this variant.",
+    "overrides_one": "{{value}} override",
+    "overrides_other": "{{value}} overrides"
+  },
   "actions": {
     "deleteItem": "Delete item",
     "saving": "Saving…",
@@ -41,7 +47,7 @@
     "title": "Core details",
     "description": "Identity, category and availability",
     "name": "Item name",
-    "nameAiPlaceholder": "Leave blank to generate from images",
+    "nameAiPlaceholder": "Leave blank to fill the name from images",
     "namePlaceholder": "e.g. Festool track saw TS 55",
     "type": "Type",
     "status": "Status",
@@ -51,7 +57,10 @@
     "tagsPlaceholder": "woodworking, power-tool, 230v",
     "categories": "Categories",
     "categoriesPlaceholder": "Workshop, Production",
-    "commaSeparated": "comma separated"
+    "commaSeparated": "comma separated",
+    "sections": {
+      "technicalDetails": "Technical details"
+    }
   },
   "customFields": {
     "title": "Custom fields",
@@ -67,7 +76,7 @@
     "description_one": "Images, video, PDFs and 3D models · {{count}} file",
     "description_other": "Images, video, PDFs and 3D models · {{count}} files",
     "cover": "Cover",
-    "ai": "AI",
+    "ai": "Automatic",
     "moveEarlier": "Move file earlier",
     "moveLater": "Move file later",
     "remove": "Remove file",
@@ -77,9 +86,9 @@
     "formats": "JPG, PNG, WebP, HEIC, MP4, MOV, PDF or USDZ · up to 12 files",
     "objectCaptureReady": "Object Capture bundle ready",
     "objectCaptureReadyDescription": "The photo becomes the item image and the USDZ file remains available as the interactive 3D model.",
-    "objectCaptureReadyDescriptionAi": "The existing AI workflow will identify the item from the selected photo and create a transparent item image. The USDZ file remains the interactive 3D model.",
+    "objectCaptureReadyDescriptionAi": "The item will be identified from the selected photo and receive a transparent cover image. The USDZ file remains the interactive 3D model.",
     "objectCaptureNeedsImage": "3D model selected",
-    "objectCaptureNeedsImageDescription": "Add at least one clear object photo to create the item image and enable AI identification and background removal."
+    "objectCaptureNeedsImageDescription": "Add at least one clear object photo to fill in details and create the cover image automatically."
   },
   "operations": {
     "title": "Operations",
@@ -105,17 +114,18 @@
     "notes": "Internal notes"
   },
   "ai": {
-    "title": "AI catalogue studio",
-    "description": "Vision analysis + image editing",
-    "analyzeImages": "Analyze images",
-    "analyzeDescription": "Generate title, description, type, tags and alt text.",
-    "generateCover": "Generate studio cover",
-    "coverDescription": "Create a clean square hero image from the first photo.",
-    "safety": "AI runs only after the original files are safely stored. You can always edit the result.",
-    "rewrite": "Analyze & rewrite fields",
+    "title": "Fill from photos",
+    "description": "Prepare item details and a cover image automatically",
+    "analyzeImages": "Fill details from photos",
+    "analyzeDescription": "Prepare the name, description, type, tags and alternative text.",
+    "generateCover": "Create cover image automatically",
+    "coverDescription": "Prepare a square cover image from the first photo.",
+    "safety": "Automatic processing starts only after the original files have been saved. Review and edit the result if needed.",
+    "rewrite": "Fill details from photos",
     "coverDirection": "Cover direction",
     "referenceImage": "Reference image",
     "referenceImageDescription": "Choose which image the cover should be based on.",
+    "advancedImageOptions": "Advanced image options",
     "transparentBackground": "Transparent background",
     "transparentBackgroundDescription": "Extract the generated cover as a transparent PNG.",
     "transparencyMethod": "Transparency method",
@@ -124,11 +134,13 @@
     "greenscreen": "Greenscreen · faster",
     "greenscreenDescription": "Uses one chroma-green pass. Faster, but green items and fine edges can show artifacts.",
     "generateNewCover": "Generate new cover",
-    "imageRequired": "Upload and save an image to enable AI actions.",
-    "lastModel": "Last model"
+    "imageRequired": "Upload and save an image to fill details or create a cover automatically.",
+    "lastModel": "Model used",
+    "automaticProcessing": "Automatic processing"
   },
   "position": {
     "title": "Position",
+    "mapDetails": "Map position (optional)",
     "editMap": "Edit point or outline on map",
     "saveFirst": "Save the item first to draw its point or outline in the map editor.",
     "geometryNotice": "Coordinates are derived from the saved map geometry. Edit them on the map to keep both views in sync.",
@@ -151,7 +163,7 @@
       "translateStale": "Translate missing & stale",
       "regenerate": "Regenerate {{language}} translation",
       "saveHuman": "Save human edit",
-      "useAi": "Return to AI",
+      "useAi": "Return to automatic translation",
       "acceptSuggestion": "Accept suggestion"
     },
     "empty": "No additional content languages are configured.",
@@ -170,17 +182,17 @@
     },
     "notTranslated": "Not translated",
     "humanLocked": "Protected human edit",
-    "suggestion": "AI suggestion for the changed source",
+    "suggestion": "Automatic suggestion for the changed source",
     "notices": {
       "updated_one": "Updated {{count}} translated field.",
       "updated_other": "Updated {{count}} translated fields.",
       "current": "All translations are already current.",
       "queued": "Translation queued. It will continue in the background.",
-      "savedHuman": "Human translation saved and protected from AI overwrite."
+      "savedHuman": "Human translation saved and protected from automatic overwrite."
     },
     "errors": {
       "load": "Unable to load translations.",
-      "ai": "Unable to queue AI translation.",
+      "ai": "Unable to queue the automatic translation.",
       "save": "Unable to save the translation."
     }
   },
@@ -273,7 +285,7 @@
   },
   "notices": {
     "locationRead": "Location was read from the image metadata. Please verify it.",
-    "analysisComplete": "AI analysis updated the title, description, tags and type.",
+    "analysisComplete": "Details were filled from the photos. The title, description, tags and type were updated.",
     "coverComplete": "A new studio cover was generated and set as the first image.",
     "savedTranslationStale": "Changes saved. Translation is still stale: {{reason}}",
     "savedTranslations": "Changes saved. Translation refresh is queued in the background.",
@@ -288,12 +300,12 @@
     "load": "Unable to load item.",
     "loadCustomFields": "Unable to load custom field definitions.",
     "unsupportedFiles": "Some files were skipped. Supported formats are images, video, PDF, and USDZ 3D models.",
-    "analysis": "AI analysis failed.",
+    "analysis": "The automatic photo analysis failed.",
     "cover": "Cover generation failed.",
     "requiredCustomField": "Complete the required custom field “{{label}}”.",
-    "nameOrImage": "Add a name or at least one image for AI analysis.",
+    "nameOrImage": "Add a name or at least one image for automatic analysis.",
     "objectCaptureImageRequired": "Add at least one object photo before saving this 3D model.",
-    "translation": "AI translation failed.",
+    "translation": "Automatic translation failed.",
     "save": "Unable to save item.",
     "removeFile": "Unable to remove file.",
     "reorderMedia": "Unable to reorder media.",

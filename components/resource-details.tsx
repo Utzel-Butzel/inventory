@@ -15,6 +15,7 @@ import {
   CircleDollarSign,
   Clock3,
   FileText,
+  Flag,
   Hash,
   ImageIcon,
   Layers3,
@@ -24,7 +25,6 @@ import {
   Package,
   Paperclip,
   Pencil,
-  Sparkles,
   Tag,
   Trash2,
   Warehouse,
@@ -101,10 +101,10 @@ function DetailField({
   mono?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 gap-3 rounded-xl border border-border bg-surface-subtle/70 p-3.5">
+    <div className="flex min-w-0 gap-3 border-b border-border py-3 last:border-b-0">
       <Icon className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden="true" />
       <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</p>
+        <p className="text-xs text-muted">{label}</p>
         <div className={`mt-1 truncate text-sm font-medium text-foreground ${mono ? "font-mono" : ""}`}>
           {value}
         </div>
@@ -188,10 +188,6 @@ export function ResourceDetails({
   const { t, i18n } = useT("inventory");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
-  const decimal = useMemo(
-    () => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }),
-    [locale],
-  );
   const [resource, setResource] = useState<ClientResource | null>(null);
   const [localization, setLocalization] =
     useState<ClientResourceLocalization | null>(null);
@@ -296,6 +292,10 @@ export function ResourceDetails({
     t(`mediaKinds.${value}`, { defaultValue: humanize(value) });
   const { model: objectModel, gallery: galleryMedia } =
     getObjectCapturePresentation(resource.media, resource.cover?.id ?? null);
+  const coordinateLabel =
+    resource.gpsLatitude !== null && resource.gpsLongitude !== null
+      ? `${resource.gpsLatitude.toFixed(5)}, ${resource.gpsLongitude.toFixed(5)}`
+      : null;
 
   return (
     <div className="mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
@@ -309,21 +309,15 @@ export function ResourceDetails({
             <span className="truncate">{t("details.breadcrumb.details")}</span>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-[-0.035em] text-foreground sm:text-4xl">
+            <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">
               {resource.name}
             </h1>
             <span
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}
             >
               {statusLabel(resource.status)}
             </span>
           </div>
-          <p className="mt-2 text-xs text-muted">
-            {t("details.updatedWithId", {
-              date: formatDate(resource.updatedAt, locale),
-              id: resource.id.slice(0, 8),
-            })}
-          </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           {localization && localization.availableLanguages.length > 1 ? (
@@ -362,7 +356,7 @@ export function ResourceDetails({
           {canEdit ? (
             <Link
               href={`/inventory/${resource.id}/edit`}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-strong px-4 text-sm font-semibold text-on-strong shadow-sm transition hover:bg-success"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-solid px-4 text-sm font-semibold text-on-brand transition hover:bg-brand-hover"
             >
               <Pencil className="size-4" /> {t("details.actions.edit")}
             </Link>
@@ -392,7 +386,7 @@ export function ResourceDetails({
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
         <div className="space-y-6">
-          <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
+          <section className="overflow-hidden rounded-xl border border-border bg-surface">
             {objectModel ? (
               <div className="grid border-b border-border lg:grid-cols-2">
                 {resource.cover ? (
@@ -461,18 +455,20 @@ export function ResourceDetails({
                 <Box className="size-14" strokeWidth={1.25} />
               </div>
             )}
-            <div className="p-5 sm:p-6">
-              <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-success">
-                <Package className="size-4" /> {t("details.sections.overview")}
+            {resource.description ? (
+              <div className="p-5 sm:p-6">
+                <h2 className="text-sm font-semibold text-foreground">
+                  {t("details.sections.overview")}
+                </h2>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-muted-strong">
+                  {resource.description}
+                </p>
               </div>
-              <p className="whitespace-pre-wrap text-sm leading-7 text-muted-strong">
-                {resource.description || t("details.emptyDescription")}
-              </p>
-            </div>
+            ) : null}
           </section>
 
           {galleryMedia.length ? (
-            <section className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
+            <section className="rounded-xl border border-border bg-surface p-5 sm:p-6">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <ImageIcon className="size-4 text-success" />
@@ -500,7 +496,7 @@ export function ResourceDetails({
           ) : null}
 
           {resource.notes ? (
-            <section className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
+            <section className="rounded-xl border border-border bg-surface p-5 sm:p-6">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <FileText className="size-4 text-success" /> {t("details.sections.notes")}
               </h2>
@@ -510,11 +506,11 @@ export function ResourceDetails({
         </div>
 
         <aside className="space-y-6 xl:sticky xl:top-5">
-          <section className="rounded-2xl border border-border bg-surface p-5">
+          <section className="rounded-xl border border-border bg-surface p-5">
             <h2 className="mb-4 text-sm font-semibold text-foreground">
               {t("details.sections.itemDetails")}
             </h2>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+            <div className="grid sm:grid-cols-2 sm:gap-x-5 xl:grid-cols-1 2xl:grid-cols-2">
               <DetailField icon={Layers3} label={t("fields.type")} value={typeLabel(resource.type)} />
               <DetailField
                 icon={Hash}
@@ -524,30 +520,58 @@ export function ResourceDetails({
                   value: integer.format(resource.quantity),
                 })}
               />
-              <DetailField icon={Barcode} label={t("fields.sku")} value={resource.sku || "—"} mono />
-              <DetailField icon={Barcode} label={t("fields.barcode")} value={resource.barcode || "—"} mono />
-              <DetailField icon={Barcode} label={t("fields.serialNumber")} value={resource.serialNumber || "—"} mono />
-              <DetailField icon={MapPin} label={t("fields.location")} value={resource.location || "—"} />
+              {resource.sku ? (
+                <DetailField icon={Barcode} label={t("fields.sku")} value={resource.sku} mono />
+              ) : null}
+              {resource.barcode ? (
+                <DetailField icon={Barcode} label={t("fields.barcode")} value={resource.barcode} mono />
+              ) : null}
+              {resource.serialNumber ? (
+                <DetailField icon={Barcode} label={t("fields.serialNumber")} value={resource.serialNumber} mono />
+              ) : null}
+              {resource.location || coordinateLabel ? (
+                <DetailField
+                  icon={MapPin}
+                  label={t("fields.location")}
+                  value={
+                    <>
+                      {resource.location || coordinateLabel}
+                      {resource.location && coordinateLabel ? (
+                        <span className="mt-1 block font-mono text-xs font-normal text-muted">
+                          {coordinateLabel}
+                        </span>
+                      ) : null}
+                    </>
+                  }
+                />
+              ) : null}
+              {resource.valueCents !== null ? (
+                <DetailField
+                  icon={CircleDollarSign}
+                  label={t("fields.value")}
+                  value={formatValue(resource.valueCents, resource.currency, locale)}
+                />
+              ) : null}
               <DetailField
-                icon={CircleDollarSign}
-                label={t("fields.value")}
-                value={formatValue(resource.valueCents, resource.currency, locale)}
-              />
-              <DetailField
-                icon={Sparkles}
+                icon={Flag}
                 label={t("fields.priority")}
                 value={t("details.priority", { value: integer.format(resource.priority) })}
               />
-              <DetailField
-                icon={CalendarDays}
-                label={t("fields.created")}
-                value={formatDate(resource.createdAt, locale)}
-              />
             </div>
+            {mapHref ? (
+              <a
+                href={mapHref}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-success hover:text-success"
+              >
+                {t("details.openOnMap")} <ChevronRight className="size-3.5" />
+              </a>
+            ) : null}
           </section>
 
           {resource.tags.length || resource.categories.length ? (
-            <section className="rounded-2xl border border-border bg-surface p-5">
+            <section className="rounded-xl border border-border bg-surface p-5">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <Tag className="size-4 text-success" /> {t("details.sections.classification")}
               </h2>
@@ -567,7 +591,7 @@ export function ResourceDetails({
           ) : null}
 
           {customFields.length ? (
-            <section className="rounded-2xl border border-border bg-surface p-5">
+            <section className="rounded-xl border border-border bg-surface p-5">
               <h2 className="text-sm font-semibold text-foreground">
                 {t("details.sections.customFields")}
               </h2>
@@ -591,38 +615,24 @@ export function ResourceDetails({
             </section>
           ) : null}
 
-          <section className="rounded-2xl border border-border bg-surface p-5">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <MapPin className="size-4 text-success" /> {t("details.sections.position")}
-            </h2>
-            {mapHref ? (
-              <>
-                <p className="mt-3 font-mono text-xs leading-5 text-muted">
-                  {resource.gpsLatitude?.toFixed(6)}, {resource.gpsLongitude?.toFixed(6)}
-                  {resource.gpsAltitude === null
-                    ? ""
-                    : ` · ${decimal.format(resource.gpsAltitude)} m`}
-                </p>
-                <a href={mapHref} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-success hover:text-success">
-                  {t("details.openOnMap")} <ChevronRight className="size-3.5" />
-                </a>
-              </>
-            ) : (
-              <p className="mt-3 text-xs leading-5 text-muted">
-                {t("details.noPosition")}
+          <details className="rounded-xl border border-border bg-surface text-xs text-muted">
+            <summary className="cursor-pointer px-5 py-4 font-medium text-muted-strong">
+              {t("details.sections.technicalDetails")}
+            </summary>
+            <div className="space-y-2 border-t border-border px-5 py-4">
+              <p className="flex items-center gap-2">
+                <CalendarDays className="size-3.5" />
+                {t("fields.created")}: {formatDate(resource.createdAt, locale)}
               </p>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-border bg-surface p-5 text-xs text-muted">
-            <p className="flex items-center gap-2">
-              <Clock3 className="size-3.5" />
-              {t("details.lastUpdated", {
-                date: formatDate(resource.updatedAt, locale),
-              })}
-            </p>
-            <p className="mt-2 break-all font-mono">{resource.id}</p>
-          </section>
+              <p className="flex items-center gap-2">
+                <Clock3 className="size-3.5" />
+                {t("details.lastUpdated", {
+                  date: formatDate(resource.updatedAt, locale),
+                })}
+              </p>
+              <p className="break-all font-mono">{resource.id}</p>
+            </div>
+          </details>
         </aside>
       </div>
     </div>

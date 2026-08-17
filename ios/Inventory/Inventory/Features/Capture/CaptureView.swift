@@ -5,7 +5,7 @@ import UIKit
 struct CaptureView: View {
     @EnvironmentObject private var state: AppState
     @StateObject private var camera = CameraService()
-    @StateObject private var model = CaptureViewModel()
+    @StateObject private var model: CaptureViewModel
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var shutterFlash = false
     @State private var codeScanning = false
@@ -17,9 +17,15 @@ struct CaptureView: View {
     let onSubmit: (IntakeSubmission) -> Void
 
     init(
+        maximumUploadImagePixelSize: Int,
         onClose: (() -> Void)? = nil,
         onSubmit: @escaping (IntakeSubmission) -> Void
     ) {
+        _model = StateObject(
+            wrappedValue: CaptureViewModel(
+                maximumPixelSize: maximumUploadImagePixelSize
+            )
+        )
         self.onClose = onClose
         self.onSubmit = onSubmit
     }
@@ -531,7 +537,12 @@ struct CaptureView: View {
 
     private func submitCapture() {
         guard model.canSubmit, model.processingCount == 0 else { return }
-        let submission = model.makeSubmission(imageModelID: state.selectedImageModelID)
+        let submission = model.makeSubmission(
+            imageModelID: state.selectedImageModelID,
+            maximumAIGeneratedImagePixelSize: state.maximumAIGeneratedImagePixelSize,
+            analysisPrompt: state.analysisPrompt,
+            coverPrompt: state.coverPrompt
+        )
         onSubmit(submission)
         withAnimation {
             model.resetAfterSubmitting()

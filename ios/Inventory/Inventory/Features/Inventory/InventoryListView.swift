@@ -132,7 +132,9 @@ struct InventoryListView: View {
                 isPresented: $showObjectCapture,
                 onDismiss: presentFormAfterObjectCapture
             ) {
-                ObjectCaptureFlowView { model in
+                ObjectCaptureFlowView(
+                    maximumUploadImagePixelSize: state.maximumUploadImagePixelSize
+                ) { model in
                     capturedObjectPendingForm = model
                 } onFallback: {
                     openManualFormAfterCapture = true

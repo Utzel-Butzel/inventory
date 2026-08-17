@@ -1,6 +1,6 @@
 {
   "fallback": {
-    "untitled": "Unbenanntes Element"
+    "untitled": "Unbenannter Eintrag"
   },
   "types": {
     "tool": "Werkzeug",
@@ -15,23 +15,29 @@
   },
   "statuses": {
     "available": "Verfügbar",
-    "inUse": "In Verwendung",
+    "inUse": "In Benutzung",
     "maintenance": "Wartung",
     "archived": "Archiviert"
   },
   "header": {
     "inventory": "Inventar",
-    "newItem": "Neues Element",
+    "newItem": "Neuer Eintrag",
     "edit": "Bearbeiten",
-    "addItem": "Inventarelement hinzufügen",
+    "addItem": "Eintrag hinzufügen",
     "updated": "Aktualisiert {{date}} · ID {{id}}",
-    "description": "Manuell erstellen oder Bilder den ersten Entwurf liefern lassen.",
+    "description": "Erstelle den Eintrag manuell oder ergänze Angaben aus Bildern.",
     "stock": "Bestand"
   },
+  "variantInheritance": {
+    "title": "Variante von",
+    "description": "Gemeinsame Angaben bleiben mit dem Haupteintrag synchron. Änderst du hier ein gemeinsames Feld, wird nur dieses Feld für die Variante abweichend gespeichert.",
+    "overrides_one": "{{value}} Abweichung",
+    "overrides_other": "{{value}} Abweichungen"
+  },
   "actions": {
-    "deleteItem": "Element löschen",
+    "deleteItem": "Eintrag löschen",
     "saving": "Wird gespeichert…",
-    "createItem": "Element erstellen",
+    "createItem": "Eintrag erstellen",
     "saveChanges": "Änderungen speichern",
     "dismissError": "Fehler schließen",
     "dismissMessage": "Meldung schließen",
@@ -40,8 +46,8 @@
   "details": {
     "title": "Kerndaten",
     "description": "Identität, Kategorie und Verfügbarkeit",
-    "name": "Elementname",
-    "nameAiPlaceholder": "Leer lassen, um ihn aus Bildern zu erzeugen",
+    "name": "Name des Eintrags",
+    "nameAiPlaceholder": "Leer lassen, um den Namen aus Bildern zu übernehmen",
     "namePlaceholder": "z. B. Festool Tauchsäge TS 55",
     "type": "Typ",
     "status": "Status",
@@ -51,7 +57,10 @@
     "tagsPlaceholder": "holzarbeiten, elektrowerkzeug, 230v",
     "categories": "Kategorien",
     "categoriesPlaceholder": "Werkstatt, Produktion",
-    "commaSeparated": "durch Kommas getrennt"
+    "commaSeparated": "durch Kommas getrennt",
+    "sections": {
+      "technicalDetails": "Technische Details"
+    }
   },
   "customFields": {
     "title": "Benutzerdefinierte Felder",
@@ -59,7 +68,7 @@
     "count_one": "{{count}} Feld",
     "count_other": "{{count}} Felder",
     "loading": "Benutzerdefinierte Felder werden geladen",
-    "empty": "Für dieses Element gelten keine benutzerdefinierten Felder",
+    "empty": "Für diesen Eintrag gelten keine benutzerdefinierten Felder",
     "emptyDescription": "Administratoren können in den Einstellungen Felder für Datensätze des Typs {{type}} oder passende Kategorien konfigurieren."
   },
   "media": {
@@ -67,7 +76,7 @@
     "description_one": "Bilder, Videos, PDFs und 3D-Modelle · {{count}} Datei",
     "description_other": "Bilder, Videos, PDFs und 3D-Modelle · {{count}} Dateien",
     "cover": "Titelbild",
-    "ai": "KI",
+    "ai": "Automatisch",
     "moveEarlier": "Datei nach vorn verschieben",
     "moveLater": "Datei nach hinten verschieben",
     "remove": "Datei entfernen",
@@ -76,10 +85,10 @@
     "drop": "Dateien hier ablegen oder auswählen",
     "formats": "JPG, PNG, WebP, HEIC, MP4, MOV, PDF oder USDZ · bis zu 12 Dateien",
     "objectCaptureReady": "Object-Capture-Paket ist bereit",
-    "objectCaptureReadyDescription": "Das Foto wird zum Artikelbild und die USDZ-Datei bleibt als interaktives 3D-Modell verfügbar.",
-    "objectCaptureReadyDescriptionAi": "Der bestehende KI-Ablauf erkennt den Artikel anhand des ausgewählten Fotos und erstellt ein freigestelltes Artikelbild. Die USDZ-Datei bleibt als interaktives 3D-Modell verfügbar.",
+    "objectCaptureReadyDescription": "Das Foto wird zum Titelbild und die USDZ-Datei bleibt als interaktives 3D-Modell verfügbar.",
+    "objectCaptureReadyDescriptionAi": "Der Eintrag wird anhand des ausgewählten Fotos erkannt und erhält ein freigestelltes Titelbild. Die USDZ-Datei bleibt als interaktives 3D-Modell verfügbar.",
     "objectCaptureNeedsImage": "3D-Modell ausgewählt",
-    "objectCaptureNeedsImageDescription": "Füge mindestens ein deutliches Objektfoto hinzu, um das Artikelbild zu erstellen und KI-Erkennung sowie Freistellung zu aktivieren."
+    "objectCaptureNeedsImageDescription": "Füge mindestens ein deutliches Foto hinzu, um Angaben und Titelbild automatisch zu übernehmen."
   },
   "operations": {
     "title": "Betrieb",
@@ -105,32 +114,35 @@
     "notes": "Interne Notizen"
   },
   "ai": {
-    "title": "KI-Katalogstudio",
-    "description": "Bildanalyse + Bildbearbeitung",
-    "analyzeImages": "Bilder analysieren",
-    "analyzeDescription": "Titel, Beschreibung, Typ, Tags und Alt-Text erzeugen.",
-    "generateCover": "Studio-Titelbild erstellen",
-    "coverDescription": "Aus dem ersten Foto ein sauberes quadratisches Hauptbild erstellen.",
-    "safety": "Die KI läuft erst, nachdem die Originaldateien sicher gespeichert wurden. Das Ergebnis kann jederzeit bearbeitet werden.",
-    "rewrite": "Felder analysieren und neu schreiben",
+    "title": "Aus Fotos übernehmen",
+    "description": "Angaben und Titelbild automatisch vorbereiten",
+    "analyzeImages": "Angaben aus Fotos übernehmen",
+    "analyzeDescription": "Name, Beschreibung, Typ, Tags und Alternativtext vorbereiten.",
+    "generateCover": "Titelbild automatisch erstellen",
+    "coverDescription": "Aus dem ersten Foto ein quadratisches Titelbild vorbereiten.",
+    "safety": "Die automatische Verarbeitung beginnt erst, nachdem die Originaldateien gespeichert wurden. Prüfe und bearbeite das Ergebnis anschließend bei Bedarf.",
+    "rewrite": "Angaben aus Fotos übernehmen",
     "coverDirection": "Vorgabe für das Titelbild",
     "referenceImage": "Referenzbild",
     "referenceImageDescription": "Wähle, auf welchem Bild das Titelbild basieren soll.",
+    "advancedImageOptions": "Erweiterte Bildoptionen",
     "transparentBackground": "Transparenter Hintergrund",
     "transparentBackgroundDescription": "Das erstellte Titelbild als transparentes PNG freistellen.",
     "transparencyMethod": "Transparenzmethode",
-    "differenceMatting": "Differenz-Matting · beste Qualität",
-    "differenceMattingDescription": "Verwendet deckungsgleiche weiße und schwarze Durchläufe für saubere Kanten, Glas und weiche Schatten. Benötigt zwei Bildgenerierungen.",
-    "greenscreen": "Greenscreen · schneller",
-    "greenscreenDescription": "Verwendet einen chromagrünen Durchlauf. Schneller, aber grüne Objekte und feine Kanten können Artefakte zeigen.",
+    "differenceMatting": "Differenz-Matting · zwei Durchläufe",
+    "differenceMattingDescription": "Verwendet deckungsgleiche weiße und schwarze Durchläufe für Kanten, Glas und weiche Schatten. Benötigt zwei Bildgenerierungen.",
+    "greenscreen": "Greenscreen · ein Durchlauf",
+    "greenscreenDescription": "Verwendet einen chromagrünen Durchlauf. Bei grünen Objekten und feinen Kanten können Artefakte entstehen.",
     "generateNewCover": "Neues Titelbild erstellen",
-    "imageRequired": "Lade ein Bild hoch und speichere es, um KI-Aktionen zu aktivieren.",
-    "lastModel": "Letztes Modell"
+    "imageRequired": "Lade ein Bild hoch und speichere es, um Angaben oder ein Titelbild automatisch zu erstellen.",
+    "lastModel": "Verwendetes Modell",
+    "automaticProcessing": "Automatische Verarbeitung"
   },
   "position": {
     "title": "Position",
+    "mapDetails": "Kartenposition (optional)",
     "editMap": "Punkt oder Umriss auf der Karte bearbeiten",
-    "saveFirst": "Speichere das Element zuerst, um seinen Punkt oder Umriss im Karteneditor zu zeichnen.",
+    "saveFirst": "Speichere den Eintrag zuerst, um seinen Punkt oder Umriss im Karteneditor zu zeichnen.",
     "geometryNotice": "Die Koordinaten werden aus der gespeicherten Kartengeometrie abgeleitet. Bearbeite sie auf der Karte, damit beide Ansichten synchron bleiben.",
     "latitude": "Breitengrad",
     "longitude": "Längengrad",
@@ -151,7 +163,7 @@
       "translateStale": "Fehlende & veraltete übersetzen",
       "regenerate": "Übersetzung für {{language}} neu erzeugen",
       "saveHuman": "Manuelle Bearbeitung speichern",
-      "useAi": "An KI zurückgeben",
+      "useAi": "Wieder automatisch übersetzen",
       "acceptSuggestion": "Vorschlag übernehmen"
     },
     "empty": "Es sind keine weiteren Inhaltssprachen konfiguriert.",
@@ -170,41 +182,41 @@
     },
     "notTranslated": "Nicht übersetzt",
     "humanLocked": "Geschützte manuelle Bearbeitung",
-    "suggestion": "KI-Vorschlag für die geänderte Quelle",
+    "suggestion": "Automatischer Vorschlag für den geänderten Ausgangstext",
     "notices": {
       "updated_one": "{{count}} übersetztes Feld aktualisiert.",
       "updated_other": "{{count}} übersetzte Felder aktualisiert.",
       "current": "Alle Übersetzungen sind bereits aktuell.",
       "queued": "Übersetzung wurde eingereiht und wird im Hintergrund fortgesetzt.",
-      "savedHuman": "Die manuelle Übersetzung wurde gespeichert und vor Überschreiben durch die KI geschützt."
+      "savedHuman": "Die manuelle Übersetzung wurde gespeichert und vor automatischem Überschreiben geschützt."
     },
     "errors": {
       "load": "Übersetzungen konnten nicht geladen werden.",
-      "ai": "KI-Übersetzung konnte nicht eingereiht werden.",
+      "ai": "Die automatische Übersetzung konnte nicht eingereiht werden.",
       "save": "Die Übersetzung konnte nicht gespeichert werden."
     }
   },
   "relations": {
     "title": "Beziehungen",
-    "description": "Dieses Element mit Behältern und zugehörigem Inventar verbinden",
+    "description": "Diesen Eintrag mit Behältern und zugehörigem Inventar verbinden",
     "refresh": "Beziehungen aktualisieren",
     "locatedIn": "Befindet sich in",
-    "noParent": "Kein übergeordneter Ort",
-    "noParentDescription": "Wähle einen Behälter oder Ort für dieses Element.",
-    "chooseParent": "Übergeordnetes Element wählen",
+    "noParent": "Kein übergeordneter Eintrag",
+    "noParentDescription": "Wähle einen Behälter oder Ort für diesen Eintrag.",
+    "chooseParent": "Übergeordneten Eintrag wählen",
     "add": "Hinzufügen",
     "contains": "Enthält",
-    "noChildren": "Dieses Element enthält kein weiteres Inventar.",
+    "noChildren": "Dieser Eintrag enthält kein weiteres Inventar.",
     "other_one": "{{count}} weitere Beziehung",
     "other_other": "{{count}} weitere Beziehungen",
-    "chooseItem": "Element wählen",
+    "chooseItem": "Eintrag wählen",
     "link": "Verknüpfen",
-    "missingItem": "Fehlendes Element",
+    "missingItem": "Fehlender Eintrag",
     "unknown": "Unbekannter Typ",
     "automatic": "Automatisch",
     "manual": "Manuell",
     "removeWith": "Beziehung mit {{name}} entfernen",
-    "item": "Element",
+    "item": "Eintrag",
     "errors": {
       "load": "Beziehungen konnten nicht geladen werden.",
       "save": "Beziehung konnte nicht gespeichert werden.",
@@ -273,30 +285,30 @@
   },
   "notices": {
     "locationRead": "Der Standort wurde aus den Bildmetadaten gelesen. Bitte überprüfe ihn.",
-    "analysisComplete": "Die KI-Analyse hat Titel, Beschreibung, Tags und Typ aktualisiert.",
-    "coverComplete": "Ein neues Studio-Titelbild wurde erstellt und als erstes Bild festgelegt.",
+    "analysisComplete": "Angaben aus den Fotos wurden übernommen. Titel, Beschreibung, Tags und Typ wurden aktualisiert.",
+    "coverComplete": "Ein neues Titelbild wurde erstellt und als erstes Bild festgelegt.",
     "savedTranslationStale": "Änderungen gespeichert. Die Übersetzung ist noch veraltet: {{reason}}",
     "savedTranslations": "Änderungen gespeichert. Die Übersetzungen werden im Hintergrund aktualisiert.",
     "saved": "Änderungen gespeichert.",
     "idCopied": "Datensatz-ID kopiert."
   },
   "confirm": {
-    "removeFile": "Diese Datei vom Element entfernen?",
+    "removeFile": "Diese Datei vom Eintrag entfernen?",
     "delete": "„{{name}}“ löschen? Dies kann nicht rückgängig gemacht werden."
   },
   "errors": {
-    "load": "Element konnte nicht geladen werden.",
+    "load": "Eintrag konnte nicht geladen werden.",
     "loadCustomFields": "Definitionen der benutzerdefinierten Felder konnten nicht geladen werden.",
     "unsupportedFiles": "Einige Dateien wurden übersprungen. Unterstützt werden Bilder, Videos, PDF-Dateien und USDZ-3D-Modelle.",
-    "analysis": "KI-Analyse fehlgeschlagen.",
+    "analysis": "Die automatische Auswertung der Fotos ist fehlgeschlagen.",
     "cover": "Titelbilderstellung fehlgeschlagen.",
     "requiredCustomField": "Fülle das erforderliche benutzerdefinierte Feld „{{label}}“ aus.",
-    "nameOrImage": "Füge einen Namen oder mindestens ein Bild für die KI-Analyse hinzu.",
+    "nameOrImage": "Füge einen Namen oder mindestens ein Bild für die automatische Auswertung hinzu.",
     "objectCaptureImageRequired": "Füge vor dem Speichern dieses 3D-Modells mindestens ein Objektfoto hinzu.",
-    "translation": "KI-Übersetzung fehlgeschlagen.",
-    "save": "Element konnte nicht gespeichert werden.",
+    "translation": "Die automatische Übersetzung ist fehlgeschlagen.",
+    "save": "Eintrag konnte nicht gespeichert werden.",
     "removeFile": "Datei konnte nicht entfernt werden.",
     "reorderMedia": "Medien konnten nicht neu sortiert werden.",
-    "delete": "Element konnte nicht gelöscht werden."
+    "delete": "Eintrag konnte nicht gelöscht werden."
   }
 }

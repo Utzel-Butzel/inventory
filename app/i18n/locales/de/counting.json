@@ -1,20 +1,21 @@
 {
   "launch": {
     "title": "Stücke anhand eines Fotos zählen",
-    "description": "Nehmen Sie ein Foto auf und lassen Sie die Menge von der KI eintragen.",
-    "action": "Ausprobieren"
+    "description": "Ermittle die Menge anhand eines Fotos und prüfe das Ergebnis vor der Buchung.",
+    "action": "Öffnen"
   },
   "header": {
     "title": "Stückzähler per Foto",
-    "description": "Verteilen Sie die Stücke, fotografieren Sie von oben und vermeiden Sie nach Möglichkeit Überlappungen."
+    "description": "Verteile die Stücke, fotografiere sie von oben und vermeide nach Möglichkeit Überlappungen."
   },
   "upload": {
     "preparing": "Foto wird vorbereitet…",
     "choose": "Foto aufnehmen oder auswählen",
-    "privacy": "Das Foto wird nur für diese Zählung analysiert und nicht an den Artikel angehängt."
+    "privacy": "Das Foto wird nur für diese Zählung analysiert und nicht an den Eintrag angehängt."
   },
   "capture": {
-    "countHint": "Die KI zählt sichtbare {{unit}}, die zu „{{item}}“ passen. Sie können die Menge vor der Buchung korrigieren."
+    "countHint": "Sichtbare {{unit}}, die zu „{{item}}“ passen, werden automatisch gezählt. Du kannst die Menge vor der Buchung korrigieren.",
+    "advancedOptions": "Erweiterte Optionen"
   },
   "actions": {
     "close": "Fotozähler schließen",
@@ -35,31 +36,34 @@
   },
   "result": {
     "confidence": "{{value}} % Konfidenz",
-    "filled": "Menge automatisch eingetragen — prüfen Sie sie vor der Buchung.",
-    "noneFound": "Keine passenden Stücke gefunden. Versuchen Sie es mit einem deutlicheren Foto.",
-    "estimateWarning": "Dies ist eine Schätzung. Prüfen Sie verdeckte oder überlappende Stücke sorgfältig.",
+    "confidenceLabel": "Konfidenz",
+    "filled": "Menge automatisch eingetragen — prüfe sie vor der Buchung.",
+    "noneFound": "Keine passenden Stücke gefunden. Versuche es mit einem deutlicheren Foto.",
+    "estimateWarning": "Dies ist eine Schätzung. Prüfe verdeckte oder überlappende Stücke sorgfältig.",
     "analyzedWith": "Analysiert mit {{model}}",
-    "exceedsAvailable": "Die ausgewählte Menge überschreitet die derzeit verfügbaren {{quantity}}. Korrigieren Sie sie oder wechseln Sie zum Bestandszugang."
+    "technicalDetails": "Technische Details",
+    "method": "Verfahren",
+    "exceedsAvailable": "Die ausgewählte Menge überschreitet die derzeit verfügbaren {{quantity}}. Korrigiere sie oder wechsle zum Bestandszugang."
   },
   "notices": {
-    "waitingStopped": "Warten beendet. Sie können dieselbe Zählung fortsetzen."
+    "waitingStopped": "Warten beendet. Du kannst dieselbe Zählung fortsetzen."
   },
   "errors": {
-    "imageFormat": "Wählen Sie ein Foto im Format JPG, PNG, WebP oder HEIC.",
+    "imageFormat": "Wähle ein Foto im Format JPG, PNG, WebP oder HEIC.",
     "preparePhoto": "Das Foto konnte nicht für die Zählung vorbereitet werden.",
-    "invalidQuantity": "Der Zähler hat eine ungültige Menge zurückgegeben. Versuchen Sie es mit einem anderen Foto.",
-    "markerMismatch": "Der Zähler konnte nicht jedes Stück markieren. Versuchen Sie es mit einem anderen Foto.",
+    "invalidQuantity": "Der Zähler hat eine ungültige Menge zurückgegeben. Versuche es mit einem anderen Foto.",
+    "markerMismatch": "Der Zähler konnte nicht jedes Stück markieren. Versuche es mit einem anderen Foto.",
     "invalidProcessingResponse": "Der Zähler hat eine ungültige Verarbeitungsantwort zurückgegeben.",
     "requestFailed": "Anfrage fehlgeschlagen (HTTP {{status}}).",
     "invalidResult": "Der Zähler hat ein ungültiges Ergebnis zurückgegeben.",
     "invalidJobDeadline": "Der Zähler hat eine ungültige Auftragsfrist zurückgegeben.",
-    "expired": "Die Zählung hat zu lange gedauert und ist abgelaufen. Versuchen Sie es erneut.",
-    "stoppedTimeout": "Die Zählung hat zu lange gedauert und wurde beendet. Versuchen Sie es mit einem anderen Foto.",
+    "expired": "Die Zählung hat zu lange gedauert und ist abgelaufen. Versuche es erneut.",
+    "stoppedTimeout": "Die Zählung hat zu lange gedauert und wurde beendet. Versuche es mit einem anderen Foto.",
     "countPhoto": "Die Objekte auf diesem Foto konnten nicht gezählt werden."
   },
   "fallback": {
     "cameraPhoto": "Kamerafoto",
     "detectedItem": "Objekte",
-    "model": "KI-Bilderkennung"
+    "model": "Automatische Bilderkennung"
   }
 }

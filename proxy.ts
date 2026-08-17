@@ -8,15 +8,16 @@ import {
   type UiLanguage,
 } from "./i18n.config";
 import {
-  isOrganizationId,
   isOrganizationPagePath,
-  organizationIdFromPathname,
+  isOrganizationReference,
+  isOrganizationScopedPagePath,
   organizationPath,
+  organizationReferenceFromPathname,
   stripOrganizationPathname,
 } from "./lib/organization-path";
 
 const ORGANIZATION_COOKIE = "inventory.organization";
-const ORGANIZATION_HEADER = "x-organization-id";
+const ORGANIZATION_ROUTE_HEADER = "x-inventory-organization-route";
 const ORIGINAL_PATH_HEADER = "x-inventory-original-path";
 
 function requestedLanguage(request: NextRequest): UiLanguage {
@@ -43,33 +44,43 @@ function requestedLanguage(request: NextRequest): UiLanguage {
   ) ?? "en";
 }
 
-function routedHeaders(request: NextRequest, organizationId?: string | null) {
+function routedHeaders(
+  request: NextRequest,
+  organizationReference?: string | null,
+) {
   const headers = new Headers(request.headers);
+  headers.delete(ORGANIZATION_ROUTE_HEADER);
+  headers.delete(ORIGINAL_PATH_HEADER);
   headers.set(UI_LANGUAGE_HEADER, requestedLanguage(request));
   headers.set(
     ORIGINAL_PATH_HEADER,
     `${request.nextUrl.pathname}${request.nextUrl.search}`,
   );
-  if (organizationId) headers.set(ORGANIZATION_HEADER, organizationId);
+  if (organizationReference) {
+    headers.set(ORGANIZATION_ROUTE_HEADER, organizationReference);
+  }
   return headers;
 }
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const routeOrganizationId = organizationIdFromPathname(pathname);
+  const routeOrganizationReference =
+    organizationReferenceFromPathname(pathname);
   const internalPathname = stripOrganizationPathname(pathname);
 
   if (
-    routeOrganizationId &&
-    (internalPathname === "/" || isOrganizationPagePath(pathname))
+    routeOrganizationReference &&
+    isOrganizationScopedPagePath(pathname)
   ) {
     const rewriteUrl = request.nextUrl.clone();
     rewriteUrl.pathname =
       internalPathname === "/" ? "/dashboard" : internalPathname;
     const response = NextResponse.rewrite(rewriteUrl, {
-      request: { headers: routedHeaders(request, routeOrganizationId) },
+      request: {
+        headers: routedHeaders(request, routeOrganizationReference),
+      },
     });
-    response.cookies.set(ORGANIZATION_COOKIE, routeOrganizationId, {
+    response.cookies.set(ORGANIZATION_COOKIE, routeOrganizationReference, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
@@ -80,10 +91,17 @@ export function proxy(request: NextRequest) {
   }
 
   if (isOrganizationPagePath(pathname)) {
-    const cookieOrganizationId = request.cookies.get(ORGANIZATION_COOKIE)?.value;
-    if (cookieOrganizationId && isOrganizationId(cookieOrganizationId)) {
+    const cookieOrganizationReference = request.cookies
+      .get(ORGANIZATION_COOKIE)?.value;
+    if (
+      cookieOrganizationReference &&
+      isOrganizationReference(cookieOrganizationReference)
+    ) {
       const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = organizationPath(cookieOrganizationId, pathname);
+      redirectUrl.pathname = organizationPath(
+        cookieOrganizationReference,
+        pathname,
+      );
       return NextResponse.redirect(redirectUrl);
     }
   }

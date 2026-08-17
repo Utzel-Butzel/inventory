@@ -9,7 +9,6 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
-  Bot,
   Box,
   Braces,
   Check,
@@ -17,6 +16,7 @@ import {
   CircleDollarSign,
   Copy,
   FileText,
+  GitBranch,
   ImageIcon,
   LoaderCircle,
   MapPin,
@@ -24,10 +24,8 @@ import {
   Paperclip,
   RefreshCcw,
   Save,
-  Sparkles,
   Trash2,
   UploadCloud,
-  WandSparkles,
   Warehouse,
   X,
 } from "lucide-react";
@@ -333,13 +331,21 @@ function CoverTransparencyOptions({
 export function ResourceEditor({
   resourceId,
   canDelete = false,
+  canViewStock = false,
   canUseAi = false,
   canManageSpatial = false,
+  variantContext = null,
 }: {
   resourceId?: string;
   canDelete?: boolean;
+  canViewStock?: boolean;
   canUseAi?: boolean;
   canManageSpatial?: boolean;
+  variantContext?: {
+    primaryResourceId: string;
+    primaryName: string;
+    overriddenFields: string[];
+  } | null;
 }) {
   const router = useRouter();
   const organizationHref = useOrganizationHref();
@@ -873,7 +879,13 @@ export function ResourceEditor({
     }
     try {
       await fetchJson(`/api/v1/resources/${resourceId}`, { method: "DELETE" });
-      router.push(organizationHref("/inventory"));
+      router.push(
+        organizationHref(
+          variantContext
+            ? `/inventory/${variantContext.primaryResourceId}`
+            : "/inventory",
+        ),
+      );
       router.refresh();
     } catch (deleteError) {
       setError(
@@ -940,7 +952,7 @@ export function ResourceEditor({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {!isNew && canDelete ? (
+          {!isNew && canViewStock ? (
             <Link
               href={`/inventory/${resourceId}/stock`}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3.5 text-sm font-semibold text-brand transition hover:bg-brand-soft"
@@ -949,7 +961,7 @@ export function ResourceEditor({
               {t("header.stock")}
             </Link>
           ) : null}
-          {!isNew ? (
+          {!isNew && canDelete ? (
             <button
               type="button"
               onClick={deleteItem}
@@ -1001,6 +1013,38 @@ export function ResourceEditor({
           >
             <X size={16} />
           </button>
+        </div>
+      ) : null}
+
+      {variantContext ? (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl border border-brand-border bg-brand-soft/45 px-4 py-3.5">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface text-brand">
+            <GitBranch className="size-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-foreground">
+              {t("variantInheritance.title")} {" "}
+              <Link
+                href={`/inventory/${variantContext.primaryResourceId}`}
+                className="text-brand hover:underline"
+              >
+                {variantContext.primaryName}
+              </Link>
+            </p>
+            <p className="mt-1 text-[11px] leading-5 text-muted">
+              {t("variantInheritance.description")}
+            </p>
+          </div>
+          {variantContext.overriddenFields.length ? (
+            <span className="shrink-0 rounded-full border border-brand-border bg-surface px-2.5 py-1 text-[10px] font-semibold text-brand">
+              {t("variantInheritance.overrides", {
+                count: variantContext.overriddenFields.length,
+                value: new Intl.NumberFormat(locale).format(
+                  variantContext.overriddenFields.length,
+                ),
+              })}
+            </span>
+          ) : null}
         </div>
       ) : null}
 
@@ -1056,6 +1100,15 @@ export function ResourceEditor({
                 </select>
               </label>
               <label className={`${labelClass} sm:col-span-2`}>
+                {t("operations.location")}
+                <input
+                  value={form.location}
+                  onChange={(event) => setField("location", event.target.value)}
+                  placeholder={t("operations.locationPlaceholder")}
+                  className={inputClass}
+                />
+              </label>
+              <label className={`${labelClass} sm:col-span-2`}>
                 {t("details.itemDescription")}
                 <textarea
                   value={form.description}
@@ -1089,6 +1142,9 @@ export function ResourceEditor({
             />
           ) : null}
 
+          {customFieldsLoading ||
+          customFieldsError ||
+          applicableCustomFieldDefinitions.length ? (
           <section className="rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)] sm:p-6">
             <div className="mb-5 flex items-center justify-between gap-4 border-b border-border pb-4">
               <div className="flex items-center gap-3">
@@ -1142,18 +1198,9 @@ export function ResourceEditor({
                 values={customFields}
                 onChange={setCustomFields}
               />
-            ) : (
-              <div className="rounded-xl border border-dashed border-border bg-surface-subtle/60 px-5 py-8 text-center">
-                <Braces className="mx-auto size-5 text-muted" aria-hidden="true" />
-                <p className="mt-2 text-xs font-semibold text-muted">
-                  {t("customFields.empty")}
-                </p>
-                <p className="mx-auto mt-1 max-w-md text-[11px] leading-4 text-muted">
-                  {t("customFields.emptyDescription", { type: form.type })}
-                </p>
-              </div>
-            )}
+            ) : null}
           </section>
+          ) : null}
 
           <section className="rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)] sm:p-6">
             <div className="mb-5 flex items-center justify-between gap-4 border-b border-border pb-4">
@@ -1287,16 +1334,11 @@ export function ResourceEditor({
               ) : (
                 <div className={labelClass}>
                   {t("operations.currentStock")}
-                  <Link
-                    href={`/inventory/${resourceId}/stock`}
-                    className="mt-1.5 flex h-11 items-center justify-between rounded-xl border border-brand-border bg-brand-soft px-3.5 text-sm font-semibold text-brand transition hover:bg-brand-soft"
-                  >
+                  <div className="mt-1.5 flex h-11 items-center rounded-xl border border-border bg-surface-subtle px-3.5 text-sm font-semibold text-muted-strong">
                     <span className="inline-flex items-center gap-2"><Warehouse size={15} />{t("operations.units", { count: Number(form.quantity) })}</span>
-                    <span className="text-xs">{t("operations.manageStock")} →</span>
-                  </Link>
+                  </div>
                 </div>
               )}
-              <label className={`${labelClass} sm:col-span-2`}>{t("operations.location")}<input value={form.location} onChange={(event) => setField("location", event.target.value)} placeholder={t("operations.locationPlaceholder")} className={inputClass} /></label>
               <label className={labelClass}>{t("operations.priority")}<select value={form.priority} onChange={(event) => setField("priority", event.target.value)} className={inputClass}><option value="1">1 · {t("operations.priorityLow")}</option><option value="2">2</option><option value="3">3 · {t("operations.priorityNormal")}</option><option value="4">4</option><option value="5">5 · {t("operations.priorityHigh")}</option></select></label>
               <label className={labelClass}>{t("operations.value")}<div className="mt-1.5 flex"><input type="number" min="0" step="0.01" value={form.value} onChange={(event) => setField("value", event.target.value)} className={`${inputClass} mt-0 rounded-r-none`} /><input value={form.currency} onChange={(event) => setField("currency", event.target.value.slice(0, 3))} className="h-11 w-20 rounded-r-xl border border-l-0 border-border bg-surface-subtle px-3 text-center text-xs font-bold uppercase text-muted outline-none" aria-label={t("operations.currency")} /></div></label>
               <label className={`${labelClass} sm:col-span-2 lg:col-span-3`}>{t("operations.notes")}<textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} rows={4} className={`${inputClass} h-auto py-3`} /></label>
@@ -1306,14 +1348,14 @@ export function ResourceEditor({
 
         <aside className="space-y-5 xl:sticky xl:top-5">
           {canUseAi ? (
-          <section className="overflow-hidden rounded-2xl border border-brand-border bg-gradient-to-br from-brand-soft to-surface p-5 shadow-[var(--shadow-md)]">
-            <div className="mb-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-lg shadow-[var(--shadow-sm)]"><Sparkles size={19} /></div><div><h2 className="text-sm font-semibold text-foreground">{t("ai.title")}</h2><p className="text-xs text-brand">{t("ai.description")}</p></div></div>
+          <section className="rounded-2xl border border-border bg-surface p-5">
+            <div className="mb-4 flex items-center gap-3 border-b border-border pb-4"><div className="grid h-9 w-9 place-items-center rounded-xl bg-surface-muted text-muted-strong"><ImageIcon size={17} /></div><div><h2 className="text-sm font-semibold text-foreground">{t("ai.title")}</h2><p className="text-xs text-muted">{t("ai.description")}</p></div></div>
             {isNew ? (
               <div className="space-y-3">
-                <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-surface/80 p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => { aiPreferencesTouched.current.analyze = true; setAutoAnalyze(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.analyzeDescription")}</span></span></label>
-                <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-surface/80 p-3"><input type="checkbox" checked={autoCover} onChange={(event) => { aiPreferencesTouched.current.cover = true; setAutoCover(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.coverDescription")}</span></span></label>
+                <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => { aiPreferencesTouched.current.analyze = true; setAutoAnalyze(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.analyzeDescription")}</span></span></label>
+                <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoCover} onChange={(event) => { aiPreferencesTouched.current.cover = true; setAutoCover(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.coverDescription")}</span></span></label>
                 {autoCover ? (
-                  <div className="rounded-xl border border-brand-border bg-surface/80 p-3">
+                  <div className="rounded-xl border border-border bg-surface-subtle p-3">
                     <CoverReferencePicker
                       name="new-cover-reference"
                       options={previews.flatMap((url, index) =>
@@ -1335,26 +1377,34 @@ export function ResourceEditor({
                       disabled={Boolean(aiAction)}
                       onSelect={(id) => setCoverSourceFileIndex(Number(id))}
                     />
-                    <CoverTransparencyOptions
-                      transparentBackground={transparentCover}
-                      transparencyMethod={coverTransparencyMethod}
-                      disabled={Boolean(aiAction)}
-                      onTransparentBackgroundChange={changeTransparentCover}
-                      onTransparencyMethodChange={setCoverTransparencyMethod}
-                    />
-                    <ImageModelSelector
-                      preference={imageModelPreference}
-                      disabled={Boolean(aiAction)}
-                      className="mt-3"
-                    />
+                    <details className="group mt-3 rounded-lg border border-border bg-surface px-3 py-2.5">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[11px] font-semibold text-muted-strong marker:content-none">
+                        {t("ai.advancedImageOptions")}
+                        <ChevronRight size={14} className="text-muted transition group-open:rotate-90" aria-hidden="true" />
+                      </summary>
+                      <div className="mt-3 border-t border-border pt-3">
+                        <CoverTransparencyOptions
+                          transparentBackground={transparentCover}
+                          transparencyMethod={coverTransparencyMethod}
+                          disabled={Boolean(aiAction)}
+                          onTransparentBackgroundChange={changeTransparentCover}
+                          onTransparencyMethodChange={setCoverTransparencyMethod}
+                        />
+                        <ImageModelSelector
+                          preference={imageModelPreference}
+                          disabled={Boolean(aiAction)}
+                          className="mt-3"
+                        />
+                      </div>
+                    </details>
                   </div>
                 ) : null}
                 <p className="text-[11px] leading-4 text-muted">{t("ai.safety")}</p>
               </div>
             ) : (
               <div className="space-y-3">
-                <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runAnalysis(resourceId, true)} className="flex w-full items-center justify-between rounded-xl bg-brand-solid px-3.5 py-3 text-left text-xs font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover disabled:bg-muted disabled:text-background disabled:opacity-100"><span className="flex items-center gap-2">{aiAction === "analyze" ? <LoaderCircle size={15} className="animate-spin" /> : <Bot size={15} />}{t("ai.rewrite")}</span><ChevronRight size={15} /></button>
-                <div className="rounded-xl border border-brand-border bg-surface/80 p-3">
+                <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runAnalysis(resourceId, true)} className="flex w-full items-center justify-between rounded-xl bg-brand-solid px-3.5 py-3 text-left text-xs font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover disabled:bg-muted disabled:text-background disabled:opacity-100"><span className="flex items-center gap-2">{aiAction === "analyze" ? <LoaderCircle size={15} className="animate-spin" /> : <ImageIcon size={15} />}{t("ai.rewrite")}</span><ChevronRight size={15} /></button>
+                <div className="rounded-xl border border-border bg-surface-subtle p-3">
                   <CoverReferencePicker
                     name="existing-cover-reference"
                     options={itemMedia.flatMap((item) =>
@@ -1377,30 +1427,42 @@ export function ResourceEditor({
                     {t("ai.coverDirection")}
                     <textarea value={coverPrompt} onChange={(event) => { setCoverPrompt(event.target.value); setCoverPromptCustomized(true); }} rows={5} className="mt-2 w-full resize-none rounded-lg border border-border bg-surface p-2.5 text-xs leading-5 text-muted-strong outline-none focus:border-focus" />
                   </label>
-                  <CoverTransparencyOptions
-                    transparentBackground={transparentCover}
-                    transparencyMethod={coverTransparencyMethod}
-                    disabled={Boolean(aiAction)}
-                    onTransparentBackgroundChange={changeTransparentCover}
-                    onTransparencyMethodChange={setCoverTransparencyMethod}
-                  />
-                  <ImageModelSelector
-                    preference={imageModelPreference}
-                    disabled={Boolean(aiAction)}
-                    className="mt-3"
-                  />
-                  <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runCover(resourceId)} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-brand-border bg-brand-soft px-3 py-2 text-xs font-semibold text-brand transition hover:bg-brand-soft disabled:border-border-strong disabled:bg-surface-muted disabled:text-muted disabled:opacity-100">{aiAction === "cover" ? <LoaderCircle size={14} className="animate-spin" /> : <WandSparkles size={14} />}{t("ai.generateNewCover")}</button>
+                  <details className="group mt-3 rounded-lg border border-border bg-surface px-3 py-2.5">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[11px] font-semibold text-muted-strong marker:content-none">
+                      {t("ai.advancedImageOptions")}
+                      <ChevronRight size={14} className="text-muted transition group-open:rotate-90" aria-hidden="true" />
+                    </summary>
+                    <div className="mt-3 border-t border-border pt-3">
+                      <CoverTransparencyOptions
+                        transparentBackground={transparentCover}
+                        transparencyMethod={coverTransparencyMethod}
+                        disabled={Boolean(aiAction)}
+                        onTransparentBackgroundChange={changeTransparentCover}
+                        onTransparencyMethodChange={setCoverTransparencyMethod}
+                      />
+                      <ImageModelSelector
+                        preference={imageModelPreference}
+                        disabled={Boolean(aiAction)}
+                        className="mt-3"
+                      />
+                      {resource?.aiMetadata ? <p className="mt-3 flex items-center justify-between gap-3 text-[10px] text-muted"><span>{t("ai.lastModel")}</span><span className="max-w-40 truncate font-mono">{resource.aiMetadata.model ?? t("ai.automaticProcessing")}</span></p> : null}
+                    </div>
+                  </details>
+                  <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runCover(resourceId)} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-muted-strong transition hover:bg-surface-muted disabled:bg-surface-muted disabled:text-muted disabled:opacity-100">{aiAction === "cover" ? <LoaderCircle size={14} className="animate-spin" /> : <ImageIcon size={14} />}{t("ai.generateNewCover")}</button>
                 </div>
                 {!hasImage ? <p className="text-[11px] text-warning">{t("ai.imageRequired")}</p> : null}
-                {resource?.aiMetadata ? <div className="flex items-center justify-between rounded-lg bg-brand-soft px-3 py-2 text-[10px] text-brand"><span>{t("ai.lastModel")}</span><span className="max-w-40 truncate font-mono">{resource.aiMetadata.model ?? "AI"}</span></div> : null}
               </div>
             )}
           </section>
           ) : null}
 
           {canManageSpatial ? (
-          <section className="rounded-2xl border border-border bg-surface p-5">
-            <div className="mb-4 flex items-center gap-2"><MapPin size={16} className="text-success" /><h2 className="text-sm font-semibold text-foreground">{t("position.title")}</h2></div>
+          <details className="group rounded-2xl border border-border bg-surface p-5">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-foreground marker:content-none">
+              <span className="flex items-center gap-2"><MapPin size={16} className="text-success" />{t("position.mapDetails")}</span>
+              <ChevronRight size={15} className="text-muted transition group-open:rotate-90" aria-hidden="true" />
+            </summary>
+            <div className="mt-4 border-t border-border pt-4">
             {!isNew && resourceId ? (
               <Link href={`/map?resource=${resourceId}`} className="mb-4 flex items-center justify-between rounded-xl border border-brand-border bg-brand-soft px-3 py-2.5 text-xs font-semibold text-brand transition hover:bg-brand-soft">
                 <span className="inline-flex items-center gap-2"><MapPin size={14} />{t("position.editMap")}</span>
@@ -1414,7 +1476,8 @@ export function ResourceEditor({
             <label className={`${labelClass} mt-3`}>{t("position.longitude")}<input type="number" step="any" value={form.gpsLongitude} onChange={(event) => setField("gpsLongitude", event.target.value)} placeholder="13.7373" disabled={Boolean(resource?.mapFeatures.length)} className={inputClass} /></label>
             <label className={`${labelClass} mt-3`}>{t("position.altitude")} <span className="font-normal text-muted">· {t("position.metres")}</span><input type="number" step="any" value={form.gpsAltitude} onChange={(event) => setField("gpsAltitude", event.target.value)} className={inputClass} /></label>
             {mapHref ? <a href={mapHref} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-success hover:text-success">{t("position.openMap")} <ChevronRight size={13} /></a> : <p className="mt-3 text-[11px] leading-4 text-muted">{t("position.gpsHelp")}</p>}
-          </section>
+            </div>
+          </details>
           ) : null}
 
           {!isNew && resource ? (

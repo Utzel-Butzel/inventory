@@ -3,7 +3,6 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   aiIdempotencyOperations,
   media,
-  resources,
   type NewResource,
 } from "@/db/schema";
 import { analyzeInventoryImages } from "@/lib/ai";
@@ -25,8 +24,12 @@ import {
 } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { hashIdempotentPayload, readIdempotencyKey } from "@/lib/idempotency";
-import { getResource } from "@/lib/resources";
+import {
+  getResource,
+  updateResourceWithCustomFieldValidation,
+} from "@/lib/resources";
 import { mediaToDataUrl } from "@/lib/storage";
+import { analyzeInputSchema } from "@/lib/validators";
 import { enqueueWebhookEvent } from "@/lib/webhooks";
 
 type Context = { params: Promise<{ id: string }> };
@@ -41,13 +44,20 @@ export async function POST(request: Request, context: Context) {
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
 
-  let overwrite = true;
+  let body: unknown = {};
   try {
-    const body = (await request.json()) as { overwrite?: unknown };
-    overwrite = body.overwrite !== false;
+    body = await request.json();
   } catch {
     // An empty body uses the default behavior.
   }
+  const parsed = analyzeInputSchema.safeParse(body);
+  if (!parsed.success) {
+    return Response.json(
+      { error: "Invalid analysis request.", details: parsed.error.flatten() },
+      { status: 422 },
+    );
+  }
+  const { overwrite, prompt } = parsed.data;
 
   let operationId: string | null = null;
   if (idempotency.key) {
@@ -59,7 +69,7 @@ export async function POST(request: Request, context: Context) {
       requestHash: hashIdempotentPayload({
         actor: authorization.identity.subject,
         resourceId: id,
-        input: { overwrite },
+        input: parsed.data,
       }),
     });
     if (claim.kind !== "claimed") {
@@ -131,6 +141,18 @@ export async function POST(request: Request, context: Context) {
   try {
     dataUrls = await Promise.all(imageMedia.map(mediaToDataUrl));
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("RESOURCE_PERMISSION_DENIED")
+    ) {
+      return finish(
+        {
+          error:
+            "This analysis cannot update every non-overridden item in the variant family under your current access rules.",
+        },
+        403,
+      );
+    }
     return finish(
       {
         error:
@@ -167,7 +189,7 @@ export async function POST(request: Request, context: Context) {
   }
 
   try {
-    const { result, model } = await analyzeInventoryImages(dataUrls);
+    const { result, model } = await analyzeInventoryImages(dataUrls, prompt);
     const generatedFields: string[] = [];
     const values: Partial<NewResource> = {
       aiMetadata: {
@@ -207,6 +229,29 @@ export async function POST(request: Request, context: Context) {
         403,
       );
     }
+    const updatedResource = await updateResourceWithCustomFieldValidation({
+      organizationId: authorization.identity.organizationId,
+      id: resource.id,
+      values,
+      validateCustomFields: values.type !== undefined,
+      customFieldsProvided: false,
+      actor: authorization.identity.subject,
+      authorize: async (current, proposed) =>
+        (await canAccessResource(
+          authorization.identity,
+          "ai.use",
+          current,
+        )) &&
+        (await canAccessResource(
+          authorization.identity,
+          "ai.use",
+          proposed,
+        )),
+    });
+    if (!updatedResource) {
+      throw new Error("Resource disappeared during AI analysis.");
+    }
+
     const responseBody = await db.transaction(async (transaction) => {
       await transaction
         .update(media)
@@ -217,17 +262,6 @@ export async function POST(request: Request, context: Context) {
             inArray(media.id, imageMedia.map((item) => item.id)),
           ),
         );
-      const [updated] = await transaction
-        .update(resources)
-        .set({ ...values, updatedAt: new Date() })
-        .where(
-          and(
-            eq(resources.organizationId, authorization.identity.organizationId),
-            eq(resources.id, resource.id),
-          ),
-        )
-        .returning();
-      if (!updated) throw new Error("Resource disappeared during AI analysis.");
       const mediaRows = await transaction
         .select()
         .from(media)
@@ -239,7 +273,7 @@ export async function POST(request: Request, context: Context) {
         )
         .orderBy(asc(media.position));
       const resourceSnapshot = {
-        ...updated,
+        ...updatedResource,
         media: mediaRows,
         cover: mediaRows.find((item) => item.kind === "image") ?? null,
       };
@@ -252,11 +286,11 @@ export async function POST(request: Request, context: Context) {
         organizationId: authorization.identity.organizationId,
         type: "inventory.resource.updated",
         aggregateType: "resource",
-        aggregateId: updated.id,
+        aggregateId: updatedResource.id,
         actor: authorization.identity.subject,
         data: {
           resource: resourceSnapshot,
-          changedFields: Array.from(new Set([...Object.keys(values), "media"])),
+          changedFields: ["media"],
         },
       });
       if (operationId) {

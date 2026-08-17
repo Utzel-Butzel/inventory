@@ -10,7 +10,7 @@ export async function requireSettingsPermission(permission: AppPermission) {
   const identity = await getSessionIdentity();
   if (!identity) redirect("/login");
   if (!identity.permissions.includes(permission)) {
-    redirect(organizationPath(identity.organizationId, "/settings/data"));
+    redirect(organizationPath(identity.organization.slug, "/settings/data"));
   }
   return identity;
 }

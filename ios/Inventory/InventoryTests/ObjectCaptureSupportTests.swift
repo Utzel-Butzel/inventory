@@ -60,10 +60,11 @@ final class ObjectCaptureSupportTests: XCTestCase {
             .appendingPathComponent("object-capture-tests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: base) }
         let workspace = try ObjectCaptureWorkspace.create(in: base)
-        let png = try XCTUnwrap(Data(base64Encoded:
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zq4sAAAAASUVORK5CYII="
-        ))
-        try png.write(to: workspace.imagesDirectory.appendingPathComponent("001.png"))
+        try TestImageFactory.writeJPEG(
+            width: 1_280,
+            height: 640,
+            to: workspace.imagesDirectory.appendingPathComponent("001.jpg")
+        )
 
         let result = try await ObjectCaptureArticleImageBuilder(
             maximumPixelSize: 640,
@@ -74,7 +75,8 @@ final class ObjectCaptureSupportTests: XCTestCase {
         )
 
         XCTAssertEqual(result.fileURL, workspace.articleImageURL)
-        XCTAssertLessThanOrEqual(max(result.pixelWidth, result.pixelHeight), 640)
+        XCTAssertEqual(result.pixelWidth, 640)
+        XCTAssertEqual(result.pixelHeight, 320)
         XCTAssertGreaterThan(result.byteCount, 0)
         XCTAssertTrue(FileManager.default.fileExists(atPath: result.fileURL.path))
     }
@@ -106,8 +108,9 @@ final class ObjectCaptureSupportTests: XCTestCase {
         )
         let request = CoverRequest(
             sourceMediaID: sourceID,
-            prompt: nil,
+            prompt: "Preserve the exact silhouette",
             modelID: "image-model",
+            maximumImageSize: 4_096,
             transparentBackground: true,
             transparencyMethod: .differenceMatting
         )
@@ -117,9 +120,69 @@ final class ObjectCaptureSupportTests: XCTestCase {
         )
 
         XCTAssertEqual(object["sourceMediaId"] as? String, sourceID.uuidString)
+        XCTAssertEqual(object["prompt"] as? String, "Preserve the exact silhouette")
         XCTAssertEqual(object["modelId"] as? String, "image-model")
+        XCTAssertEqual(object["maximumImageSize"] as? Int, 4_096)
         XCTAssertEqual(object["transparentBackground"] as? Bool, true)
         XCTAssertEqual(object["transparencyMethod"] as? String, "difference-matting")
+    }
+
+    func testLegacyCoverRequestOmitsMaximumImageSize() throws {
+        let request = CoverRequest(
+            sourceMediaID: nil,
+            prompt: nil,
+            modelID: nil,
+            transparentBackground: false,
+            transparencyMethod: nil
+        )
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(request))
+                as? [String: Any]
+        )
+
+        XCTAssertNil(object["maximumImageSize"])
+        XCTAssertNil(object["prompt"])
+    }
+
+    func testAnalyzeRequestEncodesOptionalPrompt() throws {
+        let request = AnalyzeRequest(
+            overwrite: true,
+            prompt: "Catalog the dominant object"
+        )
+
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(request))
+                as? [String: Any]
+        )
+
+        XCTAssertEqual(object["overwrite"] as? Bool, true)
+        XCTAssertEqual(object["prompt"] as? String, "Catalog the dominant object")
+    }
+
+    func testLegacyAnalyzeRequestOmitsPrompt() throws {
+        let request = AnalyzeRequest(overwrite: true, prompt: nil)
+
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(request))
+                as? [String: Any]
+        )
+
+        XCTAssertEqual(object["overwrite"] as? Bool, true)
+        XCTAssertNil(object["prompt"])
+    }
+
+    func testObjectCaptureAISettingsSnapshotNormalizesRequestInputs() {
+        let snapshot = ObjectCaptureAISettingsSnapshot(
+            analysisPrompt: "  Analyze carefully  ",
+            transparentCoverPrompt: "  Preserve fine edges  ",
+            imageModelID: "  image-model  ",
+            maximumImageSize: 4_096
+        )
+
+        XCTAssertEqual(snapshot.analysisPrompt, "Analyze carefully")
+        XCTAssertEqual(snapshot.transparentCoverPrompt, "Preserve fine edges")
+        XCTAssertEqual(snapshot.imageModelID, "image-model")
+        XCTAssertEqual(snapshot.maximumImageSize, 4_096)
     }
 
     func testObjectCaptureAIRetryRotatesOnlyAfterDefinitiveHTTPFailure() {

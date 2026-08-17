@@ -14,7 +14,6 @@ import {
   RefreshCw,
   SearchCheck,
   ShieldAlert,
-  Sparkles,
   Tag,
   X,
 } from "lucide-react";
@@ -135,13 +134,13 @@ function ResourcePanel({ resource, side }: { resource: DuplicateResource; side: 
   });
 
   return (
-    <article className="min-w-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
+    <article className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface">
       <div className="relative overflow-hidden">
         <ResourceImage resource={resource} />
-        <span className="absolute left-3 top-3 rounded-lg bg-zinc-950/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white shadow-sm backdrop-blur">
+        <span className="absolute left-3 top-3 rounded-md bg-zinc-950/80 px-2.5 py-1 text-xs font-semibold text-white">
           {side === "left" ? t("duplicates.recordA") : t("duplicates.recordB")}
         </span>
-        <span className="absolute bottom-3 right-3 rounded-full bg-surface/90 px-2.5 py-1 text-xs font-semibold capitalize text-muted-strong shadow-sm backdrop-blur">
+        <span className="absolute bottom-3 right-3 rounded-full bg-surface px-2.5 py-1 text-xs font-semibold capitalize text-muted-strong">
           {typeLabel}
         </span>
       </div>
@@ -158,7 +157,7 @@ function ResourcePanel({ resource, side }: { resource: DuplicateResource; side: 
               })}
             </p>
           </div>
-          <span className="shrink-0 rounded-full bg-success-soft px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-success ring-1 ring-inset ring-success-border">
+          <span className="shrink-0 rounded-full bg-success-soft px-2.5 py-1 text-xs font-semibold text-success ring-1 ring-inset ring-success-border">
             {statusLabel}
           </span>
         </div>
@@ -315,11 +314,9 @@ export function DuplicatesClient() {
 
   return (
     <section aria-labelledby="matches-heading" className="space-y-5">
-      <div className="flex flex-col gap-4 rounded-2xl border border-border/80 bg-surface p-4 shadow-[var(--shadow-sm)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
+      <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div className="flex items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
-            <SearchCheck className="size-5" />
-          </span>
+          <SearchCheck className="size-5 shrink-0 text-muted" />
           <div>
             <h2 id="matches-heading" className="text-sm font-semibold text-foreground">
               {loading
@@ -338,7 +335,7 @@ export function DuplicatesClient() {
           type="button"
           onClick={() => void loadDuplicates(true)}
           disabled={loading || refreshing || merging}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-muted-strong shadow-sm transition hover:border-border-strong hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-muted-strong transition hover:border-border-strong hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
           {refreshing ? t("duplicates.scanning") : t("duplicates.runScan")}
@@ -346,7 +343,7 @@ export function DuplicatesClient() {
       </div>
 
       {successName ? (
-        <div className="flex items-start justify-between gap-3 rounded-2xl border border-success-border bg-success-soft p-4 text-sm text-success" role="status">
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-success-border bg-success-soft p-4 text-sm text-success" role="status">
           <span className="flex items-start gap-2.5">
             <Check className="mt-0.5 size-4 shrink-0" />
             {t("duplicates.success", { name: successName })}
@@ -363,7 +360,7 @@ export function DuplicatesClient() {
       ) : null}
 
       {error ? (
-        <div className="flex items-start justify-between gap-3 rounded-2xl border border-danger-border bg-danger-soft p-4 text-sm text-danger" role="alert">
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-danger-border bg-danger-soft p-4 text-sm text-danger" role="alert">
           <span className="flex items-start gap-2.5">
             <AlertTriangle className="mt-0.5 size-4 shrink-0" />
             {t(`duplicates.errors.${error}`)}
@@ -382,22 +379,20 @@ export function DuplicatesClient() {
       {loading ? (
         <div className="space-y-4" aria-label={t("duplicates.loadingMatches")}>
           {Array.from({ length: 2 }, (_, index) => (
-            <div key={index} className="rounded-3xl border border-border bg-surface p-4 sm:p-5">
+            <div key={index} className="rounded-xl border border-border bg-surface p-4 sm:p-5">
               <div className="mb-4 h-8 w-56 animate-pulse rounded-lg bg-surface-muted" />
               <div className="grid gap-3 md:grid-cols-2">
-                <div className="h-[420px] animate-pulse rounded-2xl bg-surface-muted" />
-                <div className="h-[420px] animate-pulse rounded-2xl bg-surface-muted" />
+                <div className="h-[420px] animate-pulse rounded-xl bg-surface-muted" />
+                <div className="h-[420px] animate-pulse rounded-xl bg-surface-muted" />
               </div>
             </div>
           ))}
         </div>
       ) : !error && duplicates.length === 0 ? (
-        <div className="grid min-h-[420px] place-items-center rounded-3xl border border-dashed border-border-strong bg-gradient-to-b from-surface to-surface-subtle px-6 py-14 text-center">
+        <div className="grid min-h-64 place-items-center rounded-xl border border-border bg-surface px-6 py-10 text-center">
           <div>
-            <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-success-soft text-success ring-1 ring-inset ring-success-border">
-              <Sparkles className="size-6" />
-            </span>
-            <h2 className="mt-5 text-lg font-semibold tracking-tight text-foreground">
+            <Check className="mx-auto size-6 text-success" />
+            <h2 className="mt-3 text-base font-semibold text-foreground">
               {t("duplicates.empty.title")}
             </h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
@@ -413,10 +408,10 @@ export function DuplicatesClient() {
             const percent = Math.round(Math.min(1, Math.max(0, pair.score)) * 100);
 
             return (
-              <article key={key} className="overflow-hidden rounded-3xl border border-border/80 bg-surface-subtle/70 shadow-[var(--shadow-md)]">
-                <header className="flex flex-col gap-3 border-b border-border/80 bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <article key={key} className="overflow-hidden rounded-xl border border-border bg-surface-subtle/70">
+                <header className="flex flex-col gap-3 border-b border-border bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                   <div className="flex items-center gap-3">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand"><GitMerge className="size-4" /></span>
+                    <GitMerge className="size-4 shrink-0 text-muted" />
                     <div>
                       <h3 className="text-sm font-semibold text-foreground">
                         {t("duplicates.potentialMatch", {
@@ -428,7 +423,7 @@ export function DuplicatesClient() {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface-muted" aria-hidden="true">
-                      <div className="h-full rounded-full bg-gradient-to-r from-brand-solid to-brand-hover" style={{ width: `${percent}%` }} />
+                      <div className="h-full rounded-full bg-brand-solid" style={{ width: `${percent}%` }} />
                     </div>
                     <span className="text-xs font-semibold text-muted-strong">
                       {t("duplicates.matchPercent", {
@@ -447,7 +442,7 @@ export function DuplicatesClient() {
                   <div className="border-t border-danger-border bg-danger-soft px-4 py-5 sm:px-6">
                     <div className="mx-auto max-w-4xl">
                       <div className="flex items-start gap-3">
-                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-danger-soft text-danger"><ShieldAlert className="size-5" /></span>
+                        <ShieldAlert className="size-5 shrink-0 text-danger" />
                         <div>
                           <h4 className="font-semibold text-danger">
                             {t("duplicates.confirm.title")}
@@ -458,7 +453,7 @@ export function DuplicatesClient() {
                             <strong>{pendingMerge.remove.name}</strong>{" "}
                             {t("duplicates.confirm.removeSuffix")}
                           </p>
-                          <p className="mt-2 text-xs font-bold uppercase tracking-[0.12em] text-danger">
+                          <p className="mt-2 text-xs font-semibold text-danger">
                             {t("duplicates.confirm.irreversible")}
                           </p>
                         </div>

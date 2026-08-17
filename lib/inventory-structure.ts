@@ -363,6 +363,12 @@ export async function updateRelationType(
       409,
     );
   }
+  if (current.key === "variant_of" && patch.allowManual === true) {
+    throw new InventoryStructureError(
+      "Variant-family links are managed from the primary item's variant panel.",
+      409,
+    );
+  }
   const [updated] = await db
     .update(relationTypeDefinitions)
     .set({
@@ -596,6 +602,26 @@ export async function deleteManualResourceRelation(
   resourceId: string,
   actor: string,
 ) {
+  const [relation] = await db
+    .select({ relationTypeKey: resourceRelations.relationTypeKey })
+    .from(resourceRelations)
+    .where(
+      and(
+        eq(resourceRelations.id, relationId),
+        eq(resourceRelations.organizationId, organizationId),
+        or(
+          eq(resourceRelations.sourceResourceId, resourceId),
+          eq(resourceRelations.targetResourceId, resourceId),
+        ),
+      ),
+    )
+    .limit(1);
+  if (relation?.relationTypeKey === "variant_of") {
+    throw new InventoryStructureError(
+      "Variant-family links are managed from the primary item's variant panel.",
+      409,
+    );
+  }
   const [deleted] = await db
     .delete(resourceRelations)
     .where(

@@ -21,6 +21,9 @@ services:
       - BOOTSTRAP_ADMIN_NAME=Inventory admin
       - BOOTSTRAP_ADMIN_PASSWORD=${SERVICE_PASSWORD_64_ADMIN}
       - BOOTSTRAP_ADMIN_PASSWORD_ONCE=true
+      - DEMO_ACCESS_ENABLED=${DEMO_ACCESS_ENABLED:-false}
+      - DEMO_ORGANIZATION_SLUG=${DEMO_ORGANIZATION_SLUG:-demo}
+      - DEMO_USER_EMAIL=${DEMO_USER_EMAIL:-demo@inventory.invalid}
       - STORAGE_PROVIDER=local
       - STORAGE_LOCAL_PATH=/app/data/uploads
     volumes:

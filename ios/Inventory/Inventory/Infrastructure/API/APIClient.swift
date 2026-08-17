@@ -434,6 +434,7 @@ public final class APIClient: Sendable {
     public func analyzeResource(
         id: UUID,
         overwrite: Bool = true,
+        prompt: String? = nil,
         idempotencyKey: UUID? = nil
     ) async throws -> AnalyzeResourceResponse {
         let url = try makeAPIURL(path: [
@@ -444,7 +445,10 @@ public final class APIClient: Sendable {
         var request = try await jsonRequest(
             url: url,
             method: "POST",
-            body: AnalyzeRequest(overwrite: overwrite)
+            body: AnalyzeRequest(
+                overwrite: overwrite,
+                prompt: AIPromptPreferences.validatedPrompt(prompt)
+            )
         )
         setIdempotencyKey(idempotencyKey, on: &request)
         return try await execute(request)
@@ -685,6 +689,7 @@ public final class APIClient: Sendable {
         sourceMediaID: UUID? = nil,
         prompt: String? = nil,
         modelID: String? = nil,
+        maximumImageSize: Int? = nil,
         transparentBackground: Bool = false,
         transparencyMethod: CoverTransparencyMethod? = nil,
         idempotencyKey: UUID? = nil
@@ -699,8 +704,9 @@ public final class APIClient: Sendable {
             method: "POST",
             body: CoverRequest(
                 sourceMediaID: sourceMediaID,
-                prompt: prompt,
+                prompt: AIPromptPreferences.validatedPrompt(prompt),
                 modelID: modelID,
+                maximumImageSize: maximumImageSize,
                 transparentBackground: transparentBackground,
                 transparencyMethod: transparentBackground
                     ? (transparencyMethod ?? .differenceMatting)
@@ -1344,8 +1350,9 @@ final class SameOriginRedirectDelegate: NSObject, URLSessionTaskDelegate, @unche
     }
 }
 
-private struct AnalyzeRequest: Encodable, Sendable {
+struct AnalyzeRequest: Encodable, Sendable {
     let overwrite: Bool
+    let prompt: String?
 }
 
 private enum ObjectCountStep {
@@ -1386,13 +1393,31 @@ struct CoverRequest: Encodable, Sendable {
     let sourceMediaID: UUID?
     let prompt: String?
     let modelID: String?
+    let maximumImageSize: Int?
     let transparentBackground: Bool
     let transparencyMethod: CoverTransparencyMethod?
+
+    init(
+        sourceMediaID: UUID?,
+        prompt: String?,
+        modelID: String?,
+        maximumImageSize: Int? = nil,
+        transparentBackground: Bool,
+        transparencyMethod: CoverTransparencyMethod?
+    ) {
+        self.sourceMediaID = sourceMediaID
+        self.prompt = prompt
+        self.modelID = modelID
+        self.maximumImageSize = maximumImageSize
+        self.transparentBackground = transparentBackground
+        self.transparencyMethod = transparencyMethod
+    }
 
     private enum CodingKeys: String, CodingKey {
         case sourceMediaID = "sourceMediaId"
         case prompt
         case modelID = "modelId"
+        case maximumImageSize
         case transparentBackground
         case transparencyMethod
     }

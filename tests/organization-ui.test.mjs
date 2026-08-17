@@ -11,7 +11,7 @@ test("organization switching uses the scoped selection endpoint and clears clien
   assert.match(switcher, /JSON\.stringify\(\{ organizationId \}\)/);
   assert.match(
     switcher,
-    /window\.location\.assign\(organizationPath\(organizationId, "\/dashboard"\)\)/,
+    /selectedOrganization\?\.slug \?\? organization\.slug/,
   );
 });
 
@@ -24,12 +24,12 @@ test("web organization routing makes the URL tenant context authoritative", asyn
   ]);
 
   assert.match(proxy, /NextResponse\.rewrite/);
-  assert.match(proxy, /routedHeaders\(request, routeOrganizationId\)/);
+  assert.match(proxy, /routedHeaders\(request, routeOrganizationReference\)/);
   assert.match(proxy, /response\.cookies\.set\(ORGANIZATION_COOKIE/);
-  assert.match(auth, /headers\(\)\)\.get\(ORGANIZATION_HEADER\)/);
-  assert.match(layout, /organizationPath\(identity\.organizationId/);
+  assert.match(auth, /\.get\(ORGANIZATION_ROUTE_HEADER\)/);
+  assert.match(layout, /organizationIdentity\.organization\.slug/);
   assert.match(routing, /OrganizationRoutingProvider/);
-  assert.match(routing, /organizationPath\(organizationId, href\)/);
+  assert.match(routing, /organizationPath\(organizationSlug, href\)/);
 });
 
 test("organization settings use the list, create, and update contracts", async () => {
@@ -45,6 +45,7 @@ test("organization settings use the list, create, and update contracts", async (
   assert.match(manager, /method: "POST"/);
   assert.match(manager, /`\/api\/v1\/organizations\/\$\{encodeURIComponent\(organization\.id\)\}`/);
   assert.match(manager, /method: "PATCH"/);
+  assert.match(manager, /organizations\.form\.slug/);
   assert.match(navigation, /href: "\/settings\/organization"/);
   assert.match(shell, /<OrganizationSwitcher/);
   assert.match(shell, /\{organization\.name\}/);

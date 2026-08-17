@@ -795,6 +795,12 @@ paths:
               required: [name]
               properties:
                 name: { type: string, minLength: 1, maxLength: 160 }
+                slug:
+                  type: string
+                  minLength: 1
+                  maxLength: 48
+                  pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+                  description: Optional short Webapp URL slug; generated from the name when omitted.
       responses:
         "201":
           description: Organization created with the current user as admin
@@ -806,7 +812,8 @@ paths:
                 properties:
                   organization: { $ref: "#/components/schemas/OrganizationMembership" }
         "403": { description: A browser session is required }
-        "422": { description: Invalid organization name }
+        "409": { description: Requested organization slug is already in use }
+        "422": { description: Invalid organization name or slug }
   /organizations/select:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -844,7 +851,7 @@ paths:
         schema: { type: string, format: uuid }
     patch:
       tags: [Organizations]
-      summary: Rename an organization
+      summary: Update an organization's name or Webapp URL slug
       security: [{ adminSession: [] }]
       requestBody:
         required: true
@@ -853,9 +860,14 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [name]
+              minProperties: 1
               properties:
                 name: { type: string, minLength: 1, maxLength: 160 }
+                slug:
+                  type: string
+                  minLength: 1
+                  maxLength: 48
+                  pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
       responses:
         "200":
           description: Updated organization
@@ -867,7 +879,9 @@ paths:
                 properties:
                   organization: { $ref: "#/components/schemas/OrganizationMembership" }
         "403": { description: Browser user lacks organization administration permission }
+        "409": { description: Requested organization slug is already in use }
         "404": { description: Organization not found or not available to this user }
+        "422": { description: Invalid organization name or slug }
   /api/access/roles:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -1983,13 +1997,72 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Primary item still has linked first-class variants }
+  /resources/{id}/family:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Resources]
+      summary: Retrieve a first-class inventory variant family
+      description: Resolves the primary item and its ordinary resource variants. Every returned member has independent stock, locations, serialization, relationships, and manufacturing history. The request fails rather than exposing a partially authorized family.
+      responses:
+        "200":
+          description: Variant family
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceFamily" }
+        "403": { description: One or more family members are outside the caller's inventory access rules }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Resources]
+      summary: Create a first-class variant from a primary inventory item
+      description: Creates a zero-stock resource linked to this primary by a protected `variant_of` relationship. Shared catalog fields and stock settings start from the primary; operational state remains independent. Variant families cannot be nested.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceFamilyVariantInput" }
+      responses:
+        "201":
+          description: First-class variant created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [variant]
+                properties:
+                  variant: { $ref: "#/components/schemas/ResourceFamilyMember" }
+        "403": { description: Missing inventory create or primary-item update access }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Identifier conflict, archived primary, or nested family attempt }
+        "422": { description: Invalid variant identity }
+    delete:
+      tags: [Resources]
+      summary: Detach a first-class variant from its primary item
+      description: Removes only the protected `variant_of` family link. The currently effective inherited bill of materials is materialized onto the same inventory resource first. Stock, locations, serial units, ordinary relationships, assignments, and manufacturing history stay attached to that resource.
+      responses:
+        "200":
+          description: Variant detached and its effective bill of materials materialized
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [detached]
+                properties:
+                  detached: { $ref: "#/components/schemas/ResourceVariantDetachResult" }
+        "403": { description: Missing update access to the variant item }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Item is not a linked variant or its effective bill of materials cannot be preserved }
+        "422": { description: Invalid resource id }
   /resources/{id}/variants:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Resources, Stock]
-      summary: List optional bulk-stock variants for an inventory item
+      summary: List legacy bulk-stock variants for an inventory item
+      deprecated: true
       responses:
         "200":
           description: Variants and the allocated/unallocated parent stock summary
@@ -2005,7 +2078,8 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [Resources, Stock]
-      summary: Add a variant and optionally allocate existing parent stock
+      summary: Add a legacy bulk-stock variant and optionally allocate existing parent stock
+      deprecated: true
       description: Variants are bulk-only. `initialAllocation` moves existing unallocated parent stock into the variant without changing the parent total.
       requestBody:
         required: true
@@ -2027,6 +2101,7 @@ paths:
     patch:
       tags: [Resources]
       summary: Update variant identity or price fields
+      deprecated: true
       description: Quantity cannot be patched; use a dated variant stock movement.
       requestBody:
         required: true
@@ -2040,6 +2115,7 @@ paths:
     delete:
       tags: [Resources]
       summary: Delete an unused zero-stock variant
+      deprecated: true
       responses:
         "204": { description: Variant deleted }
         "409": { description: Variant has stock or movement history }
@@ -2054,6 +2130,7 @@ paths:
     post:
       tags: [Stock]
       summary: Book an atomic parent and variant stock movement
+      deprecated: true
       description: The signed delta updates parent and variant quantities together and appends one dated stock-ledger row.
       requestBody:
         required: true
@@ -2615,7 +2692,8 @@ paths:
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Manufacturing]
-      summary: Retrieve an item's bill of materials and current build capacity
+      summary: Retrieve an item's effective bill of materials and current build capacity
+      description: A primary item returns its local BOM. A first-class variant returns the primary BOM with its sparse removals, replacements, and variant-only slots applied.
       responses:
         "200":
           description: Bill of materials with component availability
@@ -2625,7 +2703,8 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     put:
       tags: [Manufacturing]
-      summary: Replace an item's complete bill of materials
+      summary: Replace an item's effective bill of materials
+      description: Primary items store the submitted recipe as stable BOM slots. Variants compare the submitted effective recipe with the primary and persist only sparse differences.
       requestBody:
         required: true
         content:
@@ -2642,6 +2721,18 @@ paths:
         "200": { description: Bill of materials replaced }
         "409": { description: Circular dependency or concurrent referenced-resource conflict }
         "422": { description: "Invalid, duplicate, missing, or self-referencing component list" }
+    delete:
+      tags: [Manufacturing]
+      summary: Reset a variant's bill of materials to its primary item
+      description: Removes every sparse BOM override for a linked first-class variant. Primary and standalone items cannot use this operation.
+      responses:
+        "200":
+          description: Reset effective bill of materials
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BomDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Item is not a linked variant }
   /resources/{id}/stock/builds:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -2938,10 +3029,15 @@ paths:
               type: object
               properties:
                 overwrite: { type: boolean, default: true }
+                prompt:
+                  type: string
+                  maxLength: 5000
+                  description: Optional replacement for the built-in inventory-analysis prompt. Omit it to use the server default.
       responses:
         "200": { description: Item enriched or completed response replayed }
         "202": { description: An operation with this key is still processing }
         "409": { description: Idempotency key belongs to another resource or payload }
+        "422": { description: Invalid analysis request }
         "429":
           description: AI request limit reached
           headers:
@@ -2968,11 +3064,19 @@ paths:
                   type: string
                   format: uuid
                   description: Image to use as the visual reference. Defaults to the first non-AI image, then falls back to the first image.
-                prompt: { type: string, maxLength: 5000 }
+                prompt:
+                  type: string
+                  maxLength: 5000
+                  description: Optional replacement for the built-in studio or transparent-cover prompt. Omit it to use the matching server default.
                 modelId:
                   type: string
                   maxLength: 240
                   description: An ID returned by GET /ai/image-models. Omit it to use the deployment default.
+                maximumImageSize:
+                  type: integer
+                  enum: [1024, 2048, 4096]
+                  default: 1024
+                  description: Maximum requested longest edge in pixels. Models use the largest supported standard square size at or below this value; transparent covers are capped at 2048 for safe processing.
                 transparentBackground:
                   type: boolean
                   default: false
@@ -3152,7 +3256,12 @@ components:
       properties:
         id: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 160 }
-        slug: { type: string, minLength: 1, maxLength: 180 }
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          description: Short, editable identifier used as the first Webapp URL segment.
         role:
           type: [string, "null"]
           pattern: '^[a-z][a-z0-9_-]{0,63}$'
@@ -4128,7 +4237,7 @@ components:
         relationTypeKey: { $ref: "#/components/schemas/RelationTypeKey" }
     ResourceRelationRecord:
       type: object
-      required: [id, sourceResourceId, targetResourceId, relationTypeKey, origin, sourceFeatureId, targetFeatureId, createdBy, createdAt]
+      required: [id, sourceResourceId, targetResourceId, relationTypeKey, origin, sourceFeatureId, targetFeatureId, attributes, createdBy, createdAt]
       properties:
         id: { type: string, format: uuid }
         sourceResourceId: { type: string, format: uuid }
@@ -4137,6 +4246,10 @@ components:
         origin: { type: string, enum: [manual, spatial] }
         sourceFeatureId: { type: [string, "null"] }
         targetFeatureId: { type: [string, "null"] }
+        attributes:
+          type: object
+          additionalProperties: true
+          description: System-managed typed relationship metadata. `variant_of` stores inherited-field overrides here.
         createdBy: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
     ResourceRelation:
@@ -4573,9 +4686,12 @@ components:
       additionalProperties: false
       properties:
         resourceId: { type: string, format: uuid }
-        variantId: { type: [string, "null"], format: uuid }
-        variantDelta: { type: [integer, "null"] }
-        variantBalanceAfter: { type: [integer, "null"], minimum: 0 }
+        slotKey:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: Stable logical BOM slot. Omit only for backward-compatible matching or creation.
         quantityPerAssembly: { type: integer, minimum: 1 }
         position: { type: integer, minimum: 0 }
         note: { type: string, maxLength: 20000 }
@@ -4583,9 +4699,14 @@ components:
       allOf:
         - { $ref: "#/components/schemas/BomComponentInput" }
         - type: object
-          required: [id, name, availableQuantity, trackingMode, availableUnits]
+          required: [id, slotKey, origin, name, availableQuantity, trackingMode, availableUnits]
           properties:
             id: { type: string, format: uuid }
+            slotKey: { type: string, minLength: 1, maxLength: 80 }
+            origin:
+              type: string
+              enum: [local, inherited, override, variant]
+              description: Whether this effective row is local, unchanged from the primary, replaces a primary slot, or exists only on the variant.
             name: { type: string }
             sku: { type: [string, "null"] }
             availableQuantity: { type: integer, minimum: 0 }
@@ -4601,7 +4722,7 @@ components:
                   location: { type: [string, "null"] }
     BomDetail:
       type: object
-      required: [resource, components, buildableQuantity]
+      required: [resource, components, buildableQuantity, inheritance]
       properties:
         resource:
           type: object
@@ -4613,6 +4734,18 @@ components:
             trackingMode: { type: string, enum: [bulk, serialized] }
         components: { type: array, items: { $ref: "#/components/schemas/BomComponent" } }
         buildableQuantity: { type: integer, minimum: 0 }
+        inheritance:
+          oneOf:
+            - type: object
+              required: [primaryResourceId, primaryName, overrideCount]
+              properties:
+                primaryResourceId: { type: string, format: uuid }
+                primaryName: { type: string }
+                overrideCount:
+                  type: integer
+                  minimum: 0
+                  description: Stored removals, replacements, and variant-only slots.
+            - type: "null"
     AssemblyBuildInput:
       type: object
       required: [quantity]
@@ -5519,6 +5652,58 @@ components:
           items: { $ref: "#/components/schemas/ResourceMapFeature" }
         notes: { type: string }
         customFields: { $ref: "#/components/schemas/CustomFieldValues" }
+    ResourceFamilyVariantInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 240 }
+        sku: { type: [string, "null"], maxLength: 80 }
+        barcode: { type: [string, "null"], maxLength: 180 }
+    ResourceVariantDetachResult:
+      type: object
+      required: [resourceId, materializedBomLineCount]
+      properties:
+        resourceId: { type: string, format: uuid }
+        materializedBomLineCount: { type: integer, minimum: 0 }
+    ResourceFamilyMember:
+      type: object
+      required: [id, name, type, status, sku, barcode, quantity, trackingMode, updatedAt, overriddenFields]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { $ref: "#/components/schemas/InventoryTypeKey" }
+        status: { type: string, enum: [available, in-use, maintenance, archived] }
+        sku: { type: [string, "null"] }
+        barcode: { type: [string, "null"] }
+        quantity: { type: integer, minimum: 0 }
+        trackingMode: { type: string, enum: [bulk, serialized] }
+        updatedAt: { type: string, format: date-time }
+        overriddenFields:
+          type: array
+          items:
+            type: string
+            enum: [description, type, valueCents, currency, priority, tags, categories, customFields, notes]
+    ResourceFamily:
+      type: object
+      required: [role, currentResourceId, primary, variants, legacyVariantCount, summary]
+      properties:
+        role: { type: string, enum: [primary, variant] }
+        currentResourceId: { type: string, format: uuid }
+        primary: { $ref: "#/components/schemas/ResourceFamilyMember" }
+        variants:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceFamilyMember" }
+        legacyVariantCount: { type: integer, minimum: 0 }
+        summary:
+          type: object
+          required: [totalQuantity, primaryQuantity, variantQuantity, variantCount, serializedVariantCount]
+          properties:
+            totalQuantity: { type: integer, minimum: 0 }
+            primaryQuantity: { type: integer, minimum: 0 }
+            variantQuantity: { type: integer, minimum: 0 }
+            variantCount: { type: integer, minimum: 0 }
+            serializedVariantCount: { type: integer, minimum: 0 }
     ResourceVariantInput:
       type: object
       additionalProperties: false

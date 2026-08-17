@@ -22,7 +22,12 @@ export async function POST(request: Request) {
       { status: 422, headers: notificationNoStoreHeaders },
     );
   }
-  const { preference } = await getNotificationSettings(authorization.recipient);
+  const { preference } = await getNotificationSettings(
+    authorization.recipient,
+    {
+      initializePreference: !authorization.identity.organization.isReadOnly,
+    },
+  );
   const result = previewNotificationChannel(
     parsed.data.channel,
     preference.locale,

@@ -5,22 +5,14 @@ import { OrganizationLink as Link } from "@/components/organization-routing";
 import {
   AlertTriangle,
   ArrowRight,
-  Boxes,
   CalendarClock,
-  CheckCircle2,
   ChevronRight,
   CircleAlert,
   Clock3,
   Package,
-  PackageMinus,
-  PackageX,
-  QrCode,
   RefreshCw,
   Search,
-  ShoppingCart,
   TrendingDown,
-  Warehouse,
-  Workflow,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -457,34 +449,11 @@ export function StockOverview() {
   return (
     <div className="mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <StockSectionNav />
-      <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div className="animate-fade-up">
-          <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
-            <Warehouse className="size-3.5 text-brand" aria-hidden="true" />
-            {t("overview.eyebrow")}
-          </div>
-          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-foreground sm:text-[32px]">
-            {t("overview.title")}
-          </h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted">
-            {t("overview.description")}
-          </p>
-        </div>
+      <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-semibold text-foreground sm:text-[28px]">
+          {t("overview.title")}
+        </h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/stock/scan"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-brand-solid px-4 text-sm font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover"
-          >
-            <QrCode className="size-4" aria-hidden="true" />
-            {t("overview.actions.scanCode")}
-          </Link>
-          <Link
-            href="/stock/workflows"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-foreground shadow-sm transition hover:bg-surface-hover"
-          >
-            <Workflow className="size-4" aria-hidden="true" />
-            {t("overview.actions.scanWorkflows")}
-          </Link>
           <Button
             variant="secondary"
             onClick={() => void loadStock({ quiet: true })}
@@ -525,8 +494,11 @@ export function StockOverview() {
       ) : null}
 
       {!loading && !error ? (
-        <div className="space-y-5 animate-fade-up animation-delay-1">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="space-y-5">
+          <section
+            className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 xl:grid-cols-5"
+            aria-label={t("overview.title")}
+          >
             {[
               {
                 label: t("overview.metrics.trackedItems"),
@@ -535,8 +507,7 @@ export function StockOverview() {
                   count: metrics.totalQuantity,
                   value: compactNumber.format(metrics.totalQuantity),
                 }),
-                icon: Boxes,
-                iconClass: "bg-brand-soft text-brand",
+                valueClass: "text-foreground",
               },
               {
                 label: t("overview.metrics.incoming"),
@@ -545,15 +516,13 @@ export function StockOverview() {
                   count: metrics.incomingItems,
                   value: compactNumber.format(metrics.incomingItems),
                 }),
-                icon: ShoppingCart,
-                iconClass: "bg-info-soft text-info",
+                valueClass: "text-foreground",
               },
               {
                 label: t("overview.metrics.healthyStock"),
                 value: compactNumber.format(metrics.healthy),
                 detail: t("overview.metrics.aboveThresholds"),
-                icon: CheckCircle2,
-                iconClass: "bg-success-soft text-success",
+                valueClass: "text-foreground",
               },
               {
                 label: t("overview.metrics.lowStock"),
@@ -562,8 +531,7 @@ export function StockOverview() {
                   count: metrics.reorderSuggested,
                   value: compactNumber.format(metrics.reorderSuggested),
                 }),
-                icon: PackageMinus,
-                iconClass: "bg-warning-soft text-warning",
+                valueClass: "text-warning",
               },
               {
                 label: t("overview.metrics.outOfStock"),
@@ -571,42 +539,28 @@ export function StockOverview() {
                 detail: metrics.out
                   ? t("overview.metrics.immediateAction")
                   : t("overview.metrics.nothingBlocked"),
-                icon: PackageX,
-                iconClass: "bg-danger-soft text-danger",
+                valueClass: "text-danger",
               },
-            ].map((metric) => {
-              const Icon = metric.icon;
-              return (
-                <Card key={metric.label} className="p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[12px] font-semibold text-muted">{metric.label}</p>
-                    <span className={cn("grid size-9 place-items-center rounded-xl", metric.iconClass)}>
-                      <Icon className="size-[17px]" aria-hidden="true" />
-                    </span>
-                  </div>
-                  <p className="mt-5 text-[28px] font-semibold tracking-[-0.04em] text-foreground">{metric.value}</p>
-                  <p className="mt-1 text-[11px] text-muted">{metric.detail}</p>
-                </Card>
-              );
-            })}
-          </div>
+            ].map((metric) => (
+              <div key={metric.label} className="bg-surface p-4 sm:p-5">
+                <p className="text-xs font-medium text-muted">{metric.label}</p>
+                <p className={cn("mt-3 text-2xl font-semibold tabular-nums", metric.valueClass)}>
+                  {metric.value}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted">{metric.detail}</p>
+              </div>
+            ))}
+          </section>
 
           {needsAttention > 0 ? (
             <Card
               className={cn(
                 "flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5",
-                metrics.out
-                  ? "border-danger-border bg-[linear-gradient(100deg,var(--color-danger-soft),var(--color-surface))]"
-                  : "border-warning-border bg-[linear-gradient(100deg,var(--color-warning-soft),var(--color-surface))]",
+                metrics.out ? "border-danger-border" : "border-warning-border",
               )}
             >
               <div className="flex items-start gap-3">
-                <span
-                  className={cn(
-                    "grid size-10 shrink-0 place-items-center rounded-xl",
-                    metrics.out ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning",
-                  )}
-                >
+                <span className={metrics.out ? "text-danger" : "text-warning"}>
                   <AlertTriangle className="size-[18px]" aria-hidden="true" />
                 </span>
                 <div>
@@ -616,7 +570,7 @@ export function StockOverview() {
                       value: compactNumber.format(needsAttention),
                     })}
                   </p>
-                  <p className="mt-1 text-[12px] leading-5 text-muted">
+                  <p className="mt-1 text-xs leading-5 text-muted">
                     {metrics.out
                       ? t("overview.attention.outAndLow", {
                           out: compactNumber.format(metrics.out),
@@ -643,11 +597,9 @@ export function StockOverview() {
           ) : null}
 
           {dueCounts.length ? (
-            <Card className="overflow-hidden border-brand-border">
-              <div className="flex items-center gap-3 border-b border-brand-border bg-brand-soft px-4 py-3.5 sm:px-5">
-                <span className="grid size-9 place-items-center rounded-xl bg-brand-soft text-brand">
-                  <CalendarClock className="size-4" aria-hidden="true" />
-                </span>
+            <Card className="overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-border px-4 py-3.5 sm:px-5">
+                <CalendarClock className="size-4 text-muted" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-foreground">
                     {t("overview.counts.due", {
@@ -655,7 +607,7 @@ export function StockOverview() {
                       value: compactNumber.format(dueCounts.length),
                     })}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-muted">
+                  <p className="mt-0.5 text-xs text-muted">
                     {t("overview.counts.description")}
                   </p>
                 </div>
@@ -668,10 +620,10 @@ export function StockOverview() {
                     className="flex items-center gap-3 px-4 py-3 transition hover:bg-surface-hover sm:px-5"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold text-foreground">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         {item.name}
                       </p>
-                      <p className="mt-0.5 text-[10px] text-muted">
+                      <p className="mt-0.5 text-xs text-muted">
                         {t("overview.counts.schedule", {
                           count: item.intervalDays,
                           interval: compactNumber.format(item.intervalDays),
@@ -681,7 +633,7 @@ export function StockOverview() {
                         })}
                       </p>
                     </div>
-                    <span className="text-[11px] font-semibold text-brand">
+                    <span className="text-xs font-semibold text-brand">
                       {t("overview.counts.action", {
                         quantity: compactNumber.format(item.quantity),
                       })}

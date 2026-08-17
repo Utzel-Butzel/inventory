@@ -80,6 +80,7 @@ export const organizations = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 160 }).notNull(),
     slug: varchar("slug", { length: 80 }).notNull(),
+    isReadOnly: boolean("is_read_only").notNull().default(false),
     createdBy: varchar("created_by", { length: 320 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -271,6 +272,8 @@ export type ResourceType = string;
 
 export const relationOrigins = ["manual", "spatial"] as const;
 export type RelationOrigin = (typeof relationOrigins)[number];
+
+export type ResourceRelationAttributes = Record<string, unknown>;
 
 export const assignmentKinds = ["checkout", "assignment", "reservation"] as const;
 export type AssignmentKind = (typeof assignmentKinds)[number];
@@ -1134,6 +1137,10 @@ export const resourceRelations = pgTable(
       .default("manual"),
     sourceFeatureId: varchar("source_feature_id", { length: 80 }),
     targetFeatureId: varchar("target_feature_id", { length: 80 }),
+    attributes: jsonb("attributes")
+      .$type<ResourceRelationAttributes>()
+      .notNull()
+      .default({}),
     createdBy: varchar("created_by", { length: 320 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -1155,6 +1162,9 @@ export const resourceRelations = pgTable(
       table.targetResourceId,
       table.relationTypeKey,
     ),
+    uniqueIndex("resource_relations_variant_source_unique")
+      .on(table.organizationId, table.sourceResourceId)
+      .where(sql`${table.relationTypeKey} = 'variant_of'`),
     index("resource_relations_source_idx").on(
       table.sourceResourceId,
       table.relationTypeKey,
@@ -1170,6 +1180,10 @@ export const resourceRelations = pgTable(
     check(
       "resource_relations_origin_check",
       sql`${table.origin} in ('manual', 'spatial')`,
+    ),
+    check(
+      "resource_relations_attributes_object",
+      sql`jsonb_typeof(${table.attributes}) = 'object'`,
     ),
   ],
 );
@@ -1390,6 +1404,7 @@ export const bomLines = pgTable(
     componentResourceId: uuid("component_resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "restrict" }),
+    slotKey: varchar("slot_key", { length: 80 }).notNull(),
     quantityPerAssembly: integer("quantity_per_assembly").notNull(),
     position: integer("position").notNull().default(0),
     note: text("note").notNull().default(""),
@@ -1415,6 +1430,10 @@ export const bomLines = pgTable(
       table.assemblyResourceId,
       table.componentResourceId,
     ),
+    uniqueIndex("bom_lines_assembly_slot_unique").on(
+      table.assemblyResourceId,
+      table.slotKey,
+    ),
     index("bom_lines_assembly_resource_id_idx").on(table.assemblyResourceId),
     index("bom_lines_component_resource_id_idx").on(table.componentResourceId),
     check(
@@ -1423,8 +1442,77 @@ export const bomLines = pgTable(
     ),
     check("bom_lines_position_nonnegative", sql`${table.position} >= 0`),
     check(
+      "bom_lines_slot_key_check",
+      sql`${table.slotKey} ~ '^[A-Za-z0-9_-]{1,80}$'`,
+    ),
+    check(
       "bom_lines_distinct_resources",
       sql`${table.assemblyResourceId} <> ${table.componentResourceId}`,
+    ),
+  ],
+);
+
+/**
+ * Sparse changes to a primary item's BOM for one first-class resource variant.
+ * A missing row inherits the primary slot. A removed row hides it; otherwise
+ * the row replaces that slot or adds a variant-only slot.
+ */
+export const variantBomOverrides = pgTable(
+  "variant_bom_overrides",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    variantResourceId: uuid("variant_resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    slotKey: varchar("slot_key", { length: 80 }).notNull(),
+    componentResourceId: uuid("component_resource_id").references(
+      () => resources.id,
+      { onDelete: "restrict" },
+    ),
+    quantityPerAssembly: integer("quantity_per_assembly"),
+    position: integer("position"),
+    note: text("note").notNull().default(""),
+    removed: boolean("removed").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "variant_bom_overrides_organization_variant_fk",
+      columns: [table.organizationId, table.variantResourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "variant_bom_overrides_organization_component_fk",
+      columns: [table.organizationId, table.componentResourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("restrict"),
+    uniqueIndex("variant_bom_overrides_variant_slot_unique").on(
+      table.variantResourceId,
+      table.slotKey,
+    ),
+    index("variant_bom_overrides_variant_idx").on(table.variantResourceId),
+    index("variant_bom_overrides_component_idx").on(table.componentResourceId),
+    check(
+      "variant_bom_overrides_slot_key_check",
+      sql`${table.slotKey} ~ '^[A-Za-z0-9_-]{1,80}$'`,
+    ),
+    check(
+      "variant_bom_overrides_position_nonnegative",
+      sql`${table.position} is null or ${table.position} >= 0`,
+    ),
+    check(
+      "variant_bom_overrides_payload_check",
+      sql`(${table.removed} and ${table.componentResourceId} is null and ${table.quantityPerAssembly} is null) or (not ${table.removed} and ${table.componentResourceId} is not null and ${table.quantityPerAssembly} > 0 and ${table.position} is not null)`,
+    ),
+    check(
+      "variant_bom_overrides_distinct_resources",
+      sql`${table.componentResourceId} is null or ${table.variantResourceId} <> ${table.componentResourceId}`,
     ),
   ],
 );
@@ -2933,6 +3021,7 @@ export type InventoryCountRecord = typeof inventoryCounts.$inferSelect;
 export type InventoryAssignmentRecord =
   typeof inventoryAssignments.$inferSelect;
 export type BomLineRecord = typeof bomLines.$inferSelect;
+export type VariantBomOverrideRecord = typeof variantBomOverrides.$inferSelect;
 export type AssemblyBuildRecord = typeof assemblyBuilds.$inferSelect;
 export type AssemblyBuildComponentRecord =
   typeof assemblyBuildComponents.$inferSelect;

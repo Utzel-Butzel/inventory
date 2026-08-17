@@ -3,6 +3,7 @@
 import {
   OrganizationLink as Link,
   useOrganizationPathname,
+  useOrganizationReadOnly,
 } from "@/components/organization-routing";
 import { useT } from "next-i18next/client";
 import {
@@ -10,6 +11,7 @@ import {
   Braces,
   Building2,
   Boxes,
+  ChevronDown,
   DatabaseZap,
   KeyRound,
   Languages,
@@ -36,7 +38,7 @@ const navigationGroups: Array<{
   items: SettingsNavigationItem[];
 }> = [
   {
-    labelKey: "settings.groups.workspace",
+    labelKey: "settings.groups.general",
     items: [
       {
         labelKey: "settings.items.organization.label",
@@ -44,6 +46,17 @@ const navigationGroups: Array<{
         href: "/settings/organization",
         icon: Building2,
       },
+      {
+        labelKey: "settings.items.notifications.label",
+        descriptionKey: "settings.items.notifications.description",
+        href: "/settings/notifications",
+        icon: Bell,
+      },
+    ],
+  },
+  {
+    labelKey: "settings.groups.inventory",
+    items: [
       {
         labelKey: "settings.items.data.label",
         descriptionKey: "settings.items.data.description",
@@ -71,6 +84,11 @@ const navigationGroups: Array<{
         icon: Braces,
         requiredPermission: "settings.custom-fields.manage",
       },
+    ],
+  },
+  {
+    labelKey: "settings.groups.peopleAccess",
+    items: [
       {
         labelKey: "settings.items.users.label",
         descriptionKey: "settings.items.users.description",
@@ -92,16 +110,10 @@ const navigationGroups: Array<{
         icon: Share2,
         requiredPermission: "sharing.manage",
       },
-      {
-        labelKey: "settings.items.notifications.label",
-        descriptionKey: "settings.items.notifications.description",
-        href: "/settings/notifications",
-        icon: Bell,
-      },
     ],
   },
   {
-    labelKey: "settings.groups.developer",
+    labelKey: "settings.groups.integrationsAdvanced",
     items: [
       {
         labelKey: "settings.items.webhooks.label",
@@ -130,6 +142,7 @@ export function SettingsNavigation({
   permissions: AppPermission[];
 }) {
   const pathname = useOrganizationPathname();
+  const isReadOnly = useOrganizationReadOnly();
   const { t } = useT("shell");
   const visibleGroups = navigationGroups
     .map((group) => ({
@@ -141,25 +154,22 @@ export function SettingsNavigation({
     }))
     .filter((group) => group.items.length > 0);
   const visibleItems = visibleGroups.flatMap((group) => group.items);
+  const activeItem =
+    visibleItems.find((item) => isActive(pathname, item.href)) ?? visibleItems[0];
 
   return (
     <>
       <aside className="hidden border-r border-border bg-surface md:block">
-        <div className="scrollbar-thin sticky top-[68px] h-[calc(100dvh-68px)] overflow-y-auto px-4 py-7">
-          <div className="px-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand">
-              {t("settings.eyebrow")}
-            </p>
-            <p className="mt-1.5 text-xl font-semibold tracking-[-0.025em] text-foreground">
-              {t("settings.title")}
-            </p>
-            <p className="mt-2 text-[12px] leading-5 text-muted">
-              {t("settings.description")}
-            </p>
-          </div>
-
+        <div
+          className={cn(
+            "scrollbar-thin sticky overflow-y-auto px-4 py-7",
+            isReadOnly
+              ? "top-[109px] h-[calc(100dvh-109px)]"
+              : "top-[68px] h-[calc(100dvh-68px)]",
+          )}
+        >
           <nav
-            className="mt-7 space-y-6"
+            className="space-y-6"
             aria-label={t("settings.navigationLabel")}
           >
             {visibleGroups.map((group) => (
@@ -177,7 +187,7 @@ export function SettingsNavigation({
                         href={item.href}
                         aria-current={active ? "page" : undefined}
                         className={cn(
-                          "group flex items-start gap-3 rounded-xl px-2.5 py-2.5 transition",
+                          "group flex min-h-10 items-center gap-3 rounded-xl px-2.5 py-2 transition",
                           active
                             ? "bg-brand-soft text-brand"
                             : "text-foreground hover:bg-surface-hover",
@@ -193,18 +203,8 @@ export function SettingsNavigation({
                           strokeWidth={active ? 2.2 : 1.9}
                           aria-hidden="true"
                         />
-                        <span className="min-w-0">
-                          <span className="block text-[13px] font-semibold">
-                            {t(item.labelKey)}
-                          </span>
-                          <span
-                            className={cn(
-                              "mt-0.5 block text-[10px] leading-4",
-                              active ? "text-brand" : "text-muted",
-                            )}
-                          >
-                            {t(item.descriptionKey)}
-                          </span>
+                        <span className="min-w-0 truncate text-[13px] font-semibold">
+                          {t(item.labelKey)}
                         </span>
                       </Link>
                     );
@@ -217,31 +217,54 @@ export function SettingsNavigation({
       </aside>
 
       <div className="border-b border-border bg-surface px-4 py-3 md:hidden">
-        <nav
-          className="scrollbar-thin flex gap-1 overflow-x-auto"
-          aria-label={t("settings.navigationLabel")}
-        >
-          {visibleItems.map((item) => {
-            const active = isActive(pathname, item.href);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-[12px] font-semibold transition",
-                  active
-                    ? "bg-brand-soft text-brand"
-                    : "text-muted-strong hover:bg-surface-muted hover:text-foreground",
-                )}
-              >
-                <Icon className="size-3.5" aria-hidden="true" />
-                {t(item.labelKey)}
-              </Link>
-            );
-          })}
-        </nav>
+        <details className="group relative">
+          <summary className="flex h-10 cursor-pointer list-none items-center justify-between rounded-xl border border-border bg-surface px-3 text-[13px] font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+            <span className="truncate">
+              {activeItem ? t(activeItem.labelKey) : t("settings.title")}
+            </span>
+            <ChevronDown
+              className="size-4 shrink-0 text-muted transition group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </summary>
+          <nav
+            className="absolute inset-x-0 top-full z-20 mt-2 max-h-[min(65dvh,32rem)] space-y-3 overflow-y-auto rounded-xl border border-border bg-surface p-2 shadow-xl"
+            aria-label={t("settings.navigationLabel")}
+          >
+            {visibleGroups.map((group) => (
+              <div key={group.labelKey}>
+                <p className="px-2 py-1 text-[11px] font-semibold text-muted">
+                  {t(group.labelKey)}
+                </p>
+                {group.items.map((item) => {
+                  const active = isActive(pathname, item.href);
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={(event) =>
+                        event.currentTarget
+                          .closest("details")
+                          ?.removeAttribute("open")
+                      }
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "flex min-h-10 items-center gap-3 rounded-lg px-2.5 text-[13px] font-medium",
+                        active
+                          ? "bg-brand-soft text-brand"
+                          : "text-foreground hover:bg-surface-muted",
+                      )}
+                    >
+                      <Icon className="size-4 shrink-0" aria-hidden="true" />
+                      {t(item.labelKey)}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+        </details>
       </div>
     </>
   );

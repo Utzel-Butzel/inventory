@@ -42,9 +42,10 @@ content live in [open-inventory-website](https://github.com/Utzel-Butzel/open-in
 ### Organizations
 
 Users can belong to multiple isolated organizations and have a different role
-in each one. Authenticated Webapp pages include the organization UUID as the
-first URL segment, for example
-`https://inventory.example.com/11111111-1111-4111-8111-111111111111/inventory`.
+in each one. Authenticated Webapp pages use a short, editable organization slug
+as the first URL segment, for example
+`https://inventory.example.com/workshop-berlin/inventory`. Legacy UUID URLs
+redirect to the current slug, so existing links remain valid.
 API and iOS clients select a membership with `X-Organization-ID`; standalone
 API tokens remain pinned to the organization that issued them. Manage and
 switch organizations under **Settings → Organization**.
@@ -103,6 +104,22 @@ Import the ready-made PostgreSQL and app bundle using the
 
 Paste the service definition from the
 [Coolify deployment guide](deploy/coolify/README.md).
+
+### iOS / TestFlight
+
+The native iOS app is deployed with the repository's pinned Fastlane version.
+After the one-time App Store Connect and Xcode signing setup described in the
+[iOS deployment guide](ios/Inventory/README.md#testflight-deployment), deploy a
+new build from the repository root with:
+
+```bash
+npm run deploy
+```
+
+This builds a signed IPA and uploads it to TestFlight. It does not submit an App
+Store version for review. Use `npm run ios:check` for a local configuration
+check of the project and shared scheme, or `npm run ios:build` to create the IPA
+without uploading it.
 
 Both platform templates include migrations, health checks, generated secrets,
 and persistent database and upload volumes. They use the published
@@ -201,6 +218,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run db:generate` | Generate a Drizzle migration |
 | `npm run db:tunnel` | Open an SSH tunnel to a remote PostgreSQL server |
 | `npm run auth:hash -- "password"` | Generate a bcrypt password hash |
+| `npm run deploy` | Build and upload the native iOS app to TestFlight |
 
 Focused contract and integration test commands are listed in
 [`package.json`](package.json).

@@ -15,37 +15,55 @@ import {
   stripOrganizationPathname,
 } from "@/lib/organization-path";
 
-const OrganizationRoutingContext = createContext<string | null>(null);
+type OrganizationRoutingContextValue = {
+  organizationSlug: string;
+  isReadOnly: boolean;
+};
+
+const OrganizationRoutingContext =
+  createContext<OrganizationRoutingContextValue | null>(null);
 
 export function OrganizationRoutingProvider({
-  organizationId,
+  organizationSlug,
+  isReadOnly = false,
   children,
 }: {
-  organizationId: string;
+  organizationSlug: string;
+  isReadOnly?: boolean;
   children: ReactNode;
 }) {
   return (
-    <OrganizationRoutingContext.Provider value={organizationId}>
+    <OrganizationRoutingContext.Provider
+      value={{ organizationSlug, isReadOnly }}
+    >
       {children}
     </OrganizationRoutingContext.Provider>
   );
 }
 
-export function useOrganizationId() {
-  const organizationId = useContext(OrganizationRoutingContext);
-  if (!organizationId) {
+function useOrganizationRouting() {
+  const organization = useContext(OrganizationRoutingContext);
+  if (!organization) {
     throw new Error(
       "Organization routing must be used inside OrganizationRoutingProvider.",
     );
   }
-  return organizationId;
+  return organization;
+}
+
+export function useOrganizationSlug() {
+  return useOrganizationRouting().organizationSlug;
+}
+
+export function useOrganizationReadOnly() {
+  return useOrganizationRouting().isReadOnly;
 }
 
 export function useOrganizationHref() {
-  const organizationId = useOrganizationId();
+  const organizationSlug = useOrganizationSlug();
   return useCallback(
-    (href: string) => organizationPath(organizationId, href),
-    [organizationId],
+    (href: string) => organizationPath(organizationSlug, href),
+    [organizationSlug],
   );
 }
 

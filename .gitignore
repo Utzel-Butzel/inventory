@@ -24,6 +24,9 @@
 # misc
 .DS_Store
 *.pem
+*.p8
+*.p12
+*.mobileprovision
 
 # debug
 npm-debug.log*
@@ -49,6 +52,14 @@ yarn-error.log*
 **/xcuserdata/
 **/*.xcuserstate
 **/DerivedData/
+
+# Fastlane state and generated artifacts
+/build/ios/
+/vendor/bundle/
+/fastlane/report.xml
+/fastlane/Preview.html
+/fastlane/screenshots/
+/fastlane/test_output/
 
 # persistent local uploads
 /data/uploads/*

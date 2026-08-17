@@ -7,7 +7,7 @@ export default async function NewInventoryItemPage() {
   const identity = await getSessionIdentity();
   if (!identity) redirect("/login");
   if (!identity.permissions.includes("inventory.create")) {
-    redirect(organizationPath(identity.organizationId, "/inventory"));
+    redirect(organizationPath(identity.organization.slug, "/inventory"));
   }
 
   return (

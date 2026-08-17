@@ -20,6 +20,7 @@ import {
   notificationInbox,
   notificationPreferences,
   notificationPushSubscriptions,
+  organizations,
   resources,
   stockSettings,
 } from "@/db/schema";
@@ -32,6 +33,7 @@ import type {
 } from "@/lib/notification-contract";
 import { db } from "@/lib/db";
 import { organizationPath } from "@/lib/organization-path";
+import { getOrganization } from "@/lib/organizations";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   boundedDigest,
@@ -132,6 +134,62 @@ export async function ensureNotificationPreferences(recipient: Recipient) {
   return preference;
 }
 
+async function readNotificationPreferences(recipient: Recipient) {
+  const [preference] = await db
+    .select()
+    .from(notificationPreferences)
+    .where(
+      and(
+        eq(notificationPreferences.organizationId, recipient.organizationId),
+        eq(notificationPreferences.recipientKey, recipient.key),
+      ),
+    )
+    .limit(1);
+  return preference ?? null;
+}
+
+function defaultNotificationPreference(recipient: Recipient): PreferenceRecord {
+  const timestamp = new Date(0);
+  return {
+    organizationId: recipient.organizationId,
+    recipientKey: recipient.key,
+    recipientEmail:
+      recipient.email?.trim().toLocaleLowerCase("en-US") || null,
+    recipientName: recipient.name?.trim() || null,
+    ...DEFAULT_NOTIFICATION_PREFERENCES,
+    locale: recipient.locale ?? DEFAULT_NOTIFICATION_PREFERENCES.locale,
+    lastDigestAt: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+async function notificationPreferenceForRead(recipient: Recipient) {
+  return (
+    (await readNotificationPreferences(recipient)) ??
+    defaultNotificationPreference(recipient)
+  );
+}
+
+// Background notification jobs must not mutate read-only organizations.
+async function writableNotificationPreferences(organizationId?: string) {
+  const baseCondition = and(
+    eq(organizations.id, notificationPreferences.organizationId),
+    eq(organizations.isReadOnly, false),
+  );
+  const rows = organizationId
+    ? await db
+        .select({ preference: notificationPreferences })
+        .from(notificationPreferences)
+        .innerJoin(organizations, baseCondition)
+        .where(eq(notificationPreferences.organizationId, organizationId))
+    : await db
+        .select({ preference: notificationPreferences })
+        .from(notificationPreferences)
+        .innerJoin(organizations, baseCondition);
+  return rows.map((row) => row.preference);
+}
+
 export function notificationRuntimeConfiguration() {
   const emailTarget = process.env.NOTIFICATION_EMAIL_FROM?.trim() || null;
   const pushSubject = process.env.WEB_PUSH_SUBJECT?.trim() || null;
@@ -168,8 +226,13 @@ export function notificationRuntimeConfiguration() {
   };
 }
 
-export async function getNotificationSettings(recipient: Recipient) {
-  const preference = await ensureNotificationPreferences(recipient);
+export async function getNotificationSettings(
+  recipient: Recipient,
+  options: { initializePreference?: boolean } = {},
+) {
+  const preference = options.initializePreference === false
+    ? await notificationPreferenceForRead(recipient)
+    : await ensureNotificationPreferences(recipient);
   const [{ value: subscriptionCount }] = await db
     .select({ value: count() })
     .from(notificationPushSubscriptions)
@@ -223,9 +286,15 @@ export async function updateNotificationPreferences(
 
 export async function listInbox(
   recipient: Recipient,
-  options: { limit?: number; unreadOnly?: boolean } = {},
+  options: {
+    limit?: number;
+    unreadOnly?: boolean;
+    initializePreference?: boolean;
+  } = {},
 ) {
-  await ensureNotificationPreferences(recipient);
+  if (options.initializePreference !== false) {
+    await ensureNotificationPreferences(recipient);
+  }
   const limit = Math.min(100, Math.max(1, options.limit ?? 30));
   const where = options.unreadOnly
     ? and(
@@ -536,12 +605,7 @@ export async function detectNotifications(
   now = new Date(),
   organizationId?: string,
 ) {
-  const preferences = organizationId
-    ? await db
-        .select()
-        .from(notificationPreferences)
-        .where(eq(notificationPreferences.organizationId, organizationId))
-    : await db.select().from(notificationPreferences);
+  const preferences = await writableNotificationPreferences(organizationId);
   let created = 0;
   for (const preference of preferences) {
     const candidates = await loadCandidates(preference, now);
@@ -642,6 +706,7 @@ function digestText(
 function digestPayload(
   preference: PreferenceRecord,
   notifications: InboxRecord[],
+  organizationReference: string,
 ) {
   const subject =
     preference.locale === "de"
@@ -649,7 +714,7 @@ function digestPayload(
       : `Inventory daily digest (${notifications.length})`;
   const bounded = boundedDigest(notifications);
   const inboxPath = organizationPath(
-    preference.organizationId,
+    organizationReference,
     "/notifications",
   );
   return {
@@ -662,7 +727,7 @@ function digestPayload(
       title: item.title,
       body: item.body,
       href: item.href
-        ? organizationPath(preference.organizationId, item.href)
+        ? organizationPath(organizationReference, item.href)
         : null,
       createdAt: item.createdAt.toISOString(),
     })),
@@ -734,7 +799,7 @@ async function sendPush(preference: PreferenceRecord, payload: ReturnType<typeof
         JSON.stringify({
           title: payload.subject,
           body: payload.text.slice(0, 240),
-          url: organizationPath(preference.organizationId, "/notifications"),
+          url: payload.url,
         }),
         { TTL: 3_600, urgency: "normal" },
       );
@@ -766,8 +831,13 @@ async function deliverChannel(
   channel: NotificationChannel,
   preference: PreferenceRecord,
   notifications: InboxRecord[],
+  organizationReference: string,
 ) {
-  const payload = digestPayload(preference, notifications);
+  const payload = digestPayload(
+    preference,
+    notifications,
+    organizationReference,
+  );
   if (channel === "email") return sendEmail(preference, payload);
   if (channel === "push") return sendPush(preference, payload);
   if (channel === "slack") {
@@ -824,16 +894,14 @@ export async function dispatchDueDigests(
   now = new Date(),
   organizationId?: string,
 ) {
-  const preferences = organizationId
-    ? await db
-        .select()
-        .from(notificationPreferences)
-        .where(eq(notificationPreferences.organizationId, organizationId))
-    : await db.select().from(notificationPreferences);
+  const preferences = await writableNotificationPreferences(organizationId);
   let sent = 0;
   let failed = 0;
   for (const preference of preferences) {
     if (!digestIsDue(preference, now)) continue;
+    const organization = await getOrganization(preference.organizationId);
+    const organizationReference =
+      organization?.slug ?? preference.organizationId;
     const since = preference.lastDigestAt ?? preference.createdAt;
     const notifications = await db
       .select()
@@ -882,7 +950,12 @@ export async function dispatchDueDigests(
         let status: "sent" | "skipped" | "failed" = "failed";
         let error: string | null = null;
         try {
-          const result = await deliverChannel(channel, preference, notifications);
+          const result = await deliverChannel(
+            channel,
+            preference,
+            notifications,
+            organizationReference,
+          );
           status = result.status;
           if (status === "sent") sent += 1;
         } catch (deliveryError) {

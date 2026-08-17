@@ -535,12 +535,9 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
 
   return (
     <main className="flex min-h-[calc(100vh-68px)] flex-col px-3 py-4 sm:px-5 lg:px-6">
-      <header className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+      <header className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand">
-            <MapPin size={13} /> {t("map.eyebrow")}
-          </div>
-          <h1 className="text-2xl font-semibold tracking-[-0.035em] text-foreground sm:text-3xl">
+          <h1 className="text-2xl font-semibold text-foreground sm:text-[28px]">
             {t(isEditing ? "map.title.edit" : "map.title.view")}
           </h1>
           <p className="mt-1 text-sm text-muted">
@@ -617,10 +614,11 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
         </div>
       ) : null}
 
-      <div className="grid min-h-[720px] flex-1 overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-md)] lg:grid-cols-[360px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col border-b border-border bg-surface lg:border-b-0 lg:border-r">
+      <div className="grid min-h-[720px] flex-1 overflow-hidden rounded-xl border border-border bg-surface lg:grid-cols-[360px_minmax(0,1fr)]">
+        <aside className="order-2 flex min-h-0 flex-col border-t border-border bg-surface lg:order-1 lg:border-r lg:border-t-0">
           <div className="border-b border-border p-3">
             <label className="relative block">
+              <span className="sr-only">{t("map.search.placeholder")}</span>
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("map.search.placeholder")} className={`${inputClass} pl-9`} />
             </label>
@@ -773,7 +771,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
           </div>
         </aside>
 
-        <section className="relative min-h-[560px] overflow-hidden bg-surface-muted">
+        <section className="relative order-1 min-h-[560px] overflow-hidden bg-surface-muted lg:order-2">
           <InventoryMapCanvas
             resources={displayed}
             featuresByResource={featuresByResource}

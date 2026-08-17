@@ -21,6 +21,9 @@ struct IntakeSubmission: Sendable {
     let analyze: Bool
     let generateCover: Bool
     let imageModelID: String?
+    let maximumAIGeneratedImagePixelSize: Int
+    let analysisPrompt: String?
+    let coverPrompt: String?
     let spatialPlacement: SpatialPlacementDraft?
 }
 
@@ -43,8 +46,11 @@ final class CaptureViewModel: ObservableObject {
     let locationService = LocationService()
     private let downsampler: JPEGDownsampler
 
-    init() {
-        downsampler = try! JPEGDownsampler(maximumPixelSize: 2_200, compressionQuality: 0.86)
+    init(maximumPixelSize: Int = ImageSizePreferences.defaultUploadPixelSize) {
+        downsampler = try! JPEGDownsampler(
+            maximumPixelSize: maximumPixelSize,
+            compressionQuality: 0.86
+        )
     }
 
     var canSubmit: Bool {
@@ -159,7 +165,13 @@ final class CaptureViewModel: ObservableObject {
         spatialPlacement = nil
     }
 
-    func makeSubmission(imageModelID: String? = nil) -> IntakeSubmission {
+    func makeSubmission(
+        imageModelID: String? = nil,
+        maximumAIGeneratedImagePixelSize: Int = ImageSizePreferences
+            .defaultAIGeneratedPixelSize,
+        analysisPrompt: String? = nil,
+        coverPrompt: String? = nil
+    ) -> IntakeSubmission {
         let coordinates = locationService.coordinates
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let request = ResourceCreateRequest(
@@ -183,6 +195,10 @@ final class CaptureViewModel: ObservableObject {
             analyze: autoAnalyze && !photos.isEmpty,
             generateCover: autoAnalyze && autoCover && !photos.isEmpty,
             imageModelID: imageModelID,
+            maximumAIGeneratedImagePixelSize: ImageSizePreferences
+                .validatedAIGeneratedPixelSize(maximumAIGeneratedImagePixelSize),
+            analysisPrompt: AIPromptPreferences.validatedPrompt(analysisPrompt),
+            coverPrompt: AIPromptPreferences.validatedPrompt(coverPrompt),
             spatialPlacement: spatialPlacement
         )
     }

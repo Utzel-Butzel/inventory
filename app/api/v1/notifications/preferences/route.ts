@@ -1,5 +1,9 @@
 import { notificationPreferencePatchSchema } from "@/lib/notification-contract";
-import { requireNotificationRecipient, notificationNoStoreHeaders } from "@/lib/notification-api";
+import {
+  requireNotificationRecipient,
+  requireWritableNotificationRecipient,
+  notificationNoStoreHeaders,
+} from "@/lib/notification-api";
 import { getNotificationSettings, updateNotificationPreferences } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
@@ -7,12 +11,14 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const authorization = await requireNotificationRecipient(request);
   if (authorization.response) return authorization.response;
-  const settings = await getNotificationSettings(authorization.recipient);
+  const settings = await getNotificationSettings(authorization.recipient, {
+    initializePreference: !authorization.identity.organization.isReadOnly,
+  });
   return Response.json(settings, { headers: notificationNoStoreHeaders });
 }
 
 export async function PATCH(request: Request) {
-  const authorization = await requireNotificationRecipient(request);
+  const authorization = await requireWritableNotificationRecipient(request);
   if (authorization.response) return authorization.response;
   let payload: unknown;
   try {

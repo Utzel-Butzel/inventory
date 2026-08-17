@@ -198,6 +198,7 @@ export async function POST(request: Request, context: Context) {
           ? defaultTransparentCoverPrompt(resource.name)
           : defaultCoverPrompt(resource.name)),
       imageModel,
+      maximumImageSize: parsed.data.maximumImageSize,
       transparentBackground,
       transparencyMethod: parsed.data.transparencyMethod,
     });

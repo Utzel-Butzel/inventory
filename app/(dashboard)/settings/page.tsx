@@ -7,7 +7,7 @@ export default async function SettingsPage() {
   const identity = await getSessionIdentity();
   redirect(
     identity
-      ? organizationPath(identity.organizationId, "/settings/data")
+      ? organizationPath(identity.organization.slug, "/settings/organization")
       : "/login",
   );
 }

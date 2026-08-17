@@ -2,8 +2,8 @@
   "metadata": {
     "collection": "Geteiltes Inventar",
     "collectionDescription": "Inventar über einen öffentlichen Link mit Lesezugriff ansehen.",
-    "item": "Geteiltes Inventarelement",
-    "itemDescription": "Ein über einen öffentlichen Link mit Lesezugriff geteiltes Inventarelement ansehen."
+    "item": "Geteilter Eintrag",
+    "itemDescription": "Einen über einen öffentlichen Link mit Lesezugriff geteilten Eintrag ansehen."
   },
   "header": {
     "sharedInventory": "Geteiltes Inventar",
@@ -11,15 +11,15 @@
   },
   "collection": {
     "eyebrow": "Öffentliche Sammlung",
-    "count_one": "{{count}} geteiltes Element",
-    "count_other": "{{count}} geteilte Elemente",
+    "count_one": "{{count}} geteilter Eintrag",
+    "count_other": "{{count}} geteilte Einträge",
     "filtered": "Gefilterte Sammlung",
     "searchPlaceholder": "Geteiltes Inventar durchsuchen…",
     "searchLabel": "Geteiltes Inventar durchsuchen",
     "empty": {
-      "title": "Derzeit keine geteilten Elemente",
+      "title": "Derzeit keine geteilten Einträge",
       "search": "Versuche eine andere Suche.",
-      "default": "Elemente erscheinen hier, sobald sie zu dieser Freigabe passen."
+      "default": "Einträge erscheinen hier, sobald sie zu dieser Freigabe passen."
     }
   },
   "pagination": {
@@ -30,7 +30,7 @@
   },
   "statuses": {
     "available": "Verfügbar",
-    "in-use": "In Verwendung",
+    "in-use": "In Benutzung",
     "maintenance": "Wartung",
     "archived": "Archiviert"
   },
@@ -49,7 +49,7 @@
     "back": "Zurück zum geteilten Inventar",
     "overview": "Übersicht",
     "media": "Medien",
-    "details": "Elementdetails",
+    "details": "Eintragsdetails",
     "classification": "Klassifizierung",
     "customFields": "Benutzerdefinierte Felder",
     "noDescriptionShort": "Keine Beschreibung",

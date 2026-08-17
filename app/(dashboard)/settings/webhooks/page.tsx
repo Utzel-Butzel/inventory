@@ -19,7 +19,7 @@ export default async function WebhookSettingsPage() {
   const identity = await getSessionIdentity();
   if (!identity) redirect("/login");
   if (!identity.permissions.includes("webhooks.manage")) {
-    redirect(organizationPath(identity.organizationId, "/settings/data"));
+    redirect(organizationPath(identity.organization.slug, "/settings/data"));
   }
   const { t } = await getT("settings");
 

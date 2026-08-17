@@ -49,10 +49,14 @@ export function ResourceVariantsManager({
   resourceId,
   canEdit,
   canManageStock = false,
+  hideWhenEmpty = false,
+  allowCreate = true,
 }: {
   resourceId: string;
   canEdit: boolean;
   canManageStock?: boolean;
+  hideWhenEmpty?: boolean;
+  allowCreate?: boolean;
 }) {
   const { t, i18n } = useT("inventory");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
@@ -189,16 +193,28 @@ export function ResourceVariantsManager({
     }
   };
 
+  if (
+    hideWhenEmpty &&
+    !loading &&
+    !error &&
+    (data?.variants.length ?? 0) === 0
+  ) {
+    return null;
+  }
+
   return (
     <section className="mx-auto mt-6 w-full max-w-[1450px] px-4 sm:px-6 lg:px-8">
       <div className="rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)] sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <PackagePlus className="size-4 text-success" /> {t("variants.title")}
+              <PackagePlus className="size-4 text-success" />{" "}
+              {allowCreate ? t("variants.title") : t("variants.legacyTitle")}
             </h2>
             <p className="mt-1 text-xs text-muted">
-              {t("variants.description")}
+              {allowCreate
+                ? t("variants.description")
+                : t("variants.legacyDescription")}
             </p>
           </div>
           {data ? (
@@ -269,7 +285,7 @@ export function ResourceVariantsManager({
               </div>
             ) : null}
 
-            {canEdit && !formOpen ? (
+            {canEdit && allowCreate && !formOpen ? (
               <button
                 type="button"
                 onClick={() => setFormOpen(true)}

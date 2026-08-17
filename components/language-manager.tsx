@@ -8,7 +8,6 @@ import {
   Plus,
   RefreshCw,
   Save,
-  Sparkles,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -215,7 +214,7 @@ export function LanguageManager() {
                 disabled={bulkTranslating}
                 className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3 text-xs font-semibold text-brand hover:bg-brand-soft disabled:opacity-50"
               >
-                {bulkTranslating ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                {bulkTranslating ? <LoaderCircle className="size-4 animate-spin" /> : <Languages className="size-4" />}
                 {bulkTranslating ? t("languages.translating") : t("languages.translateInventory")}
               </button>
             ) : null}
@@ -386,12 +385,12 @@ export function LanguageManager() {
                           className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-xs font-semibold text-muted hover:border-brand-border hover:text-brand disabled:opacity-50"
                           title={t("languages.makeDefaultTitle")}
                         >
-                          <Sparkles className="size-3.5" /> {t("languages.makeDefault")}
+                          <Check className="size-3.5" /> {t("languages.makeDefault")}
                         </button>
                       </>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-[11px] font-semibold text-success">
-                        <Sparkles className="size-3" /> {t("languages.default")}
+                        <Check className="size-3" /> {t("languages.default")}
                       </span>
                     )}
                     {!language.archivedAt ? (

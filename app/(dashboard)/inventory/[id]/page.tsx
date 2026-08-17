@@ -1,5 +1,6 @@
 import { ResourceAssignmentsManager } from "@/components/resource-assignments-manager";
 import { ResourceDetails } from "@/components/resource-details";
+import { ResourceFamilyManager } from "@/components/resource-family-manager";
 import { ResourceRelationsManager } from "@/components/resource-relations-manager";
 import { ResourceVariantsManager } from "@/components/resource-variants-manager";
 import { canAccessResource, getSessionIdentity } from "@/lib/api-auth";
@@ -23,6 +24,9 @@ export default async function InventoryItemPage({ params }: Props) {
         ])
       : [false, false, false, false];
   const canShare = Boolean(identity?.permissions.includes("sharing.manage"));
+  const canCreate = Boolean(
+    canEdit && identity?.permissions.includes("inventory.create"),
+  );
   const canViewStock = Boolean(identity?.permissions.includes("stock.read"));
   const canViewAssignments = Boolean(
     identity?.permissions.includes("assignments.read"),
@@ -37,11 +41,19 @@ export default async function InventoryItemPage({ params }: Props) {
         canShare={canShare}
         canViewStock={canViewStock}
       />
+      <ResourceFamilyManager
+        resourceId={id}
+        canCreate={canCreate}
+        canEdit={canEdit}
+        canViewStock={canViewStock}
+      />
       <ResourceRelationsManager resourceId={id} canEdit={canEdit} />
       <ResourceVariantsManager
         resourceId={id}
         canEdit={canEdit}
         canManageStock={canManageStock}
+        hideWhenEmpty
+        allowCreate={false}
       />
       {canViewAssignments ? (
         <ResourceAssignmentsManager

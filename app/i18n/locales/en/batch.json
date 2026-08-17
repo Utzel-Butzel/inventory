@@ -1,8 +1,8 @@
 {
   "header": {
     "inventory": "Inventory",
-    "eyebrow": "Fast intake",
-    "title": "Batch capture",
+    "eyebrow": "From photos",
+    "title": "Photo capture",
     "processing_one": "{{count}} item processing",
     "processing_other": "{{count}} items processing",
     "ready": "Ready for the next item"
@@ -38,7 +38,7 @@
   },
   "photos": {
     "title": "Photo tray",
-    "description": "Add several angles for a better AI result.",
+    "description": "Add several angles for a more reliable result.",
     "clear": "Clear",
     "selected": "Selected photos",
     "alt": "Selected item view {{number}}",
@@ -61,8 +61,9 @@
     "useLocation": "Use current location",
     "accuracy": "Accurate to about {{meters}} m · Tap to refresh",
     "locationPrivacy": "Saved privately with this inventory item",
-    "generateCover": "Generate AI cover",
-    "generateCoverDescription": "Identify the item, then create a clean studio cover from the first photo.",
+    "generateCover": "Create cover automatically",
+    "generateCoverDescription": "Identify the item and create a cover from the first photo.",
+    "advancedImageOptions": "Advanced image options",
     "transparentBackground": "Transparent background",
     "transparentBackgroundDescription": "Save generated covers as transparent PNGs.",
     "transparencyMethod": "Transparency method",
@@ -72,14 +73,14 @@
     "greenscreenDescription": "One image pass, with more risk around green objects and fine edges."
   },
   "submit": {
-    "create": "Create with AI",
+    "create": "Create item",
     "photoCount_one": "{{count}} photo",
     "photoCount_other": "{{count}} photos",
     "addPhotos": "Add photos",
-    "description": "The tray clears immediately, so you can capture the next item while AI works."
+    "description": "Photos are processed in the background, so you can capture the next item right away."
   },
   "jobs": {
-    "eyebrow": "Background queue",
+    "eyebrow": "Processing",
     "title": "Recent captures",
     "clearFinished": "Clear finished",
     "captureName_one": "{{count}}-photo capture",
@@ -93,7 +94,7 @@
       "attention": "Needs attention",
       "creating": "Creating item",
       "uploading": "Uploading photos",
-      "analyzing": "AI is identifying it",
+      "analyzing": "Reviewing photos",
       "cover": "Generating cover",
       "processing": "Processing"
     },
@@ -104,10 +105,10 @@
       "cover": "Cover"
     },
     "messages": {
-      "analysisFailed": "Item and photos saved, but AI analysis failed: {{reason}}",
-      "coverFailed": "Item analyzed, but its AI cover failed: {{reason}}",
-      "readyWithCover": "Item, metadata, and AI cover are ready.",
-      "ready": "Item and AI metadata are ready."
+      "analysisFailed": "Item and photos were saved, but automatic processing failed: {{reason}}",
+      "coverFailed": "The item was processed, but its automatic cover failed: {{reason}}",
+      "readyWithCover": "Item, details, and cover are ready.",
+      "ready": "Item and details are ready."
     }
   },
   "errors": {

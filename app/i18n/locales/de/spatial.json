@@ -1,22 +1,22 @@
 {
   "metadata": {
-    "mapTitle": "Standorte",
-    "mapDescription": "Inventarstandorte auf der Karte ansehen und bearbeiten.",
+    "mapTitle": "Orte",
+    "mapDescription": "Orte und Einträge auf der Karte ansehen und bearbeiten.",
     "roomsTitle": "Räume in 3D",
     "roomsDescription": "RoomPlan-Scans und räumlich positioniertes Inventar erkunden."
   },
   "map": {
     "loading": "Karte wird geladen…",
-    "eyebrow": "Räumliches Inventar",
+    "eyebrow": "Orte",
     "title": {
-      "edit": "Standorte bearbeiten",
-      "view": "Standorte"
+      "edit": "Karte bearbeiten",
+      "view": "Karte"
     },
     "summary": {
-      "positioned": "{{located}} von {{total}} Objekten positioniert",
+      "positioned": "{{located}} von {{total}} Einträgen positioniert",
       "structures_one": "{{value}} georeferenziertes Gebäude",
       "structures_other": "{{value}} georeferenzierte Gebäude",
-      "features": "Punkte, Räume und Objektumrisse"
+      "features": "Punkte, Räume und Eintragsumrisse"
     },
     "changes": {
       "unsaved_one": "{{value}} ungespeicherte Änderung",
@@ -46,25 +46,25 @@
       "outlineAdded": "Umriss hinzugefügt. Ziehe die orangefarbenen Ecken oder klicke auf grüne Griffe, um ihn anzupassen.",
       "saved_one": "{{value}} Kartenänderung gespeichert.",
       "saved_other": "{{value}} Kartenänderungen gespeichert.",
-      "updated_one": "{{value}} Objekt aktualisiert.",
-      "updated_other": "{{value}} Objekte aktualisiert."
+      "updated_one": "{{value}} Eintrag aktualisiert.",
+      "updated_other": "{{value}} Einträge aktualisiert."
     },
     "search": {
-      "placeholder": "Objekte, Standorte oder Tags suchen…",
-      "noMatches": "Keine passenden Inventarobjekte."
+      "placeholder": "Einträge, Standorte oder Tags suchen…",
+      "noMatches": "Keine passenden Einträge."
     },
     "selection": {
-      "selected_one": "{{value}} Objekt ausgewählt",
-      "selected_other": "{{value}} Objekte ausgewählt",
+      "selected_one": "{{value}} Eintrag ausgewählt",
+      "selected_other": "{{value}} Einträge ausgewählt",
       "selectResults": "Ergebnisse auswählen",
       "clear": "Leeren",
-      "empty": "Wähle ein Objekt in der Liste oder auf der Karte aus."
+      "empty": "Wähle einen Eintrag in der Liste oder auf der Karte aus."
     },
     "resource": {
       "features_one": "{{value}} Kartenmerkmal",
       "features_other": "{{value}} Kartenmerkmale",
       "notPositioned": "Nicht positioniert",
-      "open": "Objekt öffnen"
+      "open": "Eintrag öffnen"
     },
     "draw": {
       "title": "Geometrie zeichnen",
@@ -76,7 +76,7 @@
       "polygonHint_other": "Klicke Ecken auf der Karte an · {{value}} Punkte",
       "finishPolygon": "Polygon abschließen",
       "cancel": "Abbrechen",
-      "placeOverlay": "Einmal klicken, um das Objekt zu platzieren",
+      "placeOverlay": "Einmal klicken, um den Eintrag zu platzieren",
       "polygonOverlay_one": "{{value}} Ecke · Eingabetaste zum Abschließen · Esc zum Abbrechen",
       "polygonOverlay_other": "{{value}} Ecken · Eingabetaste zum Abschließen · Esc zum Abbrechen"
     },
@@ -93,20 +93,20 @@
       }
     },
     "quickEdit": {
-      "title_one": "Schnellbearbeitung · {{value}} Objekt ausgewählt",
-      "title_other": "Schnellbearbeitung · {{value}} Objekte ausgewählt",
+      "title_one": "Schnellbearbeitung · {{value}} Eintrag ausgewählt",
+      "title_other": "Schnellbearbeitung · {{value}} Einträge ausgewählt",
       "keepStatus": "Status beibehalten",
       "keepType": "Typ beibehalten",
       "keepPriority": "Priorität beibehalten",
       "priority": "Priorität {{value}}",
       "addTags": "Tags hinzufügen…",
-      "changeLocation": "Standortbezeichnung ändern",
+      "changeLocation": "Standort ändern",
       "locationPlaceholder": "Werkstatt · Regal A3 (leer löscht)",
       "apply": "Auf Auswahl anwenden"
     },
     "statuses": {
       "available": "Verfügbar",
-      "in-use": "In Verwendung",
+      "in-use": "In Benutzung",
       "maintenance": "Wartung",
       "archived": "Archiviert"
     },
@@ -156,17 +156,17 @@
     },
     "empty": {
       "title": "Noch keine Räume gescannt",
-      "description": "Öffne die Inventory-App auf dem iPhone, wähle Räume und scanne einen Raum mit RoomPlan. Das 3D-Modell und alle räumlich erfassten Inventarobjekte erscheinen anschließend hier.",
+      "description": "Öffne die Inventory-App auf dem iPhone, wähle Räume und scanne einen Raum mit RoomPlan. Das 3D-Modell und alle räumlich erfassten Einträge erscheinen anschließend hier.",
       "requirement": "Erfordert ein LiDAR-fähiges iPhone"
     },
-    "eyebrow": "Räumliches Inventar",
+    "eyebrow": "Orte",
     "title": "Räume in 3D",
-    "subtitle": "Navigiere durch RoomPlan-Scans und öffne Inventarobjekte an ihren gemessenen Positionen.",
+    "subtitle": "Navigiere durch RoomPlan-Scans und öffne Einträge an ihren gemessenen Positionen.",
     "stats": {
       "rooms_one": "{{value}} Raum",
       "rooms_other": "{{value}} Räume",
-      "items_one": "{{value}} positioniertes Objekt",
-      "items_other": "{{value}} positionierte Objekte",
+      "items_one": "{{value}} positionierter Eintrag",
+      "items_other": "{{value}} positionierte Einträge",
       "linked_one": "{{value}} verbundener Raum auf dieser Etage",
       "linked_other": "{{value}} verbundene Räume auf dieser Etage"
     },
@@ -184,13 +184,13 @@
     },
     "scans": {
       "title": "Gescannte Räume",
-      "revision_one": "Revision {{revision}} · {{value}} Objekt",
-      "revision_other": "Revision {{revision}} · {{value}} Objekte",
+      "revision_one": "Revision {{revision}} · {{value}} Eintrag",
+      "revision_other": "Revision {{revision}} · {{value}} Einträge",
       "sharedFrame": "Gemeinsamer AR-Bezugsrahmen {{id}}"
     },
     "scene": {
-      "noItemsTitle": "Noch keine Objekte platziert",
-      "noItemsDescription": "Erfasse mit dem AR-Modus der iPhone-App ein Objekt in diesem Raum.",
+      "noItemsTitle": "Noch keine Einträge platziert",
+      "noItemsDescription": "Erfasse mit dem AR-Modus der iPhone-App einen Eintrag in diesem Raum.",
       "roomFallback": "Raum",
       "downloadUsdz": "Original-USDZ herunterladen"
     },
@@ -210,8 +210,8 @@
       "save": "Anordnung speichern"
     },
     "placements": {
-      "searchPlaceholder": "Positionierte Objekte suchen…",
-      "noMatches": "Keine passenden Objekte",
+      "searchPlaceholder": "Positionierte Einträge suchen…",
+      "noMatches": "Keine passenden Einträge",
       "coordinates": "{{coordinates}} m",
       "accuracy": "Genauigkeit {{value}} · {{method}}",
       "open": "{{name}} öffnen",

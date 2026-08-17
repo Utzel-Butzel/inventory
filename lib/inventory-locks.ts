@@ -1,1 +1,2 @@
 export const BOM_WRITE_LOCK_ID = 4_847_868_373;
+export const VARIANT_FAMILY_WRITE_LOCK_ID = 4_847_868_374;

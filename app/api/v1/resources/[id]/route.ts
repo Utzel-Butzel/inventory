@@ -300,6 +300,15 @@ export async function DELETE(request: Request, context: Context) {
         { status: 403 },
       );
     }
+    if (message.includes("RESOURCE_HAS_FIRST_CLASS_VARIANTS")) {
+      return Response.json(
+        {
+          error:
+            "This primary item still has linked variants. Archive it or handle the variants first.",
+        },
+        { status: 409 },
+      );
+    }
     const referenced =
       message.includes("bom_lines_component_resource_id") ||
       message.includes("assembly_builds_assembly_resource_id") ||

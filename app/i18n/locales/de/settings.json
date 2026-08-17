@@ -5,81 +5,84 @@
   "pages": {
     "organization": {
       "title": "Organisation",
-      "metaDescription": "Die für Ihr Konto verfügbaren Organisationen verwalten.",
-      "description": "Prüfen Sie Ihre Organisationen, ändern Sie deren Namen oder erstellen Sie einen separaten Arbeitsbereich für ein anderes Team oder Inventar."
+      "metaDescription": "Die für dein Konto verfügbaren Organisationen verwalten.",
+      "description": "Prüfe deine Organisationen, ändere ihre Namen oder erstelle einen separaten Arbeitsbereich für ein anderes Team oder Inventar."
     },
     "access": {
       "title": "Rollen & Zugriff",
       "metaDescription": "Detaillierte Rollen und bedingten Inventarzugriff verwalten.",
-      "description": "Stellen Sie Arbeitsbereichsrollen aus präzisen Berechtigungen zusammen und ergänzen Sie Regeln, die ausgewählte Aktionen nur für passende Inventareinträge erlauben."
+      "description": "Stelle Arbeitsbereichsrollen aus einzelnen Berechtigungen zusammen und ergänze Regeln, die ausgewählte Aktionen nur für passende Einträge erlauben."
     },
     "api": {
       "title": "API & Dienste",
       "metaDescription": "Laufzeitdienste prüfen und API-Zugriff verwalten.",
-      "description": "Prüfen Sie die für diese Bereitstellung aktivierten Dienste und verwalten Sie bereichsbezogene Zugangsdaten für Integrationen.",
+      "description": "Prüfe die für diese Bereitstellung aktivierten Dienste und verwalte bereichsbezogene Zugangsdaten für Integrationen.",
       "documentation": "API-Dokumentation"
     },
     "customFields": {
       "title": "Benutzerdefinierte Felder",
       "metaDescription": "Strukturierte Zusatzdaten für Inventar und Bestandseinheiten konfigurieren.",
-      "description": "Erstellen Sie strukturierte Felder für Inventareinträge und serialisierte Bestandseinheiten mit Typ- und Kategoriezuordnung."
+      "description": "Erstelle strukturierte Felder für Einträge und serialisierte Bestandseinheiten mit Typ- und Kategoriezuordnung."
     },
     "data": {
       "title": "Datentransfer",
       "metaDescription": "Inventar als CSV importieren oder als CSV, Excel und PDF exportieren.",
-      "description": "Übertragen Sie Inventardaten mit einem validierten CSV-Import in diesen Arbeitsbereich oder exportieren Sie sie als CSV, Excel oder PDF."
+      "description": "Übertrage Inventardaten per CSV-Import in diesen Arbeitsbereich oder exportiere sie als CSV, Excel oder PDF."
     },
     "inventoryTypes": {
       "title": "Inventartypen",
       "metaDescription": "Die im Arbeitsbereich verfügbaren Eintragstypen konfigurieren.",
-      "description": "Definieren Sie die Arten von Einträgen und Behältern, die Ihr Arbeitsbereich erfasst, einschließlich Bezeichnungen, Farben und Funktionen."
+      "description": "Definiere die Arten von Einträgen und Behältern, die dein Arbeitsbereich erfasst, einschließlich Bezeichnungen, Farben und Funktionen."
     },
     "languages": {
       "title": "Inhaltssprachen",
       "metaDescription": "Quellsprache und KI-übersetzte Inventarsprachen konfigurieren.",
-      "description": "Wählen Sie die maßgebliche Sprache für die Inhaltserstellung und die Sprachen, in die Inventarinhalte übersetzt werden sollen."
+      "description": "Wähle die maßgebliche Sprache für die Inhaltserstellung und die Sprachen, in die Inventarinhalte übersetzt werden sollen."
     },
     "users": {
       "title": "Benutzer",
       "metaDescription": "Benutzer, Rollen und Zugriffe des Arbeitsbereichs verwalten.",
-      "description": "Fügen Sie Personen zum Arbeitsbereich hinzu, weisen Sie Rollen zu und verwalten Sie lokale Kontozugriffe."
+      "description": "Füge Personen zum Arbeitsbereich hinzu, weise Rollen zu und verwalte lokale Kontozugriffe."
     },
     "sharing": {
       "title": "Öffentliche Freigaben",
       "metaDescription": "Öffentliche Links für das Inventar erstellen und verwalten.",
-      "description": "Veröffentlichen Sie das gesamte Inventar, eine nach benutzerdefiniertem Feld gefilterte Ansicht oder einen einzelnen Eintrag über einen widerrufbaren Link."
+      "description": "Veröffentliche das gesamte Inventar, eine gefilterte Ansicht oder einen einzelnen Eintrag über einen widerrufbaren Link."
     },
     "notifications": {
       "title": "Benachrichtigungen",
-      "metaDescription": "Ruhige Inventarhinweise und Zusammenfassungen konfigurieren.",
-      "description": "Wählen Sie Ereignisse, Schwellen, Digest-Zeit und optionale externe Kanäle. Das In-App-Postfach ist immer verfügbar."
+      "metaDescription": "Inventarhinweise und Zusammenfassungen konfigurieren.",
+      "description": "Wähle Ereignisse, Schwellen, Digest-Zeit und optionale externe Kanäle. Das In-App-Postfach ist immer verfügbar."
     },
     "webhooks": {
       "title": "Webhooks",
       "metaDescription": "Inventarereignisse über signierte Webhooks mit externen Systemen verbinden.",
-      "description": "Senden Sie signierte Inventarereignisse an eigene HTTPS-Endpunkte, testen Sie Integrationen und prüfen Sie deren Zustellstatus."
+      "description": "Sende signierte Inventarereignisse an eigene HTTPS-Endpunkte, teste Integrationen und prüfe ihren Zustellstatus."
     }
   },
   "organizations": {
     "list": {
-      "title": "Ihre Organisationen",
+      "title": "Deine Organisationen",
       "description": "Jede Organisation trennt Inventar, Einstellungen, Mitglieder und Integrationen voneinander.",
       "count_one": "{{count}} Organisation",
       "count_other": "{{count}} Organisationen",
       "active": "Aktiv",
-      "slug": "Kennung: {{slug}}",
+      "slug": "Arbeitsbereich-URL: /{{slug}}",
       "emptyTitle": "Keine Organisationen verfügbar",
-      "emptyDescription": "Erstellen Sie eine Organisation, um einen separaten Inventararbeitsbereich zu beginnen."
+      "emptyDescription": "Erstelle eine Organisation, um einen separaten Inventararbeitsbereich zu beginnen."
     },
     "create": {
       "title": "Organisation erstellen",
-      "description": "Beginnen Sie einen separaten Arbeitsbereich für ein anderes Team, einen Standort oder ein Inventar.",
-      "hint": "Sie werden Mitglied der neuen Organisation. Organisationen wechseln Sie über die Hauptnavigation."
+      "description": "Beginne einen separaten Arbeitsbereich für ein anderes Team, einen Standort oder ein Inventar.",
+      "hint": "Du wirst Mitglied der neuen Organisation. Organisationen wechselst du über die Hauptnavigation."
     },
     "form": {
       "name": "Organisationsname",
       "namePlaceholder": "Werkstatt Nord",
-      "slugHint": "Aus dem Namen wird automatisch eine stabile Kennung erzeugt."
+      "slug": "URL-Slug",
+      "slugOptional": "URL-Slug (optional)",
+      "slugHint": "Wird für kurze Arbeitsbereich-URLs verwendet. Leer lassen, um ihn aus dem Namen zu erzeugen; erlaubt sind Kleinbuchstaben, Zahlen und Bindestriche.",
+      "slugEditHint": "Eine Änderung aktualisiert die Arbeitsbereich-Links. Bestehende UUID-Links funktionieren weiterhin."
     },
     "actions": {
       "refresh": "Organisationen aktualisieren",
@@ -87,15 +90,15 @@
       "dismissNotice": "Meldung schließen",
       "dismissError": "Fehler schließen",
       "cancel": "Abbrechen",
-      "save": "Namen speichern",
+      "save": "Änderungen speichern",
       "saving": "Wird gespeichert…",
-      "rename": "Umbenennen",
+      "edit": "Bearbeiten",
       "create": "Erstellen",
       "creating": "Wird erstellt…"
     },
     "notices": {
       "created": "Organisation „{{name}}“ wurde erstellt.",
-      "updated": "Der Organisationsname wurde in „{{name}}“ geändert."
+      "updated": "Die Organisation „{{name}}“ wurde aktualisiert."
     },
     "errors": {
       "loadTitle": "Organisationen konnten nicht geladen werden",
@@ -107,7 +110,7 @@
   "notifications": {
     "events": {
       "title": "Beobachtete Ereignisse",
-      "description": "Ausgewählte Ereignisse gelangen nach Schwellen- und Cooldown-Prüfung ins In-App-Postfach.",
+      "description": "Wähle aus, bei welchen Ereignissen du benachrichtigt werden möchtest.",
       "low_stock": {
         "label": "Niedriger Bestand",
         "description": "Hinweis, wenn der verfügbare Bestand den festgelegten Anteil des Mindestbestands erreicht."
@@ -126,27 +129,27 @@
       }
     },
     "noise": {
-      "title": "Rhythmus und Ruhe",
-      "description": "Täglicher Digest und 24 Stunden Cooldown sind die ruhigen Defaults. Sofortmeldungen bleiben dedupliziert.",
+      "title": "Versandhäufigkeit",
+      "description": "Meldungen werden standardmäßig täglich zusammengefasst und nicht mehrfach gesendet.",
       "frequency": "Externe Zustellung",
       "daily": "Tägliche Zusammenfassung (empfohlen)",
       "immediate": "Sofort",
-      "digestHour": "Digest-Stunde · 0–23",
-      "timezone": "IANA-Zeitzone",
+      "digestHour": "Uhrzeit der Zusammenfassung · 0–23 Uhr",
+      "timezone": "Zeitzone",
       "language": "Benachrichtigungssprache",
-      "cooldown": "Cooldown · Stunden"
+      "cooldown": "Mindestabstand zwischen Meldungen · Stunden"
     },
     "thresholds": {
       "lowStock": "Niedrigbestand · % vom Minimum",
       "expiryWindow": "Ablauf-Fenster · Tage",
       "maintenanceWindow": "Wartungsfenster · Tage",
       "returnWindow": "Rückgabefenster · Tage",
-      "expiryField": "Custom-Field-Key für Ablaufdatum",
-      "maintenanceField": "Custom-Field-Key für Wartungsdatum"
+      "expiryField": "Feld für Ablaufdatum",
+      "maintenanceField": "Feld für Wartungsdatum"
     },
     "channels": {
       "title": "Zustellkanäle",
-      "description": "Externe Kanäle bleiben aus, bis Sie sie ausdrücklich aktivieren. Ziele werden serverseitig verwaltet und hier redigiert.",
+      "description": "Externe Kanäle werden erst verwendet, nachdem du sie aktiviert hast.",
       "optIn": "Opt-in",
       "alwaysOn": "Immer aktiv",
       "configured": "Konfiguriert",
@@ -155,7 +158,7 @@
       "disabled": "Inaktiv",
       "inApp": {
         "label": "In-App-Postfach",
-        "description": "Empfängt immer deduplizierte Ereignisse; kein externer Kanal nötig."
+        "description": "Zeigt Benachrichtigungen direkt in Open Inventory an."
       },
       "email": {
         "label": "E-Mail",
@@ -163,19 +166,19 @@
       },
       "push": {
         "label": "Web Push",
-        "description": "Abonniert diesen Browser über den verschlüsselten Push-API-Ablauf."
+        "description": "Sendet Benachrichtigungen an diesen Browser."
       },
       "slack": {
         "label": "Slack",
-        "description": "Deploymentweiter Incoming Webhook."
+        "description": "Sendet Benachrichtigungen an den eingerichteten Slack-Kanal."
       },
       "teams": {
         "label": "Microsoft Teams",
-        "description": "Deploymentweiter Workflow-Webhook."
+        "description": "Sendet Benachrichtigungen an den eingerichteten Teams-Kanal."
       },
       "webhook": {
         "label": "Generischer Webhook",
-        "description": "Deploymentweiter, signierter JSON-Endpunkt."
+        "description": "Sendet signierte Benachrichtigungen an den eingerichteten Endpunkt."
       }
     },
     "actions": {
@@ -189,7 +192,7 @@
       "saved": "Benachrichtigungseinstellungen gespeichert.",
       "pushEnabled": "Web Push für diesen Browser aktiviert.",
       "pushDisabled": "Web Push für diesen Browser deaktiviert.",
-      "previewOnly": "Vorschau serverseitig erzeugt. Es wurde keine Nachricht gesendet."
+      "previewOnly": "Die Vorschau wurde erstellt. Es wurde keine Nachricht gesendet."
     },
     "errors": {
       "load": "Benachrichtigungseinstellungen konnten nicht geladen werden.",
@@ -211,23 +214,23 @@
       "activeCount_other": "{{count}} aktiv",
       "loading": "Webhooks werden geladen",
       "emptyTitle": "Noch keine Webhooks",
-      "emptyDescription": "Erstellen Sie einen Endpunkt, um Inventaränderungen in Echtzeit an einen anderen Dienst zu senden."
+      "emptyDescription": "Erstelle einen Endpunkt, um Inventaränderungen in Echtzeit an einen anderen Dienst zu senden."
     },
     "form": {
       "createTitle": "Webhook erstellen",
-      "createDescription": "Wählen Sie ein Ziel und die Ereignisse, die diese Integration empfangen soll.",
+      "createDescription": "Wähle ein Ziel und die Ereignisse, die diese Integration empfangen soll.",
       "editTitle": "Webhook bearbeiten",
-      "editDescription": "Ändern Sie Name, Ereignisse, Status oder ersetzen Sie die Ziel-URL.",
+      "editDescription": "Ändere Name, Ereignisse oder Status oder ersetze die Ziel-URL.",
       "name": "Name der Integration",
       "namePlaceholder": "Lagerautomatisierung",
-      "nameHint": "Verwenden Sie einen Namen, an dem das empfangende System leicht zu erkennen ist.",
+      "nameHint": "Verwende einen Namen, an dem das empfangende System leicht zu erkennen ist.",
       "url": "Endpunkt-URL",
       "urlPlaceholder": "https://automation.example.com/hooks/inventory",
       "urlEditPlaceholder": "Leer lassen, um die aktuelle URL beizubehalten",
-      "urlHint": "Verwenden Sie eine HTTPS-URL, die von der empfangenden Integration kontrolliert wird.",
+      "urlHint": "Verwende eine HTTPS-URL, die von der empfangenden Integration kontrolliert wird.",
       "currentTarget": "Aktuelles Ziel: {{target}}. Leer lassen, um es beizubehalten.",
       "events": "Zugestellte Ereignisse",
-      "eventsHint": "Wählen Sie mindestens ein Ereignis. Die Auswahl kann später geändert werden.",
+      "eventsHint": "Wähle mindestens ein Ereignis. Die Auswahl kann später geändert werden.",
       "enabled": "Sofort aktivieren",
       "enabledHint": "Deaktivierte Endpunkte behalten ihre Konfiguration, erhalten aber keine neuen Zustellungen."
     },
@@ -270,7 +273,7 @@
     "secret": {
       "eyebrow": "Einmalige Anzeige",
       "title": "Signatur-Secret für {{name}}",
-      "description": "Kopieren Sie dieses Secret jetzt und speichern Sie es im Secret-Speicher des empfangenden Dienstes. Nach dem Ausblenden kann es nicht erneut angezeigt werden.",
+      "description": "Kopiere dieses Secret jetzt und speichere es im Secret-Speicher des empfangenden Dienstes. Nach dem Ausblenden kann es nicht erneut angezeigt werden.",
       "copy": "Secret kopieren",
       "copied": "Kopiert",
       "dismiss": "Signatur-Secret ausblenden"
@@ -310,7 +313,7 @@
     },
     "confirm": {
       "rotateTitle": "Signatur-Secret ersetzen?",
-      "rotateDescription": "Neue Zustellungen für {{name}} verwenden das neue Secret. Bereits eingeplante Zustellungen behalten ihr bisheriges Secret. Akzeptieren Sie während des Übergangs beide.",
+      "rotateDescription": "Neue Zustellungen für {{name}} verwenden das neue Secret. Bereits eingeplante Zustellungen behalten ihr bisheriges Secret. Akzeptiere während des Übergangs beide.",
       "deleteTitle": "Diesen Webhook löschen?",
       "deleteDescription": "{{name}} erhält keine Ereignisse mehr und verschwindet aus den Einstellungen. Zustelldaten bleiben bis zum Ablauf der konfigurierten Aufbewahrungsfrist verfügbar."
     },
@@ -319,7 +322,7 @@
       "description": "Neueste Versuche, Antwortcodes und geplante Wiederholungen für diesen Endpunkt.",
       "refresh": "Zustellungen aktualisieren",
       "emptyTitle": "Keine Zustellversuche",
-      "emptyDescription": "Senden Sie einen Test oder warten Sie auf ein ausgewähltes Inventarereignis.",
+      "emptyDescription": "Sende einen Test oder warte auf ein ausgewähltes Inventarereignis.",
       "unknownEvent": "Unbekanntes Ereignis",
       "httpStatus": "HTTP-Status",
       "attempts_one": "{{count}} Versuch",
@@ -345,10 +348,10 @@
     },
     "errors": {
       "load": "Webhooks konnten nicht geladen werden.",
-      "nameRequired": "Geben Sie diesem Webhook einen erkennbaren Namen.",
-      "urlRequired": "Geben Sie die URL des empfangenden Endpunkts ein.",
-      "urlInvalid": "Geben Sie eine gültige HTTPS-Endpunkt-URL ein.",
-      "eventsRequired": "Wählen Sie mindestens ein zuzustellendes Ereignis.",
+      "nameRequired": "Gib diesem Webhook einen erkennbaren Namen.",
+      "urlRequired": "Gib die URL des empfangenden Endpunkts ein.",
+      "urlInvalid": "Gib eine gültige HTTPS-Endpunkt-URL ein.",
+      "eventsRequired": "Wähle mindestens ein zuzustellendes Ereignis.",
       "create": "Der Webhook konnte nicht erstellt werden.",
       "update": "Der Webhook konnte nicht aktualisiert werden.",
       "toggle": "Der Status des Webhooks konnte nicht geändert werden.",
@@ -357,15 +360,15 @@
       "rotate": "Das Signatur-Secret konnte nicht rotiert werden.",
       "delete": "Der Webhook konnte nicht gelöscht werden.",
       "deliveries": "Der Zustellverlauf konnte nicht geladen werden.",
-      "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Markieren und kopieren Sie das Secret manuell."
+      "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Markiere und kopiere das Secret manuell."
     },
-    "securityNote": "Signatur-Secrets werden nur nach dem Erstellen oder Rotieren angezeigt. Prüfen Sie jede eingehende Signatur, bevor Sie deren Nutzlast verarbeiten, und verwenden Sie Ereignis-IDs zur Idempotenz."
+    "securityNote": "Signatur-Secrets werden nur nach dem Erstellen oder Rotieren angezeigt. Prüfe jede eingehende Signatur, bevor du ihre Nutzlast verarbeitest, und verwende Ereignis-IDs zur Idempotenz."
   },
   "sharing": {
     "create": {
       "title": "Öffentlichen Link erstellen",
-      "description": "Legen Sie genau fest, was der Link zeigt. Jeder mit der URL kann die Inhalte ohne Anmeldung ansehen.",
-      "warning": "Öffentliche Links umgehen die Anmeldung am Arbeitsbereich. Vermeiden Sie private Felder und widerrufen Sie nicht mehr benötigte Links.",
+      "description": "Lege genau fest, was der Link zeigt. Jeder mit der URL kann die Inhalte ohne Anmeldung ansehen.",
+      "warning": "Öffentliche Links umgehen die Anmeldung am Arbeitsbereich. Vermeide private Felder und widerrufe nicht mehr benötigte Links.",
       "scope": "Was soll freigegeben werden?",
       "scopes": {
         "inventory": "Inventar",
@@ -387,14 +390,14 @@
     },
     "list": {
       "title": "Aktive öffentliche Links",
-      "description": "Kopieren, prüfen oder widerrufen Sie Links, die derzeit ohne Anmeldung funktionieren.",
+      "description": "Kopiere, prüfe oder widerrufe Links, die derzeit ohne Anmeldung funktionieren.",
       "activeCount_one": "{{count}} aktiv",
       "activeCount_other": "{{count}} aktiv",
       "dismissNotice": "Hinweis schließen",
       "loading": "Öffentliche Links werden geladen",
       "loadTitle": "Öffentliche Links konnten nicht geladen werden",
       "emptyTitle": "Keine aktiven öffentlichen Links",
-      "emptyDescription": "Erstellen Sie oben einen Link, sobald Sie Inventar veröffentlichen möchten.",
+      "emptyDescription": "Erstelle oben einen Link, wenn du Inventar veröffentlichen möchtest.",
       "filterDescription": "{{field}} entspricht {{value}}",
       "scopes": {
         "inventory": "Inventar",
@@ -416,11 +419,11 @@
     "errors": {
       "load": "Die Einstellungen für öffentliche Freigaben konnten nicht geladen werden.",
       "loadItems": "Inventareinträge konnten nicht geladen werden.",
-      "nameRequired": "Geben Sie dem Link einen Namen, damit er später leicht zu erkennen ist.",
-      "itemRequired": "Wählen Sie den Inventareintrag aus, den dieser Link freigeben soll.",
-      "filterValueRequired": "Wählen Sie einen Wert für den Filter des benutzerdefinierten Feldes.",
+      "nameRequired": "Gib dem Link einen Namen, damit er später leicht zu erkennen ist.",
+      "itemRequired": "Wähle den Eintrag aus, den dieser Link freigeben soll.",
+      "filterValueRequired": "Wähle einen Wert für den Filter des benutzerdefinierten Feldes.",
       "create": "Der öffentliche Link konnte nicht erstellt werden.",
-      "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Öffnen Sie den Link und kopieren Sie ihn stattdessen aus dem Browser.",
+      "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Öffne den Link und kopiere ihn stattdessen aus dem Browser.",
       "revoke": "Der öffentliche Link konnte nicht widerrufen werden."
     }
   },
@@ -434,7 +437,7 @@
       "fileStorage": "Dateispeicher",
       "provider": "Anbieter: {{provider}}",
       "aiAnalysis": "KI-Analyse",
-      "aiAnalysisDescription": "Metadaten und Stapelanreicherung",
+      "aiAnalysisDescription": "Metadaten und Fotoerfassung",
       "imageGeneration": "Bilderzeugung",
       "imageModelDescription": "Wird für Cover verwendet, die in diesem Browser erstellt werden.",
       "authentication": "Authentifizierung",
@@ -451,14 +454,14 @@
       "creating": "Wird erstellt…",
       "close": "Schließen",
       "saveNow": "Token jetzt speichern",
-      "saveNowDescription": "Dieses Geheimnis wird nur einmal angezeigt und kann nicht wiederhergestellt werden. Speichern Sie es vor dem Schließen in einem Passwortmanager oder Secret-Vault.",
+      "saveNowDescription": "Dieses Geheimnis wird nur einmal angezeigt und kann nicht wiederhergestellt werden. Speichere es vor dem Schließen in einem Passwortmanager oder Secret-Vault.",
       "dismissGenerated": "Erstelltes Token schließen",
       "copy": "Kopieren",
       "copied": "Kopiert",
       "quickTest": "Schnelltest",
       "copyCurl": "curl kopieren",
       "name": "Tokenname",
-      "nameDescription": "Verwenden Sie einen Namen, der die Integration eindeutig bezeichnet.",
+      "nameDescription": "Verwende einen Namen, der die Integration eindeutig bezeichnet.",
       "namePlaceholder": "Lagerabgleich",
       "expiration": "Ablauf",
       "expirationDescription": "Kürzer gültige Zugangsdaten verringern das Risiko.",
@@ -478,7 +481,7 @@
       "cancel": "Abbrechen",
       "dismissError": "Fehler schließen",
       "emptyTitle": "Keine aktiven API-Token",
-      "emptyDescription": "Erstellen Sie ein bereichsbezogenes Token, sobald Sie ein Skript oder einen anderen Dienst verbinden möchten.",
+      "emptyDescription": "Erstelle ein bereichsbezogenes Token, wenn du ein Skript oder einen anderen Dienst verbinden möchtest.",
       "created": "Erstellt: {{date}}",
       "expires": "Läuft ab: {{date}}",
       "lastUsed": "Zuletzt verwendet: {{date}}",
@@ -491,17 +494,17 @@
       "loadRuntime": "Die Laufzeitkonfiguration konnte nicht geladen werden.",
       "loadTokens": "Die API-Token konnten nicht geladen werden.",
       "loadSettings": "Die Einstellungen konnten nicht geladen werden.",
-      "nameRequired": "Geben Sie diesem Token einen Namen, damit es später leicht zu erkennen ist.",
-      "expiryInvalid": "Wählen Sie ein gültiges Ablaufdatum mit Uhrzeit.",
+      "nameRequired": "Gib diesem Token einen Namen, damit es später leicht zu erkennen ist.",
+      "expiryInvalid": "Wähle ein gültiges Ablaufdatum mit Uhrzeit.",
       "expiryFuture": "Der Ablaufzeitpunkt muss in der Zukunft liegen.",
       "create": "Das Token konnte nicht erstellt werden.",
-      "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Markieren und kopieren Sie den Text manuell.",
+      "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Markiere und kopiere den Text manuell.",
       "revoke": "Das Token konnte nicht widerrufen werden."
     }
   },
   "inventoryTypes": {
     "title": "Inventartypen",
-    "description": "Konfigurieren Sie Räume, Möbel, Geräte, Behälter oder jeden anderen Typ, den Ihr Arbeitsbereich benötigt.",
+    "description": "Konfiguriere Räume, Möbel, Geräte, Behälter oder jeden anderen Typ, den dein Arbeitsbereich benötigt.",
     "refresh": "Inventartypen aktualisieren",
     "add": "Typ hinzufügen",
     "close": "Schließen",
@@ -565,7 +568,7 @@
     "archiveConfirm": "„{{name}}“ archivieren? Gespeicherte Übersetzungen bleiben erhalten.",
     "starting": "Wird gestartet…",
     "queueing": "Wird eingereiht…",
-    "jobsQueued": "{{jobs}} Übersetzungsaufträge für {{resources}} Einträge wurden eingereiht. Sie werden im Hintergrund fortgesetzt.",
+    "jobsQueued": "{{jobs}} Übersetzungsaufträge für {{resources}} Einträge wurden eingereiht und werden im Hintergrund fortgesetzt.",
     "noJobs": "Es sind keine Zielsprachen für die Übersetzung eingerichtet.",
     "progress": "{{scannedItems}} Einträge geprüft · {{translatedItems}} übersetzt · {{savedFields}} Felder aktualisiert",
     "passComplete": "Übersetzungslauf abgeschlossen: {{scannedItems}} Einträge geprüft und {{savedFields}} Felder aktualisiert.",
@@ -609,13 +612,13 @@
       "editor": "Inventar, Bestand, Uploads und KI",
       "viewer": "Schreibgeschützter Zugriff auf das gemeinsame Inventar"
     },
-    "passwordDelivery": "Senden Sie das Passwort über einen sicheren Kanal. Es gibt keine öffentliche Registrierung.",
+    "passwordDelivery": "Sende das Passwort über einen sicheren Kanal. Es gibt keine öffentliche Registrierung.",
     "creating": "Wird erstellt…",
     "createAccount": "Konto erstellen",
     "dismissError": "Fehler schließen",
     "loadTitle": "Benutzer konnten nicht geladen werden",
     "retry": "Erneut versuchen",
-    "you": "Sie",
+    "you": "Du",
     "active": "Aktiv",
     "disabled": "Deaktiviert",
     "never": "Nie",
@@ -624,8 +627,8 @@
     "resetPassword": "Passwort zurücksetzen",
     "disable": "Deaktivieren",
     "enable": "Aktivieren",
-    "auth0Note": "Auth0-Identitäten werden in Auth0 verwaltet. Ihre Arbeitsbereichsrolle stammt aus dem konfigurierten Rollen-Claim oder der Auth0-Standardrolle der Bereitstellung.",
-    "resetDescription": "Legen Sie ein neues Passwort für {{name}} fest. Bestehende Sitzungen werden abgemeldet.",
+    "auth0Note": "Auth0-Identitäten werden in Auth0 verwaltet. Deine Arbeitsbereichsrolle stammt aus dem konfigurierten Rollen-Claim oder der Auth0-Standardrolle der Bereitstellung.",
+    "resetDescription": "Lege ein neues Passwort für {{name}} fest. Bestehende Sitzungen werden abgemeldet.",
     "newPassword": "Neues Passwort",
     "cancel": "Abbrechen",
     "savePassword": "Passwort speichern",
@@ -644,10 +647,10 @@
     "saving": "Wird gespeichert…",
     "overview": {
       "title": "Zugriffssteuerung",
-      "description": "Rollen gewähren arbeitsbereichsweite Berechtigungen. Inventarregeln ergänzen eng begrenzte Aktionen, wenn ein Artikel alle Bedingungen erfüllt.",
+      "description": "Rollen gewähren arbeitsbereichsweite Berechtigungen. Inventarregeln ergänzen eng begrenzte Aktionen, wenn ein Eintrag alle Bedingungen erfüllt.",
       "roles": "Konfigurierte Rollen",
       "members": "Aktive Mitglieder",
-      "activeRules": "Aktive Artikelregeln"
+      "activeRules": "Aktive Eintragsregeln"
     },
     "tabs": {
       "label": "Bereiche der Zugriffssteuerung",
@@ -656,7 +659,7 @@
     },
     "roles": {
       "title": "Arbeitsbereichsrollen",
-      "description": "Fassen Sie einzelne Berechtigungen zu wiederverwendbaren Rollen zusammen, die Mitgliedern des Arbeitsbereichs zugewiesen werden können.",
+      "description": "Fasse einzelne Berechtigungen zu wiederverwendbaren Rollen zusammen, die Mitgliedern des Arbeitsbereichs zugewiesen werden können.",
       "add": "Rolle hinzufügen",
       "newEyebrow": "Neue Rolle",
       "editEyebrow": "Rolle bearbeiten",
@@ -668,7 +671,7 @@
       "descriptionLabel": "Beschreibung",
       "descriptionPlaceholder": "Wofür sollen Personen mit dieser Rolle verantwortlich sein?",
       "permissionTitle": "Arbeitsbereichsberechtigungen",
-      "permissionDescription": "Jede Berechtigung ist unabhängig. Wählen Sie nur den Zugriff aus, den diese Rolle überall im Arbeitsbereich benötigt.",
+      "permissionDescription": "Jede Berechtigung ist unabhängig. Wähle nur den Zugriff aus, den diese Rolle überall im Arbeitsbereich benötigt.",
       "selectedPermissions_one": "{{count}} Berechtigung ausgewählt",
       "selectedPermissions_other": "{{count}} Berechtigungen ausgewählt",
       "permissions": "Berechtigungen",
@@ -681,22 +684,22 @@
       "create": "Rolle erstellen",
       "save": "Rolle speichern",
       "delete": "Rolle löschen",
-      "deleteConfirm": "Die Rolle „{{name}}“ löschen? Ihre bedingten Inventarregeln werden ebenfalls gelöscht.",
+      "deleteConfirm": "Die Rolle „{{name}}“ löschen? Die zugehörigen bedingten Inventarregeln werden ebenfalls gelöscht.",
       "systemDeleteHint": "Integrierte Rollen können nicht gelöscht werden.",
-      "memberDeleteHint": "Weisen Sie jedes Mitglied einer anderen Rolle zu, bevor Sie diese Rolle löschen.",
+      "memberDeleteHint": "Weise jedes Mitglied einer anderen Rolle zu, bevor du diese Rolle löschst.",
       "sessionWarning_one": "Durch das Speichern der Berechtigungsänderungen wird das {{count}} aktive Mitglied mit dieser Rolle abgemeldet.",
       "sessionWarning_other": "Durch das Speichern der Berechtigungsänderungen werden die {{count}} aktiven Mitglieder mit dieser Rolle abgemeldet.",
       "emptyTitle": "Keine Rollen konfiguriert",
-      "emptyDescription": "Erstellen Sie eine Rolle, um Mitgliedern des Arbeitsbereichs einen präzisen Satz von Berechtigungen zu geben."
+      "emptyDescription": "Erstelle eine Rolle, um Mitgliedern des Arbeitsbereichs einen passenden Satz von Berechtigungen zu geben."
     },
     "rules": {
       "title": "Bedingte Inventarregeln",
-      "description": "Gewähren Sie einer Rolle zusätzliche Aktionen für Inventarartikel, die alle Bedingungen einer Regel erfüllen.",
+      "description": "Gewähre einer Rolle zusätzliche Aktionen für Einträge, die alle Bedingungen einer Regel erfüllen.",
       "add": "Regel hinzufügen",
       "newEyebrow": "Neue Inventarregel",
       "editEyebrow": "Inventarregel bearbeiten",
       "newTitle": "Bedingte Regel erstellen",
-      "editorDescription": "Regeln gewähren nur zusätzlichen Zugriff. Sie entziehen niemals Berechtigungen, die bereits durch die Rolle bereitgestellt werden.",
+      "editorDescription": "Regeln gewähren nur zusätzlichen Zugriff und entziehen keine Berechtigungen, die bereits durch die Rolle bereitgestellt werden.",
       "name": "Regelname",
       "namePlaceholder": "Werkstattwerkzeuge können aktualisiert werden",
       "role": "Rolle, die Zugriff erhält",
@@ -704,11 +707,11 @@
       "priority": "Priorität",
       "priorityValue": "Priorität {{value}}",
       "descriptionLabel": "Beschreibung",
-      "descriptionPlaceholder": "Erklären Sie, warum diese Ausnahme besteht.",
+      "descriptionPlaceholder": "Erkläre, warum diese Ausnahme besteht.",
       "actionsTitle": "Zu gewährende Aktionen",
-      "actionsDescription": "Diese Aktionen sind nur für Inventarartikel verfügbar, die alle folgenden Bedingungen erfüllen.",
-      "conditionsTitle": "Artikelbedingungen",
-      "conditionsDescription": "Alle Bedingungen werden mit UND verknüpft. Verwenden Sie eine stabile Artikel-ID für einen bestimmten Artikel oder Felder wie Tags, Kategorien, Typ und benutzerdefinierte Felder für eine Gruppe.",
+      "actionsDescription": "Diese Aktionen sind nur für Einträge verfügbar, die alle folgenden Bedingungen erfüllen.",
+      "conditionsTitle": "Eintragsbedingungen",
+      "conditionsDescription": "Alle Bedingungen werden mit UND verknüpft. Verwende eine stabile Eintrags-ID für einen bestimmten Eintrag oder Felder wie Tags, Kategorien, Typ und benutzerdefinierte Felder für eine Gruppe.",
       "addCondition": "Bedingung hinzufügen",
       "removeCondition": "Bedingung {{number}} entfernen",
       "field": "Feld",
@@ -730,7 +733,7 @@
       "if": "WENN",
       "and": "UND",
       "when": "Wenn",
-      "customFieldHint": "Geben Sie für ein benutzerdefiniertes Feld customFields. gefolgt von seinem stabilen Schlüssel ein, zum Beispiel customFields.department.",
+      "customFieldHint": "Gib für ein benutzerdefiniertes Feld customFields. gefolgt von seinem stabilen Schlüssel ein, zum Beispiel customFields.department.",
       "enableOnSave": "Diese Regel sofort aktivieren",
       "enabled": "Aktiviert",
       "disabled": "Deaktiviert",
@@ -742,12 +745,12 @@
       "delete": "Regel löschen",
       "deleteConfirm": "Die Inventarregel „{{name}}“ löschen?",
       "emptyTitle": "Keine bedingten Regeln",
-      "emptyDescription": "Fügen Sie eine Regel hinzu, wenn eine Rolle zusätzliche Aktionen nur für einen bestimmten Artikel oder eine passende Gruppe erhalten soll."
+      "emptyDescription": "Füge eine Regel hinzu, wenn eine Rolle zusätzliche Aktionen nur für einen bestimmten Eintrag oder eine passende Gruppe erhalten soll."
     },
     "permissionGroups": {
       "inventory": {
         "label": "Inventar",
-        "description": "Zentrale Artikeldatensätze und Massendatenübertragung."
+        "description": "Zentrale Eintragsdaten und Massendatenübertragung."
       },
       "operations": {
         "label": "Abläufe",
@@ -760,24 +763,24 @@
     },
     "permissions": {
       "inventory_read": {
-        "label": "Artikel anzeigen",
-        "description": "Inventarartikel durchsuchen, suchen und öffnen."
+        "label": "Einträge anzeigen",
+        "description": "Einträge durchsuchen, suchen und öffnen."
       },
       "inventory_create": {
-        "label": "Artikel erstellen",
-        "description": "Neue Inventarartikel hinzufügen."
+        "label": "Einträge erstellen",
+        "description": "Neue Einträge hinzufügen."
       },
       "inventory_update": {
-        "label": "Artikel aktualisieren",
-        "description": "Artikelfelder, Medien, Beziehungen und Stücklisten bearbeiten."
+        "label": "Einträge aktualisieren",
+        "description": "Eintragsfelder, Medien, Beziehungen und Stücklisten bearbeiten."
       },
       "inventory_delete": {
-        "label": "Artikel löschen",
-        "description": "Inventarartikel dauerhaft löschen oder zusammenführen."
+        "label": "Einträge löschen",
+        "description": "Einträge dauerhaft löschen oder zusammenführen."
       },
       "inventory_import": {
         "label": "Daten importieren",
-        "description": "Artikel aus CSV-Dateien erstellen und aktualisieren."
+        "description": "Einträge aus CSV-Dateien erstellen und aktualisieren."
       },
       "inventory_export": {
         "label": "Daten exportieren",
@@ -785,11 +788,11 @@
       },
       "stock_read": {
         "label": "Bestand anzeigen",
-        "description": "Bestände, Bewegungen, Einheiten und Lagerorte anzeigen."
+        "description": "Bestände, Bewegungen, Einheiten und Standorte anzeigen."
       },
       "stock_manage": {
         "label": "Bestand verwalten",
-        "description": "Bestände, Einheiten, Lagerorte und Fertigungen ändern."
+        "description": "Bestände, Einheiten, Standorte und Fertigungen ändern."
       },
       "assignments_read": {
         "label": "Zuweisungen anzeigen",
@@ -813,7 +816,7 @@
       },
       "spatial_manage": {
         "label": "Räume verwalten",
-        "description": "Scans, Strukturen und Artikelplatzierungen erstellen."
+        "description": "Scans, Strukturen und Eintragsplatzierungen erstellen."
       },
       "orders_read": {
         "label": "Bestellungen anzeigen",
@@ -913,15 +916,15 @@
     },
     "errors": {
       "load": "Zugriffseinstellungen konnten nicht geladen werden.",
-      "roleRequired": "Geben Sie einen Rollennamen und einen stabilen Schlüssel ein.",
+      "roleRequired": "Gib einen Rollennamen und einen stabilen Schlüssel ein.",
       "createRole": "Die Rolle konnte nicht erstellt werden.",
       "updateRole": "Die Rolle konnte nicht aktualisiert werden.",
       "deleteRole": "Die Rolle konnte nicht gelöscht werden.",
-      "ruleRequired": "Geben Sie einen Regelnamen ein und wählen Sie eine Rolle aus.",
-      "rulePermission": "Wählen Sie mindestens eine Aktion für diese Regel aus.",
-      "ruleCondition": "Fügen Sie mindestens eine Artikelbedingung hinzu.",
-      "conditionIncomplete": "Vervollständigen Sie jede Bedingung, bevor Sie die Regel speichern.",
-      "priorityValue": "Der Vergleichswert für die Artikelpriorität muss eine Zahl sein.",
+      "ruleRequired": "Gib einen Regelnamen ein und wähle eine Rolle aus.",
+      "rulePermission": "Wähle mindestens eine Aktion für diese Regel aus.",
+      "ruleCondition": "Füge mindestens eine Eintragsbedingung hinzu.",
+      "conditionIncomplete": "Vervollständige jede Bedingung, bevor du die Regel speicherst.",
+      "priorityValue": "Der Vergleichswert für die Eintragspriorität muss eine Zahl sein.",
       "createRule": "Die Inventarregel konnte nicht erstellt werden.",
       "updateRule": "Die Inventarregel konnte nicht aktualisiert werden.",
       "deleteRule": "Die Inventarregel konnte nicht gelöscht werden."
@@ -929,7 +932,7 @@
   },
   "customFields": {
     "title": "Benutzerdefinierte Felder",
-    "description": "Konfigurieren Sie typisierte Informationen nach Inventartyp oder Kategorie.",
+    "description": "Konfiguriere typisierte Informationen nach Inventartyp oder Kategorie.",
     "refresh": "Benutzerdefinierte Felder aktualisieren",
     "newField": "Neues Feld",
     "dismissError": "Fehler ausblenden",
@@ -938,7 +941,7 @@
     "fieldCount_one": "{{count}} Feld",
     "fieldCount_other": "{{count}} Felder",
     "emptyTitle": "Noch keine benutzerdefinierten Felder",
-    "emptyDescription": "Erstellen Sie das erste Feld für {{target}}.",
+    "emptyDescription": "Erstelle das erste Feld für {{target}}.",
     "addField": "Feld hinzufügen",
     "editTitle": "{{label}} bearbeiten",
     "createTitle": "Benutzerdefiniertes Feld erstellen",
@@ -979,7 +982,7 @@
     "categories": "Kategorien",
     "categoriesPlaceholder": "Werkstatt, Produktion",
     "editKeyHint": "Der API-Schlüssel bleibt beim Bearbeiten unverändert.",
-    "createKeyHint": "Lassen Sie den Schlüssel leer, um ihn aus der Beschriftung zu erzeugen.",
+    "createKeyHint": "Lass den Schlüssel leer, um ihn aus der Beschriftung zu erzeugen.",
     "saveField": "Feld speichern",
     "createField": "Feld erstellen",
     "deleteConfirm": "„{{label}}“ löschen? Bereits gespeicherte Werte für diesen Schlüssel sind dann möglicherweise nicht mehr sichtbar.",
@@ -1030,10 +1033,10 @@
     },
     "applies": {
       "title": "Gilt für",
-      "description": "Lassen Sie beide Filter leer, um dieses Feld überall anzuzeigen. Wenn beide gesetzt sind, müssen Datensätze beiden entsprechen."
+      "description": "Lass beide Filter leer, um dieses Feld überall anzuzeigen. Wenn beide gesetzt sind, müssen Datensätze beiden entsprechen."
     },
     "validation": {
-      "labelRequired": "Geben Sie diesem Feld eine sichtbare Beschriftung.",
+      "labelRequired": "Gib diesem Feld eine sichtbare Beschriftung.",
       "keyFormat": "Der Schlüssel muss mit einem Kleinbuchstaben beginnen und darf nur Kleinbuchstaben, Zahlen und Unterstriche enthalten.",
       "position": "Die Position muss eine ganze Zahl ab null sein.",
       "inventoryTypeKeys": "Inventartyp-Schlüssel müssen mit einem Kleinbuchstaben beginnen und dürfen nur Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche enthalten.",
@@ -1041,7 +1044,7 @@
       "maximum": "Das Maximum muss eine gültige Zahl sein.",
       "step": "Die Schrittweite muss größer als null sein.",
       "minimumMaximum": "Das Minimum darf das Maximum nicht überschreiten.",
-      "optionRequired": "Fügen Sie mindestens eine Auswahloption hinzu.",
+      "optionRequired": "Füge mindestens eine Auswahloption hinzu.",
       "optionValues": "Jede Auswahloption benötigt eine Beschriftung und einen gespeicherten Wert.",
       "optionUnique": "Die Werte der Auswahloptionen müssen eindeutig sein.",
       "referenceTypeKeys": "Referenz-Inventartyp-Schlüssel müssen mit einem Kleinbuchstaben beginnen und dürfen nur Kleinbuchstaben, Zahlen, Unterstriche und Bindestriche enthalten."
@@ -1075,8 +1078,8 @@
   },
   "csv": {
     "title": "Inventarimport und -export",
-    "description": "Exportieren Sie das Inventar als CSV, Excel oder PDF oder prüfen Sie bis zu 1.000 neue Einträge vor dem CSV-Import.",
-    "exportOnlyDescription": "Exportieren Sie das aktuelle Inventar als CSV, Excel oder PDF.",
+    "description": "Exportiere das Inventar als CSV, Excel oder PDF oder prüfe bis zu 1.000 neue Einträge vor dem CSV-Import.",
+    "exportOnlyDescription": "Exportiere das aktuelle Inventar als CSV, Excel oder PDF.",
     "export": "Exportieren",
     "exporting": "{{format}} wird vorbereitet…",
     "exportFormats": "Exportformate",
@@ -1086,7 +1089,7 @@
       "pdf": { "label": "PDF-Bericht", "description": "Kompakte, druckbare Inventarübersicht mit Seitenzahlen." }
     },
     "chooseFile": "UTF-8-CSV-Datei auswählen",
-    "fileHint": "Verwenden Sie die exportierten Spaltenüberschriften; ID und Zeitstempel werden beim Import ignoriert.",
+    "fileHint": "Verwende die exportierten Spaltenüberschriften; ID und Zeitstempel werden beim Import ignoriert.",
     "reset": "Zurücksetzen",
     "replace": "Ersetzen",
     "choose": "Datei auswählen",

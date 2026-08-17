@@ -149,6 +149,83 @@ final class IntakeQueueRecoveryTests: XCTestCase {
         XCTAssertNil(decoded.imageModelID)
     }
 
+    func testAIGeneratedImageSizeSurvivesManifestRoundTrip() throws {
+        let job = makeJob(
+            expectedFileCount: 0,
+            maximumAIGeneratedImagePixelSize: 4_096
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(IntakeJob.self, from: encoder.encode(job))
+
+        XCTAssertEqual(decoded.maximumAIGeneratedImagePixelSize, 4_096)
+    }
+
+    func testLegacyManifestWithoutAIGeneratedImageSizeUsesServerDefault() throws {
+        let job = makeJob(
+            expectedFileCount: 0,
+            maximumAIGeneratedImagePixelSize: 2_048
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let encoded = try encoder.encode(job)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "maximumAIGeneratedImagePixelSize")
+        let data = try JSONSerialization.data(withJSONObject: object)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(IntakeJob.self, from: data)
+
+        XCTAssertNil(decoded.maximumAIGeneratedImagePixelSize)
+    }
+
+    func testAIPromptsSurviveManifestRoundTrip() throws {
+        let job = makeJob(
+            expectedFileCount: 0,
+            analysisPrompt: "Analyze the item",
+            coverPrompt: "Create a clean cover"
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(IntakeJob.self, from: encoder.encode(job))
+
+        XCTAssertEqual(decoded.analysisPrompt, "Analyze the item")
+        XCTAssertEqual(decoded.coverPrompt, "Create a clean cover")
+    }
+
+    func testLegacyManifestWithoutAIPromptsUsesServerDefaults() throws {
+        let job = makeJob(
+            expectedFileCount: 0,
+            analysisPrompt: "Analyze the item",
+            coverPrompt: "Create a clean cover"
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let encoded = try encoder.encode(job)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "analysisPrompt")
+        object.removeValue(forKey: "coverPrompt")
+        let data = try JSONSerialization.data(withJSONObject: object)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(IntakeJob.self, from: data)
+
+        XCTAssertNil(decoded.analysisPrompt)
+        XCTAssertNil(decoded.coverPrompt)
+    }
+
     func testPreparingJobRecoversOnlyWhenEveryPhotoExists() throws {
         let root = temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -212,6 +289,9 @@ final class IntakeQueueRecoveryTests: XCTestCase {
         expectedFileCount: Int,
         mediaUploaded: Bool = false,
         imageModelID: String? = nil,
+        maximumAIGeneratedImagePixelSize: Int? = nil,
+        analysisPrompt: String? = nil,
+        coverPrompt: String? = nil,
         organizationID: UUID? = UUID(
             uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
         ),
@@ -239,6 +319,9 @@ final class IntakeQueueRecoveryTests: XCTestCase {
             coverCompleted: true,
             analysisOperationID: nil,
             coverOperationID: nil,
+            maximumAIGeneratedImagePixelSize: maximumAIGeneratedImagePixelSize,
+            analysisPrompt: analysisPrompt,
+            coverPrompt: coverPrompt,
             attemptCount: 0,
             nextAttemptAt: nil,
             message: nil

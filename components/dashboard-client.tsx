@@ -6,19 +6,14 @@ import { useT } from "next-i18next/client";
 import {
   AlertTriangle,
   ArrowRight,
-  Boxes,
   BoxIcon,
-  CircleCheck,
-  CircleDollarSign,
   Layers3,
   MapPin,
   PackagePlus,
   RefreshCw,
-  Sparkles,
-  UploadCloud,
 } from "lucide-react";
 
-import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Skeleton } from "@/components/ui";
 
 type DashboardStats = {
   resources: number;
@@ -56,18 +51,15 @@ const humanize = (value: string) =>
 function DashboardLoading() {
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Card className="grid overflow-hidden sm:grid-cols-2 xl:grid-cols-4 [&>div:not(:last-child)]:border-b [&>div]:border-border sm:[&>div:nth-child(odd)]:border-r sm:[&>div:nth-child(n+3)]:border-b-0 xl:[&>div]:border-b-0 xl:[&>div:not(:last-child)]:border-r">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Card key={index} className="p-5">
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="size-8 rounded-xl" />
-            </div>
-            <Skeleton className="mt-7 h-8 w-20" />
+          <div key={index} className="p-5">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="mt-5 h-8 w-20" />
             <Skeleton className="mt-3 h-3 w-32" />
-          </Card>
+          </div>
         ))}
-      </div>
+      </Card>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(290px,0.8fr)]">
         <Card className="p-5">
           <Skeleton className="h-5 w-36" />
@@ -211,37 +203,10 @@ export function DashboardClient() {
 
   return (
     <div className="mx-auto max-w-[1540px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-9">
-      <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div className="animate-fade-up">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-success ring-4 ring-success-border" />
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
-              {t("eyebrow")}
-            </p>
-          </div>
-          <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-foreground sm:text-[32px]">
-            {greeting}
-          </h1>
-          <p className="mt-1.5 text-sm text-muted">
-            {t("subtitle")}
-          </p>
-        </div>
-        <div className="flex animate-fade-up gap-2 animation-delay-1">
-          <Link
-            href="/batch"
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-[13px] font-semibold text-foreground shadow-sm transition hover:border-border-strong hover:bg-surface-hover"
-          >
-            <UploadCloud className="size-4 text-muted" aria-hidden="true" />
-            {t("actions.batchUpload")}
-          </Link>
-          <Link
-            href="/inventory/new"
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-solid px-3.5 text-[13px] font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover"
-          >
-            <PackagePlus className="size-4" aria-hidden="true" />
-            {t("actions.addItem")}
-          </Link>
-        </div>
+      <div className="mb-7">
+        <h1 className="text-[28px] font-semibold tracking-[-0.025em] text-foreground sm:text-[32px]">
+          {greeting}
+        </h1>
       </div>
 
       {loading ? <DashboardLoading /> : null}
@@ -263,8 +228,8 @@ export function DashboardClient() {
       ) : null}
 
       {!loading && !error && stats ? (
-        <div className="space-y-5 animate-fade-up animation-delay-1">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="space-y-5">
+          <Card className="grid overflow-hidden sm:grid-cols-2 xl:grid-cols-4 [&>div:not(:last-child)]:border-b [&>div]:border-border sm:[&>div:nth-child(odd)]:border-r sm:[&>div:nth-child(n+3)]:border-b-0 xl:[&>div]:border-b-0 xl:[&>div:not(:last-child)]:border-r">
             {[
               {
                 id: "items",
@@ -274,16 +239,12 @@ export function DashboardClient() {
                   count: stats.units,
                   value: compactNumber.format(stats.units),
                 }),
-                icon: Boxes,
-                iconClass: "bg-brand-soft text-brand",
               },
               {
                 id: "value",
                 label: t("metrics.value.label"),
                 value: money.format(stats.valueCents / 100),
                 detail: t("metrics.value.detail"),
-                icon: CircleDollarSign,
-                iconClass: "bg-success-soft text-success",
               },
               {
                 id: "available",
@@ -294,8 +255,6 @@ export function DashboardClient() {
                       value: percent.format(availability / 100),
                     })
                   : t("metrics.available.empty"),
-                icon: CircleCheck,
-                iconClass: "bg-info-soft text-info",
               },
               {
                 id: "attention",
@@ -305,32 +264,19 @@ export function DashboardClient() {
                   count: stats.attention,
                   value: integer.format(stats.attention),
                 }),
-                icon: AlertTriangle,
-                iconClass: "bg-warning-soft text-warning",
               },
-            ].map((metric) => {
-              const Icon = metric.icon;
-              return (
-                <Card
-                  key={metric.id}
-                  className="group p-5 transition duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-md)]"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-[12px] font-medium text-muted">
-                      {metric.label}
-                    </p>
-                    <span className={cn("grid size-8 place-items-center rounded-xl", metric.iconClass)}>
-                      <Icon className="size-4" strokeWidth={2} aria-hidden="true" />
-                    </span>
-                  </div>
-                  <p className="mt-5 truncate text-[27px] font-semibold tracking-[-0.04em] text-foreground">
-                    {metric.value}
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted">{metric.detail}</p>
-                </Card>
-              );
-            })}
-          </div>
+            ].map((metric) => (
+              <div key={metric.id} className="p-5">
+                <p className="text-[12px] font-medium text-muted">
+                  {metric.label}
+                </p>
+                <p className="mt-3 truncate text-[27px] font-semibold tracking-[-0.03em] text-foreground">
+                  {metric.value}
+                </p>
+                <p className="mt-1 text-[11px] text-muted">{metric.detail}</p>
+              </div>
+            ))}
+          </Card>
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.75fr)]">
             <Card className="overflow-hidden">
@@ -407,24 +353,15 @@ export function DashboardClient() {
                 </div>
               ) : (
                 <EmptyState
-                  className="min-h-[330px]"
+                  className="min-h-64"
                   icon={<PackagePlus className="size-5" aria-hidden="true" />}
                   title={t("recent.empty.title")}
                   description={t("recent.empty.description")}
-                  action={
-                    <Link
-                      href="/inventory/new"
-                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand-solid px-3.5 text-[12px] font-semibold text-on-brand shadow-sm hover:bg-brand-hover"
-                    >
-                      <PlusIcon />
-                      {t("actions.addFirstItem")}
-                    </Link>
-                  }
                 />
               )}
             </Card>
 
-            <div className="space-y-5">
+            <div>
               <Card className="p-5 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -469,34 +406,10 @@ export function DashboardClient() {
                   </p>
                 )}
               </Card>
-
-              <Card className="relative overflow-hidden border-brand-border bg-gradient-to-br from-brand-soft to-surface p-5 sm:p-6">
-                <div className="absolute -right-12 -top-14 size-32 rounded-full bg-brand-solid/10 blur-2xl" />
-                <span className="relative grid size-9 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-[var(--shadow-sm)]">
-                  <Sparkles className="size-4" aria-hidden="true" />
-                </span>
-                <h2 className="relative mt-4 text-sm font-semibold text-brand">
-                  {t("batchCard.title")}
-                </h2>
-                <p className="relative mt-1.5 text-[12px] leading-5 text-muted">
-                  {t("batchCard.description")}
-                </p>
-                <Link
-                  href="/batch"
-                  className="relative mt-4 inline-flex items-center gap-1.5 text-[12px] font-semibold text-brand hover:text-brand-strong"
-                >
-                  {t("batchCard.action")}
-                  <ArrowRight className="size-3.5" aria-hidden="true" />
-                </Link>
-              </Card>
             </div>
           </div>
         </div>
       ) : null}
     </div>
   );
-}
-
-function PlusIcon() {
-  return <PackagePlus className="size-3.5" aria-hidden="true" />;
 }

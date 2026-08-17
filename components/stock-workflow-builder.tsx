@@ -23,7 +23,6 @@ import {
   ScanLine,
   Settings2,
   ShieldCheck,
-  Sparkles,
   Trash2,
   Workflow,
   X,
@@ -893,7 +892,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
   return (
     <div>
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div className="animate-fade-up">
+        <div>
           <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
             <Workflow className="size-3.5 text-brand" aria-hidden="true" />
             {t("workflows.header.eyebrow")}
@@ -921,7 +920,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
           </Button>
           {canManage ? (
             <Button onClick={chooseTemplate} disabled={interactionBusy}>
-              <Sparkles className="size-4" aria-hidden="true" />
+              <Plus className="size-4" aria-hidden="true" />
               {t("workflows.header.newTemplate")}
             </Button>
           ) : null}

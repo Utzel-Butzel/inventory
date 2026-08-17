@@ -1,5 +1,8 @@
 import { getSessionIdentity } from "@/lib/api-auth";
-import { updateOrganization } from "@/lib/organizations";
+import {
+  OrganizationSlugUnavailableError,
+  updateOrganization,
+} from "@/lib/organizations";
 import { organizationUpdateInputSchema } from "@/lib/validators";
 
 type Context = { params: Promise<{ id: string }> };
@@ -19,7 +22,7 @@ export async function PATCH(request: Request, context: Context) {
   }
   if (!identity.permissions.includes("users.manage")) {
     return Response.json(
-      { error: "You do not have permission to rename this organization." },
+      { error: "You do not have permission to edit this organization." },
       { status: 403, headers: noStoreHeaders },
     );
   }
@@ -40,11 +43,23 @@ export async function PATCH(request: Request, context: Context) {
       { status: 422, headers: noStoreHeaders },
     );
   }
-  const updated = await updateOrganization({
-    id,
-    name: parsed.data.name,
-    actor: identity.subject,
-  });
+  let updated: Awaited<ReturnType<typeof updateOrganization>>;
+  try {
+    updated = await updateOrganization({
+      id,
+      name: parsed.data.name,
+      slug: parsed.data.slug,
+      actor: identity.subject,
+    });
+  } catch (error) {
+    if (error instanceof OrganizationSlugUnavailableError) {
+      return Response.json(
+        { error: "This organization slug is already in use." },
+        { status: 409, headers: noStoreHeaders },
+      );
+    }
+    throw error;
+  }
   if (!updated) {
     return Response.json(
       { error: "Organization not found." },

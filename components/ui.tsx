@@ -82,7 +82,7 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]",
+        "rounded-xl border border-border bg-surface",
         className,
       )}
       {...props}
@@ -118,18 +118,18 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex min-h-64 flex-col items-center justify-center px-6 py-12 text-center",
+        "flex min-h-48 flex-col items-center justify-center px-6 py-8 text-center",
         className,
       )}
     >
-      <div className="mb-4 grid size-11 place-items-center rounded-xl border border-border bg-surface-subtle text-muted shadow-sm">
+      <div className="mb-3 grid size-10 place-items-center rounded-lg bg-surface-subtle text-muted">
         {icon ?? <Inbox className="size-5" aria-hidden="true" />}
       </div>
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       <p className="mt-1.5 max-w-sm text-[13px] leading-5 text-muted">
         {description}
       </p>
-      {action ? <div className="mt-5">{action}</div> : null}
+      {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
 }

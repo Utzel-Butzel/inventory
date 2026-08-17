@@ -1,7 +1,7 @@
 {
   "eyebrow": "Attention queue",
   "title": "Notifications",
-  "description": "A quiet, deduplicated inbox for inventory events that need attention.",
+  "description": "Updates about low stock, due dates, maintenance, and returns.",
   "showAll": "Show all",
   "showUnread": "Unread only",
   "markAllRead": "Mark all read",

@@ -153,6 +153,7 @@ struct RootView: View {
             if state.canWrite {
                 UnifiedCameraView(
                     initialMode: .capture,
+                    maximumUploadImagePixelSize: state.maximumUploadImagePixelSize,
                     onClose: { state.presentedTool = nil },
                     onSubmit: { state.intakeQueue.enqueue($0) }
                 )
@@ -160,6 +161,7 @@ struct RootView: View {
         case .scanner:
             UnifiedCameraView(
                 initialMode: .scan,
+                maximumUploadImagePixelSize: state.maximumUploadImagePixelSize,
                 onClose: { state.presentedTool = nil },
                 onSubmit: { state.intakeQueue.enqueue($0) }
             )

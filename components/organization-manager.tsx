@@ -14,9 +14,16 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
 
-import { Badge, Button, Card, EmptyState, Skeleton } from "@/components/ui";
-import { useOrganizationHref } from "@/components/organization-routing";
-import { organizationPath } from "@/lib/organization-path";
+import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
+import {
+  useOrganizationHref,
+  useOrganizationReadOnly,
+} from "@/components/organization-routing";
+import {
+  ORGANIZATION_SLUG_MAX_LENGTH,
+  organizationPath,
+  slugifyOrganizationName,
+} from "@/lib/organization-path";
 
 type ManagedOrganization = {
   id: string;
@@ -31,7 +38,7 @@ type ManagedOrganization = {
 type OrganizationsResponse = {
   organizations?: ManagedOrganization[];
   activeOrganizationId?: string | null;
-  organization?: { id: string } | null;
+  organization?: { id: string; slug: string } | null;
   activeOrganization?: { id: string } | null;
 };
 
@@ -58,6 +65,7 @@ function roleFallback(role: string) {
 export function OrganizationManager() {
   const { t } = useT("settings");
   const organizationHref = useOrganizationHref();
+  const isReadOnly = useOrganizationReadOnly();
   const [organizations, setOrganizations] = useState<ManagedOrganization[]>([]);
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,9 +75,11 @@ export function OrganizationManager() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newSlug, setNewSlug] = useState("");
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingSlug, setEditingSlug] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (quiet = false) => {
@@ -126,21 +136,25 @@ export function OrganizationManager() {
       const response = await fetch("/api/v1/organizations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({
+          name,
+          ...(newSlug.trim() ? { slug: newSlug.trim() } : {}),
+        }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         throw new Error(errorMessage(payload, t("organizations.errors.create")));
       }
       setNewName("");
+      setNewSlug("");
       setCreateOpen(false);
       // Creation selects the new organization server-side. Reload the shell so
       // no client state from the previous authorization boundary survives.
-      const createdOrganizationId = (payload as OrganizationsResponse)
-        .organization?.id;
+      const createdOrganizationSlug = (payload as OrganizationsResponse)
+        .organization?.slug;
       window.location.assign(
-        createdOrganizationId
-          ? organizationPath(createdOrganizationId, "/settings/organization")
+        createdOrganizationSlug
+          ? organizationPath(createdOrganizationSlug, "/settings/organization")
           : organizationHref("/settings/organization"),
       );
     } catch (error) {
@@ -156,11 +170,13 @@ export function OrganizationManager() {
     clearMessages();
     setEditingId(organization.id);
     setEditingName(organization.name);
+    setEditingSlug(organization.slug);
   }
 
   function closeEditor() {
     setEditingId(null);
     setEditingName("");
+    setEditingSlug("");
   }
 
   async function updateOrganization(
@@ -169,7 +185,8 @@ export function OrganizationManager() {
   ) {
     event.preventDefault();
     const name = editingName.trim();
-    if (!name) return;
+    const slug = editingSlug.trim();
+    if (!name || !slug) return;
 
     clearMessages();
     setSaving(true);
@@ -179,7 +196,7 @@ export function OrganizationManager() {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name, slug }),
         },
       );
       const payload = await response.json().catch(() => null);
@@ -189,7 +206,13 @@ export function OrganizationManager() {
       closeEditor();
       setNotice(t("organizations.notices.updated", { name }));
       if (organization.id === activeOrganizationId) {
-        window.location.assign(organizationHref("/settings/organization"));
+        const updatedSlug = (payload as OrganizationsResponse).organization
+          ?.slug;
+        window.location.assign(
+          updatedSlug
+            ? organizationPath(updatedSlug, "/settings/organization")
+            : organizationHref("/settings/organization"),
+        );
       } else {
         await load(true);
       }
@@ -203,7 +226,13 @@ export function OrganizationManager() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
+    <div
+      className={cn(
+        "grid gap-6",
+        !isReadOnly &&
+          "xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]",
+      )}
+    >
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">
@@ -299,8 +328,10 @@ export function OrganizationManager() {
                 const active = organization.id === activeOrganizationId;
                 const editing = editingId === organization.id;
                 const canManage =
-                  organization.canManage ??
-                  (organization.role === "admin" || organization.role === "owner");
+                  !isReadOnly &&
+                  (organization.canManage ??
+                    (organization.role === "admin" ||
+                      organization.role === "owner"));
                 return (
                   <article key={organization.id} className="rounded-2xl px-3 py-4 transition hover:bg-surface-subtle sm:px-4">
                     {editing ? (
@@ -318,11 +349,35 @@ export function OrganizationManager() {
                             className="mt-2 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm text-foreground shadow-sm outline-none transition focus:border-focus focus:ring-4 focus:ring-focus/10"
                           />
                         </label>
+                        <label className="mt-3 block">
+                          <span className="text-xs font-semibold text-muted-strong">
+                            {t("organizations.form.slug")}
+                          </span>
+                          <div className="mt-2 flex h-11 items-center rounded-xl border border-border bg-surface px-3.5 shadow-sm transition focus-within:border-focus focus-within:ring-4 focus-within:ring-focus/10">
+                            <span className="shrink-0 text-sm text-muted">/</span>
+                            <input
+                              value={editingSlug}
+                              onChange={(event) =>
+                                setEditingSlug(event.target.value.toLowerCase())
+                              }
+                              required
+                              maxLength={ORGANIZATION_SLUG_MAX_LENGTH}
+                              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                              autoCapitalize="none"
+                              autoCorrect="off"
+                              spellCheck={false}
+                              className="h-full min-w-0 flex-1 bg-transparent pl-0.5 text-sm text-foreground outline-none"
+                            />
+                          </div>
+                          <p className="mt-1.5 text-xs leading-5 text-muted">
+                            {t("organizations.form.slugEditHint")}
+                          </p>
+                        </label>
                         <div className="mt-3 flex justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={closeEditor} disabled={saving}>
                             {t("organizations.actions.cancel")}
                           </Button>
-                          <Button size="sm" type="submit" disabled={saving || !editingName.trim()}>
+                          <Button size="sm" type="submit" disabled={saving || !editingName.trim() || !editingSlug.trim()}>
                             {saving ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <Save className="size-3.5" aria-hidden="true" />}
                             {saving ? t("organizations.actions.saving") : t("organizations.actions.save")}
                           </Button>
@@ -345,7 +400,7 @@ export function OrganizationManager() {
                         {canManage ? (
                           <Button variant="ghost" size="sm" onClick={() => editOrganization(organization)}>
                             <Pencil className="size-3.5" aria-hidden="true" />
-                            {t("organizations.actions.rename")}
+                            {t("organizations.actions.edit")}
                           </Button>
                         ) : null}
                       </div>
@@ -358,7 +413,7 @@ export function OrganizationManager() {
         </div>
       </Card>
 
-      <Card className="h-fit overflow-hidden">
+      {!isReadOnly ? <Card className="h-fit overflow-hidden">
         <div className="border-b border-border px-5 py-5 sm:px-6">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -393,11 +448,30 @@ export function OrganizationManager() {
                 className="mt-2 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted focus:border-focus focus:ring-4 focus:ring-focus/10"
               />
             </label>
-            <p className="mt-2 text-xs leading-5 text-muted">
-              {t("organizations.form.slugHint")}
-            </p>
+            <label className="mt-4 block">
+              <span className="text-xs font-semibold text-muted-strong">
+                {t("organizations.form.slugOptional")}
+              </span>
+              <div className="mt-2 flex h-11 items-center rounded-xl border border-border bg-surface px-3.5 shadow-sm transition focus-within:border-focus focus-within:ring-4 focus-within:ring-focus/10">
+                <span className="shrink-0 text-sm text-muted">/</span>
+                <input
+                  value={newSlug}
+                  onChange={(event) => setNewSlug(event.target.value.toLowerCase())}
+                  maxLength={ORGANIZATION_SLUG_MAX_LENGTH}
+                  pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder={slugifyOrganizationName(newName || t("organizations.form.namePlaceholder"))}
+                  className="h-full min-w-0 flex-1 bg-transparent pl-0.5 text-sm text-foreground outline-none placeholder:text-muted"
+                />
+              </div>
+              <p className="mt-1.5 text-xs leading-5 text-muted">
+                {t("organizations.form.slugHint")}
+              </p>
+            </label>
             <div className="mt-5 flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={() => { setCreateOpen(false); setNewName(""); }} disabled={creating}>
+              <Button variant="ghost" size="sm" onClick={() => { setCreateOpen(false); setNewName(""); setNewSlug(""); }} disabled={creating}>
                 {t("organizations.actions.cancel")}
               </Button>
               <Button size="sm" type="submit" disabled={creating || !newName.trim()}>
@@ -411,7 +485,7 @@ export function OrganizationManager() {
             {t("organizations.create.hint")}
           </div>
         )}
-      </Card>
+      </Card> : null}
     </div>
   );
 }

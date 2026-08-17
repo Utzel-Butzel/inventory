@@ -7,7 +7,6 @@ import {
   LoaderCircle,
   RefreshCw,
   Save,
-  Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
@@ -158,7 +157,7 @@ function TranslationFieldEditor({
                 }
                 className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[10px] font-semibold text-muted-strong disabled:opacity-40"
               >
-                <Sparkles className="size-3" />
+                <Languages className="size-3" />
                 {t("translations.actions.useAi")}
               </button>
             ) : null}
@@ -343,7 +342,7 @@ export function ResourceTranslations({
             {translatingCode === "all" ? (
               <LoaderCircle className="size-3.5 animate-spin" />
             ) : (
-              <Sparkles className="size-3.5" />
+              <Languages className="size-3.5" />
             )}
             {t("translations.actions.translateStale")}
           </button>

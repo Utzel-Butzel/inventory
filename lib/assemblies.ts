@@ -14,11 +14,13 @@ import {
   assemblyBuildComponents,
   assemblyBuilds,
   bomLines,
+  resourceRelations,
   resources,
   stockLocationBalances,
   stockMovements,
   stockSettings,
   stockUnits,
+  variantBomOverrides,
   type AssemblyBuildComponentRecord,
   type AssemblyBuildRecord,
   type ResourceRecord,
@@ -27,17 +29,24 @@ import {
   type StockUnitRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
-import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
-import { BOM_WRITE_LOCK_ID } from "@/lib/inventory-locks";
+import {
+  BOM_WRITE_LOCK_ID,
+  VARIANT_FAMILY_WRITE_LOCK_ID,
+} from "@/lib/inventory-locks";
 import {
   allocatedVariantQuantity,
   assertVariantAllocationFits,
 } from "@/lib/variant-stock-invariant";
+import {
+  enqueueStockMovementWebhookEvents,
+  enqueueWebhookEvent,
+} from "@/lib/webhooks";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 
 export type BomComponentInput = {
   resourceId: string;
+  slotKey?: string;
   quantityPerAssembly: number;
   position?: number;
   note?: string;
@@ -121,8 +130,244 @@ const movementDto = (row: StockMovementRecord) => ({
   createdBy: row.createdBy,
 });
 
-export async function getBom(organizationId: string, resourceId: string) {
-  const [resource] = await db
+type BomOrigin = "local" | "inherited" | "override" | "variant";
+
+type StoredBomLine = {
+  id: string;
+  slotKey: string;
+  componentResourceId: string;
+  quantityPerAssembly: number;
+  position: number;
+  note: string;
+};
+
+type EffectiveBomLine = StoredBomLine & { origin: BomOrigin };
+
+type StoredVariantOverride = {
+  id: string;
+  variantResourceId: string;
+  slotKey: string;
+  componentResourceId: string | null;
+  quantityPerAssembly: number | null;
+  position: number | null;
+  note: string;
+  removed: boolean;
+};
+
+type NormalizedBomComponent = {
+  slotKey: string;
+  componentResourceId: string;
+  quantityPerAssembly: number;
+  position: number;
+  note: string;
+};
+
+type ReadExecutor = Pick<typeof db, "select">;
+
+const sortBomLines = <T extends { position: number; slotKey: string }>(
+  rows: T[],
+) =>
+  rows.sort(
+    (left, right) =>
+      left.position - right.position || left.slotKey.localeCompare(right.slotKey),
+  );
+
+async function findVariantPrimary(
+  executor: ReadExecutor,
+  organizationId: string,
+  resourceId: string,
+) {
+  const [relation] = await executor
+    .select({ primaryResourceId: resourceRelations.targetResourceId })
+    .from(resourceRelations)
+    .where(
+      and(
+        eq(resourceRelations.organizationId, organizationId),
+        eq(resourceRelations.sourceResourceId, resourceId),
+        eq(resourceRelations.relationTypeKey, "variant_of"),
+      ),
+    )
+    .limit(1);
+  return relation?.primaryResourceId ?? null;
+}
+
+async function readStoredBom(
+  executor: ReadExecutor,
+  organizationId: string,
+  assemblyResourceId: string,
+): Promise<StoredBomLine[]> {
+  return executor
+    .select({
+      id: bomLines.id,
+      slotKey: bomLines.slotKey,
+      componentResourceId: bomLines.componentResourceId,
+      quantityPerAssembly: bomLines.quantityPerAssembly,
+      position: bomLines.position,
+      note: bomLines.note,
+    })
+    .from(bomLines)
+    .where(
+      and(
+        eq(bomLines.organizationId, organizationId),
+        eq(bomLines.assemblyResourceId, assemblyResourceId),
+      ),
+    )
+    .orderBy(asc(bomLines.position), asc(bomLines.slotKey), asc(bomLines.id));
+}
+
+async function readVariantOverrides(
+  executor: ReadExecutor,
+  organizationId: string,
+  variantResourceId: string,
+): Promise<StoredVariantOverride[]> {
+  return executor
+    .select({
+      id: variantBomOverrides.id,
+      variantResourceId: variantBomOverrides.variantResourceId,
+      slotKey: variantBomOverrides.slotKey,
+      componentResourceId: variantBomOverrides.componentResourceId,
+      quantityPerAssembly: variantBomOverrides.quantityPerAssembly,
+      position: variantBomOverrides.position,
+      note: variantBomOverrides.note,
+      removed: variantBomOverrides.removed,
+    })
+    .from(variantBomOverrides)
+    .where(
+      and(
+        eq(variantBomOverrides.organizationId, organizationId),
+        eq(variantBomOverrides.variantResourceId, variantResourceId),
+      ),
+    )
+    .orderBy(asc(variantBomOverrides.slotKey));
+}
+
+function applyVariantBomOverrides(
+  baseLines: StoredBomLine[],
+  overrides: StoredVariantOverride[],
+): EffectiveBomLine[] {
+  const baseBySlot = new Map(baseLines.map((line) => [line.slotKey, line]));
+  const overrideBySlot = new Map(overrides.map((row) => [row.slotKey, row]));
+  const effective: EffectiveBomLine[] = [];
+
+  for (const base of baseLines) {
+    const override = overrideBySlot.get(base.slotKey);
+    if (!override) {
+      effective.push({ ...base, origin: "inherited" });
+      continue;
+    }
+    if (override.removed) continue;
+    if (
+      override.componentResourceId === null ||
+      override.quantityPerAssembly === null ||
+      override.position === null
+    ) {
+      throw new AssemblyOperationError(
+        "This variant contains an invalid bill-of-materials override.",
+        409,
+      );
+    }
+    effective.push({
+      id: override.id,
+      slotKey: override.slotKey,
+      componentResourceId: override.componentResourceId,
+      quantityPerAssembly: override.quantityPerAssembly,
+      position: override.position,
+      note: override.note,
+      origin: "override",
+    });
+  }
+
+  for (const override of overrides) {
+    if (baseBySlot.has(override.slotKey) || override.removed) continue;
+    if (
+      override.componentResourceId === null ||
+      override.quantityPerAssembly === null ||
+      override.position === null
+    ) {
+      throw new AssemblyOperationError(
+        "This variant contains an invalid bill-of-materials override.",
+        409,
+      );
+    }
+    effective.push({
+      id: override.id,
+      slotKey: override.slotKey,
+      componentResourceId: override.componentResourceId,
+      quantityPerAssembly: override.quantityPerAssembly,
+      position: override.position,
+      note: override.note,
+      origin: "variant",
+    });
+  }
+
+  return sortBomLines(effective);
+}
+
+async function resolveEffectiveBomRecipe(
+  executor: ReadExecutor,
+  organizationId: string,
+  resourceId: string,
+) {
+  const primaryResourceId = await findVariantPrimary(
+    executor,
+    organizationId,
+    resourceId,
+  );
+  if (!primaryResourceId) {
+    const baseLines = await readStoredBom(executor, organizationId, resourceId);
+    return {
+      lines: baseLines.map((line) => ({ ...line, origin: "local" as const })),
+      baseLines,
+      primary: null,
+      overrideCount: 0,
+    };
+  }
+
+  if (
+    await findVariantPrimary(executor, organizationId, primaryResourceId)
+  ) {
+    throw new AssemblyOperationError(
+      "Nested variant families cannot inherit a bill of materials.",
+      409,
+    );
+  }
+  const baseLines = await readStoredBom(
+    executor,
+    organizationId,
+    primaryResourceId,
+  );
+  const overrides = await readVariantOverrides(
+    executor,
+    organizationId,
+    resourceId,
+  );
+  const [primary] = await executor
+    .select({ id: resources.id, name: resources.name })
+    .from(resources)
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, primaryResourceId),
+      ),
+    )
+    .limit(1);
+  if (!primary) {
+    throw new AssemblyOperationError("The primary variant item no longer exists.", 409);
+  }
+  return {
+    lines: applyVariantBomOverrides(baseLines, overrides),
+    baseLines,
+    primary,
+    overrideCount: overrides.length,
+  };
+}
+
+async function getBomWithExecutor(
+  executor: ReadExecutor,
+  organizationId: string,
+  resourceId: string,
+) {
+  const [resource] = await executor
     .select({
       id: resources.id,
       name: resources.name,
@@ -146,44 +391,43 @@ export async function getBom(organizationId: string, resourceId: string) {
     .limit(1);
   if (!resource) return null;
 
-  const rows = await db
-    .select({
-      id: bomLines.id,
-      resourceId: resources.id,
-      name: resources.name,
-      sku: resources.sku,
-      quantityPerAssembly: bomLines.quantityPerAssembly,
-      position: bomLines.position,
-      note: bomLines.note,
-      availableQuantity: resources.quantity,
-      trackingMode: stockSettings.trackingMode,
-    })
-    .from(bomLines)
-    .innerJoin(
-      resources,
-      and(
-        eq(resources.organizationId, organizationId),
-        eq(resources.id, bomLines.componentResourceId),
-      ),
-    )
-    .leftJoin(
-      stockSettings,
-      and(
-        eq(stockSettings.organizationId, organizationId),
-        eq(stockSettings.resourceId, resources.id),
-      ),
-    )
-    .where(
-      and(
-        eq(bomLines.organizationId, organizationId),
-        eq(bomLines.assemblyResourceId, resourceId),
-      ),
-    )
-    .orderBy(asc(bomLines.position), asc(resources.name), asc(bomLines.id));
-
-  const componentIds = rows.map((row) => row.resourceId);
+  const recipe = await resolveEffectiveBomRecipe(
+    executor,
+    organizationId,
+    resourceId,
+  );
+  const componentIds = Array.from(
+    new Set(recipe.lines.map((line) => line.componentResourceId)),
+  );
+  const componentRows = componentIds.length
+    ? await executor
+        .select({
+          id: resources.id,
+          name: resources.name,
+          sku: resources.sku,
+          availableQuantity: resources.quantity,
+          trackingMode: stockSettings.trackingMode,
+        })
+        .from(resources)
+        .leftJoin(
+          stockSettings,
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            eq(stockSettings.resourceId, resources.id),
+          ),
+        )
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            inArray(resources.id, componentIds),
+          ),
+        )
+    : [];
+  if (componentRows.length !== componentIds.length) {
+    throw new AssemblyOperationError("A bill-of-materials component no longer exists.", 409);
+  }
   const availableUnitRows = componentIds.length
-    ? await db
+    ? await executor
         .select()
         .from(stockUnits)
         .where(
@@ -201,16 +445,28 @@ export async function getBom(organizationId: string, resourceId: string) {
     list.push(unit);
     unitsByResource.set(unit.resourceId, list);
   }
-
-  const components = rows.map((row) => ({
-    ...row,
-    trackingMode: trackingMode(row.trackingMode),
-    availableUnits: (unitsByResource.get(row.resourceId) ?? []).map((unit) => ({
-      id: unit.id,
-      code: unit.code,
-      location: unit.location,
-    })),
-  }));
+  const componentById = new Map(componentRows.map((row) => [row.id, row]));
+  const components = recipe.lines.map((line) => {
+    const component = componentById.get(line.componentResourceId)!;
+    return {
+      id: line.id,
+      slotKey: line.slotKey,
+      origin: line.origin,
+      resourceId: component.id,
+      name: component.name,
+      sku: component.sku,
+      quantityPerAssembly: line.quantityPerAssembly,
+      position: line.position,
+      note: line.note,
+      availableQuantity: component.availableQuantity,
+      trackingMode: trackingMode(component.trackingMode),
+      availableUnits: (unitsByResource.get(component.id) ?? []).map((unit) => ({
+        id: unit.id,
+        code: unit.code,
+        location: unit.location,
+      })),
+    };
+  });
   const buildableQuantity = components.length
     ? Math.min(
         ...components.map((component) =>
@@ -226,26 +482,220 @@ export async function getBom(organizationId: string, resourceId: string) {
     },
     components,
     buildableQuantity,
+    inheritance: recipe.primary
+      ? {
+          primaryResourceId: recipe.primary.id,
+          primaryName: recipe.primary.name,
+          overrideCount: recipe.overrideCount,
+        }
+      : null,
   };
 }
 
-const graphContainsPath = (
-  adjacency: Map<string, string[]>,
-  start: string,
-  target: string,
-) => {
-  const pending = [start];
-  const seen = new Set<string>();
-  while (pending.length) {
-    const current = pending.pop();
-    if (!current) continue;
-    if (current === target) return true;
-    if (seen.has(current)) continue;
-    seen.add(current);
-    pending.push(...(adjacency.get(current) ?? []));
+export async function getBom(organizationId: string, resourceId: string) {
+  return db.transaction(
+    (transaction) => getBomWithExecutor(transaction, organizationId, resourceId),
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+}
+
+function normalizeBomComponents(
+  components: BomComponentInput[],
+  referenceLines: Array<Pick<StoredBomLine, "slotKey" | "componentResourceId" | "position">>,
+): NormalizedBomComponent[] {
+  const normalized = components.map((component, index) => ({
+    slotKey: component.slotKey ?? null,
+    componentResourceId: component.resourceId,
+    quantityPerAssembly: component.quantityPerAssembly,
+    position: component.position ?? index,
+    note: component.note ?? "",
+  }));
+  const usedSlots = new Set(
+    normalized.flatMap((component) => (component.slotKey ? [component.slotKey] : [])),
+  );
+  if (usedSlots.size !== normalized.filter((component) => component.slotKey).length) {
+    throw new AssemblyOperationError(
+      "Each bill-of-materials slot key may appear only once.",
+      422,
+    );
   }
-  return false;
-};
+
+  for (const component of normalized) {
+    if (component.slotKey) continue;
+    const exact = referenceLines.find(
+      (line) =>
+        line.componentResourceId === component.componentResourceId &&
+        !usedSlots.has(line.slotKey),
+    );
+    if (exact) {
+      component.slotKey = exact.slotKey;
+      usedSlots.add(exact.slotKey);
+    }
+  }
+  for (const component of normalized) {
+    if (component.slotKey) continue;
+    const samePosition = referenceLines.find(
+      (line) => line.position === component.position && !usedSlots.has(line.slotKey),
+    );
+    component.slotKey = samePosition?.slotKey ?? randomUUID();
+    usedSlots.add(component.slotKey);
+  }
+  return normalized.map((component) => ({
+    ...component,
+    slotKey: component.slotKey!,
+  }));
+}
+
+function assertDistinctRecipeComponents(
+  components: Array<{ componentResourceId: string }>,
+) {
+  if (
+    new Set(components.map((component) => component.componentResourceId)).size !==
+    components.length
+  ) {
+    throw new AssemblyOperationError(
+      "Each component may appear only once in a bill of materials.",
+      422,
+    );
+  }
+}
+
+async function assertEffectiveBomGraphAcyclic(
+  executor: ReadExecutor,
+  organizationId: string,
+  proposed: {
+    resourceId: string;
+    isVariant: boolean;
+    lines: NormalizedBomComponent[];
+  },
+) {
+  const storedBaseRows = await executor
+    .select({
+      assemblyResourceId: bomLines.assemblyResourceId,
+      id: bomLines.id,
+      slotKey: bomLines.slotKey,
+      componentResourceId: bomLines.componentResourceId,
+      quantityPerAssembly: bomLines.quantityPerAssembly,
+      position: bomLines.position,
+      note: bomLines.note,
+    })
+    .from(bomLines)
+    .where(eq(bomLines.organizationId, organizationId));
+  const storedOverrides = await executor
+    .select({
+      id: variantBomOverrides.id,
+      variantResourceId: variantBomOverrides.variantResourceId,
+      slotKey: variantBomOverrides.slotKey,
+      componentResourceId: variantBomOverrides.componentResourceId,
+      quantityPerAssembly: variantBomOverrides.quantityPerAssembly,
+      position: variantBomOverrides.position,
+      note: variantBomOverrides.note,
+      removed: variantBomOverrides.removed,
+    })
+    .from(variantBomOverrides)
+    .where(eq(variantBomOverrides.organizationId, organizationId));
+  const variantLinks = await executor
+    .select({
+      variantResourceId: resourceRelations.sourceResourceId,
+      primaryResourceId: resourceRelations.targetResourceId,
+    })
+    .from(resourceRelations)
+    .where(
+      and(
+        eq(resourceRelations.organizationId, organizationId),
+        eq(resourceRelations.relationTypeKey, "variant_of"),
+      ),
+    );
+
+  const baseByAssembly = new Map<string, StoredBomLine[]>();
+  for (const row of storedBaseRows) {
+    const lines = baseByAssembly.get(row.assemblyResourceId) ?? [];
+    lines.push(row);
+    baseByAssembly.set(row.assemblyResourceId, lines);
+  }
+  if (!proposed.isVariant) {
+    baseByAssembly.set(
+      proposed.resourceId,
+      proposed.lines.map((line) => ({ id: line.slotKey, ...line })),
+    );
+  }
+  const overridesByVariant = new Map<string, StoredVariantOverride[]>();
+  for (const row of storedOverrides) {
+    const rows = overridesByVariant.get(row.variantResourceId) ?? [];
+    rows.push(row);
+    overridesByVariant.set(row.variantResourceId, rows);
+  }
+  const primaryByVariant = new Map(
+    variantLinks.map((link) => [link.variantResourceId, link.primaryResourceId]),
+  );
+  const cache = new Map<string, EffectiveBomLine[]>();
+  const resolving = new Set<string>();
+  const resolve = (resourceId: string): EffectiveBomLine[] => {
+    if (proposed.isVariant && resourceId === proposed.resourceId) {
+      return proposed.lines.map((line) => ({
+        id: line.slotKey,
+        ...line,
+        origin: "variant" as const,
+      }));
+    }
+    const cached = cache.get(resourceId);
+    if (cached) return cached;
+    if (resolving.has(resourceId)) {
+      throw new AssemblyOperationError(
+        "This variant family contains a circular inheritance dependency.",
+        409,
+      );
+    }
+    resolving.add(resourceId);
+    const primaryResourceId = primaryByVariant.get(resourceId);
+    const lines = primaryResourceId
+      ? applyVariantBomOverrides(
+          resolve(primaryResourceId),
+          overridesByVariant.get(resourceId) ?? [],
+        )
+      : (baseByAssembly.get(resourceId) ?? []).map((line) => ({
+          ...line,
+          origin: "local" as const,
+        }));
+    resolving.delete(resourceId);
+    cache.set(resourceId, lines);
+    return lines;
+  };
+
+  const assemblyIds = new Set([
+    ...baseByAssembly.keys(),
+    ...primaryByVariant.keys(),
+    proposed.resourceId,
+  ]);
+  const adjacency = new Map<string, string[]>();
+  for (const assemblyId of assemblyIds) {
+    const lines = resolve(assemblyId);
+    assertDistinctRecipeComponents(lines);
+    adjacency.set(
+      assemblyId,
+      lines.map((line) => line.componentResourceId),
+    );
+  }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (resourceId: string): boolean => {
+    if (visiting.has(resourceId)) return true;
+    if (visited.has(resourceId)) return false;
+    visiting.add(resourceId);
+    for (const componentResourceId of adjacency.get(resourceId) ?? []) {
+      if (visit(componentResourceId)) return true;
+    }
+    visiting.delete(resourceId);
+    visited.add(resourceId);
+    return false;
+  };
+  if (Array.from(assemblyIds).some(visit)) {
+    throw new AssemblyOperationError(
+      "This bill of materials would create a circular assembly dependency.",
+      409,
+    );
+  }
+}
 
 export async function replaceBom(
   organizationId: string,
@@ -259,8 +709,27 @@ export async function replaceBom(
       sql`select pg_advisory_xact_lock(${BOM_WRITE_LOCK_ID})`,
     );
 
+    const currentRecipe = await resolveEffectiveBomRecipe(
+      transaction,
+      organizationId,
+      assemblyResourceId,
+    );
+    const referencesBySlot = new Map(
+      [...currentRecipe.baseLines, ...currentRecipe.lines].map((line) => [
+        line.slotKey,
+        line,
+      ]),
+    );
+    const normalizedComponents = normalizeBomComponents(
+      components,
+      Array.from(referencesBySlot.values()),
+    );
+
     const ids = Array.from(
-      new Set([assemblyResourceId, ...components.map((item) => item.resourceId)]),
+      new Set([
+        assemblyResourceId,
+        ...normalizedComponents.map((item) => item.componentResourceId),
+      ]),
     ).sort();
     const lockedResources = await transaction
       .select({ id: resources.id })
@@ -282,73 +751,310 @@ export async function replaceBom(
         422,
       );
     }
-    if (components.some((item) => item.resourceId === assemblyResourceId)) {
+    if (
+      normalizedComponents.some(
+        (item) => item.componentResourceId === assemblyResourceId,
+      )
+    ) {
       throw new AssemblyOperationError(
         "An assembly cannot contain itself as a component.",
         422,
       );
     }
-    if (new Set(components.map((item) => item.resourceId)).size !== components.length) {
-      throw new AssemblyOperationError(
-        "Each component may appear only once in a bill of materials.",
-        422,
-      );
-    }
+    assertDistinctRecipeComponents(normalizedComponents);
+    await assertEffectiveBomGraphAcyclic(transaction, organizationId, {
+      resourceId: assemblyResourceId,
+      isVariant: Boolean(currentRecipe.primary),
+      lines: normalizedComponents,
+    });
 
-    const existingEdges = await transaction
-      .select({
-        parent: bomLines.assemblyResourceId,
-        child: bomLines.componentResourceId,
-      })
-      .from(bomLines)
-      .where(eq(bomLines.organizationId, organizationId));
-    const adjacency = new Map<string, string[]>();
-    for (const edge of existingEdges) {
-      if (edge.parent === assemblyResourceId) continue;
-      const children = adjacency.get(edge.parent) ?? [];
-      children.push(edge.child);
-      adjacency.set(edge.parent, children);
-    }
-    adjacency.set(
-      assemblyResourceId,
-      components.map((item) => item.resourceId),
-    );
-    for (const component of components) {
-      if (graphContainsPath(adjacency, component.resourceId, assemblyResourceId)) {
-        throw new AssemblyOperationError(
-          "This bill of materials would create a circular assembly dependency.",
-          409,
+    if (currentRecipe.primary) {
+      const baseBySlot = new Map(
+        currentRecipe.baseLines.map((line) => [line.slotKey, line]),
+      );
+      const submittedBySlot = new Map(
+        normalizedComponents.map((line) => [line.slotKey, line]),
+      );
+      const overrideValues: Array<typeof variantBomOverrides.$inferInsert> = [];
+      const now = new Date();
+      for (const base of currentRecipe.baseLines) {
+        const submitted = submittedBySlot.get(base.slotKey);
+        if (!submitted) {
+          overrideValues.push({
+            organizationId,
+            variantResourceId: assemblyResourceId,
+            slotKey: base.slotKey,
+            removed: true,
+            note: "",
+            updatedAt: now,
+          });
+          continue;
+        }
+        if (
+          submitted.componentResourceId === base.componentResourceId &&
+          submitted.quantityPerAssembly === base.quantityPerAssembly &&
+          submitted.position === base.position &&
+          submitted.note === base.note
+        ) {
+          continue;
+        }
+        overrideValues.push({
+          organizationId,
+          variantResourceId: assemblyResourceId,
+          slotKey: submitted.slotKey,
+          componentResourceId: submitted.componentResourceId,
+          quantityPerAssembly: submitted.quantityPerAssembly,
+          position: submitted.position,
+          note: submitted.note,
+          updatedAt: now,
+        });
+      }
+      for (const submitted of normalizedComponents) {
+        if (baseBySlot.has(submitted.slotKey)) continue;
+        overrideValues.push({
+          organizationId,
+          variantResourceId: assemblyResourceId,
+          slotKey: submitted.slotKey,
+          componentResourceId: submitted.componentResourceId,
+          quantityPerAssembly: submitted.quantityPerAssembly,
+          position: submitted.position,
+          note: submitted.note,
+          updatedAt: now,
+        });
+      }
+      await transaction
+        .delete(variantBomOverrides)
+        .where(
+          and(
+            eq(variantBomOverrides.organizationId, organizationId),
+            eq(variantBomOverrides.variantResourceId, assemblyResourceId),
+          ),
+        );
+      if (overrideValues.length) {
+        await transaction.insert(variantBomOverrides).values(overrideValues);
+      }
+    } else {
+      await transaction
+        .delete(bomLines)
+        .where(
+          and(
+            eq(bomLines.organizationId, organizationId),
+            eq(bomLines.assemblyResourceId, assemblyResourceId),
+          ),
+        );
+      if (normalizedComponents.length) {
+        const now = new Date();
+        await transaction.insert(bomLines).values(
+          normalizedComponents.map((component) => ({
+            organizationId,
+            assemblyResourceId,
+            slotKey: component.slotKey,
+            componentResourceId: component.componentResourceId,
+            quantityPerAssembly: component.quantityPerAssembly,
+            position: component.position,
+            note: component.note,
+            updatedAt: now,
+          })),
         );
       }
-    }
-
-    await transaction
-      .delete(bomLines)
-      .where(
-        and(
-          eq(bomLines.organizationId, organizationId),
-          eq(bomLines.assemblyResourceId, assemblyResourceId),
-        ),
-      );
-    if (components.length) {
-      const now = new Date();
-      await transaction.insert(bomLines).values(
-        components.map((component, index) => ({
-          organizationId,
-          assemblyResourceId,
-          componentResourceId: component.resourceId,
-          quantityPerAssembly: component.quantityPerAssembly,
-          position: component.position ?? index,
-          note: component.note ?? "",
-          updatedAt: now,
-        })),
-      );
     }
   });
 
   const result = await getBom(organizationId, assemblyResourceId);
   if (!result) throw new AssemblyOperationError("Not found", 404);
   return result;
+}
+
+export async function resetVariantBomOverrides(
+  organizationId: string,
+  variantResourceId: string,
+) {
+  await db.transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(${BOM_WRITE_LOCK_ID})`,
+    );
+    const recipe = await resolveEffectiveBomRecipe(
+      transaction,
+      organizationId,
+      variantResourceId,
+    );
+    if (!recipe.primary) {
+      throw new AssemblyOperationError(
+        "Only a linked variant can reset inherited bill-of-materials changes.",
+        409,
+      );
+    }
+    const inherited = recipe.baseLines.map((line) => ({
+      slotKey: line.slotKey,
+      componentResourceId: line.componentResourceId,
+      quantityPerAssembly: line.quantityPerAssembly,
+      position: line.position,
+      note: line.note,
+    }));
+    await assertEffectiveBomGraphAcyclic(transaction, organizationId, {
+      resourceId: variantResourceId,
+      isVariant: true,
+      lines: inherited,
+    });
+    await transaction
+      .delete(variantBomOverrides)
+      .where(
+        and(
+          eq(variantBomOverrides.organizationId, organizationId),
+          eq(variantBomOverrides.variantResourceId, variantResourceId),
+        ),
+      );
+  });
+
+  const result = await getBom(organizationId, variantResourceId);
+  if (!result) throw new AssemblyOperationError("Not found", 404);
+  return result;
+}
+
+/**
+ * Detach a first-class variant without changing the resource that owns its
+ * operational data. The effective inherited BOM is materialized first so the
+ * now-standalone item keeps exactly the recipe it had at detachment time.
+ */
+export async function detachResourceVariant(
+  organizationId: string,
+  variantResourceId: string,
+  actor: string,
+) {
+  return db.transaction(async (transaction) => {
+    // Keep the global lock order aligned with merge/build and family writes:
+    // BOM graph, family membership, then resource rows.
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(${BOM_WRITE_LOCK_ID})`,
+    );
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(${VARIANT_FAMILY_WRITE_LOCK_ID})`,
+    );
+
+    const recipe = await resolveEffectiveBomRecipe(
+      transaction,
+      organizationId,
+      variantResourceId,
+    );
+    if (!recipe.primary) {
+      throw new AssemblyOperationError(
+        "Only a linked variant can be detached from a variant family.",
+        409,
+      );
+    }
+
+    const resourceIds = Array.from(
+      new Set([
+        variantResourceId,
+        recipe.primary.id,
+        ...recipe.lines.map((line) => line.componentResourceId),
+      ]),
+    ).sort();
+    const lockedResources = await transaction
+      .select()
+      .from(resources)
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          inArray(resources.id, resourceIds),
+        ),
+      )
+      .orderBy(asc(resources.id))
+      .for("update");
+    const variant = lockedResources.find(
+      (resource) => resource.id === variantResourceId,
+    );
+    if (!variant) throw new AssemblyOperationError("Not found", 404);
+    if (lockedResources.length !== resourceIds.length) {
+      throw new AssemblyOperationError(
+        "The primary item or one of the effective BOM components no longer exists.",
+        409,
+      );
+    }
+    assertDistinctRecipeComponents(recipe.lines);
+
+    await transaction
+      .delete(bomLines)
+      .where(
+        and(
+          eq(bomLines.organizationId, organizationId),
+          eq(bomLines.assemblyResourceId, variantResourceId),
+        ),
+      );
+    const now = new Date();
+    if (recipe.lines.length) {
+      await transaction.insert(bomLines).values(
+        recipe.lines.map((line) => ({
+          organizationId,
+          assemblyResourceId: variantResourceId,
+          slotKey: line.slotKey,
+          componentResourceId: line.componentResourceId,
+          quantityPerAssembly: line.quantityPerAssembly,
+          position: line.position,
+          note: line.note,
+          updatedAt: now,
+        })),
+      );
+    }
+    await transaction
+      .delete(variantBomOverrides)
+      .where(
+        and(
+          eq(variantBomOverrides.organizationId, organizationId),
+          eq(variantBomOverrides.variantResourceId, variantResourceId),
+        ),
+      );
+    const [removedMembership] = await transaction
+      .delete(resourceRelations)
+      .where(
+        and(
+          eq(resourceRelations.organizationId, organizationId),
+          eq(resourceRelations.sourceResourceId, variantResourceId),
+          eq(resourceRelations.targetResourceId, recipe.primary.id),
+          eq(resourceRelations.relationTypeKey, "variant_of"),
+        ),
+      )
+      .returning({ id: resourceRelations.id });
+    if (!removedMembership) {
+      throw new AssemblyOperationError(
+        "This item is no longer linked to that variant family.",
+        409,
+      );
+    }
+
+    const [saved] = await transaction
+      .update(resources)
+      .set({ updatedAt: now })
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, variantResourceId),
+        ),
+      )
+      .returning();
+    if (!saved) throw new AssemblyOperationError("Not found", 404);
+
+    await enqueueWebhookEvent(transaction, {
+      organizationId,
+      type: "inventory.resource.updated",
+      aggregateType: "resource",
+      aggregateId: variantResourceId,
+      actor,
+      data: {
+        resource: saved,
+        changedFields: ["variantFamily", "bom"],
+        family: {
+          role: "standalone",
+          detachedFromResourceId: recipe.primary.id,
+        },
+      },
+    });
+
+    return {
+      resourceId: variantResourceId,
+      materializedBomLineCount: recipe.lines.length,
+    };
+  });
 }
 
 type BuildComponentDto = {
@@ -511,23 +1217,6 @@ export async function listAssemblyBuilds(
   };
 }
 
-const bomSignature = (
-  rows: Array<{
-    componentResourceId: string;
-    quantityPerAssembly: number;
-    position: number;
-  }>,
-) =>
-  JSON.stringify(
-    rows
-      .map((row) => ({
-        resourceId: row.componentResourceId,
-        quantity: row.quantityPerAssembly,
-        position: row.position,
-      }))
-      .sort((left, right) => left.resourceId.localeCompare(right.resourceId)),
-  );
-
 export async function buildAssembly(
   organizationId: string,
   assemblyResourceId: string,
@@ -554,19 +1243,18 @@ export async function buildAssembly(
 
   try {
     return await db.transaction(async (transaction) => {
-      const initialBom = await transaction
-        .select({
-          componentResourceId: bomLines.componentResourceId,
-          quantityPerAssembly: bomLines.quantityPerAssembly,
-          position: bomLines.position,
-        })
-        .from(bomLines)
-        .where(
-          and(
-            eq(bomLines.organizationId, organizationId),
-            eq(bomLines.assemblyResourceId, assemblyResourceId),
-          ),
-        );
+      // Builds and recipe writes share one lock order: BOM graph first, then
+      // resource rows. The effective inherited recipe therefore cannot change
+      // between resolution and stock consumption.
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(${BOM_WRITE_LOCK_ID})`,
+      );
+      const effectiveRecipe = await resolveEffectiveBomRecipe(
+        transaction,
+        organizationId,
+        assemblyResourceId,
+      );
+      const initialBom = effectiveRecipe.lines;
 
       const resourceIds = Array.from(
         new Set([
@@ -622,38 +1310,15 @@ export async function buildAssembly(
           409,
         );
       }
-
-      const currentBom = await transaction
-        .select({
-          id: bomLines.id,
-          componentResourceId: bomLines.componentResourceId,
-          quantityPerAssembly: bomLines.quantityPerAssembly,
-          position: bomLines.position,
-          note: bomLines.note,
-          name: resources.name,
-          sku: resources.sku,
-        })
-        .from(bomLines)
-        .innerJoin(
-          resources,
-          and(
-            eq(resources.organizationId, organizationId),
-            eq(resources.id, bomLines.componentResourceId),
-          ),
-        )
-        .where(
-          and(
-            eq(bomLines.organizationId, organizationId),
-            eq(bomLines.assemblyResourceId, assemblyResourceId),
-          ),
-        )
-        .orderBy(asc(bomLines.position), asc(bomLines.id));
-      if (bomSignature(initialBom) !== bomSignature(currentBom)) {
-        throw new AssemblyOperationError(
-          "The bill of materials changed while this build was starting. Review and retry it.",
-          409,
-        );
-      }
+      const resourceById = new Map(lockedResources.map((row) => [row.id, row]));
+      const currentBom = initialBom.map((line) => {
+        const component = resourceById.get(line.componentResourceId);
+        if (!component) {
+          throw new AssemblyOperationError("A component no longer exists.", 409);
+        }
+        return { ...line, name: component.name, sku: component.sku };
+      });
+      assertDistinctRecipeComponents(currentBom);
 
       const settingsRows = await transaction
         .select({
@@ -686,7 +1351,6 @@ export async function buildAssembly(
       const locatedByResource = new Map(
         locatedRows.map((row) => [row.resourceId, Number(row.quantity)]),
       );
-      const resourceById = new Map(lockedResources.map((row) => [row.id, row]));
       const assembly = resourceById.get(assemblyResourceId);
       if (!assembly) throw new AssemblyOperationError("Not found", 404);
       const assemblyMode = modeByResource.get(assemblyResourceId) ?? "bulk";

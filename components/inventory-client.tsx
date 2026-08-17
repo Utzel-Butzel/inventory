@@ -5,7 +5,6 @@ import { useT } from "next-i18next/client";
 import {
   ArrowRight,
   Box,
-  Camera,
   Car,
   ChevronLeft,
   ChevronRight,
@@ -16,11 +15,8 @@ import {
   List,
   MapPin,
   PackageOpen,
-  Plus,
   Search,
   Shirt,
-  Sparkles,
-  Warehouse,
   Wrench,
   X,
 } from "lucide-react";
@@ -84,7 +80,7 @@ function ResourceVisual({ resource }: { resource: ClientResource }) {
       <img
         src={resource.cover.url}
         alt={resource.cover.altText || resource.name}
-        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+        className="h-full w-full object-cover"
       />
     );
   }
@@ -210,32 +206,13 @@ export function InventoryClient({
 
   return (
     <div className="mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div className="mb-7 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-success">
-            <Warehouse size={14} /> {t("list.eyebrow")}
-          </div>
-          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-foreground sm:text-4xl">
-            {t("list.title")}
-          </h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/batch"
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold text-muted-strong shadow-sm transition hover:border-border-strong hover:bg-surface-subtle"
-          >
-            <Camera size={16} /> {t("actions.batchCapture")}
-          </Link>
-          <Link
-            href="/inventory/new"
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-strong px-4 text-sm font-semibold text-on-strong shadow-sm transition hover:bg-success"
-          >
-            <Plus size={16} /> {t("actions.addItem")}
-          </Link>
-        </div>
+      <div className="mb-7">
+        <h1 className="text-3xl font-semibold tracking-[-0.025em] text-foreground sm:text-4xl">
+          {t("list.title")}
+        </h1>
       </div>
 
-      <section className="mb-5 rounded-2xl border border-border/80 bg-surface p-3 shadow-[var(--shadow-sm)]">
+      <section className="mb-5 rounded-xl border border-border bg-surface p-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <label className="relative min-w-0 flex-1">
             <span className="sr-only">{t("search.label")}</span>
@@ -322,6 +299,7 @@ export function InventoryClient({
                   view === "grid" ? "bg-surface text-foreground shadow-sm" : "text-muted"
                 }`}
                 aria-label={t("views.grid")}
+                aria-pressed={view === "grid"}
               >
                 <Grid2X2 size={16} />
               </button>
@@ -332,6 +310,7 @@ export function InventoryClient({
                   view === "table" ? "bg-surface text-foreground shadow-sm" : "text-muted"
                 }`}
                 aria-label={t("views.table")}
+                aria-pressed={view === "table"}
               >
                 <List size={17} />
               </button>
@@ -341,7 +320,7 @@ export function InventoryClient({
       </section>
 
       {error ? (
-        <div className="mb-5 rounded-2xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
+        <div className="mb-5 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
           {error}
         </div>
       ) : null}
@@ -354,25 +333,25 @@ export function InventoryClient({
           {Array.from({ length: 8 }, (_, index) => (
             <div
               key={index}
-              className="h-72 animate-pulse rounded-2xl border border-border bg-surface"
+              className="h-72 animate-pulse rounded-xl border border-border bg-surface"
             />
           ))}
         </div>
       ) : resources.length === 0 ? (
-        <div className="flex min-h-[440px] flex-col items-center justify-center rounded-3xl border border-dashed border-border-strong bg-surface px-6 text-center">
-          <div className="mb-5 grid h-16 w-16 place-items-center rounded-2xl bg-success-soft text-success">
-            {activeFilters ? <Search size={27} /> : <PackageOpen size={28} />}
+        <div className="flex min-h-64 flex-col items-center justify-center rounded-xl border border-dashed border-border-strong bg-surface px-6 py-8 text-center">
+          <div className="mb-3 grid size-10 place-items-center rounded-lg bg-surface-subtle text-muted">
+            {activeFilters ? <Search size={20} /> : <PackageOpen size={20} />}
           </div>
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">
+          <h2 className="text-base font-semibold text-foreground">
             {activeFilters ? t("empty.filteredTitle") : t("empty.title")}
           </h2>
-          <p className="mt-2 max-w-md text-sm leading-6 text-muted">
+          <p className="mt-1.5 max-w-sm text-[13px] leading-5 text-muted">
             {activeFilters
               ? t("empty.filteredDescription")
               : t("empty.description")}
           </p>
-          <div className="mt-5 flex gap-2">
-            {activeFilters ? (
+          {activeFilters ? (
+            <div className="mt-4">
               <button
                 type="button"
                 onClick={clearFilters}
@@ -380,23 +359,8 @@ export function InventoryClient({
               >
                 {t("filters.clear")}
               </button>
-            ) : (
-              <>
-                <Link
-                  href="/inventory/new"
-                  className="rounded-xl bg-strong px-4 py-2 text-sm font-semibold text-on-strong"
-                >
-                  {t("actions.addAnItem")}
-                </Link>
-                <Link
-                  href="/batch"
-                  className="rounded-xl border border-border bg-surface px-4 py-2 text-sm font-semibold text-muted-strong"
-                >
-                  {t("actions.batchCapture")}
-                </Link>
-              </>
-            )}
-          </div>
+            </div>
+          ) : null}
         </div>
       ) : view === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -404,7 +368,7 @@ export function InventoryClient({
             <Link
               key={resource.id}
               href={`/inventory/${resource.id}`}
-              className="group overflow-hidden rounded-2xl border border-border/90 bg-surface shadow-[var(--shadow-sm)] transition hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-md)]"
+              className="group overflow-hidden rounded-xl border border-border bg-surface transition-colors hover:border-border-strong"
             >
               <div className="relative aspect-square overflow-hidden bg-surface-muted">
                 <ResourceVisual resource={resource} />
@@ -413,11 +377,6 @@ export function InventoryClient({
                 >
                   {statusLabel(resource.status)}
                 </span>
-                {resource.aiMetadata?.generatedFields?.length ? (
-                  <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-slate-950/80 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur">
-                    <Sparkles size={11} /> {t("item.aiEnriched")}
-                  </span>
-                ) : null}
               </div>
               <div className="p-4">
                 <div className="mb-1 flex items-start justify-between gap-3">
@@ -448,7 +407,7 @@ export function InventoryClient({
           ))}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+        <div className="overflow-hidden rounded-xl border border-border bg-surface">
           <div className="hidden grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] gap-4 border-b border-border bg-surface-subtle/80 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted lg:grid">
             <span>{t("table.item")}</span>
             <span>{t("table.status")}</span>
@@ -465,7 +424,7 @@ export function InventoryClient({
                 className="group grid gap-3 px-4 py-3 transition hover:bg-surface-subtle lg:grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] lg:items-center lg:gap-4"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-surface-muted">
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
                     <ResourceVisual resource={resource} />
                   </div>
                   <div className="min-w-0">

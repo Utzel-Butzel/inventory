@@ -13,6 +13,11 @@ import {
 import {
   coverTransparencyMethods,
 } from "@/lib/cover-generation-contract";
+import { maximumGeneratedImageSizes } from "@/lib/image-generation-size";
+import {
+  isOrganizationSlug,
+  ORGANIZATION_SLUG_MAX_LENGTH,
+} from "@/lib/organization-path";
 
 const passwordSchema = z
   .string()
@@ -434,13 +439,33 @@ export const nativeLoginInputSchema = z.object({
   organizationId: z.string().uuid().optional(),
 });
 
+export const organizationSlugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(ORGANIZATION_SLUG_MAX_LENGTH)
+  .transform((value) => value.toLowerCase())
+  .refine(
+    isOrganizationSlug,
+    "Use lowercase letters, numbers, and single dashes; this slug may be reserved.",
+  );
+
 export const organizationCreateInputSchema = z
   .object({
     name: z.string().trim().min(1).max(160),
+    slug: organizationSlugSchema.optional(),
   })
   .strict();
 
-export const organizationUpdateInputSchema = organizationCreateInputSchema;
+export const organizationUpdateInputSchema = z
+  .object({
+    name: z.string().trim().min(1).max(160).optional(),
+    slug: organizationSlugSchema.optional(),
+  })
+  .strict()
+  .refine((value) => value.name !== undefined || value.slug !== undefined, {
+    message: "Provide an organization name or slug.",
+  });
 
 export const organizationSelectInputSchema = z
   .object({
@@ -448,10 +473,16 @@ export const organizationSelectInputSchema = z
   })
   .strict();
 
+export const analyzeInputSchema = z.object({
+  overwrite: z.boolean().optional().default(true),
+  prompt: z.string().trim().max(5_000).optional(),
+});
+
 export const coverInputSchema = z.object({
   sourceMediaId: z.string().uuid().optional(),
   prompt: z.string().trim().max(5_000).optional(),
   modelId: z.string().trim().min(1).max(240).optional(),
+  maximumImageSize: z.literal(maximumGeneratedImageSizes).optional(),
   transparentBackground: z.boolean().optional(),
   transparencyMethod: z.enum(coverTransparencyMethods).optional(),
 });

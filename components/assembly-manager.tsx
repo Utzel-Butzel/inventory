@@ -19,6 +19,7 @@ import {
   Package,
   Plus,
   RefreshCw,
+  RotateCcw,
   Save,
   Search,
   Trash2,
@@ -55,6 +56,7 @@ type BomResource = {
 
 type BomComponent = {
   id: string;
+  slotKey: string;
   resourceId: string;
   name: string;
   sku: string | null;
@@ -64,12 +66,20 @@ type BomComponent = {
   availableQuantity: number;
   trackingMode: TrackingMode;
   availableUnits: AvailableUnit[];
+  origin?: "local" | "base" | "inherited" | "override" | "variant";
+};
+
+type BomInheritance = {
+  primaryResourceId: string;
+  primaryName: string;
+  overrideCount: number;
 };
 
 type BomData = {
   resource: BomResource;
   components: BomComponent[];
   buildableQuantity: number;
+  inheritance?: BomInheritance | null;
 };
 
 type BuildComponent = {
@@ -143,10 +153,14 @@ function normalizeBom(payload: BomEnvelope, t: TFunction<"assembly">): BomData {
   if (!source.resource) throw new Error(t("errors.invalidBom"));
   return {
     resource: source.resource,
-    components: [...(source.components ?? [])].sort(
-      (left, right) => left.position - right.position,
-    ),
+    components: [...(source.components ?? [])]
+      .map((component) => ({
+        ...component,
+        slotKey: component.slotKey ?? component.id,
+      }))
+      .sort((left, right) => left.position - right.position),
     buildableQuantity: Math.max(0, source.buildableQuantity ?? 0),
+    inheritance: source.inheritance ?? null,
   };
 }
 
@@ -159,6 +173,7 @@ function normalizeBuilds(payload: BuildsEnvelope | AssemblyBuild[]) {
 function componentSnapshot(components: BomComponent[]) {
   return JSON.stringify(
     components.map((component, position) => ({
+      slotKey: component.slotKey,
       resourceId: component.resourceId,
       quantityPerAssembly: component.quantityPerAssembly,
       position,
@@ -223,6 +238,7 @@ export function AssemblyManager({
   const [loadingBom, setLoadingBom] = useState(true);
   const [loadingBuilds, setLoadingBuilds] = useState(showBuild);
   const [savingBom, setSavingBom] = useState(false);
+  const [resettingBom, setResettingBom] = useState(false);
   const [postingBuild, setPostingBuild] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -408,10 +424,12 @@ export function AssemblyManager({
   );
 
   function addComponent(resource: ClientResource) {
+    const slotKey = crypto.randomUUID();
     setComponents((current) => [
       ...current,
       {
-        id: `draft-${resource.id}`,
+        id: `draft-${slotKey}`,
+        slotKey,
         resourceId: resource.id,
         name: resource.name,
         sku: resource.sku,
@@ -421,6 +439,7 @@ export function AssemblyManager({
         availableQuantity: resource.quantity,
         trackingMode: "bulk",
         availableUnits: [],
+        origin: bom?.inheritance ? "variant" : "local",
       },
     ]);
     setQuery("");
@@ -429,12 +448,12 @@ export function AssemblyManager({
   }
 
   function updateComponent(
-    resourceIdToUpdate: string,
+    slotKeyToUpdate: string,
     values: Partial<Pick<BomComponent, "quantityPerAssembly" | "note">>,
   ) {
     setComponents((current) =>
       current.map((component) =>
-        component.resourceId === resourceIdToUpdate
+        component.slotKey === slotKeyToUpdate
           ? { ...component, ...values }
           : component,
       ),
@@ -471,6 +490,7 @@ export function AssemblyManager({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           components: components.map((component, position) => ({
+            slotKey: component.slotKey,
             resourceId: component.resourceId,
             quantityPerAssembly: component.quantityPerAssembly,
             position,
@@ -488,6 +508,40 @@ export function AssemblyManager({
       );
     } finally {
       setSavingBom(false);
+    }
+  }
+
+  async function resetBomToPrimary() {
+    if (!bom?.inheritance || bom.inheritance.overrideCount < 1) return;
+    if (
+      !window.confirm(
+        t("assembly:bom.inheritance.resetConfirm", {
+          name: bom.inheritance.primaryName,
+        }),
+      )
+    ) {
+      return;
+    }
+
+    setResettingBom(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const payload = await fetchJson<BomEnvelope>(bomEndpoint, {
+        method: "DELETE",
+      });
+      const normalized = normalizeBom(payload, t);
+      setBom(normalized);
+      setComponents(normalized.components);
+      setNotice(t("assembly:notices.bomReset"));
+    } catch (resetError) {
+      setError(
+        resetError instanceof Error
+          ? resetError.message
+          : t("assembly:errors.resetBom"),
+      );
+    } finally {
+      setResettingBom(false);
     }
   }
 
@@ -670,7 +724,7 @@ export function AssemblyManager({
                 <Button
                   size="sm"
                   onClick={() => void saveBom()}
-                  disabled={!dirty || savingBom}
+                  disabled={!dirty || savingBom || resettingBom}
                 >
                   {savingBom ? (
                     <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
@@ -682,6 +736,40 @@ export function AssemblyManager({
               </div>
             }
           />
+
+          {bom.inheritance ? (
+            <div className="flex flex-col gap-3 border-b border-border bg-surface-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="min-w-0">
+                <Link
+                  href={`/inventory/${bom.inheritance.primaryResourceId}`}
+                  className="text-[12px] font-semibold text-foreground hover:text-brand"
+                >
+                  {t("assembly:bom.inheritance.basedOn", {
+                    name: bom.inheritance.primaryName,
+                  })}
+                </Link>
+                <p className="mt-0.5 text-[11px] leading-4 text-muted">
+                  {t("assembly:bom.inheritance.description")}
+                </p>
+              </div>
+              {bom.inheritance.overrideCount > 0 ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void resetBomToPrimary()}
+                  disabled={resettingBom || savingBom}
+                >
+                  <RotateCcw
+                    className={cn("size-3.5", resettingBom && "animate-spin")}
+                    aria-hidden="true"
+                  />
+                  {resettingBom
+                    ? t("assembly:actions.resettingPrimary")
+                    : t("assembly:actions.resetToPrimary")}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="border-b border-border p-4 sm:p-5">
             <label className="relative block">
@@ -756,8 +844,15 @@ export function AssemblyManager({
             <div className="divide-y divide-border">
               {components.map((component, index) => {
                 const enough = component.availableQuantity >= component.quantityPerAssembly;
+                const variantOrigin =
+                  bom.inheritance &&
+                  (component.origin === "inherited" ||
+                    component.origin === "override" ||
+                    component.origin === "variant")
+                    ? component.origin
+                    : null;
                 return (
-                  <div key={component.resourceId} className="p-4 sm:p-5">
+                  <div key={component.slotKey} className="p-4 sm:p-5">
                     <div className="grid gap-4 lg:grid-cols-[minmax(210px,1fr)_130px_140px_auto] lg:items-start">
                       <div className="flex min-w-0 items-start gap-3">
                         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted">
@@ -768,12 +863,30 @@ export function AssemblyManager({
                           )}
                         </span>
                         <div className="min-w-0 pt-0.5">
-                          <Link
-                            href={`/inventory/${component.resourceId}`}
-                            className="block truncate text-[13px] font-semibold text-foreground hover:text-brand"
-                          >
-                            {component.name}
-                          </Link>
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Link
+                              href={`/inventory/${component.resourceId}`}
+                              className="min-w-0 truncate text-[13px] font-semibold text-foreground hover:text-brand"
+                            >
+                              {component.name}
+                            </Link>
+                            {variantOrigin ? (
+                              <Badge
+                                tone={
+                                  variantOrigin === "override"
+                                    ? "brand"
+                                    : variantOrigin === "variant"
+                                      ? "warning"
+                                      : "neutral"
+                                }
+                                className="min-h-5 shrink-0 px-2 py-0 text-[10px]"
+                              >
+                                {t(
+                                  `assembly:bom.inheritance.origins.${variantOrigin}`,
+                                )}
+                              </Badge>
+                            ) : null}
+                          </div>
                           <p className="mt-1 truncate text-[10px] text-muted">
                             {component.sku || t("assembly:labels.noSku")} · {t(`assembly:tracking.${component.trackingMode}`)}
                           </p>
@@ -789,7 +902,7 @@ export function AssemblyManager({
                           step="1"
                           value={component.quantityPerAssembly}
                           onChange={(event) =>
-                            updateComponent(component.resourceId, {
+                            updateComponent(component.slotKey, {
                               quantityPerAssembly: Number(event.target.value),
                             })
                           }
@@ -832,7 +945,7 @@ export function AssemblyManager({
                           type="button"
                           onClick={() =>
                             setComponents((current) =>
-                              current.filter((item) => item.resourceId !== component.resourceId),
+                              current.filter((item) => item.slotKey !== component.slotKey),
                             )
                           }
                           className="grid size-9 place-items-center rounded-lg border border-danger-border bg-surface text-danger hover:bg-danger-soft"
@@ -852,7 +965,7 @@ export function AssemblyManager({
                         value={component.note ?? ""}
                         maxLength={1000}
                         onChange={(event) =>
-                          updateComponent(component.resourceId, { note: event.target.value })
+                          updateComponent(component.slotKey, { note: event.target.value })
                         }
                         placeholder={t("assembly:placeholders.assemblyNote")}
                         className={`${inputClass} mt-1.5`}
@@ -876,7 +989,11 @@ export function AssemblyManager({
               <p className="text-[11px] text-muted">
                 {t("assembly:bom.unsavedDescription")}
               </p>
-              <Button size="sm" onClick={() => void saveBom()} disabled={savingBom}>
+              <Button
+                size="sm"
+                onClick={() => void saveBom()}
+                disabled={savingBom || resettingBom}
+              >
                 {savingBom ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <Save className="size-3.5" aria-hidden="true" />}
                 {t("assembly:actions.saveChanges")}
               </Button>

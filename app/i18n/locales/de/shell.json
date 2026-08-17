@@ -1,13 +1,12 @@
 {
-  "brand": "Inventory",
+  "brand": "Open Inventory",
   "metadata": {
     "title": "Inventar",
     "template": "%s · Inventar",
-    "description": "Inventar, Bestand, Standorte und Abläufe verwalten."
+    "description": "Inventar, Bestand, Orte und Abläufe verwalten."
   },
   "sections": {
-    "workspace": "Arbeitsbereich",
-    "manage": "Verwalten"
+    "workspace": "Bereiche"
   },
   "organizations": {
     "label": "Organisation",
@@ -20,10 +19,11 @@
     "mainLabel": "Hauptnavigation",
     "overview": "Übersicht",
     "inventory": "Inventar",
+    "entries": "Einträge",
     "stock": "Bestand",
-    "locations": "Standorte",
+    "locations": "Orte",
+    "map": "Karte",
     "rooms": "3D-Räume",
-    "batch": "Stapelstudio",
     "labels": "Etiketten",
     "duplicates": "Duplikate",
     "notifications": "Benachrichtigungen",
@@ -33,16 +33,21 @@
     "title": "Benachrichtigungen",
     "open": "Benachrichtigungen öffnen ({{count}} ungelesen)"
   },
-  "badges": {
-    "ai": "KI"
+  "demo": {
+    "bannerLabel": "Live-Demo · schreibgeschützt",
+    "bannerDescription": "Du kannst alles ansehen; Änderungen sind deaktiviert.",
+    "backToWebsite": "Zur Produktseite"
   },
   "actions": {
-    "addInventoryItem": "Inventar hinzufügen",
-    "addItem": "Eintrag hinzufügen",
+    "new": "Neu",
+    "createMenu": "Neuen Eintrag erstellen",
+    "manualEntry": "Manuell erfassen",
+    "manualEntryDescription": "Details selbst eingeben",
+    "photoCapture": "Per Foto erfassen",
+    "photoCaptureDescription": "Fotos aufnehmen oder hochladen",
     "signOut": "Abmelden",
     "openNavigation": "Navigation öffnen",
-    "closeNavigation": "Navigation schließen",
-    "helpAndConfiguration": "Hilfe und Konfiguration"
+    "closeNavigation": "Navigation schließen"
   },
   "user": {
     "generic": "Benutzer",
@@ -59,13 +64,14 @@
     "action": "Suchen"
   },
   "settings": {
-    "eyebrow": "Arbeitsbereich",
     "title": "Einstellungen",
     "description": "Daten, Zugriffe und Integrationen konfigurieren.",
     "navigationLabel": "Einstellungsnavigation",
     "groups": {
-      "workspace": "Arbeitsbereich",
-      "developer": "Entwicklung"
+      "general": "Allgemein",
+      "inventory": "Inventar",
+      "peopleAccess": "Personen & Zugriff",
+      "integrationsAdvanced": "Integrationen & Erweitert"
     },
     "items": {
       "organization": {

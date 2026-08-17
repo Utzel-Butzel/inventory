@@ -515,34 +515,30 @@ export function RoomSceneBrowser() {
 
   return (
     <main className="flex min-h-[calc(100dvh-68px)] flex-col gap-4 px-3 py-4 sm:px-5 lg:px-6">
-      <header className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+      <header className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand">
-            <Rotate3d className="size-3.5" aria-hidden="true" />
-            {t("rooms.eyebrow")}
-          </div>
-          <h1 className="text-2xl font-semibold tracking-[-0.025em] text-foreground">
+          <h1 className="text-2xl font-semibold text-foreground sm:text-[28px]">
             {t("rooms.title")}
           </h1>
           <p className="mt-1 text-sm text-muted">
             {t("rooms.subtitle")}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-          <span className="rounded-lg border border-border bg-surface px-3 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+          <span>
             {t("rooms.stats.rooms", {
               count: scans.length,
               value: integer.format(scans.length),
             })}
           </span>
-          <span className="rounded-lg border border-border bg-surface px-3 py-2 shadow-sm">
+          <span>
             {t("rooms.stats.items", {
               count: visiblePlacements.length,
               value: integer.format(visiblePlacements.length),
             })}
           </span>
           {linkedManifests.length ? (
-            <span className="rounded-lg border border-success-border bg-success-soft px-3 py-2 font-semibold text-success shadow-sm">
+            <span className="font-semibold text-success">
               {t("rooms.stats.linked", {
                 count: linkedManifests.length + 1,
                 value: integer.format(linkedManifests.length + 1),
@@ -636,8 +632,8 @@ export function RoomSceneBrowser() {
         </div>
       ) : null}
 
-      <div className="grid min-h-[680px] flex-1 overflow-hidden rounded-2xl border border-border bg-surface shadow-sm lg:grid-cols-[280px_minmax(0,1fr)_300px]">
-        <aside className="border-b border-border bg-surface-subtle p-3 lg:border-b-0 lg:border-r">
+      <div className="grid min-h-[680px] flex-1 overflow-hidden rounded-xl border border-border bg-surface lg:grid-cols-[280px_minmax(0,1fr)_300px]">
+        <aside className="order-2 border-t border-border bg-surface-subtle p-3 lg:order-1 lg:border-r lg:border-t-0">
           <p className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-muted">
             {t("rooms.scans.title")}
           </p>
@@ -697,7 +693,7 @@ export function RoomSceneBrowser() {
           </div>
         </aside>
 
-        <section className="relative min-h-[430px] overflow-hidden bg-surface-muted">
+        <section className="relative order-1 min-h-[430px] overflow-hidden bg-surface-muted lg:order-2">
           {visibleManifest && !loadingScene ? (
             <RoomSceneCanvas
               manifest={visibleManifest}
@@ -716,7 +712,7 @@ export function RoomSceneBrowser() {
           )}
 
           {layoutDrafts && selectedLayoutManifest ? (
-            <div className="absolute right-3 top-14 z-20 w-[min(310px,calc(100%-24px))] rounded-2xl border border-border bg-surface/95 p-3 shadow-xl backdrop-blur">
+            <div className="absolute right-3 top-14 z-20 w-[min(310px,calc(100%-24px))] rounded-xl border border-border bg-surface p-3 shadow-lg">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold text-foreground">
@@ -840,7 +836,7 @@ export function RoomSceneBrowser() {
           ) : null}
 
           {visibleManifest && !visiblePlacements.length ? (
-            <div className="absolute inset-x-4 bottom-14 mx-auto max-w-md rounded-2xl border border-border bg-surface/90 p-4 text-center shadow-lg backdrop-blur">
+            <div className="absolute inset-x-4 bottom-14 mx-auto max-w-md rounded-xl border border-border bg-surface p-4 text-center shadow-lg">
               <MapPin className="mx-auto size-5 text-brand" aria-hidden="true" />
               <p className="mt-2 text-sm font-semibold text-foreground">{t("rooms.scene.noItemsTitle")}</p>
               <p className="mt-1 text-xs leading-5 text-muted">
@@ -850,7 +846,7 @@ export function RoomSceneBrowser() {
           ) : null}
         </section>
 
-        <aside className="flex min-h-0 flex-col border-t border-border bg-surface lg:border-l lg:border-t-0">
+        <aside className="order-3 flex min-h-0 flex-col border-t border-border bg-surface lg:border-l lg:border-t-0">
           <div className="border-b border-border p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -876,6 +872,7 @@ export function RoomSceneBrowser() {
               ) : null}
             </div>
             <label className="relative mt-4 block">
+              <span className="sr-only">{t("rooms.placements.searchPlaceholder")}</span>
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted"
                 aria-hidden="true"

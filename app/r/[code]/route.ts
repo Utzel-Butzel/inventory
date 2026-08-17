@@ -19,7 +19,7 @@ export async function GET(request: Request, context: Context) {
 
   const identity = await getSessionIdentity();
   const destination = identity
-    ? organizationPath(identity.organizationId, `/inventory/${resourceId}`)
+    ? organizationPath(identity.organization.slug, `/inventory/${resourceId}`)
     : `/inventory/${resourceId}`;
   const redirectUrl = identity
     ? new URL(destination, request.url)

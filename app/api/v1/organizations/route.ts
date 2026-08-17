@@ -4,6 +4,7 @@ import { getRequestIdentity } from "@/lib/api-auth";
 import {
   createOrganization,
   ORGANIZATION_COOKIE,
+  OrganizationSlugUnavailableError,
   type OrganizationMembershipSummary,
 } from "@/lib/organizations";
 import { organizationCreateInputSchema } from "@/lib/validators";
@@ -22,9 +23,9 @@ function activeMembership(
   };
 }
 
-async function selectSessionOrganization(organizationId: string) {
+async function selectSessionOrganization(organizationSlug: string) {
   const cookieStore = await cookies();
-  cookieStore.set(ORGANIZATION_COOKIE, organizationId, {
+  cookieStore.set(ORGANIZATION_COOKIE, organizationSlug, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -69,6 +70,12 @@ export async function POST(request: Request) {
       { status: 403, headers: noStoreHeaders },
     );
   }
+  if (identity.organization.isReadOnly) {
+    return Response.json(
+      { error: "This organization is read-only." },
+      { status: 403, headers: noStoreHeaders },
+    );
+  }
 
   let payload: unknown;
   try {
@@ -87,13 +94,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const created = await createOrganization({
-    name: parsed.data.name,
-    userId: identity.userId,
-    actor: identity.subject,
-  });
+  let created: Awaited<ReturnType<typeof createOrganization>>;
+  try {
+    created = await createOrganization({
+      name: parsed.data.name,
+      slug: parsed.data.slug,
+      userId: identity.userId,
+      actor: identity.subject,
+    });
+  } catch (error) {
+    if (error instanceof OrganizationSlugUnavailableError) {
+      return Response.json(
+        { error: "This organization slug is already in use." },
+        { status: 409, headers: noStoreHeaders },
+      );
+    }
+    throw error;
+  }
   const organization = activeMembership(created);
-  await selectSessionOrganization(organization.id);
+  await selectSessionOrganization(organization.slug);
   return Response.json(
     { organization },
     { status: 201, headers: noStoreHeaders },

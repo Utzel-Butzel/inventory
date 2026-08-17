@@ -140,7 +140,10 @@ actor ObjectCaptureArticleImageBuilder {
     private let maximumPixelSize: Int
     private let compressionQuality: Double
 
-    init(maximumPixelSize: Int = 2_200, compressionQuality: Double = 0.86) {
+    init(
+        maximumPixelSize: Int = ImageSizePreferences.defaultUploadPixelSize,
+        compressionQuality: Double = 0.86
+    ) {
         self.maximumPixelSize = maximumPixelSize
         self.compressionQuality = compressionQuality
     }
@@ -249,11 +252,17 @@ private final class ObjectCaptureFlowModel: ObservableObject {
     private var captureTasks: [Task<Void, Never>] = []
     private var reconstructionTask: Task<Void, Never>?
     private var photogrammetrySession: PhotogrammetrySession?
-    private let articleImageBuilder = ObjectCaptureArticleImageBuilder()
+    private let articleImageBuilder: ObjectCaptureArticleImageBuilder
     private var started = false
     private var reconstructionStarted = false
     private var resultPreparationStarted = false
     private var ownsWorkspace = true
+
+    init(maximumUploadImagePixelSize: Int) {
+        articleImageBuilder = ObjectCaptureArticleImageBuilder(
+            maximumPixelSize: maximumUploadImagePixelSize
+        )
+    }
 
     var canRetryReconstruction: Bool {
         phase == .failed && workspace != nil && reconstructionStarted
@@ -644,13 +653,17 @@ private final class ObjectCaptureFlowModel: ObservableObject {
 struct ObjectCaptureFlowView: View {
     @Environment(\.dismiss) private var dismiss
 
+    let maximumUploadImagePixelSize: Int
     let onComplete: (CapturedObjectModel) -> Void
     let onFallback: () -> Void
 
     var body: some View {
         Group {
             if ObjectCaptureAvailability.isSupported {
-                SupportedObjectCaptureFlowView(onComplete: onComplete)
+                SupportedObjectCaptureFlowView(
+                    maximumUploadImagePixelSize: maximumUploadImagePixelSize,
+                    onComplete: onComplete
+                )
             } else {
                 unsupportedView
             }
@@ -682,11 +695,23 @@ struct ObjectCaptureFlowView: View {
 
 private struct SupportedObjectCaptureFlowView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var model = ObjectCaptureFlowModel()
+    @StateObject private var model: ObjectCaptureFlowModel
     @State private var confirmCancellation = false
     @State private var deliveredResult = false
 
     let onComplete: (CapturedObjectModel) -> Void
+
+    init(
+        maximumUploadImagePixelSize: Int,
+        onComplete: @escaping (CapturedObjectModel) -> Void
+    ) {
+        _model = StateObject(
+            wrappedValue: ObjectCaptureFlowModel(
+                maximumUploadImagePixelSize: maximumUploadImagePixelSize
+            )
+        )
+        self.onComplete = onComplete
+    }
 
     var body: some View {
         ZStack {

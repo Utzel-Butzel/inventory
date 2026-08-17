@@ -5,7 +5,6 @@
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import {
   AlertTriangle,
-  Aperture,
   ArrowLeft,
   Camera,
   Check,
@@ -18,11 +17,9 @@ import {
   MapPin,
   RefreshCw,
   Send,
-  Sparkles,
   Trash2,
   Upload,
   Video,
-  WandSparkles,
   X,
 } from "lucide-react";
 import {
@@ -670,21 +667,11 @@ export default function BatchCapturePage() {
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               {t("header.inventory")}
             </Link>
-            <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-strong text-on-strong shadow-sm">
-                <Aperture className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-                  {t("header.eyebrow")}
-                </p>
-                <h1 className="text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">
-                  {t("header.title")}
-                </h1>
-              </div>
-            </div>
+            <h1 className="text-2xl font-semibold sm:text-[28px]">
+              {t("header.title")}
+            </h1>
           </div>
-          <div className="flex items-center gap-2 self-start rounded-full border border-border bg-surface px-3 py-2 text-xs font-medium text-muted shadow-sm sm:self-auto">
+          <div className="flex items-center gap-2 self-start text-xs font-medium text-muted sm:self-auto">
             <span
               className={`h-2 w-2 rounded-full ${
                 activeJobs ? "animate-pulse bg-brand-solid" : "bg-border-strong"
@@ -698,7 +685,7 @@ export default function BatchCapturePage() {
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,0.62fr)]">
           <section
-            className="overflow-hidden rounded-[28px] border border-black/10 bg-[#11130f] shadow-[0_18px_50px_rgba(25,29,22,0.12)]"
+            className="overflow-hidden rounded-xl border border-border bg-[#11130f]"
             aria-labelledby="camera-heading"
           >
             <div className="relative aspect-[4/3] min-h-[340px] max-h-[680px] w-full overflow-hidden bg-[#11130f] sm:aspect-[16/10]">
@@ -729,7 +716,7 @@ export default function BatchCapturePage() {
                   <span
                     className={`h-2 w-2 rounded-full ${
                       cameraState === "ready" && isVideoReady
-                        ? "bg-[#dfff71]"
+                        ? "bg-success"
                         : cameraState === "requesting"
                           ? "animate-pulse bg-amber-300"
                           : "bg-white/45"
@@ -752,7 +739,7 @@ export default function BatchCapturePage() {
                         setSelectedDeviceId(deviceId);
                         void startCamera(deviceId);
                       }}
-                      className="max-w-full appearance-none truncate rounded-full border border-white/15 bg-black/35 py-2 pl-3 pr-9 text-xs font-medium text-white outline-none backdrop-blur-md focus:ring-2 focus:ring-[#dfff71]"
+                      className="max-w-full appearance-none truncate rounded-full border border-white/15 bg-black/35 py-2 pl-3 pr-9 text-xs font-medium text-white outline-none backdrop-blur-md focus:ring-2 focus:ring-brand-solid"
                     >
                       {devices.map((device, index) => (
                         <option key={device.deviceId} value={device.deviceId}>
@@ -795,7 +782,7 @@ export default function BatchCapturePage() {
                     <button
                       type="button"
                       onClick={() => void startCamera(selectedDeviceId)}
-                      className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full bg-[#dfff71] px-5 py-2.5 text-sm font-semibold text-[#20251f] transition hover:bg-[#e8ff9a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#11130f]"
+                      className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full bg-brand-solid px-5 py-2.5 text-sm font-semibold text-on-brand transition hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid focus-visible:ring-offset-2 focus-visible:ring-offset-[#11130f]"
                     >
                       <Camera className="h-4 w-4" aria-hidden="true" />
                       {cameraState === "error"
@@ -810,7 +797,7 @@ export default function BatchCapturePage() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="group flex h-12 min-w-12 items-center justify-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71] sm:px-4"
+                  className="group flex h-12 min-w-12 items-center justify-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid sm:px-4"
                 >
                   <Upload className="h-4 w-4" aria-hidden="true" />
                   <span className="hidden sm:inline">{t("camera.upload")}</span>
@@ -825,7 +812,7 @@ export default function BatchCapturePage() {
                     photos.length >= MAX_PHOTOS
                   }
                   aria-label={t("camera.takePhoto")}
-                  className="grid h-[74px] w-[74px] place-items-center rounded-full border-[5px] border-white bg-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.35)] transition hover:scale-[1.04] active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71] focus-visible:ring-offset-4 focus-visible:ring-offset-black"
+                  className="grid h-[74px] w-[74px] place-items-center rounded-full border-[5px] border-white bg-white/20 shadow-[0_4px_24px_rgba(0,0,0,0.35)] transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid focus-visible:ring-offset-4 focus-visible:ring-offset-black"
                 >
                   <span className="grid h-[54px] w-[54px] place-items-center rounded-full bg-white text-[#171a15]">
                     {isCapturing ? (
@@ -845,7 +832,7 @@ export default function BatchCapturePage() {
                       stopCamera();
                       setCameraState("idle");
                     }}
-                    className="flex h-12 min-w-12 items-center justify-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71] sm:px-4"
+                    className="flex h-12 min-w-12 items-center justify-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 text-sm font-medium text-white backdrop-blur-md transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid sm:px-4"
                   >
                     <CircleStop className="h-4 w-4" aria-hidden="true" />
                     <span className="hidden sm:inline">{t("camera.stop")}</span>
@@ -892,7 +879,7 @@ export default function BatchCapturePage() {
                         return [];
                       });
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-white/55 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71]"
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-white/55 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid"
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                     {t("photos.clear")}
@@ -924,7 +911,7 @@ export default function BatchCapturePage() {
                         type="button"
                         onClick={() => removePhoto(photo.id)}
                         aria-label={t("photos.remove", { number: index + 1 })}
-                        className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/65 text-white shadow-sm transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71]"
+                        className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/65 text-white shadow-sm transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid"
                       >
                         <X className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
@@ -934,7 +921,7 @@ export default function BatchCapturePage() {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="grid h-24 w-24 shrink-0 place-items-center rounded-2xl border border-dashed border-white/20 text-white/45 transition hover:border-white/40 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71]"
+                      className="grid h-24 w-24 shrink-0 place-items-center rounded-xl border border-dashed border-white/20 text-white/45 transition hover:border-white/40 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid"
                       aria-label={t("photos.addMore")}
                     >
                       <ImagePlus className="h-5 w-5" aria-hidden="true" />
@@ -945,7 +932,7 @@ export default function BatchCapturePage() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-white/15 px-4 py-4 text-left transition hover:border-white/30 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#dfff71]"
+                  className="flex w-full items-center gap-3 rounded-xl border border-dashed border-white/15 px-4 py-4 text-left transition hover:border-white/30 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid"
                 >
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/[0.07] text-white/60">
                     <FileImage className="h-4 w-4" aria-hidden="true" />
@@ -963,7 +950,7 @@ export default function BatchCapturePage() {
             </div>
           </section>
 
-          <aside className="flex flex-col rounded-[28px] border border-border bg-surface p-5 shadow-[var(--shadow-md)] sm:p-6">
+          <aside className="flex flex-col rounded-xl border border-border bg-surface p-5 sm:p-6">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
@@ -1098,13 +1085,13 @@ export default function BatchCapturePage() {
                 ) : null}
               </div>
 
-              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-brand-border bg-brand-soft p-4">
+              <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
                 <span className="flex min-w-0 items-start gap-3">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-sm">
-                    <WandSparkles className="h-4 w-4" aria-hidden="true" />
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted-strong">
+                    <FileImage className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <span>
-                    <span className="block text-sm font-semibold text-brand-strong">
+                    <span className="block text-sm font-semibold text-foreground">
                       {t("defaults.generateCover")}
                     </span>
                     <span className="mt-0.5 block text-xs leading-5 text-muted">
@@ -1124,70 +1111,76 @@ export default function BatchCapturePage() {
                 </span>
               </label>
               {autoGenerateCover ? (
-                <div className="mt-3 rounded-2xl border border-brand-border bg-surface p-4">
-                  <label className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={transparentCover}
-                      onChange={(event) => setTransparentCover(event.target.checked)}
-                      className="mt-0.5 h-4 w-4 accent-brand-solid"
+                <details className="group mt-3 rounded-2xl border border-border bg-surface p-4">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-muted-strong marker:content-none">
+                    {t("defaults.advancedImageOptions")}
+                    <ChevronDown className="h-4 w-4 text-muted transition group-open:rotate-180" aria-hidden="true" />
+                  </summary>
+                  <div className="mt-3 border-t border-border pt-3">
+                    <label className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={transparentCover}
+                        onChange={(event) => setTransparentCover(event.target.checked)}
+                        className="mt-0.5 h-4 w-4 accent-brand-solid"
+                      />
+                      <span>
+                        <span className="block text-xs font-semibold text-muted-strong">
+                          {t("defaults.transparentBackground")}
+                        </span>
+                        <span className="mt-0.5 block text-xs leading-5 text-muted">
+                          {t("defaults.transparentBackgroundDescription")}
+                        </span>
+                      </span>
+                    </label>
+                    {transparentCover ? (
+                      <fieldset className="mt-3 border-t border-border pt-3">
+                        <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                          {t("defaults.transparencyMethod")}
+                        </legend>
+                        <div className="mt-2 grid gap-2">
+                          {(["difference-matting", "greenscreen"] as const).map(
+                            (method) => (
+                              <label
+                                key={method}
+                                className="flex cursor-pointer items-start gap-2 rounded-lg border border-border bg-surface-subtle p-2.5"
+                              >
+                                <input
+                                  type="radio"
+                                  name="batch-cover-transparency-method"
+                                  value={method}
+                                  checked={coverTransparencyMethod === method}
+                                  onChange={() => setCoverTransparencyMethod(method)}
+                                  className="mt-0.5 h-3.5 w-3.5 accent-brand-solid"
+                                />
+                                <span>
+                                  <span className="block text-xs font-semibold text-muted-strong">
+                                    {t(
+                                      method === "difference-matting"
+                                        ? "defaults.differenceMatting"
+                                        : "defaults.greenscreen",
+                                    )}
+                                  </span>
+                                  <span className="mt-0.5 block text-[11px] leading-4 text-muted">
+                                    {t(
+                                      method === "difference-matting"
+                                        ? "defaults.differenceMattingDescription"
+                                        : "defaults.greenscreenDescription",
+                                    )}
+                                  </span>
+                                </span>
+                              </label>
+                            ),
+                          )}
+                        </div>
+                      </fieldset>
+                    ) : null}
+                    <ImageModelSelector
+                      preference={imageModelPreference}
+                      className="mt-3"
                     />
-                    <span>
-                      <span className="block text-xs font-semibold text-muted-strong">
-                        {t("defaults.transparentBackground")}
-                      </span>
-                      <span className="mt-0.5 block text-xs leading-5 text-muted">
-                        {t("defaults.transparentBackgroundDescription")}
-                      </span>
-                    </span>
-                  </label>
-                  {transparentCover ? (
-                    <fieldset className="mt-3 border-t border-border pt-3">
-                      <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                        {t("defaults.transparencyMethod")}
-                      </legend>
-                      <div className="mt-2 grid gap-2">
-                        {(["difference-matting", "greenscreen"] as const).map(
-                          (method) => (
-                            <label
-                              key={method}
-                              className="flex cursor-pointer items-start gap-2 rounded-lg border border-border bg-surface-subtle p-2.5"
-                            >
-                              <input
-                                type="radio"
-                                name="batch-cover-transparency-method"
-                                value={method}
-                                checked={coverTransparencyMethod === method}
-                                onChange={() => setCoverTransparencyMethod(method)}
-                                className="mt-0.5 h-3.5 w-3.5 accent-brand-solid"
-                              />
-                              <span>
-                                <span className="block text-xs font-semibold text-muted-strong">
-                                  {t(
-                                    method === "difference-matting"
-                                      ? "defaults.differenceMatting"
-                                      : "defaults.greenscreen",
-                                  )}
-                                </span>
-                                <span className="mt-0.5 block text-[11px] leading-4 text-muted">
-                                  {t(
-                                    method === "difference-matting"
-                                      ? "defaults.differenceMattingDescription"
-                                      : "defaults.greenscreenDescription",
-                                  )}
-                                </span>
-                              </span>
-                            </label>
-                          ),
-                        )}
-                      </div>
-                    </fieldset>
-                  ) : null}
-                  <ImageModelSelector
-                    preference={imageModelPreference}
-                    className="mt-3"
-                  />
-                </div>
+                  </div>
+                </details>
               ) : null}
             </div>
 
@@ -1208,13 +1201,13 @@ export default function BatchCapturePage() {
                 type="button"
                 onClick={sendBatch}
                 disabled={!photos.length}
-                className="group flex min-h-14 w-full items-center justify-between rounded-2xl bg-strong px-5 text-sm font-semibold text-on-strong shadow-[var(--shadow-md)] transition hover:-translate-y-0.5 hover:opacity-90 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                className="group flex min-h-14 w-full items-center justify-between rounded-xl bg-brand-solid px-5 text-sm font-semibold text-on-brand transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
               >
                 <span className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  <Camera className="h-4 w-4" aria-hidden="true" />
                   {t("submit.create")}
                 </span>
-                <span className="flex items-center gap-2 text-on-strong/65 group-hover:text-on-strong group-disabled:text-on-strong/70">
+                <span className="flex items-center gap-2 text-on-brand opacity-70 group-hover:opacity-100">
                   {photos.length
                     ? t("submit.photoCount", { count: photos.length })
                     : t("submit.addPhotos")}
@@ -1231,10 +1224,7 @@ export default function BatchCapturePage() {
         <section className="mt-6" aria-labelledby="jobs-heading" aria-live="polite">
           <div className="mb-3 flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                {t("jobs.eyebrow")}
-              </p>
-              <h2 id="jobs-heading" className="mt-1 text-lg font-semibold">
+              <h2 id="jobs-heading" className="text-lg font-semibold">
                 {t("jobs.title")}
               </h2>
             </div>
@@ -1258,7 +1248,7 @@ export default function BatchCapturePage() {
               {jobs.map((job) => (
                 <article
                   key={job.id}
-                  className="rounded-2xl border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
+                  className="rounded-xl border border-border bg-surface p-4"
                 >
                   <div className="flex items-start gap-3">
                     <span

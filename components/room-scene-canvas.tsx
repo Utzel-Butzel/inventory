@@ -12,7 +12,6 @@ import {
   LoaderCircle,
   Maximize2,
   ScanSearch,
-  Sparkles,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -1878,7 +1877,7 @@ export function RoomSceneCanvas({
               )}
               aria-pressed={sceneMode === "gaussian_splat"}
             >
-              <Sparkles className="size-3.5" aria-hidden="true" />
+              <ScanSearch className="size-3.5" aria-hidden="true" />
               {t("canvas.modes.splat")}
             </button>
           ) : null}

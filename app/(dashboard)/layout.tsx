@@ -10,8 +10,9 @@ import type {
 import { UiI18nProvider } from "@/components/ui-i18n-provider";
 import { getSessionIdentity } from "@/lib/api-auth";
 import {
-  organizationIdFromPathname,
   organizationPath,
+  organizationReferenceFromPathname,
+  isOrganizationScopedPagePath,
   stripOrganizationPathname,
 } from "@/lib/organization-path";
 import { getResources, getT } from "@/lib/ui-i18n/server";
@@ -53,10 +54,16 @@ export default async function DashboardLayout({
   if (!organizationIdentity.organization) redirect("/login");
   const originalPath =
     requestHeaders.get("x-inventory-original-path") ?? "/dashboard";
-  if (!organizationIdFromPathname(originalPath)) {
-    const [pathname, query] = originalPath.split("?", 2);
+  const [pathname, query] = originalPath.split("?", 2);
+  const routeReference = organizationReferenceFromPathname(pathname);
+  const routeSegment = pathname.split("/").filter(Boolean)[0];
+  if (
+    !isOrganizationScopedPagePath(pathname) ||
+    routeReference !== organizationIdentity.organization.slug ||
+    routeSegment !== organizationIdentity.organization.slug
+  ) {
     redirect(
-      `${organizationPath(identity.organizationId, stripOrganizationPathname(pathname))}${query ? `?${query}` : ""}`,
+      `${organizationPath(organizationIdentity.organization.slug, stripOrganizationPathname(pathname))}${query ? `?${query}` : ""}`,
     );
   }
   const organizations = organizationIdentity.organizations?.length
@@ -69,12 +76,18 @@ export default async function DashboardLayout({
         },
       ];
   const resources = getResources(translation.i18n);
+  const configuredWebsiteUrl = process.env.WEBSITE_URL?.trim();
+  const websiteUrl =
+    configuredWebsiteUrl && /^https?:\/\//i.test(configuredWebsiteUrl)
+      ? configuredWebsiteUrl
+      : "https://github.com/Utzel-Butzel/open-inventory-website";
 
   return (
     <UiI18nProvider language={translation.lng} resources={resources}>
       <AppShell
         organization={organizationIdentity.organization}
         organizations={organizations}
+        websiteUrl={websiteUrl}
         user={{
           name: identity.name,
           email: identity.subject,

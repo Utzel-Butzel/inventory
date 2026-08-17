@@ -32,5 +32,4 @@ export function coverPromptForTransparency(
 
 export const differenceMattingBlackPassPrompt = `Change only the pure white background to a pure, perfectly uniform black #000000 background.
 Keep the subject, its position, scale, pixels, colors, lighting, fine edges, translucent details, and shadow exactly unchanged.
-Do not redraw, restyle, move, crop, or alter the subject. The black background must fill every pixel outside it with no texture, gradient, horizon, vignette, border, or other detail.
-Return exactly one square 1024×1024 image.`;
+Do not redraw, restyle, move, crop, or alter the subject. The black background must fill every pixel outside it with no texture, gradient, horizon, vignette, border, or other detail.`;

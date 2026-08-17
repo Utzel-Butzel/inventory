@@ -1,8 +1,8 @@
 {
   "launch": {
     "title": "Count pieces from a photo",
-    "description": "Take a photo and let AI fill the quantity.",
-    "action": "Try it"
+    "description": "Calculate the quantity from a photo and verify the result before booking.",
+    "action": "Open"
   },
   "header": {
     "title": "Photo piece counter",
@@ -14,7 +14,8 @@
     "privacy": "The photo is analyzed for this count and is not attached to the item."
   },
   "capture": {
-    "countHint": "AI will count visible {{unit}} matching “{{item}}”. You can correct the quantity before booking."
+    "countHint": "Visible {{unit}} matching “{{item}}” will be counted automatically. You can correct the quantity before booking.",
+    "advancedOptions": "Advanced options"
   },
   "actions": {
     "close": "Close photo counter",
@@ -35,10 +36,13 @@
   },
   "result": {
     "confidence": "{{value}}% confidence",
+    "confidenceLabel": "Confidence",
     "filled": "Quantity filled in automatically — verify it before booking.",
     "noneFound": "No matching pieces were found. Try a clearer photo.",
     "estimateWarning": "This is an estimate. Check hidden or overlapping pieces carefully.",
     "analyzedWith": "Analyzed with {{model}}",
+    "technicalDetails": "Technical details",
+    "method": "Method",
     "exceedsAvailable": "The selected quantity exceeds the {{quantity}} currently available. Correct it or switch to stock in."
   },
   "notices": {
@@ -60,6 +64,6 @@
   "fallback": {
     "cameraPhoto": "Camera photo",
     "detectedItem": "objects",
-    "model": "AI vision"
+    "model": "Automatic image recognition"
   }
 }

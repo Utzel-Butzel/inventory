@@ -14,14 +14,17 @@ import {
 } from "@/db/schema";
 import { builtinRolePermissions } from "@/lib/access-control-contract";
 import { db } from "@/lib/db";
+import { slugifyOrganizationName } from "@/lib/organization-path";
 
 export const ORGANIZATION_HEADER = "x-organization-id";
 export const ORGANIZATION_COOKIE = "inventory.organization";
+export const ORGANIZATION_ROUTE_HEADER = "x-inventory-organization-route";
 
 export type OrganizationSummary = {
   id: string;
   name: string;
   slug: string;
+  isReadOnly: boolean;
 };
 
 export type OrganizationMembershipSummary = OrganizationSummary & {
@@ -157,6 +160,16 @@ const canonicalRelationTypes = [
     position: 10,
   },
   {
+    key: "variant_of",
+    label: "Variant of",
+    inverseLabel: "Variants",
+    description:
+      "Connects a first-class inventory variant to its primary item.",
+    allowManual: false,
+    spatial: false,
+    position: 15,
+  },
+  {
     key: "related",
     label: "Related to",
     inverseLabel: "Related to",
@@ -168,11 +181,15 @@ const canonicalRelationTypes = [
 ] as const;
 
 export const organizationSummary = (
-  organization: Pick<typeof organizations.$inferSelect, "id" | "name" | "slug">,
+  organization: Pick<
+    typeof organizations.$inferSelect,
+    "id" | "name" | "slug" | "isReadOnly"
+  >,
 ): OrganizationSummary => ({
   id: organization.id,
   name: organization.name,
   slug: organization.slug,
+  isReadOnly: organization.isReadOnly,
 });
 
 export async function getOrganization(id: string) {
@@ -222,16 +239,23 @@ export async function listOrganizationsForUser(
 
 export function selectOrganization(
   memberships: readonly OrganizationMembershipSummary[],
-  requestedId?: string | null,
-  fallbackId?: string | null,
+  requestedReference?: string | null,
+  fallbackReference?: string | null,
+  allowSlug = false,
 ) {
-  const requested = requestedId?.trim();
+  const matches = (
+    membership: OrganizationMembershipSummary,
+    reference: string,
+  ) =>
+    membership.id === reference ||
+    (allowSlug && membership.slug === reference.toLowerCase());
+  const requested = requestedReference?.trim();
   if (requested) {
-    return memberships.find((membership) => membership.id === requested) ?? null;
+    return memberships.find((membership) => matches(membership, requested)) ?? null;
   }
-  const fallback = fallbackId?.trim();
+  const fallback = fallbackReference?.trim();
   if (fallback) {
-    const match = memberships.find((membership) => membership.id === fallback);
+    const match = memberships.find((membership) => matches(membership, fallback));
     if (match) return match;
   }
   return (
@@ -260,17 +284,6 @@ export async function ensureDefaultOrganizationMembership(options: {
         organizationMemberships.userId,
       ],
     });
-}
-
-function slugBase(name: string) {
-  const normalized = name
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 64);
-  return normalized || "organization";
 }
 
 async function copyOrganizationDefaults(
@@ -322,15 +335,17 @@ async function copyOrganizationDefaults(
 
 export async function createOrganization(options: {
   name: string;
+  slug?: string;
   userId: string;
   actor: string;
 }) {
   return db.transaction(async (transaction) => {
-    const base = slugBase(options.name);
+    const base = options.slug ?? slugifyOrganizationName(options.name);
     let created: typeof organizations.$inferSelect | undefined;
-    for (let attempt = 0; attempt < 25 && !created; attempt += 1) {
+    const attempts = options.slug ? 1 : 25;
+    for (let attempt = 0; attempt < attempts && !created; attempt += 1) {
       const suffix = attempt === 0 ? "" : `-${attempt + 1}`;
-      const slug = `${base.slice(0, 80 - suffix.length)}${suffix}`;
+      const slug = `${base.slice(0, 48 - suffix.length)}${suffix}`;
       [created] = await transaction
         .insert(organizations)
         .values({
@@ -341,7 +356,7 @@ export async function createOrganization(options: {
         .onConflictDoNothing({ target: organizations.slug })
         .returning();
     }
-    if (!created) throw new Error("Unable to allocate an organization slug.");
+    if (!created) throw new OrganizationSlugUnavailableError();
 
     await copyOrganizationDefaults(
       transaction,
@@ -360,13 +375,37 @@ export async function createOrganization(options: {
 
 export async function updateOrganization(options: {
   id: string;
-  name: string;
+  name?: string;
+  slug?: string;
   actor: string;
 }) {
-  const [updated] = await db
-    .update(organizations)
-    .set({ name: options.name, updatedAt: new Date() })
-    .where(eq(organizations.id, options.id))
-    .returning();
-  return updated ? organizationSummary(updated) : null;
+  try {
+    const [updated] = await db
+      .update(organizations)
+      .set({
+        ...(options.name ? { name: options.name } : {}),
+        ...(options.slug ? { slug: options.slug } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(organizations.id, options.id))
+      .returning();
+    return updated ? organizationSummary(updated) : null;
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "23505"
+    ) {
+      throw new OrganizationSlugUnavailableError();
+    }
+    throw error;
+  }
+}
+
+export class OrganizationSlugUnavailableError extends Error {
+  constructor() {
+    super("Organization slug is already in use.");
+    this.name = "OrganizationSlugUnavailableError";
+  }
 }

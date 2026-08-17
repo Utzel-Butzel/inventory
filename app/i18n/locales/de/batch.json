@@ -1,11 +1,11 @@
 {
   "header": {
     "inventory": "Inventar",
-    "eyebrow": "Schnellerfassung",
-    "title": "Serienerfassung",
-    "processing_one": "{{count}} Element wird verarbeitet",
-    "processing_other": "{{count}} Elemente werden verarbeitet",
-    "ready": "Bereit für das nächste Element"
+    "eyebrow": "Per Foto",
+    "title": "Fotoerfassung",
+    "processing_one": "{{count}} Eintrag wird verarbeitet",
+    "processing_other": "{{count}} Einträge werden verarbeitet",
+    "ready": "Bereit für den nächsten Eintrag"
   },
   "types": {
     "object": "Objekt",
@@ -28,7 +28,7 @@
     "numbered": "Kamera {{number}}",
     "unavailable": "Kamera nicht verfügbar",
     "permission": "Warten auf Berechtigung…",
-    "prompt": "Element an seinem Standort fotografieren",
+    "prompt": "Gegenstand an seinem Standort fotografieren",
     "description": "Die rückseitige Kamera wird bevorzugt. Du kannst jederzeit vorhandene Bilder hochladen.",
     "retry": "Kamera erneut versuchen",
     "allow": "Kamera erlauben",
@@ -37,11 +37,11 @@
     "stop": "Stoppen"
   },
   "photos": {
-    "title": "Fotoablage",
-    "description": "Mehrere Blickwinkel verbessern das KI-Ergebnis.",
+    "title": "Fotos",
+    "description": "Mehrere Blickwinkel erleichtern die zuverlässige Erfassung.",
     "clear": "Leeren",
     "selected": "Ausgewählte Fotos",
-    "alt": "Ausgewählte Ansicht {{number}} des Elements",
+    "alt": "Ausgewählte Ansicht {{number}} des Gegenstands",
     "primary": "Hauptbild",
     "remove": "Foto {{number}} entfernen",
     "addMore": "Weitere Fotos hinzufügen",
@@ -50,64 +50,65 @@
   },
   "defaults": {
     "eyebrow": "Vorgaben",
-    "title": "Serie beschreiben",
+    "title": "Eintrag beschreiben",
     "optional": "Optional",
-    "itemType": "Elementtyp",
-    "locationLabel": "Standortbezeichnung",
+    "itemType": "Eintragstyp",
+    "locationLabel": "Standort",
     "locationPlaceholder": "z. B. Werkstatt · Regal B2",
     "coordinates": "GPS-Koordinaten",
     "clear": "Leeren",
     "findingLocation": "Standort wird ermittelt…",
     "useLocation": "Aktuellen Standort verwenden",
     "accuracy": "Auf etwa {{meters}} m genau · Zum Aktualisieren tippen",
-    "locationPrivacy": "Wird vertraulich mit diesem Inventarelement gespeichert",
-    "generateCover": "KI-Titelbild erstellen",
-    "generateCoverDescription": "Element erkennen und anschließend aus dem ersten Foto ein sauberes Studio-Titelbild erstellen.",
+    "locationPrivacy": "Wird mit diesem Eintrag gespeichert",
+    "generateCover": "Titelbild automatisch erstellen",
+    "generateCoverDescription": "Den Gegenstand erfassen und aus dem ersten Foto ein Titelbild erstellen.",
+    "advancedImageOptions": "Erweiterte Bildoptionen",
     "transparentBackground": "Transparenter Hintergrund",
     "transparentBackgroundDescription": "Erstellte Titelbilder als transparente PNGs speichern.",
     "transparencyMethod": "Transparenzmethode",
-    "differenceMatting": "Differenz-Matting · beste Qualität",
-    "differenceMattingDescription": "Zwei deckungsgleiche Bilddurchläufe erhalten saubere Kanten, Glas und weiche Schatten.",
-    "greenscreen": "Greenscreen · schneller",
-    "greenscreenDescription": "Ein Bilddurchlauf, mit höherem Risiko bei grünen Objekten und feinen Kanten."
+    "differenceMatting": "Differenz-Matting · zwei Durchläufe",
+    "differenceMattingDescription": "Zwei deckungsgleiche Bilddurchläufe verarbeiten Kanten, Glas und weiche Schatten.",
+    "greenscreen": "Greenscreen · ein Durchlauf",
+    "greenscreenDescription": "Ein Bilddurchlauf; bei grünen Objekten und feinen Kanten können Artefakte entstehen."
   },
   "submit": {
-    "create": "Mit KI erstellen",
+    "create": "Eintrag erstellen",
     "photoCount_one": "{{count}} Foto",
     "photoCount_other": "{{count}} Fotos",
     "addPhotos": "Fotos hinzufügen",
-    "description": "Die Ablage wird sofort geleert, damit du das nächste Element erfassen kannst, während die KI arbeitet."
+    "description": "Nach dem Start kannst du sofort den nächsten Eintrag erfassen."
   },
   "jobs": {
-    "eyebrow": "Hintergrundwarteschlange",
-    "title": "Letzte Aufnahmen",
+    "eyebrow": "Verarbeitung",
+    "title": "Letzte Fotoerfassungen",
     "clearFinished": "Abgeschlossene entfernen",
-    "captureName_one": "Aufnahme mit {{count}} Foto",
-    "captureName_other": "Aufnahme mit {{count}} Fotos",
-    "openItem": "Element öffnen",
+    "captureName_one": "Fotoerfassung mit {{count}} Foto",
+    "captureName_other": "Fotoerfassung mit {{count}} Fotos",
+    "openItem": "Eintrag öffnen",
     "empty": "Noch nichts in der Warteschlange",
-    "emptyDescription": "Abgeschlossene und laufende Elemente bleiben hier sichtbar.",
+    "emptyDescription": "Laufende und abgeschlossene Fotoerfassungen erscheinen hier.",
     "stage": {
       "ready": "Bereit",
       "warning": "Mit Warnung gespeichert",
       "attention": "Aktion erforderlich",
-      "creating": "Element wird erstellt",
+      "creating": "Eintrag wird erstellt",
       "uploading": "Fotos werden hochgeladen",
-      "analyzing": "KI identifiziert das Element",
+      "analyzing": "Fotos werden ausgewertet",
       "cover": "Titelbild wird erstellt",
       "processing": "Wird verarbeitet"
     },
     "steps": {
-      "save": "Element speichern",
+      "save": "Eintrag speichern",
       "upload": "Hochladen",
       "analyze": "Analysieren",
       "cover": "Titelbild"
     },
     "messages": {
-      "analysisFailed": "Element und Fotos wurden gespeichert, aber die KI-Analyse ist fehlgeschlagen: {{reason}}",
-      "coverFailed": "Das Element wurde analysiert, aber das KI-Titelbild ist fehlgeschlagen: {{reason}}",
-      "readyWithCover": "Element, Metadaten und KI-Titelbild sind bereit.",
-      "ready": "Element und KI-Metadaten sind bereit."
+      "analysisFailed": "Eintrag und Fotos wurden gespeichert, aber die automatische Auswertung ist fehlgeschlagen: {{reason}}",
+      "coverFailed": "Der Eintrag wurde ausgewertet, aber das automatische Titelbild ist fehlgeschlagen: {{reason}}",
+      "readyWithCover": "Eintrag, Angaben und Titelbild sind bereit.",
+      "ready": "Eintrag und Angaben sind bereit."
     }
   },
   "errors": {
@@ -122,16 +123,16 @@
     "filesOverLimit_one": "{{count}} Datei über dem Limit von {{max}} Fotos wurde übersprungen.",
     "filesOverLimit_other": "{{count}} Dateien über dem Limit von {{max}} Fotos wurden übersprungen.",
     "filesSkippedBoth": "{{unsupportedCount}} nicht unterstützte Datei(en) und {{limitCount}} über dem Limit von {{max}} Fotos wurden übersprungen.",
-    "photoLimit": "Ein Element kann bis zu {{max}} Fotos enthalten.",
+    "photoLimit": "Ein Eintrag kann bis zu {{max}} Fotos enthalten.",
     "frameNotReady": "Das Kamerabild ist noch nicht bereit.",
     "frameUnsupported": "Dieser Browser kann das Kamerabild nicht aufnehmen.",
     "photoProcess": "Das Foto konnte nicht verarbeitet werden.",
     "photoCapture": "Das Foto konnte nicht aufgenommen werden.",
     "geolocationUnsupported": "Dieser Browser unterstützt keine Standortbestimmung.",
-    "locationBlocked": "Der Standortzugriff wurde blockiert. Du kannst das Element trotzdem ohne Koordinaten speichern.",
+    "locationBlocked": "Der Standortzugriff wurde blockiert. Du kannst den Eintrag trotzdem ohne Koordinaten speichern.",
     "locationUnknown": "Dein aktueller Standort konnte nicht bestimmt werden.",
     "unknownReason": "Unbekannter Fehler",
-    "batchSave": "Diese Serie konnte nicht gespeichert werden.",
+    "batchSave": "Die Fotoerfassung konnte nicht gespeichert werden.",
     "photoRequired": "Nimm zuerst mindestens ein Foto auf oder lade eines hoch."
   }
 }

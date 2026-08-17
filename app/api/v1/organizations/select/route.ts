@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
   if (identity.kind === "session") {
     const cookieStore = await cookies();
-    cookieStore.set(ORGANIZATION_COOKIE, organization.id, {
+    cookieStore.set(ORGANIZATION_COOKIE, organization.slug, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
