@@ -216,7 +216,11 @@ test("family creation makes an ordinary zero-stock resource with its own operati
   }
   assert.match(
     family,
-    /\.insert\(stockSettings\)[\s\S]*resourceId: created\.id/,
+    /resources_initialize_stock trigger already created this row[\s\S]*\.update\(stockSettings\)[\s\S]*eq\(stockSettings\.resourceId, created\.id\)/,
+  );
+  assert.doesNotMatch(
+    family,
+    /createResourceFamilyVariant[\s\S]*\.insert\(stockSettings\)/,
   );
 });
 

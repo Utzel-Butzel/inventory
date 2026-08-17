@@ -573,17 +573,25 @@ export async function createResourceFamilyVariant(options: {
     }
 
     const trackingMode = primarySettings?.trackingMode ?? "bulk";
-    await transaction.insert(stockSettings).values({
-      organizationId: options.organizationId,
-      resourceId: created.id,
-      trackingMode,
-      minimumStock: primarySettings?.minimumStock ?? 0,
-      reorderQuantity: primarySettings?.reorderQuantity ?? 0,
-      leadTimeDays: primarySettings?.leadTimeDays ?? 0,
-      unitName: primarySettings?.unitName ?? "unit",
-      createdAt: now,
-      updatedAt: now,
-    });
+    // The resources_initialize_stock trigger already created this row together
+    // with the opening stock movement. Apply the primary item's settings to
+    // that row instead of inserting a duplicate primary key.
+    await transaction
+      .update(stockSettings)
+      .set({
+        trackingMode,
+        minimumStock: primarySettings?.minimumStock ?? 0,
+        reorderQuantity: primarySettings?.reorderQuantity ?? 0,
+        leadTimeDays: primarySettings?.leadTimeDays ?? 0,
+        unitName: primarySettings?.unitName ?? "unit",
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(stockSettings.organizationId, options.organizationId),
+          eq(stockSettings.resourceId, created.id),
+        ),
+      );
 
     await transaction.insert(resourceRelations).values({
       organizationId: options.organizationId,
