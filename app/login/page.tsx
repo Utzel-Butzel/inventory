@@ -104,7 +104,7 @@ export default async function LoginPage({
                 )}
               </p>
 
-              <div className="mt-8">
+              <div className="mt-8 animate-fade-up animation-delay-1">
                 <LoginForm
                   auth0Enabled={auth0Enabled}
                   demoEnabled={demoAccessEnabled}

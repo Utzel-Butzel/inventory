@@ -43,7 +43,6 @@ const bundledAssetsDirectory = path.resolve(scriptDirectory, "../demo/assets");
 const mediaStoragePrefix = "demo";
 
 const value = (name) => process.env[name]?.trim() ?? "";
-const enabled = value("DEMO_ACCESS_ENABLED").toLocaleLowerCase("en-US") === "true";
 const removeRequested = process.argv.slice(2).includes("--remove");
 const unexpectedArguments = process.argv
   .slice(2)
@@ -58,6 +57,7 @@ for (const envFile of [".env.local", ".env"]) {
   process.loadEnvFile(envFile);
 }
 
+const enabled = value("DEMO_ACCESS_ENABLED").toLocaleLowerCase("en-US") === "true";
 const databaseUrl =
   process.env.DATABASE_URL ??
   "postgresql://inventory:inventory@localhost:5432/inventory";
@@ -390,6 +390,7 @@ async function seedDemo(transaction, configuration, preparedMedia) {
   `;
 
   for (const resource of DEMO_RESOURCES) {
+    const updatedAt = atDaysAgo(referenceTime, resource.updatedDaysAgo);
     await transaction`
       INSERT INTO resources (
         organization_id, id, name, description, type, status, sku, quantity,
@@ -402,7 +403,7 @@ async function seedDemo(transaction, configuration, preparedMedia) {
         ${resource.barcode}, ${resource.valueCents}, 'EUR', ${resource.priority},
         ${resource.tags}, ${transaction.json(resource.categories)},
         ${transaction.json(resource.customFields)}, ${resource.notes},
-        ${DEMO_ACTOR}, now()
+        ${DEMO_ACTOR}, ${updatedAt}
       )
       ON CONFLICT (id) DO UPDATE SET
         name = excluded.name,
@@ -424,7 +425,7 @@ async function seedDemo(transaction, configuration, preparedMedia) {
         notes = excluded.notes,
         ai_metadata = null,
         created_by = excluded.created_by,
-        updated_at = now()
+        updated_at = excluded.updated_at
     `;
   }
 
@@ -844,6 +845,11 @@ if (!enabled && !removeRequested) {
         await removeDemo(transaction, configuration);
       } else {
         await assertIdentitySlotsAreSafe(transaction, configuration);
+        // The public tenant is disposable product data, so rebuild it from the
+        // fixed manifest on every reconciliation. This prevents stale rows,
+        // shares, tokens, jobs, or media records from an older demo version
+        // from becoming publicly visible after a deploy.
+        await removeDemo(transaction, configuration);
         await assertTenantRowIdsAreSafe(transaction);
         await seedDemo(transaction, configuration, preparedMedia);
       }

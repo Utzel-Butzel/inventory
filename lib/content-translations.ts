@@ -16,6 +16,7 @@ import {
 
 import {
   media,
+  organizations,
   resourceTranslationJobs,
   resourceTranslations,
   resources,
@@ -31,6 +32,7 @@ import {
 } from "@/lib/ai-rate-limit";
 import { listCustomFieldDefinitions } from "@/lib/custom-fields";
 import { db } from "@/lib/db";
+import { organizationAllowsWorkerSideEffects } from "@/lib/organization-read-only";
 import type { ResourceWithMedia } from "@/lib/resources";
 import {
   applicableTranslationDefinitions,
@@ -832,6 +834,38 @@ export function translationRetryDelayMs(attempt: number) {
   return Math.min(15 * 60_000, 5_000 * 2 ** Math.max(0, attempt - 1));
 }
 
+type TranslationTransaction = Parameters<
+  Parameters<typeof db.transaction>[0]
+>[0];
+
+const writableTranslationOrganizationCondition = () => sql`exists (
+  select 1 from ${organizations}
+  where ${organizations.id} = ${resourceTranslationJobs.organizationId}
+    and ${organizations.isReadOnly} = false
+)`;
+
+async function translationOrganizationAllowsWork(organizationId: string) {
+  const [organization] = await db
+    .select({ isReadOnly: organizations.isReadOnly })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1);
+  return organizationAllowsWorkerSideEffects(organization?.isReadOnly);
+}
+
+async function lockWritableTranslationOrganization(
+  transaction: TranslationTransaction,
+  organizationId: string,
+) {
+  const [organization] = await transaction
+    .select({ isReadOnly: organizations.isReadOnly })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1)
+    .for("share");
+  return organizationAllowsWorkerSideEffects(organization?.isReadOnly);
+}
+
 async function claimTranslationJob() {
   return db.transaction(async (transaction) => {
     const now = new Date();
@@ -839,15 +873,18 @@ async function claimTranslationJob() {
       .select()
       .from(resourceTranslationJobs)
       .where(
-        or(
-          and(
-            eq(resourceTranslationJobs.status, "pending"),
-            lte(resourceTranslationJobs.runAfter, now),
-          ),
-          and(
-            eq(resourceTranslationJobs.status, "processing"),
-            isNotNull(resourceTranslationJobs.leaseExpiresAt),
-            lte(resourceTranslationJobs.leaseExpiresAt, now),
+        and(
+          writableTranslationOrganizationCondition(),
+          or(
+            and(
+              eq(resourceTranslationJobs.status, "pending"),
+              lte(resourceTranslationJobs.runAfter, now),
+            ),
+            and(
+              eq(resourceTranslationJobs.status, "processing"),
+              isNotNull(resourceTranslationJobs.leaseExpiresAt),
+              lte(resourceTranslationJobs.leaseExpiresAt, now),
+            ),
           ),
         ),
       )
@@ -877,6 +914,7 @@ async function claimTranslationJob() {
           ),
           eq(resourceTranslationJobs.resourceId, candidate.resourceId),
           eq(resourceTranslationJobs.languageCode, candidate.languageCode),
+          writableTranslationOrganizationCondition(),
         ),
       )
       .returning();
@@ -885,17 +923,28 @@ async function claimTranslationJob() {
 }
 
 async function discardClaim(job: ResourceTranslationJobRecord) {
-  await db
-    .delete(resourceTranslationJobs)
-    .where(
-      and(
-        eq(resourceTranslationJobs.organizationId, job.organizationId),
-        eq(resourceTranslationJobs.resourceId, job.resourceId),
-        eq(resourceTranslationJobs.languageCode, job.languageCode),
-        eq(resourceTranslationJobs.generation, job.generation),
-        eq(resourceTranslationJobs.leaseToken, job.leaseToken!),
-      ),
-    );
+  return db.transaction(async (transaction) => {
+    if (
+      !(await lockWritableTranslationOrganization(
+        transaction,
+        job.organizationId,
+      ))
+    ) {
+      return false;
+    }
+    await transaction
+      .delete(resourceTranslationJobs)
+      .where(
+        and(
+          eq(resourceTranslationJobs.organizationId, job.organizationId),
+          eq(resourceTranslationJobs.resourceId, job.resourceId),
+          eq(resourceTranslationJobs.languageCode, job.languageCode),
+          eq(resourceTranslationJobs.generation, job.generation),
+          eq(resourceTranslationJobs.leaseToken, job.leaseToken!),
+        ),
+      );
+    return true;
+  });
 }
 
 async function saveJobTranslations(options: {
@@ -906,6 +955,14 @@ async function saveJobTranslations(options: {
   model: string | null;
 }) {
   return db.transaction(async (transaction) => {
+    if (
+      !(await lockWritableTranslationOrganization(
+        transaction,
+        options.job.organizationId,
+      ))
+    ) {
+      return "read-only" as const;
+    }
     const [lockedJob] = await transaction
       .select()
       .from(resourceTranslationJobs)
@@ -1113,6 +1170,14 @@ async function failClaim(job: ResourceTranslationJobRecord, error: unknown) {
     runAfter = new Date(error.result.resetsAt.getTime() + 1_000);
   }
   await db.transaction(async (transaction) => {
+    if (
+      !(await lockWritableTranslationOrganization(
+        transaction,
+        job.organizationId,
+      ))
+    ) {
+      return;
+    }
     const [updated] = await transaction
       .update(resourceTranslationJobs)
       .set({
@@ -1163,6 +1228,9 @@ async function failClaim(job: ResourceTranslationJobRecord, error: unknown) {
 
 async function processTranslationJob(job: ResourceTranslationJobRecord) {
   try {
+    if (!(await translationOrganizationAllowsWork(job.organizationId))) {
+      return "read-only" as const;
+    }
     const [resource, languages, definitions, rows] = await Promise.all([
       resourceBundle(job.organizationId, job.resourceId),
       activeLanguages(job.organizationId),
@@ -1188,8 +1256,9 @@ async function processTranslationJob(job: ResourceTranslationJobRecord) {
       language.isDefault ||
       (job.mode === "automatic" && !language.autoTranslate)
     ) {
-      await discardClaim(job);
-      return "discarded" as const;
+      return (await discardClaim(job))
+        ? ("discarded" as const)
+        : ("read-only" as const);
     }
     const sourceLanguage = canonicalLanguage(languages);
     const applicable = applicableDefinitions(resource, definitions);
@@ -1209,12 +1278,18 @@ async function processTranslationJob(job: ResourceTranslationJobRecord) {
     }
     let model: string | null = null;
     if (Object.keys(aiFields).length) {
+      if (!(await translationOrganizationAllowsWork(job.organizationId))) {
+        return "read-only" as const;
+      }
       const limit = await consumePaidAiRateLimit({
         organizationId: job.organizationId,
         operation: "translate",
         identity: { subject: job.requestedBy },
       });
       if (!limit.allowed) throw new TranslationRateLimitError(limit);
+      if (!(await translationOrganizationAllowsWork(job.organizationId))) {
+        return "read-only" as const;
+      }
       const result = await translateInventoryContent({
         sourceLanguageCode: sourceLanguage.code,
         sourceLanguageLabel: sourceLanguage.label,

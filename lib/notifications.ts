@@ -173,7 +173,7 @@ async function notificationPreferenceForRead(recipient: Recipient) {
 
 // Background notification jobs must not mutate read-only organizations.
 async function writableNotificationPreferences(organizationId?: string) {
-  const baseCondition = and(
+  const joinCondition = and(
     eq(organizations.id, notificationPreferences.organizationId),
     eq(organizations.isReadOnly, false),
   );
@@ -181,12 +181,12 @@ async function writableNotificationPreferences(organizationId?: string) {
     ? await db
         .select({ preference: notificationPreferences })
         .from(notificationPreferences)
-        .innerJoin(organizations, baseCondition)
+        .innerJoin(organizations, joinCondition)
         .where(eq(notificationPreferences.organizationId, organizationId))
     : await db
         .select({ preference: notificationPreferences })
         .from(notificationPreferences)
-        .innerJoin(organizations, baseCondition);
+        .innerJoin(organizations, joinCondition);
   return rows.map((row) => row.preference);
 }
 
@@ -230,9 +230,10 @@ export async function getNotificationSettings(
   recipient: Recipient,
   options: { initializePreference?: boolean } = {},
 ) {
-  const preference = options.initializePreference === false
-    ? await notificationPreferenceForRead(recipient)
-    : await ensureNotificationPreferences(recipient);
+  const preference =
+    options.initializePreference === false
+      ? await notificationPreferenceForRead(recipient)
+      : await ensureNotificationPreferences(recipient);
   const [{ value: subscriptionCount }] = await db
     .select({ value: count() })
     .from(notificationPushSubscriptions)

@@ -225,6 +225,7 @@ export const DEMO_RESOURCES = Object.freeze([
     categories: [{ name: "Lagerort", color: "#16a374" }],
     customFields: {},
     notes: "Traglast je Fach: 120 kg.",
+    updatedDaysAgo: 21,
     kind: "place",
   },
   {
@@ -243,6 +244,7 @@ export const DEMO_RESOURCES = Object.freeze([
     categories: [{ name: "Arbeitsplatz", color: "#3b82f6" }],
     customFields: {},
     notes: "Absaugung vor Lötarbeiten einschalten.",
+    updatedDaysAgo: 18,
     kind: "place",
   },
   {
@@ -261,6 +263,7 @@ export const DEMO_RESOURCES = Object.freeze([
     categories: [{ name: "Lagerort", color: "#16a374" }],
     customFields: {},
     notes: "Behälter 3 bis 6.",
+    updatedDaysAgo: 14,
     kind: "place",
   },
   {
@@ -279,6 +282,7 @@ export const DEMO_RESOURCES = Object.freeze([
     categories: [{ name: "Elektrowerkzeug", color: "#e99b2d" }],
     customFields: { lieferumfang: "2 Geräte, 3 Akkus, 1 Ladegerät" },
     notes: "Gerät 02 ist für das Projekt Lastenrad ausgegeben.",
+    updatedDaysAgo: 2,
     kind: "item",
   },
   {
@@ -297,6 +301,7 @@ export const DEMO_RESOURCES = Object.freeze([
     categories: [{ name: "Elektronik", color: "#635bff" }],
     customFields: { temperaturbereich: "150–450 °C" },
     notes: "Spitzen nach Gebrauch reinigen und verzinnen.",
+    updatedDaysAgo: 6,
     kind: "item",
   },
   {
@@ -315,6 +320,7 @@ export const DEMO_RESOURCES = Object.freeze([
     categories: [{ name: "Messtechnik", color: "#e2647f" }],
     customFields: { wartungsstatus: "Kalibrierung beauftragt" },
     notes: "Bis zur abgeschlossenen Kalibrierung nicht verwenden.",
+    updatedDaysAgo: 1,
     kind: "item",
   },
   {
@@ -333,6 +339,7 @@ export const DEMO_RESOURCES = Object.freeze([
     categories: [{ name: "Verbrauchsmaterial", color: "#64748b" }],
     customFields: { norm: "ISO 4762", werkstoff: "Edelstahl A2" },
     notes: "Bestand nach Entnahme direkt buchen.",
+    updatedDaysAgo: 4,
     kind: "item",
   },
   {
@@ -351,6 +358,7 @@ export const DEMO_RESOURCES = Object.freeze([
     categories: [{ name: "Verbrauchsmaterial", color: "#64748b" }],
     customFields: { abmessung: "200 × 4,8 mm" },
     notes: "Mindestbestand unterschritten; Nachbestellung ist offen.",
+    updatedDaysAgo: 3,
     kind: "item",
   },
 ]);
@@ -825,6 +833,9 @@ export function validateDemoSeedManifest() {
     if (movement.unitId && !unitById.has(movement.unitId)) errors.push(`Unknown movement unit: ${movement.id}`);
   }
   for (const resource of DEMO_RESOURCES) {
+    if (!Number.isInteger(resource.updatedDaysAgo) || resource.updatedDaysAgo < 0) {
+      errors.push(`Invalid resource update age: ${resource.sku}`);
+    }
     const history = DEMO_STOCK_MOVEMENTS
       .filter((movement) => movement.resourceId === resource.id)
       .sort((left, right) => left.sequence - right.sequence);

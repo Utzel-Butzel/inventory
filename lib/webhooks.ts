@@ -21,6 +21,7 @@ import {
 } from "drizzle-orm";
 
 import {
+  organizations,
   webhookDeliveries,
   webhookEndpoints,
   webhookEvents,
@@ -29,6 +30,7 @@ import {
   type StockMovementRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import { organizationAllowsWorkerSideEffects } from "@/lib/organization-read-only";
 import { decryptSecret, encryptSecret } from "@/lib/secret-encryption";
 import {
   isPrivateWebhookAddress,
@@ -659,6 +661,41 @@ type ClaimedDelivery = WebhookDeliveryRecord & {
   event: typeof webhookEvents.$inferSelect;
 };
 
+type WebhookOrganizationIdColumn =
+  | typeof webhookDeliveries.organizationId
+  | typeof webhookEndpoints.organizationId
+  | typeof webhookEvents.organizationId;
+
+const writableWebhookOrganizationCondition = (
+  organizationId: WebhookOrganizationIdColumn,
+) => sql`exists (
+  select 1 from ${organizations}
+  where ${organizations.id} = ${organizationId}
+    and ${organizations.isReadOnly} = false
+)`;
+
+async function webhookOrganizationAllowsWork(organizationId: string) {
+  const [organization] = await db
+    .select({ isReadOnly: organizations.isReadOnly })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1);
+  return organizationAllowsWorkerSideEffects(organization?.isReadOnly);
+}
+
+async function lockWritableWebhookOrganization(
+  transaction: Transaction,
+  organizationId: string,
+) {
+  const [organization] = await transaction
+    .select({ isReadOnly: organizations.isReadOnly })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1)
+    .for("share");
+  return organizationAllowsWorkerSideEffects(organization?.isReadOnly);
+}
+
 async function claimWebhookDelivery(): Promise<ClaimedDelivery | null> {
   return db.transaction(async (transaction) => {
     const now = new Date();
@@ -677,22 +714,30 @@ async function claimWebhookDelivery(): Promise<ClaimedDelivery | null> {
           isNotNull(webhookDeliveries.leaseExpiresAt),
           lte(webhookDeliveries.leaseExpiresAt, now),
           gte(webhookDeliveries.attempts, maximumAttempts()),
+          writableWebhookOrganizationCondition(
+            webhookDeliveries.organizationId,
+          ),
         ),
       );
     const [candidate] = await transaction
       .select()
       .from(webhookDeliveries)
       .where(
-        or(
-          and(
-            eq(webhookDeliveries.status, "pending"),
-            lte(webhookDeliveries.nextAttemptAt, now),
+        and(
+          writableWebhookOrganizationCondition(
+            webhookDeliveries.organizationId,
           ),
-          and(
-            eq(webhookDeliveries.status, "processing"),
-            isNotNull(webhookDeliveries.leaseExpiresAt),
-            lte(webhookDeliveries.leaseExpiresAt, now),
-            sql`${webhookDeliveries.attempts} < ${maximumAttempts()}`,
+          or(
+            and(
+              eq(webhookDeliveries.status, "pending"),
+              lte(webhookDeliveries.nextAttemptAt, now),
+            ),
+            and(
+              eq(webhookDeliveries.status, "processing"),
+              isNotNull(webhookDeliveries.leaseExpiresAt),
+              lte(webhookDeliveries.leaseExpiresAt, now),
+              sql`${webhookDeliveries.attempts} < ${maximumAttempts()}`,
+            ),
           ),
         ),
       )
@@ -715,6 +760,9 @@ async function claimWebhookDelivery(): Promise<ClaimedDelivery | null> {
         and(
           eq(webhookDeliveries.organizationId, candidate.organizationId),
           eq(webhookDeliveries.id, candidate.id),
+          writableWebhookOrganizationCondition(
+            webhookDeliveries.organizationId,
+          ),
         ),
       )
       .returning();
@@ -744,6 +792,14 @@ async function claimWebhookDelivery(): Promise<ClaimedDelivery | null> {
 async function markDeliverySuccess(delivery: ClaimedDelivery, status: number) {
   const now = new Date();
   await db.transaction(async (transaction) => {
+    if (
+      !(await lockWritableWebhookOrganization(
+        transaction,
+        delivery.organizationId,
+      ))
+    ) {
+      return;
+    }
     const [updated] = await transaction
       .update(webhookDeliveries)
       .set({
@@ -786,6 +842,14 @@ async function markDeliveryFailure(
   const retryable = options.retryable ?? true;
   const terminal = !retryable || delivery.attempts >= maximumAttempts();
   await db.transaction(async (transaction) => {
+    if (
+      !(await lockWritableWebhookOrganization(
+        transaction,
+        delivery.organizationId,
+      ))
+    ) {
+      return;
+    }
     const [updated] = await transaction
       .update(webhookDeliveries)
       .set({
@@ -824,6 +888,9 @@ async function markDeliveryFailure(
 }
 
 async function deliverWebhook(delivery: ClaimedDelivery) {
+  if (!(await webhookOrganizationAllowsWork(delivery.organizationId))) {
+    return "read-only";
+  }
   if (
     delivery.endpoint.revokedAt ||
     (!delivery.endpoint.enabled && delivery.event.type !== "inventory.webhook.test")
@@ -840,6 +907,9 @@ async function deliverWebhook(delivery: ClaimedDelivery) {
     const addresses = await resolveWebhookTarget(url, signal);
     const secret = decryptSecret(delivery.encryptedSecret, ENCRYPTION_VARIABLE);
     const timestamp = Math.floor(Date.now() / 1_000);
+    if (!(await webhookOrganizationAllowsWork(delivery.organizationId))) {
+      return "read-only";
+    }
     const status = await sendWebhookRequest({
       url,
       addresses,
@@ -913,6 +983,7 @@ export async function drainWebhookDeliveries(limit = 1) {
     await db.delete(webhookEvents).where(
       and(
         lt(webhookEvents.createdAt, retentionCutoff),
+        writableWebhookOrganizationCondition(webhookEvents.organizationId),
         sql`not exists (
           select 1 from ${webhookDeliveries}
           where ${webhookDeliveries.eventId} = ${webhookEvents.id}
@@ -925,6 +996,7 @@ export async function drainWebhookDeliveries(limit = 1) {
       and(
         isNotNull(webhookEndpoints.revokedAt),
         lt(webhookEndpoints.revokedAt, retentionCutoff),
+        writableWebhookOrganizationCondition(webhookEndpoints.organizationId),
         sql`not exists (
           select 1 from ${webhookDeliveries}
           where ${webhookDeliveries.webhookId} = ${webhookEndpoints.id}

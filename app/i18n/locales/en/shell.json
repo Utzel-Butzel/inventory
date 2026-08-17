@@ -38,6 +38,9 @@
     "bannerDescription": "You can explore everything; changes are disabled.",
     "backToWebsite": "Back to product site"
   },
+  "badges": {
+    "ai": "AI"
+  },
   "actions": {
     "new": "New",
     "createMenu": "Create a new item",

@@ -67,6 +67,9 @@ export function proxy(request: NextRequest) {
   const routeOrganizationReference =
     organizationReferenceFromPathname(pathname);
   const internalPathname = stripOrganizationPathname(pathname);
+  const routedOrganizationReference = request.headers
+    .get(ORGANIZATION_ROUTE_HEADER)
+    ?.trim();
 
   if (
     routeOrganizationReference &&
@@ -90,7 +93,10 @@ export function proxy(request: NextRequest) {
     return response;
   }
 
-  if (isOrganizationPagePath(pathname)) {
+  // Rewrites of organization-scoped URLs pass through this proxy again with
+  // the tenant header already attached. Avoid redirecting that internal route
+  // back to its public URL, which would create a loop.
+  if (isOrganizationPagePath(pathname) && !routedOrganizationReference) {
     const cookieOrganizationReference = request.cookies
       .get(ORGANIZATION_COOKIE)?.value;
     if (

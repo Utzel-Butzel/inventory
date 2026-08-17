@@ -195,6 +195,18 @@ test("seed is opt-in, transactional, reconciling, and marks read-only last", asy
   );
   assert.match(source, /DEMO_ACCESS_ENABLED/);
   assert.match(source, /pg_advisory_xact_lock/);
+  const reconcile = source.slice(source.lastIndexOf("await assertIdentitySlotsAreSafe"));
+  const removeAt = reconcile.indexOf("await removeDemo(transaction, configuration)");
+  const collisionCheckAt = reconcile.indexOf("await assertTenantRowIdsAreSafe");
+  const seedAt = reconcile.indexOf("await seedDemo");
+  assert.ok(removeAt > 0);
+  assert.ok(collisionCheckAt > removeAt);
+  assert.ok(seedAt > collisionCheckAt);
+  assert.ok(
+    source.indexOf("const enabled =", source.indexOf("process.loadEnvFile")) >
+      source.indexOf("process.loadEnvFile"),
+    "the opt-in flag must be read after local environment files are loaded",
+  );
   assert.doesNotMatch(source, /SELECT\s+count\(\*\).*resources/is);
   assert.ok((source.match(/ON CONFLICT/g) ?? []).length >= 15);
   assert.match(

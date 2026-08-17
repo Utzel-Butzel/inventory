@@ -25,6 +25,8 @@ import { db } from "@/lib/db";
 import {
   isPinnedReadOnlyDemoMembershipSet,
   organizationAllowsPermission,
+  PUBLIC_DEMO_ORGANIZATION_ID,
+  PUBLIC_DEMO_USER_ID,
   restrictOrganizationPermissions,
   restrictOrganizationScopes,
 } from "@/lib/organization-read-only";
@@ -94,6 +96,7 @@ async function identityForUser(options: {
   allowRequestedFallback?: boolean;
   tokenScopes?: ApiScope[];
   tokenId?: string;
+  demoOrganizationId?: string;
   demoOrganizationSlug?: string;
 }) {
   const memberships = await listOrganizationsForUser(options.user.id);
@@ -105,9 +108,11 @@ async function identityForUser(options: {
   let selected: OrganizationMembershipSummary | null | undefined;
   if (demoOrganizationSlug) {
     if (
+      !options.demoOrganizationId ||
       !isPinnedReadOnlyDemoMembershipSet(
         memberships,
         demoOrganizationSlug,
+        options.demoOrganizationId,
       )
     ) {
       return null;
@@ -335,6 +340,7 @@ export async function getSessionIdentity(
     )
       ? sessionUserId
       : null;
+  if (isDemoSession && databaseUserId !== PUBLIC_DEMO_USER_ID) return null;
   if (databaseUserId) {
     [user] = await db
       .select()
@@ -377,6 +383,7 @@ export async function getSessionIdentity(
       allowOrganizationSlug,
       ...(isDemoSession
         ? {
+            demoOrganizationId: PUBLIC_DEMO_ORGANIZATION_ID,
             demoOrganizationSlug:
               process.env.DEMO_ORGANIZATION_SLUG?.trim() || "demo",
           }

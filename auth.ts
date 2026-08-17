@@ -13,6 +13,10 @@ import {
 import { normalizeUserRole } from "@/lib/auth-roles";
 import { db } from "@/lib/db";
 import { authenticateLocalUser } from "@/lib/local-auth";
+import {
+  PUBLIC_DEMO_ORGANIZATION_ID,
+  PUBLIC_DEMO_USER_ID,
+} from "@/lib/organization-read-only";
 
 const auth0Issuer =
   process.env.AUTH0_ISSUER_BASE_URL?.trim() ||
@@ -54,7 +58,11 @@ async function authorizeDemoUser() {
       .select()
       .from(users)
       .where(
-        and(eq(users.email, demoUserEmail()), eq(users.isActive, true)),
+        and(
+          eq(users.id, PUBLIC_DEMO_USER_ID),
+          eq(users.email, demoUserEmail()),
+          eq(users.isActive, true),
+        ),
       )
       .limit(1);
     if (!user) return null;
@@ -64,6 +72,7 @@ async function authorizeDemoUser() {
     const memberships = await db
       .select({
         roleKey: organizationMemberships.roleKey,
+        organizationId: organizations.id,
         organizationSlug: organizations.slug,
         organizationIsReadOnly: organizations.isReadOnly,
         roleIsSystem: accessRoles.isSystem,
@@ -92,6 +101,7 @@ async function authorizeDemoUser() {
     if (
       memberships.length !== 1 ||
       !membership ||
+      membership.organizationId !== PUBLIC_DEMO_ORGANIZATION_ID ||
       membership.organizationSlug !== demoOrganizationSlug() ||
       membership.organizationIsReadOnly !== true ||
       membership.roleKey !== "viewer" ||

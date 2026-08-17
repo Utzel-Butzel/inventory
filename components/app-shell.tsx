@@ -562,7 +562,31 @@ export function AppShell({
       ) : null}
 
       <div className="lg:pl-[244px]">
-        <header className="sticky top-0 z-20 flex h-[68px] items-center border-b border-border bg-surface/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        {organization.isReadOnly ? (
+          <div className="sticky top-0 z-30 flex min-h-11 items-center justify-between gap-4 border-b border-brand-border bg-brand-soft px-4 py-2 text-brand sm:px-6 lg:px-8">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <LockKeyhole className="size-4 shrink-0" aria-hidden="true" />
+              <p className="min-w-0 text-xs sm:text-sm">
+                <strong className="font-semibold">{t("demo.bannerLabel")}</strong>
+                <span className="ml-2 hidden text-muted-strong sm:inline">
+                  {t("demo.bannerDescription")}
+                </span>
+              </p>
+            </div>
+            <a
+              href={websiteUrl}
+              className="shrink-0 text-xs font-semibold underline-offset-4 hover:underline"
+            >
+              {t("demo.backToWebsite")}
+            </a>
+          </div>
+        ) : null}
+        <header
+          className={cn(
+            "sticky z-20 flex h-[68px] items-center border-b border-border bg-surface/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8",
+            organization.isReadOnly ? "top-11" : "top-0",
+          )}
+        >
           <button
             ref={mobileMenuTriggerRef}
             type="button"

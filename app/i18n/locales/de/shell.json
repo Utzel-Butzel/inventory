@@ -38,6 +38,9 @@
     "bannerDescription": "Du kannst alles ansehen; Änderungen sind deaktiviert.",
     "backToWebsite": "Zur Produktseite"
   },
+  "badges": {
+    "ai": "KI"
+  },
   "actions": {
     "new": "Neu",
     "createMenu": "Neuen Eintrag erstellen",

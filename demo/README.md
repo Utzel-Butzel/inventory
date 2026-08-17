@@ -5,9 +5,12 @@ Open Inventory deployment. Set `DEMO_ACCESS_ENABLED=true` to reconcile the
 fixed `demo` organization after database migrations and enable the dedicated
 sign-in flow implemented by the application.
 
-The seed is intentionally deterministic and idempotent:
+The seed is intentionally deterministic and idempotent. On reconciliation it
+first verifies the fixed identity fail-closed, then recreates that disposable
+tenant from the manifest so stale records, shares, tokens, jobs, or media rows
+from an older demo cannot remain public:
 
-- organization: `Werkstatt Nord · Demo` (`/demo`)
+- organization: `Werkstatt Nord · Demo` with the reserved slug `demo`
 - dedicated user: `demo@inventory.invalid`, active viewer, exactly one membership
 - five workshop items and three places with stock history, serialized units,
   one active checkout, one maintenance case, one low-stock case, and one order
