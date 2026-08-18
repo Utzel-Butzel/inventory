@@ -111,6 +111,42 @@ test("manufacturing resolves, saves, resets, and builds the effective variant BO
   assert.match(route, /resetVariantBomOverrides/);
 });
 
+test("builds can consume a selected first-class variant for a configurable BOM component", async () => {
+  const [assemblies, buildRoute, manager, bomRoute, stockSwitcher, openapi] =
+    await Promise.all([
+      source("lib/assemblies.ts"),
+      source("app/api/v1/resources/[id]/stock/builds/route.ts"),
+      source("components/assembly-manager.tsx"),
+      source("app/api/v1/resources/[id]/bom/route.ts"),
+      source("components/resource-stock-configuration-switcher.tsx"),
+      source("public/openapi.yaml"),
+    ]);
+
+  assert.match(
+    assemblies,
+    /getBomWithExecutor[\s\S]*relationTypeKey, "variant_of"[\s\S]*choices:/,
+  );
+  assert.match(assemblies, /authorizeChoice/);
+  assert.match(bomRoute, /canAccessResource[\s\S]*"inventory\.read"/);
+  assert.match(
+    assemblies,
+    /resolveBuildComponentSelections[\s\S]*primaryByVariant\.get\(selectedResourceId\) !== line\.componentResourceId/,
+  );
+  assert.match(
+    assemblies,
+    /pg_advisory_xact_lock\(\$\{BOM_WRITE_LOCK_ID\}\)[\s\S]*pg_advisory_xact_lock\(\$\{VARIANT_FAMILY_WRITE_LOCK_ID\}\)[\s\S]*resolveBuildComponentSelections/,
+  );
+  assert.match(buildRoute, /componentResourceSelections/);
+  assert.match(manager, /component\.choices\.length > 1/);
+  assert.match(manager, /componentResourceSelections/);
+  assert.match(manager, /assembly:labels\.componentConfiguration/);
+  assert.match(stockSwitcher, /\/family/);
+  assert.match(
+    openapi,
+    /componentResourceSelections:[\s\S]*selected resource is consumed and snapshotted in build history/,
+  );
+});
+
 test("detaching freezes inherited BOM while preserving the variant resource and operations", async () => {
   const [assemblies, familyRoute, familyManager, openapi] = await Promise.all([
     source("lib/assemblies.ts"),

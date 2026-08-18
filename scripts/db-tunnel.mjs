@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { isIP } from "node:net";
+import { createServer } from "node:net";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -100,14 +100,17 @@ sshArguments.push(
   "ServerAliveCountMax=3",
 );
 const needsDockerLookup = Boolean(dockerContainer || dockerService);
+const controlPath = needsDockerLookup
+  ? path.join(homedir(), ".ssh", `inventory-tunnel-${process.pid}-%C`)
+  : "";
 if (needsDockerLookup) {
   sshArguments.push(
     "-o",
     "ControlMaster=auto",
     "-o",
-    "ControlPersist=5",
+    "ControlPersist=yes",
     "-o",
-    `ControlPath=${path.join(homedir(), ".ssh", `inventory-tunnel-${process.pid}-%C`)}`,
+    `ControlPath=${controlPath}`,
   );
 }
 
@@ -135,7 +138,16 @@ const runAndCapture = (command, args) =>
     });
   });
 
-let remoteHost = configuredRemoteHost;
+const closeControlMaster = () => {
+  if (!controlPath) return;
+  spawn(
+    "ssh",
+    ["-S", controlPath, "-O", "exit", sshTarget],
+    { stdio: "ignore" },
+  ).unref();
+};
+
+let resolvedDockerContainer = "";
 if (dockerService) {
   process.stdout.write(
     `Resolving database service ${dockerService} through ${sshTarget}...\n`,
@@ -144,7 +156,7 @@ if (dockerService) {
     `container_id=$(docker ps --filter label=com.docker.swarm.service.name=${dockerService} --format '{{.ID}}' | head -n 1)`,
     `if [ -z "$container_id" ]; then container_id=$(docker ps --filter name=^${dockerService} --format '{{.ID}}' | head -n 1); fi`,
     'test -n "$container_id"',
-    `docker inspect --format '{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}' "$container_id"`,
+    `printf '%s\\n' "$container_id"`,
   ].join("; ");
 
   let output;
@@ -156,14 +168,15 @@ if (dockerService) {
       remoteCommand,
     ]);
   } catch (error) {
+    closeControlMaster();
     fail(`Could not inspect the remote database service: ${error.message}`);
   }
 
-  const addresses = output.split(/\s+/).filter((candidate) => isIP(candidate));
-  if (addresses.length === 0) {
-    fail(`Docker returned no running container IP address for ${dockerService}.`);
+  resolvedDockerContainer = output.trim().split(/\s+/)[0] ?? "";
+  if (!/^[a-f0-9]{12,64}$/.test(resolvedDockerContainer)) {
+    closeControlMaster();
+    fail(`Docker returned no running container ID for ${dockerService}.`);
   }
-  [remoteHost] = addresses;
 } else if (dockerContainer) {
   process.stdout.write(
     `Resolving database container ${dockerContainer} through ${sshTarget}...\n`,
@@ -177,61 +190,128 @@ if (dockerService) {
       "docker",
       "inspect",
       "--format",
-      "'{{range .NetworkSettings.Networks}}{{println .IPAddress}}{{end}}'",
+      "'{{.Id}}'",
       dockerContainer,
     ]);
   } catch (error) {
+    closeControlMaster();
     fail(`Could not inspect the remote database container: ${error.message}`);
   }
 
-  const addresses = output.split(/\s+/).filter((candidate) => isIP(candidate));
-  if (addresses.length === 0) {
-    fail(`Docker returned no IP address for ${dockerContainer}.`);
+  resolvedDockerContainer = output.trim().split(/\s+/)[0] ?? "";
+  if (!/^[a-f0-9]{12,64}$/.test(resolvedDockerContainer)) {
+    closeControlMaster();
+    fail(`Docker returned no container ID for ${dockerContainer}.`);
   }
-  [remoteHost] = addresses;
 }
 
 const formatHost = (host) => (host.includes(":") ? `[${host}]` : host);
-const forwarding = `${formatHost(localHost)}:${localPort}:${formatHost(remoteHost)}:${remotePort}`;
 const databaseUser = value("DB_TUNNEL_DATABASE_USER") || "inventory";
 const databaseName = value("DB_TUNNEL_DATABASE_NAME") || "inventory";
 const localDatabaseHost = localHost === "::1" ? "[::1]" : localHost;
+const targetDescription = resolvedDockerContainer
+  ? `Docker container ${resolvedDockerContainer.slice(0, 12)}:${remotePort}`
+  : `${configuredRemoteHost}:${remotePort}`;
 
 process.stdout.write(
   [
-    `Opening ${localHost}:${localPort} -> ${remoteHost}:${remotePort} through ${sshTarget}`,
+    `Opening ${localHost}:${localPort} -> ${targetDescription} through ${sshTarget}`,
     "Keep this terminal open; press Ctrl-C to stop the tunnel.",
     "Use this in another terminal (replace <password>):",
-    `DATABASE_URL='postgresql://${databaseUser}:<password>@${localDatabaseHost}:${localPort}/${databaseName}' yarn dev`,
+    `DATABASE_URL='postgresql://${databaseUser}:<password>@${localDatabaseHost}:${localPort}/${databaseName}' npm run dev`,
     "",
   ].join("\n"),
 );
 
-const tunnel = spawn(
-  "ssh",
-  [
-    ...sshArguments,
-    "-N",
-    "-T",
-    "-L",
-    forwarding,
-    sshTarget,
-  ],
-  { stdio: "inherit" },
-);
+if (!resolvedDockerContainer) {
+  const forwarding = `${formatHost(localHost)}:${localPort}:${formatHost(configuredRemoteHost)}:${remotePort}`;
+  const tunnel = spawn(
+    "ssh",
+    [
+      ...sshArguments,
+      "-N",
+      "-T",
+      "-L",
+      forwarding,
+      sshTarget,
+    ],
+    { stdio: "inherit" },
+  );
 
-tunnel.once("error", (error) => {
-  fail(`Could not start ssh: ${error.message}`);
-});
-
-for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.once(signal, () => tunnel.kill(signal));
-}
-
-const exitCode = await new Promise((resolve) => {
-  tunnel.once("exit", (code, signal) => {
-    if (code !== null) resolve(code);
-    else resolve(signal === "SIGINT" ? 130 : 1);
+  tunnel.once("error", (error) => {
+    fail(`Could not start ssh: ${error.message}`);
   });
-});
-process.exitCode = exitCode;
+
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    process.once(signal, () => tunnel.kill(signal));
+  }
+
+  const exitCode = await new Promise((resolve) => {
+    tunnel.once("exit", (code, signal) => {
+      if (code !== null) resolve(code);
+      else resolve(signal === "SIGINT" ? 130 : 1);
+    });
+  });
+  process.exitCode = exitCode;
+} else {
+  // The SSH host may not have a route to a Swarm overlay address. Relay each
+  // local connection through the container's own network namespace instead.
+  const relayCommand = [
+    `docker exec -i ${resolvedDockerContainer} bash -c`,
+    `'exec 3<>/dev/tcp/127.0.0.1/${remotePort}; cat <&3 & reader=$!; cat >&3; kill "$reader" 2>/dev/null; wait "$reader" 2>/dev/null'`,
+  ].join(" ");
+  const relays = new Set();
+
+  const server = createServer((socket) => {
+    const relay = spawn(
+      "ssh",
+      [...sshArguments, "-T", sshTarget, relayCommand],
+      { stdio: ["pipe", "pipe", "pipe"] },
+    );
+    relays.add(relay);
+
+    let stderr = "";
+    relay.stderr.setEncoding("utf8");
+    relay.stderr.on("data", (chunk) => {
+      if (stderr.length < 8_192) stderr += chunk;
+    });
+    relay.stdin.on("error", () => socket.destroy());
+    relay.once("error", (error) => {
+      process.stderr.write(`Database relay failed: ${error.message}\n`);
+      socket.destroy();
+    });
+    relay.once("exit", (code) => {
+      relays.delete(relay);
+      if (code && !socket.destroyed) {
+        const detail = stderr.trim();
+        process.stderr.write(
+          `Database relay exited with code ${code}${detail ? `: ${detail}` : "."}\n`,
+        );
+      }
+      socket.end();
+    });
+    socket.once("error", () => relay.kill("SIGTERM"));
+    socket.once("close", () => relay.kill("SIGTERM"));
+    socket.pipe(relay.stdin);
+    relay.stdout.pipe(socket);
+  });
+
+  try {
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(localPort, localHost, resolve);
+    });
+  } catch (error) {
+    closeControlMaster();
+    fail(`Could not listen on ${localHost}:${localPort}: ${error.message}`);
+  }
+
+  const exitCode = await new Promise((resolve) => {
+    process.once("SIGINT", () => resolve(130));
+    process.once("SIGTERM", () => resolve(143));
+  });
+  server.close();
+  for (const relay of relays) relay.kill("SIGTERM");
+  closeControlMaster();
+  process.exitCode = exitCode;
+}

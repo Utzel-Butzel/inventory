@@ -14,6 +14,10 @@ import {
   assemblyBuildComponents,
   assemblyBuilds,
   bomLines,
+  resourceOptionConfigurations,
+  resourceOptionGroups,
+  resourceOptionSelections,
+  resourceOptionValues,
   resourceRelations,
   resources,
   stockLocationBalances,
@@ -57,6 +61,7 @@ export type AssemblyBuildInput = {
   occurredAt?: Date;
   location?: string | null;
   note?: string;
+  componentResourceSelections?: Record<string, string>;
   componentUnitIds?: Record<string, string[]>;
   outputUnitCodes?: string[];
 };
@@ -163,6 +168,7 @@ type NormalizedBomComponent = {
 };
 
 type ReadExecutor = Pick<typeof db, "select">;
+type AssemblyTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const sortBomLines = <T extends { position: number; slotKey: string }>(
   rows: T[],
@@ -362,10 +368,166 @@ async function resolveEffectiveBomRecipe(
   };
 }
 
+async function readOptionControlledBomLines(
+  executor: ReadExecutor,
+  organizationId: string,
+  resourceId: string,
+  baseLines: StoredBomLine[],
+) {
+  const selections = await executor
+    .select({
+      groupName: resourceOptionGroups.name,
+      slotKey: resourceOptionGroups.bomSlotKey,
+      componentResourceId: resourceOptionValues.componentResourceId,
+    })
+    .from(resourceOptionConfigurations)
+    .innerJoin(
+      resourceOptionSelections,
+      and(
+        eq(
+          resourceOptionSelections.configurationId,
+          resourceOptionConfigurations.id,
+        ),
+        eq(
+          resourceOptionSelections.organizationId,
+          resourceOptionConfigurations.organizationId,
+        ),
+      ),
+    )
+    .innerJoin(
+      resourceOptionGroups,
+      and(
+        eq(resourceOptionGroups.id, resourceOptionSelections.groupId),
+        eq(
+          resourceOptionGroups.organizationId,
+          resourceOptionSelections.organizationId,
+        ),
+      ),
+    )
+    .innerJoin(
+      resourceOptionValues,
+      and(
+        eq(resourceOptionValues.id, resourceOptionSelections.valueId),
+        eq(resourceOptionValues.groupId, resourceOptionSelections.groupId),
+      ),
+    )
+    .where(
+      and(
+        eq(resourceOptionConfigurations.organizationId, organizationId),
+        eq(resourceOptionConfigurations.resourceId, resourceId),
+        sql`${resourceOptionGroups.bomSlotKey} is not null`,
+      ),
+    );
+  const baseBySlot = new Map(baseLines.map((line) => [line.slotKey, line]));
+  return selections.map((selection) => {
+    const base = selection.slotKey
+      ? baseBySlot.get(selection.slotKey)
+      : undefined;
+    if (!base || !selection.componentResourceId) {
+      throw new AssemblyOperationError(
+        `The BOM mapping for option group "${selection.groupName}" is invalid.`,
+        409,
+      );
+    }
+    return {
+      groupName: selection.groupName,
+      slotKey: base.slotKey,
+      componentResourceId: selection.componentResourceId,
+      quantityPerAssembly: base.quantityPerAssembly,
+      position: base.position,
+      note: base.note,
+      baseComponentResourceId: base.componentResourceId,
+    };
+  });
+}
+
+async function syncOptionBomOverridesForPrimary(
+  transaction: AssemblyTransaction,
+  organizationId: string,
+  primaryResourceId: string,
+  baseLines: StoredBomLine[],
+) {
+  const configurations = await transaction
+    .select({ resourceId: resourceOptionConfigurations.resourceId })
+    .from(resourceOptionConfigurations)
+    .where(
+      and(
+        eq(resourceOptionConfigurations.organizationId, organizationId),
+        eq(
+          resourceOptionConfigurations.primaryResourceId,
+          primaryResourceId,
+        ),
+        sql`${resourceOptionConfigurations.resourceId} <> ${primaryResourceId}`,
+      ),
+    );
+  const variantIds = configurations.map((row) => row.resourceId);
+  if (!variantIds.length) return;
+  const controlledByVariant = new Map<
+    string,
+    Awaited<ReturnType<typeof readOptionControlledBomLines>>
+  >();
+  for (const variantId of variantIds) {
+    controlledByVariant.set(
+      variantId,
+      await readOptionControlledBomLines(
+        transaction,
+        organizationId,
+        variantId,
+        baseLines,
+      ),
+    );
+  }
+  const slotKeys = Array.from(
+    new Set(
+      Array.from(controlledByVariant.values()).flatMap((lines) =>
+        lines.map((line) => line.slotKey),
+      ),
+    ),
+  );
+  if (slotKeys.length) {
+    await transaction
+      .delete(variantBomOverrides)
+      .where(
+        and(
+          eq(variantBomOverrides.organizationId, organizationId),
+          inArray(variantBomOverrides.variantResourceId, variantIds),
+          inArray(variantBomOverrides.slotKey, slotKeys),
+        ),
+      );
+  }
+  const now = new Date();
+  const requiredOverrides = Array.from(controlledByVariant.entries()).flatMap(
+    ([variantResourceId, lines]) =>
+      lines.flatMap((line) =>
+        line.componentResourceId === line.baseComponentResourceId
+          ? []
+          : [
+              {
+                organizationId,
+                variantResourceId,
+                slotKey: line.slotKey,
+                componentResourceId: line.componentResourceId,
+                quantityPerAssembly: line.quantityPerAssembly,
+                position: line.position,
+                note: line.note,
+                removed: false,
+                updatedAt: now,
+              },
+            ],
+      ),
+  );
+  if (requiredOverrides.length) {
+    await transaction.insert(variantBomOverrides).values(requiredOverrides);
+  }
+}
+
 async function getBomWithExecutor(
   executor: ReadExecutor,
   organizationId: string,
   resourceId: string,
+  options: {
+    authorizeChoice?: (resource: ResourceRecord) => boolean | Promise<boolean>;
+  } = {},
 ) {
   const [resource] = await executor
     .select({
@@ -399,7 +561,29 @@ async function getBomWithExecutor(
   const componentIds = Array.from(
     new Set(recipe.lines.map((line) => line.componentResourceId)),
   );
-  const componentRows = componentIds.length
+  const variantLinks = componentIds.length
+    ? await executor
+        .select({
+          variantResourceId: resourceRelations.sourceResourceId,
+          primaryResourceId: resourceRelations.targetResourceId,
+        })
+        .from(resourceRelations)
+        .where(
+          and(
+            eq(resourceRelations.organizationId, organizationId),
+            eq(resourceRelations.relationTypeKey, "variant_of"),
+            inArray(resourceRelations.targetResourceId, componentIds),
+          ),
+        )
+        .orderBy(asc(resourceRelations.createdAt), asc(resourceRelations.id))
+    : [];
+  const choiceResourceIds = Array.from(
+    new Set([
+      ...componentIds,
+      ...variantLinks.map((link) => link.variantResourceId),
+    ]),
+  );
+  const componentRows = choiceResourceIds.length
     ? await executor
         .select({
           id: resources.id,
@@ -419,21 +603,57 @@ async function getBomWithExecutor(
         .where(
           and(
             eq(resources.organizationId, organizationId),
-            inArray(resources.id, componentIds),
+            inArray(resources.id, choiceResourceIds),
           ),
         )
     : [];
-  if (componentRows.length !== componentIds.length) {
+  const componentById = new Map(componentRows.map((row) => [row.id, row]));
+  if (componentIds.some((componentId) => !componentById.has(componentId))) {
     throw new AssemblyOperationError("A bill-of-materials component no longer exists.", 409);
   }
-  const availableUnitRows = componentIds.length
+  const variantResourceRows =
+    options.authorizeChoice && variantLinks.length
+      ? await executor
+          .select()
+          .from(resources)
+          .where(
+            and(
+              eq(resources.organizationId, organizationId),
+              inArray(
+                resources.id,
+                variantLinks.map((link) => link.variantResourceId),
+              ),
+            ),
+          )
+      : [];
+  const variantResourceById = new Map(
+    variantResourceRows.map((variant) => [variant.id, variant]),
+  );
+  const allowedVariantIds = new Set<string>();
+  for (const link of variantLinks) {
+    const variant = componentById.get(link.variantResourceId);
+    const authorizationResource = variantResourceById.get(link.variantResourceId);
+    if (
+      variant &&
+      (!options.authorizeChoice ||
+        (authorizationResource &&
+          (await options.authorizeChoice(authorizationResource))))
+    ) {
+      allowedVariantIds.add(variant.id);
+    }
+  }
+  const visibleChoiceIds = [
+    ...componentIds,
+    ...Array.from(allowedVariantIds),
+  ];
+  const availableUnitRows = visibleChoiceIds.length
     ? await executor
         .select()
         .from(stockUnits)
         .where(
           and(
             eq(stockUnits.organizationId, organizationId),
-            inArray(stockUnits.resourceId, componentIds),
+            inArray(stockUnits.resourceId, visibleChoiceIds),
             eq(stockUnits.status, "available"),
           ),
         )
@@ -445,7 +665,29 @@ async function getBomWithExecutor(
     list.push(unit);
     unitsByResource.set(unit.resourceId, list);
   }
-  const componentById = new Map(componentRows.map((row) => [row.id, row]));
+  const variantsByPrimary = new Map<string, string[]>();
+  for (const link of variantLinks) {
+    if (!allowedVariantIds.has(link.variantResourceId)) continue;
+    const current = variantsByPrimary.get(link.primaryResourceId) ?? [];
+    current.push(link.variantResourceId);
+    variantsByPrimary.set(link.primaryResourceId, current);
+  }
+  const choiceDto = (choiceId: string, primaryId: string) => {
+    const choice = componentById.get(choiceId)!;
+    return {
+      resourceId: choice.id,
+      name: choice.name,
+      sku: choice.sku,
+      availableQuantity: choice.availableQuantity,
+      trackingMode: trackingMode(choice.trackingMode),
+      availableUnits: (unitsByResource.get(choice.id) ?? []).map((unit) => ({
+        id: unit.id,
+        code: unit.code,
+        location: unit.location,
+      })),
+      isPrimary: choice.id === primaryId,
+    };
+  };
   const components = recipe.lines.map((line) => {
     const component = componentById.get(line.componentResourceId)!;
     return {
@@ -465,6 +707,16 @@ async function getBomWithExecutor(
         code: unit.code,
         location: unit.location,
       })),
+      choices: [
+        choiceDto(component.id, component.id),
+        ...(variantsByPrimary.get(component.id) ?? [])
+          .map((variantId) => choiceDto(variantId, component.id))
+          .sort(
+            (left, right) =>
+              left.name.localeCompare(right.name) ||
+              left.resourceId.localeCompare(right.resourceId),
+          ),
+      ],
     };
   });
   const buildableQuantity = components.length
@@ -492,9 +744,16 @@ async function getBomWithExecutor(
   };
 }
 
-export async function getBom(organizationId: string, resourceId: string) {
+export async function getBom(
+  organizationId: string,
+  resourceId: string,
+  options: {
+    authorizeChoice?: (resource: ResourceRecord) => boolean | Promise<boolean>;
+  } = {},
+) {
   return db.transaction(
-    (transaction) => getBomWithExecutor(transaction, organizationId, resourceId),
+    (transaction) =>
+      getBomWithExecutor(transaction, organizationId, resourceId, options),
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
 }
@@ -697,6 +956,33 @@ async function assertEffectiveBomGraphAcyclic(
   }
 }
 
+/**
+ * Revalidates the complete effective BOM graph after another service has
+ * inserted family links or sparse variant overrides in the same transaction.
+ */
+export async function assertCurrentEffectiveBomGraphAcyclic(
+  transaction: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  organizationId: string,
+  resourceId: string,
+) {
+  const recipe = await resolveEffectiveBomRecipe(
+    transaction,
+    organizationId,
+    resourceId,
+  );
+  await assertEffectiveBomGraphAcyclic(transaction, organizationId, {
+    resourceId,
+    isVariant: Boolean(recipe.primary),
+    lines: recipe.lines.map((line) => ({
+      slotKey: line.slotKey,
+      componentResourceId: line.componentResourceId,
+      quantityPerAssembly: line.quantityPerAssembly,
+      position: line.position,
+      note: line.note,
+    })),
+  });
+}
+
 export async function replaceBom(
   organizationId: string,
   assemblyResourceId: string,
@@ -762,6 +1048,75 @@ export async function replaceBom(
       );
     }
     assertDistinctRecipeComponents(normalizedComponents);
+
+    if (currentRecipe.primary) {
+      const controlledLines = await readOptionControlledBomLines(
+        transaction,
+        organizationId,
+        assemblyResourceId,
+        currentRecipe.baseLines,
+      );
+      const submittedBySlot = new Map(
+        normalizedComponents.map((line) => [line.slotKey, line]),
+      );
+      for (const controlled of controlledLines) {
+        const submitted = submittedBySlot.get(controlled.slotKey);
+        if (
+          !submitted ||
+          submitted.componentResourceId !== controlled.componentResourceId ||
+          submitted.quantityPerAssembly !== controlled.quantityPerAssembly ||
+          submitted.position !== controlled.position ||
+          submitted.note !== controlled.note
+        ) {
+          throw new AssemblyOperationError(
+            `The BOM slot controlled by option group "${controlled.groupName}" follows its selected option. Change the option definition instead.`,
+            409,
+          );
+        }
+      }
+    } else {
+      const mappedDefaults = await transaction
+        .select({
+          groupName: resourceOptionGroups.name,
+          slotKey: resourceOptionGroups.bomSlotKey,
+          componentResourceId: resourceOptionValues.componentResourceId,
+        })
+        .from(resourceOptionGroups)
+        .innerJoin(
+          resourceOptionValues,
+          and(
+            eq(resourceOptionValues.groupId, resourceOptionGroups.id),
+            eq(resourceOptionValues.isDefault, true),
+          ),
+        )
+        .where(
+          and(
+            eq(resourceOptionGroups.organizationId, organizationId),
+            eq(resourceOptionGroups.primaryResourceId, assemblyResourceId),
+            sql`${resourceOptionGroups.bomSlotKey} is not null`,
+          ),
+        );
+      const submittedBySlot = new Map(
+        normalizedComponents.map((line) => [line.slotKey, line]),
+      );
+      for (const mapping of mappedDefaults) {
+        const submitted = mapping.slotKey
+          ? submittedBySlot.get(mapping.slotKey)
+          : undefined;
+        if (!submitted) {
+          throw new AssemblyOperationError(
+            `The BOM slot used by option group "${mapping.groupName}" cannot be removed. Edit or clear the option groups first.`,
+            409,
+          );
+        }
+        if (submitted.componentResourceId !== mapping.componentResourceId) {
+          throw new AssemblyOperationError(
+            `The default component for option group "${mapping.groupName}" must match its mapped BOM slot. Edit the option group first.`,
+            409,
+          );
+        }
+      }
+    }
     await assertEffectiveBomGraphAcyclic(transaction, organizationId, {
       resourceId: assemblyResourceId,
       isVariant: Boolean(currentRecipe.primary),
@@ -857,6 +1212,19 @@ export async function replaceBom(
           })),
         );
       }
+      await syncOptionBomOverridesForPrimary(
+        transaction,
+        organizationId,
+        assemblyResourceId,
+        normalizedComponents.map((line) => ({
+          id: line.slotKey,
+          slotKey: line.slotKey,
+          componentResourceId: line.componentResourceId,
+          quantityPerAssembly: line.quantityPerAssembly,
+          position: line.position,
+          note: line.note,
+        })),
+      );
     }
   });
 
@@ -884,9 +1252,20 @@ export async function resetVariantBomOverrides(
         409,
       );
     }
+    const controlledLines = await readOptionControlledBomLines(
+      transaction,
+      organizationId,
+      variantResourceId,
+      recipe.baseLines,
+    );
+    const controlledBySlot = new Map(
+      controlledLines.map((line) => [line.slotKey, line]),
+    );
     const inherited = recipe.baseLines.map((line) => ({
       slotKey: line.slotKey,
-      componentResourceId: line.componentResourceId,
+      componentResourceId:
+        controlledBySlot.get(line.slotKey)?.componentResourceId ??
+        line.componentResourceId,
       quantityPerAssembly: line.quantityPerAssembly,
       position: line.position,
       note: line.note,
@@ -904,6 +1283,26 @@ export async function resetVariantBomOverrides(
           eq(variantBomOverrides.variantResourceId, variantResourceId),
         ),
       );
+    const requiredOverrides = controlledLines.flatMap((line) =>
+      line.componentResourceId === line.baseComponentResourceId
+        ? []
+        : [
+            {
+              organizationId,
+              variantResourceId,
+              slotKey: line.slotKey,
+              componentResourceId: line.componentResourceId,
+              quantityPerAssembly: line.quantityPerAssembly,
+              position: line.position,
+              note: line.note,
+              removed: false,
+              updatedAt: new Date(),
+            },
+          ],
+    );
+    if (requiredOverrides.length) {
+      await transaction.insert(variantBomOverrides).values(requiredOverrides);
+    }
   });
 
   const result = await getBom(organizationId, variantResourceId);
@@ -1002,6 +1401,14 @@ export async function detachResourceVariant(
         and(
           eq(variantBomOverrides.organizationId, organizationId),
           eq(variantBomOverrides.variantResourceId, variantResourceId),
+        ),
+      );
+    await transaction
+      .delete(resourceOptionConfigurations)
+      .where(
+        and(
+          eq(resourceOptionConfigurations.organizationId, organizationId),
+          eq(resourceOptionConfigurations.resourceId, variantResourceId),
         ),
       );
     const [removedMembership] = await transaction
@@ -1217,6 +1624,74 @@ export async function listAssemblyBuilds(
   };
 }
 
+async function resolveBuildComponentSelections(
+  transaction: AssemblyTransaction,
+  organizationId: string,
+  recipeLines: EffectiveBomLine[],
+  selections: Record<string, string> | undefined,
+) {
+  const lineBySlot = new Map(recipeLines.map((line) => [line.slotKey, line]));
+  for (const slotKey of Object.keys(selections ?? {})) {
+    if (!lineBySlot.has(slotKey)) {
+      throw new AssemblyOperationError(
+        "componentResourceSelections contains a slot that is not in this bill of materials.",
+        422,
+      );
+    }
+  }
+
+  const selectedVariantIds = Array.from(
+    new Set(
+      recipeLines.flatMap((line) => {
+        const selectedResourceId = selections?.[line.slotKey];
+        return selectedResourceId && selectedResourceId !== line.componentResourceId
+          ? [selectedResourceId]
+          : [];
+      }),
+    ),
+  );
+  const memberships = selectedVariantIds.length
+    ? await transaction
+        .select({
+          variantResourceId: resourceRelations.sourceResourceId,
+          primaryResourceId: resourceRelations.targetResourceId,
+        })
+        .from(resourceRelations)
+        .where(
+          and(
+            eq(resourceRelations.organizationId, organizationId),
+            eq(resourceRelations.relationTypeKey, "variant_of"),
+            inArray(resourceRelations.sourceResourceId, selectedVariantIds),
+          ),
+        )
+    : [];
+  const primaryByVariant = new Map(
+    memberships.map((membership) => [
+      membership.variantResourceId,
+      membership.primaryResourceId,
+    ]),
+  );
+
+  return recipeLines.map((line) => {
+    const selectedResourceId =
+      selections?.[line.slotKey] ?? line.componentResourceId;
+    if (
+      selectedResourceId !== line.componentResourceId &&
+      primaryByVariant.get(selectedResourceId) !== line.componentResourceId
+    ) {
+      throw new AssemblyOperationError(
+        "A selected component configuration is not a direct variant of its BOM component.",
+        422,
+      );
+    }
+    return {
+      ...line,
+      baseComponentResourceId: line.componentResourceId,
+      componentResourceId: selectedResourceId,
+    };
+  });
+}
+
 export async function buildAssembly(
   organizationId: string,
   assemblyResourceId: string,
@@ -1249,12 +1724,20 @@ export async function buildAssembly(
       await transaction.execute(
         sql`select pg_advisory_xact_lock(${BOM_WRITE_LOCK_ID})`,
       );
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(${VARIANT_FAMILY_WRITE_LOCK_ID})`,
+      );
       const effectiveRecipe = await resolveEffectiveBomRecipe(
         transaction,
         organizationId,
         assemblyResourceId,
       );
-      const initialBom = effectiveRecipe.lines;
+      const initialBom = await resolveBuildComponentSelections(
+        transaction,
+        organizationId,
+        effectiveRecipe.lines,
+        input.componentResourceSelections,
+      );
 
       const resourceIds = Array.from(
         new Set([

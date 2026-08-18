@@ -73,6 +73,40 @@ export type ConnectionDiagramModel = {
   connectionCount: number;
 };
 
+export type ConnectionDiagramPayload = {
+  relations: ConnectionDiagramRelation[];
+  family: ConnectionDiagramFamily | null;
+  bomComponents: ConnectionDiagramBomComponent[];
+};
+
+export type ConnectionDiagramGraphNode = {
+  resource: ConnectionDiagramResource;
+  column: number;
+  depth: number;
+  connections: ConnectionDiagramConnection[];
+};
+
+export type ConnectionDiagramGraphEdge = {
+  key: string;
+  firstResourceId: string;
+  secondResourceId: string;
+  connections: Array<
+    ConnectionDiagramConnection & {
+      canonicalId: string;
+      fromResourceId: string;
+      toResourceId: string;
+      directed: boolean;
+    }
+  >;
+};
+
+export type ConnectionDiagramGraph = {
+  nodes: ConnectionDiagramGraphNode[];
+  edges: ConnectionDiagramGraphEdge[];
+  connectionCount: number;
+  truncated: boolean;
+};
+
 type Input = {
   currentResourceId: string;
   family?: ConnectionDiagramFamily | null;
@@ -236,5 +270,150 @@ export function buildResourceConnectionDiagram(
       .filter((node) => node.side === "right")
       .sort(sortNodes),
     connectionCount,
+  };
+}
+
+const canonicalConnectionId = (
+  currentResourceId: string,
+  relatedResourceId: string,
+  connection: ConnectionDiagramConnection,
+) => {
+  if (connection.id.startsWith("relation:")) return connection.id;
+  const pair = [currentResourceId, relatedResourceId].sort().join(":");
+  if (connection.kind === "family") return `family:${pair}`;
+  return `${connection.kind}:${currentResourceId}:${relatedResourceId}:${connection.id}`;
+};
+
+/**
+ * Expands already-loaded direct payloads into a bounded, cycle-safe graph.
+ * Missing payloads simply leave a node as a leaf; the client can use the
+ * returned node depths to decide which resources need another fetch round.
+ */
+export function buildResourceConnectionGraph(input: {
+  root: ConnectionDiagramResource;
+  depth: number;
+  payloads: ReadonlyMap<string, ConnectionDiagramPayload>;
+  maxNodes?: number;
+}): ConnectionDiagramGraph {
+  const maximumDepth = Math.max(1, Math.min(3, Math.trunc(input.depth)));
+  const maximumNodes = Math.max(3, input.maxNodes ?? 45);
+  const nodes = new Map<string, ConnectionDiagramGraphNode>([
+    [
+      input.root.id,
+      {
+        resource: { ...input.root },
+        column: 0,
+        depth: 0,
+        connections: [],
+      },
+    ],
+  ]);
+  const edges = new Map<string, ConnectionDiagramGraphEdge>();
+  const canonicalConnections = new Set<string>();
+  const queue = [input.root.id];
+  const expanded = new Set<string>();
+  let truncated = false;
+
+  while (queue.length) {
+    const currentResourceId = queue.shift()!;
+    const currentNode = nodes.get(currentResourceId)!;
+    if (expanded.has(currentResourceId) || currentNode.depth >= maximumDepth) {
+      continue;
+    }
+    expanded.add(currentResourceId);
+    const payload = input.payloads.get(currentResourceId);
+    if (!payload) continue;
+    const direct = buildResourceConnectionDiagram({
+      currentResourceId,
+      ...payload,
+    });
+    for (const directNode of [...direct.left, ...direct.right]) {
+      // Siblings are useful around the selected root, but recursively joining
+      // every sibling to every other sibling would turn a family into a clique.
+      const connections = directNode.connections.filter(
+        (connection) =>
+          currentNode.depth === 0 || connection.descriptor.type !== "sibling",
+      );
+      if (!connections.length) continue;
+      const relatedResourceId = directNode.resource.id;
+      let relatedNode = nodes.get(relatedResourceId);
+      if (!relatedNode) {
+        if (nodes.size >= maximumNodes) {
+          truncated = true;
+          continue;
+        }
+        relatedNode = {
+          resource: { ...directNode.resource },
+          column:
+            currentNode.column + (directNode.side === "left" ? -1 : 1),
+          depth: currentNode.depth + 1,
+          connections: [],
+        };
+        nodes.set(relatedResourceId, relatedNode);
+        if (relatedNode.depth < maximumDepth) queue.push(relatedResourceId);
+      } else {
+        if (!relatedNode.resource.type && directNode.resource.type) {
+          relatedNode.resource.type = directNode.resource.type;
+        }
+        if (!relatedNode.resource.status && directNode.resource.status) {
+          relatedNode.resource.status = directNode.resource.status;
+        }
+      }
+
+      const pair = [currentResourceId, relatedResourceId].sort();
+      const edgeKey = pair.join(":");
+      const edge = edges.get(edgeKey) ?? {
+        key: edgeKey,
+        firstResourceId: pair[0],
+        secondResourceId: pair[1],
+        connections: [],
+      };
+      for (const connection of connections) {
+        const canonicalId = canonicalConnectionId(
+          currentResourceId,
+          relatedResourceId,
+          connection,
+        );
+        if (canonicalConnections.has(canonicalId)) continue;
+        canonicalConnections.add(canonicalId);
+        const towardCurrent = connection.direction === "toward-current";
+        const directed = connection.direction !== "undirected";
+        edge.connections.push({
+          ...connection,
+          canonicalId,
+          fromResourceId: towardCurrent
+            ? relatedResourceId
+            : currentResourceId,
+          toResourceId: towardCurrent
+            ? currentResourceId
+            : relatedResourceId,
+          directed,
+        });
+        for (const graphNode of [currentNode, relatedNode]) {
+          if (
+            !graphNode.connections.some(
+              (item) =>
+                item.id === connection.id && item.kind === connection.kind,
+            )
+          ) {
+            graphNode.connections.push(connection);
+          }
+        }
+      }
+      if (edge.connections.length) edges.set(edgeKey, edge);
+    }
+  }
+
+  return {
+    nodes: Array.from(nodes.values()).sort(
+      (left, right) =>
+        left.column - right.column ||
+        left.depth - right.depth ||
+        left.resource.name.localeCompare(right.resource.name) ||
+        left.resource.id.localeCompare(right.resource.id),
+    ),
+    edges: Array.from(edges.values()),
+    connectionCount: canonicalConnections.size,
+    truncated,
   };
 }

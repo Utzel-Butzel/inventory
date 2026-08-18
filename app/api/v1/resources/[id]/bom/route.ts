@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requireResourcePermission } from "@/lib/api-auth";
+import { canAccessResource, requireResourcePermission } from "@/lib/api-auth";
 import {
   assemblyHttpError,
   getBom,
@@ -71,7 +71,10 @@ export async function GET(request: Request, context: Context) {
   if (authorization.response) return authorization.response;
 
   try {
-    const result = await getBom(authorization.identity.organizationId, id);
+    const result = await getBom(authorization.identity.organizationId, id, {
+      authorizeChoice: (resource) =>
+        canAccessResource(authorization.identity, "inventory.read", resource),
+    });
     if (!result) return Response.json({ error: "Not found" }, { status: 404 });
     return Response.json(result);
   } catch (error) {

@@ -44,6 +44,7 @@ type ResourceFamilyResponse = {
   primary: ResourceFamilyMember;
   variants: ResourceFamilyMember[];
   legacyVariantCount: number;
+  optionGroupCount: number;
 };
 
 type CreateForm = {
@@ -119,6 +120,12 @@ export function ResourceFamilyManager({
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const reload = () => void load();
+    window.addEventListener("resource-family-changed", reload);
+    return () => window.removeEventListener("resource-family-changed", reload);
   }, [load]);
 
   const siblings = useMemo(
@@ -263,7 +270,10 @@ export function ResourceFamilyManager({
                 })}
               </Badge>
             ) : null}
-            {canCreate && family?.role !== "variant" && !formOpen ? (
+            {canCreate &&
+            family?.role !== "variant" &&
+            family?.optionGroupCount === 0 &&
+            !formOpen ? (
               <Button
                 size="sm"
                 onClick={() => {

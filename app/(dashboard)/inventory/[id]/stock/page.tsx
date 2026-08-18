@@ -21,18 +21,14 @@ export default async function ResourceStockPage({ params }: Props) {
   const resource = identity
     ? await getResourceRecord(id, identity.organizationId)
     : null;
-  const [canManageStock, canManageCounts] =
+  const canManageStock =
     identity && resource
-      ? await Promise.all([
-          canAccessResource(identity, "stock.manage", resource),
-          canAccessResource(identity, "counts.manage", resource),
-        ])
-      : [false, false];
+      ? await canAccessResource(identity, "stock.manage", resource)
+      : false;
   return (
     <ResourceStockManager
       resourceId={id}
       canEdit={canManageStock}
-      canManageCounts={canManageCounts}
     />
   );
 }

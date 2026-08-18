@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { buildResourceConnectionDiagram } from "../lib/resource-connection-diagram.ts";
+import {
+  buildResourceConnectionDiagram,
+  buildResourceConnectionGraph,
+} from "../lib/resource-connection-diagram.ts";
 
 const item = (id, name) => ({ id, name, type: "item", status: "available" });
 
@@ -135,6 +138,73 @@ test("merges repeated resources on the same side while retaining each connection
   assert.equal(model.connectionCount, 2);
 });
 
+test("expands loaded payloads across bounded levels without duplicating cycles", () => {
+  const root = item("root", "Root");
+  const child = item("child", "Child");
+  const grandchild = item("grandchild", "Grandchild");
+  const relation = (id, source, target) => ({
+    id,
+    sourceResourceId: source.id,
+    targetResourceId: target.id,
+    relationTypeKey: "related",
+    source,
+    target,
+    relationType: { label: "Related to", inverseLabel: "Related to" },
+  });
+  const payloads = new Map([
+    [
+      root.id,
+      {
+        family: null,
+        bomComponents: [],
+        relations: [relation("root-child", root, child)],
+      },
+    ],
+    [
+      child.id,
+      {
+        family: null,
+        bomComponents: [],
+        relations: [
+          relation("root-child", root, child),
+          relation("child-grandchild", child, grandchild),
+        ],
+      },
+    ],
+    [
+      grandchild.id,
+      {
+        family: null,
+        bomComponents: [],
+        relations: [relation("child-grandchild", child, grandchild)],
+      },
+    ],
+  ]);
+
+  const oneLevel = buildResourceConnectionGraph({ root, depth: 1, payloads });
+  assert.deepEqual(
+    oneLevel.nodes.map((node) => node.resource.id),
+    [root.id, child.id],
+  );
+  assert.equal(oneLevel.connectionCount, 1);
+
+  const threeLevels = buildResourceConnectionGraph({
+    root,
+    depth: 3,
+    payloads,
+  });
+  assert.deepEqual(
+    threeLevels.nodes.map((node) => node.resource.id),
+    [root.id, child.id, grandchild.id],
+  );
+  assert.deepEqual(
+    threeLevels.nodes.map((node) => node.column),
+    [0, 1, 2],
+  );
+  assert.equal(threeLevels.connectionCount, 2);
+  assert.equal(threeLevels.edges.length, 2);
+});
+
 test("the detail-page diagram loads lazily from existing read APIs", async () => {
   const [page, component] = await Promise.all([
     readFile(
@@ -154,4 +224,8 @@ test("the detail-page diagram loads lazily from existing read APIs", async () =>
   assert.match(component, /\/bom`/);
   assert.match(component, /Promise\.allSettled/);
   assert.match(component, /OrganizationLink as Link/);
+  assert.match(component, /DEPTH_OPTIONS = \[1, 2, 3\]/);
+  assert.match(component, /connectionDiagram\.depth\.label/);
+  assert.match(component, /buildResourceConnectionGraph/);
+  assert.match(component, /MAX_GRAPH_NODES = 45/);
 });

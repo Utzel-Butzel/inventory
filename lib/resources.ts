@@ -24,6 +24,8 @@ import {
   media,
   purchaseOrderLines,
   resourceCreationRequests,
+  resourceOptionSelections,
+  resourceOptionValues,
   resourceRelations,
   resourceVariants,
   roomScanAssets,
@@ -937,6 +939,9 @@ export async function deleteResource(
   if (!resource) return null;
   const deleted = await db.transaction(async (transaction) => {
     await transaction.execute(
+      sql`select pg_advisory_xact_lock(${BOM_WRITE_LOCK_ID})`,
+    );
+    await transaction.execute(
       sql`select pg_advisory_xact_lock(${VARIANT_FAMILY_WRITE_LOCK_ID})`,
     );
     const [locked] = await transaction
@@ -966,6 +971,73 @@ export async function deleteResource(
       .limit(1);
     if (linkedVariant) {
       throw new Error("RESOURCE_HAS_FIRST_CLASS_VARIANTS");
+    }
+    const optionValueReferences = await transaction
+      .select({
+        id: resourceOptionValues.id,
+        groupId: resourceOptionValues.groupId,
+      })
+      .from(resourceOptionValues)
+      .where(
+        and(
+          eq(resourceOptionValues.organizationId, organizationId),
+          eq(resourceOptionValues.componentResourceId, id),
+        ),
+      );
+    if (optionValueReferences.length) {
+      const valueIds = optionValueReferences.map((value) => value.id);
+      const groupIds = Array.from(
+        new Set(optionValueReferences.map((value) => value.groupId)),
+      );
+      const [selectedValue] = await transaction
+        .select({ id: resourceOptionSelections.valueId })
+        .from(resourceOptionSelections)
+        .where(
+          and(
+            eq(resourceOptionSelections.organizationId, organizationId),
+            inArray(resourceOptionSelections.valueId, valueIds),
+          ),
+        )
+        .limit(1);
+      if (selectedValue) {
+        throw new Error("RESOURCE_USED_BY_OPTION_SELECTION");
+      }
+      const groupValueCounts = await transaction
+        .select({
+          groupId: resourceOptionValues.groupId,
+          value: count(),
+        })
+        .from(resourceOptionValues)
+        .where(
+          and(
+            eq(resourceOptionValues.organizationId, organizationId),
+            inArray(resourceOptionValues.groupId, groupIds),
+          ),
+        )
+        .groupBy(resourceOptionValues.groupId);
+      const referencesPerGroup = new Map<string, number>();
+      for (const reference of optionValueReferences) {
+        referencesPerGroup.set(
+          reference.groupId,
+          (referencesPerGroup.get(reference.groupId) ?? 0) + 1,
+        );
+      }
+      if (
+        groupValueCounts.some(
+          (group) =>
+            Number(group.value) - (referencesPerGroup.get(group.groupId) ?? 0) < 2,
+        )
+      ) {
+        throw new Error("RESOURCE_REQUIRED_BY_OPTION_GROUP");
+      }
+      await transaction
+        .delete(resourceOptionValues)
+        .where(
+          and(
+            eq(resourceOptionValues.organizationId, organizationId),
+            inArray(resourceOptionValues.id, valueIds),
+          ),
+        );
     }
     const [spatialAssets, keyframeImages] = await Promise.all([
       transaction

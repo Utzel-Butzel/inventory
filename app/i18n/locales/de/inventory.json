@@ -101,6 +101,76 @@
       "nameRequired": "Gib einen Namen für die Variante ein."
     }
   },
+  "options": {
+    "title": "Optionsgruppen",
+    "description": "Auswahlmöglichkeiten einmal definieren und verbundene Inventarvarianten erzeugen.",
+    "variantDescription": "Optionsauswahl, die von {{name}} übernommen wird.",
+    "variantHelp": "Dieser Eintrag bleibt ein vollständiger Inventarartikel. Bestand, Standorte, Serienexemplare, Beziehungen und Fertigungsverlauf sind unabhängig.",
+    "groupCount_one": "{{value}} Gruppe",
+    "groupCount_other": "{{value}} Gruppen",
+    "combinations_one": "{{value}} Kombination; der Standard bleibt der Haupteintrag.",
+    "combinations_other": "{{value}} Kombinationen; der Standard bleibt der Haupteintrag.",
+    "defaultHint": "Der Haupteintrag steht für alle Standardwerte.",
+    "default": "Standard",
+    "bomMapped": "Mit Stückliste verknüpft",
+    "locked": "Erzeugt",
+    "loading": "Optionsgruppen werden geladen",
+    "empty": {
+      "title": "Keine Optionsgruppen",
+      "description": "Füge Dimensionen wie Sprache oder Rahmen hinzu. Verknüpfe eine Gruppe optional mit einer Stücklistenposition, damit jeder Wert genau diese Komponente austauscht."
+    },
+    "fields": {
+      "groupName": "Gruppenname",
+      "key": "Schlüssel",
+      "bomSlot": "Stücklistenposition (optional)",
+      "valueLabel": "Wert {{index}}",
+      "code": "Code",
+      "component": "Komponente"
+    },
+    "editor": {
+      "help": "Halte es einfach: Meistens braucht eine Gruppe nur einen Namen und Werte. Wähle nur dann eine Stücklistenposition, wenn diese Auswahl eine physische Komponente ersetzen soll.",
+      "groupPlaceholder": "z. B. Sprache",
+      "valuePlaceholder": "z. B. Deutsch",
+      "noBomSlot": "Keine Komponentenänderung",
+      "selectComponent": "Komponente auswählen…",
+      "loadingComponents": "Komponenten werden geladen…",
+      "catalogOnly": "Katalogoption"
+    },
+    "generate": {
+      "confirm_one": "Jetzt {{value}} vollständige Inventarvariante erzeugen? Die Definitionen werden anschließend gesperrt.",
+      "confirm_other": "Jetzt {{value}} vollständige Inventarvarianten erzeugen? Die Definitionen werden anschließend gesperrt."
+    },
+    "actions": {
+      "configure": "Optionen konfigurieren",
+      "edit": "Definitionen bearbeiten",
+      "save": "Definitionen speichern",
+      "saving": "Wird gespeichert…",
+      "cancel": "Abbrechen",
+      "generate": "Varianten erzeugen",
+      "generating": "Werden erzeugt…",
+      "addGroup": "Gruppe hinzufügen",
+      "addValue": "Wert hinzufügen",
+      "removeGroup": "Gruppe {{name}} entfernen",
+      "removeValue": "Wert {{label}} entfernen",
+      "openPrimary": "{{name}} öffnen",
+      "dismissError": "Fehler der Optionsgruppen schließen"
+    },
+    "notices": {
+      "saved": "Optionsdefinitionen gespeichert.",
+      "generated_one": "{{value}} verbundene Variante erzeugt.",
+      "generated_other": "{{value}} verbundene Varianten erzeugt."
+    },
+    "errors": {
+      "load": "Die Optionsgruppen konnten nicht geladen werden.",
+      "resources": "Die auswählbaren Komponenten konnten nicht geladen werden.",
+      "save": "Die Optionsgruppen konnten nicht gespeichert werden.",
+      "generate": "Die Optionsvarianten konnten nicht erzeugt werden.",
+      "invalidGroup": "Vervollständige Name und Schlüssel der Optionsgruppe {{group}}. Der Schlüssel muss mit einem Buchstaben beginnen.",
+      "invalidValue": "Gib eine Bezeichnung und einen Code für Wert {{value}} in {{group}} ein.",
+      "missingComponent": "Wähle eine Komponente für Wert {{value}} in {{group}} aus.",
+      "duplicateValues": "Verwende in {{group}} eindeutige Bezeichnungen und Codes."
+    }
+  },
   "actions": {
     "batchCapture": "Fotoerfassung",
     "addItem": "Eintrag hinzufügen",
@@ -238,7 +308,7 @@
       "edit": "Eintrag bearbeiten",
       "delete": "Eintrag löschen"
     },
-    "confirmDelete": "„{{name}}“ löschen? Dies kann nicht rückgängig gemacht werden.",
+    "confirmDelete": "„{{name}}“ löschen? Dabei werden auch Optionsgruppen, Optionsauswahlen, Medien, andere eintragseigene Daten und ungenutzte Optionswerte gelöscht, die diesen Eintrag als Komponente verwenden. Dies kann nicht rückgängig gemacht werden.",
     "share": {
       "title": "Öffentliche Links verwalten",
       "description": "Erstelle und widerrufe öffentliche Links mit Lesezugriff für „{{name}}“.",

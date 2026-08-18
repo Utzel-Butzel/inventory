@@ -54,6 +54,16 @@ type BomResource = {
   trackingMode: TrackingMode;
 };
 
+type BomComponentChoice = {
+  resourceId: string;
+  name: string;
+  sku: string | null;
+  availableQuantity: number;
+  trackingMode: TrackingMode;
+  availableUnits: AvailableUnit[];
+  isPrimary: boolean;
+};
+
 type BomComponent = {
   id: string;
   slotKey: string;
@@ -66,6 +76,7 @@ type BomComponent = {
   availableQuantity: number;
   trackingMode: TrackingMode;
   availableUnits: AvailableUnit[];
+  choices: BomComponentChoice[];
   origin?: "local" | "base" | "inherited" | "override" | "variant";
 };
 
@@ -157,6 +168,19 @@ function normalizeBom(payload: BomEnvelope, t: TFunction<"assembly">): BomData {
       .map((component) => ({
         ...component,
         slotKey: component.slotKey ?? component.id,
+        choices: component.choices?.length
+          ? component.choices
+          : [
+              {
+                resourceId: component.resourceId,
+                name: component.name,
+                sku: component.sku,
+                availableQuantity: component.availableQuantity,
+                trackingMode: component.trackingMode,
+                availableUnits: component.availableUnits,
+                isPrimary: true,
+              },
+            ],
       }))
       .sort((left, right) => left.position - right.position),
     buildableQuantity: Math.max(0, source.buildableQuantity ?? 0),
@@ -220,10 +244,12 @@ export function AssemblyManager({
   resourceId,
   mode = "full",
   onStockChanged,
+  hideWhenEmpty = false,
 }: {
   resourceId: string;
   mode?: AssemblyMode;
   onStockChanged?: () => void;
+  hideWhenEmpty?: boolean;
 }) {
   const { t, i18n } = useT(["assembly", "common"]);
   const locale = i18n.resolvedLanguage ?? i18n.language;
@@ -259,6 +285,8 @@ export function AssemblyManager({
   const [componentUnitIds, setComponentUnitIds] = useState<
     Record<string, string[]>
   >({});
+  const [componentResourceSelections, setComponentResourceSelections] =
+    useState<Record<string, string>>({});
   const buildRequestRef = useRef<{ key: string; fingerprint: string } | null>(null);
 
   const loadBom = useCallback(
@@ -271,6 +299,21 @@ export function AssemblyManager({
         const normalized = normalizeBom(payload, t);
         setBom(normalized);
         setComponents(normalized.components);
+        setComponentResourceSelections((current) =>
+          Object.fromEntries(
+            normalized.components.map((component) => {
+              const preserved = current[component.slotKey];
+              return [
+                component.slotKey,
+                component.choices.some(
+                  (choice) => choice.resourceId === preserved,
+                )
+                  ? preserved
+                  : component.resourceId,
+              ];
+            }),
+          ),
+        );
       } catch (loadError) {
         setError(
           loadError instanceof Error ? loadError.message : t("assembly:errors.loadBom"),
@@ -369,15 +412,45 @@ export function AssemblyManager({
   const preview = useMemo(
     () =>
       (bom?.components ?? []).map((component) => {
+        const selectedResourceId =
+          componentResourceSelections[component.slotKey] ??
+          component.resourceId;
+        const selectedChoice =
+          component.choices.find(
+            (choice) => choice.resourceId === selectedResourceId,
+          ) ?? component.choices[0]!;
         const required = component.quantityPerAssembly * buildQuantity;
         return {
           ...component,
+          resourceId: selectedChoice.resourceId,
+          name: selectedChoice.name,
+          sku: selectedChoice.sku,
+          availableQuantity: selectedChoice.availableQuantity,
+          trackingMode: selectedChoice.trackingMode,
+          availableUnits: selectedChoice.availableUnits,
           required,
-          remaining: component.availableQuantity - required,
-          shortage: required > component.availableQuantity,
+          remaining: selectedChoice.availableQuantity - required,
+          shortage: required > selectedChoice.availableQuantity,
         };
       }),
-    [bom?.components, buildQuantity],
+    [bom?.components, buildQuantity, componentResourceSelections],
+  );
+  const selectedBuildable = useMemo(
+    () =>
+      preview.length
+        ? Math.max(
+            0,
+            Math.min(
+              ...preview.map((component) =>
+                Math.floor(
+                  component.availableQuantity /
+                    Math.max(1, component.quantityPerAssembly),
+                ),
+              ),
+            ),
+          )
+        : 0,
+    [preview],
   );
 
   useEffect(() => {
@@ -439,6 +512,17 @@ export function AssemblyManager({
         availableQuantity: resource.quantity,
         trackingMode: "bulk",
         availableUnits: [],
+        choices: [
+          {
+            resourceId: resource.id,
+            name: resource.name,
+            sku: resource.sku,
+            availableQuantity: resource.quantity,
+            trackingMode: "bulk",
+            availableUnits: [],
+            isPrimary: true,
+          },
+        ],
         origin: bom?.inheritance ? "variant" : "local",
       },
     ]);
@@ -585,6 +669,7 @@ export function AssemblyManager({
         occurredAt,
         location: buildForm.location.trim() || undefined,
         note: buildForm.note.trim() || undefined,
+        componentResourceSelections,
         componentUnitIds,
         outputUnitCodes:
           bom.resource.trackingMode === "serialized" && outputCodes.length
@@ -665,6 +750,10 @@ export function AssemblyManager({
         />
       </Card>
     );
+  }
+
+  if (hideWhenEmpty && !bom.components.length) {
+    return null;
   }
 
   return (
@@ -1009,8 +1098,8 @@ export function AssemblyManager({
             title={t("assembly:build.title")}
             description={t("assembly:build.description")}
             trailing={
-              <Badge tone={bom.buildableQuantity > 0 ? "success" : "warning"}>
-                {t("assembly:buildable", { count: bom.buildableQuantity })}
+              <Badge tone={selectedBuildable > 0 ? "success" : "warning"}>
+                {t("assembly:buildable", { count: selectedBuildable })}
               </Badge>
             }
           />
@@ -1118,8 +1207,40 @@ export function AssemblyManager({
                     </div>
                     <div className="divide-y divide-border">
                       {preview.map((component) => (
-                        <div key={component.resourceId} className={cn("grid gap-3 px-4 py-3 sm:grid-cols-[minmax(180px,1fr)_90px_90px_90px] sm:items-center", component.shortage && "bg-danger-soft")}>
+                        <div key={component.slotKey} className={cn("grid gap-3 px-4 py-3 sm:grid-cols-[minmax(180px,1fr)_90px_90px_90px] sm:items-center", component.shortage && "bg-danger-soft")}>
                           <div className="min-w-0">
+                            {component.choices.length > 1 ? (
+                              <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.08em] text-muted">
+                                {t("assembly:labels.componentConfiguration")}
+                                <select
+                                  value={component.resourceId}
+                                  onChange={(event) => {
+                                    setComponentResourceSelections((current) => ({
+                                      ...current,
+                                      [component.slotKey]: event.target.value,
+                                    }));
+                                    setComponentUnitIds({});
+                                    buildRequestRef.current = null;
+                                  }}
+                                  className={`${inputClass} mt-1.5 normal-case tracking-normal`}
+                                >
+                                  {component.choices.map((choice) => (
+                                    <option
+                                      key={choice.resourceId}
+                                      value={choice.resourceId}
+                                    >
+                                      {choice.name}
+                                      {choice.isPrimary
+                                        ? ` ${t("assembly:build.primaryConfiguration")}`
+                                        : ""}
+                                      {` · ${t("assembly:availableCount", {
+                                        count: choice.availableQuantity,
+                                      })}`}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : null}
                             <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
                             <p className="mt-0.5 text-[9px] text-muted">
                               {t("assembly:perFinishedCount", {

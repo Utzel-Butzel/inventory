@@ -152,6 +152,14 @@
     "system": "System",
     "unit": "unit",
     "optional": "optional",
+    "configuration": {
+      "title": "Stock configuration",
+      "label": "Configuration",
+      "help": "All stock actions on this page apply to the selected configuration.",
+      "movementHelp": "This movement will be booked against the selected configuration.",
+      "error": "The configuration selector could not be loaded. Reload the page before booking stock.",
+      "primary": "(primary)"
+    },
     "actions": {
       "retry": "Try again",
       "backToItem": "Back to item",

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inventory API
-  version: 1.15.0
+  version: 1.18.0
   description: >-
     Organization-scoped API for configurable inventory structures, localized
     content, indoor 3D room scans, location-aware stock, cycle counts,
@@ -2055,6 +2055,60 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Item is not a linked variant or its effective bill of materials cannot be preserved }
         "422": { description: Invalid resource id }
+  /resources/{id}/options:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Resources, Manufacturing]
+      summary: Retrieve option groups and the current resource's selections
+      description: The primary item represents the all-default combination. Generated combinations are ordinary first-class resource variants with independent operational data and sparse BOM overrides.
+      responses:
+        "200":
+          description: Option matrix, BOM slots, and current selection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceOptions" }
+        "403": { description: The primary item is outside the caller's inventory access rules }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Resources, Manufacturing]
+      summary: Replace option-group definitions before variants are generated
+      description: A group may map to one stable primary BOM slot. Its default component must equal the primary BOM component in that slot. Definitions lock after generation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [groups]
+              properties:
+                groups:
+                  type: array
+                  maxItems: 4
+                  items: { $ref: "#/components/schemas/ResourceOptionGroupInput" }
+      responses:
+        "200":
+          description: Saved option definitions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceOptions" }
+        "409": { description: Definitions are locked, the item is a child variant, or the family already has manual variants }
+        "422": { description: Invalid group, value, component, BOM mapping, or matrix size }
+    post:
+      tags: [Resources, Manufacturing]
+      summary: Generate every non-default option combination
+      description: Atomically creates the Cartesian product as protected first-class variants, copies catalog and stock settings, stores selections, and writes only BOM differences. Maximum 100 total combinations.
+      responses:
+        "201":
+          description: Option variants generated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceOptionGenerationResult" }
+        "403": { description: Missing inventory create or primary-item update access }
+        "409": { description: Variants already exist, generation already ran, or the primary is archived }
+        "422": { description: Invalid option matrix or circular effective BOM }
   /resources/{id}/variants:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -4699,7 +4753,7 @@ components:
       allOf:
         - { $ref: "#/components/schemas/BomComponentInput" }
         - type: object
-          required: [id, slotKey, origin, name, availableQuantity, trackingMode, availableUnits]
+          required: [id, slotKey, origin, name, availableQuantity, trackingMode, availableUnits, choices]
           properties:
             id: { type: string, format: uuid }
             slotKey: { type: string, minLength: 1, maxLength: 80 }
@@ -4720,6 +4774,29 @@ components:
                   id: { type: string, format: uuid }
                   code: { type: string }
                   location: { type: [string, "null"] }
+            choices:
+              type: array
+              minItems: 1
+              description: The BOM component itself followed by readable direct first-class variants that may be consumed for this slot during a build.
+              items:
+                type: object
+                required: [resourceId, name, sku, availableQuantity, trackingMode, availableUnits, isPrimary]
+                properties:
+                  resourceId: { type: string, format: uuid }
+                  name: { type: string }
+                  sku: { type: [string, "null"] }
+                  availableQuantity: { type: integer, minimum: 0 }
+                  trackingMode: { type: string, enum: [bulk, serialized] }
+                  availableUnits:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, code, location]
+                      properties:
+                        id: { type: string, format: uuid }
+                        code: { type: string }
+                        location: { type: [string, "null"] }
+                  isPrimary: { type: boolean }
     BomDetail:
       type: object
       required: [resource, components, buildableQuantity, inheritance]
@@ -4755,6 +4832,14 @@ components:
         occurredAt: { type: string, format: date-time }
         location: { type: [string, "null"], maxLength: 240 }
         note: { type: string, maxLength: 20000 }
+        componentResourceSelections:
+          type: object
+          description: Maps stable BOM slot keys to either that slot's component resource or one of its direct first-class variants. The selected resource is consumed and snapshotted in build history.
+          propertyNames:
+            pattern: "^[A-Za-z0-9_-]{1,80}$"
+          additionalProperties:
+            type: string
+            format: uuid
         componentUnitIds:
           type: object
           additionalProperties:
@@ -5686,7 +5771,7 @@ components:
             enum: [description, type, valueCents, currency, priority, tags, categories, customFields, notes]
     ResourceFamily:
       type: object
-      required: [role, currentResourceId, primary, variants, legacyVariantCount, summary]
+      required: [role, currentResourceId, primary, variants, legacyVariantCount, optionGroupCount, summary]
       properties:
         role: { type: string, enum: [primary, variant] }
         currentResourceId: { type: string, format: uuid }
@@ -5695,6 +5780,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ResourceFamilyMember" }
         legacyVariantCount: { type: integer, minimum: 0 }
+        optionGroupCount: { type: integer, minimum: 0 }
         summary:
           type: object
           required: [totalQuantity, primaryQuantity, variantQuantity, variantCount, serializedVariantCount]
@@ -5704,6 +5790,127 @@ components:
             variantQuantity: { type: integer, minimum: 0 }
             variantCount: { type: integer, minimum: 0 }
             serializedVariantCount: { type: integer, minimum: 0 }
+    ResourceOptionValueInput:
+      type: object
+      additionalProperties: false
+      required: [label, code, isDefault]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 120 }
+        code: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$" }
+        componentResourceId: { type: [string, "null"], format: uuid }
+        isDefault: { type: boolean }
+        position: { type: integer, minimum: 0 }
+    ResourceOptionGroupInput:
+      type: object
+      additionalProperties: false
+      required: [key, name, values]
+      properties:
+        key: { type: string, pattern: "^[a-z][a-z0-9_-]{0,63}$" }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        bomSlotKey: { type: [string, "null"], maxLength: 80 }
+        position: { type: integer, minimum: 0 }
+        values:
+          type: array
+          minItems: 2
+          maxItems: 8
+          items: { $ref: "#/components/schemas/ResourceOptionValueInput" }
+    ResourceOptionValue:
+      allOf:
+        - { $ref: "#/components/schemas/ResourceOptionValueInput" }
+        - type: object
+          required: [id, componentName, position]
+          properties:
+            id: { type: string, format: uuid }
+            componentName: { type: [string, "null"] }
+    ResourceOptionGroup:
+      type: object
+      required: [id, key, name, bomSlotKey, position, values]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        name: { type: string }
+        bomSlotKey: { type: [string, "null"] }
+        position: { type: integer, minimum: 0 }
+        values:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceOptionValue" }
+    ResourceOptions:
+      type: object
+      required: [role, currentResourceId, primary, groups, configurations, currentSelection, bomSlots, combinationCount, generatedVariantCount, familyVariantCount, definitionsLocked]
+      properties:
+        role: { type: string, enum: [primary, variant] }
+        currentResourceId: { type: string, format: uuid }
+        primary:
+          type: object
+          required: [id, name, sku]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            sku: { type: [string, "null"] }
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceOptionGroup" }
+        configurations:
+          type: array
+          description: Materialized configurations whose inventory items the caller may read.
+          items:
+            type: object
+            required: [resourceId, resourceName, resourceSku, isPrimary, signature, selection]
+            properties:
+              resourceId: { type: string, format: uuid }
+              resourceName: { type: string }
+              resourceSku: { type: [string, "null"] }
+              isPrimary: { type: boolean }
+              signature: { type: string }
+              selection:
+                type: array
+                items:
+                  type: object
+                  required: [groupId, groupName, valueId, valueLabel]
+                  properties:
+                    groupId: { type: string, format: uuid }
+                    groupName: { type: string }
+                    valueId: { type: string, format: uuid }
+                    valueLabel: { type: string }
+        currentSelection:
+          type: array
+          items:
+            type: object
+            required: [groupId, groupName, valueId, valueLabel]
+            properties:
+              groupId: { type: string, format: uuid }
+              groupName: { type: string }
+              valueId: { type: string, format: uuid }
+              valueLabel: { type: string }
+        bomSlots:
+          type: array
+          items:
+            type: object
+            required: [slotKey, position, componentResourceId, componentName]
+            properties:
+              slotKey: { type: string }
+              position: { type: integer, minimum: 0 }
+              componentResourceId: { type: string, format: uuid }
+              componentName: { type: string }
+        combinationCount: { type: integer, minimum: 0, maximum: 100 }
+        generatedVariantCount: { type: integer, minimum: 0 }
+        familyVariantCount: { type: integer, minimum: 0 }
+        definitionsLocked: { type: boolean }
+    ResourceOptionGenerationResult:
+      type: object
+      required: [primaryResourceId, generatedVariantCount, variants]
+      properties:
+        primaryResourceId: { type: string, format: uuid }
+        generatedVariantCount: { type: integer, minimum: 1, maximum: 99 }
+        variants:
+          type: array
+          items:
+            type: object
+            required: [id, name, sku]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              sku: { type: [string, "null"] }
     ResourceVariantInput:
       type: object
       additionalProperties: false

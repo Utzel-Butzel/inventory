@@ -225,7 +225,7 @@
   },
   "connectionDiagram": {
     "title": "Connection flow",
-    "description": "Visualize this item's family, bill of materials, containment, and related inventory.",
+    "description": "Visualize this item's family, bill of materials, containment, and related inventory across multiple levels.",
     "current": "Current item",
     "connections_one": "{{value}} connection",
     "connections_other": "{{value}} connections",
@@ -236,6 +236,10 @@
     "openItem": "Open {{name}}",
     "more_one": "{{count}} more connection",
     "more_other": "{{count}} more connections",
+    "depth": {
+      "label": "Levels",
+      "ariaLabel": "Number of connection levels"
+    },
     "legend": {
       "family": "Variant family",
       "bom": "Bill of materials",
@@ -330,7 +334,7 @@
   },
   "confirm": {
     "removeFile": "Remove this file from the item?",
-    "delete": "Delete “{{name}}”? This cannot be undone."
+    "delete": "Delete “{{name}}”? This also deletes its option groups, option selections, media, other item-owned records, and any unused option values that use it as a component. This cannot be undone."
   },
   "errors": {
     "load": "Unable to load item.",

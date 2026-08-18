@@ -309,6 +309,24 @@ export async function DELETE(request: Request, context: Context) {
         { status: 409 },
       );
     }
+    if (message.includes("RESOURCE_USED_BY_OPTION_SELECTION")) {
+      return Response.json(
+        {
+          error:
+            "This item is used by a generated option configuration. Detach or remove that configuration first.",
+        },
+        { status: 409 },
+      );
+    }
+    if (message.includes("RESOURCE_REQUIRED_BY_OPTION_GROUP")) {
+      return Response.json(
+        {
+          error:
+            "Deleting this item would leave an option group with fewer than two choices. Add another choice or remove the option group first.",
+        },
+        { status: 409 },
+      );
+    }
     const referenced =
       message.includes("bom_lines_component_resource_id") ||
       message.includes("assembly_builds_assembly_resource_id") ||

@@ -225,7 +225,7 @@
   },
   "connectionDiagram": {
     "title": "Verbindungsfluss",
-    "description": "Variantenfamilie, Stückliste, Enthaltensein und zugehöriges Inventar dieses Eintrags visualisieren.",
+    "description": "Variantenfamilie, Stückliste, Enthaltensein und zugehöriges Inventar dieses Eintrags über mehrere Ebenen visualisieren.",
     "current": "Aktueller Eintrag",
     "connections_one": "{{value}} Verbindung",
     "connections_other": "{{value}} Verbindungen",
@@ -236,6 +236,10 @@
     "openItem": "{{name}} öffnen",
     "more_one": "{{count}} weitere Verbindung",
     "more_other": "{{count}} weitere Verbindungen",
+    "depth": {
+      "label": "Ebenen",
+      "ariaLabel": "Anzahl der Verbindungsebenen"
+    },
     "legend": {
       "family": "Variantenfamilie",
       "bom": "Stückliste",
@@ -330,7 +334,7 @@
   },
   "confirm": {
     "removeFile": "Diese Datei vom Eintrag entfernen?",
-    "delete": "„{{name}}“ löschen? Dies kann nicht rückgängig gemacht werden."
+    "delete": "„{{name}}“ löschen? Dabei werden auch Optionsgruppen, Optionsauswahlen, Medien, andere eintragseigene Daten und ungenutzte Optionswerte gelöscht, die diesen Eintrag als Komponente verwenden. Dies kann nicht rückgängig gemacht werden."
   },
   "errors": {
     "load": "Eintrag konnte nicht geladen werden.",

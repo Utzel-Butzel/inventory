@@ -1517,6 +1517,244 @@ export const variantBomOverrides = pgTable(
   ],
 );
 
+/**
+ * User-facing dimensions such as language, size, or frame finish. An option
+ * group may drive one stable BOM slot; values then select the component used
+ * in that slot for each generated first-class resource variant.
+ */
+export const resourceOptionGroups = pgTable(
+  "resource_option_groups",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    primaryResourceId: uuid("primary_resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    key: varchar("key", { length: 64 }).notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    bomSlotKey: varchar("bom_slot_key", { length: 80 }),
+    position: integer("position").notNull().default(0),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "resource_option_groups_organization_primary_fk",
+      columns: [table.organizationId, table.primaryResourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    uniqueIndex("resource_option_groups_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    uniqueIndex("resource_option_groups_primary_key_unique").on(
+      table.primaryResourceId,
+      table.key,
+    ),
+    uniqueIndex("resource_option_groups_primary_bom_slot_unique")
+      .on(table.primaryResourceId, table.bomSlotKey)
+      .where(sql`${table.bomSlotKey} is not null`),
+    index("resource_option_groups_primary_position_idx").on(
+      table.primaryResourceId,
+      table.position,
+    ),
+    check(
+      "resource_option_groups_key_check",
+      sql`${table.key} ~ '^[a-z][a-z0-9_-]{0,63}$'`,
+    ),
+    check(
+      "resource_option_groups_name_nonempty",
+      sql`length(btrim(${table.name})) > 0`,
+    ),
+    check(
+      "resource_option_groups_bom_slot_check",
+      sql`${table.bomSlotKey} is null or ${table.bomSlotKey} ~ '^[A-Za-z0-9_-]{1,80}$'`,
+    ),
+    check(
+      "resource_option_groups_position_nonnegative",
+      sql`${table.position} >= 0`,
+    ),
+  ],
+);
+
+export const resourceOptionValues = pgTable(
+  "resource_option_values",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => resourceOptionGroups.id, { onDelete: "cascade" }),
+    label: varchar("label", { length: 120 }).notNull(),
+    code: varchar("code", { length: 40 }).notNull(),
+    componentResourceId: uuid("component_resource_id").references(
+      () => resources.id,
+      { onDelete: "restrict" },
+    ),
+    isDefault: boolean("is_default").notNull().default(false),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "resource_option_values_organization_group_fk",
+      columns: [table.organizationId, table.groupId],
+      foreignColumns: [
+        resourceOptionGroups.organizationId,
+        resourceOptionGroups.id,
+      ],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "resource_option_values_organization_component_fk",
+      columns: [table.organizationId, table.componentResourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("restrict"),
+    uniqueIndex("resource_option_values_organization_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    uniqueIndex("resource_option_values_group_id_id_unique").on(
+      table.groupId,
+      table.id,
+    ),
+    uniqueIndex("resource_option_values_group_code_unique").on(
+      table.groupId,
+      table.code,
+    ),
+    uniqueIndex("resource_option_values_group_default_unique")
+      .on(table.groupId)
+      .where(sql`${table.isDefault}`),
+    index("resource_option_values_group_position_idx").on(
+      table.groupId,
+      table.position,
+    ),
+    index("resource_option_values_component_idx").on(
+      table.componentResourceId,
+    ),
+    check(
+      "resource_option_values_label_nonempty",
+      sql`length(btrim(${table.label})) > 0`,
+    ),
+    check(
+      "resource_option_values_code_check",
+      sql`${table.code} ~ '^[A-Z0-9][A-Z0-9_-]{0,39}$'`,
+    ),
+    check(
+      "resource_option_values_position_nonnegative",
+      sql`${table.position} >= 0`,
+    ),
+  ],
+);
+
+export const resourceOptionConfigurations = pgTable(
+  "resource_option_configurations",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    primaryResourceId: uuid("primary_resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    signature: varchar("signature", { length: 1024 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "resource_option_configurations_organization_primary_fk",
+      columns: [table.organizationId, table.primaryResourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "resource_option_configurations_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    uniqueIndex("resource_option_configurations_organization_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    uniqueIndex("resource_option_configurations_resource_unique").on(
+      table.organizationId,
+      table.resourceId,
+    ),
+    uniqueIndex("resource_option_configurations_signature_unique").on(
+      table.primaryResourceId,
+      table.signature,
+    ),
+    index("resource_option_configurations_primary_idx").on(
+      table.primaryResourceId,
+    ),
+    check(
+      "resource_option_configurations_signature_nonempty",
+      sql`length(${table.signature}) > 0`,
+    ),
+  ],
+);
+
+export const resourceOptionSelections = pgTable(
+  "resource_option_selections",
+  {
+    organizationId: organizationIdColumn(),
+    configurationId: uuid("configuration_id")
+      .notNull()
+      .references(() => resourceOptionConfigurations.id, {
+        onDelete: "cascade",
+      }),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => resourceOptionGroups.id, { onDelete: "cascade" }),
+    valueId: uuid("value_id")
+      .notNull()
+      .references(() => resourceOptionValues.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "resource_option_selections_organization_configuration_fk",
+      columns: [table.organizationId, table.configurationId],
+      foreignColumns: [
+        resourceOptionConfigurations.organizationId,
+        resourceOptionConfigurations.id,
+      ],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "resource_option_selections_organization_group_fk",
+      columns: [table.organizationId, table.groupId],
+      foreignColumns: [
+        resourceOptionGroups.organizationId,
+        resourceOptionGroups.id,
+      ],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "resource_option_selections_group_value_fk",
+      columns: [table.groupId, table.valueId],
+      foreignColumns: [resourceOptionValues.groupId, resourceOptionValues.id],
+    }).onDelete("cascade"),
+    primaryKey({
+      name: "resource_option_selections_pk",
+      columns: [table.configurationId, table.groupId],
+    }),
+    index("resource_option_selections_value_idx").on(table.valueId),
+  ],
+);
+
 export const assemblyBuilds = pgTable(
   "assembly_builds",
   {
@@ -3022,6 +3260,12 @@ export type InventoryAssignmentRecord =
   typeof inventoryAssignments.$inferSelect;
 export type BomLineRecord = typeof bomLines.$inferSelect;
 export type VariantBomOverrideRecord = typeof variantBomOverrides.$inferSelect;
+export type ResourceOptionGroupRecord = typeof resourceOptionGroups.$inferSelect;
+export type ResourceOptionValueRecord = typeof resourceOptionValues.$inferSelect;
+export type ResourceOptionConfigurationRecord =
+  typeof resourceOptionConfigurations.$inferSelect;
+export type ResourceOptionSelectionRecord =
+  typeof resourceOptionSelections.$inferSelect;
 export type AssemblyBuildRecord = typeof assemblyBuilds.$inferSelect;
 export type AssemblyBuildComponentRecord =
   typeof assemblyBuildComponents.$inferSelect;

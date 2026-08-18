@@ -24,6 +24,12 @@ const buildSchema = z
     occurredAt: z.string().datetime().optional(),
     location: z.string().trim().max(240).nullable().optional(),
     note: z.string().trim().max(20_000).optional(),
+    componentResourceSelections: z
+      .record(
+        z.string().trim().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/),
+        z.string().uuid(),
+      )
+      .optional(),
     componentUnitIds: z
       .record(
         z.string().uuid(),

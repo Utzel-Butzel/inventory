@@ -4,6 +4,7 @@ import { and, asc, count, eq, inArray, or, sql } from "drizzle-orm";
 
 import {
   resourceRelations,
+  resourceOptionGroups,
   resources,
   resourceVariants,
   stockSettings,
@@ -58,6 +59,7 @@ export type ResourceFamilyDto = {
   primary: ResourceFamilyMemberDto;
   variants: ResourceFamilyMemberDto[];
   legacyVariantCount: number;
+  optionGroupCount: number;
   summary: {
     totalQuantity: number;
     primaryQuantity: number;
@@ -303,7 +305,7 @@ export async function getResourceFamily(
       ...memberships.map((membership) => membership.sourceResourceId),
     ]),
   );
-  const [memberRows, settingsRows, legacyRows] = await Promise.all([
+  const [memberRows, settingsRows, legacyRows, optionGroupRows] = await Promise.all([
     db
       .select()
       .from(resources)
@@ -332,6 +334,15 @@ export async function getResourceFamily(
         and(
           eq(resourceVariants.organizationId, organizationId),
           eq(resourceVariants.resourceId, primaryResourceId),
+        ),
+      ),
+    db
+      .select({ value: count() })
+      .from(resourceOptionGroups)
+      .where(
+        and(
+          eq(resourceOptionGroups.organizationId, organizationId),
+          eq(resourceOptionGroups.primaryResourceId, primaryResourceId),
         ),
       ),
   ]);
@@ -395,6 +406,7 @@ export async function getResourceFamily(
     primary,
     variants,
     legacyVariantCount: Number(legacyRows[0]?.value ?? 0),
+    optionGroupCount: Number(optionGroupRows[0]?.value ?? 0),
     summary: {
       totalQuantity: primary.quantity + variantQuantity,
       primaryQuantity: primary.quantity,
@@ -515,6 +527,23 @@ export async function createResourceFamilyVariant(options: {
     if (primaryMembership) {
       throw new ResourceFamilyError(
         "Add variants from the primary inventory item; variant families cannot be nested.",
+        409,
+      );
+    }
+
+    const [optionGroup] = await transaction
+      .select({ id: resourceOptionGroups.id })
+      .from(resourceOptionGroups)
+      .where(
+        and(
+          eq(resourceOptionGroups.organizationId, options.organizationId),
+          eq(resourceOptionGroups.primaryResourceId, primary.id),
+        ),
+      )
+      .limit(1);
+    if (optionGroup) {
+      throw new ResourceFamilyError(
+        "This family uses option groups. Generate variants from the option matrix instead of adding one manually.",
         409,
       );
     }

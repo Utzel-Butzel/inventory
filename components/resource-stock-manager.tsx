@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   ArrowDownRight,
   ArrowLeft,
-  ArrowRight,
   ArrowUpRight,
   Barcode,
   Boxes,
@@ -14,8 +13,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  CircleCheck,
-  Clock3,
   Copy,
   History,
   Info,
@@ -28,14 +25,10 @@ import {
   PackagePlus,
   Pencil,
   Plus,
-  QrCode,
   RefreshCw,
   Save,
   Settings2,
-  ShieldAlert,
-  ShoppingCart,
   SlidersHorizontal,
-  TrendingDown,
   X,
 } from "lucide-react";
 import {
@@ -48,7 +41,6 @@ import {
 import { useT } from "next-i18next/client";
 
 import { AssemblyManager } from "@/components/assembly-manager";
-import { InventoryCycleManager } from "@/components/inventory-cycle-manager";
 import {
   CustomFieldInputs,
   CustomFieldValueSummary,
@@ -57,8 +49,8 @@ import {
   PhotoCountCapture,
   type PhotoCountResult,
 } from "@/components/photo-count-capture";
-import { PurchaseOrdersManager } from "@/components/purchase-orders-manager";
 import { StockLocationsManager } from "@/components/stock-locations-manager";
+import { ResourceStockConfigurationSwitcher } from "@/components/resource-stock-configuration-switcher";
 import { fetchJson } from "@/lib/client-types";
 import {
   isCustomFieldDefinitionApplicable,
@@ -174,14 +166,6 @@ type StockApiResponse = Partial<StockData> & {
   data?: StockData;
 };
 
-type ConfigForm = {
-  trackingMode: TrackingMode;
-  minimumStock: string;
-  reorderQuantity: string;
-  leadTimeDays: string;
-  unitName: string;
-};
-
 type MovementForm = {
   quantity: string;
   type: MovementType;
@@ -269,14 +253,6 @@ const statusLabelKeys: Record<UnitStatus, string> = {
 
 const unitStatuses = Object.keys(statusLabelKeys) as UnitStatus[];
 
-const defaultConfigForm: ConfigForm = {
-  trackingMode: "bulk",
-  minimumStock: "0",
-  reorderQuantity: "0",
-  leadTimeDays: "0",
-  unitName: "unit",
-};
-
 function localDateTime(value: Date | string = new Date()) {
   const date = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return "";
@@ -303,16 +279,6 @@ const defaultUnitCreateForm = (): UnitCreateForm => ({
   metadata: "{}",
   acquiredAt: localDateTime(),
 });
-
-function toConfigForm(config: StockConfig): ConfigForm {
-  return {
-    trackingMode: config.trackingMode,
-    minimumStock: String(config.minimumStock),
-    reorderQuantity: String(config.reorderQuantity),
-    leadTimeDays: String(config.leadTimeDays),
-    unitName: config.unitName,
-  };
-}
 
 function parseMetadata(value: string, t: TFunction) {
   if (!value.trim()) return {};
@@ -448,11 +414,9 @@ function SectionHeading({
 export function ResourceStockManager({
   resourceId,
   canEdit = false,
-  canManageCounts = false,
 }: {
   resourceId: string;
   canEdit?: boolean;
-  canManageCounts?: boolean;
 }) {
   const { t, i18n } = useT("stock");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
@@ -469,9 +433,6 @@ export function ResourceStockManager({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const [configForm, setConfigForm] = useState<ConfigForm>(defaultConfigForm);
-  const [savingConfig, setSavingConfig] = useState(false);
 
   const [direction, setDirection] = useState<"in" | "out">("in");
   const [movementForm, setMovementForm] = useState<MovementForm>(
@@ -518,7 +479,6 @@ export function ResourceStockManager({
         ]);
         const normalized = normalizeStock(payload, t);
         setStock(normalized);
-        setConfigForm(toConfigForm(normalized.config));
         if (definitionsResult.value) {
           setCustomFieldDefinitions(definitionsResult.value.definitions);
         } else {
@@ -594,78 +554,6 @@ export function ResourceStockManager({
       quantity: String(result.count),
       reason: current.reason || t("resource.movements.photoAssisted"),
     }));
-  }
-
-  async function saveConfig(event: FormEvent) {
-    event.preventDefault();
-    if (!stock) return;
-    setError(null);
-    setNotice(null);
-
-    const minimumStock = Number(configForm.minimumStock);
-    const reorderQuantity = Number(configForm.reorderQuantity);
-    const leadTimeDays = Number(configForm.leadTimeDays);
-    if (!Number.isInteger(minimumStock) || minimumStock < 0) {
-      setError(t("resource.errors.minimumStock"));
-      return;
-    }
-    if (!Number.isInteger(reorderQuantity) || reorderQuantity < 0) {
-      setError(t("resource.errors.reorderQuantity"));
-      return;
-    }
-    if (!Number.isInteger(leadTimeDays) || leadTimeDays < 0 || leadTimeDays > 3650) {
-      setError(t("resource.errors.leadTime"));
-      return;
-    }
-    const cleanUnitName = configForm.unitName.trim();
-    if (!cleanUnitName || cleanUnitName.length > 60) {
-      setError(t("resource.errors.unitName"));
-      return;
-    }
-
-    if (
-      configForm.trackingMode !== stock.config.trackingMode &&
-      currentQuantity > 0 &&
-      !window.confirm(
-        configForm.trackingMode === "serialized"
-          ? t("resource.confirm.switchSerialized", {
-              quantity: quantityLabel(
-                currentQuantity,
-                unitName,
-                numberFormat,
-                t,
-              ),
-            })
-          : t("resource.confirm.switchBulk"),
-      )
-    ) {
-      return;
-    }
-
-    setSavingConfig(true);
-    try {
-      await fetchJson(`${endpoint}/config`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trackingMode: configForm.trackingMode,
-          minimumStock,
-          reorderQuantity,
-          leadTimeDays,
-          unitName: cleanUnitName,
-        }),
-      });
-      await loadStock(true);
-      setNotice(t("resource.notices.settingsSaved"));
-    } catch (saveError) {
-      setError(
-        saveError instanceof Error
-          ? saveError.message
-          : t("resource.errors.saveSettings"),
-      );
-    } finally {
-      setSavingConfig(false);
-    }
   }
 
   function buildMovementPayload() {
@@ -963,13 +851,10 @@ export function ResourceStockManager({
 
   const forecast = stock.forecast;
   const minimum = stock.config.minimumStock;
-  const stockBarMax = Math.max(currentQuantity, minimum, 1);
-  const stockBarWidth = Math.min(100, (currentQuantity / stockBarMax) * 100);
-  const minimumMarker = Math.min(100, (minimum / stockBarMax) * 100);
 
   return (
     <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-      <header className="mb-6 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <header className="mb-5 flex items-center justify-between gap-4 border-b border-border pb-4">
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted">
             <Link href="/inventory" className="inline-flex items-center gap-1 hover:text-foreground">
@@ -977,47 +862,33 @@ export function ResourceStockManager({
               {t("resource.inventory")}
             </Link>
             <ChevronRight className="size-3" aria-hidden="true" />
-            <Link
-              href={`/inventory/${resourceId}`}
-              className="max-w-44 truncate hover:text-foreground sm:max-w-72"
-            >
-              {stock.resource.name}
-            </Link>
-            <ChevronRight className="size-3" aria-hidden="true" />
             <span className="text-muted">{t("resource.stock")}</span>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="truncate text-2xl font-semibold tracking-[-0.035em] text-foreground sm:text-3xl">
-              {t("resource.title")}
+              {stock.resource.name}
             </h1>
             <span className="inline-flex h-6 items-center rounded-full bg-brand-soft px-2.5 text-[10px] font-bold uppercase tracking-[0.08em] text-brand">
               {t(`resource.tracking.${stock.config.trackingMode}`)}
             </span>
           </div>
-          <p className="mt-1.5 text-sm text-muted">
-            {t("resource.description")}
-          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Link
-            href="/stock/scan"
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-solid px-3.5 text-xs font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover"
-          >
-            <QrCode className="size-3.5" aria-hidden="true" />{" "}
-            {t("resource.actions.scanCode")}
-          </Link>
-          <Link
-            href={`/inventory/${resourceId}`}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-xs font-semibold text-muted-strong shadow-sm transition hover:bg-surface-hover"
-          >
-            {t("resource.actions.itemDetails")}{" "}
-            <ArrowRight className="size-3.5" aria-hidden="true" />
-          </Link>
+          {canEdit ? (
+            <Link
+              href={`/inventory/${resourceId}/stock/settings`}
+              className="grid size-10 place-items-center rounded-xl border border-border bg-surface text-muted transition hover:bg-surface-hover"
+              aria-label={t("resource.settings.title")}
+              title={t("resource.settings.title")}
+            >
+              <Settings2 className="size-4" aria-hidden="true" />
+            </Link>
+          ) : null}
           <button
             type="button"
             onClick={() => void loadStock(true)}
             disabled={refreshing}
-            className="grid size-10 place-items-center rounded-xl border border-border bg-surface text-muted shadow-sm transition hover:bg-surface-hover disabled:opacity-50"
+            className="grid size-10 place-items-center rounded-xl border border-border bg-surface text-muted transition hover:bg-surface-hover disabled:opacity-50"
             aria-label={t("resource.actions.refresh")}
             title={t("resource.actions.refresh")}
           >
@@ -1051,142 +922,63 @@ export function ResourceStockManager({
         </div>
       ) : null}
 
-      <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)]">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-muted">{t("resource.metrics.available")}</p>
-            <span className="grid size-8 place-items-center rounded-xl bg-brand-soft text-brand">
-              <Boxes className="size-4" aria-hidden="true" />
+      <section className="mb-5 overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
+        <div className="grid gap-5 p-5 sm:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(120px,0.6fr))] sm:items-center sm:p-6">
+          <div className="flex items-center gap-4">
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-brand-soft text-brand">
+              <Boxes className="size-5" aria-hidden="true" />
             </span>
+            <div>
+              <p className="text-xs font-medium text-muted">{t("resource.metrics.available")}</p>
+              <p className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-foreground">
+                {quantityLabel(currentQuantity, unitName, numberFormat, t)}
+              </p>
+            </div>
           </div>
-          <p className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-foreground">
-            {numberFormat.format(currentQuantity)}
-          </p>
-          <p className="mt-1 text-[11px] text-muted">
-            {t("resource.metrics.readyToUse", {
-              quantity: quantityLabel(currentQuantity, unitName, numberFormat, t),
-            })}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-info-border bg-surface p-5 shadow-[var(--shadow-sm)]">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-muted">{t("resource.metrics.incoming")}</p>
-            <span className="grid size-8 place-items-center rounded-xl bg-info-soft text-info">
-              <ShoppingCart className="size-4" aria-hidden="true" />
-            </span>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+              {t("resource.metrics.minimum")}
+            </p>
+            <p className={`mt-1 text-lg font-semibold ${forecast.isBelowMinimum ? "text-danger" : "text-foreground"}`}>
+              {quantityLabel(minimum, unitName, numberFormat, t)}
+            </p>
           </div>
-          <p className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-foreground">
-            {numberFormat.format(onOrder)}
-          </p>
-          <p className="mt-1 text-[11px] text-muted">
-            {onOrder > 0
-              ? t("resource.metrics.afterReceipt", {
-                  quantity: quantityLabel(
-                    stock.procurement.projectedQuantity,
-                    unitName,
-                    numberFormat,
-                    t,
-                  ),
-                  date: stock.procurement.nextExpectedAt
-                    ? ` · ${formatDate(stock.procurement.nextExpectedAt, locale)}`
-                    : "",
-                })
-              : t("resource.metrics.nothingOnOrder")}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)]">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-muted">{t("resource.metrics.minimum")}</p>
-            <span
-              className={`grid size-8 place-items-center rounded-xl ${forecast.isBelowMinimum ? "bg-danger-soft text-danger" : "bg-success-soft text-success"}`}
-            >
-              {forecast.isBelowMinimum ? (
-                <ShieldAlert className="size-4" aria-hidden="true" />
-              ) : (
-                <CircleCheck className="size-4" aria-hidden="true" />
-              )}
-            </span>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+              {t("resource.metrics.incoming")}
+            </p>
+            <p className="mt-1 text-lg font-semibold text-foreground">
+              {quantityLabel(onOrder, unitName, numberFormat, t)}
+            </p>
           </div>
-          <p className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-foreground">
-            {numberFormat.format(minimum)}
-          </p>
-          <p className={`mt-1 text-[11px] ${forecast.isBelowMinimum ? "font-medium text-danger" : "text-muted"}`}>
-            {forecast.isBelowMinimum
-              ? t("resource.metrics.thresholdReached")
-              : t("resource.metrics.aboveThreshold")}
-          </p>
         </div>
-        <div className="rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)]">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-muted">{t("resource.metrics.averageUsage")}</p>
-            <span className="grid size-8 place-items-center rounded-xl bg-info-soft text-info">
-              <TrendingDown className="size-4" aria-hidden="true" />
-            </span>
+        {forecast.isBelowMinimum ? (
+          <div className="flex items-center gap-2 border-t border-warning-border bg-warning-soft px-5 py-3 text-xs font-medium text-warning sm:px-6">
+            <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+            {t("resource.forecast.belowThreshold")}
           </div>
-          <p className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-foreground">
-            {new Intl.NumberFormat(locale, {
-              maximumFractionDigits: 2,
-            }).format(forecast.averageDailyUsage)}
-          </p>
-          <p className="mt-1 text-[11px] text-muted">
-            {t("resource.metrics.usedPerDay", { unit: unitName })}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)]">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-muted">{t("resource.metrics.runway")}</p>
-            <span className="grid size-8 place-items-center rounded-xl bg-warning-soft text-warning">
-              <Clock3 className="size-4" aria-hidden="true" />
-            </span>
-          </div>
-          <p className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-foreground">
-            {forecast.daysUntilStockout === null
-              ? t("resource.metrics.stable")
-              : t("resource.metrics.daysShort", {
-                  value: numberFormat.format(
-                    Math.max(0, Math.round(forecast.daysUntilStockout)),
-                  ),
-                })}
-          </p>
-          <p className="mt-1 text-[11px] text-muted">
-            {forecast.predictedStockoutAt
-              ? t("resource.metrics.estimated", {
-                  date: formatDate(forecast.predictedStockoutAt, locale),
-                })
-              : t("resource.metrics.noStockout")}
-          </p>
-        </div>
+        ) : null}
       </section>
 
-      <section className="mb-5 grid items-start gap-5 2xl:grid-cols-2">
+      <section className="mb-5">
         <StockLocationsManager
           resourceId={resourceId}
           canEdit={canEdit}
           unitName={unitName}
           onStockChanged={() => void loadStock(true)}
         />
-        <InventoryCycleManager
-          resourceId={resourceId}
-          canEdit={canManageCounts}
-          unitName={unitName}
-          onStockChanged={() => void loadStock(true)}
-        />
       </section>
 
-      <section className="mb-5 grid items-start gap-5 2xl:grid-cols-2">
+      <section className="mb-5">
         <AssemblyManager
           resourceId={resourceId}
           mode="build"
-          onStockChanged={() => void loadStock(true)}
-        />
-        <PurchaseOrdersManager
-          resourceId={resourceId}
-          compact
+          hideWhenEmpty
           onStockChanged={() => void loadStock(true)}
         />
       </section>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_390px]">
+      <div>
         <div className="space-y-5">
           <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
             <SectionHeading
@@ -1202,6 +994,11 @@ export function ResourceStockManager({
               }
             />
             <form onSubmit={submitMovement} className="p-5 sm:p-6">
+              <ResourceStockConfigurationSwitcher
+                resourceId={resourceId}
+                placement="movement"
+              />
+
               <div className="mb-5 grid grid-cols-2 rounded-xl bg-surface-muted p-1">
                 <button
                   type="button"
@@ -1529,297 +1326,34 @@ export function ResourceStockManager({
           </section>
         </div>
 
-        <aside className="space-y-5 xl:sticky xl:top-[88px]">
-          <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
-            <SectionHeading
-              icon={<Settings2 className="size-4" aria-hidden="true" />}
-              title={t("resource.settings.title")}
-              description={t("resource.settings.description")}
-            />
-            <form onSubmit={saveConfig} className="space-y-4 p-5">
-              <div>
-                <span className={labelClass}>{t("resource.settings.trackingMode")}</span>
-                <div className="mt-1.5 grid grid-cols-2 rounded-xl bg-surface-muted p-1">
-                  {(["bulk", "serialized"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      disabled={
-                        mode === "bulk" &&
-                        stock.config.trackingMode === "serialized" &&
-                        stock.units.length > 0
-                      }
-                      onClick={() =>
-                        setConfigForm((current) => ({ ...current, trackingMode: mode }))
-                      }
-                      className={`h-9 rounded-lg text-[11px] font-semibold capitalize transition ${
-                        configForm.trackingMode === mode
-                          ? "bg-surface text-brand shadow-sm"
-                          : "text-muted hover:text-foreground"
-                      } disabled:cursor-not-allowed disabled:opacity-35`}
-                      title={
-                        mode === "bulk" &&
-                        stock.config.trackingMode === "serialized" &&
-                        stock.units.length > 0
-                          ? t("resource.settings.cannotReturnBulk")
-                          : undefined
-                      }
-                    >
-                      {t(`resource.tracking.${mode}`)}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-2 text-[10px] leading-4 text-muted">
-                  {configForm.trackingMode === "bulk"
-                    ? t("resource.settings.bulkHelp")
-                    : t("resource.settings.serializedHelp")}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className={labelClass}>
-                  {t("resource.settings.minimumStock")}
-                  <input
-                    type="number"
-                    min="0"
-                    max="1000000"
-                    step="1"
-                    required
-                    value={configForm.minimumStock}
-                    onChange={(event) =>
-                      setConfigForm((current) => ({
-                        ...current,
-                        minimumStock: event.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                  />
-                </label>
-                <label className={labelClass}>
-                  {t("resource.settings.reorderQuantity")}
-                  <input
-                    type="number"
-                    min="0"
-                    max="1000000"
-                    step="1"
-                    required
-                    value={configForm.reorderQuantity}
-                    onChange={(event) =>
-                      setConfigForm((current) => ({
-                        ...current,
-                        reorderQuantity: event.target.value,
-                      }))
-                    }
-                    className={inputClass}
-                  />
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className={labelClass}>
-                  {t("resource.settings.leadTime")}
-                  <div className="relative">
-                    <input
-                      type="number"
-                      min="0"
-                      max="3650"
-                      step="1"
-                      required
-                      value={configForm.leadTimeDays}
-                      onChange={(event) =>
-                        setConfigForm((current) => ({
-                          ...current,
-                          leadTimeDays: event.target.value,
-                        }))
-                      }
-                      className={`${inputClass} pr-12`}
-                    />
-                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[10px] text-muted">
-                      {t("resource.settings.dayUnit")}
-                    </span>
-                  </div>
-                </label>
-                <label className={labelClass}>
-                  {t("resource.settings.unitName")}
-                  <input
-                    required
-                    maxLength={60}
-                    value={configForm.unitName}
-                    onChange={(event) =>
-                      setConfigForm((current) => ({
-                        ...current,
-                        unitName: event.target.value,
-                      }))
-                    }
-                    placeholder={t("resource.settings.unitNamePlaceholder")}
-                    className={inputClass}
-                  />
-                </label>
-              </div>
-              <button
-                type="submit"
-                disabled={savingConfig}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-strong px-4 text-xs font-semibold text-on-strong transition hover:opacity-90 disabled:opacity-50"
-              >
-                {savingConfig ? (
-                  <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Save className="size-4" aria-hidden="true" />
-                )}
-                {t("resource.actions.saveSettings")}
-              </button>
-            </form>
-          </section>
-
-          <section
-            className={`overflow-hidden rounded-2xl border p-5 shadow-[var(--shadow-sm)] ${
-              forecast.isBelowMinimum
-                ? "border-warning-border bg-warning-soft"
-                : "border-border bg-surface"
-            }`}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold text-foreground">
-                  {t("resource.forecast.title")}
-                </p>
-                <p className="mt-1 text-[10px] text-muted">
-                  {t("resource.forecast.description")}
-                </p>
-              </div>
-              <span
-                className={`grid size-8 place-items-center rounded-xl ${
-                  forecast.isBelowMinimum
-                    ? "bg-warning-soft text-warning"
-                    : "bg-brand-soft text-brand"
-                }`}
-              >
-                <TrendingDown className="size-4" aria-hidden="true" />
-              </span>
-            </div>
-            <div className="relative mt-6 h-2 rounded-full bg-surface-muted">
-              <div
-                className={`h-full rounded-full ${forecast.isBelowMinimum ? "bg-warning-soft0" : "bg-success-soft0"}`}
-                style={{ width: `${stockBarWidth}%` }}
-              />
-              <span
-                className="absolute top-1/2 h-4 w-px -translate-y-1/2 bg-muted-strong"
-                style={{ left: `${minimumMarker}%` }}
-                title={t("resource.settings.minimumStock")}
-              />
-            </div>
-            <div className="mt-2 flex justify-between text-[9px] text-muted">
-              <span>0</span>
-              <span>
-                {t("resource.forecast.minimum", {
-                  quantity: numberFormat.format(minimum),
-                })}
-              </span>
-              <span>{numberFormat.format(stockBarMax)}</span>
-            </div>
-            <div className="mt-5 rounded-xl border border-border bg-surface/70 p-3.5">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-[11px] text-muted">
-                  {t("resource.forecast.suggestedOrder")}
-                </span>
-                <span className="text-sm font-semibold text-foreground">
-                  {quantityLabel(
-                    forecast.suggestedReorderQuantity,
-                    unitName,
-                    numberFormat,
-                    t,
-                  )}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-4">
-                <span className="text-[11px] text-muted">
-                  {t("resource.settings.leadTime")}
-                </span>
-                <span className="text-xs font-semibold text-muted-strong">
-                  {t("resource.settings.days", {
-                    count: stock.config.leadTimeDays,
-                    value: numberFormat.format(stock.config.leadTimeDays),
-                  })}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-4">
-                <span className="text-[11px] text-muted">
-                  {t("resource.forecast.alreadyOrdered")}
-                </span>
-                <span className="text-xs font-semibold text-info">
-                  {quantityLabel(onOrder, unitName, numberFormat, t)}
-                </span>
-              </div>
-            </div>
-            <Link
-              href={`/stock/orders?resourceId=${resourceId}`}
-              className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-info-border bg-info-soft px-3 text-[11px] font-semibold text-info transition hover:bg-info-soft/80"
-            >
-              <ShoppingCart className="size-3.5" aria-hidden="true" />
-              {t("resource.actions.manageOrders")}
-            </Link>
-            {forecast.isBelowMinimum ? (
-              <p className="mt-3 flex items-start gap-2 text-[10px] leading-4 text-warning">
-                <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-                {t("resource.forecast.belowThreshold")}
-              </p>
-            ) : null}
-          </section>
-        </aside>
       </div>
 
       <section
         id="serialized-units"
-        className="mt-5 scroll-mt-24 overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]"
+        className={`${stock.config.trackingMode === "serialized" ? "" : "hidden "}mt-5 scroll-mt-24 overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]`}
       >
         <SectionHeading
           icon={<Barcode className="size-4" aria-hidden="true" />}
           title={t("resource.units.title")}
-          description={
-            stock.config.trackingMode === "serialized"
-              ? t("resource.units.description", {
-                  count: stock.units.length,
-                  value: numberFormat.format(stock.units.length),
-                })
-              : t("resource.units.descriptionDisabled")
-          }
+          description={t("resource.units.description", {
+            count: stock.units.length,
+            value: numberFormat.format(stock.units.length),
+          })}
           trailing={
-            stock.config.trackingMode === "serialized" ? (
-              <span className="hidden rounded-full bg-success-soft px-2.5 py-1 text-[10px] font-semibold text-success sm:inline-flex">
-                {t("resource.units.availableCount", {
-                  count: stock.units.filter((unit) => unit.status === "available")
+            <span className="hidden rounded-full bg-success-soft px-2.5 py-1 text-[10px] font-semibold text-success sm:inline-flex">
+              {t("resource.units.availableCount", {
+                count: stock.units.filter((unit) => unit.status === "available")
+                  .length,
+                value: numberFormat.format(
+                  stock.units.filter((unit) => unit.status === "available")
                     .length,
-                  value: numberFormat.format(
-                    stock.units.filter((unit) => unit.status === "available")
-                      .length,
-                  ),
-                })}
-              </span>
-            ) : undefined
+                ),
+              })}
+            </span>
           }
         />
 
-        {stock.config.trackingMode !== "serialized" ? (
-          <div className="px-5 py-12 text-center sm:px-6">
-            <span className="mx-auto grid size-11 place-items-center rounded-2xl bg-brand-soft text-brand">
-              <Layers3 className="size-5" aria-hidden="true" />
-            </span>
-            <h3 className="mt-4 text-sm font-semibold text-foreground">
-              {t("resource.units.notEnabledTitle")}
-            </h3>
-            <p className="mx-auto mt-1.5 max-w-lg text-xs leading-5 text-muted">
-              {t("resource.units.notEnabledDescription")}
-            </p>
-            <button
-              type="button"
-              onClick={() =>
-                setConfigForm((current) => ({ ...current, trackingMode: "serialized" }))
-              }
-              className="mt-5 inline-flex h-9 items-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3.5 text-xs font-semibold text-brand hover:bg-brand-soft/80"
-            >
-              <Settings2 className="size-3.5" aria-hidden="true" />{" "}
-              {t("resource.actions.prepareSerialized")}
-            </button>
-          </div>
-        ) : (
+        {stock.config.trackingMode === "serialized" ? (
           <div className="grid items-start xl:grid-cols-[360px_minmax(0,1fr)]">
             <form
               onSubmit={createUnits}
@@ -2332,7 +1866,7 @@ export function ResourceStockManager({
               )}
             </div>
           </div>
-        )}
+        ) : null}
       </section>
 
       {pendingMovement ? (

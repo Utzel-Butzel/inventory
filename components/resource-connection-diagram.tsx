@@ -19,36 +19,38 @@ import { OrganizationLink as Link } from "@/components/organization-routing";
 import { Badge, Button, Card } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
 import {
-  buildResourceConnectionDiagram,
+  buildResourceConnectionGraph,
   type ConnectionDiagramBomComponent,
   type ConnectionDiagramConnection,
   type ConnectionDiagramFamily,
+  type ConnectionDiagramGraphEdge,
+  type ConnectionDiagramGraphNode,
   type ConnectionDiagramKind,
-  type ConnectionDiagramNode,
+  type ConnectionDiagramPayload,
   type ConnectionDiagramRelation,
   type ConnectionDiagramResource,
 } from "@/lib/resource-connection-diagram";
 
-type DiagramPayload = {
-  relations: ConnectionDiagramRelation[];
-  family: ConnectionDiagramFamily | null;
-  bomComponents: ConnectionDiagramBomComponent[];
+type PayloadResult = {
+  payload: ConnectionDiagramPayload;
+  partial: boolean;
 };
 
-type SourceName = "relations" | "family" | "bom";
+type DisplayColumnItem =
+  | { type: "resource"; node: ConnectionDiagramGraphNode }
+  | { type: "overflow"; column: number; count: number };
 
-type DisplayNode =
-  | { type: "resource"; node: ConnectionDiagramNode }
-  | { type: "overflow"; side: "left" | "right"; count: number };
+type NodePosition = { x: number; y: number };
 
 const NODE_WIDTH = 232;
 const NODE_HEIGHT = 70;
 const ROW_GAP = 18;
-const CANVAS_WIDTH = 1040;
-const LEFT_X = 24;
-const CURRENT_X = 404;
-const RIGHT_X = 784;
-const MAX_NODES_PER_SIDE = 10;
+const COLUMN_STEP = 330;
+const CANVAS_PADDING = 24;
+const MAX_VISIBLE_NODES_PER_COLUMN = 12;
+const MAX_GRAPH_NODES = 45;
+const FETCH_BATCH_SIZE = 6;
+const DEPTH_OPTIONS = [1, 2, 3] as const;
 
 const kindColor: Record<ConnectionDiagramKind, string> = {
   family: "var(--color-brand)",
@@ -67,29 +69,70 @@ const kindBadgeTone: Record<
   relationship: "neutral",
 };
 
+const kindPriority: Record<ConnectionDiagramKind, number> = {
+  family: 0,
+  bom: 1,
+  containment: 2,
+  relationship: 3,
+};
+
 const humanize = (value: string) =>
   value
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[-_]+/g, " ")
     .replace(/^./, (character) => character.toUpperCase());
 
-const displayNodes = (
-  nodes: ConnectionDiagramNode[],
-  side: "left" | "right",
-): DisplayNode[] => {
-  if (nodes.length <= MAX_NODES_PER_SIDE) {
-    return nodes.map((node) => ({ type: "resource" as const, node }));
+const primaryConnection = (connections: ConnectionDiagramConnection[]) =>
+  [...connections].sort(
+    (left, right) => kindPriority[left.kind] - kindPriority[right.kind],
+  )[0];
+
+const displayColumn = (
+  nodes: ConnectionDiagramGraphNode[],
+  column: number,
+  rootResourceId: string,
+): DisplayColumnItem[] => {
+  const sorted = [...nodes].sort(
+    (left, right) =>
+      Number(right.resource.id === rootResourceId) -
+        Number(left.resource.id === rootResourceId) ||
+      kindPriority[
+        primaryConnection(left.connections)?.kind ?? "relationship"
+      ] -
+        kindPriority[
+          primaryConnection(right.connections)?.kind ?? "relationship"
+        ] ||
+      left.resource.name.localeCompare(right.resource.name) ||
+      left.resource.id.localeCompare(right.resource.id),
+  );
+  if (sorted.length <= MAX_VISIBLE_NODES_PER_COLUMN) {
+    return sorted.map((node) => ({ type: "resource" as const, node }));
   }
   return [
-    ...nodes
-      .slice(0, MAX_NODES_PER_SIDE - 1)
+    ...sorted
+      .slice(0, MAX_VISIBLE_NODES_PER_COLUMN - 1)
       .map((node) => ({ type: "resource" as const, node })),
     {
       type: "overflow" as const,
-      side,
-      count: nodes.length - (MAX_NODES_PER_SIDE - 1),
+      column,
+      count: sorted.length - (MAX_VISIBLE_NODES_PER_COLUMN - 1),
     },
   ];
+};
+
+const centerRoot = (
+  items: DisplayColumnItem[],
+  rootResourceId: string,
+) => {
+  const rootIndex = items.findIndex(
+    (item) =>
+      item.type === "resource" && item.node.resource.id === rootResourceId,
+  );
+  if (rootIndex < 0 || items.length < 2) return items;
+  const root = items[rootIndex];
+  const others = items.filter((_, index) => index !== rootIndex);
+  const middle = Math.floor(others.length / 2);
+  return [...others.slice(0, middle), root, ...others.slice(middle)];
 };
 
 const rowPositions = (count: number, canvasHeight: number) => {
@@ -101,19 +144,40 @@ const rowPositions = (count: number, canvasHeight: number) => {
   );
 };
 
-const primaryConnection = (node: ConnectionDiagramNode) =>
-  [...node.connections].sort(
-    (left, right) =>
-      ["family", "bom", "containment", "relationship"].indexOf(left.kind) -
-      ["family", "bom", "containment", "relationship"].indexOf(right.kind),
-  )[0];
-
-const combinedDirection = (node: ConnectionDiagramNode) => {
-  const directions = new Set(node.connections.map((item) => item.direction));
-  return directions.size === 1
-    ? node.connections[0]?.direction ?? "undirected"
-    : "undirected";
-};
+async function loadDirectPayload(resourceId: string): Promise<PayloadResult> {
+  const results = await Promise.allSettled([
+    fetchJson<{ relations: ConnectionDiagramRelation[] }>(
+      `/api/v1/resources/${resourceId}/relations`,
+      { cache: "no-store" },
+    ),
+    fetchJson<ConnectionDiagramFamily>(
+      `/api/v1/resources/${resourceId}/family`,
+      { cache: "no-store" },
+    ),
+    fetchJson<{ components: ConnectionDiagramBomComponent[] }>(
+      `/api/v1/resources/${resourceId}/bom`,
+      { cache: "no-store" },
+    ),
+  ] as const);
+  if (results.every((result) => result.status === "rejected")) {
+    const failure = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    throw failure?.reason instanceof Error
+      ? failure.reason
+      : new Error("Unable to load connections.");
+  }
+  const [relations, family, bom] = results;
+  return {
+    partial: results.some((result) => result.status === "rejected"),
+    payload: {
+      relations:
+        relations.status === "fulfilled" ? relations.value.relations : [],
+      family: family.status === "fulfilled" ? family.value : null,
+      bomComponents: bom.status === "fulfilled" ? bom.value.components : [],
+    },
+  };
+}
 
 export function ResourceConnectionDiagram({
   resource,
@@ -124,99 +188,140 @@ export function ResourceConnectionDiagram({
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const number = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [payload, setPayload] = useState<DiagramPayload | null>(null);
-  const [unavailable, setUnavailable] = useState<SourceName[]>([]);
+  const payloadsRef = useRef(new Map<string, ConnectionDiagramPayload>());
+  const failedResourcesRef = useRef(new Set<string>());
+  const partialRef = useRef(false);
+  const requestSequenceRef = useRef(0);
+  const [payloadSnapshot, setPayloadSnapshot] = useState<
+    ReadonlyMap<string, ConnectionDiagramPayload>
+  >(new Map());
+  const [depth, setDepth] = useState(1);
+  const [partial, setPartial] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const results = await Promise.allSettled([
-      fetchJson<{ relations: ConnectionDiagramRelation[] }>(
-        `/api/v1/resources/${resource.id}/relations`,
-        { cache: "no-store" },
-      ),
-      fetchJson<ConnectionDiagramFamily>(
-        `/api/v1/resources/${resource.id}/family`,
-        { cache: "no-store" },
-      ),
-      fetchJson<{ components: ConnectionDiagramBomComponent[] }>(
-        `/api/v1/resources/${resource.id}/bom`,
-        { cache: "no-store" },
-      ),
-    ] as const);
+  const load = useCallback(
+    async (requestedDepth: number, refresh = false) => {
+      const requestSequence = ++requestSequenceRef.current;
+      if (refresh) {
+        payloadsRef.current = new Map();
+        failedResourcesRef.current = new Set();
+        partialRef.current = false;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        if (!payloadsRef.current.has(resource.id)) {
+          const rootResult = await loadDirectPayload(resource.id);
+          payloadsRef.current.set(resource.id, rootResult.payload);
+          partialRef.current ||= rootResult.partial;
+        }
 
-    const failedSources: SourceName[] = [];
-    const [relationsResult, familyResult, bomResult] = results;
-    if (relationsResult.status === "rejected") failedSources.push("relations");
-    if (familyResult.status === "rejected") failedSources.push("family");
-    if (bomResult.status === "rejected") failedSources.push("bom");
-
-    if (failedSources.length === results.length) {
-      const firstFailure = results.find(
-        (result): result is PromiseRejectedResult => result.status === "rejected",
-      );
-      setError(
-        firstFailure?.reason instanceof Error
-          ? firstFailure.reason.message
-          : t("connectionDiagram.errors.load"),
-      );
-      setLoading(false);
-      return;
-    }
-
-    setUnavailable(failedSources);
-    setPayload({
-      relations:
-        relationsResult.status === "fulfilled"
-          ? relationsResult.value.relations
-          : [],
-      family:
-        familyResult.status === "fulfilled" ? familyResult.value : null,
-      bomComponents:
-        bomResult.status === "fulfilled" ? bomResult.value.components : [],
-    });
-    setLoading(false);
-  }, [resource.id, t]);
+        while (requestSequence === requestSequenceRef.current) {
+          const graph = buildResourceConnectionGraph({
+            root: resource,
+            depth: requestedDepth,
+            payloads: payloadsRef.current,
+            maxNodes: MAX_GRAPH_NODES,
+          });
+          partialRef.current ||= graph.truncated;
+          const missing = graph.nodes
+            .filter(
+              (node) =>
+                node.depth < requestedDepth &&
+                !payloadsRef.current.has(node.resource.id) &&
+                !failedResourcesRef.current.has(node.resource.id),
+            )
+            .slice(0, FETCH_BATCH_SIZE);
+          if (!missing.length) break;
+          await Promise.all(
+            missing.map(async (node) => {
+              try {
+                const result = await loadDirectPayload(node.resource.id);
+                payloadsRef.current.set(node.resource.id, result.payload);
+                partialRef.current ||= result.partial;
+              } catch {
+                failedResourcesRef.current.add(node.resource.id);
+                partialRef.current = true;
+              }
+            }),
+          );
+        }
+        if (requestSequence !== requestSequenceRef.current) return;
+        setPartial(partialRef.current);
+        setPayloadSnapshot(new Map(payloadsRef.current));
+      } catch (loadError) {
+        if (requestSequence !== requestSequenceRef.current) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : t("connectionDiagram.errors.load"),
+        );
+      } finally {
+        if (requestSequence === requestSequenceRef.current) setLoading(false);
+      }
+    },
+    [resource, t],
+  );
 
   const model = useMemo(
     () =>
-      payload
-        ? buildResourceConnectionDiagram({
-            currentResourceId: resource.id,
-            relations: payload.relations,
-            family: payload.family,
-            bomComponents: payload.bomComponents,
+      payloadSnapshot.has(resource.id)
+        ? buildResourceConnectionGraph({
+            root: resource,
+            depth,
+            payloads: payloadSnapshot,
+            maxNodes: MAX_GRAPH_NODES,
           })
         : null,
-    [payload, resource.id],
+    [depth, payloadSnapshot, resource],
   );
-  const left = useMemo(
-    () => displayNodes(model?.left ?? [], "left"),
-    [model?.left],
+
+  const columns = useMemo(() => {
+    const result = new Map<number, DisplayColumnItem[]>();
+    for (let column = -depth; column <= depth; column += 1) {
+      const nodes = model?.nodes.filter((node) => node.column === column) ?? [];
+      result.set(
+        column,
+        centerRoot(displayColumn(nodes, column, resource.id), resource.id),
+      );
+    }
+    return result;
+  }, [depth, model?.nodes, resource.id]);
+  const maximumRows = Math.max(
+    1,
+    ...Array.from(columns.values()).map((items) => items.length),
   );
-  const right = useMemo(
-    () => displayNodes(model?.right ?? [], "right"),
-    [model?.right],
-  );
-  const rowCount = Math.max(left.length, right.length, 1);
   const canvasHeight = Math.max(
     280,
-    rowCount * NODE_HEIGHT + Math.max(0, rowCount - 1) * ROW_GAP + 48,
+    maximumRows * NODE_HEIGHT + Math.max(0, maximumRows - 1) * ROW_GAP + 48,
   );
-  const currentY = canvasHeight / 2 - NODE_HEIGHT / 2;
-  const leftY = rowPositions(left.length, canvasHeight);
-  const rightY = rowPositions(right.length, canvasHeight);
+  const canvasWidth =
+    CANVAS_PADDING * 2 + NODE_WIDTH + depth * 2 * COLUMN_STEP;
+  const positions = useMemo(() => {
+    const result = new Map<string, NodePosition>();
+    for (const [column, items] of columns) {
+      const ys = rowPositions(items.length, canvasHeight);
+      for (const [index, item] of items.entries()) {
+        if (item.type !== "resource") continue;
+        result.set(item.node.resource.id, {
+          x: CANVAS_PADDING + (column + depth) * COLUMN_STEP,
+          y: ys[index] ?? 0,
+        });
+      }
+    }
+    return result;
+  }, [canvasHeight, columns, depth]);
 
   useEffect(() => {
     const container = scrollRef.current;
-    if (!model || !container || container.clientWidth >= CANVAS_WIDTH) return;
+    const rootPosition = positions.get(resource.id);
+    if (!model || !container || !rootPosition) return;
     container.scrollLeft = Math.max(
       0,
-      CURRENT_X + NODE_WIDTH / 2 - container.clientWidth / 2,
+      rootPosition.x + NODE_WIDTH / 2 - container.clientWidth / 2,
     );
-  }, [model]);
+  }, [model, positions, resource.id]);
 
   return (
     <section className="mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
@@ -224,7 +329,13 @@ export function ResourceConnectionDiagram({
         <details
           className="group"
           onToggle={(event) => {
-            if (event.currentTarget.open && !payload && !loading) void load();
+            if (
+              event.currentTarget.open &&
+              !payloadsRef.current.has(resource.id) &&
+              !loading
+            ) {
+              void load(depth);
+            }
           }}
         >
           <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 marker:hidden sm:px-6 [&::-webkit-details-marker]:hidden">
@@ -255,30 +366,50 @@ export function ResourceConnectionDiagram({
               <div className="flex flex-wrap gap-2">
                 <LegendBadge kind="family" label={t("connectionDiagram.legend.family")} />
                 <LegendBadge kind="bom" label={t("connectionDiagram.legend.bom")} />
-                <LegendBadge
-                  kind="containment"
-                  label={t("connectionDiagram.legend.containment")}
-                />
-                <LegendBadge
-                  kind="relationship"
-                  label={t("connectionDiagram.legend.relationship")}
-                />
+                <LegendBadge kind="containment" label={t("connectionDiagram.legend.containment")} />
+                <LegendBadge kind="relationship" label={t("connectionDiagram.legend.relationship")} />
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={loading}
-                onClick={() => void load()}
-              >
-                <RefreshCw
-                  className={`size-3.5 ${loading ? "animate-spin" : ""}`}
-                  aria-hidden="true"
-                />
-                {t("connectionDiagram.refresh")}
-              </Button>
+              <div className="flex items-center gap-2">
+                {loading && model ? (
+                  <LoaderCircle className="size-3.5 animate-spin text-muted" aria-hidden="true" />
+                ) : null}
+                <label className="flex h-8 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
+                  <span>{t("connectionDiagram.depth.label")}</span>
+                  <select
+                    value={depth}
+                    onChange={(event) => {
+                      const nextDepth = Number(event.target.value);
+                      setDepth(nextDepth);
+                      if (payloadsRef.current.has(resource.id)) {
+                        void load(nextDepth);
+                      }
+                    }}
+                    className="bg-transparent text-xs font-semibold text-foreground outline-none"
+                    aria-label={t("connectionDiagram.depth.ariaLabel")}
+                  >
+                    {DEPTH_OPTIONS.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={loading}
+                  onClick={() => void load(depth, true)}
+                >
+                  <RefreshCw
+                    className={`size-3.5 ${loading ? "animate-spin" : ""}`}
+                    aria-hidden="true"
+                  />
+                  {t("connectionDiagram.refresh")}
+                </Button>
+              </div>
             </div>
 
-            {unavailable.length && payload ? (
+            {partial && model ? (
               <p className="border-b border-warning-border bg-warning-soft px-5 py-2.5 text-xs text-warning sm:px-6">
                 {t("connectionDiagram.partial")}
               </p>
@@ -290,12 +421,12 @@ export function ResourceConnectionDiagram({
                   className="mt-3"
                   variant="secondary"
                   size="sm"
-                  onClick={() => void load()}
+                  onClick={() => void load(depth, true)}
                 >
                   {t("connectionDiagram.retry")}
                 </Button>
               </div>
-            ) : loading && !payload ? (
+            ) : loading && !model ? (
               <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted">
                 <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
                 {t("connectionDiagram.loading")}
@@ -308,35 +439,32 @@ export function ResourceConnectionDiagram({
                 >
                   <div
                     className="relative"
-                    style={{ width: CANVAS_WIDTH, height: canvasHeight }}
+                    style={{ width: canvasWidth, height: canvasHeight }}
                   >
-                    <DiagramEdges
-                      left={left}
-                      right={right}
-                      leftY={leftY}
-                      rightY={rightY}
-                      currentY={currentY}
+                    <GraphEdges
+                      edges={model.edges}
+                      positions={positions}
+                      width={canvasWidth}
                       height={canvasHeight}
                     />
-                    {left.map((item, index) => (
-                      <PositionedNode
-                        key={item.type === "resource" ? item.node.key : "left:overflow"}
-                        item={item}
-                        x={LEFT_X}
-                        y={leftY[index] ?? 0}
-                        number={number}
-                      />
-                    ))}
-                    <CurrentNode resource={resource} y={currentY} />
-                    {right.map((item, index) => (
-                      <PositionedNode
-                        key={item.type === "resource" ? item.node.key : "right:overflow"}
-                        item={item}
-                        x={RIGHT_X}
-                        y={rightY[index] ?? 0}
-                        number={number}
-                      />
-                    ))}
+                    {Array.from(columns.entries()).flatMap(([column, items]) => {
+                      const ys = rowPositions(items.length, canvasHeight);
+                      const x = CANVAS_PADDING + (column + depth) * COLUMN_STEP;
+                      return items.map((item, index) => (
+                        <PositionedGraphNode
+                          key={
+                            item.type === "resource"
+                              ? item.node.resource.id
+                              : `overflow:${column}`
+                          }
+                          item={item}
+                          rootResourceId={resource.id}
+                          x={x}
+                          y={ys[index] ?? 0}
+                          number={number}
+                        />
+                      ));
+                    })}
                   </div>
                 </div>
               ) : (
@@ -377,30 +505,24 @@ function LegendBadge({
   );
 }
 
-function DiagramEdges({
-  left,
-  right,
-  leftY,
-  rightY,
-  currentY,
+function GraphEdges({
+  edges,
+  positions,
+  width,
   height,
 }: {
-  left: DisplayNode[];
-  right: DisplayNode[];
-  leftY: number[];
-  rightY: number[];
-  currentY: number;
+  edges: ConnectionDiagramGraphEdge[];
+  positions: ReadonlyMap<string, NodePosition>;
+  width: number;
   height: number;
 }) {
-  const { t } = useT("resource");
-  const currentCenterY = currentY + NODE_HEIGHT / 2;
   return (
     <svg
       aria-hidden="true"
       className="pointer-events-none absolute inset-0"
-      width={CANVAS_WIDTH}
+      width={width}
       height={height}
-      viewBox={`0 0 ${CANVAS_WIDTH} ${height}`}
+      viewBox={`0 0 ${width} ${height}`}
     >
       <defs>
         {Object.entries(kindColor).map(([kind, color]) => (
@@ -418,131 +540,77 @@ function DiagramEdges({
           </marker>
         ))}
       </defs>
-      {left.map((item, index) => (
-        <DiagramEdge
-          key={item.type === "resource" ? item.node.key : "left:overflow"}
-          item={item}
-          nodeX={LEFT_X}
-          nodeY={(leftY[index] ?? 0) + NODE_HEIGHT / 2}
-          currentY={currentCenterY}
-          side="left"
-          overflowLabel={t("connectionDiagram.more", {
-            count: item.type === "overflow" ? item.count : 0,
-          })}
-        />
-      ))}
-      {right.map((item, index) => (
-        <DiagramEdge
-          key={item.type === "resource" ? item.node.key : "right:overflow"}
-          item={item}
-          nodeX={RIGHT_X}
-          nodeY={(rightY[index] ?? 0) + NODE_HEIGHT / 2}
-          currentY={currentCenterY}
-          side="right"
-          overflowLabel={t("connectionDiagram.more", {
-            count: item.type === "overflow" ? item.count : 0,
-          })}
-        />
+      {edges.map((edge) => (
+        <GraphEdge key={edge.key} edge={edge} positions={positions} />
       ))}
     </svg>
   );
 }
 
-function DiagramEdge({
-  item,
-  nodeX,
-  nodeY,
-  currentY,
-  side,
-  overflowLabel,
+function GraphEdge({
+  edge,
+  positions,
 }: {
-  item: DisplayNode;
-  nodeX: number;
-  nodeY: number;
-  currentY: number;
-  side: "left" | "right";
-  overflowLabel: string;
+  edge: ConnectionDiagramGraphEdge;
+  positions: ReadonlyMap<string, NodePosition>;
 }) {
-  const connection = item.type === "resource" ? primaryConnection(item.node) : null;
-  const kind = connection?.kind ?? "relationship";
-  const direction =
-    item.type === "resource" ? combinedDirection(item.node) : "undirected";
-  const currentEdgeX = side === "left" ? CURRENT_X : CURRENT_X + NODE_WIDTH;
-  const nodeEdgeX = side === "left" ? nodeX + NODE_WIDTH : nodeX;
-  const startsAtNode = direction === "toward-current";
-  const startX = startsAtNode ? nodeEdgeX : currentEdgeX;
-  const startY = startsAtNode ? nodeY : currentY;
-  const endX = startsAtNode ? currentEdgeX : nodeEdgeX;
-  const endY = startsAtNode ? currentY : nodeY;
-  const middleX = (currentEdgeX + nodeEdgeX) / 2;
-  const path = `M ${startX} ${startY} C ${middleX} ${startY}, ${middleX} ${endY}, ${endX} ${endY}`;
-  const markerEnd =
-    direction === "undirected" ? undefined : `url(#connection-arrow-${kind})`;
+  const primary = primaryConnection(edge.connections);
+  if (!primary) return null;
+  const directed = edge.connections.every(
+    (connection) =>
+      connection.directed &&
+      connection.fromResourceId === edge.connections[0]?.fromResourceId &&
+      connection.toResourceId === edge.connections[0]?.toResourceId,
+  );
+  const fromId = directed
+    ? edge.connections[0].fromResourceId
+    : edge.firstResourceId;
+  const toId = directed
+    ? edge.connections[0].toResourceId
+    : edge.secondResourceId;
+  const from = positions.get(fromId);
+  const to = positions.get(toId);
+  if (!from || !to) return null;
+  const fromCenterY = from.y + NODE_HEIGHT / 2;
+  const toCenterY = to.y + NODE_HEIGHT / 2;
+  let path: string;
+  if (from.x === to.x) {
+    const downward = fromCenterY <= toCenterY;
+    const startY = downward ? from.y + NODE_HEIGHT : from.y;
+    const endY = downward ? to.y : to.y + NODE_HEIGHT;
+    const curveX = from.x + NODE_WIDTH + 44;
+    path = `M ${from.x + NODE_WIDTH / 2} ${startY} C ${curveX} ${startY}, ${curveX} ${endY}, ${to.x + NODE_WIDTH / 2} ${endY}`;
+  } else {
+    const leftToRight = from.x < to.x;
+    const startX = leftToRight ? from.x + NODE_WIDTH : from.x;
+    const endX = leftToRight ? to.x : to.x + NODE_WIDTH;
+    const middleX = (startX + endX) / 2;
+    path = `M ${startX} ${fromCenterY} C ${middleX} ${fromCenterY}, ${middleX} ${toCenterY}, ${endX} ${toCenterY}`;
+  }
   return (
-    <g>
-      <path
-        d={path}
-        fill="none"
-        stroke={kindColor[kind]}
-        strokeWidth="1.75"
-        strokeDasharray={direction === "undirected" ? "5 5" : undefined}
-        markerEnd={markerEnd}
-        opacity="0.78"
-      />
-      {item.type === "overflow" ? (
-        <text
-          x={middleX}
-          y={(nodeY + currentY) / 2 - 7}
-          textAnchor="middle"
-          className="fill-muted text-[10px] font-semibold"
-          style={{
-            paintOrder: "stroke",
-            stroke: "var(--color-surface)",
-            strokeWidth: 5,
-          }}
-        >
-          {overflowLabel}
-        </text>
-      ) : null}
-    </g>
+    <path
+      d={path}
+      fill="none"
+      stroke={kindColor[primary.kind]}
+      strokeWidth="1.75"
+      strokeDasharray={directed ? undefined : "5 5"}
+      markerEnd={
+        directed ? `url(#connection-arrow-${primary.kind})` : undefined
+      }
+      opacity="0.78"
+    />
   );
 }
 
-function CurrentNode({
-  resource,
-  y,
-}: {
-  resource: ConnectionDiagramResource;
-  y: number;
-}) {
-  const { t } = useT("resource");
-  return (
-    <div
-      className="absolute z-10 flex items-center gap-3 rounded-2xl border-2 border-info bg-surface px-3.5 shadow-[var(--shadow-md)]"
-      style={{ left: CURRENT_X, top: y, width: NODE_WIDTH, height: NODE_HEIGHT }}
-    >
-      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-info-soft text-info">
-        <CircleDot className="size-4" aria-hidden="true" />
-      </span>
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold text-foreground">
-          {resource.name}
-        </span>
-        <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-wider text-info">
-          {t("connectionDiagram.current")}
-        </span>
-      </span>
-    </div>
-  );
-}
-
-function PositionedNode({
+function PositionedGraphNode({
   item,
+  rootResourceId,
   x,
   y,
   number,
 }: {
-  item: DisplayNode;
+  item: DisplayColumnItem;
+  rootResourceId: string;
   x: number;
   y: number;
   number: Intl.NumberFormat;
@@ -567,44 +635,76 @@ function PositionedNode({
     );
   }
 
-  const { node } = item;
-  const connection = primaryConnection(node);
+  const isRoot = item.node.resource.id === rootResourceId;
+  const connection = primaryConnection(item.node.connections);
   const kind = connection?.kind ?? "relationship";
-  const descriptions = node.connections.map((item) =>
-    connectionDescription(item, t, number),
+  const descriptions = item.node.connections.map((candidate) =>
+    connectionDescription(candidate, t, number),
   );
-  const subtitle = Array.from(new Set(descriptions)).join(" · ");
-  return (
-    <Link
-      href={`/inventory/${node.resource.id}`}
-      aria-label={t("connectionDiagram.openItem", { name: node.resource.name })}
-      className="absolute z-10 flex items-center gap-3 rounded-xl border border-border bg-surface px-3.5 shadow-[var(--shadow-sm)] transition hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-md)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-      style={{ left: x, top: y, width: NODE_WIDTH, height: NODE_HEIGHT }}
-    >
+  const subtitle = isRoot
+    ? t("connectionDiagram.current")
+    : Array.from(new Set(descriptions)).join(" · ") ||
+      humanize(item.node.resource.type ?? "inventory");
+  const content = (
+    <>
       <span
         className="grid size-9 shrink-0 place-items-center rounded-xl"
         style={{
-          backgroundColor: `color-mix(in srgb, ${kindColor[kind]} 13%, transparent)`,
-          color: kindColor[kind],
+          backgroundColor: `color-mix(in srgb, ${
+            isRoot ? "var(--color-info)" : kindColor[kind]
+          } 13%, transparent)`,
+          color: isRoot ? "var(--color-info)" : kindColor[kind],
         }}
       >
-        <ConnectionIcon kind={kind} />
+        {isRoot ? (
+          <CircleDot className="size-4" aria-hidden="true" />
+        ) : (
+          <ConnectionIcon kind={kind} />
+        )}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
-            {node.resource.name}
+            {item.node.resource.name}
           </span>
-          {node.connections.length > 1 ? (
+          {!isRoot && item.node.connections.length > 1 ? (
             <Badge tone={kindBadgeTone[kind]} className="min-h-5 px-1.5 text-[9px]">
-              {node.connections.length}
+              {item.node.connections.length}
             </Badge>
           ) : null}
         </span>
-        <span className="mt-1 block truncate text-[10px] text-muted">
-          {subtitle || humanize(node.resource.type ?? "inventory")}
+        <span
+          className={`mt-1 block truncate text-[10px] ${
+            isRoot
+              ? "font-semibold uppercase tracking-wider text-info"
+              : "text-muted"
+          }`}
+        >
+          {subtitle}
         </span>
       </span>
+    </>
+  );
+  const className = `absolute z-10 flex items-center gap-3 rounded-xl bg-surface px-3.5 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
+    isRoot
+      ? "border-2 border-info shadow-[var(--shadow-md)]"
+      : "border border-border shadow-[var(--shadow-sm)] hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-md)]"
+  }`;
+  const style = { left: x, top: y, width: NODE_WIDTH, height: NODE_HEIGHT };
+  return isRoot ? (
+    <div className={className} style={style}>
+      {content}
+    </div>
+  ) : (
+    <Link
+      href={`/inventory/${item.node.resource.id}`}
+      aria-label={t("connectionDiagram.openItem", {
+        name: item.node.resource.name,
+      })}
+      className={className}
+      style={style}
+    >
+      {content}
     </Link>
   );
 }
@@ -631,4 +731,3 @@ function connectionDescription(
   }
   return t(`connectionDiagram.kinds.${descriptor.type}`);
 }
-

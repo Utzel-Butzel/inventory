@@ -101,6 +101,76 @@
       "nameRequired": "Enter a name for the variant."
     }
   },
+  "options": {
+    "title": "Option groups",
+    "description": "Define choices once, then generate connected inventory variants.",
+    "variantDescription": "Option selection inherited from {{name}}.",
+    "variantHelp": "This item remains a full inventory record. Its stock, locations, serial units, relationships, and build history are independent.",
+    "groupCount_one": "{{value}} group",
+    "groupCount_other": "{{value}} groups",
+    "combinations_one": "{{value}} combination; the default remains the primary item.",
+    "combinations_other": "{{value}} combinations; the default remains the primary item.",
+    "defaultHint": "The primary item will represent all default values.",
+    "default": "Default",
+    "bomMapped": "BOM mapped",
+    "locked": "Generated",
+    "loading": "Loading option groups",
+    "empty": {
+      "title": "No option groups",
+      "description": "Add dimensions such as Language or Frame. Optionally connect a group to one BOM slot so each value swaps exactly that component."
+    },
+    "fields": {
+      "groupName": "Group name",
+      "key": "Key",
+      "bomSlot": "BOM slot (optional)",
+      "valueLabel": "Value {{index}}",
+      "code": "Code",
+      "component": "Component"
+    },
+    "editor": {
+      "help": "Keep this simple: most groups only need a name and values. Select a BOM slot only when this choice should replace a physical component.",
+      "groupPlaceholder": "e.g. Language",
+      "valuePlaceholder": "e.g. English",
+      "noBomSlot": "No component change",
+      "selectComponent": "Select component…",
+      "loadingComponents": "Loading components…",
+      "catalogOnly": "Catalog option"
+    },
+    "generate": {
+      "confirm_one": "Generate {{value}} full inventory variant now? Definitions will be locked afterwards.",
+      "confirm_other": "Generate {{value}} full inventory variants now? Definitions will be locked afterwards."
+    },
+    "actions": {
+      "configure": "Configure options",
+      "edit": "Edit definitions",
+      "save": "Save definitions",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "generate": "Generate variants",
+      "generating": "Generating…",
+      "addGroup": "Add group",
+      "addValue": "Add value",
+      "removeGroup": "Remove group {{name}}",
+      "removeValue": "Remove value {{label}}",
+      "openPrimary": "Open {{name}}",
+      "dismissError": "Dismiss option-group error"
+    },
+    "notices": {
+      "saved": "Option definitions saved.",
+      "generated_one": "{{value}} connected variant generated.",
+      "generated_other": "{{value}} connected variants generated."
+    },
+    "errors": {
+      "load": "Unable to load option groups.",
+      "resources": "Unable to load selectable components.",
+      "save": "Unable to save option groups.",
+      "generate": "Unable to generate option variants.",
+      "invalidGroup": "Complete the name and key for option group {{group}}. The key must begin with a letter.",
+      "invalidValue": "Enter a label and code for value {{value}} in {{group}}.",
+      "missingComponent": "Select a component for value {{value}} in {{group}}.",
+      "duplicateValues": "Use unique labels and codes in {{group}}."
+    }
+  },
   "actions": {
     "batchCapture": "Batch capture",
     "addItem": "Add item",
@@ -238,7 +308,7 @@
       "edit": "Edit item",
       "delete": "Delete item"
     },
-    "confirmDelete": "Delete “{{name}}”? This cannot be undone.",
+    "confirmDelete": "Delete “{{name}}”? This also deletes its option groups, option selections, media, other item-owned records, and any unused option values that use it as a component. This cannot be undone.",
     "share": {
       "title": "Manage public links",
       "description": "Create and revoke public, view-only links for “{{name}}”.",

@@ -152,6 +152,14 @@
     "system": "System",
     "unit": "Einheit",
     "optional": "optional",
+    "configuration": {
+      "title": "Bestandskonfiguration",
+      "label": "Konfiguration",
+      "help": "Alle Bestandsaktionen auf dieser Seite gelten für die ausgewählte Konfiguration.",
+      "movementHelp": "Diese Bewegung wird für die ausgewählte Konfiguration gebucht.",
+      "error": "Die Konfigurationsauswahl konnte nicht geladen werden. Lade die Seite neu, bevor du Bestand buchst.",
+      "primary": "(Primärvariante)"
+    },
     "actions": {
       "retry": "Erneut versuchen",
       "backToItem": "Zurück zum Eintrag",
