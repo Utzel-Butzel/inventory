@@ -260,6 +260,95 @@ test("family creation makes an ordinary zero-stock resource with its own operati
   );
 });
 
+test("an existing standalone item can join a family without moving operational data", async () => {
+  const [family, route, manager, openapi] = await Promise.all([
+    source("lib/resource-families.ts"),
+    source("app/api/v1/resources/[id]/family/route.ts"),
+    source("components/resource-family-manager.tsx"),
+    source("public/openapi.yaml"),
+  ]);
+  const attachStart = family.indexOf(
+    "export async function attachExistingResourceVariant",
+  );
+  const attachEnd = family.indexOf(
+    "export async function createResourceFamilyVariant",
+    attachStart,
+  );
+  const attach = family.slice(attachStart, attachEnd);
+  assert.notEqual(attachStart, -1);
+  assert.notEqual(attachEnd, -1);
+
+  const bomLock = attach.indexOf(
+    "pg_advisory_xact_lock(${BOM_WRITE_LOCK_ID})",
+  );
+  const familyLock = attach.indexOf(
+    "pg_advisory_xact_lock(${VARIANT_FAMILY_WRITE_LOCK_ID})",
+  );
+  const link = attach.indexOf("insert(resourceRelations)");
+  const removeLocalBom = attach.indexOf("delete(bomLines)");
+  const storeOverrides = attach.indexOf("insert(variantBomOverrides)");
+  const validateGraph = attach.indexOf("assertCurrentEffectiveBomGraphAcyclic");
+  assert.ok(
+    bomLock < familyLock &&
+      familyLock < link &&
+      link < removeLocalBom &&
+      removeLocalBom < storeOverrides &&
+      storeOverrides < validateGraph,
+  );
+  assert.match(
+    attach,
+    /sourceResourceId: variantResourceId[\s\S]*targetResourceId: primary\.id[\s\S]*relationTypeKey: VARIANT_RELATION_TYPE/,
+  );
+  assert.match(
+    attach,
+    /VARIANT_INHERITED_CATALOG_FIELDS\.filter\([\s\S]*isDeepStrictEqual\(variant\[field\], primary\[field\]\)/,
+  );
+  assert.match(attach, /alignExistingBomToPrimary/);
+  assert.match(attach, /removed: true/);
+  assert.match(attach, /connectedExisting: true/);
+  assert.match(attach, /authorizeVariant\(variant\)/);
+  assert.match(attach, /variant families cannot be nested/i);
+  assert.match(attach, /option groups/i);
+
+  for (const preservedTable of [
+    "stockMovements",
+    "stockLocationBalances",
+    "stockUnits",
+    "assemblyBuilds",
+    "assemblyBuildComponents",
+    "inventoryAssignments",
+    "resourceRelations",
+    "resources",
+  ]) {
+    assert.doesNotMatch(
+      attach,
+      new RegExp(`\\.delete\\(${preservedTable}\\)`),
+      preservedTable,
+    );
+  }
+
+  assert.match(route, /existingResourceId: z\.string\(\)\.uuid\(\)/);
+  assert.match(route, /attachExistingResourceVariant/);
+  assert.match(
+    route,
+    /authorizeVariant:[\s\S]*canAccessResource\([\s\S]*"inventory\.update"/,
+  );
+  assert.match(manager, /family\.actions\.connectExisting/);
+  assert.match(manager, /loadEveryResource/);
+  assert.match(
+    manager,
+    /JSON\.stringify\(\{ existingResourceId: candidateResourceId \}\)/,
+  );
+  assert.match(
+    openapi,
+    /ResourceFamilyExistingVariantInput:[\s\S]*required: \[existingResourceId\]/,
+  );
+  assert.match(
+    openapi,
+    /connects an existing standalone item without moving its stock, locations, serial units, relationships, assignments, or history/,
+  );
+});
+
 test("family membership is a protected variant-to-primary edge and cannot nest", async () => {
   const family = await source("lib/resource-families.ts");
 

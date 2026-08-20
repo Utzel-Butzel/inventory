@@ -351,6 +351,12 @@ export function AssemblyManager({
   }, [loadBom, loadBuilds]);
 
   useEffect(() => {
+    const reloadBom = () => void loadBom(true);
+    window.addEventListener("resource-bom-changed", reloadBom);
+    return () => window.removeEventListener("resource-bom-changed", reloadBom);
+  }, [loadBom]);
+
+  useEffect(() => {
     const cleanQuery = query.trim();
     if (cleanQuery.length < 2) {
       setSearchResults([]);

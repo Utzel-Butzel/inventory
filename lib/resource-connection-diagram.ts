@@ -23,14 +23,20 @@ export type ConnectionDiagramFamily = {
   currentResourceId: string;
   primary: ConnectionDiagramResource;
   variants: ConnectionDiagramResource[];
+  optionGroupCount?: number;
 };
 
 export type ConnectionDiagramBomComponent = {
+  id?: string;
+  slotKey?: string;
   resourceId: string;
   name: string;
   type?: string | null;
   status?: string | null;
   quantityPerAssembly: number;
+  position?: number;
+  note?: string | null;
+  origin?: "local" | "base" | "inherited" | "override" | "variant";
 };
 
 export type ConnectionDiagramKind =
@@ -90,6 +96,7 @@ export type ConnectionDiagramGraphEdge = {
   key: string;
   firstResourceId: string;
   secondResourceId: string;
+  visualOnly?: boolean;
   connections: Array<
     ConnectionDiagramConnection & {
       canonicalId: string;
@@ -401,6 +408,44 @@ export function buildResourceConnectionGraph(input: {
         }
       }
       if (edge.connections.length) edges.set(edgeKey, edge);
+    }
+  }
+
+  // When the selected item is the primary family member, its variants all sit
+  // in the same visual column. Join adjacent variants with a subtle dashed
+  // rail so the family reads as one group without implying extra persisted
+  // relationships or turning a large family into a full clique.
+  const rootFamily = input.payloads.get(input.root.id)?.family;
+  if (rootFamily?.primary.id === input.root.id) {
+    const visibleVariants = rootFamily.variants
+      .filter((variant) => nodes.has(variant.id))
+      .sort(
+        (left, right) =>
+          left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
+      );
+    for (let index = 1; index < visibleVariants.length; index += 1) {
+      const first = visibleVariants[index - 1];
+      const second = visibleVariants[index];
+      const pair = [first.id, second.id].sort();
+      const key = `family-sibling:${pair.join(":")}`;
+      edges.set(key, {
+        key,
+        firstResourceId: pair[0],
+        secondResourceId: pair[1],
+        visualOnly: true,
+        connections: [
+          {
+            id: key,
+            kind: "family",
+            direction: "undirected",
+            descriptor: { type: "sibling" },
+            canonicalId: key,
+            fromResourceId: first.id,
+            toResourceId: second.id,
+            directed: false,
+          },
+        ],
+      });
     }
   }
 

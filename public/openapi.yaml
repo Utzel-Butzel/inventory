@@ -2016,14 +2016,26 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [Resources]
-      summary: Create a first-class variant from a primary inventory item
-      description: Creates a zero-stock resource linked to this primary by a protected `variant_of` relationship. Shared catalog fields and stock settings start from the primary; operational state remains independent. Variant families cannot be nested.
+      summary: Create a first-class variant or connect an existing inventory item
+      description: With identity fields, creates a zero-stock resource linked to this primary by a protected `variant_of` relationship. With `existingResourceId`, connects an existing standalone item without moving its stock, locations, serial units, relationships, assignments, or history. Existing catalog and BOM differences are retained as sparse overrides. Variant families cannot be nested.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/ResourceFamilyVariantInput" }
+            schema:
+              oneOf:
+                - { $ref: "#/components/schemas/ResourceFamilyVariantInput" }
+                - { $ref: "#/components/schemas/ResourceFamilyExistingVariantInput" }
       responses:
+        "200":
+          description: Existing inventory item connected as a first-class variant
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [variant]
+                properties:
+                  variant: { $ref: "#/components/schemas/ResourceFamilyMember" }
         "201":
           description: First-class variant created
           content:
@@ -2033,9 +2045,9 @@ paths:
                 required: [variant]
                 properties:
                   variant: { $ref: "#/components/schemas/ResourceFamilyMember" }
-        "403": { description: Missing inventory create or primary-item update access }
+        "403": { description: Missing primary-item update access, candidate-item update access, or inventory create permission when creating }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { description: Identifier conflict, archived primary, or nested family attempt }
+        "409": { description: Identifier conflict, archived item, option-managed family, existing membership, or nested family attempt }
         "422": { description: Invalid variant identity }
     delete:
       tags: [Resources]
@@ -5745,6 +5757,15 @@ components:
         name: { type: string, minLength: 1, maxLength: 240 }
         sku: { type: [string, "null"], maxLength: 80 }
         barcode: { type: [string, "null"], maxLength: 180 }
+    ResourceFamilyExistingVariantInput:
+      type: object
+      additionalProperties: false
+      required: [existingResourceId]
+      properties:
+        existingResourceId:
+          type: string
+          format: uuid
+          description: Existing standalone inventory item to connect as the child variant while preserving its operational records.
     ResourceVariantDetachResult:
       type: object
       required: [resourceId, materializedBomLineCount]

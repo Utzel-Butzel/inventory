@@ -56,6 +56,8 @@ export default async function InventoryItemPage({ params }: Props) {
       />
       {resource ? (
         <ResourceConnectionDiagram
+          canEdit={canEdit}
+          canCreate={canCreate}
           resource={{
             id: resource.id,
             name: resource.name,

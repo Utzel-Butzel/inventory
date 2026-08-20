@@ -9,6 +9,8 @@ import {
   LoaderCircle,
   MapPin,
   Package,
+  Pencil,
+  Plus,
   RefreshCw,
   Workflow,
 } from "lucide-react";
@@ -16,7 +18,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "next-i18next/client";
 
 import { OrganizationLink as Link } from "@/components/organization-routing";
-import { Badge, Button, Card } from "@/components/ui";
+import {
+  ResourceConnectionEditorPanel,
+  type ConnectionEditorChangeKind,
+  type ConnectionEditorSelection,
+} from "@/components/resource-connection-editor-panel";
+import { Badge, Button, Card, cn } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
 import {
   buildResourceConnectionGraph,
@@ -181,8 +188,12 @@ async function loadDirectPayload(resourceId: string): Promise<PayloadResult> {
 
 export function ResourceConnectionDiagram({
   resource,
+  canEdit,
+  canCreate,
 }: {
   resource: ConnectionDiagramResource;
+  canEdit: boolean;
+  canCreate: boolean;
 }) {
   const { t, i18n } = useT("resource");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
@@ -199,6 +210,10 @@ export function ResourceConnectionDiagram({
   const [partial, setPartial] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editorSelection, setEditorSelection] =
+    useState<ConnectionEditorSelection | null>(null);
+  const [editorNotice, setEditorNotice] = useState<string | null>(null);
 
   const load = useCallback(
     async (requestedDepth: number, refresh = false) => {
@@ -262,6 +277,26 @@ export function ResourceConnectionDiagram({
       }
     },
     [resource, t],
+  );
+
+  const getPayload = useCallback(async (resourceId: string) => {
+    const cached = payloadsRef.current.get(resourceId);
+    if (cached) return cached;
+    const result = await loadDirectPayload(resourceId);
+    payloadsRef.current.set(resourceId, result.payload);
+    partialRef.current ||= result.partial;
+    setPartial(partialRef.current);
+    setPayloadSnapshot(new Map(payloadsRef.current));
+    return result.payload;
+  }, []);
+
+  const connectionChanged = useCallback(
+    async (kind: ConnectionEditorChangeKind) => {
+      setEditorSelection(null);
+      setEditorNotice(t(`connectionDiagram.editor.notices.${kind}`));
+      await load(depth, true);
+    },
+    [depth, load, t],
   );
 
   const model = useMemo(
@@ -406,8 +441,36 @@ export function ResourceConnectionDiagram({
                   />
                   {t("connectionDiagram.refresh")}
                 </Button>
+                {canEdit ? (
+                  <Button
+                    variant={editing ? "primary" : "secondary"}
+                    size="sm"
+                    onClick={() => {
+                      setEditing((current) => !current);
+                      setEditorSelection(null);
+                      setEditorNotice(null);
+                    }}
+                    aria-pressed={editing}
+                  >
+                    <Pencil className="size-3.5" aria-hidden="true" />
+                    {editing
+                      ? t("connectionDiagram.editor.finishEditing")
+                      : t("connectionDiagram.editor.edit")}
+                  </Button>
+                ) : null}
               </div>
             </div>
+
+            {editing ? (
+              <p className="border-b border-info-border bg-info-soft px-5 py-2.5 text-xs text-info sm:px-6">
+                {t("connectionDiagram.editor.help")}
+              </p>
+            ) : null}
+            {editorNotice ? (
+              <p className="border-b border-success-border bg-success-soft px-5 py-2.5 text-xs text-success sm:px-6">
+                {editorNotice}
+              </p>
+            ) : null}
 
             {partial && model ? (
               <p className="border-b border-warning-border bg-warning-soft px-5 py-2.5 text-xs text-warning sm:px-6">
@@ -432,40 +495,93 @@ export function ResourceConnectionDiagram({
                 {t("connectionDiagram.loading")}
               </div>
             ) : model ? (
-              model.connectionCount ? (
+              model.connectionCount || editing ? (
                 <div
-                  ref={scrollRef}
-                  className="overflow-x-auto bg-[radial-gradient(circle_at_center,var(--color-surface-muted)_1px,transparent_1px)] [background-size:18px_18px]"
+                  className={cn(
+                    editorSelection &&
+                      "grid lg:grid-cols-[minmax(0,1fr)_360px]",
+                  )}
                 >
                   <div
-                    className="relative"
-                    style={{ width: canvasWidth, height: canvasHeight }}
+                    ref={scrollRef}
+                    className="min-w-0 overflow-x-auto bg-[radial-gradient(circle_at_center,var(--color-surface-muted)_1px,transparent_1px)] [background-size:18px_18px]"
                   >
-                    <GraphEdges
-                      edges={model.edges}
-                      positions={positions}
-                      width={canvasWidth}
-                      height={canvasHeight}
-                    />
-                    {Array.from(columns.entries()).flatMap(([column, items]) => {
-                      const ys = rowPositions(items.length, canvasHeight);
-                      const x = CANVAS_PADDING + (column + depth) * COLUMN_STEP;
-                      return items.map((item, index) => (
-                        <PositionedGraphNode
-                          key={
-                            item.type === "resource"
-                              ? item.node.resource.id
-                              : `overflow:${column}`
-                          }
-                          item={item}
-                          rootResourceId={resource.id}
-                          x={x}
-                          y={ys[index] ?? 0}
-                          number={number}
-                        />
-                      ));
-                    })}
+                    <div
+                      className="relative"
+                      style={{ width: canvasWidth, height: canvasHeight }}
+                    >
+                      <GraphEdges
+                        edges={model.edges}
+                        positions={positions}
+                        width={canvasWidth}
+                        height={canvasHeight}
+                        editing={editing}
+                        selectedEdgeKey={
+                          editorSelection?.type === "edge"
+                            ? editorSelection.edge.key
+                            : null
+                        }
+                        onSelect={(edge) => {
+                          const firstResource = model.nodes.find(
+                            (node) => node.resource.id === edge.firstResourceId,
+                          )?.resource;
+                          const secondResource = model.nodes.find(
+                            (node) => node.resource.id === edge.secondResourceId,
+                          )?.resource;
+                          if (!firstResource || !secondResource) return;
+                          setEditorSelection({
+                            type: "edge",
+                            edge,
+                            firstResource,
+                            secondResource,
+                          });
+                        }}
+                      />
+                      {Array.from(columns.entries()).flatMap(
+                        ([column, items]) => {
+                          const ys = rowPositions(items.length, canvasHeight);
+                          const x =
+                            CANVAS_PADDING + (column + depth) * COLUMN_STEP;
+                          return items.map((item, index) => (
+                            <PositionedGraphNode
+                              key={
+                                item.type === "resource"
+                                  ? item.node.resource.id
+                                  : `overflow:${column}`
+                              }
+                              item={item}
+                              rootResourceId={resource.id}
+                              x={x}
+                              y={ys[index] ?? 0}
+                              number={number}
+                              editing={editing}
+                              selectedResourceId={
+                                editorSelection?.type === "node"
+                                  ? editorSelection.resource.id
+                                  : null
+                              }
+                              onSelect={(selectedResource) =>
+                                setEditorSelection({
+                                  type: "node",
+                                  resource: selectedResource,
+                                })
+                              }
+                            />
+                          ));
+                        },
+                      )}
+                    </div>
                   </div>
+                  {editorSelection ? (
+                    <ResourceConnectionEditorPanel
+                      selection={editorSelection}
+                      rootResourceId={resource.id}
+                      canCreate={canCreate}
+                      loadPayload={getPayload}
+                      onChanged={connectionChanged}
+                      onClose={() => setEditorSelection(null)}
+                    />
+                  ) : null}
                 </div>
               ) : (
                 <div className="px-6 py-10 text-center">
@@ -510,16 +626,22 @@ function GraphEdges({
   positions,
   width,
   height,
+  editing,
+  selectedEdgeKey,
+  onSelect,
 }: {
   edges: ConnectionDiagramGraphEdge[];
   positions: ReadonlyMap<string, NodePosition>;
   width: number;
   height: number;
+  editing: boolean;
+  selectedEdgeKey: string | null;
+  onSelect: (edge: ConnectionDiagramGraphEdge) => void;
 }) {
   return (
     <svg
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0"
+      aria-hidden={editing ? undefined : "true"}
+      className={cn("absolute inset-0", !editing && "pointer-events-none")}
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
@@ -541,7 +663,14 @@ function GraphEdges({
         ))}
       </defs>
       {edges.map((edge) => (
-        <GraphEdge key={edge.key} edge={edge} positions={positions} />
+        <GraphEdge
+          key={edge.key}
+          edge={edge}
+          positions={positions}
+          editing={editing && !edge.visualOnly}
+          selected={selectedEdgeKey === edge.key}
+          onSelect={onSelect}
+        />
       ))}
     </svg>
   );
@@ -550,12 +679,19 @@ function GraphEdges({
 function GraphEdge({
   edge,
   positions,
+  editing,
+  selected,
+  onSelect,
 }: {
   edge: ConnectionDiagramGraphEdge;
   positions: ReadonlyMap<string, NodePosition>;
+  editing: boolean;
+  selected: boolean;
+  onSelect: (edge: ConnectionDiagramGraphEdge) => void;
 }) {
   const primary = primaryConnection(edge.connections);
   if (!primary) return null;
+  const visualOnly = Boolean(edge.visualOnly);
   const directed = edge.connections.every(
     (connection) =>
       connection.directed &&
@@ -588,17 +724,44 @@ function GraphEdge({
     path = `M ${startX} ${fromCenterY} C ${middleX} ${fromCenterY}, ${middleX} ${toCenterY}, ${endX} ${toCenterY}`;
   }
   return (
-    <path
-      d={path}
-      fill="none"
-      stroke={kindColor[primary.kind]}
-      strokeWidth="1.75"
-      strokeDasharray={directed ? undefined : "5 5"}
-      markerEnd={
-        directed ? `url(#connection-arrow-${primary.kind})` : undefined
+    <g
+      role={editing ? "button" : undefined}
+      tabIndex={editing ? 0 : undefined}
+      className={editing ? "cursor-pointer outline-none" : undefined}
+      onClick={editing ? () => onSelect(edge) : undefined}
+      onKeyDown={
+        editing
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect(edge);
+              }
+            }
+          : undefined
       }
-      opacity="0.78"
-    />
+    >
+      <path
+        d={path}
+        fill="none"
+        stroke={kindColor[primary.kind]}
+        strokeWidth={selected ? "3.5" : visualOnly ? "1.25" : "1.75"}
+        strokeDasharray={visualOnly ? "3 5" : directed ? undefined : "5 5"}
+        markerEnd={
+          directed ? `url(#connection-arrow-${primary.kind})` : undefined
+        }
+        opacity={selected ? "1" : visualOnly ? "0.55" : "0.78"}
+        pointerEvents="none"
+      />
+      {editing ? (
+        <path
+          d={path}
+          fill="none"
+          stroke="transparent"
+          strokeWidth="18"
+          pointerEvents="stroke"
+        />
+      ) : null}
+    </g>
   );
 }
 
@@ -608,12 +771,18 @@ function PositionedGraphNode({
   x,
   y,
   number,
+  editing,
+  selectedResourceId,
+  onSelect,
 }: {
   item: DisplayColumnItem;
   rootResourceId: string;
   x: number;
   y: number;
   number: Intl.NumberFormat;
+  editing: boolean;
+  selectedResourceId: string | null;
+  onSelect: (resource: ConnectionDiagramResource) => void;
 }) {
   const { t } = useT("resource");
   if (item.type === "overflow") {
@@ -685,15 +854,45 @@ function PositionedGraphNode({
       </span>
     </>
   );
-  const className = `absolute z-10 flex items-center gap-3 rounded-xl bg-surface px-3.5 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
+  const selected = item.node.resource.id === selectedResourceId;
+  const className = `absolute z-10 rounded-xl bg-surface transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
     isRoot
       ? "border-2 border-info shadow-[var(--shadow-md)]"
       : "border border-border shadow-[var(--shadow-sm)] hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-md)]"
+  } ${selected ? "ring-4 ring-focus/15" : ""}`;
+  const contentClassName = `flex h-full w-full items-center gap-3 rounded-[inherit] px-3.5 text-left ${
+    editing ? "pr-11" : ""
   }`;
   const style = { left: x, top: y, width: NODE_WIDTH, height: NODE_HEIGHT };
+  if (editing) {
+    return (
+      <div className={className} style={style}>
+        <button
+          type="button"
+          className={contentClassName}
+          onClick={() => onSelect(item.node.resource)}
+          aria-label={t("connectionDiagram.editor.editItem", {
+            name: item.node.resource.name,
+          })}
+        >
+          {content}
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelect(item.node.resource)}
+          className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg bg-brand-soft text-brand transition hover:bg-brand-solid hover:text-on-brand"
+          aria-label={t("connectionDiagram.editor.addTo", {
+            name: item.node.resource.name,
+          })}
+        >
+          <Plus className="size-3.5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
   return isRoot ? (
     <div className={className} style={style}>
-      {content}
+      <div className={contentClassName}>{content}</div>
     </div>
   ) : (
     <Link
@@ -704,7 +903,7 @@ function PositionedGraphNode({
       className={className}
       style={style}
     >
-      {content}
+      <span className={contentClassName}>{content}</span>
     </Link>
   );
 }

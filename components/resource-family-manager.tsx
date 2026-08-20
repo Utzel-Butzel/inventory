@@ -5,6 +5,7 @@ import {
   Barcode,
   Boxes,
   GitBranch,
+  Link2,
   LoaderCircle,
   Pencil,
   Plus,
@@ -21,7 +22,7 @@ import {
   useOrganizationHref,
 } from "@/components/organization-routing";
 import { Badge, Button, Card, Skeleton } from "@/components/ui";
-import { fetchJson } from "@/lib/client-types";
+import { fetchJson, type ClientResource } from "@/lib/client-types";
 
 type FamilyRole = "standalone" | "primary" | "variant";
 
@@ -59,6 +60,27 @@ const inputClass =
   "mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-success focus:ring-4 focus:ring-success-border";
 const labelClass = "block text-[11px] font-semibold text-muted-strong";
 
+type ResourceListResponse = {
+  resources: ClientResource[];
+  pagination: { pages: number };
+};
+
+async function loadEveryResource() {
+  const first = await fetchJson<ResourceListResponse>(
+    "/api/v1/resources?page=1&pageSize=100",
+    { cache: "no-store" },
+  );
+  const remaining = await Promise.all(
+    Array.from({ length: Math.max(0, first.pagination.pages - 1) }, (_, index) =>
+      fetchJson<ResourceListResponse>(
+        `/api/v1/resources?page=${index + 2}&pageSize=100`,
+        { cache: "no-store" },
+      ),
+    ),
+  );
+  return [first, ...remaining].flatMap((page) => page.resources);
+}
+
 const humanize = (value: string) =>
   value
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -91,6 +113,13 @@ export function ResourceFamilyManager({
   const [family, setFamily] = useState<ResourceFamilyResponse | null>(null);
   const [form, setForm] = useState<CreateForm>(emptyForm);
   const [formOpen, setFormOpen] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [candidateResources, setCandidateResources] = useState<
+    ClientResource[]
+  >([]);
+  const [candidateResourceId, setCandidateResourceId] = useState("");
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [detaching, setDetaching] = useState(false);
@@ -138,10 +167,53 @@ export function ResourceFamilyManager({
     [family],
   );
 
+  const availableCandidates = useMemo(() => {
+    const familyIds = new Set([
+      family?.primary.id,
+      ...(family?.variants.map((member) => member.id) ?? []),
+    ]);
+    return candidateResources
+      .filter(
+        (resource) =>
+          resource.status !== "archived" && !familyIds.has(resource.id),
+      )
+      .sort(
+        (left, right) =>
+          left.name.localeCompare(right.name, locale) ||
+          left.id.localeCompare(right.id),
+      );
+  }, [candidateResources, family, locale]);
+
   const closeForm = () => {
     setForm(emptyForm);
     setFormOpen(false);
     setError(null);
+  };
+
+  const closeConnect = () => {
+    setConnectOpen(false);
+    setCandidateResourceId("");
+    setError(null);
+  };
+
+  const openConnect = async () => {
+    setFormOpen(false);
+    setConnectOpen(true);
+    setCandidateResources([]);
+    setCandidateResourceId("");
+    setError(null);
+    setLoadingCandidates(true);
+    try {
+      setCandidateResources(await loadEveryResource());
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : t("family.errors.loadCandidates"),
+      );
+    } finally {
+      setLoadingCandidates(false);
+    }
   };
 
   const createVariant = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -178,6 +250,48 @@ export function ResourceFamilyManager({
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const connectExisting = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!candidateResourceId) {
+      setError(t("family.errors.existingRequired"));
+      return;
+    }
+    const selected = availableCandidates.find(
+      (resource) => resource.id === candidateResourceId,
+    );
+
+    setConnecting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await fetchJson<{ variant: ResourceFamilyMember }>(
+        `/api/v1/resources/${resourceId}/family`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ existingResourceId: candidateResourceId }),
+        },
+      );
+      setConnectOpen(false);
+      setCandidateResourceId("");
+      setNotice(
+        t("family.connect.success", {
+          name: selected?.name ?? t("family.connect.selectedItem"),
+        }),
+      );
+      window.dispatchEvent(new Event("resource-family-changed"));
+      router.refresh();
+    } catch (connectError) {
+      setError(
+        connectError instanceof Error
+          ? connectError.message
+          : t("family.errors.connect"),
+      );
+    } finally {
+      setConnecting(false);
     }
   };
 
@@ -231,7 +345,8 @@ export function ResourceFamilyManager({
     !notice &&
     family?.role !== "variant" &&
     family?.variants.length === 0 &&
-    !canCreate
+    !canCreate &&
+    !canEdit
   ) {
     return null;
   }
@@ -273,16 +388,32 @@ export function ResourceFamilyManager({
             {canCreate &&
             family?.role !== "variant" &&
             family?.optionGroupCount === 0 &&
-            !formOpen ? (
+            !formOpen &&
+            !connectOpen ? (
               <Button
                 size="sm"
                 onClick={() => {
                   setError(null);
+                  setConnectOpen(false);
                   setFormOpen(true);
                 }}
               >
                 <Plus className="size-3.5" aria-hidden="true" />
                 {t("family.actions.add")}
+              </Button>
+            ) : null}
+            {canEdit &&
+            family?.role !== "variant" &&
+            family?.optionGroupCount === 0 &&
+            !formOpen &&
+            !connectOpen ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => void openConnect()}
+              >
+                <Link2 className="size-3.5" aria-hidden="true" />
+                {t("family.actions.connectExisting")}
               </Button>
             ) : null}
             {canEdit && family?.role === "variant" ? (
@@ -408,6 +539,80 @@ export function ResourceFamilyManager({
                 {saving
                   ? t("family.actions.creating")
                   : t("family.actions.createAndEdit")}
+              </Button>
+            </div>
+          </form>
+        ) : null}
+
+        {connectOpen ? (
+          <form
+            onSubmit={connectExisting}
+            className="border-b border-brand-border bg-brand-soft/35 px-5 py-4 sm:px-6"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xs font-semibold text-foreground">
+                  {t("family.connect.title")}
+                </h3>
+                <p className="mt-1 max-w-3xl text-[11px] leading-5 text-muted">
+                  {t("family.connect.help", { name: family?.primary.name })}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeConnect}
+                disabled={connecting}
+                className="grid size-8 shrink-0 place-items-center rounded-lg text-muted hover:bg-surface-muted hover:text-foreground"
+                aria-label={t("family.actions.cancel")}
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className={`${labelClass} min-w-0 flex-1`}>
+                {t("family.connect.itemLabel")}
+                <select
+                  required
+                  value={candidateResourceId}
+                  disabled={loadingCandidates || connecting}
+                  onChange={(event) =>
+                    setCandidateResourceId(event.target.value)
+                  }
+                  className={inputClass}
+                >
+                  <option value="">
+                    {loadingCandidates
+                      ? t("family.connect.loading")
+                      : availableCandidates.length
+                        ? t("family.connect.placeholder")
+                        : t("family.connect.empty")}
+                  </option>
+                  {availableCandidates.map((resource) => (
+                    <option key={resource.id} value={resource.id}>
+                      {resource.name}
+                      {resource.sku ? ` · ${resource.sku}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button
+                type="submit"
+                disabled={
+                  connecting || loadingCandidates || !candidateResourceId
+                }
+                className="sm:w-fit"
+              >
+                {connecting ? (
+                  <LoaderCircle
+                    className="size-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Link2 className="size-4" aria-hidden="true" />
+                )}
+                {connecting
+                  ? t("family.actions.connecting")
+                  : t("family.actions.connect")}
               </Button>
             </div>
           </form>

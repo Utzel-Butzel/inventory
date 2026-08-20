@@ -255,6 +255,91 @@
       "located-in": "Container",
       "contains": "Contained item"
     },
+    "editor": {
+      "edit": "Edit structure",
+      "finishEditing": "Finish editing",
+      "help": "Select the plus on an item to connect something. Select a line to edit its connection.",
+      "title": "Add connection",
+      "chooseAction": "How should the new item be connected to this object?",
+      "loadingContext": "Loading structure…",
+      "back": "Back to connection choices",
+      "close": "Close structure editor",
+      "editItem": "Edit connections for {{name}}",
+      "addTo": "Connect something to {{name}}",
+      "selected": "Selected",
+      "searching": "Searching items…",
+      "noCandidates": "No matching items found.",
+      "newItemHelp": "The new item is created with defaults and can be fully edited afterwards.",
+      "modes": {
+        "existing": "Existing",
+        "new": "Create new"
+      },
+      "actions": {
+        "bom": "Add BOM component",
+        "variant": "Add variant",
+        "contained": "Add child item",
+        "container": "Place in container",
+        "relationship": "Other relationship",
+        "connect": "Connect",
+        "saving": "Connecting…",
+        "apply": "Apply",
+        "remove": "Remove connection",
+        "detach": "Detach variant"
+      },
+      "actionDescriptions": {
+        "bom": "Insert as a required component with a quantity and optional note.",
+        "variant": "Connect as an equivalent version of this primary item.",
+        "contained": "Add as a spatial or logical child item.",
+        "container": "Assign this item to a parent container.",
+        "relationship": "Connect with a configurable relationship type."
+      },
+      "unavailable": {
+        "variant": "Variant families cannot be nested or extended manually when option groups are used.",
+        "contained": "This inventory type cannot contain child items."
+      },
+      "fields": {
+        "item": "Item",
+        "searchPlaceholder": "Search by name or SKU",
+        "name": "Name",
+        "sku": "SKU · optional",
+        "barcode": "Barcode · optional",
+        "quantity": "Quantity per finished item",
+        "note": "Assembly note · optional",
+        "relationType": "Relationship type"
+      },
+      "edge": {
+        "title": "Edit connection",
+        "between": "{{first}} ↔ {{second}}",
+        "bom": "Bill-of-materials line",
+        "siblingHelp": "Open the family member to detach that exact variant from the family.",
+        "confirmRemoveBom": "Remove this component from the bill of materials?",
+        "confirmDetachVariant": "Detach this variant from its primary item? Its inherited bill of materials will become local.",
+        "confirmRemoveRelation": "Remove this relationship?",
+        "descriptions": {
+          "family": "Protected membership in a variant family",
+          "bom": "Quantity and bill-of-materials membership",
+          "containment": "Parent or child spatial structure",
+          "relationship": "Manually created inventory relationship"
+        }
+      },
+      "notices": {
+        "bom": "Bill-of-materials structure updated.",
+        "family": "Variant family updated.",
+        "relationship": "Relationship updated."
+      },
+      "errors": {
+        "loadContext": "The selected item could not be loaded.",
+        "search": "Items could not be searched.",
+        "save": "The connection could not be saved.",
+        "variantUnavailable": "This item cannot receive another variant here.",
+        "cannotContain": "This inventory type cannot contain child items.",
+        "nameRequired": "Enter a name for the new item.",
+        "itemRequired": "Select an item.",
+        "quantity": "The BOM quantity must be a whole number greater than zero.",
+        "relationTypeRequired": "Select a relationship type.",
+        "openFamilyMember": "Open the family member to edit this variant connection."
+      }
+    },
     "empty": {
       "title": "No connections yet",
       "description": "Variant links, BOM components, containers, and ordinary relationships will appear here automatically."

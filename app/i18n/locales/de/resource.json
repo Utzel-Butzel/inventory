@@ -255,6 +255,91 @@
       "located-in": "Behälter",
       "contains": "Enthaltener Eintrag"
     },
+    "editor": {
+      "edit": "Struktur bearbeiten",
+      "finishEditing": "Bearbeitung beenden",
+      "help": "Wähle das Plus an einem Eintrag, um etwas zu verbinden. Wähle eine Linie, um ihre Verbindung zu bearbeiten.",
+      "title": "Verbindung hinzufügen",
+      "chooseAction": "Wie soll der neue Eintrag mit diesem Objekt verbunden werden?",
+      "loadingContext": "Struktur wird geladen…",
+      "back": "Zur Verbindungsauswahl zurück",
+      "close": "Struktureditor schließen",
+      "editItem": "Verbindungen von {{name}} bearbeiten",
+      "addTo": "Etwas mit {{name}} verbinden",
+      "selected": "Gewählt",
+      "searching": "Einträge werden gesucht…",
+      "noCandidates": "Keine passenden Einträge gefunden.",
+      "newItemHelp": "Der neue Eintrag wird mit Standardwerten angelegt und kann anschließend vollständig bearbeitet werden.",
+      "modes": {
+        "existing": "Vorhanden",
+        "new": "Neu anlegen"
+      },
+      "actions": {
+        "bom": "BOM-Komponente hinzufügen",
+        "variant": "Variante hinzufügen",
+        "contained": "Untereintrag hinzufügen",
+        "container": "In Behälter ablegen",
+        "relationship": "Andere Beziehung",
+        "connect": "Verbinden",
+        "saving": "Wird verbunden…",
+        "apply": "Übernehmen",
+        "remove": "Verbindung entfernen",
+        "detach": "Variante lösen"
+      },
+      "actionDescriptions": {
+        "bom": "Als benötigte Komponente mit Menge und optionaler Notiz einfügen.",
+        "variant": "Als gleichwertige Ausführung dieses Haupteintrags verbinden.",
+        "contained": "Als räumlichen oder logischen Untereintrag aufnehmen.",
+        "container": "Diesen Eintrag einem übergeordneten Behälter zuordnen.",
+        "relationship": "Mit einem frei konfigurierbaren Beziehungstyp verbinden."
+      },
+      "unavailable": {
+        "variant": "Variantenfamilien können nicht verschachtelt oder bei Optionsgruppen manuell erweitert werden.",
+        "contained": "Der Inventartyp dieses Eintrags kann keine Untereinträge enthalten."
+      },
+      "fields": {
+        "item": "Eintrag",
+        "searchPlaceholder": "Nach Name oder SKU suchen",
+        "name": "Name",
+        "sku": "SKU · optional",
+        "barcode": "Barcode · optional",
+        "quantity": "Menge pro fertigem Eintrag",
+        "note": "Montagehinweis · optional",
+        "relationType": "Beziehungstyp"
+      },
+      "edge": {
+        "title": "Verbindung bearbeiten",
+        "between": "{{first}} ↔ {{second}}",
+        "bom": "Stücklistenposition",
+        "siblingHelp": "Öffne das Familienmitglied, um genau diese Variante aus der Familie zu lösen.",
+        "confirmRemoveBom": "Diese Komponente aus der Stückliste entfernen?",
+        "confirmDetachVariant": "Diese Variante vom Haupteintrag lösen? Die geerbte Stückliste wird dabei als lokale Stückliste übernommen.",
+        "confirmRemoveRelation": "Diese Beziehung entfernen?",
+        "descriptions": {
+          "family": "Geschützte Zugehörigkeit zu einer Variantenfamilie",
+          "bom": "Menge und Zugehörigkeit zur Stückliste",
+          "containment": "Über- oder untergeordnete räumliche Struktur",
+          "relationship": "Manuell angelegte Inventarbeziehung"
+        }
+      },
+      "notices": {
+        "bom": "Stücklistenstruktur aktualisiert.",
+        "family": "Variantenfamilie aktualisiert.",
+        "relationship": "Beziehung aktualisiert."
+      },
+      "errors": {
+        "loadContext": "Der gewählte Eintrag konnte nicht geladen werden.",
+        "search": "Einträge konnten nicht gesucht werden.",
+        "save": "Die Verbindung konnte nicht gespeichert werden.",
+        "variantUnavailable": "Dieser Eintrag kann hier keine weitere Variante erhalten.",
+        "cannotContain": "Dieser Inventartyp kann keine Untereinträge enthalten.",
+        "nameRequired": "Gib einen Namen für den neuen Eintrag ein.",
+        "itemRequired": "Wähle einen Eintrag aus.",
+        "quantity": "Die Stücklistenmenge muss eine ganze Zahl größer als null sein.",
+        "relationTypeRequired": "Wähle einen Beziehungstyp aus.",
+        "openFamilyMember": "Öffne das Familienmitglied, um diese Variantenverbindung zu bearbeiten."
+      }
+    },
     "empty": {
       "title": "Noch keine Verbindungen",
       "description": "Variantenverknüpfungen, Stücklistenkomponenten, Behälter und gewöhnliche Beziehungen erscheinen hier automatisch."

@@ -74,16 +74,29 @@
       "namePlaceholder": "e.g. Blue / Large",
       "inheritanceHelp": "Shared details and the bill of materials inherit from the primary item. Stock, locations, serialization, relationships, and manufacturing history remain independent."
     },
+    "connect": {
+      "title": "Connect existing item",
+      "help": "The selected item becomes a variant of {{name}}. It keeps its stock, locations, serial units, relationships, assignments, and history. Existing differences in shared details and its bill of materials are kept as overrides.",
+      "itemLabel": "Existing inventory item",
+      "placeholder": "Select an item…",
+      "loading": "Loading inventory…",
+      "empty": "No available inventory items",
+      "selectedItem": "Existing item",
+      "success": "Connected {{name}} as a variant. Its operational data remains attached to that item."
+    },
     "detach": {
       "confirm": "Detach this variant from {{name}}? Its current shared details and effective bill of materials will be kept. Stock, locations, serial units, relationships, assignments, and build history will stay with this item.",
       "success": "Detached from {{name}}. This item and all of its operational history remain intact."
     },
     "empty": {
       "title": "No linked variants",
-      "description": "Create a variant to keep shared details connected while managing its operations independently."
+      "description": "Create a variant or connect an existing inventory item while managing its operations independently."
     },
     "actions": {
       "add": "Add variant",
+      "connectExisting": "Connect existing",
+      "connect": "Connect item",
+      "connecting": "Connecting…",
       "createAndEdit": "Create & edit",
       "creating": "Creating…",
       "detach": "Detach",
@@ -96,8 +109,11 @@
     },
     "errors": {
       "load": "Unable to load the variant family.",
+      "loadCandidates": "Unable to load inventory items.",
       "create": "Unable to create the variant.",
+      "connect": "Unable to connect the existing item.",
       "detach": "Unable to detach the variant.",
+      "existingRequired": "Select an existing inventory item.",
       "nameRequired": "Enter a name for the variant."
     }
   },

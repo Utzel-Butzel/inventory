@@ -74,16 +74,29 @@
       "namePlaceholder": "z. B. Blau / Groß",
       "inheritanceHelp": "Gemeinsame Details und die Stückliste werden vom Haupteintrag geerbt. Bestand, Standorte, Serialisierung, Beziehungen und Fertigungsverlauf werden unabhängig geführt."
     },
+    "connect": {
+      "title": "Vorhandenen Eintrag verbinden",
+      "help": "Der ausgewählte Eintrag wird eine Variante von {{name}}. Er behält Bestand, Standorte, Serienexemplare, Beziehungen, Zuweisungen und Verlauf. Bestehende Abweichungen bei gemeinsamen Details und der Stückliste bleiben als Überschreibungen erhalten.",
+      "itemLabel": "Vorhandener Inventareintrag",
+      "placeholder": "Eintrag auswählen…",
+      "loading": "Inventar wird geladen…",
+      "empty": "Keine verfügbaren Inventareinträge",
+      "selectedItem": "Vorhandener Eintrag",
+      "success": "{{name}} wurde als Variante verbunden. Die Vorgangsdaten bleiben mit diesem Eintrag verknüpft."
+    },
     "detach": {
       "confirm": "Diese Variante von {{name}} trennen? Die aktuellen gemeinsamen Details und die wirksame Stückliste bleiben erhalten. Bestand, Standorte, Serienexemplare, Beziehungen, Zuweisungen und Fertigungsverlauf bleiben bei diesem Eintrag.",
       "success": "Von {{name}} getrennt. Dieser Eintrag und sein gesamter Vorgangsverlauf bleiben erhalten."
     },
     "empty": {
       "title": "Keine verknüpften Varianten",
-      "description": "Erstelle eine Variante, um gemeinsame Details verbunden zu halten und ihre Vorgänge unabhängig zu verwalten."
+      "description": "Erstelle eine Variante oder verbinde einen vorhandenen Inventareintrag und verwalte seine Vorgänge weiterhin unabhängig."
     },
     "actions": {
       "add": "Variante hinzufügen",
+      "connectExisting": "Vorhandenen verbinden",
+      "connect": "Eintrag verbinden",
+      "connecting": "Wird verbunden…",
       "createAndEdit": "Erstellen und bearbeiten",
       "creating": "Wird erstellt…",
       "detach": "Trennen",
@@ -96,8 +109,11 @@
     },
     "errors": {
       "load": "Die Variantenfamilie konnte nicht geladen werden.",
+      "loadCandidates": "Die Inventareinträge konnten nicht geladen werden.",
       "create": "Die Variante konnte nicht erstellt werden.",
+      "connect": "Der vorhandene Eintrag konnte nicht verbunden werden.",
       "detach": "Die Variante konnte nicht getrennt werden.",
+      "existingRequired": "Wähle einen vorhandenen Inventareintrag aus.",
       "nameRequired": "Gib einen Namen für die Variante ein."
     }
   },

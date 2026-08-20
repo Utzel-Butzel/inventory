@@ -1,18 +1,30 @@
 import "server-only";
 
 import { and, asc, count, eq, inArray, or, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 
 import {
+  bomLines,
   resourceRelations,
+  resourceOptionConfigurations,
   resourceOptionGroups,
   resources,
   resourceVariants,
   stockSettings,
+  variantBomOverrides,
   type ResourceRecord,
   type StockTrackingMode,
 } from "@/db/schema";
+import {
+  AssemblyOperationError,
+  assertCurrentEffectiveBomGraphAcyclic,
+} from "@/lib/assemblies";
 import { db } from "@/lib/db";
-import { VARIANT_FAMILY_WRITE_LOCK_ID } from "@/lib/inventory-locks";
+import {
+  BOM_WRITE_LOCK_ID,
+  VARIANT_FAMILY_WRITE_LOCK_ID,
+} from "@/lib/inventory-locks";
 import { enqueueWebhookEvent } from "@/lib/webhooks";
 
 export const VARIANT_RELATION_TYPE = "variant_of" as const;
@@ -73,6 +85,10 @@ export type CreateResourceFamilyVariantInput = {
   name: string;
   sku: string | null;
   barcode: string | null;
+};
+
+export type AttachExistingResourceVariantInput = {
+  variantResourceId: string;
 };
 
 export class ResourceFamilyError extends Error {
@@ -476,6 +492,431 @@ async function assertIdentifiersAvailable(
       409,
     );
   }
+}
+
+type FamilyBomLine = {
+  assemblyResourceId: string;
+  slotKey: string;
+  componentResourceId: string;
+  quantityPerAssembly: number;
+  position: number;
+  note: string;
+};
+
+const sameBomLine = (left: FamilyBomLine, right: FamilyBomLine) =>
+  left.componentResourceId === right.componentResourceId &&
+  left.quantityPerAssembly === right.quantityPerAssembly &&
+  left.position === right.position &&
+  left.note === right.note;
+
+/**
+ * Reuse the primary's stable slots where an existing recipe clearly refers to
+ * the same component or position. Unmatched lines retain their own stable key
+ * and become variant-only additions.
+ */
+function alignExistingBomToPrimary(
+  primaryLines: FamilyBomLine[],
+  variantLines: FamilyBomLine[],
+) {
+  const primaryBySlot = new Map(
+    primaryLines.map((line) => [line.slotKey, line]),
+  );
+  const usedSlots = new Set<string>();
+  const aligned = variantLines.map((line) => ({ ...line, alignedSlotKey: "" }));
+
+  for (const line of aligned) {
+    if (primaryBySlot.has(line.slotKey) && !usedSlots.has(line.slotKey)) {
+      line.alignedSlotKey = line.slotKey;
+      usedSlots.add(line.slotKey);
+    }
+  }
+  for (const line of aligned) {
+    if (line.alignedSlotKey) continue;
+    const match = primaryLines.find(
+      (primary) =>
+        primary.componentResourceId === line.componentResourceId &&
+        !usedSlots.has(primary.slotKey),
+    );
+    if (!match) continue;
+    line.alignedSlotKey = match.slotKey;
+    usedSlots.add(match.slotKey);
+  }
+  for (const line of aligned) {
+    if (line.alignedSlotKey) continue;
+    const match = primaryLines.find(
+      (primary) =>
+        primary.position === line.position && !usedSlots.has(primary.slotKey),
+    );
+    if (!match) continue;
+    line.alignedSlotKey = match.slotKey;
+    usedSlots.add(match.slotKey);
+  }
+  for (const line of aligned) {
+    if (line.alignedSlotKey) continue;
+    line.alignedSlotKey = usedSlots.has(line.slotKey)
+      ? randomUUID()
+      : line.slotKey;
+    usedSlots.add(line.alignedSlotKey);
+  }
+
+  return aligned.map(({ alignedSlotKey, ...line }) => ({
+    ...line,
+    slotKey: alignedSlotKey,
+  }));
+}
+
+/**
+ * Connect an existing standalone inventory item to a primary. No operational
+ * records move: stock, locations, units, relationships, assignments, and
+ * manufacturing history already belong to the existing resource. Catalog and
+ * recipe differences are recorded as sparse overrides before inheritance is
+ * enabled.
+ */
+export async function attachExistingResourceVariant(options: {
+  organizationId: string;
+  primaryResourceId: string;
+  input: AttachExistingResourceVariantInput;
+  actor: string;
+  authorizeVariant?: (
+    resource: ResourceRecord,
+  ) => boolean | Promise<boolean>;
+}) {
+  const variantResourceId = options.input.variantResourceId;
+  if (variantResourceId === options.primaryResourceId) {
+    throw new ResourceFamilyError(
+      "Choose a different inventory item to connect as a variant.",
+      422,
+    );
+  }
+
+  return db.transaction(async (transaction) => {
+    // Match every other BOM/family mutation: graph lock, family lock, resource
+    // rows in UUID order. This keeps attachment atomic with builds and edits.
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(${BOM_WRITE_LOCK_ID})`,
+    );
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(${VARIANT_FAMILY_WRITE_LOCK_ID})`,
+    );
+
+    const storedBomLines = await transaction
+      .select({
+        assemblyResourceId: bomLines.assemblyResourceId,
+        slotKey: bomLines.slotKey,
+        componentResourceId: bomLines.componentResourceId,
+        quantityPerAssembly: bomLines.quantityPerAssembly,
+        position: bomLines.position,
+        note: bomLines.note,
+      })
+      .from(bomLines)
+      .where(
+        and(
+          eq(bomLines.organizationId, options.organizationId),
+          inArray(bomLines.assemblyResourceId, [
+            options.primaryResourceId,
+            variantResourceId,
+          ]),
+        ),
+      )
+      .orderBy(asc(bomLines.assemblyResourceId), asc(bomLines.position));
+    const resourceIds = Array.from(
+      new Set([
+        options.primaryResourceId,
+        variantResourceId,
+        ...storedBomLines.map((line) => line.componentResourceId),
+      ]),
+    ).sort();
+    const lockedResources = await transaction
+      .select()
+      .from(resources)
+      .where(
+        and(
+          eq(resources.organizationId, options.organizationId),
+          inArray(resources.id, resourceIds),
+        ),
+      )
+      .orderBy(asc(resources.id))
+      .for("update");
+    const primary = lockedResources.find(
+      (resource) => resource.id === options.primaryResourceId,
+    );
+    const variant = lockedResources.find(
+      (resource) => resource.id === variantResourceId,
+    );
+    if (!primary || !variant) throw new ResourceFamilyError("Not found", 404);
+    if (lockedResources.length !== resourceIds.length) {
+      throw new ResourceFamilyError(
+        "The existing item or one of its bill-of-materials components no longer exists.",
+        409,
+      );
+    }
+    if (
+      options.authorizeVariant &&
+      (!(await options.authorizeVariant(variant)))
+    ) {
+      throw new ResourceFamilyError(
+        "You do not have permission to update the existing inventory item.",
+        403,
+      );
+    }
+    if (primary.status === "archived" || variant.status === "archived") {
+      throw new ResourceFamilyError(
+        "Restore both inventory items before connecting them as variants.",
+        409,
+      );
+    }
+
+    const familyLinks = await transaction
+      .select({
+        sourceResourceId: resourceRelations.sourceResourceId,
+        targetResourceId: resourceRelations.targetResourceId,
+      })
+      .from(resourceRelations)
+      .where(
+        and(
+          eq(resourceRelations.organizationId, options.organizationId),
+          eq(resourceRelations.relationTypeKey, VARIANT_RELATION_TYPE),
+          or(
+            inArray(resourceRelations.sourceResourceId, [
+              options.primaryResourceId,
+              variantResourceId,
+            ]),
+            eq(resourceRelations.targetResourceId, variantResourceId),
+          ),
+        ),
+      );
+    if (
+      familyLinks.some(
+        (link) => link.sourceResourceId === options.primaryResourceId,
+      )
+    ) {
+      throw new ResourceFamilyError(
+        "Add variants from the primary inventory item; variant families cannot be nested.",
+        409,
+      );
+    }
+    if (
+      familyLinks.some((link) => link.sourceResourceId === variantResourceId)
+    ) {
+      throw new ResourceFamilyError(
+        "The selected inventory item already belongs to a variant family.",
+        409,
+      );
+    }
+    if (
+      familyLinks.some((link) => link.targetResourceId === variantResourceId)
+    ) {
+      throw new ResourceFamilyError(
+        "The selected inventory item is itself a primary item. Detach its variants first.",
+        409,
+      );
+    }
+
+    const optionGroups = await transaction
+      .select({ primaryResourceId: resourceOptionGroups.primaryResourceId })
+      .from(resourceOptionGroups)
+      .where(
+        and(
+          eq(resourceOptionGroups.organizationId, options.organizationId),
+          inArray(resourceOptionGroups.primaryResourceId, [
+            options.primaryResourceId,
+            variantResourceId,
+          ]),
+        ),
+      );
+    if (
+      optionGroups.some(
+        (group) => group.primaryResourceId === options.primaryResourceId,
+      )
+    ) {
+      throw new ResourceFamilyError(
+        "This family uses option groups. Generate variants from the option matrix instead.",
+        409,
+      );
+    }
+    if (
+      optionGroups.some(
+        (group) => group.primaryResourceId === variantResourceId,
+      )
+    ) {
+      throw new ResourceFamilyError(
+        "The selected inventory item owns option groups and cannot become a nested variant.",
+        409,
+      );
+    }
+    const [optionConfiguration, existingOverride] = await Promise.all([
+      transaction
+        .select({ id: resourceOptionConfigurations.resourceId })
+        .from(resourceOptionConfigurations)
+        .where(
+          and(
+            eq(
+              resourceOptionConfigurations.organizationId,
+              options.organizationId,
+            ),
+            eq(resourceOptionConfigurations.resourceId, variantResourceId),
+          ),
+        )
+        .limit(1),
+      transaction
+        .select({ id: variantBomOverrides.id })
+        .from(variantBomOverrides)
+        .where(
+          and(
+            eq(variantBomOverrides.organizationId, options.organizationId),
+            eq(variantBomOverrides.variantResourceId, variantResourceId),
+          ),
+        )
+        .limit(1),
+    ]);
+    if (optionConfiguration.length || existingOverride.length) {
+      throw new ResourceFamilyError(
+        "The selected inventory item has inconsistent variant metadata and cannot be connected safely.",
+        409,
+      );
+    }
+
+    const primaryLines = storedBomLines.filter(
+      (line) => line.assemblyResourceId === options.primaryResourceId,
+    );
+    const variantLines = alignExistingBomToPrimary(
+      primaryLines,
+      storedBomLines.filter(
+        (line) => line.assemblyResourceId === variantResourceId,
+      ),
+    );
+    const variantBySlot = new Map(
+      variantLines.map((line) => [line.slotKey, line]),
+    );
+    const primaryBySlot = new Map(
+      primaryLines.map((line) => [line.slotKey, line]),
+    );
+    const now = new Date();
+    const overrideValues: Array<typeof variantBomOverrides.$inferInsert> = [];
+    for (const primaryLine of primaryLines) {
+      const variantLine = variantBySlot.get(primaryLine.slotKey);
+      if (!variantLine) {
+        overrideValues.push({
+          organizationId: options.organizationId,
+          variantResourceId,
+          slotKey: primaryLine.slotKey,
+          removed: true,
+          note: "",
+          updatedAt: now,
+        });
+      } else if (!sameBomLine(primaryLine, variantLine)) {
+        overrideValues.push({
+          organizationId: options.organizationId,
+          variantResourceId,
+          slotKey: variantLine.slotKey,
+          componentResourceId: variantLine.componentResourceId,
+          quantityPerAssembly: variantLine.quantityPerAssembly,
+          position: variantLine.position,
+          note: variantLine.note,
+          updatedAt: now,
+        });
+      }
+    }
+    for (const variantLine of variantLines) {
+      if (primaryBySlot.has(variantLine.slotKey)) continue;
+      overrideValues.push({
+        organizationId: options.organizationId,
+        variantResourceId,
+        slotKey: variantLine.slotKey,
+        componentResourceId: variantLine.componentResourceId,
+        quantityPerAssembly: variantLine.quantityPerAssembly,
+        position: variantLine.position,
+        note: variantLine.note,
+        updatedAt: now,
+      });
+    }
+
+    const overriddenFields = VARIANT_INHERITED_CATALOG_FIELDS.filter(
+      (field) => !isDeepStrictEqual(variant[field], primary[field]),
+    );
+    await transaction.insert(resourceRelations).values({
+      organizationId: options.organizationId,
+      sourceResourceId: variantResourceId,
+      targetResourceId: primary.id,
+      relationTypeKey: VARIANT_RELATION_TYPE,
+      origin: "manual",
+      attributes: { overriddenFields, protected: true },
+      createdBy: options.actor,
+      createdAt: now,
+    });
+    await transaction
+      .delete(bomLines)
+      .where(
+        and(
+          eq(bomLines.organizationId, options.organizationId),
+          eq(bomLines.assemblyResourceId, variantResourceId),
+        ),
+      );
+    if (overrideValues.length) {
+      await transaction.insert(variantBomOverrides).values(overrideValues);
+    }
+    try {
+      await assertCurrentEffectiveBomGraphAcyclic(
+        transaction,
+        options.organizationId,
+        variantResourceId,
+      );
+    } catch (error) {
+      if (error instanceof AssemblyOperationError) {
+        throw new ResourceFamilyError(error.message, error.status);
+      }
+      throw error;
+    }
+
+    const [saved, candidateSettings] = await Promise.all([
+      transaction
+        .update(resources)
+        .set({ updatedAt: now })
+        .where(
+          and(
+            eq(resources.organizationId, options.organizationId),
+            eq(resources.id, variantResourceId),
+          ),
+        )
+        .returning(),
+      transaction
+        .select({ trackingMode: stockSettings.trackingMode })
+        .from(stockSettings)
+        .where(
+          and(
+            eq(stockSettings.organizationId, options.organizationId),
+            eq(stockSettings.resourceId, variantResourceId),
+          ),
+        )
+        .limit(1),
+    ]);
+    const savedVariant = saved[0];
+    if (!savedVariant) throw new ResourceFamilyError("Not found", 404);
+
+    await enqueueWebhookEvent(transaction, {
+      organizationId: options.organizationId,
+      type: "inventory.resource.updated",
+      aggregateType: "resource",
+      aggregateId: variantResourceId,
+      actor: options.actor,
+      data: {
+        resource: savedVariant,
+        changedFields: ["variantFamily", "bom"],
+        family: {
+          role: "variant",
+          primaryResourceId: primary.id,
+          relationType: VARIANT_RELATION_TYPE,
+          connectedExisting: true,
+        },
+      },
+    });
+
+    return familyMemberDto(
+      savedVariant,
+      candidateSettings[0]?.trackingMode,
+      overriddenFields,
+    );
+  });
 }
 
 export async function createResourceFamilyVariant(options: {

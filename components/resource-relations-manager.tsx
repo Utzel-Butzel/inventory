@@ -128,6 +128,12 @@ export function ResourceRelationsManager({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const reload = () => void load();
+    window.addEventListener("resource-relations-changed", reload);
+    return () => window.removeEventListener("resource-relations-changed", reload);
+  }, [load]);
+
   const containerTypes = useMemo(
     () => new Set(types.filter((type) => type.canContain).map((type) => type.key)),
     [types],

@@ -138,6 +138,37 @@ test("merges repeated resources on the same side while retaining each connection
   assert.equal(model.connectionCount, 2);
 });
 
+test("adds a visual dashed rail between adjacent primary-item variants", () => {
+  const primary = item("primary", "Primary");
+  const first = item("first", "Blue variant");
+  const second = item("second", "Red variant");
+  const graph = buildResourceConnectionGraph({
+    root: primary,
+    depth: 1,
+    payloads: new Map([
+      [
+        primary.id,
+        {
+          family: {
+            role: "primary",
+            currentResourceId: primary.id,
+            primary,
+            variants: [second, first],
+          },
+          bomComponents: [],
+          relations: [],
+        },
+      ],
+    ]),
+  });
+
+  const siblingRail = graph.edges.find((edge) => edge.visualOnly);
+  assert.ok(siblingRail);
+  assert.equal(siblingRail.connections[0].descriptor.type, "sibling");
+  assert.equal(siblingRail.connections[0].directed, false);
+  assert.equal(graph.connectionCount, 2);
+});
+
 test("expands loaded payloads across bounded levels without duplicating cycles", () => {
   const root = item("root", "Root");
   const child = item("child", "Child");
@@ -228,4 +259,46 @@ test("the detail-page diagram loads lazily from existing read APIs", async () =>
   assert.match(component, /connectionDiagram\.depth\.label/);
   assert.match(component, /buildResourceConnectionGraph/);
   assert.match(component, /MAX_GRAPH_NODES = 45/);
+});
+
+test("the diagram edits typed connections without bypassing existing APIs", async () => {
+  const [page, diagram, editor, assembly, relations] = await Promise.all([
+    readFile(
+      new URL("../app/(dashboard)/inventory/[id]/page.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../components/resource-connection-diagram.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../components/resource-connection-editor-panel.tsx",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL("../components/assembly-manager.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../components/resource-relations-manager.tsx", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(page, /canEdit=\{canEdit\}/);
+  assert.match(page, /canCreate=\{canCreate\}/);
+  assert.match(diagram, /ResourceConnectionEditorPanel/);
+  assert.match(diagram, /selectedEdgeKey/);
+  assert.match(diagram, /connectionDiagram\.editor\.edit/);
+  assert.match(diagram, /pointerEvents="stroke"/);
+  assert.match(editor, /method: "PUT"[\s\S]*\/bom`/);
+  assert.match(editor, /existingResourceId: candidate\.id/);
+  assert.match(editor, /relationTypeKey: relationType/);
+  assert.match(editor, /method: "DELETE"/);
+  assert.match(editor, /bomWritePayload/);
+  assert.match(assembly, /resource-bom-changed/);
+  assert.match(relations, /resource-relations-changed/);
 });

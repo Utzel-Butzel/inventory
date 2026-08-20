@@ -6,6 +6,7 @@ import {
   detachResourceVariant,
 } from "@/lib/assemblies";
 import {
+  attachExistingResourceVariant,
   createResourceFamilyVariant,
   getResourceFamily,
   resourceFamilyHttpError,
@@ -29,6 +30,17 @@ const createVariantSchema = z
     barcode: nullableIdentifier(180),
   })
   .strict();
+
+const attachExistingVariantSchema = z
+  .object({
+    existingResourceId: z.string().uuid(),
+  })
+  .strict();
+
+const familyMutationSchema = z.union([
+  attachExistingVariantSchema,
+  createVariantSchema,
+]);
 
 export const dynamic = "force-dynamic";
 
@@ -79,12 +91,6 @@ export async function POST(request: Request, context: Context) {
     id.data,
   );
   if (authorization.response) return authorization.response;
-  if (!authorization.identity.permissions.includes("inventory.create")) {
-    return Response.json(
-      { error: "You do not have permission to create inventory items." },
-      { status: 403 },
-    );
-  }
 
   let payload: unknown;
   try {
@@ -95,7 +101,7 @@ export async function POST(request: Request, context: Context) {
       { status: 400 },
     );
   }
-  const parsed = createVariantSchema.safeParse(payload);
+  const parsed = familyMutationSchema.safeParse(payload);
   if (!parsed.success) {
     return Response.json(
       { error: "Invalid variant.", details: parsed.error.flatten() },
@@ -104,6 +110,27 @@ export async function POST(request: Request, context: Context) {
   }
 
   try {
+    if ("existingResourceId" in parsed.data) {
+      const variant = await attachExistingResourceVariant({
+        organizationId: authorization.identity.organizationId,
+        primaryResourceId: id.data,
+        input: { variantResourceId: parsed.data.existingResourceId },
+        actor: authorization.identity.subject,
+        authorizeVariant: (resource) =>
+          canAccessResource(
+            authorization.identity,
+            "inventory.update",
+            resource,
+          ),
+      });
+      return Response.json({ variant });
+    }
+    if (!authorization.identity.permissions.includes("inventory.create")) {
+      return Response.json(
+        { error: "You do not have permission to create inventory items." },
+        { status: 403 },
+      );
+    }
     const variant = await createResourceFamilyVariant({
       organizationId: authorization.identity.organizationId,
       primaryResourceId: id.data,
