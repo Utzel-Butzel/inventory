@@ -1,9 +1,6 @@
 import { ResourceAssignmentsManager } from "@/components/resource-assignments-manager";
 import { ResourceConnectionDiagram } from "@/components/resource-connection-diagram";
 import { ResourceDetails } from "@/components/resource-details";
-import { ResourceFamilyManager } from "@/components/resource-family-manager";
-import { ResourceOptionGroupsManager } from "@/components/resource-option-groups-manager";
-import { ResourceRelationsManager } from "@/components/resource-relations-manager";
 import { ResourceVariantsManager } from "@/components/resource-variants-manager";
 import { canAccessResource, getSessionIdentity } from "@/lib/api-auth";
 import { getResourceRecord } from "@/lib/access-control";
@@ -43,21 +40,11 @@ export default async function InventoryItemPage({ params }: Props) {
         canShare={canShare}
         canViewStock={canViewStock}
       />
-      <ResourceFamilyManager
-        resourceId={id}
-        canCreate={canCreate}
-        canEdit={canEdit}
-        canViewStock={canViewStock}
-      />
-      <ResourceOptionGroupsManager
-        resourceId={id}
-        canEdit={canEdit}
-        canCreate={canCreate}
-      />
       {resource ? (
         <ResourceConnectionDiagram
           canEdit={canEdit}
           canCreate={canCreate}
+          canViewStock={canViewStock}
           resource={{
             id: resource.id,
             name: resource.name,
@@ -66,7 +53,6 @@ export default async function InventoryItemPage({ params }: Props) {
           }}
         />
       ) : null}
-      <ResourceRelationsManager resourceId={id} canEdit={canEdit} />
       <ResourceVariantsManager
         resourceId={id}
         canEdit={canEdit}

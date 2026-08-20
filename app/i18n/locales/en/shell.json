@@ -77,6 +77,10 @@
       "integrationsAdvanced": "Integrations & advanced"
     },
     "items": {
+      "user": {
+        "label": "User settings",
+        "description": "Manage your personal preferences"
+      },
       "organization": {
         "label": "Organization",
         "description": "Manage organizations and names"

@@ -5,19 +5,22 @@ import {
   ChevronRight,
   CircleDot,
   GitBranch,
+  LayoutList,
   Link2,
   LoaderCircle,
   MapPin,
+  Network,
   Package,
   Pencil,
   Plus,
-  RefreshCw,
+  Trash2,
   Workflow,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "next-i18next/client";
 
 import { OrganizationLink as Link } from "@/components/organization-routing";
+import { ResourceFamilyManager } from "@/components/resource-family-manager";
 import {
   ResourceConnectionEditorPanel,
   type ConnectionEditorChangeKind,
@@ -27,6 +30,7 @@ import { Badge, Button, Card, cn } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
 import {
   buildResourceConnectionGraph,
+  orderConnectionColumns,
   type ConnectionDiagramBomComponent,
   type ConnectionDiagramConnection,
   type ConnectionDiagramFamily,
@@ -41,6 +45,12 @@ import {
 type PayloadResult = {
   payload: ConnectionDiagramPayload;
   partial: boolean;
+};
+
+type ConnectionDiagramCover = {
+  resourceId: string;
+  url: string;
+  altText: string;
 };
 
 type DisplayColumnItem =
@@ -94,35 +104,21 @@ const primaryConnection = (connections: ConnectionDiagramConnection[]) =>
     (left, right) => kindPriority[left.kind] - kindPriority[right.kind],
   )[0];
 
-const displayColumn = (
+const truncateColumn = (
   nodes: ConnectionDiagramGraphNode[],
   column: number,
-  rootResourceId: string,
 ): DisplayColumnItem[] => {
-  const sorted = [...nodes].sort(
-    (left, right) =>
-      Number(right.resource.id === rootResourceId) -
-        Number(left.resource.id === rootResourceId) ||
-      kindPriority[
-        primaryConnection(left.connections)?.kind ?? "relationship"
-      ] -
-        kindPriority[
-          primaryConnection(right.connections)?.kind ?? "relationship"
-        ] ||
-      left.resource.name.localeCompare(right.resource.name) ||
-      left.resource.id.localeCompare(right.resource.id),
-  );
-  if (sorted.length <= MAX_VISIBLE_NODES_PER_COLUMN) {
-    return sorted.map((node) => ({ type: "resource" as const, node }));
+  if (nodes.length <= MAX_VISIBLE_NODES_PER_COLUMN) {
+    return nodes.map((node) => ({ type: "resource" as const, node }));
   }
   return [
-    ...sorted
+    ...nodes
       .slice(0, MAX_VISIBLE_NODES_PER_COLUMN - 1)
       .map((node) => ({ type: "resource" as const, node })),
     {
       type: "overflow" as const,
       column,
-      count: sorted.length - (MAX_VISIBLE_NODES_PER_COLUMN - 1),
+      count: nodes.length - (MAX_VISIBLE_NODES_PER_COLUMN - 1),
     },
   ];
 };
@@ -186,16 +182,29 @@ async function loadDirectPayload(resourceId: string): Promise<PayloadResult> {
   };
 }
 
+async function loadResourceCovers(resourceIds: string[]) {
+  if (!resourceIds.length) return [];
+  const search = new URLSearchParams();
+  for (const resourceId of resourceIds) search.append("id", resourceId);
+  return fetchJson<{ covers: ConnectionDiagramCover[] }>(
+    `/api/v1/resources/covers?${search.toString()}`,
+    { cache: "no-store" },
+  ).then((result) => result.covers);
+}
+
 export function ResourceConnectionDiagram({
   resource,
   canEdit,
   canCreate,
+  canViewStock,
 }: {
   resource: ConnectionDiagramResource;
   canEdit: boolean;
   canCreate: boolean;
+  canViewStock: boolean;
 }) {
   const { t, i18n } = useT("resource");
+  const { t: inventoryT } = useT("inventory");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const number = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -206,14 +215,19 @@ export function ResourceConnectionDiagram({
   const [payloadSnapshot, setPayloadSnapshot] = useState<
     ReadonlyMap<string, ConnectionDiagramPayload>
   >(new Map());
-  const [depth, setDepth] = useState(1);
+  const [coverSnapshot, setCoverSnapshot] = useState<
+    ReadonlyMap<string, ConnectionDiagramCover>
+  >(new Map());
+  const [depth, setDepth] = useState(3);
   const [partial, setPartial] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [view, setView] = useState<"graph" | "list" | "family">("graph");
   const [editorSelection, setEditorSelection] =
     useState<ConnectionEditorSelection | null>(null);
   const [editorNotice, setEditorNotice] = useState<string | null>(null);
+  const [listRemoveError, setListRemoveError] = useState<string | null>(null);
 
   const load = useCallback(
     async (requestedDepth: number, refresh = false) => {
@@ -263,6 +277,24 @@ export function ResourceConnectionDiagram({
           );
         }
         if (requestSequence !== requestSequenceRef.current) return;
+        const visibleGraph = buildResourceConnectionGraph({
+          root: resource,
+          depth: requestedDepth,
+          payloads: payloadsRef.current,
+          maxNodes: MAX_GRAPH_NODES,
+        });
+        try {
+          const covers = await loadResourceCovers(
+            visibleGraph.nodes.map((node) => node.resource.id),
+          );
+          if (requestSequence !== requestSequenceRef.current) return;
+          setCoverSnapshot(
+            new Map(covers.map((cover) => [cover.resourceId, cover])),
+          );
+        } catch {
+          // Covers are visual enhancements; connection data remains usable if
+          // their lightweight lookup is temporarily unavailable.
+        }
         setPartial(partialRef.current);
         setPayloadSnapshot(new Map(payloadsRef.current));
       } catch (loadError) {
@@ -290,6 +322,25 @@ export function ResourceConnectionDiagram({
     return result.payload;
   }, []);
 
+  useEffect(() => {
+    void load(depth);
+    // The initial depth is intentionally loaded once. Later depth changes are
+    // handled by the selector so switching tabs never resets the graph.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load]);
+
+  useEffect(() => {
+    const refresh = () => void load(depth, true);
+    window.addEventListener("resource-family-changed", refresh);
+    window.addEventListener("resource-bom-changed", refresh);
+    window.addEventListener("resource-relations-changed", refresh);
+    return () => {
+      window.removeEventListener("resource-family-changed", refresh);
+      window.removeEventListener("resource-bom-changed", refresh);
+      window.removeEventListener("resource-relations-changed", refresh);
+    };
+  }, [depth, load]);
+
   const connectionChanged = useCallback(
     async (kind: ConnectionEditorChangeKind) => {
       setEditorSelection(null);
@@ -314,15 +365,20 @@ export function ResourceConnectionDiagram({
 
   const columns = useMemo(() => {
     const result = new Map<number, DisplayColumnItem[]>();
+    const ordered = model
+      ? orderConnectionColumns(model.nodes, model.edges, depth, resource.id)
+      : null;
     for (let column = -depth; column <= depth; column += 1) {
-      const nodes = model?.nodes.filter((node) => node.column === column) ?? [];
       result.set(
         column,
-        centerRoot(displayColumn(nodes, column, resource.id), resource.id),
+        centerRoot(
+          truncateColumn(ordered?.get(column) ?? [], column),
+          resource.id,
+        ),
       );
     }
     return result;
-  }, [depth, model?.nodes, resource.id]);
+  }, [depth, model, resource.id]);
   const maximumRows = Math.max(
     1,
     ...Array.from(columns.values()).map((items) => items.length),
@@ -352,27 +408,31 @@ export function ResourceConnectionDiagram({
     const container = scrollRef.current;
     const rootPosition = positions.get(resource.id);
     if (!model || !container || !rootPosition) return;
-    container.scrollLeft = Math.max(
-      0,
-      rootPosition.x + NODE_WIDTH / 2 - container.clientWidth / 2,
-    );
+
+    let frame = 0;
+    const centerRoot = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        container.scrollLeft = Math.max(
+          0,
+          rootPosition.x + NODE_WIDTH / 2 - container.clientWidth / 2,
+        );
+      });
+    };
+    const observer = new ResizeObserver(centerRoot);
+    observer.observe(container);
+    centerRoot();
+
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+    };
   }, [model, positions, resource.id]);
 
   return (
     <section className="mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
       <Card className="overflow-hidden shadow-[var(--shadow-sm)]">
-        <details
-          className="group"
-          onToggle={(event) => {
-            if (
-              event.currentTarget.open &&
-              !payloadsRef.current.has(resource.id) &&
-              !loading
-            ) {
-              void load(depth);
-            }
-          }}
-        >
+        <details className="group" open>
           <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 marker:hidden sm:px-6 [&::-webkit-details-marker]:hidden">
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-info-soft text-info">
               <Workflow className="size-4" aria-hidden="true" />
@@ -399,68 +459,120 @@ export function ResourceConnectionDiagram({
           <div className="border-t border-border">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-subtle px-5 py-3 sm:px-6">
               <div className="flex flex-wrap gap-2">
-                <LegendBadge kind="family" label={t("connectionDiagram.legend.family")} />
-                <LegendBadge kind="bom" label={t("connectionDiagram.legend.bom")} />
-                <LegendBadge kind="containment" label={t("connectionDiagram.legend.containment")} />
-                <LegendBadge kind="relationship" label={t("connectionDiagram.legend.relationship")} />
+                {view === "graph" || view === "list" ? (
+                  <>
+                    <LegendBadge kind="family" label={t("connectionDiagram.legend.family")} />
+                    <LegendBadge kind="bom" label={t("connectionDiagram.legend.bom")} />
+                    <LegendBadge kind="containment" label={t("connectionDiagram.legend.containment")} />
+                    <LegendBadge kind="relationship" label={t("connectionDiagram.legend.relationship")} />
+                  </>
+                ) : null}
               </div>
-              <div className="flex items-center gap-2">
-                {loading && model ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {(view === "graph" || view === "list") && loading && model ? (
                   <LoaderCircle className="size-3.5 animate-spin text-muted" aria-hidden="true" />
                 ) : null}
-                <label className="flex h-8 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
-                  <span>{t("connectionDiagram.depth.label")}</span>
-                  <select
-                    value={depth}
-                    onChange={(event) => {
-                      const nextDepth = Number(event.target.value);
-                      setDepth(nextDepth);
-                      if (payloadsRef.current.has(resource.id)) {
-                        void load(nextDepth);
-                      }
-                    }}
-                    className="bg-transparent text-xs font-semibold text-foreground outline-none"
-                    aria-label={t("connectionDiagram.depth.ariaLabel")}
+                <div className="flex min-h-8 max-w-full flex-wrap items-center overflow-hidden rounded-lg border border-border bg-surface text-[11px] font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => { setView("graph"); setEditorSelection(null); }}
+                    className={cn(
+                      "flex h-8 items-center gap-1.5 px-2.5 transition",
+                      view === "graph"
+                        ? "bg-surface-hover text-foreground"
+                        : "text-muted hover:text-foreground",
+                    )}
+                    aria-pressed={view === "graph"}
                   >
-                    {DEPTH_OPTIONS.map((value) => (
-                      <option key={value} value={value}>
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={loading}
-                  onClick={() => void load(depth, true)}
-                >
-                  <RefreshCw
-                    className={`size-3.5 ${loading ? "animate-spin" : ""}`}
-                    aria-hidden="true"
-                  />
-                  {t("connectionDiagram.refresh")}
-                </Button>
-                {canEdit ? (
-                  <Button
-                    variant={editing ? "primary" : "secondary"}
-                    size="sm"
-                    onClick={() => {
-                      setEditing((current) => !current);
-                      setEditorSelection(null);
-                      setEditorNotice(null);
-                    }}
-                    aria-pressed={editing}
+                    <Network className="size-3" aria-hidden="true" />
+                    {t("connectionDiagram.viewToggle.graph")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setView("list"); setEditorSelection(null); }}
+                    className={cn(
+                      "flex h-8 items-center gap-1.5 px-2.5 transition",
+                      view === "list"
+                        ? "bg-surface-hover text-foreground"
+                        : "text-muted hover:text-foreground",
+                    )}
+                    aria-pressed={view === "list"}
                   >
-                    <Pencil className="size-3.5" aria-hidden="true" />
-                    {editing
-                      ? t("connectionDiagram.editor.finishEditing")
-                      : t("connectionDiagram.editor.edit")}
-                  </Button>
+                    <LayoutList className="size-3" aria-hidden="true" />
+                    {t("connectionDiagram.viewToggle.list")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setView("family"); setEditorSelection(null); }}
+                    className={cn(
+                      "flex h-8 items-center gap-1.5 px-2.5 transition",
+                      view === "family"
+                        ? "bg-surface-hover text-foreground"
+                        : "text-muted hover:text-foreground",
+                    )}
+                    aria-pressed={view === "family"}
+                  >
+                    <GitBranch className="size-3" aria-hidden="true" />
+                    {inventoryT("family.title")}
+                  </button>
+                </div>
+                {view === "graph" ? (
+                  <label className="flex h-8 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
+                    <span>{t("connectionDiagram.depth.label")}</span>
+                    <select
+                      value={depth}
+                      onChange={(event) => {
+                        const nextDepth = Number(event.target.value);
+                        setDepth(nextDepth);
+                        if (payloadsRef.current.has(resource.id)) {
+                          void load(nextDepth);
+                        }
+                      }}
+                      className="bg-transparent text-xs font-semibold text-foreground outline-none"
+                      aria-label={t("connectionDiagram.depth.ariaLabel")}
+                    >
+                      {DEPTH_OPTIONS.map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                {view === "graph" || view === "list" ? (
+                  <>
+                    {canEdit ? (
+                      <Button
+                        variant={editing ? "primary" : "secondary"}
+                        size="sm"
+                        onClick={() => {
+                          setEditing((current) => !current);
+                          setEditorSelection(null);
+                          setEditorNotice(null);
+                        }}
+                        aria-pressed={editing}
+                      >
+                        <Pencil className="size-3.5" aria-hidden="true" />
+                        {editing
+                          ? t("connectionDiagram.editor.finishEditing")
+                          : t("connectionDiagram.editor.edit")}
+                      </Button>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
             </div>
 
+            {view === "family" ? (
+              <ResourceFamilyManager
+                resourceId={resource.id}
+                canCreate={canCreate}
+                canEdit={canEdit}
+                canViewStock={canViewStock}
+                embedded
+              />
+            ) : (
+              <>
             {editing ? (
               <p className="border-b border-info-border bg-info-soft px-5 py-2.5 text-xs text-info sm:px-6">
                 {t("connectionDiagram.editor.help")}
@@ -475,6 +587,11 @@ export function ResourceConnectionDiagram({
             {partial && model ? (
               <p className="border-b border-warning-border bg-warning-soft px-5 py-2.5 text-xs text-warning sm:px-6">
                 {t("connectionDiagram.partial")}
+              </p>
+            ) : null}
+            {listRemoveError ? (
+              <p className="border-b border-danger-border bg-danger-soft px-5 py-2.5 text-xs text-danger sm:px-6">
+                {listRemoveError}
               </p>
             ) : null}
             {error ? (
@@ -495,7 +612,24 @@ export function ResourceConnectionDiagram({
                 {t("connectionDiagram.loading")}
               </div>
             ) : model ? (
-              model.connectionCount || editing ? (
+              view === "list" ? (
+                <ConnectionListView
+                  resource={resource}
+                  payload={payloadSnapshot.get(resource.id) ?? null}
+                  canEdit={canEdit}
+                  canCreate={canCreate}
+                  editing={editing}
+                  editorSelection={editorSelection}
+                  onAddConnection={() => {
+                    setEditing(true);
+                    setEditorSelection({ type: "node", resource });
+                  }}
+                  onRemoveError={setListRemoveError}
+                  onChanged={connectionChanged}
+                  onCloseEditor={() => setEditorSelection(null)}
+                  getPayload={getPayload}
+                />
+              ) : model.connectionCount || editing ? (
                 <div
                   className={cn(
                     editorSelection &&
@@ -507,7 +641,7 @@ export function ResourceConnectionDiagram({
                     className="min-w-0 overflow-x-auto bg-[radial-gradient(circle_at_center,var(--color-surface-muted)_1px,transparent_1px)] [background-size:18px_18px]"
                   >
                     <div
-                      className="relative"
+                      className="relative mx-auto"
                       style={{ width: canvasWidth, height: canvasHeight }}
                     >
                       <GraphEdges
@@ -550,6 +684,13 @@ export function ResourceConnectionDiagram({
                                   : `overflow:${column}`
                               }
                               item={item}
+                              cover={
+                                item.type === "resource"
+                                  ? (coverSnapshot.get(
+                                      item.node.resource.id,
+                                    ) ?? null)
+                                  : null
+                              }
                               rootResourceId={resource.id}
                               x={x}
                               y={ys[index] ?? 0}
@@ -595,10 +736,389 @@ export function ResourceConnectionDiagram({
                 </div>
               )
             ) : null}
+              </>
+            )}
           </div>
         </details>
       </Card>
     </section>
+  );
+}
+
+function ConnectionListView({
+  resource,
+  payload,
+  canEdit,
+  canCreate,
+  editing,
+  editorSelection,
+  onAddConnection,
+  onRemoveError,
+  onChanged,
+  onCloseEditor,
+  getPayload,
+}: {
+  resource: ConnectionDiagramResource;
+  payload: ConnectionDiagramPayload | null;
+  canEdit: boolean;
+  canCreate: boolean;
+  editing: boolean;
+  editorSelection: ConnectionEditorSelection | null;
+  onAddConnection: () => void;
+  onRemoveError: (message: string | null) => void;
+  onChanged: (kind: ConnectionEditorChangeKind) => Promise<void>;
+  onCloseEditor: () => void;
+  getPayload: (resourceId: string) => Promise<ConnectionDiagramPayload>;
+}) {
+  const { t } = useT("resource");
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  const relations = payload?.relations ?? [];
+  const family = payload?.family ?? null;
+  const bomComponents = payload?.bomComponents ?? [];
+
+  const parents = relations.filter(
+    (r) =>
+      r.relationTypeKey === "contains" && r.targetResourceId === resource.id,
+  );
+  const children = relations.filter(
+    (r) =>
+      r.relationTypeKey === "contains" && r.sourceResourceId === resource.id,
+  );
+  const others = relations.filter(
+    (r) =>
+      r.relationTypeKey !== "contains" && r.relationTypeKey !== "variant_of",
+  );
+
+  const removeRelation = async (relationId: string, authResourceId: string) => {
+    setRemoving(relationId);
+    onRemoveError(null);
+    try {
+      await fetchJson(
+        `/api/v1/relations/${relationId}?resourceId=${encodeURIComponent(authResourceId)}`,
+        { method: "DELETE" },
+      );
+      await onChanged("relationship");
+    } catch (error) {
+      onRemoveError(
+        error instanceof Error
+          ? error.message
+          : t("connectionDiagram.list.errors.remove"),
+      );
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  const confirmAndRemove = async (
+    id: string,
+    authResourceId: string,
+  ) => {
+    if (!window.confirm(t("connectionDiagram.list.confirmRemove"))) return;
+    await removeRelation(id, authResourceId);
+  };
+
+  return (
+    <div
+      className={cn(
+        editorSelection && "grid lg:grid-cols-[minmax(0,1fr)_360px]",
+      )}
+    >
+      <div className="divide-y divide-border">
+        {family &&
+        (family.primary.id !== resource.id || family.variants.length > 0) ? (
+          <ListSection
+            icon={<GitBranch className="size-4" aria-hidden="true" />}
+            tone="brand"
+            label={t("connectionDiagram.list.family")}
+          >
+            {family.primary.id !== resource.id ? (
+              <ListItem
+                href={`/inventory/${family.primary.id}`}
+                name={family.primary.name}
+                subtitle={t("connectionDiagram.list.primaryBadge")}
+                icon={<GitBranch className="size-3.5" />}
+                iconTone="text-brand"
+              />
+            ) : null}
+            {family.variants
+              .filter((variant) => variant.id !== resource.id)
+              .map((variant) => (
+                <ListItem
+                  key={variant.id}
+                  href={`/inventory/${variant.id}`}
+                  name={variant.name}
+                  subtitle={t("connectionDiagram.kinds.variant")}
+                  icon={<GitBranch className="size-3.5" />}
+                  iconTone="text-brand"
+                />
+              ))}
+          </ListSection>
+        ) : null}
+
+        {bomComponents.length > 0 ? (
+          <ListSection
+            icon={<Package className="size-4" aria-hidden="true" />}
+            tone="warning"
+            label={t("connectionDiagram.list.bom")}
+          >
+            {bomComponents.map((component) => (
+              <ListItem
+                key={component.resourceId}
+                href={`/inventory/${component.resourceId}`}
+                name={component.name}
+                subtitle={t("connectionDiagram.list.quantity", {
+                  count: component.quantityPerAssembly,
+                })}
+                icon={<Package className="size-3.5" />}
+                iconTone="text-warning"
+              />
+            ))}
+          </ListSection>
+        ) : null}
+
+        <ListSection
+          icon={<MapPin className="size-4" aria-hidden="true" />}
+          tone="success"
+          label={t("connectionDiagram.list.locatedIn")}
+        >
+          {parents.length ? (
+            parents.map((relation) => (
+              <ListItem
+                key={relation.id}
+                href={`/inventory/${relation.sourceResourceId}`}
+                name={relation.source?.name ?? relation.sourceResourceId}
+                subtitle={
+                  relation.relationType?.label ??
+                  t("connectionDiagram.list.locatedIn")
+                }
+                icon={<MapPin className="size-3.5" />}
+                iconTone="text-success"
+                badge={
+                  relation.origin === "spatial"
+                    ? t("connectionDiagram.list.automatic")
+                    : undefined
+                }
+                onRemove={
+                  canEdit && editing
+                    ? () =>
+                        void confirmAndRemove(relation.id, resource.id)
+                    : undefined
+                }
+                removing={removing === relation.id}
+                removeLabel={t("connectionDiagram.list.removeLocatedIn")}
+              />
+            ))
+          ) : (
+            <p className="py-3 text-xs text-muted">
+              {t("connectionDiagram.list.locatedInEmpty")}
+            </p>
+          )}
+        </ListSection>
+
+        <ListSection
+          icon={<Boxes className="size-4" aria-hidden="true" />}
+          tone="success"
+          label={t("connectionDiagram.list.contains")}
+        >
+          {children.length ? (
+            children.map((relation) => (
+              <ListItem
+                key={relation.id}
+                href={`/inventory/${relation.targetResourceId}`}
+                name={relation.target?.name ?? relation.targetResourceId}
+                subtitle={
+                  relation.relationType?.inverseLabel ??
+                  t("connectionDiagram.list.contains")
+                }
+                icon={<Boxes className="size-3.5" />}
+                iconTone="text-success"
+                badge={
+                  relation.origin === "spatial"
+                    ? t("connectionDiagram.list.automatic")
+                    : undefined
+                }
+                onRemove={
+                  canEdit && editing
+                    ? () =>
+                        void confirmAndRemove(relation.id, resource.id)
+                    : undefined
+                }
+                removing={removing === relation.id}
+                removeLabel={t("connectionDiagram.list.removeContains")}
+              />
+            ))
+          ) : (
+            <p className="py-3 text-xs text-muted">
+              {t("connectionDiagram.list.containsEmpty")}
+            </p>
+          )}
+        </ListSection>
+
+        {others.length > 0 ? (
+          <ListSection
+            icon={<Link2 className="size-4" aria-hidden="true" />}
+            tone="neutral"
+            label={t("connectionDiagram.list.otherRelations", {
+              count: others.length,
+            })}
+          >
+            {others.map((relation) => {
+              const outgoing = relation.sourceResourceId === resource.id;
+              const relatedId = outgoing
+                ? relation.targetResourceId
+                : relation.sourceResourceId;
+              const relatedName = outgoing
+                ? (relation.target?.name ?? relatedId)
+                : (relation.source?.name ?? relatedId);
+              const label = outgoing
+                ? (relation.relationType?.label ?? relation.relationTypeKey)
+                : (relation.relationType?.inverseLabel ??
+                  relation.relationTypeKey);
+              return (
+                <ListItem
+                  key={relation.id}
+                  href={`/inventory/${relatedId}`}
+                  name={relatedName}
+                  subtitle={label}
+                  icon={<Link2 className="size-3.5" />}
+                  iconTone="text-info"
+                  onRemove={
+                    canEdit && editing
+                      ? () =>
+                          void confirmAndRemove(relation.id, resource.id)
+                      : undefined
+                  }
+                  removing={removing === relation.id}
+                  removeLabel={t("connectionDiagram.list.removeRelation")}
+                />
+              );
+            })}
+          </ListSection>
+        ) : null}
+
+        {canEdit ? (
+          <div className="px-5 py-4 sm:px-6">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onAddConnection}
+            >
+              <Plus className="size-3.5" aria-hidden="true" />
+              {t("connectionDiagram.list.addConnection")}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+
+      {editorSelection ? (
+        <ResourceConnectionEditorPanel
+          selection={editorSelection}
+          rootResourceId={resource.id}
+          canCreate={canCreate}
+          loadPayload={getPayload}
+          onChanged={onChanged}
+          onClose={onCloseEditor}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+type ListSectionTone = "brand" | "warning" | "success" | "neutral";
+
+const sectionIconColors: Record<ListSectionTone, string> = {
+  brand: "bg-brand-soft text-brand",
+  warning: "bg-warning-soft text-warning",
+  success: "bg-success-soft text-success",
+  neutral: "bg-surface-muted text-muted-strong",
+};
+
+function ListSection({
+  icon,
+  tone,
+  label,
+  children,
+}: {
+  icon: React.ReactNode;
+  tone: ListSectionTone;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="px-5 py-4 sm:px-6">
+      <h3 className="flex items-center gap-2 text-xs font-semibold text-muted-strong">
+        <span
+          className={cn(
+            "grid size-6 place-items-center rounded-md",
+            sectionIconColors[tone],
+          )}
+        >
+          {icon}
+        </span>
+        {label}
+      </h3>
+      <div className="mt-3 space-y-1.5">{children}</div>
+    </div>
+  );
+}
+
+function ListItem({
+  href,
+  name,
+  subtitle,
+  icon,
+  iconTone,
+  badge,
+  onRemove,
+  removing,
+  removeLabel,
+}: {
+  href: string;
+  name: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  iconTone: string;
+  badge?: string;
+  onRemove?: () => void;
+  removing?: boolean;
+  removeLabel?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2.5">
+      <span className={cn("shrink-0", iconTone)}>{icon}</span>
+      <Link
+        href={href}
+        className="min-w-0 flex-1 hover:underline"
+      >
+        <span className="block truncate text-xs font-semibold text-foreground">
+          {name}
+        </span>
+        <span className="mt-0.5 block truncate text-[10px] text-muted">
+          {subtitle}
+        </span>
+      </Link>
+      {badge ? (
+        <Badge tone="brand" className="min-h-5 px-1.5 text-[9px]">
+          {badge}
+        </Badge>
+      ) : null}
+      {onRemove ? (
+        <button
+          type="button"
+          disabled={removing}
+          onClick={onRemove}
+          aria-label={removeLabel}
+          className="grid size-7 shrink-0 place-items-center rounded-lg text-muted transition hover:bg-danger-soft hover:text-danger disabled:opacity-40"
+        >
+          {removing ? (
+            <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Trash2 className="size-3.5" aria-hidden="true" />
+          )}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -767,6 +1287,7 @@ function GraphEdge({
 
 function PositionedGraphNode({
   item,
+  cover,
   rootResourceId,
   x,
   y,
@@ -776,6 +1297,7 @@ function PositionedGraphNode({
   onSelect,
 }: {
   item: DisplayColumnItem;
+  cover: ConnectionDiagramCover | null;
   rootResourceId: string;
   x: number;
   y: number;
@@ -817,15 +1339,27 @@ function PositionedGraphNode({
   const content = (
     <>
       <span
-        className="grid size-9 shrink-0 place-items-center rounded-xl"
-        style={{
-          backgroundColor: `color-mix(in srgb, ${
-            isRoot ? "var(--color-info)" : kindColor[kind]
-          } 13%, transparent)`,
-          color: isRoot ? "var(--color-info)" : kindColor[kind],
-        }}
+        className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-surface-muted"
+        style={
+          cover
+            ? undefined
+            : {
+                backgroundColor: `color-mix(in srgb, ${
+                  isRoot ? "var(--color-info)" : kindColor[kind]
+                } 13%, transparent)`,
+                color: isRoot ? "var(--color-info)" : kindColor[kind],
+              }
+        }
       >
-        {isRoot ? (
+        {cover ? (
+          // Stored covers use an authenticated same-origin route.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={cover.url}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        ) : isRoot ? (
           <CircleDot className="size-4" aria-hidden="true" />
         ) : (
           <ConnectionIcon kind={kind} />

@@ -3,6 +3,11 @@
     "eyebrow": "Settings"
   },
   "pages": {
+    "user": {
+      "title": "User settings",
+      "metaDescription": "Manage your personal Open Inventory preferences.",
+      "description": "Choose how Open Inventory is displayed for your account."
+    },
     "organization": {
       "title": "Organization",
       "metaDescription": "Manage the organizations available to your account.",
@@ -58,6 +63,13 @@
       "title": "Webhooks",
       "metaDescription": "Connect inventory events to external systems with signed webhooks.",
       "description": "Send signed inventory events to your own HTTPS endpoints, test integrations, and review delivery health."
+    }
+  },
+  "user": {
+    "language": {
+      "title": "Interface language",
+      "description": "Choose the language used for navigation, settings, and other interface text.",
+      "selectionLabel": "Language"
     }
   },
   "organizations": {

@@ -17,6 +17,7 @@ import {
   Languages,
   Share2,
   ShieldCheck,
+  UserRound,
   Users,
   Webhook,
   type LucideIcon,
@@ -29,6 +30,7 @@ type SettingsNavigationItem = {
   labelKey: string;
   descriptionKey: string;
   href: string;
+  activeHrefs?: string[];
   icon: LucideIcon;
   requiredPermission?: AppPermission;
 };
@@ -41,6 +43,12 @@ const navigationGroups: Array<{
     labelKey: "settings.groups.general",
     items: [
       {
+        labelKey: "settings.items.user.label",
+        descriptionKey: "settings.items.user.description",
+        href: "/settings/user",
+        icon: UserRound,
+      },
+      {
         labelKey: "settings.items.organization.label",
         descriptionKey: "settings.items.organization.description",
         href: "/settings/organization",
@@ -50,6 +58,7 @@ const navigationGroups: Array<{
         labelKey: "settings.items.notifications.label",
         descriptionKey: "settings.items.notifications.description",
         href: "/settings/notifications",
+        activeHrefs: ["/notifications"],
         icon: Bell,
       },
     ],
@@ -132,8 +141,10 @@ const navigationGroups: Array<{
   },
 ];
 
-function isActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
+function isActive(pathname: string, item: SettingsNavigationItem) {
+  return [item.href, ...(item.activeHrefs ?? [])].some(
+    (href) => pathname === href || pathname.startsWith(`${href}/`),
+  );
 }
 
 export function SettingsNavigation({
@@ -155,7 +166,7 @@ export function SettingsNavigation({
     .filter((group) => group.items.length > 0);
   const visibleItems = visibleGroups.flatMap((group) => group.items);
   const activeItem =
-    visibleItems.find((item) => isActive(pathname, item.href)) ?? visibleItems[0];
+    visibleItems.find((item) => isActive(pathname, item)) ?? visibleItems[0];
 
   return (
     <>
@@ -179,7 +190,7 @@ export function SettingsNavigation({
                 </p>
                 <div className="space-y-1">
                   {group.items.map((item) => {
-                    const active = isActive(pathname, item.href);
+                    const active = isActive(pathname, item);
                     const Icon = item.icon;
                     return (
                       <Link
@@ -237,7 +248,7 @@ export function SettingsNavigation({
                   {t(group.labelKey)}
                 </p>
                 {group.items.map((item) => {
-                  const active = isActive(pathname, item.href);
+                  const active = isActive(pathname, item);
                   const Icon = item.icon;
                   return (
                     <Link

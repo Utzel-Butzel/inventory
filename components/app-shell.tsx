@@ -21,7 +21,6 @@ import {
   X,
 } from "lucide-react";
 
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { NotificationBell } from "@/components/notification-bell";
 import {
   OrganizationLink as Link,
@@ -141,6 +140,7 @@ function isPathActive(pathname: string, href: string) {
 }
 
 const settingsPageNames: Record<string, string> = {
+  user: "settings.items.user.label",
   organization: "settings.items.organization.label",
   data: "settings.items.data.label",
   languages: "settings.items.languages.label",
@@ -410,8 +410,7 @@ function SidebarContent({
       </nav>
 
       <div className="border-t border-border p-3">
-        <div className="mb-2 flex items-center justify-between px-2">
-          <LanguageSwitcher compact />
+        <div className="mb-2 flex justify-end px-2">
           <LocalizedThemeToggle />
         </div>
         <div className="flex items-center gap-2.5 rounded-xl px-2 py-2">

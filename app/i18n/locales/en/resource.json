@@ -346,6 +346,31 @@
     },
     "errors": {
       "load": "Unable to load the connection diagram."
+    },
+    "viewToggle": {
+      "graph": "Graph",
+      "list": "List"
+    },
+    "list": {
+      "addConnection": "Add connection",
+      "locatedIn": "Located in",
+      "locatedInEmpty": "Not placed in any container",
+      "contains": "Contains",
+      "containsEmpty": "Does not contain any items",
+      "bom": "Bill of materials",
+      "family": "Variant family",
+      "otherRelations_one": "{{count}} other relationship",
+      "otherRelations_other": "{{count}} other relationships",
+      "automatic": "Auto",
+      "quantity": "×{{count}}",
+      "primaryBadge": "Primary",
+      "removeLocatedIn": "Remove location",
+      "removeContains": "Remove child",
+      "removeRelation": "Remove",
+      "confirmRemove": "Remove this connection?",
+      "errors": {
+        "remove": "Unable to remove connection."
+      }
     }
   },
   "assignments": {

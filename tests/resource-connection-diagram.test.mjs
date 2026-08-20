@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   buildResourceConnectionDiagram,
   buildResourceConnectionGraph,
+  orderConnectionColumns,
 } from "../lib/resource-connection-diagram.ts";
 
 const item = (id, name) => ({ id, name, type: "item", status: "available" });
@@ -236,7 +237,128 @@ test("expands loaded payloads across bounded levels without duplicating cycles",
   assert.equal(threeLevels.edges.length, 2);
 });
 
-test("the detail-page diagram loads lazily from existing read APIs", async () => {
+test("orders columns so connected nodes align and edges stop crossing", () => {
+  const graphNode = (id, name, column, depth) => ({
+    resource: { id, name, type: "item", status: "available" },
+    column,
+    depth,
+    connections: [],
+  });
+  const graphEdge = (first, second, visualOnly = false) => ({
+    key: `${first}:${second}`,
+    firstResourceId: first,
+    secondResourceId: second,
+    visualOnly,
+    connections: [],
+  });
+
+  // Alpha connects to Yankee and Beta connects to Xerox, but the plain
+  // name order of the outer column is [Xerox, Yankee], so the two edges cross.
+  const nodes = [
+    graphNode("root", "Root", 0, 0),
+    graphNode("alpha", "Alpha", 1, 1),
+    graphNode("beta", "Beta", 1, 1),
+    graphNode("xerox", "Xerox", 2, 2),
+    graphNode("yankee", "Yankee", 2, 2),
+  ];
+  const edges = [
+    graphEdge("root", "alpha"),
+    graphEdge("root", "beta"),
+    graphEdge("alpha", "yankee"),
+    graphEdge("beta", "xerox"),
+  ];
+
+  const ordered = orderConnectionColumns(nodes, edges, 2, "root");
+  const rowOf = (column, id) =>
+    ordered.get(column).findIndex((node) => node.resource.id === id);
+
+  // Each outer node ends up in the same row as the middle node it connects to,
+  // which is exactly the arrangement with no crossing edges.
+  assert.equal(rowOf(1, "alpha"), rowOf(2, "yankee"));
+  assert.equal(rowOf(1, "beta"), rowOf(2, "xerox"));
+  assert.notEqual(rowOf(2, "xerox"), rowOf(2, "yankee"));
+});
+
+test("keeps a crossing-free column in its deterministic name order", () => {
+  const graphNode = (id, name, column, depth) => ({
+    resource: { id, name, type: "item", status: "available" },
+    column,
+    depth,
+    connections: [],
+  });
+  const graphEdge = (first, second) => ({
+    key: `${first}:${second}`,
+    firstResourceId: first,
+    secondResourceId: second,
+    connections: [],
+  });
+
+  const ordered = orderConnectionColumns(
+    [
+      graphNode("root", "Root", 0, 0),
+      graphNode("a", "Apple", 1, 1),
+      graphNode("c", "Cherry", 1, 1),
+      graphNode("b", "Banana", 1, 1),
+    ],
+    [graphEdge("root", "a"), graphEdge("root", "c"), graphEdge("root", "b")],
+    1,
+    "root",
+  );
+
+  assert.deepEqual(
+    ordered.get(1).map((node) => node.resource.id),
+    ["a", "b", "c"],
+  );
+});
+
+test("scores connections using the root's rendered center position", () => {
+  const graphNode = (id, column) => ({
+    resource: { id, name: id, type: "item", status: "available" },
+    column,
+    depth: Math.abs(column),
+    connections: [],
+  });
+  const graphEdge = (first, second, visualOnly = false) => ({
+    key: `${first}:${second}`,
+    firstResourceId: first,
+    secondResourceId: second,
+    visualOnly,
+    connections: [],
+  });
+
+  // The graph renderer moves the root between the other nodes in its column.
+  // The container and its connected variant therefore both need to be above
+  // the root to avoid crossing the root-to-variant arrows. Decorative variant
+  // rails must not pull the variants back into a crossing order.
+  const ordered = orderConnectionColumns(
+    [
+      graphNode("root", 0),
+      graphNode("container", 0),
+      graphNode("unrelated", 0),
+      graphNode("german", 1),
+      graphNode("english", 1),
+      graphNode("french", 1),
+    ],
+    [
+      graphEdge("root", "german"),
+      graphEdge("root", "english"),
+      graphEdge("root", "french"),
+      graphEdge("container", "german"),
+      graphEdge("german", "english", true),
+      graphEdge("english", "french", true),
+    ],
+    3,
+    "root",
+  );
+
+  assert.deepEqual(
+    ordered.get(0).map((node) => node.resource.id),
+    ["root", "container", "unrelated"],
+  );
+  assert.equal(ordered.get(1)[0].resource.id, "german");
+});
+
+test("the detail-page connection flow opens by default and owns every connection tool", async () => {
   const [page, component] = await Promise.all([
     readFile(
       new URL("../app/(dashboard)/inventory/[id]/page.tsx", import.meta.url),
@@ -249,16 +371,44 @@ test("the detail-page diagram loads lazily from existing read APIs", async () =>
   ]);
 
   assert.match(page, /<ResourceConnectionDiagram/);
-  assert.match(component, /<details[\s\S]*onToggle/);
+  assert.doesNotMatch(page, /<ResourceFamilyManager/);
+  assert.doesNotMatch(page, /<ResourceOptionGroupsManager/);
+  assert.match(component, /<details className="group" open>/);
+  assert.match(component, /<ResourceFamilyManager[\s\S]*embedded/);
+  assert.doesNotMatch(component, /ResourceOptionGroupsManager/);
+  assert.doesNotMatch(component, /inventoryT\("options\.title"\)/);
   assert.match(component, /\/relations`/);
   assert.match(component, /\/family`/);
   assert.match(component, /\/bom`/);
   assert.match(component, /Promise\.allSettled/);
   assert.match(component, /OrganizationLink as Link/);
   assert.match(component, /DEPTH_OPTIONS = \[1, 2, 3\]/);
+  assert.match(component, /useState\(3\)/);
   assert.match(component, /connectionDiagram\.depth\.label/);
   assert.match(component, /buildResourceConnectionGraph/);
   assert.match(component, /MAX_GRAPH_NODES = 45/);
+  assert.match(component, /className="relative mx-auto"/);
+  assert.match(component, /new ResizeObserver\(centerRoot\)/);
+  assert.match(component, /\/api\/v1\/resources\/covers/);
+  assert.match(component, /src=\{cover\.url\}/);
+  assert.match(component, /coverSnapshot\.get/);
+  assert.doesNotMatch(component, /iconX|iconY/);
+});
+
+test("loads visible item covers in one access-controlled request", async () => {
+  const [route, resources] = await Promise.all([
+    readFile(
+      new URL("../app/api/v1/resources/covers/route.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../lib/resources.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(route, /resourceIdsSchema[\s\S]*\.max\(45\)/);
+  assert.match(route, /canAccessResource[\s\S]*"inventory\.read"/);
+  assert.match(route, /getResourceCovers/);
+  assert.match(resources, /export async function getResourceCovers/);
+  assert.match(resources, /eq\(media\.kind, "image"\)/);
 });
 
 test("the diagram edits typed connections without bypassing existing APIs", async () => {

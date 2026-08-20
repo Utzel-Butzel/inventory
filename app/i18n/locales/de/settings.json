@@ -3,6 +3,11 @@
     "eyebrow": "Einstellungen"
   },
   "pages": {
+    "user": {
+      "title": "Benutzereinstellungen",
+      "metaDescription": "Persönliche Einstellungen für Open Inventory verwalten.",
+      "description": "Lege fest, wie Open Inventory für dein Konto angezeigt wird."
+    },
     "organization": {
       "title": "Organisation",
       "metaDescription": "Die für dein Konto verfügbaren Organisationen verwalten.",
@@ -58,6 +63,13 @@
       "title": "Webhooks",
       "metaDescription": "Inventarereignisse über signierte Webhooks mit externen Systemen verbinden.",
       "description": "Sende signierte Inventarereignisse an eigene HTTPS-Endpunkte, teste Integrationen und prüfe ihren Zustellstatus."
+    }
+  },
+  "user": {
+    "language": {
+      "title": "Sprache der Benutzeroberfläche",
+      "description": "Wähle die Sprache für Navigation, Einstellungen und andere Texte der Benutzeroberfläche.",
+      "selectionLabel": "Sprache"
     }
   },
   "organizations": {

@@ -378,6 +378,37 @@ export async function getResource(organizationId: string, id: string) {
   return attachMedia([row], mediaRows)[0];
 }
 
+export async function getResourceCovers(
+  organizationId: string,
+  resourceIds: readonly string[],
+) {
+  const uniqueIds = Array.from(new Set(resourceIds));
+  if (!uniqueIds.length) return [];
+
+  const rows = await db
+    .select({
+      resourceId: media.resourceId,
+      url: media.url,
+      altText: media.altText,
+    })
+    .from(media)
+    .where(
+      and(
+        eq(media.organizationId, organizationId),
+        inArray(media.resourceId, uniqueIds),
+        eq(media.kind, "image"),
+      ),
+    )
+    .orderBy(asc(media.resourceId), asc(media.position), asc(media.createdAt));
+
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    if (seen.has(row.resourceId)) return false;
+    seen.add(row.resourceId);
+    return true;
+  });
+}
+
 export async function createResource(
   organizationId: string,
   values: NewResource,

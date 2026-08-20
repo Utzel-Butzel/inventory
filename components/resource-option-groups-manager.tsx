@@ -185,10 +185,12 @@ export function ResourceOptionGroupsManager({
   resourceId,
   canEdit,
   canCreate,
+  embedded = false,
 }: {
   resourceId: string;
   canEdit: boolean;
   canCreate: boolean;
+  embedded?: boolean;
 }) {
   const { t, i18n } = useT("inventory");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
@@ -196,7 +198,7 @@ export function ResourceOptionGroupsManager({
   const [options, setOptions] = useState<ResourceOptionsResponse | null>(null);
   const [draft, setDraft] = useState<DraftGroup[]>([]);
   const [resources, setResources] = useState<ClientResource[]>([]);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(embedded);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingResources, setLoadingResources] = useState(false);
@@ -445,58 +447,26 @@ export function ResourceOptionGroupsManager({
     }
   };
 
-  if (!loading && !error && options && !options.groups.length && !canEdit) {
+  if (
+    !embedded &&
+    !loading &&
+    !error &&
+    options &&
+    !options.groups.length &&
+    !canEdit
+  ) {
     return null;
   }
 
   return (
-    <section className="mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
-      <Card className="overflow-hidden shadow-[var(--shadow-sm)]">
-        <button
-          type="button"
-          onClick={() => setExpanded((current) => !current)}
-          className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left sm:px-6"
-          aria-expanded={expanded}
-        >
-          <span className="flex min-w-0 items-start gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
-              <Layers3 className="size-4" aria-hidden="true" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold text-foreground">
-                {t("options.title")}
-              </span>
-              <span className="mt-0.5 block text-xs leading-5 text-muted">
-                {options?.role === "variant"
-                  ? t("options.variantDescription", { name: options.primary.name })
-                  : t("options.description")}
-              </span>
-              {options?.currentSelection.length ? (
-                <span className="mt-2 flex flex-wrap gap-1.5">
-                  {options.currentSelection.map((selection) => (
-                    <Badge key={selection.groupId} tone="brand">
-                      {selection.groupName}: {selection.valueLabel}
-                    </Badge>
-                  ))}
-                </span>
-              ) : null}
-            </span>
-          </span>
-          <span className="flex shrink-0 items-center gap-2">
-            {options?.groups.length ? (
-              <Badge>
-                {t("options.groupCount", {
-                  count: options.groups.length,
-                  value: number.format(options.groups.length),
-                })}
-              </Badge>
-            ) : null}
-            <ChevronDown
-              className={cn("size-4 text-muted transition", expanded && "rotate-180")}
-              aria-hidden="true"
-            />
-          </span>
-        </button>
+    <OptionGroupsManagerShell embedded={embedded}>
+      <OptionGroupsHeader
+        options={options}
+        number={number}
+        expanded={expanded}
+        collapsible={!embedded}
+        onToggle={() => setExpanded((current) => !current)}
+      />
 
         {expanded ? (
           <div className="border-t border-border">
@@ -605,8 +575,101 @@ export function ResourceOptionGroupsManager({
             ) : null}
           </div>
         ) : null}
+    </OptionGroupsManagerShell>
+  );
+}
+
+function OptionGroupsManagerShell({
+  embedded,
+  children,
+}: {
+  embedded: boolean;
+  children: React.ReactNode;
+}) {
+  if (embedded) return <div className="min-w-0">{children}</div>;
+  return (
+    <section className="mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
+      <Card className="overflow-hidden shadow-[var(--shadow-sm)]">
+        {children}
       </Card>
     </section>
+  );
+}
+
+function OptionGroupsHeader({
+  options,
+  number,
+  expanded,
+  collapsible,
+  onToggle,
+}: {
+  options: ResourceOptionsResponse | null;
+  number: Intl.NumberFormat;
+  expanded: boolean;
+  collapsible: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = useT("inventory");
+  const content = (
+    <>
+      <span className="flex min-w-0 items-start gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+          <Layers3 className="size-4" aria-hidden="true" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-foreground">
+            {t("options.title")}
+          </span>
+          <span className="mt-0.5 block text-xs leading-5 text-muted">
+            {options?.role === "variant"
+              ? t("options.variantDescription", { name: options.primary.name })
+              : t("options.description")}
+          </span>
+          {options?.currentSelection.length ? (
+            <span className="mt-2 flex flex-wrap gap-1.5">
+              {options.currentSelection.map((selection) => (
+                <Badge key={selection.groupId} tone="brand">
+                  {selection.groupName}: {selection.valueLabel}
+                </Badge>
+              ))}
+            </span>
+          ) : null}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        {options?.groups.length ? (
+          <Badge>
+            {t("options.groupCount", {
+              count: options.groups.length,
+              value: number.format(options.groups.length),
+            })}
+          </Badge>
+        ) : null}
+        {collapsible ? (
+          <ChevronDown
+            className={cn(
+              "size-4 text-muted transition",
+              expanded && "rotate-180",
+            )}
+            aria-hidden="true"
+          />
+        ) : null}
+      </span>
+    </>
+  );
+  const className =
+    "flex w-full items-start justify-between gap-4 px-5 py-4 text-left sm:px-6";
+
+  if (!collapsible) return <div className={className}>{content}</div>;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={className}
+      aria-expanded={expanded}
+    >
+      {content}
+    </button>
   );
 }
 

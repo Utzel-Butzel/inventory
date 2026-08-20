@@ -9,7 +9,6 @@ import {
   LoaderCircle,
   Package,
   Plus,
-  RefreshCw,
   Save,
   Trash2,
   Warehouse,
@@ -296,7 +295,6 @@ export function CustomFieldManager() {
   const [entityType, setEntityType] = useState<EntityType>("inventory");
   const [draft, setDraft] = useState<DefinitionDraft>(() => emptyDraft("inventory"));
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -318,8 +316,7 @@ export function CustomFieldManager() {
   );
 
   const load = useCallback(async (quiet = false) => {
-    if (quiet) setRefreshing(true);
-    else setLoading(true);
+    if (!quiet) setLoading(true);
     setError(null);
     try {
       const [payload, inventoryTypePayload] = await Promise.all([
@@ -359,7 +356,6 @@ export function CustomFieldManager() {
       );
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [t]);
 
@@ -527,16 +523,6 @@ export function CustomFieldManager() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void load(true)}
-            disabled={loading || refreshing}
-            aria-label={t("settings:customFields.refresh")}
-          >
-            <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} aria-hidden="true" />
-            {t("common:actions.refresh")}
-          </Button>
           <Button size="sm" onClick={startNew} disabled={loading}>
             <Plus className="size-3.5" aria-hidden="true" />
             {t("settings:customFields.newField")}

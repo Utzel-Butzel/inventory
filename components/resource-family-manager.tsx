@@ -99,11 +99,13 @@ export function ResourceFamilyManager({
   canCreate,
   canEdit,
   canViewStock,
+  embedded = false,
 }: {
   resourceId: string;
   canCreate: boolean;
   canEdit: boolean;
   canViewStock: boolean;
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const organizationHref = useOrganizationHref();
@@ -319,6 +321,7 @@ export function ResourceFamilyManager({
       });
       setNotice(t("family.detach.success", { name: family.primary.name }));
       await load();
+      window.dispatchEvent(new Event("resource-family-changed"));
       router.refresh();
     } catch (detachError) {
       setError(
@@ -340,6 +343,7 @@ export function ResourceFamilyManager({
   // A read-only standalone item has no family action or context to show. Keep
   // the default detail page quiet until a family actually exists.
   if (
+    !embedded &&
     !loading &&
     !error &&
     !notice &&
@@ -352,8 +356,7 @@ export function ResourceFamilyManager({
   }
 
   return (
-    <section className="mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
-      <Card className="overflow-hidden shadow-[var(--shadow-sm)]">
+    <FamilyManagerShell embedded={embedded}>
         <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div className="flex min-w-0 items-start gap-3">
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
@@ -692,6 +695,22 @@ export function ResourceFamilyManager({
             </div>
           )
         ) : null}
+    </FamilyManagerShell>
+  );
+}
+
+function FamilyManagerShell({
+  embedded,
+  children,
+}: {
+  embedded: boolean;
+  children: React.ReactNode;
+}) {
+  if (embedded) return <div className="min-w-0">{children}</div>;
+  return (
+    <section className="mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
+      <Card className="overflow-hidden shadow-[var(--shadow-sm)]">
+        {children}
       </Card>
     </section>
   );

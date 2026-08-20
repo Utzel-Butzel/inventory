@@ -83,7 +83,9 @@ const formatCustomValue = (
     return value ? booleanLabels.yes : booleanLabels.no;
   }
   if (Array.isArray(value)) {
-    return value.map((item) => formatCustomValue(item, booleanLabels)).join(", ");
+    return value
+      .map((item) => formatCustomValue(item, booleanLabels))
+      .join(", ");
   }
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
@@ -105,7 +107,9 @@ function DetailField({
       <Icon className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden="true" />
       <div className="min-w-0">
         <p className="text-xs text-muted">{label}</p>
-        <div className={`mt-1 truncate text-sm font-medium text-foreground ${mono ? "font-mono" : ""}`}>
+        <div
+          className={`mt-1 truncate text-sm font-medium text-foreground ${mono ? "font-mono" : ""}`}
+        >
           {value}
         </div>
       </div>
@@ -113,7 +117,13 @@ function DetailField({
   );
 }
 
-function MediaCard({ item, kindLabel }: { item: ClientMedia; kindLabel: string }) {
+function MediaCard({
+  item,
+  kindLabel,
+}: {
+  item: ClientMedia;
+  kindLabel: string;
+}) {
   const { t } = useT("inventory");
   const Icon = item.kind === "document" ? FileText : Paperclip;
 
@@ -163,8 +173,12 @@ function MediaCard({ item, kindLabel }: { item: ClientMedia; kindLabel: string }
         <Icon className="size-5" aria-hidden="true" />
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold text-foreground">{item.name}</span>
-        <span className="mt-1 block text-xs uppercase text-muted">{kindLabel}</span>
+        <span className="block truncate text-sm font-semibold text-foreground">
+          {item.name}
+        </span>
+        <span className="mt-1 block text-xs uppercase text-muted">
+          {kindLabel}
+        </span>
       </span>
     </a>
   );
@@ -186,6 +200,7 @@ export function ResourceDetails({
   const router = useRouter();
   const organizationHref = useOrganizationHref();
   const { t, i18n } = useT("inventory");
+  const { t: resourceT } = useT("resource");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const [resource, setResource] = useState<ClientResource | null>(null);
@@ -230,8 +245,13 @@ export function ResourceDetails({
   }, [loadResource]);
 
   const mapHref = useMemo(() => {
-    if (resource?.gpsLatitude === null || resource?.gpsLongitude === null) return null;
-    if (resource?.gpsLatitude === undefined || resource?.gpsLongitude === undefined) return null;
+    if (resource?.gpsLatitude === null || resource?.gpsLongitude === null)
+      return null;
+    if (
+      resource?.gpsLatitude === undefined ||
+      resource?.gpsLongitude === undefined
+    )
+      return null;
     return `https://www.openstreetmap.org/?mlat=${encodeURIComponent(resource.gpsLatitude)}&mlon=${encodeURIComponent(resource.gpsLongitude)}#map=18/${encodeURIComponent(resource.gpsLatitude)}/${encodeURIComponent(resource.gpsLongitude)}`;
   }, [resource]);
 
@@ -272,18 +292,25 @@ export function ResourceDetails({
         <div className="rounded-2xl border border-danger-border bg-danger-soft p-5 text-sm text-danger">
           {error ?? t("details.errors.notFound")}
         </div>
-        <Link href="/inventory" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-muted-strong">
+        <Link
+          href="/inventory"
+          className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-muted-strong"
+        >
           <ArrowLeft className="size-4" /> {t("details.back")}
         </Link>
       </div>
     );
   }
 
-  const customFields = Object.entries(resource.customFields ?? {}).map(([key, value]) => ({
-    key,
-    value: value as CustomFieldValue,
-    definition: customFieldDefinitions.find((definition) => definition.key === key),
-  }));
+  const customFields = Object.entries(resource.customFields ?? {}).map(
+    ([key, value]) => ({
+      key,
+      value: value as CustomFieldValue,
+      definition: customFieldDefinitions.find(
+        (definition) => definition.key === key,
+      ),
+    }),
+  );
   const typeLabel = (value: string) =>
     t(`typeSingular.${value}`, { defaultValue: humanize(value) });
   const statusLabel = (value: string) =>
@@ -302,8 +329,12 @@ export function ResourceDetails({
       <header className="mb-6 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <div className="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted">
-            <Link href="/inventory" className="inline-flex items-center gap-1 transition hover:text-foreground">
-              <ArrowLeft className="size-3.5" /> {t("details.breadcrumb.inventory")}
+            <Link
+              href="/inventory"
+              className="inline-flex items-center gap-1 transition hover:text-foreground"
+            >
+              <ArrowLeft className="size-3.5" />{" "}
+              {t("details.breadcrumb.inventory")}
             </Link>
             <ChevronRight className="size-3.5" />
             <span className="truncate">{t("details.breadcrumb.details")}</span>
@@ -333,7 +364,9 @@ export function ResourceDetails({
                 {localization.availableLanguages.map((language) => (
                   <option key={language.code} value={language.code}>
                     {language.label}
-                    {language.isDefault ? t("details.defaultLanguageSuffix") : ""}
+                    {language.isDefault
+                      ? t("details.defaultLanguageSuffix")
+                      : ""}
                   </option>
                 ))}
               </select>
@@ -375,7 +408,9 @@ export function ResourceDetails({
         </div>
       </header>
 
-      {localization && !localization.isDefault && localization.fallbackFields.length ? (
+      {localization &&
+      !localization.isDefault &&
+      localization.fallbackFields.length ? (
         <div className="mb-5 rounded-xl border border-warning-border bg-warning-soft px-4 py-3 text-xs leading-5 text-warning">
           {t("details.translationFallback", {
             count: localization.fallbackFields.length,
@@ -384,13 +419,13 @@ export function ResourceDetails({
         </div>
       ) : null}
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,.75fr)]">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.0fr)_minmax(340px,1.0fr)]">
         <div className="space-y-6">
           <section className="overflow-hidden rounded-xl border border-border bg-surface">
             {objectModel ? (
               <div className="grid border-b border-border lg:grid-cols-2">
                 {resource.cover ? (
-                  <div className="relative aspect-square overflow-hidden bg-[radial-gradient(circle_at_50%_35%,var(--color-surface),var(--color-surface-muted))] lg:aspect-auto lg:min-h-80">
+                  <div className="relative aspect-square self-start overflow-hidden bg-[radial-gradient(circle_at_50%_35%,var(--color-surface),var(--color-surface-muted))]">
                     {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -404,7 +439,7 @@ export function ResourceDetails({
                     </span>
                   </div>
                 ) : (
-                  <div className="grid aspect-square place-items-center bg-gradient-to-br from-success-soft to-surface-muted px-8 text-center text-muted lg:aspect-auto lg:min-h-80">
+                  <div className="grid aspect-square self-start place-items-center bg-gradient-to-br from-success-soft to-surface-muted px-8 text-center text-muted">
                     <div>
                       <ImageIcon
                         className="mx-auto size-12"
@@ -441,7 +476,7 @@ export function ResourceDetails({
                 />
               </div>
             ) : resource.cover ? (
-              <div className="aspect-[16/9] overflow-hidden bg-surface-muted sm:aspect-[2/1]">
+              <div className="aspect-square overflow-hidden bg-surface-muted">
                 {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -451,20 +486,10 @@ export function ResourceDetails({
                 />
               </div>
             ) : (
-              <div className="grid aspect-[16/7] place-items-center bg-gradient-to-br from-success-soft to-surface-muted text-muted">
+              <div className="grid aspect-square place-items-center bg-gradient-to-br from-success-soft to-surface-muted text-muted">
                 <Box className="size-14" strokeWidth={1.25} />
               </div>
             )}
-            {resource.description ? (
-              <div className="p-5 sm:p-6">
-                <h2 className="text-sm font-semibold text-foreground">
-                  {t("details.sections.overview")}
-                </h2>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-muted-strong">
-                  {resource.description}
-                </p>
-              </div>
-            ) : null}
           </section>
 
           {galleryMedia.length ? (
@@ -498,20 +523,38 @@ export function ResourceDetails({
           {resource.notes ? (
             <section className="rounded-xl border border-border bg-surface p-5 sm:p-6">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <FileText className="size-4 text-success" /> {t("details.sections.notes")}
+                <FileText className="size-4 text-success" />{" "}
+                {t("details.sections.notes")}
               </h2>
-              <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-muted-strong">{resource.notes}</p>
+              <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-muted-strong">
+                {resource.notes}
+              </p>
             </section>
           ) : null}
         </div>
 
         <aside className="space-y-6 xl:sticky xl:top-5">
+          {resource.description ? (
+            <section className="rounded-xl border border-border bg-surface p-5">
+              <h2 className="text-sm font-semibold text-foreground">
+                {t("details.sections.overview")}
+              </h2>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-muted-strong">
+                {resource.description}
+              </p>
+            </section>
+          ) : null}
+
           <section className="rounded-xl border border-border bg-surface p-5">
             <h2 className="mb-4 text-sm font-semibold text-foreground">
               {t("details.sections.itemDetails")}
             </h2>
             <div className="grid sm:grid-cols-2 sm:gap-x-5 xl:grid-cols-1 2xl:grid-cols-2">
-              <DetailField icon={Layers3} label={t("fields.type")} value={typeLabel(resource.type)} />
+              <DetailField
+                icon={Layers3}
+                label={t("fields.type")}
+                value={typeLabel(resource.type)}
+              />
               <DetailField
                 icon={Hash}
                 label={t("fields.quantity")}
@@ -521,13 +564,28 @@ export function ResourceDetails({
                 })}
               />
               {resource.sku ? (
-                <DetailField icon={Barcode} label={t("fields.sku")} value={resource.sku} mono />
+                <DetailField
+                  icon={Barcode}
+                  label={t("fields.sku")}
+                  value={resource.sku}
+                  mono
+                />
               ) : null}
               {resource.barcode ? (
-                <DetailField icon={Barcode} label={t("fields.barcode")} value={resource.barcode} mono />
+                <DetailField
+                  icon={Barcode}
+                  label={t("fields.barcode")}
+                  value={resource.barcode}
+                  mono
+                />
               ) : null}
               {resource.serialNumber ? (
-                <DetailField icon={Barcode} label={t("fields.serialNumber")} value={resource.serialNumber} mono />
+                <DetailField
+                  icon={Barcode}
+                  label={t("fields.serialNumber")}
+                  value={resource.serialNumber}
+                  mono
+                />
               ) : null}
               {resource.location || coordinateLabel ? (
                 <DetailField
@@ -549,13 +607,19 @@ export function ResourceDetails({
                 <DetailField
                   icon={CircleDollarSign}
                   label={t("fields.value")}
-                  value={formatValue(resource.valueCents, resource.currency, locale)}
+                  value={formatValue(
+                    resource.valueCents,
+                    resource.currency,
+                    locale,
+                  )}
                 />
               ) : null}
               <DetailField
                 icon={Flag}
                 label={t("fields.priority")}
-                value={t("details.priority", { value: integer.format(resource.priority) })}
+                value={t("details.priority", {
+                  value: integer.format(resource.priority),
+                })}
               />
             </div>
             {mapHref ? (
@@ -573,16 +637,23 @@ export function ResourceDetails({
           {resource.tags.length || resource.categories.length ? (
             <section className="rounded-xl border border-border bg-surface p-5">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Tag className="size-4 text-success" /> {t("details.sections.classification")}
+                <Tag className="size-4 text-success" />{" "}
+                {t("details.sections.classification")}
               </h2>
               <div className="mt-4 flex flex-wrap gap-2">
                 {resource.categories.map((category) => (
-                  <span key={category.name} className="rounded-full bg-success-soft px-2.5 py-1 text-xs font-semibold text-success">
+                  <span
+                    key={category.name}
+                    className="rounded-full bg-success-soft px-2.5 py-1 text-xs font-semibold text-success"
+                  >
                     {category.name}
                   </span>
                 ))}
                 {resource.tags.map((tag) => (
-                  <span key={tag} className="rounded-full bg-surface-muted px-2.5 py-1 text-xs text-muted-strong">
+                  <span
+                    key={tag}
+                    className="rounded-full bg-surface-muted px-2.5 py-1 text-xs text-muted-strong"
+                  >
                     #{tag}
                   </span>
                 ))}
@@ -597,11 +668,19 @@ export function ResourceDetails({
               </h2>
               <dl className="mt-4 divide-y divide-border">
                 {customFields.map(({ key, value, definition }) => (
-                  <div key={key} className="grid grid-cols-[minmax(110px,.8fr)_minmax(0,1.2fr)] gap-4 py-3 text-sm">
-                    <dt className="text-muted">{definition?.label ?? humanize(key)}</dt>
+                  <div
+                    key={key}
+                    className="grid grid-cols-[minmax(110px,.8fr)_minmax(0,1.2fr)] gap-4 py-3 text-sm"
+                  >
+                    <dt className="text-muted">
+                      {definition?.label ?? humanize(key)}
+                    </dt>
                     <dd className="break-words text-right font-medium text-foreground">
                       {definition ? (
-                        <CustomFieldValueDisplay definition={definition} value={value} />
+                        <CustomFieldValueDisplay
+                          definition={definition}
+                          value={value}
+                        />
                       ) : (
                         formatCustomValue(value, {
                           yes: t("values.yes"),
@@ -617,7 +696,7 @@ export function ResourceDetails({
 
           <details className="rounded-xl border border-border bg-surface text-xs text-muted">
             <summary className="cursor-pointer px-5 py-4 font-medium text-muted-strong">
-              {t("details.sections.technicalDetails")}
+              {resourceT("details.sections.technicalDetails")}
             </summary>
             <div className="space-y-2 border-t border-border px-5 py-4">
               <p className="flex items-center gap-2">

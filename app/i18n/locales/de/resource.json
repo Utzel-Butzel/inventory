@@ -346,6 +346,31 @@
     },
     "errors": {
       "load": "Das Verbindungsdiagramm konnte nicht geladen werden."
+    },
+    "viewToggle": {
+      "graph": "Diagramm",
+      "list": "Liste"
+    },
+    "list": {
+      "addConnection": "Verbindung hinzufügen",
+      "locatedIn": "Befindet sich in",
+      "locatedInEmpty": "Keinem Behälter zugeordnet",
+      "contains": "Enthält",
+      "containsEmpty": "Enthält keine weiteren Einträge",
+      "bom": "Stückliste",
+      "family": "Variantenfamilie",
+      "otherRelations_one": "{{count}} weitere Beziehung",
+      "otherRelations_other": "{{count}} weitere Beziehungen",
+      "automatic": "Auto",
+      "quantity": "×{{count}}",
+      "primaryBadge": "Haupteintrag",
+      "removeLocatedIn": "Standort entfernen",
+      "removeContains": "Untereintrag entfernen",
+      "removeRelation": "Entfernen",
+      "confirmRemove": "Diese Verbindung entfernen?",
+      "errors": {
+        "remove": "Verbindung konnte nicht entfernt werden."
+      }
     }
   },
   "assignments": {

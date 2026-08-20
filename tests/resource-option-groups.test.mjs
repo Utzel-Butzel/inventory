@@ -190,15 +190,19 @@ test("detaching removes option identity but preserves every operational record",
   }
 });
 
-test("the default UI is collapsed and expands to a guarded editor and generator", async () => {
-  const [component, page, route] = await Promise.all([
+test("the option editor backend remains available but is absent from the inventory flow", async () => {
+  const [component, connectionFlow, page, route] = await Promise.all([
     source("components/resource-option-groups-manager.tsx"),
+    source("components/resource-connection-diagram.tsx"),
     source("app/(dashboard)/inventory/[id]/page.tsx"),
     source("app/api/v1/resources/[id]/options/route.ts"),
   ]);
 
-  assert.match(page, /<ResourceOptionGroupsManager/);
-  assert.match(component, /useState\(false\)/);
+  assert.doesNotMatch(page, /<ResourceOptionGroupsManager/);
+  assert.doesNotMatch(connectionFlow, /ResourceOptionGroupsManager/);
+  assert.doesNotMatch(connectionFlow, /inventoryT\("options\.title"\)/);
+  assert.match(connectionFlow, /<details className="group" open>/);
+  assert.match(component, /useState\(embedded\)/);
   assert.match(component, /aria-expanded=\{expanded\}/);
   assert.match(component, /options\.editor\.help/);
   assert.match(component, /options\.actions\.generate/);

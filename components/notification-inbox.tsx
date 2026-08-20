@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CheckCheck, Clock3, PackageMinus, RefreshCw, ShieldAlert, Wrench } from "lucide-react";
+import { Bell, CheckCheck, Clock3, PackageMinus, ShieldAlert, Wrench } from "lucide-react";
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "next-i18next/client";
@@ -110,7 +110,7 @@ export function NotificationInbox() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[980px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <div className="mx-auto w-full max-w-[980px]">
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-brand">
@@ -135,10 +135,6 @@ export function NotificationInbox() {
           >
             <CheckCheck className="size-4" aria-hidden="true" />
             {t("markAllRead")}
-          </Button>
-          <Button variant="secondary" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={cn("size-4", loading && "animate-spin")} aria-hidden="true" />
-            {t("refresh")}
           </Button>
         </div>
       </header>

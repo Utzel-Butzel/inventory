@@ -77,6 +77,10 @@
       "integrationsAdvanced": "Integrationen & Erweitert"
     },
     "items": {
+      "user": {
+        "label": "Benutzereinstellungen",
+        "description": "Persönliche Einstellungen verwalten"
+      },
       "organization": {
         "label": "Organisation",
         "description": "Organisationen und Namen verwalten"

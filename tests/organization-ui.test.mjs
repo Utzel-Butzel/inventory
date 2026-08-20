@@ -53,3 +53,15 @@ test("organization settings use the list, create, and update contracts", async (
   assert.match(route, /canManage:/);
   assert.match(openapi, /canManage:[\s\S]*type: boolean/);
 });
+
+test("the notification inbox uses the settings navigation shell", async () => {
+  const [layout, sectionLayout, navigation] = await Promise.all([
+    source("app/(dashboard)/notifications/layout.tsx"),
+    source("components/settings-section-layout.tsx"),
+    source("components/settings-navigation.tsx"),
+  ]);
+
+  assert.match(layout, /<SettingsSectionLayout/);
+  assert.match(sectionLayout, /<SettingsNavigation/);
+  assert.match(navigation, /activeHrefs: \["\/notifications"\]/);
+});

@@ -23,7 +23,6 @@ import {
   PackageCheck,
   PackageMinus,
   PackagePlus,
-  Pencil,
   Plus,
   RefreshCw,
   Save,
@@ -720,20 +719,6 @@ export function ResourceStockManager({
     } finally {
       setCreatingUnits(false);
     }
-  }
-
-  function beginUnitEdit(unit: StockUnit) {
-    setEditingUnitId(unit.id);
-    setUnitEditForm({
-      status: unit.status,
-      location: unit.location ?? "",
-      locationResourceId: unit.locationResourceId ?? "",
-      customFields: unit.customFields ?? {},
-      metadata: JSON.stringify(unit.metadata ?? {}, null, 2),
-      occurredAt: localDateTime(),
-      reason: "",
-      note: "",
-    });
   }
 
   async function saveUnit(event: FormEvent) {
@@ -1652,28 +1637,6 @@ export function ResourceStockManager({
                               title={t("resource.actions.copyUnitId")}
                             >
                               <Copy className="size-3.5" aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={Boolean(unit.installation)}
-                              onClick={() =>
-                                editing ? (setEditingUnitId(null), setUnitEditForm(null)) : beginUnitEdit(unit)
-                              }
-                              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[10px] font-semibold text-muted transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
-                              title={
-                                unit.installation
-                                  ? t("resource.units.installedManagedHelp")
-                                  : undefined
-                              }
-                            >
-                              {editing ? (
-                                <X className="size-3" aria-hidden="true" />
-                              ) : (
-                                <Pencil className="size-3" aria-hidden="true" />
-                              )}
-                              {editing
-                                ? t("resource.actions.close")
-                                : t("resource.actions.update")}
                             </button>
                           </div>
                         </div>

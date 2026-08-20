@@ -325,15 +325,13 @@ export function StockOverview() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [apiMetrics, setApiMetrics] = useState<StockMetrics>({});
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<StockFilter>("all");
   const [dueCounts, setDueCounts] = useState<DueInventoryCount[]>([]);
 
-  const loadStock = useCallback(async (options?: { quiet?: boolean; signal?: AbortSignal }) => {
-    if (options?.quiet) setRefreshing(true);
-    else setLoading(true);
+  const loadStock = useCallback(async (options?: { signal?: AbortSignal }) => {
+    setLoading(true);
     setError(null);
 
     try {
@@ -370,7 +368,6 @@ export function StockOverview() {
     } finally {
       if (!options?.signal?.aborted) {
         setLoading(false);
-        setRefreshing(false);
       }
     }
   }, [t]);
@@ -453,26 +450,6 @@ export function StockOverview() {
         <h1 className="text-2xl font-semibold text-foreground sm:text-[28px]">
           {t("overview.title")}
         </h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => void loadStock({ quiet: true })}
-            disabled={loading || refreshing}
-            aria-label={
-              refreshing
-                ? t("overview.actions.refreshingLabel")
-                : t("overview.actions.refresh")
-            }
-            className="px-3 sm:px-4"
-          >
-            <RefreshCw className={cn("size-4", refreshing && "animate-spin")} aria-hidden="true" />
-            <span className="hidden sm:inline">
-              {refreshing
-                ? t("overview.actions.refreshing")
-                : t("overview.actions.refresh")}
-            </span>
-          </Button>
-        </div>
       </div>
 
       {loading ? <StockLoading /> : null}

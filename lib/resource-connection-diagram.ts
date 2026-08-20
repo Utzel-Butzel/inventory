@@ -10,6 +10,7 @@ export type ConnectionDiagramRelation = {
   sourceResourceId: string;
   targetResourceId: string;
   relationTypeKey: string;
+  origin?: "manual" | "spatial";
   source: ConnectionDiagramResource | null;
   target: ConnectionDiagramResource | null;
   relationType: {
@@ -461,4 +462,225 @@ export function buildResourceConnectionGraph(input: {
     connectionCount: canonicalConnections.size,
     truncated,
   };
+}
+
+const primaryGraphConnection = (connections: ConnectionDiagramConnection[]) =>
+  [...connections].sort(
+    (left, right) => kindPriority[left.kind] - kindPriority[right.kind],
+  )[0];
+
+const compareGraphNodes =
+  (rootResourceId: string) =>
+  (left: ConnectionDiagramGraphNode, right: ConnectionDiagramGraphNode) =>
+    Number(right.resource.id === rootResourceId) -
+      Number(left.resource.id === rootResourceId) ||
+    kindPriority[
+      primaryGraphConnection(left.connections)?.kind ?? "relationship"
+    ] -
+      kindPriority[
+        primaryGraphConnection(right.connections)?.kind ?? "relationship"
+      ] ||
+    left.resource.name.localeCompare(right.resource.name) ||
+    left.resource.id.localeCompare(right.resource.id);
+
+type Point = { x: number; y: number };
+
+const orientation = (a: Point, b: Point, c: Point) =>
+  Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+
+// Two segments cross when each straddles the line through the other. Endpoints
+// that merely touch or lie collinear do not count, so edges fanning out of a
+// shared node are never treated as crossing.
+const segmentsCross = (p1: Point, p2: Point, p3: Point, p4: Point) => {
+  const d1 = orientation(p3, p4, p1);
+  const d2 = orientation(p3, p4, p2);
+  const d3 = orientation(p1, p2, p3);
+  const d4 = orientation(p1, p2, p4);
+  return d1 !== 0 && d2 !== 0 && d3 !== 0 && d4 !== 0 && d1 !== d2 && d3 !== d4;
+};
+
+/**
+ * Counts how many pairs of edges cross given the current vertical order. Only
+ * edges that span two different columns are considered; same-column edges
+ * (sibling rails and stacked containment) render as side bulges and never
+ * take part in the layered crossing problem. Column index doubles as the
+ * horizontal coordinate, which is enough because the rendered curves stay
+ * monotonic between their two columns.
+ */
+function countConnectionCrossings(
+  edges: ConnectionDiagramGraphEdge[],
+  positionOf: ReadonlyMap<string, Point>,
+) {
+  const segments = edges.flatMap((edge) => {
+    if (edge.visualOnly) return [];
+    const first = positionOf.get(edge.firstResourceId);
+    const second = positionOf.get(edge.secondResourceId);
+    if (!first || !second || first.x === second.x) return [];
+    return [{ first, second, a: edge.firstResourceId, b: edge.secondResourceId }];
+  });
+  let crossings = 0;
+  for (let i = 0; i < segments.length; i += 1) {
+    for (let j = i + 1; j < segments.length; j += 1) {
+      const left = segments[i];
+      const right = segments[j];
+      if (
+        left.a === right.a ||
+        left.a === right.b ||
+        left.b === right.a ||
+        left.b === right.b
+      ) {
+        continue;
+      }
+      if (segmentsCross(left.first, left.second, right.first, right.second)) {
+        crossings += 1;
+      }
+    }
+  }
+  return crossings;
+}
+
+/**
+ * Orders each column of a laid-out graph vertically to reduce edge crossings.
+ * Nodes start in a stable kind/name order, then repeatedly move toward the
+ * average vertical position of the nodes they connect to — the barycenter
+ * heuristic used by layered graph drawing. Columns are centered on zero so a
+ * node's coordinate is comparable across columns of different sizes, which is
+ * what lets an edge spanning from a left column to a right column pull its
+ * endpoints into alignment. Because plain barycenter iteration can oscillate
+ * between two arrangements on symmetric graphs, every intermediate arrangement
+ * is scored and the one with the fewest actual crossings is kept. The selected
+ * root is scored at the same centered position used by the renderer, while it
+ * remains first in the returned array so column truncation can never hide it.
+ * Same-column decorative rails are ignored by the barycenter calculation since
+ * they cannot cross the between-column connection arrows.
+ */
+export function orderConnectionColumns(
+  nodes: ConnectionDiagramGraphNode[],
+  edges: ConnectionDiagramGraphEdge[],
+  depth: number,
+  rootResourceId: string,
+): Map<number, ConnectionDiagramGraphNode[]> {
+  const compare = compareGraphNodes(rootResourceId);
+  const byColumn = new Map<number, ConnectionDiagramGraphNode[]>();
+  for (let column = -depth; column <= depth; column += 1) {
+    byColumn.set(
+      column,
+      nodes.filter((node) => node.column === column).sort(compare),
+    );
+  }
+
+  const columnOf = new Map(
+    nodes.map((node) => [node.resource.id, node.column]),
+  );
+  const adjacency = new Map<string, string[]>();
+  const link = (from: string, to: string) => {
+    const neighbors = adjacency.get(from);
+    if (neighbors) neighbors.push(to);
+    else adjacency.set(from, [to]);
+  };
+  for (const edge of edges) {
+    if (
+      edge.visualOnly ||
+      columnOf.get(edge.firstResourceId) ===
+        columnOf.get(edge.secondResourceId)
+    ) {
+      continue;
+    }
+    link(edge.firstResourceId, edge.secondResourceId);
+    link(edge.secondResourceId, edge.firstResourceId);
+  }
+
+  const verticalOf = new Map<string, number>();
+  const centerColumn = (column: ConnectionDiagramGraphNode[]) => {
+    const rootIndex = column.findIndex(
+      (node) => node.resource.id === rootResourceId,
+    );
+    const visualOrder = [...column];
+    if (rootIndex >= 0 && visualOrder.length > 1) {
+      const [root] = visualOrder.splice(rootIndex, 1);
+      visualOrder.splice(Math.floor(visualOrder.length / 2), 0, root);
+    }
+    visualOrder.forEach((node, index) =>
+      verticalOf.set(node.resource.id, index - (column.length - 1) / 2),
+    );
+  };
+  for (const column of byColumn.values()) centerColumn(column);
+
+  const positions = () => {
+    const map = new Map<string, Point>();
+    for (const [id, y] of verticalOf) {
+      const x = columnOf.get(id);
+      if (x !== undefined) map.set(id, { x, y });
+    }
+    return map;
+  };
+  const snapshot = () =>
+    new Map(Array.from(byColumn, ([column, order]) => [column, [...order]]));
+
+  // Reorders one column against the current positions of every column it
+  // touches, then re-centers just that column. Moving a single column at a
+  // time (rather than all at once) is what lets a sweep settle a crossing:
+  // reordering every column together can merely rotate the whole layout and
+  // preserve the crossing it was meant to remove.
+  const reorderColumn = (columnIndex: number) => {
+    const column = byColumn.get(columnIndex);
+    if (!column || column.length < 2) return;
+    const barycenter = new Map<string, number>();
+    for (const node of column) {
+      if (node.resource.id === rootResourceId) {
+        barycenter.set(node.resource.id, verticalOf.get(node.resource.id) ?? 0);
+        continue;
+      }
+      const neighborVerticals = (adjacency.get(node.resource.id) ?? [])
+        .map((id) => verticalOf.get(id))
+        .filter((value): value is number => value !== undefined);
+      barycenter.set(
+        node.resource.id,
+        neighborVerticals.length
+          ? neighborVerticals.reduce((sum, value) => sum + value, 0) /
+              neighborVerticals.length
+          : verticalOf.get(node.resource.id) ?? 0,
+      );
+    }
+    const root = column.find(
+      (node) => node.resource.id === rootResourceId,
+    );
+    const sortable = root
+      ? column.filter((node) => node.resource.id !== rootResourceId)
+      : column;
+    sortable.sort(
+      (left, right) =>
+        (barycenter.get(left.resource.id) ?? 0) -
+          (barycenter.get(right.resource.id) ?? 0) || compare(left, right),
+    );
+    if (root) column.splice(0, column.length, root, ...sortable);
+    centerColumn(column);
+  };
+
+  const sweepOrder: number[] = [];
+  for (let distance = 1; distance <= depth; distance += 1) {
+    sweepOrder.push(distance, -distance);
+  }
+
+  let best = snapshot();
+  let bestCrossings = countConnectionCrossings(edges, positions());
+  const keepIfBetter = () => {
+    const crossings = countConnectionCrossings(edges, positions());
+    if (crossings >= bestCrossings) return;
+    bestCrossings = crossings;
+    best = snapshot();
+  };
+
+  for (let iteration = 0; iteration < 4 && bestCrossings > 0; iteration += 1) {
+    for (const columnIndex of sweepOrder) {
+      reorderColumn(columnIndex);
+      keepIfBetter();
+    }
+    for (let index = sweepOrder.length - 1; index >= 0; index -= 1) {
+      reorderColumn(sweepOrder[index]);
+      keepIfBetter();
+    }
+  }
+
+  return best;
 }

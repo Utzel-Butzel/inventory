@@ -18,7 +18,6 @@ import {
   PackageCheck,
   Plus,
   QrCode,
-  RefreshCw,
   Save,
   ScanLine,
   Settings2,
@@ -579,7 +578,6 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
   const [baseSignature, setBaseSignature] = useState(() => payloadSignature(firstDraft));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -597,9 +595,8 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
   }, []);
 
   const loadData = useCallback(
-    async (options?: { refresh?: boolean; keepSelection?: string | null }) => {
-      if (options?.refresh) setRefreshing(true);
-      else setLoading(true);
+    async () => {
+      setLoading(true);
       setNotice(null);
       try {
         const [workflowPayload, stockPayload] = await Promise.all([
@@ -611,10 +608,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
         setWorkflows(nextWorkflows);
         setResources(nextResources);
 
-        const requestedId = options?.keepSelection;
-        const nextSelection =
-          (requestedId ? nextWorkflows.find((workflow) => workflow.id === requestedId) : null) ??
-          nextWorkflows[0];
+        const nextSelection = nextWorkflows[0];
         if (nextSelection) {
           applyWorkflow(nextSelection);
         } else {
@@ -630,7 +624,6 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
         });
       } finally {
         setLoading(false);
-        setRefreshing(false);
       }
     },
     [applyWorkflow, t],
@@ -652,7 +645,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
   }, [draft.inputFields]);
 
   const dirty = payloadSignature(draft) !== baseSignature;
-  const interactionBusy = saving || deleting || refreshing;
+  const interactionBusy = saving || deleting;
   const editable = canManage && !interactionBusy;
   const savedWorkflow = draft.id
     ? workflows.find((workflow) => workflow.id === draft.id) ?? null
@@ -685,11 +678,6 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
     if (interactionBusy || selectedId === workflow.id || !confirmDraftDiscard()) return;
     applyWorkflow(workflow);
     setNotice(null);
-  };
-
-  const refreshData = () => {
-    if (interactionBusy || !confirmDraftDiscard()) return;
-    void loadData({ refresh: true, keepSelection: selectedId });
   };
 
   const persistDraft = async (
@@ -910,14 +898,6 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
               <Lock className="size-3.5" aria-hidden="true" /> {t("workflows.header.readOnly")}
             </Badge>
           ) : null}
-          <Button
-            variant="secondary"
-            onClick={refreshData}
-            disabled={interactionBusy}
-          >
-            <RefreshCw className={cn("size-4", refreshing && "animate-spin")} aria-hidden="true" />
-            {t("workflows.header.refresh")}
-          </Button>
           {canManage ? (
             <Button onClick={chooseTemplate} disabled={interactionBusy}>
               <Plus className="size-4" aria-hidden="true" />
@@ -1073,24 +1053,24 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                       {t("workflows.editor.delete")}
                     </Button>
                   ) : null}
-                  <Button
-                    size="sm"
-                    onClick={saveDraft}
-                    disabled={interactionBusy || (Boolean(draft.id) && !dirty)}
-                  >
-                    {saving ? (
-                      <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <Save className="size-3.5" aria-hidden="true" />
-                    )}
-                    {t(
-                      saving
-                        ? "workflows.editor.saving"
-                        : draft.id
-                          ? "workflows.editor.update"
+                  {!draft.id ? (
+                    <Button
+                      size="sm"
+                      onClick={saveDraft}
+                      disabled={interactionBusy}
+                    >
+                      {saving ? (
+                        <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Save className="size-3.5" aria-hidden="true" />
+                      )}
+                      {t(
+                        saving
+                          ? "workflows.editor.saving"
                           : "workflows.editor.save",
-                    )}
-                  </Button>
+                      )}
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
