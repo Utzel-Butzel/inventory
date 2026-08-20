@@ -150,6 +150,7 @@
     "coverDescription": "Prepare a square cover image from the first photo.",
     "safety": "Automatic processing starts only after the original files have been saved. Review and edit the result if needed.",
     "rewrite": "Fill details from photos",
+    "research": "Fill details from AI",
     "coverDirection": "Cover direction",
     "referenceImage": "Reference image",
     "referenceImageDescription": "Choose which image the cover should be based on.",
@@ -267,6 +268,21 @@
     "depth": {
       "label": "Levels",
       "ariaLabel": "Number of connection levels"
+    },
+    "stock": {
+      "show": "Show stock",
+      "loading": "Loading stock…",
+      "onHand": "{{quantity}} on hand",
+      "buildable_one": "{{value}} buildable",
+      "buildable_other": "{{value}} buildable",
+      "statuses": {
+        "out": "Out of stock",
+        "low": "Low stock",
+        "healthy": "In stock"
+      },
+      "errors": {
+        "load": "Unable to load stock for the connection flow."
+      }
     },
     "legend": {
       "family": "Variant family",
@@ -464,6 +480,8 @@
   "notices": {
     "locationRead": "Location was read from the image metadata. Please verify it.",
     "analysisComplete": "Details were filled from the photos. The title, description, tags and type were updated.",
+    "researchComplete": "Missing details were added with AI web research. Existing information was preserved.",
+    "researchNoChanges": "AI web research finished, but found no reliable missing details to add.",
     "coverComplete": "A new studio cover was generated and set as the first image.",
     "savedTranslationStale": "Changes saved. Translation is still stale: {{reason}}",
     "savedTranslations": "Changes saved. Translation refresh is queued in the background.",
@@ -479,6 +497,7 @@
     "loadCustomFields": "Unable to load custom field definitions.",
     "unsupportedFiles": "Some files were skipped. Supported formats are images, video, PDF, and USDZ 3D models.",
     "analysis": "The automatic photo analysis failed.",
+    "research": "AI web research failed.",
     "cover": "Cover generation failed.",
     "requiredCustomField": "Complete the required custom field “{{label}}”.",
     "nameOrImage": "Add a name or at least one image for automatic analysis.",

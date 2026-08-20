@@ -8,6 +8,10 @@ const {
   roomGeoreference,
   spatialStructureMapFeatures,
 } = await import("../lib/spatial-map-features.ts");
+const {
+  displayedMapCoordinates,
+  isRenderableMapFeature,
+} = await import("../lib/map-features.ts");
 const { identitySpatialMatrix } = await import("../lib/room-scene-contract.ts");
 
 const structureAnchor = {
@@ -203,4 +207,38 @@ test("derives a building marker from a multi-polygon room footprint", () => {
   assert.ok(collection.features.some(
     (feature) => feature.id === `structure-derived-marker:${detail.id}`,
   ));
+});
+
+test("uses only valid features from displayed inventory items for map bounds", () => {
+  const visiblePoint = {
+    id: "visible-point",
+    type: "point",
+    layer: "Location",
+    description: "",
+    coordinates: [13.7, 51.05],
+  };
+  const invalidPoint = {
+    ...visiblePoint,
+    id: "invalid-point",
+    coordinates: [Number.NaN, 51.05],
+  };
+  const hiddenPoint = {
+    ...visiblePoint,
+    id: "hidden-point",
+    coordinates: [12.3, 50.9],
+  };
+
+  assert.equal(isRenderableMapFeature(visiblePoint), true);
+  assert.equal(isRenderableMapFeature(invalidPoint), false);
+  assert.equal(isRenderableMapFeature(null), false);
+  assert.deepEqual(
+    displayedMapCoordinates(
+      [{ id: "visible" }],
+      {
+        visible: [visiblePoint, invalidPoint],
+        hidden: [hiddenPoint],
+      },
+    ),
+    [[13.7, 51.05]],
+  );
 });

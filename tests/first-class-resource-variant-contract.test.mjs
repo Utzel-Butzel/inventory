@@ -140,6 +140,19 @@ test("builds can consume a selected first-class variant for a configurable BOM c
   assert.match(manager, /component\.choices\.length > 1/);
   assert.match(manager, /componentResourceSelections/);
   assert.match(manager, /assembly:labels\.componentConfiguration/);
+  assert.match(
+    assemblies,
+    /eq\(media\.kind, "image"\)[\s\S]*coverByResource\.get\(choice\.id\)/,
+  );
+  assert.match(manager, /function ResourceThumbnail/);
+  assert.match(
+    manager,
+    /ResourceThumbnail[\s\S]*cover=\{component\.cover\}[\s\S]*<select/,
+  );
+  assert.match(
+    openapi,
+    /BomComponent:[\s\S]*cover:[\s\S]*BomCover[\s\S]*choices:/,
+  );
   assert.match(stockSwitcher, /\/family/);
   assert.match(
     openapi,

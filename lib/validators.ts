@@ -461,10 +461,11 @@ export const organizationUpdateInputSchema = z
   .object({
     name: z.string().trim().min(1).max(160).optional(),
     slug: organizationSlugSchema.optional(),
+    allowNegativeStock: z.boolean().optional(),
   })
   .strict()
-  .refine((value) => value.name !== undefined || value.slug !== undefined, {
-    message: "Provide an organization name or slug.",
+  .refine((value) => Object.values(value).some((entry) => entry !== undefined), {
+    message: "Provide an organization setting to update.",
   });
 
 export const organizationSelectInputSchema = z
@@ -477,6 +478,8 @@ export const analyzeInputSchema = z.object({
   overwrite: z.boolean().optional().default(true),
   prompt: z.string().trim().max(5_000).optional(),
 });
+
+export const researchInputSchema = z.object({}).strict();
 
 export const coverInputSchema = z.object({
   sourceMediaId: z.string().uuid().optional(),

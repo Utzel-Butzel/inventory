@@ -84,6 +84,7 @@ export type ConnectionDiagramPayload = {
   relations: ConnectionDiagramRelation[];
   family: ConnectionDiagramFamily | null;
   bomComponents: ConnectionDiagramBomComponent[];
+  bomBuildableQuantity?: number | null;
 };
 
 export type ConnectionDiagramGraphNode = {
@@ -128,6 +129,75 @@ const kindPriority: Record<ConnectionDiagramKind, number> = {
   containment: 2,
   relationship: 3,
 };
+
+type ConnectionCurvePoint = { x: number; y: number };
+
+export function buildWavyConnectionPath(curve: {
+  start: ConnectionCurvePoint;
+  controlStart: ConnectionCurvePoint;
+  controlEnd: ConnectionCurvePoint;
+  end: ConnectionCurvePoint;
+}): string {
+  const { start, controlStart, controlEnd, end } = curve;
+  const distance = (first: ConnectionCurvePoint, second: ConnectionCurvePoint) =>
+    Math.hypot(second.x - first.x, second.y - first.y);
+  const approximateLength =
+    distance(start, controlStart) +
+    distance(controlStart, controlEnd) +
+    distance(controlEnd, end);
+  const waveCount = Math.max(2, Math.round(approximateLength / 32));
+  const segmentCount = Math.max(32, waveCount * 10);
+  const coordinate = (value: number) =>
+    Math.abs(value) < 0.005 ? "0" : value.toFixed(2);
+  const points: ConnectionCurvePoint[] = [];
+
+  for (let index = 0; index <= segmentCount; index += 1) {
+    if (index === 0) {
+      points.push(start);
+      continue;
+    }
+    if (index === segmentCount) {
+      points.push(end);
+      continue;
+    }
+    const progress = index / segmentCount;
+    const inverse = 1 - progress;
+    const x =
+      inverse ** 3 * start.x +
+      3 * inverse ** 2 * progress * controlStart.x +
+      3 * inverse * progress ** 2 * controlEnd.x +
+      progress ** 3 * end.x;
+    const y =
+      inverse ** 3 * start.y +
+      3 * inverse ** 2 * progress * controlStart.y +
+      3 * inverse * progress ** 2 * controlEnd.y +
+      progress ** 3 * end.y;
+    const tangentX =
+      3 * inverse ** 2 * (controlStart.x - start.x) +
+      6 * inverse * progress * (controlEnd.x - controlStart.x) +
+      3 * progress ** 2 * (end.x - controlEnd.x);
+    const tangentY =
+      3 * inverse ** 2 * (controlStart.y - start.y) +
+      6 * inverse * progress * (controlEnd.y - controlStart.y) +
+      3 * progress ** 2 * (end.y - controlEnd.y);
+    const tangentLength = Math.hypot(tangentX, tangentY) || 1;
+    const wave =
+      Math.sin(progress * Math.PI * 2 * waveCount) *
+      Math.sin(progress * Math.PI) *
+      5;
+    points.push({
+      x: x - (tangentY / tangentLength) * wave,
+      y: y + (tangentX / tangentLength) * wave,
+    });
+  }
+
+  return points
+    .map(
+      (point, index) =>
+        `${index === 0 ? "M" : "L"} ${coordinate(point.x)} ${coordinate(point.y)}`,
+    )
+    .join(" ");
+}
 
 export function buildResourceConnectionDiagram(
   input: Input,
@@ -303,7 +373,7 @@ export function buildResourceConnectionGraph(input: {
   payloads: ReadonlyMap<string, ConnectionDiagramPayload>;
   maxNodes?: number;
 }): ConnectionDiagramGraph {
-  const maximumDepth = Math.max(1, Math.min(3, Math.trunc(input.depth)));
+  const maximumDepth = Math.max(1, Math.min(7, Math.trunc(input.depth)));
   const maximumNodes = Math.max(3, input.maxNodes ?? 45);
   const nodes = new Map<string, ConnectionDiagramGraphNode>([
     [

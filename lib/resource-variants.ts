@@ -3,6 +3,7 @@ import "server-only";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import {
+  organizations,
   resources,
   resourceVariants,
   stockMovements,
@@ -456,8 +457,16 @@ export async function bookResourceVariantMovement(
 ) {
   return db.transaction(async (transaction) => {
     const [resource] = await transaction
-      .select({ id: resources.id, quantity: resources.quantity })
+      .select({
+        id: resources.id,
+        quantity: resources.quantity,
+        allowNegativeStock: organizations.allowNegativeStock,
+      })
       .from(resources)
+      .innerJoin(
+        organizations,
+        eq(organizations.id, resources.organizationId),
+      )
       .where(
         and(
           eq(resources.organizationId, organizationId),
@@ -490,6 +499,7 @@ export async function bookResourceVariantMovement(
         resource.quantity,
         variant.quantity,
         input.delta,
+        resource.allowNegativeStock,
       );
       nextVariantQuantity = next.nextVariantQuantity;
       nextResourceQuantity = next.nextParentQuantity;

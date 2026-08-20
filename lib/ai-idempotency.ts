@@ -8,6 +8,7 @@ import { idempotencyResponseHeaders } from "@/lib/idempotency";
 
 export type AiOperationName =
   | "analyze"
+  | "research"
   | "recognize"
   | "count"
   | "cover"

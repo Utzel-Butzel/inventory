@@ -46,8 +46,11 @@ test("organization settings use the list, create, and update contracts", async (
   assert.match(manager, /`\/api\/v1\/organizations\/\$\{encodeURIComponent\(organization\.id\)\}`/);
   assert.match(manager, /method: "PATCH"/);
   assert.match(manager, /organizations\.form\.slug/);
+  assert.match(manager, /organizations\.form\.allowNegativeStock/);
+  assert.match(manager, /allowNegativeStock: editingAllowNegativeStock/);
   assert.match(navigation, /href: "\/settings\/organization"/);
   assert.match(shell, /<OrganizationSwitcher/);
+  assert.match(shell, /organizations\.length > 1/);
   assert.match(shell, /\{organization\.name\}/);
   assert.match(route, /identity\.permissions\.includes\("users\.manage"\)/);
   assert.match(route, /canManage:/);

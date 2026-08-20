@@ -29,6 +29,7 @@ import {
 import { Badge, Button, Card, cn } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
 import {
+  buildWavyConnectionPath,
   buildResourceConnectionGraph,
   getConnectionFamilyGroups,
   orderConnectionRows,
@@ -54,6 +55,16 @@ type ConnectionDiagramCover = {
   altText: string;
 };
 
+type ConnectionStockStatus = "out" | "low" | "healthy";
+
+type ConnectionStockSummary = {
+  resourceId: string;
+  quantity: number;
+  minimumStock: number;
+  unitName: string;
+  status: ConnectionStockStatus;
+};
+
 type DisplayRowItem =
   | { type: "resource"; node: ConnectionDiagramGraphNode }
   | { type: "overflow"; row: number; count: number };
@@ -73,7 +84,7 @@ const MIN_CANVAS_HEIGHT = 420;
 const MAX_VISIBLE_NODES_PER_ROW = 12;
 const MAX_GRAPH_NODES = 45;
 const FETCH_BATCH_SIZE = 6;
-const DEPTH_OPTIONS = [1, 2, 3] as const;
+const DEPTH_OPTIONS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 const kindColor: Record<ConnectionDiagramKind, string> = {
   family: "var(--color-brand)",
@@ -90,6 +101,24 @@ const kindBadgeTone: Record<
   bom: "warning",
   containment: "success",
   relationship: "neutral",
+};
+
+const stockTone: Record<
+  ConnectionStockStatus,
+  { badge: string; media: string }
+> = {
+  out: {
+    badge: "bg-danger-soft text-danger ring-danger-border",
+    media: "ring-2 ring-danger-border",
+  },
+  low: {
+    badge: "bg-warning-soft text-warning ring-warning-border",
+    media: "ring-2 ring-warning-border",
+  },
+  healthy: {
+    badge: "bg-success-soft text-success ring-success-border",
+    media: "ring-2 ring-success-border",
+  },
 };
 
 const kindPriority: Record<ConnectionDiagramKind, number> = {
@@ -250,7 +279,10 @@ async function loadDirectPayload(resourceId: string): Promise<PayloadResult> {
       `/api/v1/resources/${resourceId}/family`,
       { cache: "no-store" },
     ),
-    fetchJson<{ components: ConnectionDiagramBomComponent[] }>(
+    fetchJson<{
+      components: ConnectionDiagramBomComponent[];
+      buildableQuantity: number;
+    }>(
       `/api/v1/resources/${resourceId}/bom`,
       { cache: "no-store" },
     ),
@@ -271,6 +303,8 @@ async function loadDirectPayload(resourceId: string): Promise<PayloadResult> {
         relations.status === "fulfilled" ? relations.value.relations : [],
       family: family.status === "fulfilled" ? family.value : null,
       bomComponents: bom.status === "fulfilled" ? bom.value.components : [],
+      bomBuildableQuantity:
+        bom.status === "fulfilled" ? bom.value.buildableQuantity : null,
     },
   };
 }
@@ -283,6 +317,16 @@ async function loadResourceCovers(resourceIds: string[]) {
     `/api/v1/resources/covers?${search.toString()}`,
     { cache: "no-store" },
   ).then((result) => result.covers);
+}
+
+async function loadResourceStock(resourceIds: string[], signal: AbortSignal) {
+  if (!resourceIds.length) return [];
+  const search = new URLSearchParams();
+  for (const resourceId of resourceIds) search.append("id", resourceId);
+  return fetchJson<{ stock: ConnectionStockSummary[] }>(
+    `/api/v1/resources/stock-summaries?${search.toString()}`,
+    { cache: "no-store", signal },
+  ).then((result) => result.stock);
 }
 
 export function ResourceConnectionDiagram({
@@ -311,6 +355,9 @@ export function ResourceConnectionDiagram({
   const [coverSnapshot, setCoverSnapshot] = useState<
     ReadonlyMap<string, ConnectionDiagramCover>
   >(new Map());
+  const [stockSnapshot, setStockSnapshot] = useState<
+    ReadonlyMap<string, ConnectionStockSummary>
+  >(new Map());
   const [depth, setDepth] = useState(3);
   const [partial, setPartial] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -321,6 +368,9 @@ export function ResourceConnectionDiagram({
     useState<ConnectionEditorSelection | null>(null);
   const [editorNotice, setEditorNotice] = useState<string | null>(null);
   const [listRemoveError, setListRemoveError] = useState<string | null>(null);
+  const [showStock, setShowStock] = useState(false);
+  const [stockLoading, setStockLoading] = useState(false);
+  const [stockError, setStockError] = useState<string | null>(null);
 
   const load = useCallback(
     async (requestedDepth: number, refresh = false) => {
@@ -455,6 +505,47 @@ export function ResourceConnectionDiagram({
         : null,
     [depth, payloadSnapshot, resource],
   );
+  const stockResourceKey = useMemo(
+    () =>
+      model
+        ? model.nodes
+            .map((node) => node.resource.id)
+            .sort()
+            .join("|")
+        : "",
+    [model],
+  );
+
+  useEffect(() => {
+    if (!showStock || !canViewStock || !stockResourceKey) {
+      setStockLoading(false);
+      setStockError(null);
+      return;
+    }
+    const controller = new AbortController();
+    setStockLoading(true);
+    setStockError(null);
+    void loadResourceStock(stockResourceKey.split("|"), controller.signal)
+      .then((stock) => {
+        if (!controller.signal.aborted) {
+          setStockSnapshot(
+            new Map(stock.map((item) => [item.resourceId, item])),
+          );
+        }
+      })
+      .catch((stockLoadError) => {
+        if (controller.signal.aborted) return;
+        setStockError(
+          stockLoadError instanceof Error
+            ? stockLoadError.message
+            : t("connectionDiagram.stock.errors.load"),
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setStockLoading(false);
+      });
+    return () => controller.abort();
+  }, [canViewStock, showStock, stockResourceKey, t]);
 
   const rows = useMemo(() => {
     const result = new Map<number, DisplayRowItem[]>();
@@ -653,27 +744,46 @@ export function ResourceConnectionDiagram({
                   </button>
                 </div>
                 {view === "graph" ? (
-                  <label className="flex h-8 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
-                    <span>{t("connectionDiagram.depth.label")}</span>
-                    <select
-                      value={depth}
-                      onChange={(event) => {
-                        const nextDepth = Number(event.target.value);
-                        setDepth(nextDepth);
-                        if (payloadsRef.current.has(resource.id)) {
-                          void load(nextDepth);
-                        }
-                      }}
-                      className="bg-transparent text-xs font-semibold text-foreground outline-none"
-                      aria-label={t("connectionDiagram.depth.ariaLabel")}
-                    >
-                      {DEPTH_OPTIONS.map((value) => (
-                        <option key={value} value={value}>
-                          {value}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <>
+                    {canViewStock ? (
+                      <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
+                        <input
+                          type="checkbox"
+                          checked={showStock}
+                          onChange={(event) => setShowStock(event.target.checked)}
+                          className="size-3.5 rounded border-border-strong accent-brand-solid"
+                        />
+                        <span>{t("connectionDiagram.stock.show")}</span>
+                        {showStock && stockLoading ? (
+                          <LoaderCircle
+                            className="size-3 animate-spin text-muted"
+                            aria-label={t("connectionDiagram.stock.loading")}
+                          />
+                        ) : null}
+                      </label>
+                    ) : null}
+                    <label className="flex h-8 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
+                      <span>{t("connectionDiagram.depth.label")}</span>
+                      <select
+                        value={depth}
+                        onChange={(event) => {
+                          const nextDepth = Number(event.target.value);
+                          setDepth(nextDepth);
+                          if (payloadsRef.current.has(resource.id)) {
+                            void load(nextDepth);
+                          }
+                        }}
+                        className="bg-transparent text-xs font-semibold text-foreground outline-none"
+                        aria-label={t("connectionDiagram.depth.ariaLabel")}
+                      >
+                        {DEPTH_OPTIONS.map((value) => (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
                 ) : null}
                 {view === "graph" || view === "list" ? (
                   <>
@@ -728,6 +838,11 @@ export function ResourceConnectionDiagram({
             {listRemoveError ? (
               <p className="border-b border-danger-border bg-danger-soft px-5 py-2.5 text-xs text-danger sm:px-6">
                 {listRemoveError}
+              </p>
+            ) : null}
+            {stockError ? (
+              <p className="border-b border-danger-border bg-danger-soft px-5 py-2.5 text-xs text-danger sm:px-6">
+                {stockError}
               </p>
             ) : null}
             {error ? (
@@ -831,6 +946,23 @@ export function ResourceConnectionDiagram({
                                   ? (coverSnapshot.get(
                                       item.node.resource.id,
                                     ) ?? null)
+                                  : null
+                              }
+                              stock={
+                                showStock && item.type === "resource"
+                                  ? (stockSnapshot.get(
+                                      item.node.resource.id,
+                                    ) ?? null)
+                                  : null
+                              }
+                              buildableQuantity={
+                                showStock &&
+                                item.type === "resource" &&
+                                (payloadSnapshot.get(item.node.resource.id)
+                                  ?.bomComponents.length ?? 0) > 0
+                                  ? (payloadSnapshot.get(
+                                      item.node.resource.id,
+                                    )?.bomBuildableQuantity ?? 0)
                                   : null
                               }
                               rootResourceId={resource.id}
@@ -1418,13 +1550,23 @@ function GraphEdge({
   if (!from || !to) return null;
   const fromCenterX = anchors?.fromX ?? from.x + NODE_WIDTH / 2;
   const toCenterX = anchors?.toX ?? to.x + NODE_WIDTH / 2;
-  let path: string;
+  let curve: {
+    start: NodePosition;
+    controlStart: NodePosition;
+    controlEnd: NodePosition;
+    end: NodePosition;
+  };
   if (from.y === to.y) {
     const edgeY = visualOnly ? from.y + NODE_HEIGHT : from.y;
     const span = Math.abs(fromCenterX - toCenterX);
-    const curve = Math.min(64, 32 + span * 0.035);
-    const controlY = visualOnly ? edgeY + curve : edgeY - curve;
-    path = `M ${fromCenterX} ${edgeY} C ${fromCenterX} ${controlY}, ${toCenterX} ${controlY}, ${toCenterX} ${edgeY}`;
+    const curveHeight = Math.min(64, 32 + span * 0.035);
+    const controlY = visualOnly ? edgeY + curveHeight : edgeY - curveHeight;
+    curve = {
+      start: { x: fromCenterX, y: edgeY },
+      controlStart: { x: fromCenterX, y: controlY },
+      controlEnd: { x: toCenterX, y: controlY },
+      end: { x: toCenterX, y: edgeY },
+    };
   } else {
     const downward = from.y < to.y;
     const startY = downward ? from.y + NODE_HEIGHT : from.y;
@@ -1433,8 +1575,17 @@ function GraphEdge({
       ? to.y - arrowGap
       : to.y + NODE_HEIGHT + arrowGap;
     const middleY = (startY + endY) / 2;
-    path = `M ${fromCenterX} ${startY} C ${fromCenterX} ${middleY}, ${toCenterX} ${middleY}, ${toCenterX} ${endY}`;
+    curve = {
+      start: { x: fromCenterX, y: startY },
+      controlStart: { x: fromCenterX, y: middleY },
+      controlEnd: { x: toCenterX, y: middleY },
+      end: { x: toCenterX, y: endY },
+    };
   }
+  const path =
+    primary.kind === "relationship" && !visualOnly
+      ? buildWavyConnectionPath(curve)
+      : `M ${curve.start.x} ${curve.start.y} C ${curve.controlStart.x} ${curve.controlStart.y}, ${curve.controlEnd.x} ${curve.controlEnd.y}, ${curve.end.x} ${curve.end.y}`;
   return (
     <g
       role={editing ? "button" : undefined}
@@ -1482,6 +1633,8 @@ function GraphEdge({
 function PositionedGraphNode({
   item,
   cover,
+  stock,
+  buildableQuantity,
   rootResourceId,
   x,
   y,
@@ -1492,6 +1645,8 @@ function PositionedGraphNode({
 }: {
   item: DisplayRowItem;
   cover: ConnectionDiagramCover | null;
+  stock: ConnectionStockSummary | null;
+  buildableQuantity: number | null;
   rootResourceId: string;
   x: number;
   y: number;
@@ -1532,7 +1687,12 @@ function PositionedGraphNode({
       humanize(item.node.resource.type ?? "inventory");
   const content = (
     <>
-      <span className="relative shrink-0">
+      <span
+        className={cn(
+          "relative shrink-0 rounded-xl",
+          stock && stockTone[stock.status].media,
+        )}
+      >
         <span
           className="grid size-20 place-items-center overflow-hidden rounded-xl bg-surface-muted"
           style={
@@ -1567,6 +1727,13 @@ function PositionedGraphNode({
           >
             {item.node.connections.length}
           </Badge>
+        ) : null}
+        {stock ? (
+          <StockIndicator
+            stock={stock}
+            buildableQuantity={buildableQuantity}
+            number={number}
+          />
         ) : null}
       </span>
       <span className="min-w-0 w-full">
@@ -1635,6 +1802,51 @@ function PositionedGraphNode({
     >
       <span className={contentClassName}>{content}</span>
     </Link>
+  );
+}
+
+function StockIndicator({
+  stock,
+  buildableQuantity,
+  number,
+}: {
+  stock: ConnectionStockSummary;
+  buildableQuantity: number | null;
+  number: Intl.NumberFormat;
+}) {
+  const { t } = useT("resource");
+  const statusLabel = t(`connectionDiagram.stock.statuses.${stock.status}`);
+  const quantity = `${number.format(stock.quantity)} ${stock.unitName}`;
+  const onHandLabel = t("connectionDiagram.stock.onHand", { quantity });
+  const buildableLabel =
+    buildableQuantity === null
+      ? null
+      : t("connectionDiagram.stock.buildable", {
+          count: buildableQuantity,
+          value: number.format(buildableQuantity),
+        });
+  return (
+    <span
+      className={cn(
+        "absolute -left-2 -top-2 inline-flex max-w-[124px] flex-col items-start gap-0.5 rounded-lg px-2 py-1 text-[9px] font-bold leading-3 tabular-nums shadow-sm ring-1 ring-inset",
+        stockTone[stock.status].badge,
+      )}
+      title={[onHandLabel, buildableLabel, statusLabel]
+        .filter(Boolean)
+        .join(" · ")}
+    >
+      <span className="flex max-w-full items-center gap-1">
+        <span
+          className="size-1.5 shrink-0 rounded-full bg-current"
+          aria-hidden="true"
+        />
+        <span className="truncate">{onHandLabel}</span>
+      </span>
+      {buildableLabel ? (
+        <span className="max-w-full truncate pl-2.5">{buildableLabel}</span>
+      ) : null}
+      <span className="sr-only"> · {statusLabel}</span>
+    </span>
   );
 }
 

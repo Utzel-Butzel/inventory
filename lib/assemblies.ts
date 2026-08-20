@@ -14,6 +14,8 @@ import {
   assemblyBuildComponents,
   assemblyBuilds,
   bomLines,
+  media,
+  organizations,
   resourceOptionConfigurations,
   resourceOptionGroups,
   resourceOptionSelections,
@@ -659,6 +661,35 @@ async function getBomWithExecutor(
         )
         .orderBy(asc(stockUnits.resourceId), asc(stockUnits.code))
     : [];
+  const coverRows = visibleChoiceIds.length
+    ? await executor
+        .select({
+          resourceId: media.resourceId,
+          url: media.url,
+          altText: media.altText,
+        })
+        .from(media)
+        .where(
+          and(
+            eq(media.organizationId, organizationId),
+            inArray(media.resourceId, visibleChoiceIds),
+            eq(media.kind, "image"),
+          ),
+        )
+        .orderBy(asc(media.resourceId), asc(media.position), asc(media.createdAt))
+    : [];
+  const coverByResource = new Map<
+    string,
+    { url: string; altText: string }
+  >();
+  for (const cover of coverRows) {
+    if (!coverByResource.has(cover.resourceId)) {
+      coverByResource.set(cover.resourceId, {
+        url: cover.url,
+        altText: cover.altText,
+      });
+    }
+  }
   const unitsByResource = new Map<string, typeof availableUnitRows>();
   for (const unit of availableUnitRows) {
     const list = unitsByResource.get(unit.resourceId) ?? [];
@@ -680,6 +711,7 @@ async function getBomWithExecutor(
       sku: choice.sku,
       availableQuantity: choice.availableQuantity,
       trackingMode: trackingMode(choice.trackingMode),
+      cover: coverByResource.get(choice.id) ?? null,
       availableUnits: (unitsByResource.get(choice.id) ?? []).map((unit) => ({
         id: unit.id,
         code: unit.code,
@@ -702,6 +734,7 @@ async function getBomWithExecutor(
       note: line.note,
       availableQuantity: component.availableQuantity,
       trackingMode: trackingMode(component.trackingMode),
+      cover: coverByResource.get(component.id) ?? null,
       availableUnits: (unitsByResource.get(component.id) ?? []).map((unit) => ({
         id: unit.id,
         code: unit.code,
@@ -1794,6 +1827,14 @@ export async function buildAssembly(
         );
       }
       const resourceById = new Map(lockedResources.map((row) => [row.id, row]));
+      const [organization] = await transaction
+        .select({ allowNegativeStock: organizations.allowNegativeStock })
+        .from(organizations)
+        .where(eq(organizations.id, organizationId))
+        .limit(1);
+      if (!organization) {
+        throw new AssemblyOperationError("Organization not found", 404);
+      }
       const currentBom = initialBom.map((line) => {
         const component = resourceById.get(line.componentResourceId);
         if (!component) {
@@ -1877,13 +1918,18 @@ export async function buildAssembly(
           );
         }
         const component = resourceById.get(line.componentResourceId);
-        if (!component || component.quantity < required) {
+        const componentMode = modeByResource.get(line.componentResourceId) ?? "bulk";
+        if (
+          !component ||
+          (component.quantity < required &&
+            (!organization.allowNegativeStock || componentMode === "serialized"))
+        ) {
           throw new AssemblyOperationError(
             `${line.name} needs ${required}, but only ${component?.quantity ?? 0} are available.`,
             409,
           );
         }
-        if ((modeByResource.get(line.componentResourceId) ?? "bulk") === "bulk") {
+        if (componentMode === "bulk" && !organization.allowNegativeStock) {
           const unassigned =
             component.quantity -
             (locatedByResource.get(line.componentResourceId) ?? 0);
@@ -1969,16 +2015,24 @@ export async function buildAssembly(
         }
         const required = line.quantityPerAssembly * input.quantity;
         const balanceAfter = component.quantity - required;
+        if (balanceAfter < -MAX_STOCK_QUANTITY) {
+          throw new AssemblyOperationError(
+            `Consuming ${line.name} would exceed the minimum supported stock of -${MAX_STOCK_QUANTITY}.`,
+            409,
+          );
+        }
         const mode = modeByResource.get(line.componentResourceId) ?? "bulk";
-        const variantAllocation = await allocatedVariantQuantity(
-          transaction,
-          line.componentResourceId,
-        );
-        assertVariantAllocationFits(
-          balanceAfter,
-          variantAllocation,
-          (message) => new AssemblyOperationError(message, 409),
-        );
+        if (!organization.allowNegativeStock) {
+          const variantAllocation = await allocatedVariantQuantity(
+            transaction,
+            line.componentResourceId,
+          );
+          assertVariantAllocationFits(
+            balanceAfter,
+            variantAllocation,
+            (message) => new AssemblyOperationError(message, 409),
+          );
+        }
 
         if (mode === "serialized") {
           const requestedIds = input.componentUnitIds?.[line.componentResourceId];

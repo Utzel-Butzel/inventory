@@ -20,6 +20,8 @@ import {
   assemblyBuilds,
   inventoryAssignments,
   inventoryTypeDefinitions,
+  media,
+  organizations,
   purchaseOrderLines,
   purchaseOrders,
   resources,
@@ -45,6 +47,7 @@ import {
   allocatedVariantQuantity,
   assertVariantAllocationFits,
 } from "@/lib/variant-stock-invariant";
+import { violatesNegativeStockPolicy } from "@/lib/negative-stock-policy";
 
 const FORECAST_WINDOW_DAYS = 30;
 const MAX_SERIALIZATION_UNITS = 5_000;
@@ -202,6 +205,7 @@ async function changeLocationBalance(
   resourceId: string,
   locationResourceId: string,
   delta: number,
+  allowNegativeStock: boolean,
 ) {
   const [current] = await transaction
     .select()
@@ -216,9 +220,21 @@ async function changeLocationBalance(
     .limit(1)
     .for("update");
   const quantity = (current?.quantity ?? 0) + delta;
-  if (quantity < 0) {
+  if (
+    violatesNegativeStockPolicy({
+      allowNegativeStock,
+      quantityBefore: current?.quantity ?? 0,
+      quantityAfter: quantity,
+    })
+  ) {
     throw new StockOperationError(
       `This location only contains ${current?.quantity ?? 0}; the requested booking would make it negative.`,
+      409,
+    );
+  }
+  if (Math.abs(quantity) > MAX_STOCK_QUANTITY) {
+    throw new StockOperationError(
+      `This booking exceeds the supported stock range of -${MAX_STOCK_QUANTITY} to ${MAX_STOCK_QUANTITY}.`,
       409,
     );
   }
@@ -233,7 +249,7 @@ async function changeLocationBalance(
           eq(stockLocationBalances.id, current.id),
         ),
       );
-  } else if (quantity > 0) {
+  } else if (quantity !== 0) {
     await transaction.insert(stockLocationBalances).values({
       organizationId,
       resourceId,
@@ -300,7 +316,7 @@ const calculateForecast = (
 ): StockForecast => {
   const averageDailyUsage = usageDuringWindow / FORECAST_WINDOW_DAYS;
   const daysUntilStockout =
-    averageDailyUsage > 0 ? quantity / averageDailyUsage : null;
+    averageDailyUsage > 0 ? Math.max(0, quantity / averageDailyUsage) : null;
   const predictedTimestamp =
     daysUntilStockout === null
       ? null
@@ -590,7 +606,7 @@ export async function getStockOverview(organizationId: string) {
     .orderBy(asc(resources.name));
 
   const ids = rows.map((row) => row.resourceId);
-  const [usageRows, incomingRows] = ids.length
+  const [usageRows, incomingRows, coverRows] = ids.length
     ? await Promise.all([
         transaction
         .select({
@@ -628,8 +644,27 @@ export async function getStockOverview(organizationId: string) {
             ),
           )
           .groupBy(purchaseOrderLines.resourceId),
+        transaction
+          .select({
+            resourceId: media.resourceId,
+            url: media.url,
+            altText: media.altText,
+          })
+          .from(media)
+          .where(
+            and(
+              eq(media.organizationId, organizationId),
+              inArray(media.resourceId, ids),
+              eq(media.kind, "image"),
+            ),
+          )
+          .orderBy(
+            asc(media.resourceId),
+            asc(media.position),
+            asc(media.createdAt),
+          ),
       ])
-    : [[], []];
+    : [[], [], []];
   const usageByResource = new Map(
     usageRows.map((row) => [row.resourceId, Number(row.consumed ?? 0)]),
   );
@@ -642,6 +677,18 @@ export async function getStockOverview(organizationId: string) {
       },
     ]),
   );
+  const coverByResource = new Map<
+    string,
+    { url: string; altText: string }
+  >();
+  for (const cover of coverRows) {
+    if (!coverByResource.has(cover.resourceId)) {
+      coverByResource.set(cover.resourceId, {
+        url: cover.url,
+        altText: cover.altText,
+      });
+    }
+  }
 
   const items = rows.map((row) => {
     const config: StockConfig = {
@@ -666,6 +713,7 @@ export async function getStockOverview(organizationId: string) {
       resourceId: row.resourceId,
       name: row.name,
       type: row.type,
+      cover: coverByResource.get(row.resourceId) ?? null,
       quantity: row.quantity,
       onOrder: incoming.onOrder,
       projectedQuantity: row.quantity + incoming.onOrder,
@@ -692,7 +740,7 @@ export async function getStockOverview(organizationId: string) {
           item.minimumStock > 0 &&
           item.quantity <= item.minimumStock,
       ).length,
-      outOfStockItems: items.filter((item) => item.quantity === 0).length,
+      outOfStockItems: items.filter((item) => item.quantity <= 0).length,
       predictedStockouts: items.filter(
         (item) => item.quantity > 0 && item.predictedStockoutAt !== null,
       ).length,
@@ -820,6 +868,12 @@ export async function updateStockConfig(
       }
 
       if (next.trackingMode === "serialized") {
+        if (resource.quantity < 0) {
+          throw new StockOperationError(
+            "Bring stock back to zero or above before enabling serialized tracking.",
+            409,
+          );
+        }
         const variantAllocation = await allocatedVariantQuantity(
           transaction,
           resourceId,
@@ -977,8 +1031,17 @@ export async function bookStockMovement(
       }
 
       const [resource] = await transaction
-        .select({ id: resources.id, name: resources.name, quantity: resources.quantity })
+        .select({
+          id: resources.id,
+          name: resources.name,
+          quantity: resources.quantity,
+          allowNegativeStock: organizations.allowNegativeStock,
+        })
         .from(resources)
+        .innerJoin(
+          organizations,
+          eq(organizations.id, resources.organizationId),
+        )
         .where(
           and(
             eq(resources.organizationId, organizationId),
@@ -1099,27 +1162,35 @@ export async function bookStockMovement(
       ]);
 
       const balanceAfter = resource.quantity + input.delta;
-      if (balanceAfter < 0) {
+      if (
+        violatesNegativeStockPolicy({
+          allowNegativeStock: resource.allowNegativeStock,
+          quantityBefore: resource.quantity,
+          quantityAfter: balanceAfter,
+        })
+      ) {
         throw new StockOperationError(
           `This booking would make stock negative. Current stock is ${resource.quantity}.`,
           409,
         );
       }
-      if (balanceAfter > MAX_STOCK_QUANTITY) {
+      if (Math.abs(balanceAfter) > MAX_STOCK_QUANTITY) {
         throw new StockOperationError(
-          `This booking exceeds the maximum supported stock of ${MAX_STOCK_QUANTITY}.`,
+          `This booking exceeds the supported stock range of -${MAX_STOCK_QUANTITY} to ${MAX_STOCK_QUANTITY}.`,
           409,
         );
       }
-      const variantAllocation = await allocatedVariantQuantity(
-        transaction,
-        resourceId,
-      );
-      assertVariantAllocationFits(
-        balanceAfter,
-        variantAllocation,
-        (message) => new StockOperationError(message, 409),
-      );
+      if (!resource.allowNegativeStock) {
+        const variantAllocation = await allocatedVariantQuantity(
+          transaction,
+          resourceId,
+        );
+        assertVariantAllocationFits(
+          balanceAfter,
+          variantAllocation,
+          (message) => new StockOperationError(message, 409),
+        );
+      }
 
       if (!settings) {
         await transaction
@@ -1150,7 +1221,10 @@ export async function bookStockMovement(
         const removedFromUnassigned = isTransfer
           ? movementQuantity
           : Math.abs(input.delta);
-        if (unassigned < removedFromUnassigned) {
+        if (
+          !resource.allowNegativeStock &&
+          unassigned < removedFromUnassigned
+        ) {
           throw new StockOperationError(
             `Only ${unassigned} unassigned units are available for this booking.`,
             409,
@@ -1164,6 +1238,7 @@ export async function bookStockMovement(
           resourceId,
           input.fromLocationResourceId,
           isTransfer ? -movementQuantity : Math.min(0, input.delta),
+          resource.allowNegativeStock,
         );
       }
       if (input.toLocationResourceId) {
@@ -1173,6 +1248,7 @@ export async function bookStockMovement(
           resourceId,
           input.toLocationResourceId,
           isTransfer ? movementQuantity : Math.max(0, input.delta),
+          resource.allowNegativeStock,
         );
       }
       await transaction

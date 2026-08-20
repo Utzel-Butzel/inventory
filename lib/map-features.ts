@@ -1,4 +1,55 @@
-import type { ResourceMapFeature } from "@/db/schema";
+import type { ResourceMapCoordinate, ResourceMapFeature } from "@/db/schema";
+
+type MapResource = { id: string };
+
+export function isRenderableMapCoordinate(
+  coordinate: unknown,
+): coordinate is ResourceMapCoordinate {
+  return Array.isArray(coordinate)
+    && coordinate.length === 2
+    && coordinate.every((value) => typeof value === "number" && Number.isFinite(value))
+    && coordinate[0] >= -180
+    && coordinate[0] <= 180
+    && coordinate[1] >= -90
+    && coordinate[1] <= 90;
+}
+
+export function isRenderableMapFeature(
+  feature: unknown,
+): feature is ResourceMapFeature {
+  if (!feature || typeof feature !== "object") return false;
+
+  const candidate = feature as Partial<ResourceMapFeature>;
+  if (candidate.type === "point") {
+    return isRenderableMapCoordinate(candidate.coordinates);
+  }
+
+  if (candidate.type !== "polygon" || !Array.isArray(candidate.coordinates)) {
+    return false;
+  }
+  if (
+    candidate.coordinates.length < 4
+    || !candidate.coordinates.every(isRenderableMapCoordinate)
+  ) {
+    return false;
+  }
+
+  const first = candidate.coordinates[0];
+  const last = candidate.coordinates.at(-1);
+  return Boolean(first && last && first[0] === last[0] && first[1] === last[1]);
+}
+
+export function displayedMapCoordinates(
+  resources: MapResource[],
+  featuresByResource: Record<string, ResourceMapFeature[]>,
+) {
+  return resources.flatMap((resource) =>
+    (featuresByResource[resource.id] ?? []).flatMap((feature) => {
+      if (!isRenderableMapFeature(feature)) return [];
+      return feature.type === "point" ? [feature.coordinates] : feature.coordinates;
+    }),
+  );
+}
 
 export function positionFromMapFeatures(features: ResourceMapFeature[]) {
   const point = features.find((feature) => feature.type === "point");

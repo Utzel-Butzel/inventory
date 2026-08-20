@@ -79,6 +79,7 @@
       "count_one": "{{count}} organization",
       "count_other": "{{count}} organizations",
       "active": "Active",
+      "negativeStockAllowed": "Negative stock allowed",
       "slug": "Workspace URL: /{{slug}}",
       "emptyTitle": "No organizations available",
       "emptyDescription": "Create an organization to start a separate inventory workspace."
@@ -94,7 +95,9 @@
       "slug": "URL slug",
       "slugOptional": "URL slug (optional)",
       "slugHint": "Used in short workspace URLs. Leave blank to generate it from the name; use lowercase letters, numbers, and dashes.",
-      "slugEditHint": "Changing this updates workspace links. Existing UUID links continue to work."
+      "slugEditHint": "Changing this updates workspace links. Existing UUID links continue to work.",
+      "allowNegativeStock": "Allow negative stock",
+      "allowNegativeStockHint": "Permit bulk stock bookings, assignments, and assembly consumption to continue below zero. Serialized stock still requires identifiable units."
     },
     "actions": {
       "refresh": "Refresh organizations",

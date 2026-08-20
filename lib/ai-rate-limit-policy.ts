@@ -1,5 +1,6 @@
 export const paidAiOperations = [
   "analyze",
+  "research",
   "recognize",
   "count",
   "cover",
@@ -30,6 +31,12 @@ const operationPolicies: Record<
     environmentVariable: "AI_ANALYSIS_RATE_LIMIT_PER_MINUTE",
     legacyEnvironmentVariable: "AI_RATE_LIMIT_PER_MINUTE",
     defaultLimit: 10,
+    windowMs: 60_000,
+  },
+  research: {
+    environmentVariable: "AI_RESEARCH_RATE_LIMIT_PER_MINUTE",
+    legacyEnvironmentVariable: "AI_RATE_LIMIT_PER_MINUTE",
+    defaultLimit: 5,
     windowMs: 60_000,
   },
   recognize: {

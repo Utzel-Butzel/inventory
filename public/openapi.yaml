@@ -52,7 +52,7 @@ tags:
   - name: Spatial rooms
     description: Versioned RoomPlan scenes, native AR world-map assets, and measured indoor item placements.
   - name: AI
-    description: Visual inventory recognition, counting, item analysis, and generated covers.
+    description: Visual inventory recognition, counting, item analysis, web-grounded enrichment, and generated covers.
   - name: Insights
     description: Workspace statistics and duplicate detection.
   - name: Notifications
@@ -851,7 +851,7 @@ paths:
         schema: { type: string, format: uuid }
     patch:
       tags: [Organizations]
-      summary: Update an organization's name or Webapp URL slug
+      summary: Update an organization's settings
       security: [{ adminSession: [] }]
       requestBody:
         required: true
@@ -868,6 +868,9 @@ paths:
                   minLength: 1
                   maxLength: 48
                   pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+                allowNegativeStock:
+                  type: boolean
+                  description: Allow bulk stock balances to fall below zero.
       responses:
         "200":
           description: Updated organization
@@ -3111,6 +3114,35 @@ paths:
               schema: { type: integer, minimum: 1 }
         "502": { description: AI provider error }
         "503": { description: Shared AI rate limiter unavailable }
+  /resources/{id}/research:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    post:
+      tags: [AI]
+      summary: Add missing item details using saved content, images, and GPT web search
+      description: Preserves existing fields, appends newly researched description details, merges tags and categories, and only fills exact identifiers or value at high confidence.
+      parameters:
+        - { $ref: "#/components/parameters/ResourceId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "200": { description: Missing details added, no reliable additions found, or completed response replayed }
+        "202": { description: An operation with this key is still processing }
+        "403": { description: Proposed changes fall outside the caller's inventory access rules }
+        "409": { description: Idempotency key belongs to another resource or payload }
+        "422": { description: Invalid AI research request }
+        "429":
+          description: AI web-research request limit reached
+          headers:
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
+        "502": { description: AI provider or web-search error }
+        "503": { description: Shared AI rate limiter unavailable }
   /resources/{id}/cover:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -3318,7 +3350,7 @@ components:
     OrganizationMembership:
       type: object
       additionalProperties: false
-      required: [id, name, slug, role, roleName]
+      required: [id, name, slug, isReadOnly, allowNegativeStock, role, roleName]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 160 }
@@ -3332,6 +3364,10 @@ components:
           type: [string, "null"]
           pattern: '^[a-z][a-z0-9_-]{0,63}$'
         roleName: { type: [string, "null"] }
+        isReadOnly: { type: boolean }
+        allowNegativeStock:
+          type: boolean
+          description: Whether bulk stock balances may fall below zero in this organization.
         canManage:
           type: boolean
           description: Present on organization-list responses; true when the current identity can administer that active organization.
@@ -4761,11 +4797,18 @@ components:
         quantityPerAssembly: { type: integer, minimum: 1 }
         position: { type: integer, minimum: 0 }
         note: { type: string, maxLength: 20000 }
+    BomCover:
+      type: object
+      required: [url, altText]
+      additionalProperties: false
+      properties:
+        url: { type: string }
+        altText: { type: string }
     BomComponent:
       allOf:
         - { $ref: "#/components/schemas/BomComponentInput" }
         - type: object
-          required: [id, slotKey, origin, name, availableQuantity, trackingMode, availableUnits, choices]
+          required: [id, slotKey, origin, name, availableQuantity, trackingMode, cover, availableUnits, choices]
           properties:
             id: { type: string, format: uuid }
             slotKey: { type: string, minLength: 1, maxLength: 80 }
@@ -4777,6 +4820,10 @@ components:
             sku: { type: [string, "null"] }
             availableQuantity: { type: integer, minimum: 0 }
             trackingMode: { type: string, enum: [bulk, serialized] }
+            cover:
+              oneOf:
+                - { $ref: "#/components/schemas/BomCover" }
+                - { type: "null" }
             availableUnits:
               type: array
               items:
@@ -4792,13 +4839,17 @@ components:
               description: The BOM component itself followed by readable direct first-class variants that may be consumed for this slot during a build.
               items:
                 type: object
-                required: [resourceId, name, sku, availableQuantity, trackingMode, availableUnits, isPrimary]
+                required: [resourceId, name, sku, availableQuantity, trackingMode, cover, availableUnits, isPrimary]
                 properties:
                   resourceId: { type: string, format: uuid }
                   name: { type: string }
                   sku: { type: [string, "null"] }
-                  availableQuantity: { type: integer, minimum: 0 }
+                  availableQuantity: { type: integer }
                   trackingMode: { type: string, enum: [bulk, serialized] }
+                  cover:
+                    oneOf:
+                      - { $ref: "#/components/schemas/BomCover" }
+                      - { type: "null" }
                   availableUnits:
                     type: array
                     items:
@@ -4819,7 +4870,7 @@ components:
           properties:
             id: { type: string, format: uuid }
             name: { type: string }
-            quantity: { type: integer, minimum: 0 }
+            quantity: { type: integer }
             trackingMode: { type: string, enum: [bulk, serialized] }
         components: { type: array, items: { $ref: "#/components/schemas/BomComponent" } }
         buildableQuantity: { type: integer, minimum: 0 }
@@ -5280,7 +5331,7 @@ components:
         locationResourceId: { type: string, format: uuid }
         name: { type: string }
         type: { $ref: "#/components/schemas/InventoryTypeKey" }
-        quantity: { type: integer, minimum: 0 }
+        quantity: { type: integer }
     StockLocationBreakdown:
       type: object
       required: [resource, trackingMode, assignedQuantity, unassignedQuantity, locations]
@@ -5291,11 +5342,11 @@ components:
           properties:
             id: { type: string, format: uuid }
             name: { type: string }
-            quantity: { type: integer, minimum: 0 }
+            quantity: { type: integer }
             trackingMode: { type: [string, "null"], enum: [bulk, serialized, null] }
         trackingMode: { type: string, enum: [bulk, serialized] }
-        assignedQuantity: { type: integer, minimum: 0 }
-        unassignedQuantity: { type: integer, minimum: 0 }
+        assignedQuantity: { type: integer }
+        unassignedQuantity: { type: integer }
         locations:
           type: array
           items: { $ref: "#/components/schemas/StockLocationBalance" }
@@ -5369,7 +5420,7 @@ components:
           properties:
             id: { type: string, format: uuid }
             name: { type: string }
-            quantity: { type: integer, minimum: 0 }
+            quantity: { type: integer }
             trackingMode: { type: string, enum: [bulk, serialized] }
         policy:
           oneOf:
@@ -5386,7 +5437,7 @@ components:
         resourceId: { type: string, format: uuid }
         name: { type: string }
         type: { $ref: "#/components/schemas/InventoryTypeKey" }
-        quantity: { type: integer, minimum: 0 }
+        quantity: { type: integer }
         intervalDays: { type: integer, minimum: 1, maximum: 3650 }
         nextDueAt: { type: string, format: date-time }
         lastCompletedAt: { type: [string, "null"], format: date-time }
@@ -5478,7 +5529,7 @@ components:
           properties:
             id: { type: string, format: uuid }
             name: { type: string }
-            quantity: { type: integer, minimum: 0 }
+            quantity: { type: integer }
         movement: { $ref: "#/components/schemas/StockMovement" }
     InventoryAssignmentList:
       type: object
@@ -5490,13 +5541,13 @@ components:
           properties:
             id: { type: string, format: uuid }
             name: { type: string }
-            quantity: { type: integer, minimum: 0 }
+            quantity: { type: integer }
         trackingMode: { type: string, enum: [bulk, serialized] }
         availability:
           type: object
           required: [availableQuantity, activeQuantity]
           properties:
-            availableQuantity: { type: integer, minimum: 0 }
+            availableQuantity: { type: integer }
             activeQuantity: { type: integer, minimum: 0 }
         availableUnits:
           type: array
@@ -5560,9 +5611,9 @@ components:
         purchaseReceiptId: { type: [string, "null"], format: uuid }
         delta: { type: integer }
         quantity: { type: integer, minimum: 0 }
-        balanceAfter: { type: integer, minimum: 0 }
-        fromLocationBalanceAfter: { type: [integer, "null"], minimum: 0 }
-        toLocationBalanceAfter: { type: [integer, "null"], minimum: 0 }
+        balanceAfter: { type: integer }
+        fromLocationBalanceAfter: { type: [integer, "null"] }
+        toLocationBalanceAfter: { type: [integer, "null"] }
         type:
           type: string
           description: Includes client booking types plus system audit types such as opening_balance, inventory-count, assignment-checkout, assignment-return, unit-created, unit-status, and merge.
@@ -5609,16 +5660,26 @@ components:
             lastMovedAt: { type: string, format: date-time }
             createdAt: { type: string, format: date-time }
             updatedAt: { type: string, format: date-time }
+    StockOverviewCover:
+      type: object
+      required: [url, altText]
+      properties:
+        url: { type: string }
+        altText: { type: string }
     StockOverviewItem:
       type: object
-      required: [resourceId, name, type, quantity, onOrder, projectedQuantity, minimumStock, trackingMode, reorderSuggested, unitName]
+      required: [resourceId, name, type, cover, quantity, onOrder, projectedQuantity, minimumStock, trackingMode, reorderSuggested, unitName]
       properties:
         resourceId: { type: string, format: uuid }
         name: { type: string }
         type: { type: string }
-        quantity: { type: integer, minimum: 0 }
+        cover:
+          oneOf:
+            - { $ref: "#/components/schemas/StockOverviewCover" }
+            - { type: "null" }
+        quantity: { type: integer }
         onOrder: { type: integer, minimum: 0 }
-        projectedQuantity: { type: integer, minimum: 0 }
+        projectedQuantity: { type: integer }
         nextExpectedAt: { type: [string, "null"], format: date-time }
         minimumStock: { type: integer, minimum: 0 }
         trackingMode: { type: string, enum: [bulk, serialized] }
@@ -5646,7 +5707,7 @@ components:
                 properties:
                   name: { type: string }
                   color: { type: string }
-            quantity: { type: integer, minimum: 0 }
+            quantity: { type: integer }
         config: { $ref: "#/components/schemas/StockConfig" }
         forecast: { $ref: "#/components/schemas/StockForecast" }
         procurement:
@@ -5654,7 +5715,7 @@ components:
           required: [onOrder, projectedQuantity, nextExpectedAt, openLines]
           properties:
             onOrder: { type: integer, minimum: 0 }
-            projectedQuantity: { type: integer, minimum: 0 }
+            projectedQuantity: { type: integer }
             nextExpectedAt: { type: [string, "null"], format: date-time }
             openLines:
               type: array
@@ -5782,7 +5843,7 @@ components:
         status: { type: string, enum: [available, in-use, maintenance, archived] }
         sku: { type: [string, "null"] }
         barcode: { type: [string, "null"] }
-        quantity: { type: integer, minimum: 0 }
+        quantity: { type: integer }
         trackingMode: { type: string, enum: [bulk, serialized] }
         updatedAt: { type: string, format: date-time }
         overriddenFields:
@@ -5969,7 +6030,7 @@ components:
         barcode: { type: [string, "null"] }
         priceCents: { type: [integer, "null"], minimum: 0 }
         currency: { type: string }
-        quantity: { type: integer, minimum: 0 }
+        quantity: { type: integer }
         position: { type: integer, minimum: 0 }
         createdBy: { type: [string, "null"] }
         updatedBy: { type: [string, "null"] }
@@ -5979,9 +6040,9 @@ components:
       type: object
       required: [totalQuantity, allocatedQuantity, unallocatedQuantity, variantCount]
       properties:
-        totalQuantity: { type: integer, minimum: 0 }
-        allocatedQuantity: { type: integer, minimum: 0 }
-        unallocatedQuantity: { type: integer, minimum: 0 }
+        totalQuantity: { type: integer }
+        allocatedQuantity: { type: integer }
+        unallocatedQuantity: { type: integer }
         variantCount: { type: integer, minimum: 0 }
     ResourceVariantStockMovementInput:
       type: object

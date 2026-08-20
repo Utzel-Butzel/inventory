@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  buildWavyConnectionPath,
   buildResourceConnectionDiagram,
   buildResourceConnectionGraph,
   orderConnectionColumns,
@@ -10,6 +11,24 @@ import {
 } from "../lib/resource-connection-diagram.ts";
 
 const item = (id, name) => ({ id, name, type: "item", status: "available" });
+
+test("builds a tapered wave path for other relationships", () => {
+  const path = buildWavyConnectionPath({
+    start: { x: 0, y: 0 },
+    controlStart: { x: 0, y: 33 },
+    controlEnd: { x: 0, y: 66 },
+    end: { x: 0, y: 100 },
+  });
+  const points = Array.from(
+    path.matchAll(/[ML] (-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g),
+    ([, x, y]) => ({ x: Number(x), y: Number(y) }),
+  );
+
+  assert.deepEqual(points[0], { x: 0, y: 0 });
+  assert.deepEqual(points.at(-1), { x: 0, y: 100 });
+  assert.ok(points.slice(1, -1).some((point) => Math.abs(point.x) >= 4));
+  assert.ok(points.length >= 33);
+});
 
 test("builds a directional tree from family, BOM, containment, and relationships", () => {
   const current = item("current", "Current");
@@ -339,6 +358,61 @@ test("expands loaded payloads across bounded levels without duplicating cycles",
   assert.equal(threeLevels.edges.length, 2);
 });
 
+test("expands connection graphs through seven levels and clamps larger requests", () => {
+  const resources = Array.from({ length: 9 }, (_, index) =>
+    item(`level-${index}`, `Level ${index}`),
+  );
+  const relation = (source, target) => ({
+    id: `${source.id}-${target.id}`,
+    sourceResourceId: source.id,
+    targetResourceId: target.id,
+    relationTypeKey: "related",
+    source,
+    target,
+    relationType: { label: "Related to", inverseLabel: "Related to" },
+  });
+  const payloads = new Map(
+    resources.map((resource, index) => ({ resource, index })).map(
+      ({ resource, index }) => [
+        resource.id,
+        {
+          family: null,
+          bomComponents: [],
+          relations: [
+            ...(index > 0
+              ? [relation(resources[index - 1], resource)]
+              : []),
+            ...(index < resources.length - 1
+              ? [relation(resource, resources[index + 1])]
+              : []),
+          ],
+        },
+      ],
+    ),
+  );
+
+  const sevenLevels = buildResourceConnectionGraph({
+    root: resources[0],
+    depth: 7,
+    payloads,
+  });
+  assert.deepEqual(
+    sevenLevels.nodes.map((node) => node.resource.id),
+    resources.slice(0, 8).map((resource) => resource.id),
+  );
+  assert.equal(sevenLevels.connectionCount, 7);
+
+  const clamped = buildResourceConnectionGraph({
+    root: resources[0],
+    depth: 99,
+    payloads,
+  });
+  assert.deepEqual(
+    clamped.nodes.map((node) => node.resource.id),
+    sevenLevels.nodes.map((node) => node.resource.id),
+  );
+});
+
 test("orders columns so connected nodes align and edges stop crossing", () => {
   const graphNode = (id, name, column, depth) => ({
     resource: { id, name, type: "item", status: "available" },
@@ -484,7 +558,7 @@ test("the detail-page connection flow opens by default and owns every connection
   assert.match(component, /\/bom`/);
   assert.match(component, /Promise\.allSettled/);
   assert.match(component, /OrganizationLink as Link/);
-  assert.match(component, /DEPTH_OPTIONS = \[1, 2, 3\]/);
+  assert.match(component, /DEPTH_OPTIONS = \[1, 2, 3, 4, 5, 6, 7\]/);
   assert.match(component, /useState\(3\)/);
   assert.match(component, /connectionDiagram\.depth\.label/);
   assert.match(component, /buildResourceConnectionGraph/);
@@ -530,6 +604,40 @@ test("loads visible item covers in one access-controlled request", async () => {
   assert.match(route, /getResourceCovers/);
   assert.match(resources, /export async function getResourceCovers/);
   assert.match(resources, /eq\(media\.kind, "image"\)/);
+});
+
+test("loads and displays permission-controlled stock summaries for visible nodes", async () => {
+  const [route, stock, diagram] = await Promise.all([
+    readFile(
+      new URL(
+        "../app/api/v1/resources/stock-summaries/route.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(new URL("../lib/connection-stock.ts", import.meta.url), "utf8"),
+    readFile(
+      new URL("../components/resource-connection-diagram.tsx", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(route, /resourceIdsSchema[\s\S]*\.max\(45\)/);
+  assert.match(route, /requirePermission\(request, "stock\.read"\)/);
+  assert.match(route, /canAccessResource[\s\S]*"inventory\.read"/);
+  assert.match(route, /getConnectionStockSummaries/);
+  assert.match(stock, /row\.quantity <= 0[\s\S]*"out"/);
+  assert.match(stock, /row\.quantity <= minimumStock[\s\S]*"low"/);
+  assert.match(stock, /"healthy"/);
+  assert.match(diagram, /type="checkbox"[\s\S]*connectionDiagram\.stock\.show/);
+  assert.match(diagram, /\/api\/v1\/resources\/stock-summaries/);
+  assert.match(diagram, /bom\.value\.buildableQuantity/);
+  assert.match(diagram, /connectionDiagram\.stock\.onHand/);
+  assert.match(diagram, /connectionDiagram\.stock\.buildable/);
+  assert.match(diagram, /ring-danger-border/);
+  assert.match(diagram, /ring-warning-border/);
+  assert.match(diagram, /ring-success-border/);
+  assert.match(diagram, /<StockIndicator/);
 });
 
 test("the diagram edits typed connections without bypassing existing APIs", async () => {

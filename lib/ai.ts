@@ -26,7 +26,14 @@ import {
 } from "@/lib/image-generation-size";
 import { prepareImageGenerationReferenceImage } from "@/lib/image-generation-input";
 import type { ImageGenerationModel } from "@/lib/image-generation-models";
-import { defaultInventoryAnalysisPrompt } from "@/lib/ai-prompts";
+import {
+  defaultInventoryAnalysisPrompt,
+  defaultInventoryResearchPrompt,
+} from "@/lib/ai-prompts";
+import {
+  inventoryResearchResultSchema,
+  type InventoryResearchResource,
+} from "@/lib/inventory-research-contract";
 import {
   inventoryRecognitionObservationSchema,
   inventoryRecognitionProviderResultSchema,
@@ -268,6 +275,102 @@ export async function analyzeInventoryImages(
   return {
     result: analysisResultSchema.parse(JSON.parse(response.output_text)),
     model,
+  };
+}
+
+const researchRequestOptions = () => {
+  const configured = Number(
+    process.env.OPENAI_RESEARCH_TIMEOUT_MS?.trim() || "90000",
+  );
+  const timeout = Number.isSafeInteger(configured)
+    ? Math.min(110_000, Math.max(10_000, configured))
+    : 90_000;
+  return {
+    maxRetries: 0,
+    timeout,
+  };
+};
+
+const webSourcesFromResponse = (output: unknown[]) => {
+  const urls: string[] = [];
+  for (const rawItem of output) {
+    if (!rawItem || typeof rawItem !== "object") continue;
+    const item = rawItem as { type?: string; action?: unknown };
+    if (item.type !== "web_search_call") continue;
+    const action = item.action;
+    if (!action || typeof action !== "object") continue;
+    const typedAction = action as {
+      type?: string;
+      url?: string | null;
+      sources?: Array<{ type?: string; url?: string }>;
+    };
+    if (typedAction.url) urls.push(typedAction.url);
+    for (const source of typedAction.sources ?? []) {
+      if (source.type === "url" && source.url) urls.push(source.url);
+    }
+  }
+  return Array.from(
+    new Set(
+      urls.filter((url) => {
+        try {
+          const protocol = new URL(url).protocol;
+          return protocol === "http:" || protocol === "https:";
+        } catch {
+          return false;
+        }
+      }),
+    ),
+  ).slice(0, 12);
+};
+
+export async function researchInventoryDetails(options: {
+  resource: InventoryResearchResource & Record<string, unknown>;
+  imageDataUrls: string[];
+}) {
+  const language = process.env.AI_OUTPUT_LANGUAGE?.trim() || "English";
+  const model =
+    process.env.OPENAI_RESEARCH_MODEL?.trim() || "gpt-5.6-terra";
+  const openai = createOpenAI();
+  const response = await openai.responses.parse(
+    {
+      model,
+      store: false,
+      reasoning: { effort: "none" },
+      tools: [{ type: "web_search", search_context_size: "medium" }],
+      tool_choice: "required",
+      include: ["web_search_call.action.sources"],
+      text: {
+        format: zodTextFormat(
+          inventoryResearchResultSchema,
+          "inventory_research",
+        ),
+      },
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: `${defaultInventoryResearchPrompt(language, resourceTypes)}\n\nExisting inventory record:\n${JSON.stringify(options.resource)}`,
+            },
+            ...options.imageDataUrls.slice(0, 3).map((imageUrl) => ({
+              type: "input_image" as const,
+              image_url: imageUrl,
+              detail: "auto" as const,
+            })),
+          ],
+        },
+      ],
+    },
+    researchRequestOptions(),
+  );
+  if (!response.output_parsed) {
+    throw new Error("The AI web research returned no structured output.");
+  }
+  return {
+    result: response.output_parsed,
+    model,
+    sources: webSourcesFromResponse(response.output),
   };
 }
 

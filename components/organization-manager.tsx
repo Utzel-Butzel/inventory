@@ -31,6 +31,7 @@ type ManagedOrganization = {
   slug: string;
   role: string;
   roleName: string;
+  allowNegativeStock: boolean;
   isActive?: boolean;
   canManage?: boolean;
 };
@@ -80,6 +81,7 @@ export function OrganizationManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingSlug, setEditingSlug] = useState("");
+  const [editingAllowNegativeStock, setEditingAllowNegativeStock] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (quiet = false) => {
@@ -171,12 +173,14 @@ export function OrganizationManager() {
     setEditingId(organization.id);
     setEditingName(organization.name);
     setEditingSlug(organization.slug);
+    setEditingAllowNegativeStock(organization.allowNegativeStock);
   }
 
   function closeEditor() {
     setEditingId(null);
     setEditingName("");
     setEditingSlug("");
+    setEditingAllowNegativeStock(false);
   }
 
   async function updateOrganization(
@@ -196,7 +200,11 @@ export function OrganizationManager() {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, slug }),
+          body: JSON.stringify({
+            name,
+            slug,
+            allowNegativeStock: editingAllowNegativeStock,
+          }),
         },
       );
       const payload = await response.json().catch(() => null);
@@ -373,6 +381,24 @@ export function OrganizationManager() {
                             {t("organizations.form.slugEditHint")}
                           </p>
                         </label>
+                        <label className="mt-3 flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3">
+                          <input
+                            type="checkbox"
+                            checked={editingAllowNegativeStock}
+                            onChange={(event) =>
+                              setEditingAllowNegativeStock(event.target.checked)
+                            }
+                            className="mt-0.5 h-4 w-4 accent-brand-solid"
+                          />
+                          <span>
+                            <span className="block text-xs font-semibold text-muted-strong">
+                              {t("organizations.form.allowNegativeStock")}
+                            </span>
+                            <span className="mt-0.5 block text-[11px] leading-4 text-muted">
+                              {t("organizations.form.allowNegativeStockHint")}
+                            </span>
+                          </span>
+                        </label>
                         <div className="mt-3 flex justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={closeEditor} disabled={saving}>
                             {t("organizations.actions.cancel")}
@@ -392,6 +418,11 @@ export function OrganizationManager() {
                             </h3>
                             {active ? <Badge tone="brand">{t("organizations.list.active")}</Badge> : null}
                             <Badge>{organization.roleName || roleFallback(organization.role)}</Badge>
+                            {organization.allowNegativeStock ? (
+                              <Badge tone="warning">
+                                {t("organizations.list.negativeStockAllowed")}
+                              </Badge>
+                            ) : null}
                           </div>
                           <p className="mt-1 text-xs text-muted">
                             {t("organizations.list.slug", { slug: organization.slug })}

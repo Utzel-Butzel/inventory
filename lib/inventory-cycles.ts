@@ -6,6 +6,7 @@ import {
   inventoryCounts,
   inventoryCyclePolicies,
   inventoryTypeDefinitions,
+  organizations,
   resources,
   stockLocationBalances,
   stockMovements,
@@ -18,6 +19,9 @@ import {
   allocatedVariantQuantity,
   assertVariantAllocationFits,
 } from "@/lib/variant-stock-invariant";
+import { violatesNegativeStockPolicy } from "@/lib/negative-stock-policy";
+
+const MAX_STOCK_QUANTITY = 2_000_000_000;
 
 const nextDate = (from: Date, intervalDays: number) =>
   new Date(from.getTime() + intervalDays * 24 * 60 * 60 * 1_000);
@@ -190,8 +194,13 @@ export async function recordInventoryCount(
       .select({
         id: resources.id,
         quantity: resources.quantity,
+        allowNegativeStock: organizations.allowNegativeStock,
       })
       .from(resources)
+      .innerJoin(
+        organizations,
+        eq(organizations.id, resources.organizationId),
+      )
       .where(
         and(
           eq(resources.organizationId, organizationId),
@@ -291,7 +300,7 @@ export async function recordInventoryCount(
         .for("update");
       expectedQuantity = locationBalance?.quantity ?? 0;
       locationBalanceId = locationBalance?.id ?? null;
-    } else if (!serialized) {
+    } else if (!serialized && !resource.allowNegativeStock) {
       const [{ assigned }] = await transaction
         .select({
           assigned: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
@@ -313,10 +322,22 @@ export async function recordInventoryCount(
 
     const variance = input.countedQuantity - expectedQuantity;
     const balanceAfter = resource.quantity + variance;
-    if (balanceAfter < 0) {
+    if (Math.abs(balanceAfter) > MAX_STOCK_QUANTITY) {
+      throw new StockOperationError(
+        `This count exceeds the supported stock range of -${MAX_STOCK_QUANTITY} to ${MAX_STOCK_QUANTITY}.`,
+        409,
+      );
+    }
+    if (
+      violatesNegativeStockPolicy({
+        allowNegativeStock: resource.allowNegativeStock,
+        quantityBefore: resource.quantity,
+        quantityAfter: balanceAfter,
+      })
+    ) {
       throw new StockOperationError("This count would make the total stock negative.", 409);
     }
-    if (!input.locationResourceId) {
+    if (!input.locationResourceId && !resource.allowNegativeStock) {
       const variantAllocation = await allocatedVariantQuantity(
         transaction,
         resourceId,

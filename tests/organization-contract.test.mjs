@@ -37,6 +37,10 @@ test("organization request validators reject ambiguous or malformed input", () =
     organizationUpdateInputSchema.parse({ slug: "new-workshop" }),
     { slug: "new-workshop" },
   );
+  assert.deepEqual(
+    organizationUpdateInputSchema.parse({ allowNegativeStock: true }),
+    { allowNegativeStock: true },
+  );
   assert.equal(organizationUpdateInputSchema.safeParse({}).success, false);
   assert.deepEqual(
     organizationSelectInputSchema.parse({
@@ -49,6 +53,24 @@ test("organization request validators reject ambiguous or malformed input", () =
       .success,
     false,
   );
+});
+
+test("negative stock policy is organization-scoped and removes unconditional database checks", async () => {
+  const [migration, schema, organizations, stock] = await Promise.all([
+    read("../db/migrations/0035_negative_stock_policy.sql"),
+    read("../db/schema.ts"),
+    read("../lib/organizations.ts"),
+    read("../lib/stock.ts"),
+  ]);
+
+  assert.match(migration, /"allow_negative_stock" boolean DEFAULT false NOT NULL/);
+  assert.match(migration, /DROP CONSTRAINT IF EXISTS "resources_quantity_nonnegative"/);
+  assert.match(migration, /DROP CONSTRAINT IF EXISTS "stock_movements_balance_nonnegative"/);
+  assert.match(schema, /allowNegativeStock: boolean\("allow_negative_stock"\)/);
+  assert.doesNotMatch(schema, /check\("resources_quantity_nonnegative"/);
+  assert.match(organizations, /allowNegativeStock: organization\.allowNegativeStock/);
+  assert.match(stock, /organizations\.allowNegativeStock/);
+  assert.match(stock, /violatesNegativeStockPolicy/);
 });
 
 test("organization migration adopts legacy data and tenant-scopes critical keys", async () => {

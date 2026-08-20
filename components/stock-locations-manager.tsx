@@ -17,6 +17,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import { useT } from "next-i18next/client";
 
 import { Button, Card, Skeleton } from "@/components/ui";
+import { useOrganizationAllowsNegativeStock } from "@/components/organization-routing";
 import { fetchJson } from "@/lib/client-types";
 
 type TrackingMode = "bulk" | "serialized";
@@ -79,6 +80,7 @@ export function StockLocationsManager({
   onStockChanged,
 }: StockLocationsManagerProps) {
   const { t, i18n } = useT("stock");
+  const allowNegativeStock = useOrganizationAllowsNegativeStock();
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const numberFormat = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const [data, setData] = useState<LocationsResponse | null>(null);
@@ -122,7 +124,7 @@ export function StockLocationsManager({
   const sourceOptions = useMemo(() => {
     if (!data) return [];
     return [
-      ...(data.breakdown.unassignedQuantity > 0
+      ...(allowNegativeStock || data.breakdown.unassignedQuantity > 0
         ? [
             {
               id: UNASSIGNED,
@@ -132,14 +134,14 @@ export function StockLocationsManager({
           ]
         : []),
       ...data.breakdown.locations
-        .filter((location) => location.quantity > 0)
+        .filter((location) => allowNegativeStock || location.quantity > 0)
         .map((location) => ({
           id: location.locationResourceId,
           name: location.name,
           quantity: location.quantity,
         })),
     ];
-  }, [data, t]);
+  }, [allowNegativeStock, data, t]);
 
   const destinationOptions = useMemo(() => {
     if (!data) return [];
@@ -178,10 +180,14 @@ export function StockLocationsManager({
 
   useEffect(() => {
     const parsedQuantity = Number(quantity);
-    if (sourceQuantity > 0 && parsedQuantity > sourceQuantity) {
+    if (
+      !allowNegativeStock &&
+      sourceQuantity > 0 &&
+      parsedQuantity > sourceQuantity
+    ) {
       setQuantity(String(sourceQuantity));
     }
-  }, [quantity, sourceQuantity]);
+  }, [allowNegativeStock, quantity, sourceQuantity]);
 
   const nameForLocation = (id: string) =>
     id === UNASSIGNED
@@ -197,7 +203,7 @@ export function StockLocationsManager({
     if (
       !Number.isInteger(parsedQuantity) ||
       parsedQuantity < 1 ||
-      parsedQuantity > sourceQuantity ||
+      (!allowNegativeStock && parsedQuantity > sourceQuantity) ||
       !destination ||
       destination === source
     ) {
@@ -295,7 +301,8 @@ export function StockLocationsManager({
   }
 
   const totalQuantity = data.breakdown.resource.quantity;
-  const hasStock = totalQuantity > 0;
+  const hasStock =
+    totalQuantity !== 0 || data.breakdown.locations.some((location) => location.quantity !== 0);
   const hasTransferDestination = destinationOptions.some(
     (option) => option.id !== source,
   );
@@ -410,7 +417,7 @@ export function StockLocationsManager({
               </div>
             </div>
             {data.breakdown.locations
-              .filter((location) => location.quantity > 0)
+              .filter((location) => location.quantity !== 0)
               .map((location) => (
                 <div
                   key={location.locationResourceId}
@@ -519,7 +526,11 @@ export function StockLocationsManager({
                 <input
                   type="number"
                   min="1"
-                  max={Math.max(1, sourceQuantity)}
+                  max={
+                    allowNegativeStock
+                      ? undefined
+                      : Math.max(1, sourceQuantity)
+                  }
                   step="1"
                   required
                   value={quantity}

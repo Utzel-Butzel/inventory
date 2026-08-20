@@ -8,6 +8,7 @@ import {
   type MapOptions,
   LngLatBounds,
   Map as MapLibre,
+  Marker,
   NavigationControl,
 } from "maplibre-gl";
 import type { Feature, FeatureCollection, Geometry, Point, Polygon } from "geojson";
@@ -19,6 +20,10 @@ import type {
   ResourceMapFeature,
 } from "@/db/schema";
 import type { ClientResource } from "@/lib/client-types";
+import {
+  displayedMapCoordinates,
+  isRenderableMapFeature,
+} from "@/lib/map-features";
 import type { SpatialMapFeatureProperties } from "@/lib/spatial-map-features";
 
 export type MapDrawMode = "idle" | "point" | "polygon";
@@ -116,6 +121,7 @@ function collections(
 
   for (const resource of resources) {
     for (const feature of featuresByResource[resource.id] ?? []) {
+      if (!isRenderableMapFeature(feature)) continue;
       const properties: MapFeatureProperties = {
         resourceId: resource.id,
         featureId: feature.id,
@@ -145,6 +151,34 @@ function collections(
     points: { type: "FeatureCollection", features: points } satisfies FeatureCollection,
     polygons: { type: "FeatureCollection", features: polygons } satisfies FeatureCollection,
   };
+}
+
+function defaultViewportCoordinates(props: InventoryMapCanvasProps) {
+  const inventoryCoordinates = displayedMapCoordinates(
+    props.resources,
+    props.featuresByResource,
+  );
+  return inventoryCoordinates.length
+    ? inventoryCoordinates
+    : spatialCoordinates(props.spatialFeatures);
+}
+
+function fitCoordinates(
+  map: MapLibreMap,
+  coordinates: ResourceMapCoordinate[],
+  duration: number,
+) {
+  const first = coordinates[0];
+  if (!first) return;
+  const bounds = coordinates.reduce(
+    (result, coordinate) => result.extend(coordinate),
+    new LngLatBounds(first, first),
+  );
+  map.fitBounds(bounds, { padding: 70, maxZoom: 19, duration });
+}
+
+function coordinateSignature(coordinates: ResourceMapCoordinate[]) {
+  return coordinates.map((coordinate) => `${coordinate[0]},${coordinate[1]}`).join("|");
 }
 
 function editHandles(feature: ResourceMapFeature | undefined) {
@@ -399,18 +433,6 @@ function installLayers(map: MapLibreMap) {
     },
   });
   map.addLayer({
-    id: "inventory-points",
-    type: "circle",
-    source: sourceIds.resources,
-    filter: ["==", ["geometry-type"], "Point"],
-    paint: {
-      "circle-color": ["case", ["get", "selected"], "#635bff", "#475569"],
-      "circle-radius": ["case", ["get", "active"], 10, ["get", "selected"], 8, 6],
-      "circle-stroke-color": "#ffffff",
-      "circle-stroke-width": 2,
-    },
-  });
-  map.addLayer({
     id: "inventory-labels",
     type: "symbol",
     source: sourceIds.resources,
@@ -498,8 +520,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
   } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const fittedRef = useRef(false);
-  const spatialFittedRef = useRef(false);
+  const lastDefaultViewportRef = useRef<string | null>(null);
   const latestRef = useRef(props);
 
   useEffect(() => {
@@ -508,17 +529,8 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    const firstResource = props.resources.find(
-      (resource) => (props.featuresByResource[resource.id] ?? []).length,
-    );
-    const firstFeature = firstResource
-      ? props.featuresByResource[firstResource.id]?.[0]
-      : undefined;
-    const firstCoordinate = firstFeature?.type === "point"
-      ? firstFeature.coordinates
-      : firstFeature?.type === "polygon"
-        ? firstFeature.coordinates[0]
-        : spatialCoordinates(props.spatialFeatures)[0];
+    const initialCoordinates = defaultViewportCoordinates(props);
+    const firstCoordinate = initialCoordinates[0];
 
     const map = new MapLibre({
       container: containerRef.current,
@@ -564,7 +576,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
           center: selectedStructureCoordinate,
           zoom: Math.max(map.getZoom(), 18),
         });
-        fittedRef.current = true;
+        lastDefaultViewportRef.current = null;
       }
       const activeFeature = current.activeResourceId
         ? (current.featuresByResource[current.activeResourceId] ?? []).find(
@@ -582,23 +594,10 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
         draftCollection(current.editable ? current.polygonDraft : []),
       );
 
-      if (!fittedRef.current) {
-        const allCoordinates = [
-          ...Object.values(current.featuresByResource).flatMap((features) =>
-            features.flatMap((feature) =>
-              feature.type === "point" ? [feature.coordinates] : feature.coordinates,
-            ),
-          ),
-          ...spatialCoordinates(current.spatialFeatures),
-        ];
-        if (allCoordinates.length > 1) {
-          const bounds = allCoordinates.reduce(
-            (result, coordinate) => result.extend(coordinate),
-            new LngLatBounds(allCoordinates[0], allCoordinates[0]),
-          );
-          map.fitBounds(bounds, { padding: 70, maxZoom: 19, duration: 0 });
-        }
-        if (allCoordinates.length) fittedRef.current = true;
+      if (!current.activeSpatialStructureId) {
+        const coordinates = defaultViewportCoordinates(current);
+        fitCoordinates(map, coordinates, 0);
+        lastDefaultViewportRef.current = coordinateSignature(coordinates);
       }
     };
 
@@ -680,7 +679,6 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
           "inventory-spatial-structure-points",
           "inventory-spatial-structure-fill",
           "inventory-spatial-structure-line",
-          "inventory-points",
           "inventory-polygons-fill",
           "inventory-polygons-line",
         ],
@@ -743,13 +741,11 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
     });
     map.on("mousemove", onMove);
     map.on("mouseup", onUp);
-    map.on("mouseenter", "inventory-points", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseenter", "inventory-spatial-structure-points", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseenter", "inventory-spatial-room-fill", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseenter", "inventory-spatial-item-points", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseenter", "inventory-polygons-fill", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseenter", "inventory-vertices", () => { map.getCanvas().style.cursor = "grab"; });
-    map.on("mouseleave", "inventory-points", () => { map.getCanvas().style.cursor = ""; });
     map.on("mouseleave", "inventory-spatial-structure-points", () => { map.getCanvas().style.cursor = ""; });
     map.on("mouseleave", "inventory-spatial-room-fill", () => { map.getCanvas().style.cursor = ""; });
     map.on("mouseleave", "inventory-spatial-item-points", () => { map.getCanvas().style.cursor = ""; });
@@ -766,7 +762,65 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map?.loaded() || !map.getSource(sourceIds.resources)) return;
+    if (!map) return;
+
+    const selected = new Set(selectedIds);
+    const markers: Marker[] = [];
+    for (const resource of resources) {
+      for (const feature of featuresByResource[resource.id] ?? []) {
+        if (feature.type !== "point" || !isRenderableMapFeature(feature)) continue;
+
+        const isActive = resource.id === activeResourceId;
+        const isSelected = selected.has(resource.id);
+        const element = document.createElement("button");
+        element.type = "button";
+        element.dataset.inventoryMapPoint = feature.id;
+        element.className = [
+          "grid size-7 place-items-center rounded-full border-2 border-white text-white shadow-lg",
+          "cursor-pointer transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-solid/30",
+          isActive || isSelected ? "bg-brand-solid" : "bg-slate-600",
+          isActive ? "scale-125" : "",
+        ].join(" ");
+        element.setAttribute("aria-label", `${resource.name} · ${feature.layer}`);
+        element.title = `${resource.name} · ${feature.layer}`;
+
+        const dot = document.createElement("span");
+        dot.className = "size-2 rounded-full bg-white";
+        element.append(dot);
+
+        const activeEditHandle = editable
+          && isActive
+          && feature.id === activeFeatureId;
+        if (activeEditHandle) {
+          element.style.opacity = "0";
+          element.style.pointerEvents = "none";
+        }
+        element.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const current = latestRef.current;
+          current.onSelectResource(
+            resource.id,
+            event.shiftKey || event.metaKey || event.ctrlKey,
+          );
+          current.onSelectFeature(feature.id);
+        });
+
+        markers.push(
+          new Marker({ element, anchor: "center" })
+            .setLngLat(feature.coordinates)
+            .addTo(map),
+        );
+      }
+    }
+
+    return () => {
+      for (const marker of markers) marker.remove();
+    };
+  }, [activeFeatureId, activeResourceId, editable, featuresByResource, resources, selectedIds]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.getSource(sourceIds.resources)) return;
     const data = collections(resources, featuresByResource, selectedIds, activeResourceId);
     setSourceData(map, sourceIds.resources, {
       type: "FeatureCollection",
@@ -785,23 +839,13 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
     });
     setSourceData(map, sourceIds.draft, draftCollection(editable ? polygonDraft : []));
 
-    if (!fittedRef.current) {
-      const allCoordinates = [
-        ...Object.values(featuresByResource).flatMap((features) =>
-          features.flatMap((feature) =>
-            feature.type === "point" ? [feature.coordinates] : feature.coordinates,
-          ),
-        ),
-        ...spatialCoordinates(spatialFeatures),
-      ];
-      if (allCoordinates.length > 1) {
-        const bounds = allCoordinates.reduce(
-          (result, coordinate) => result.extend(coordinate),
-          new LngLatBounds(allCoordinates[0], allCoordinates[0]),
-        );
-        map.fitBounds(bounds, { padding: 70, maxZoom: 19, duration: 0 });
+    if (!activeSpatialStructureId) {
+      const coordinates = defaultViewportCoordinates(latestRef.current);
+      const signature = coordinateSignature(coordinates);
+      if (signature !== lastDefaultViewportRef.current) {
+        fitCoordinates(map, coordinates, 0);
+        lastDefaultViewportRef.current = signature;
       }
-      if (allCoordinates.length) fittedRef.current = true;
     }
   }, [
     activeFeatureId,
@@ -812,11 +856,12 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
     resources,
     selectedIds,
     spatialFeatures,
+    activeSpatialStructureId,
   ]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map?.loaded() || !map.getSource(sourceIds.spatial)) return;
+    if (!map?.getSource(sourceIds.spatial)) return;
     setSourceData(
       map,
       sourceIds.spatial,
@@ -832,6 +877,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
           feature.geometry.type === "Point",
       );
       if (point?.geometry.type === "Point") {
+        lastDefaultViewportRef.current = null;
         map.easeTo({
           center: [point.geometry.coordinates[0], point.geometry.coordinates[1]],
           zoom: Math.max(map.getZoom(), 18),
@@ -840,22 +886,7 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
       }
       return;
     }
-    if (spatialFittedRef.current) return;
-    const coordinates = spatialCoordinates(spatialFeatures);
-    if (!coordinates.length) return;
-    const resourceCoordinates = Object.values(featuresByResource).flatMap((features) =>
-      features.flatMap((feature) =>
-        feature.type === "point" ? [feature.coordinates] : feature.coordinates,
-      ),
-    );
-    const allCoordinates = [...resourceCoordinates, ...coordinates];
-    const bounds = allCoordinates.reduce(
-      (result, coordinate) => result.extend(coordinate),
-      new LngLatBounds(allCoordinates[0], allCoordinates[0]),
-    );
-    map.fitBounds(bounds, { padding: 70, maxZoom: 19, duration: 500 });
-    spatialFittedRef.current = true;
-  }, [activeSpatialStructureId, featuresByResource, spatialFeatures]);
+  }, [activeSpatialStructureId, spatialFeatures]);
 
   useEffect(() => {
     const map = mapRef.current;

@@ -5,6 +5,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   inventoryAssignments,
   organizationMemberships,
+  organizations,
   resources,
   stockMovementRequests,
   stockMovements,
@@ -435,8 +436,17 @@ export async function createInventoryAssignment(
       if (earlyReplay) return validateReplay(earlyReplay, replayExpected);
 
       const [resource] = await transaction
-        .select({ id: resources.id, name: resources.name, quantity: resources.quantity })
+        .select({
+          id: resources.id,
+          name: resources.name,
+          quantity: resources.quantity,
+          allowNegativeStock: organizations.allowNegativeStock,
+        })
         .from(resources)
+        .innerJoin(
+          organizations,
+          eq(organizations.id, resources.organizationId),
+        )
         .where(
           and(
             eq(resources.organizationId, organizationId),
@@ -568,13 +578,16 @@ export async function createInventoryAssignment(
         );
       }
 
-      if (input.quantity > resource.quantity) {
+      if (
+        (!resource.allowNegativeStock || trackingMode === "serialized") &&
+        input.quantity > resource.quantity
+      ) {
         throw new InventoryAssignmentError(
           `Only ${resource.quantity} units are available; ${activeBulkQuantity} bulk units are already allocated.`,
           409,
         );
       }
-      if (trackingMode === "bulk") {
+      if (trackingMode === "bulk" && !resource.allowNegativeStock) {
         const [{ located }] = await transaction
           .select({
             located: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
@@ -615,15 +628,23 @@ export async function createInventoryAssignment(
         .returning();
 
       const balanceAfter = resource.quantity - input.quantity;
-      const variantAllocation = await allocatedVariantQuantity(
-        transaction,
-        resourceId,
-      );
-      assertVariantAllocationFits(
-        balanceAfter,
-        variantAllocation,
-        (message) => new InventoryAssignmentError(message, 409),
-      );
+      if (balanceAfter < -MAX_STOCK_QUANTITY) {
+        throw new InventoryAssignmentError(
+          `This assignment exceeds the minimum supported stock of -${MAX_STOCK_QUANTITY}.`,
+          409,
+        );
+      }
+      if (!resource.allowNegativeStock) {
+        const variantAllocation = await allocatedVariantQuantity(
+          transaction,
+          resourceId,
+        );
+        assertVariantAllocationFits(
+          balanceAfter,
+          variantAllocation,
+          (message) => new InventoryAssignmentError(message, 409),
+        );
+      }
       await transaction
         .update(resources)
         .set({ quantity: balanceAfter, updatedAt: now })

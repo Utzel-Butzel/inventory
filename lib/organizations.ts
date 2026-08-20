@@ -25,6 +25,7 @@ export type OrganizationSummary = {
   name: string;
   slug: string;
   isReadOnly: boolean;
+  allowNegativeStock: boolean;
 };
 
 export type OrganizationMembershipSummary = OrganizationSummary & {
@@ -183,13 +184,14 @@ const canonicalRelationTypes = [
 export const organizationSummary = (
   organization: Pick<
     typeof organizations.$inferSelect,
-    "id" | "name" | "slug" | "isReadOnly"
+    "id" | "name" | "slug" | "isReadOnly" | "allowNegativeStock"
   >,
 ): OrganizationSummary => ({
   id: organization.id,
   name: organization.name,
   slug: organization.slug,
   isReadOnly: organization.isReadOnly,
+  allowNegativeStock: organization.allowNegativeStock,
 });
 
 export async function getOrganization(id: string) {
@@ -377,6 +379,7 @@ export async function updateOrganization(options: {
   id: string;
   name?: string;
   slug?: string;
+  allowNegativeStock?: boolean;
   actor: string;
 }) {
   try {
@@ -385,6 +388,9 @@ export async function updateOrganization(options: {
       .set({
         ...(options.name ? { name: options.name } : {}),
         ...(options.slug ? { slug: options.slug } : {}),
+        ...(options.allowNegativeStock !== undefined
+          ? { allowNegativeStock: options.allowNegativeStock }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(organizations.id, options.id))

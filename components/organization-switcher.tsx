@@ -11,6 +11,7 @@ export type ActiveOrganization = {
   name: string;
   slug: string;
   isReadOnly: boolean;
+  allowNegativeStock: boolean;
 };
 
 export type OrganizationMembershipSummary = ActiveOrganization & {

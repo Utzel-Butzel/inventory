@@ -1,7 +1,10 @@
 "use client";
 
 import type { TFunction } from "i18next";
-import { OrganizationLink as Link } from "@/components/organization-routing";
+import {
+  OrganizationLink as Link,
+  useOrganizationAllowsNegativeStock,
+} from "@/components/organization-routing";
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -417,6 +420,7 @@ export function ResourceStockManager({
   resourceId: string;
   canEdit?: boolean;
 }) {
+  const allowNegativeStock = useOrganizationAllowsNegativeStock();
   const { t, i18n } = useT("stock");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const numberFormat = useMemo(() => new Intl.NumberFormat(locale), [locale]);
@@ -560,7 +564,11 @@ export function ResourceStockManager({
     if (!Number.isInteger(quantity) || quantity < 1) {
       throw new Error(t("resource.errors.validQuantity"));
     }
-    if (direction === "out" && quantity > currentQuantity) {
+    if (
+      !allowNegativeStock &&
+      direction === "out" &&
+      quantity > currentQuantity
+    ) {
       throw new Error(
         t("resource.errors.onlyAvailable", {
           quantity: quantityLabel(

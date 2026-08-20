@@ -15,6 +15,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useT } from "next-i18next/client";
 
 import { Badge, Button, Card, EmptyState } from "@/components/ui";
+import { useOrganizationAllowsNegativeStock } from "@/components/organization-routing";
 import { fetchJson } from "@/lib/client-types";
 
 type AssignmentKind = "checkout" | "assignment" | "reservation";
@@ -116,6 +117,7 @@ export function ResourceAssignmentsManager({
   canEdit: boolean;
 }) {
   const { t, i18n } = useT("resource");
+  const allowNegativeStock = useOrganizationAllowsNegativeStock();
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const [data, setData] = useState<AssignmentData | null>(null);
   const [form, setForm] = useState<AssignmentForm>(emptyForm);
@@ -414,7 +416,11 @@ export function ResourceAssignmentsManager({
                       required
                       type="number"
                       min={1}
-                      max={data?.availability.availableQuantity ?? undefined}
+                      max={
+                        allowNegativeStock
+                          ? undefined
+                          : data?.availability.availableQuantity ?? undefined
+                      }
                       step={1}
                       value={form.quantity}
                       onChange={(event) => setField("quantity", event.target.value)}
@@ -466,7 +472,8 @@ export function ResourceAssignmentsManager({
                   disabled={
                     saving ||
                     !data ||
-                    data.availability.availableQuantity < 1 ||
+                    (!allowNegativeStock &&
+                      data.availability.availableQuantity < 1) ||
                     (data.trackingMode === "serialized" && !data.availableUnits.length)
                   }
                 >

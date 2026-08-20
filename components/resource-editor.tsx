@@ -25,6 +25,7 @@ import {
   Paperclip,
   RefreshCcw,
   Save,
+  Sparkles,
   Trash2,
   UploadCloud,
   Warehouse,
@@ -376,7 +377,9 @@ export function ResourceEditor({
   const [editingFileIndex, setEditingFileIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(Boolean(resourceId));
   const [saving, setSaving] = useState(false);
-  const [aiAction, setAiAction] = useState<"analyze" | "cover" | null>(null);
+  const [aiAction, setAiAction] = useState<
+    "analyze" | "research" | "cover" | null
+  >(null);
   const [autoAnalyze, setAutoAnalyze] = useState(canUseAi);
   const [autoCover, setAutoCover] = useState(false);
   const [coverPrompt, setCoverPrompt] = useState("");
@@ -694,6 +697,46 @@ export function ResourceEditor({
         analysisError instanceof Error
           ? analysisError.message
           : t("errors.analysis"),
+      );
+      return null;
+    } finally {
+      setAiAction(null);
+    }
+  };
+
+  const runResearch = async (id = resourceId) => {
+    if (!id) return null;
+    setAiAction("research");
+    setError(null);
+    try {
+      const response = await fetchJson<{
+        resource: ClientResource;
+        updatedFields: string[];
+      }>(`/api/v1/resources/${id}/research`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      setResource(response.resource);
+      setForm(toForm(response.resource));
+      setCustomFields(response.resource.customFields ?? {});
+      setCoverPrompt(
+        transparentCover
+          ? defaultTransparentCoverPrompt(response.resource.name)
+          : defaultCoverPrompt(response.resource.name),
+      );
+      setCoverPromptCustomized(false);
+      setNotice(
+        response.updatedFields.length
+          ? t("notices.researchComplete")
+          : t("notices.researchNoChanges"),
+      );
+      return response.resource;
+    } catch (researchError) {
+      setError(
+        researchError instanceof Error
+          ? researchError.message
+          : t("errors.research"),
       );
       return null;
     } finally {
@@ -1456,7 +1499,10 @@ export function ResourceEditor({
               </div>
             ) : (
               <div className="space-y-3">
-                <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runAnalysis(resourceId, true)} className="flex w-full items-center justify-between rounded-xl bg-brand-solid px-3.5 py-3 text-left text-xs font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover disabled:bg-muted disabled:text-background disabled:opacity-100"><span className="flex items-center gap-2">{aiAction === "analyze" ? <LoaderCircle size={15} className="animate-spin" /> : <ImageIcon size={15} />}{t("ai.rewrite")}</span><ChevronRight size={15} /></button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runAnalysis(resourceId, true)} className="flex min-h-12 min-w-0 items-center gap-2 rounded-xl bg-brand-solid px-3 py-2.5 text-left text-xs font-semibold leading-4 text-on-brand shadow-sm transition hover:bg-brand-hover disabled:bg-muted disabled:text-background disabled:opacity-100">{aiAction === "analyze" ? <LoaderCircle size={15} className="shrink-0 animate-spin" /> : <ImageIcon size={15} className="shrink-0" />}<span>{t("ai.rewrite")}</span></button>
+                  <button type="button" disabled={Boolean(aiAction)} onClick={() => void runResearch(resourceId)} className="flex min-h-12 min-w-0 items-center gap-2 rounded-xl bg-strong px-3 py-2.5 text-left text-xs font-semibold leading-4 text-on-strong shadow-sm transition hover:bg-success disabled:bg-muted disabled:text-background disabled:opacity-100">{aiAction === "research" ? <LoaderCircle size={15} className="shrink-0 animate-spin" /> : <Sparkles size={15} className="shrink-0" />}<span>{t("ai.research")}</span></button>
+                </div>
                 <div className="rounded-xl border border-border bg-surface-subtle p-3">
                   <CoverReferencePicker
                     name="existing-cover-reference"

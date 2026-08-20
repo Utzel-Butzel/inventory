@@ -30,6 +30,7 @@ export default async function InventoryItemPage({ params }: Props) {
   const canViewAssignments = Boolean(
     identity?.permissions.includes("assignments.read"),
   );
+  const isPlace = resource?.type === "place";
 
   return (
     <>
@@ -53,14 +54,16 @@ export default async function InventoryItemPage({ params }: Props) {
           }}
         />
       ) : null}
-      <ResourceVariantsManager
-        resourceId={id}
-        canEdit={canEdit}
-        canManageStock={canManageStock}
-        hideWhenEmpty
-        allowCreate={false}
-      />
-      {canViewAssignments ? (
+      {!isPlace ? (
+        <ResourceVariantsManager
+          resourceId={id}
+          canEdit={canEdit}
+          canManageStock={canManageStock}
+          hideWhenEmpty
+          allowCreate={false}
+        />
+      ) : null}
+      {canViewAssignments && !isPlace ? (
         <ResourceAssignmentsManager
           resourceId={id}
           canEdit={canManageAssignments}

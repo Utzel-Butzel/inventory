@@ -49,6 +49,7 @@ export async function PATCH(request: Request, context: Context) {
       id,
       name: parsed.data.name,
       slug: parsed.data.slug,
+      allowNegativeStock: parsed.data.allowNegativeStock,
       actor: identity.subject,
     });
   } catch (error) {

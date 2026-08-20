@@ -10,7 +10,9 @@ import {
   ArrowLeft,
   Barcode,
   Box,
+  Building2,
   CalendarDays,
+  Camera,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
@@ -22,11 +24,13 @@ import {
   Layers3,
   Languages,
   LoaderCircle,
+  Map as MapIcon,
   MapPin,
   Maximize2,
   Package,
   Paperclip,
   Pencil,
+  Rotate3d,
   Tag,
   Trash2,
   Warehouse,
@@ -43,6 +47,7 @@ import {
   type ClientMedia,
   type ClientResource,
   type ClientResourceLocalization,
+  type ClientRoomScanSummary,
 } from "@/lib/client-types";
 import type {
   CustomFieldDefinition,
@@ -56,6 +61,16 @@ const statusStyles: Record<string, string> = {
   "in-use": "bg-info-soft text-info ring-info-border",
   maintenance: "bg-warning-soft text-warning ring-warning-border",
   archived: "bg-surface-muted text-muted ring-border-strong/40",
+};
+
+const curatedArticleImages: Record<
+  string,
+  { url: string; altText: string }
+> = {
+  "a0530295-390a-457e-aa3f-06327e0e6fa7": {
+    url: "/images/rooms/montage-article.jpg",
+    altText: "Organized assembly workshop with workbenches and tool storage",
+  },
 };
 
 const formatValue = (cents: number | null, currency: string, locale: string) =>
@@ -118,6 +133,128 @@ function DetailField({
         </div>
       </div>
     </div>
+  );
+}
+
+function RoomScanSummary({
+  scan,
+  locale,
+  integer,
+}: {
+  scan: ClientRoomScanSummary;
+  locale: string;
+  integer: Intl.NumberFormat;
+}) {
+  const { t } = useT("inventory");
+  const roomHref = `/spaces?room=${encodeURIComponent(scan.id)}`;
+  const mapHref = scan.structureId
+    ? `/map?structure=${encodeURIComponent(scan.structureId)}${
+        scan.floorIdentifier
+          ? `&floor=${encodeURIComponent(scan.floorIdentifier)}`
+          : ""
+      }`
+    : null;
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-brand-border bg-surface">
+      <div className="bg-gradient-to-br from-brand-soft via-surface to-surface px-5 pb-4 pt-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="flex items-center gap-2 text-xs font-semibold text-brand">
+              <Rotate3d className="size-4" aria-hidden="true" />
+              {t("details.roomScan.eyebrow")}
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-foreground">
+              {t("details.roomScan.title")}
+            </h2>
+          </div>
+          <span className="rounded-full bg-success-soft px-2.5 py-1 text-[10px] font-semibold text-success ring-1 ring-inset ring-success-border">
+            {t("details.roomScan.revision", {
+              value: integer.format(scan.revision),
+            })}
+          </span>
+        </div>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          {t("details.roomScan.description")}
+        </p>
+      </div>
+
+      <dl className="grid grid-cols-2 border-y border-border">
+        <div className="border-b border-r border-border p-4">
+          <dt className="flex items-center gap-2 text-[11px] text-muted">
+            <Building2 className="size-3.5" aria-hidden="true" />
+            {t("details.roomScan.structure")}
+          </dt>
+          <dd className="mt-1 truncate text-sm font-semibold text-foreground">
+            {scan.structureName ?? t("details.roomScan.individualRoom")}
+          </dd>
+        </div>
+        <div className="border-b border-border p-4">
+          <dt className="flex items-center gap-2 text-[11px] text-muted">
+            <Layers3 className="size-3.5" aria-hidden="true" />
+            {t("details.roomScan.floor")}
+          </dt>
+          <dd className="mt-1 truncate text-sm font-semibold text-foreground">
+            {scan.floorIdentifier ?? t("details.roomScan.unassigned")}
+          </dd>
+        </div>
+        <div className="border-r border-border p-4">
+          <dt className="flex items-center gap-2 text-[11px] text-muted">
+            <Package className="size-3.5" aria-hidden="true" />
+            {t("details.roomScan.contents")}
+          </dt>
+          <dd className="mt-1 text-sm font-semibold text-foreground">
+            {t("details.roomScan.placements", {
+              count: scan.placementCount,
+              value: integer.format(scan.placementCount),
+            })}
+          </dd>
+        </div>
+        <div className="p-4">
+          <dt className="flex items-center gap-2 text-[11px] text-muted">
+            <Camera className="size-3.5" aria-hidden="true" />
+            {t("details.roomScan.capture")}
+          </dt>
+          <dd className="mt-1 text-sm font-semibold text-foreground">
+            {t("details.roomScan.viewpoints", {
+              count: scan.keyframeCount,
+              value: integer.format(scan.keyframeCount),
+            })}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="p-4">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+          <CalendarDays className="size-3.5" aria-hidden="true" />
+          <span>{formatDate(scan.capturedAt, locale)}</span>
+          {scan.deviceModel ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{scan.deviceModel}</span>
+            </>
+          ) : null}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            href={roomHref}
+            className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand-solid px-3.5 text-xs font-semibold text-on-brand transition hover:bg-brand-hover"
+          >
+            <Rotate3d className="size-3.5" aria-hidden="true" />
+            {t("details.roomScan.open3d")}
+          </Link>
+          {mapHref ? (
+            <Link
+              href={mapHref}
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-border px-3.5 text-xs font-semibold text-muted-strong transition hover:bg-surface-hover hover:text-foreground"
+            >
+              <MapIcon className="size-3.5" aria-hidden="true" />
+              {t("details.roomScan.viewMap")}
+            </Link>
+          ) : null}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -396,6 +533,9 @@ export function ResourceDetails({
   const [customFieldDefinitions, setCustomFieldDefinitions] = useState<
     CustomFieldDefinition[]
   >([]);
+  const [roomScan, setRoomScan] = useState<
+    ClientRoomScanSummary | null | undefined
+  >(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
@@ -431,6 +571,31 @@ export function ResourceDetails({
   useEffect(() => {
     void loadResource();
   }, [loadResource]);
+
+  useEffect(() => {
+    if (!resource || resource.type !== "place") {
+      setRoomScan(undefined);
+      return;
+    }
+    const controller = new AbortController();
+    setRoomScan(undefined);
+    void fetchJson<{ scans: ClientRoomScanSummary[] }>("/api/v1/room-scans", {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(({ scans }) => {
+        setRoomScan(
+          scans.find((scan) => scan.roomResourceId === resource.id) ?? null,
+        );
+      })
+      .catch((loadError) => {
+        if ((loadError as Error).name !== "AbortError") {
+          // Spatial access is optional; the ordinary inventory detail remains usable.
+          setRoomScan(undefined);
+        }
+      });
+    return () => controller.abort();
+  }, [resource]);
 
   const mapHref = useMemo(() => {
     if (resource?.gpsLatitude === null || resource?.gpsLongitude === null)
@@ -508,6 +673,24 @@ export function ResourceDetails({
   const { model: objectModel, gallery: galleryMedia } =
     getObjectCapturePresentation(resource.media, resource.cover?.id ?? null);
   const galleryImages = galleryMedia.filter((item) => item.kind === "image");
+  const roomGuideImage = roomScan?.assets.find(
+    (asset) => asset.kind === "guide_image",
+  );
+  const articleImage = resource.cover
+    ? {
+        url: resource.cover.url,
+        altText: resource.cover.altText || resource.name,
+      }
+    : curatedArticleImages[resource.id] ??
+      (roomGuideImage
+        ? {
+            url: roomGuideImage.url,
+            altText: t("details.roomScan.guideImageAlt", {
+              name: resource.name,
+            }),
+          }
+        : null);
+  const isRoom = resource.type === "place";
   const coordinateLabel =
     resource.gpsLatitude !== null && resource.gpsLongitude !== null
       ? `${resource.gpsLatitude.toFixed(5)}, ${resource.gpsLongitude.toFixed(5)}`
@@ -567,7 +750,7 @@ export function ResourceDetails({
               resourceName={resource.name}
             />
           ) : null}
-          {canViewStock ? (
+          {canViewStock && !isRoom ? (
             <Link
               href={`/inventory/${resource.id}/stock`}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3.5 text-sm font-semibold text-brand transition hover:bg-brand-soft"
@@ -613,13 +796,13 @@ export function ResourceDetails({
           <section className="overflow-hidden rounded-xl border border-border bg-surface">
             {objectModel ? (
               <div className="grid border-b border-border lg:grid-cols-2">
-                {resource.cover ? (
+                {articleImage ? (
                   <div className="relative aspect-square self-start overflow-hidden bg-[radial-gradient(circle_at_50%_35%,var(--color-surface),var(--color-surface-muted))]">
                     {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={resource.cover.url}
-                      alt={resource.cover.altText || resource.name}
+                      src={articleImage.url}
+                      alt={articleImage.altText}
                       className="h-full w-full object-contain"
                     />
                     <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1 text-[10px] font-semibold text-muted shadow-sm">
@@ -664,19 +847,52 @@ export function ResourceDetails({
                   }}
                 />
               </div>
-            ) : resource.cover ? (
-              <div className="aspect-square overflow-hidden bg-surface-muted">
+            ) : articleImage ? (
+              <div
+                className={`relative overflow-hidden bg-surface-muted ${
+                  isRoom ? "aspect-[3/2]" : "aspect-square"
+                }`}
+              >
                 {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={resource.cover.url}
-                  alt={resource.cover.altText || resource.name}
+                  src={articleImage.url}
+                  alt={articleImage.altText}
                   className="h-full w-full object-cover"
                 />
+                {isRoom && roomScan ? (
+                  <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 bg-gradient-to-t from-black/75 via-black/25 to-transparent px-5 pb-5 pt-16 text-white">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70">
+                        <Rotate3d className="size-3.5" aria-hidden="true" />
+                        {t("details.roomScan.roomPlan")}
+                      </p>
+                      <p className="mt-1 truncate text-sm font-semibold text-white">
+                        {roomScan.structureName ?? resource.location ?? resource.name}
+                        {roomScan.floorIdentifier
+                          ? ` · ${roomScan.floorIdentifier}`
+                          : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-black/35 px-2.5 py-1 text-[10px] font-semibold text-white/85 ring-1 ring-inset ring-white/20 backdrop-blur-sm">
+                      {t("details.roomScan.revision", {
+                        value: integer.format(roomScan.revision),
+                      })}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             ) : (
-              <div className="grid aspect-square place-items-center bg-gradient-to-br from-success-soft to-surface-muted text-muted">
-                <Box className="size-14" strokeWidth={1.25} />
+              <div
+                className={`grid place-items-center bg-gradient-to-br from-success-soft to-surface-muted text-muted ${
+                  isRoom ? "aspect-[3/2]" : "aspect-square"
+                }`}
+              >
+                {isRoom ? (
+                  <Rotate3d className="size-14" strokeWidth={1.25} />
+                ) : (
+                  <Box className="size-14" strokeWidth={1.25} />
+                )}
               </div>
             )}
           </section>
@@ -686,7 +902,7 @@ export function ResourceDetails({
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <ImageIcon className="size-4 text-success" />
-                  {resource.cover || objectModel
+                  {articleImage || objectModel
                     ? t("details.sections.additionalMedia")
                     : t("details.sections.media")}
                 </h2>
@@ -724,6 +940,14 @@ export function ResourceDetails({
         </div>
 
         <aside className="space-y-6 xl:sticky xl:top-5">
+          {roomScan ? (
+            <RoomScanSummary
+              scan={roomScan}
+              locale={locale}
+              integer={integer}
+            />
+          ) : null}
+
           {resource.description ? (
             <section className="rounded-xl border border-border bg-surface p-5">
               <h2 className="text-sm font-semibold text-foreground">
@@ -735,7 +959,9 @@ export function ResourceDetails({
 
           <section className="rounded-xl border border-border bg-surface p-5">
             <h2 className="mb-4 text-sm font-semibold text-foreground">
-              {t("details.sections.itemDetails")}
+              {isRoom
+                ? t("details.sections.roomDetails")
+                : t("details.sections.itemDetails")}
             </h2>
             <div className="grid sm:grid-cols-2 sm:gap-x-5 xl:grid-cols-1 2xl:grid-cols-2">
               <DetailField

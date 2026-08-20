@@ -152,18 +152,23 @@ export function nextVariantStockQuantities(
   parentQuantity: number,
   variantQuantity: number,
   delta: number,
+  allowNegativeStock = false,
 ) {
   if (![parentQuantity, variantQuantity, delta].every(Number.isInteger)) {
     throw new RangeError("Stock quantities must be whole numbers.");
   }
   const nextParentQuantity = parentQuantity + delta;
   const nextVariantQuantity = variantQuantity + delta;
-  if (nextParentQuantity < 0 || nextVariantQuantity < 0) {
+  if (
+    !allowNegativeStock &&
+    ((nextParentQuantity < 0 && nextParentQuantity < parentQuantity) ||
+      (nextVariantQuantity < 0 && nextVariantQuantity < variantQuantity))
+  ) {
     throw new RangeError("This booking would make stock negative.");
   }
   if (
-    nextParentQuantity > MAX_VARIANT_STOCK_QUANTITY ||
-    nextVariantQuantity > MAX_VARIANT_STOCK_QUANTITY
+    Math.abs(nextParentQuantity) > MAX_VARIANT_STOCK_QUANTITY ||
+    Math.abs(nextVariantQuantity) > MAX_VARIANT_STOCK_QUANTITY
   ) {
     throw new RangeError("This booking exceeds the maximum supported stock.");
   }

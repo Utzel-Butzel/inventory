@@ -1,6 +1,9 @@
 "use client";
 
-import { OrganizationLink as Link } from "@/components/organization-routing";
+import {
+  OrganizationLink as Link,
+  useOrganizationAllowsNegativeStock,
+} from "@/components/organization-routing";
 import type { TFunction } from "i18next";
 import {
   AlertTriangle,
@@ -47,6 +50,11 @@ type AvailableUnit = {
   location: string | null;
 };
 
+type ResourceCover = {
+  url: string;
+  altText: string;
+};
+
 type BomResource = {
   id: string;
   name: string;
@@ -60,6 +68,7 @@ type BomComponentChoice = {
   sku: string | null;
   availableQuantity: number;
   trackingMode: TrackingMode;
+  cover: ResourceCover | null;
   availableUnits: AvailableUnit[];
   isPrimary: boolean;
 };
@@ -75,6 +84,7 @@ type BomComponent = {
   note: string | null;
   availableQuantity: number;
   trackingMode: TrackingMode;
+  cover: ResourceCover | null;
   availableUnits: AvailableUnit[];
   choices: BomComponentChoice[];
   origin?: "local" | "base" | "inherited" | "override" | "variant";
@@ -177,6 +187,7 @@ function normalizeBom(payload: BomEnvelope, t: TFunction<"assembly">): BomData {
                 sku: component.sku,
                 availableQuantity: component.availableQuantity,
                 trackingMode: component.trackingMode,
+                cover: component.cover,
                 availableUnits: component.availableUnits,
                 isPrimary: true,
               },
@@ -211,6 +222,40 @@ function parsedCodes(value: string) {
     .split(/[\n,]+/)
     .map((code) => code.trim())
     .filter(Boolean);
+}
+
+function ResourceThumbnail({
+  cover,
+  className,
+}: {
+  cover: ResourceCover | null;
+  className?: string;
+}) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+
+  return (
+    <span
+      className={cn(
+        "grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-surface-muted text-muted",
+        className,
+      )}
+    >
+      {cover?.url && cover.url !== failedUrl ? (
+        // Stored covers use an authenticated same-origin route.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={cover.url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailedUrl(cover.url)}
+          className="size-full object-cover"
+        />
+      ) : (
+        <Package className="size-4" aria-hidden="true" />
+      )}
+    </span>
+  );
 }
 
 function SectionHeading({
@@ -251,6 +296,7 @@ export function AssemblyManager({
   onStockChanged?: () => void;
   hideWhenEmpty?: boolean;
 }) {
+  const allowNegativeStock = useOrganizationAllowsNegativeStock();
   const { t, i18n } = useT(["assembly", "common"]);
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const bomEndpoint = `/api/v1/resources/${resourceId}/bom`;
@@ -408,11 +454,16 @@ export function AssemblyManager({
       0,
       Math.min(
         ...components.map((component) =>
-          Math.floor(component.availableQuantity / Math.max(1, component.quantityPerAssembly)),
+          allowNegativeStock && component.trackingMode === "bulk"
+            ? 1_000
+            : Math.floor(
+                component.availableQuantity /
+                  Math.max(1, component.quantityPerAssembly),
+              ),
         ),
       ),
     );
-  }, [components]);
+  }, [allowNegativeStock, components]);
 
   const buildQuantity = Math.max(0, Number(buildForm.quantity) || 0);
   const preview = useMemo(
@@ -433,13 +484,17 @@ export function AssemblyManager({
           sku: selectedChoice.sku,
           availableQuantity: selectedChoice.availableQuantity,
           trackingMode: selectedChoice.trackingMode,
+          cover: selectedChoice.cover,
           availableUnits: selectedChoice.availableUnits,
           required,
           remaining: selectedChoice.availableQuantity - required,
           shortage: required > selectedChoice.availableQuantity,
+          blockingShortage:
+            required > selectedChoice.availableQuantity &&
+            (!allowNegativeStock || selectedChoice.trackingMode === "serialized"),
         };
       }),
-    [bom?.components, buildQuantity, componentResourceSelections],
+    [allowNegativeStock, bom?.components, buildQuantity, componentResourceSelections],
   );
   const selectedBuildable = useMemo(
     () =>
@@ -448,15 +503,17 @@ export function AssemblyManager({
             0,
             Math.min(
               ...preview.map((component) =>
-                Math.floor(
-                  component.availableQuantity /
-                    Math.max(1, component.quantityPerAssembly),
-                ),
+                allowNegativeStock && component.trackingMode === "bulk"
+                  ? 1_000
+                  : Math.floor(
+                      component.availableQuantity /
+                        Math.max(1, component.quantityPerAssembly),
+                    ),
               ),
             ),
           )
         : 0,
-    [preview],
+    [allowNegativeStock, preview],
   );
 
   useEffect(() => {
@@ -497,7 +554,7 @@ export function AssemblyManager({
       buildQuantity > 0 &&
       buildQuantity <= 1_000 &&
       !dirty &&
-      preview.every((component) => !component.shortage) &&
+      preview.every((component) => !component.blockingShortage) &&
       serializedSelectionsValid &&
       outputCodesValid,
   );
@@ -517,6 +574,12 @@ export function AssemblyManager({
         note: null,
         availableQuantity: resource.quantity,
         trackingMode: "bulk",
+        cover: resource.cover
+          ? {
+              url: resource.cover.url,
+              altText: resource.cover.altText,
+            }
+          : null,
         availableUnits: [],
         choices: [
           {
@@ -525,6 +588,12 @@ export function AssemblyManager({
             sku: resource.sku,
             availableQuantity: resource.quantity,
             trackingMode: "bulk",
+            cover: resource.cover
+              ? {
+                  url: resource.cover.url,
+                  altText: resource.cover.altText,
+                }
+              : null,
             availableUnits: [],
             isPrimary: true,
           },
@@ -1213,46 +1282,70 @@ export function AssemblyManager({
                     </div>
                     <div className="divide-y divide-border">
                       {preview.map((component) => (
-                        <div key={component.slotKey} className={cn("grid gap-3 px-4 py-3 sm:grid-cols-[minmax(180px,1fr)_90px_90px_90px] sm:items-center", component.shortage && "bg-danger-soft")}>
+                        <div key={component.slotKey} className={cn("grid gap-3 px-4 py-3 sm:grid-cols-[minmax(180px,1fr)_90px_90px_90px] sm:items-center", component.blockingShortage && "bg-danger-soft")}>
                           <div className="min-w-0">
                             {component.choices.length > 1 ? (
                               <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.08em] text-muted">
                                 {t("assembly:labels.componentConfiguration")}
-                                <select
-                                  value={component.resourceId}
-                                  onChange={(event) => {
-                                    setComponentResourceSelections((current) => ({
-                                      ...current,
-                                      [component.slotKey]: event.target.value,
-                                    }));
-                                    setComponentUnitIds({});
-                                    buildRequestRef.current = null;
-                                  }}
-                                  className={`${inputClass} mt-1.5 normal-case tracking-normal`}
-                                >
-                                  {component.choices.map((choice) => (
-                                    <option
-                                      key={choice.resourceId}
-                                      value={choice.resourceId}
-                                    >
-                                      {choice.name}
-                                      {choice.isPrimary
-                                        ? ` ${t("assembly:build.primaryConfiguration")}`
-                                        : ""}
-                                      {` · ${t("assembly:availableCount", {
-                                        count: choice.availableQuantity,
-                                      })}`}
-                                    </option>
-                                  ))}
-                                </select>
+                                <span className="relative mt-1.5 block">
+                                  <ResourceThumbnail
+                                    cover={component.cover}
+                                    className="pointer-events-none absolute left-1.5 top-1/2 z-10 size-7 -translate-y-1/2 rounded-md"
+                                  />
+                                  <select
+                                    value={component.resourceId}
+                                    onChange={(event) => {
+                                      setComponentResourceSelections((current) => ({
+                                        ...current,
+                                        [component.slotKey]: event.target.value,
+                                      }));
+                                      setComponentUnitIds({});
+                                      buildRequestRef.current = null;
+                                    }}
+                                    className={`${inputClass} pl-11 normal-case tracking-normal`}
+                                  >
+                                    {component.choices.map((choice) => (
+                                      <option
+                                        key={choice.resourceId}
+                                        value={choice.resourceId}
+                                      >
+                                        {choice.name}
+                                        {choice.isPrimary
+                                          ? ` ${t("assembly:build.primaryConfiguration")}`
+                                          : ""}
+                                        {` · ${t("assembly:availableCount", {
+                                          count: choice.availableQuantity,
+                                        })}`}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </span>
                               </label>
+                            ) : (
+                              <div className="flex min-w-0 items-center gap-3">
+                                <ResourceThumbnail
+                                  cover={component.cover}
+                                />
+                                <div className="min-w-0">
+                                  <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
+                                  <p className="mt-0.5 text-[9px] text-muted">
+                                    {t("assembly:perFinishedCount", {
+                                      count: component.quantityPerAssembly,
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                            {component.choices.length > 1 ? (
+                              <>
+                                <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
+                                <p className="mt-0.5 text-[9px] text-muted">
+                                  {t("assembly:perFinishedCount", {
+                                    count: component.quantityPerAssembly,
+                                  })}
+                                </p>
+                              </>
                             ) : null}
-                            <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
-                            <p className="mt-0.5 text-[9px] text-muted">
-                              {t("assembly:perFinishedCount", {
-                                count: component.quantityPerAssembly,
-                              })}
-                            </p>
                           </div>
                           <div className="flex items-center justify-between sm:block"><span className="text-[9px] uppercase text-muted sm:hidden">{t("assembly:labels.required")}</span><span className="text-[12px] font-semibold tabular-nums text-foreground">{component.required}</span></div>
                           <div className="flex items-center justify-between sm:block"><span className="text-[9px] uppercase text-muted sm:hidden">{t("assembly:labels.available")}</span><span className={cn("text-[12px] font-semibold tabular-nums", component.shortage ? "text-danger" : "text-foreground")}>{component.availableQuantity}</span></div>
@@ -1308,7 +1401,7 @@ export function AssemblyManager({
                     <span className="font-medium text-warning">
                       {t("assembly:build.saveFirst")}
                     </span>
-                  ) : preview.some((component) => component.shortage) ? (
+                  ) : preview.some((component) => component.blockingShortage) ? (
                     <span className="font-medium text-danger">
                       {t("assembly:build.insufficientStock")}
                     </span>

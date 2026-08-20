@@ -81,6 +81,7 @@ export const organizations = pgTable(
     name: varchar("name", { length: 160 }).notNull(),
     slug: varchar("slug", { length: 80 }).notNull(),
     isReadOnly: boolean("is_read_only").notNull().default(false),
+    allowNegativeStock: boolean("allow_negative_stock").notNull().default(false),
     createdBy: varchar("created_by", { length: 320 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -344,6 +345,7 @@ export type AiMetadata = {
   model?: string;
   confidence?: number;
   generatedFields?: string[];
+  sources?: string[];
 };
 
 export type ResourceMapCoordinate = [number, number];
@@ -565,7 +567,6 @@ export const resources = pgTable(
     index("resources_type_idx").on(table.organizationId, table.type),
     index("resources_status_idx").on(table.organizationId, table.status),
     index("resources_updated_at_idx").on(table.organizationId, table.updatedAt),
-    check("resources_quantity_nonnegative", sql`${table.quantity} >= 0`),
     check("resources_content_revision_positive", sql`${table.contentRevision} > 0`),
     check(
       "resources_custom_fields_object",
@@ -633,7 +634,6 @@ export const resourceVariants = pgTable(
       .where(sql`${table.barcode} is not null`),
     check("resource_variants_name_nonempty", sql`length(btrim(${table.name})) > 0`),
     check("resource_variants_price_nonnegative", sql`${table.priceCents} is null or ${table.priceCents} >= 0`),
-    check("resource_variants_quantity_nonnegative", sql`${table.quantity} >= 0`),
     check("resource_variants_position_nonnegative", sql`${table.position} >= 0`),
     check("resource_variants_currency_format", sql`${table.currency} ~ '^[A-Z]{3}$'`),
   ],
@@ -2007,10 +2007,6 @@ export const stockLocationBalances = pgTable(
     ),
     index("stock_location_balances_location_idx").on(table.locationResourceId),
     check(
-      "stock_location_balances_nonnegative",
-      sql`${table.quantity} >= 0`,
-    ),
-    check(
       "stock_location_balances_distinct_resources",
       sql`${table.resourceId} <> ${table.locationResourceId}`,
     ),
@@ -2194,28 +2190,12 @@ export const stockMovements = pgTable(
     index("stock_movements_from_location_idx").on(table.fromLocationResourceId),
     index("stock_movements_to_location_idx").on(table.toLocationResourceId),
     check(
-      "stock_movements_balance_nonnegative",
-      sql`${table.balanceAfter} >= 0`,
-    ),
-    check(
       "stock_movements_quantity_nonnegative",
       sql`${table.quantity} >= 0`,
     ),
     check(
-      "stock_movements_variant_balance_nonnegative",
-      sql`${table.variantBalanceAfter} is null or ${table.variantBalanceAfter} >= 0`,
-    ),
-    check(
       "stock_movements_variant_fields_consistent",
       sql`(${table.variantId} is null and ${table.variantDelta} is null and ${table.variantBalanceAfter} is null) or (${table.variantId} is not null and ${table.variantDelta} is not null and ${table.variantBalanceAfter} is not null)`,
-    ),
-    check(
-      "stock_movements_from_location_balance_nonnegative",
-      sql`${table.fromLocationBalanceAfter} is null or ${table.fromLocationBalanceAfter} >= 0`,
-    ),
-    check(
-      "stock_movements_to_location_balance_nonnegative",
-      sql`${table.toLocationBalanceAfter} is null or ${table.toLocationBalanceAfter} >= 0`,
     ),
   ],
 );
@@ -2683,7 +2663,9 @@ export const aiIdempotencyOperations = pgTable(
     organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     operation: varchar("operation", { length: 24 })
-      .$type<"analyze" | "recognize" | "count" | "cover" | "translate">()
+      .$type<
+        "analyze" | "research" | "recognize" | "count" | "cover" | "translate"
+      >()
       .notNull(),
     idempotencyKey: uuid("idempotency_key").notNull(),
     resourceId: uuid("resource_id").notNull(),
@@ -2714,7 +2696,7 @@ export const aiIdempotencyOperations = pgTable(
     index("ai_idempotency_operations_resource_id_idx").on(table.resourceId),
     check(
       "ai_idempotency_operations_operation_check",
-      sql`${table.operation} in ('analyze', 'recognize', 'count', 'cover', 'translate')`,
+      sql`${table.operation} in ('analyze', 'research', 'recognize', 'count', 'cover', 'translate')`,
     ),
     check(
       "ai_idempotency_operations_status_check",
@@ -2744,7 +2726,7 @@ export const aiRateLimitBuckets = pgTable(
     }),
     check(
       "ai_rate_limit_buckets_operation_check",
-      sql`${table.operation} in ('analyze', 'recognize', 'count', 'cover', 'translate')`,
+      sql`${table.operation} in ('analyze', 'research', 'recognize', 'count', 'cover', 'translate')`,
     ),
     check(
       "ai_rate_limit_buckets_request_count_positive",

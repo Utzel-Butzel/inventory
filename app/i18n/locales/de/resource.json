@@ -150,6 +150,7 @@
     "coverDescription": "Aus dem ersten Foto ein quadratisches Titelbild vorbereiten.",
     "safety": "Die automatische Verarbeitung beginnt erst, nachdem die Originaldateien gespeichert wurden. Prüfe und bearbeite das Ergebnis anschließend bei Bedarf.",
     "rewrite": "Angaben aus Fotos übernehmen",
+    "research": "Angaben mit KI ergänzen",
     "coverDirection": "Vorgabe für das Titelbild",
     "referenceImage": "Referenzbild",
     "referenceImageDescription": "Wähle, auf welchem Bild das Titelbild basieren soll.",
@@ -267,6 +268,21 @@
     "depth": {
       "label": "Ebenen",
       "ariaLabel": "Anzahl der Verbindungsebenen"
+    },
+    "stock": {
+      "show": "Bestand anzeigen",
+      "loading": "Bestand wird geladen…",
+      "onHand": "{{quantity}} vorhanden",
+      "buildable_one": "{{value}} baubar",
+      "buildable_other": "{{value}} baubar",
+      "statuses": {
+        "out": "Nicht auf Lager",
+        "low": "Niedriger Bestand",
+        "healthy": "Auf Lager"
+      },
+      "errors": {
+        "load": "Der Bestand für den Verbindungsfluss konnte nicht geladen werden."
+      }
     },
     "legend": {
       "family": "Variantenfamilie",
@@ -464,6 +480,8 @@
   "notices": {
     "locationRead": "Der Standort wurde aus den Bildmetadaten gelesen. Bitte überprüfe ihn.",
     "analysisComplete": "Angaben aus den Fotos wurden übernommen. Titel, Beschreibung, Tags und Typ wurden aktualisiert.",
+    "researchComplete": "Fehlende Angaben wurden durch KI-Webrecherche ergänzt. Bestehende Informationen blieben erhalten.",
+    "researchNoChanges": "Die KI-Webrecherche ist abgeschlossen, hat aber keine verlässlichen fehlenden Angaben gefunden.",
     "coverComplete": "Ein neues Titelbild wurde erstellt und als erstes Bild festgelegt.",
     "savedTranslationStale": "Änderungen gespeichert. Die Übersetzung ist noch veraltet: {{reason}}",
     "savedTranslations": "Änderungen gespeichert. Die Übersetzungen werden im Hintergrund aktualisiert.",
@@ -479,6 +497,7 @@
     "loadCustomFields": "Definitionen der benutzerdefinierten Felder konnten nicht geladen werden.",
     "unsupportedFiles": "Einige Dateien wurden übersprungen. Unterstützt werden Bilder, Videos, PDF-Dateien und USDZ-3D-Modelle.",
     "analysis": "Die automatische Auswertung der Fotos ist fehlgeschlagen.",
+    "research": "Die KI-Webrecherche ist fehlgeschlagen.",
     "cover": "Titelbilderstellung fehlgeschlagen.",
     "requiredCustomField": "Fülle das erforderliche benutzerdefinierte Feld „{{label}}“ aus.",
     "nameOrImage": "Füge einen Namen oder mindestens ein Bild für die automatische Auswertung hinzu.",

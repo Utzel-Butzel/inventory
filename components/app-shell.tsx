@@ -321,12 +321,14 @@ function SidebarContent({
         </Link>
       </div>
 
-      <div className="px-3.5 pt-2">
-        <OrganizationSwitcher
-          organization={organization}
-          organizations={organizations}
-        />
-      </div>
+      {organizations.length > 1 ? (
+        <div className="px-3.5 pt-2">
+          <OrganizationSwitcher
+            organization={organization}
+            organizations={organizations}
+          />
+        </div>
+      ) : null}
 
       {showCreateMenu ? <CreateMenu user={user} onNavigate={onNavigate} /> : null}
 
@@ -514,6 +516,7 @@ export function AppShell({
     <OrganizationRoutingProvider
       organizationSlug={organization.slug}
       isReadOnly={organization.isReadOnly}
+      allowNegativeStock={organization.allowNegativeStock}
     >
     <div className="min-h-dvh bg-background">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[244px] border-r border-border lg:block">

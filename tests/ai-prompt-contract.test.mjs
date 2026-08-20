@@ -5,6 +5,7 @@ import { hashIdempotentPayload } from "../lib/idempotency.ts";
 import {
   defaultCoverPrompt,
   defaultInventoryAnalysisPrompt,
+  defaultInventoryResearchPrompt,
   defaultTransparentCoverPrompt,
 } from "../lib/ai-prompts.ts";
 import { analyzeInputSchema, coverInputSchema } from "../lib/validators.ts";
@@ -56,4 +57,12 @@ test("built-in prompts remain available when clients omit overrides", () => {
   );
   assert.match(defaultCoverPrompt("Drill"), /pure white background/);
   assert.match(defaultTransparentCoverPrompt("Drill"), /exact shape/);
+  assert.match(
+    defaultInventoryResearchPrompt("German", ["object", "tool"]),
+    /Use web search/,
+  );
+  assert.match(
+    defaultInventoryResearchPrompt("German", ["object", "tool"]),
+    /exactly one of: object, tool/,
+  );
 });

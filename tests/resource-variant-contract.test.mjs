@@ -101,4 +101,12 @@ test("variant bookings derive matching parent and variant balances", () => {
     nextVariantQuantity: 3,
   });
   assert.throws(() => nextVariantStockQuantities(20, 2, -3), /negative/);
+  assert.deepEqual(nextVariantStockQuantities(2, 2, -3, true), {
+    nextParentQuantity: -1,
+    nextVariantQuantity: -1,
+  });
+  assert.deepEqual(nextVariantStockQuantities(-2, -2, 1), {
+    nextParentQuantity: -1,
+    nextVariantQuantity: -1,
+  });
 });

@@ -28,6 +28,10 @@ type StockItem = {
   resourceId: string;
   name: string;
   type: string;
+  cover: {
+    url: string;
+    altText: string;
+  } | null;
   quantity: number;
   onOrder: number;
   projectedQuantity: number;
@@ -129,6 +133,47 @@ function itemState(item: StockItem): StockState {
     return "low";
   }
   return "healthy";
+}
+
+function StockItemVisual({ item, state }: { item: StockItem; state: StockState }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const imageUrl = item.cover?.url;
+
+  if (imageUrl && imageUrl !== failedUrl) {
+    return (
+      <span className="block size-12 shrink-0 overflow-hidden rounded-xl bg-surface-muted ring-1 ring-inset ring-border">
+        {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={item.cover?.altText || item.name}
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailedUrl(imageUrl)}
+          className="size-full object-cover"
+        />
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        "grid size-12 shrink-0 place-items-center rounded-xl",
+        state === "out"
+          ? "bg-danger-soft text-danger"
+          : state === "low"
+            ? "bg-warning-soft text-warning"
+            : "bg-surface-muted text-muted",
+      )}
+    >
+      {state === "healthy" ? (
+        <Package className="size-5" aria-hidden="true" />
+      ) : (
+        <TrendingDown className="size-5" aria-hidden="true" />
+      )}
+    </span>
+  );
 }
 
 function titleCase(value: string) {
@@ -746,18 +791,7 @@ export function StockOverview() {
                           >
                             <td className="px-5 py-4">
                               <div className="flex items-center gap-3">
-                                <span
-                                  className={cn(
-                                    "grid size-9 shrink-0 place-items-center rounded-xl",
-                                    state === "out"
-                                      ? "bg-danger-soft text-danger"
-                                      : state === "low"
-                                        ? "bg-warning-soft text-warning"
-                                        : "bg-surface-muted text-muted",
-                                  )}
-                                >
-                                  {state === "healthy" ? <Package className="size-4" aria-hidden="true" /> : <TrendingDown className="size-4" aria-hidden="true" />}
-                                </span>
+                                <StockItemVisual item={item} state={state} />
                                 <div className="min-w-0">
                                   <Link href={`/inventory/${item.resourceId}/stock`} className="block max-w-[260px] truncate text-[13px] font-semibold text-foreground transition hover:text-brand">
                                     {item.name}
@@ -849,18 +883,7 @@ export function StockOverview() {
                         )}
                       >
                         <div className="flex items-start gap-3">
-                          <span
-                            className={cn(
-                              "grid size-10 shrink-0 place-items-center rounded-xl",
-                              state === "out"
-                                ? "bg-danger-soft text-danger"
-                                : state === "low"
-                                  ? "bg-warning-soft text-warning"
-                                  : "bg-surface-muted text-muted",
-                            )}
-                          >
-                            <Package className="size-[18px]" aria-hidden="true" />
-                          </span>
+                          <StockItemVisual item={item} state={state} />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">

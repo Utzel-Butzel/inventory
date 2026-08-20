@@ -18,6 +18,7 @@ import {
 type OrganizationRoutingContextValue = {
   organizationSlug: string;
   isReadOnly: boolean;
+  allowNegativeStock: boolean;
 };
 
 const OrganizationRoutingContext =
@@ -26,15 +27,17 @@ const OrganizationRoutingContext =
 export function OrganizationRoutingProvider({
   organizationSlug,
   isReadOnly = false,
+  allowNegativeStock = false,
   children,
 }: {
   organizationSlug: string;
   isReadOnly?: boolean;
+  allowNegativeStock?: boolean;
   children: ReactNode;
 }) {
   return (
     <OrganizationRoutingContext.Provider
-      value={{ organizationSlug, isReadOnly }}
+      value={{ organizationSlug, isReadOnly, allowNegativeStock }}
     >
       {children}
     </OrganizationRoutingContext.Provider>
@@ -57,6 +60,10 @@ export function useOrganizationSlug() {
 
 export function useOrganizationReadOnly() {
   return useOrganizationRouting().isReadOnly;
+}
+
+export function useOrganizationAllowsNegativeStock() {
+  return useOrganizationRouting().allowNegativeStock;
 }
 
 export function useOrganizationHref() {

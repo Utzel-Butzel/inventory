@@ -79,6 +79,7 @@
       "count_one": "{{count}} Organisation",
       "count_other": "{{count}} Organisationen",
       "active": "Aktiv",
+      "negativeStockAllowed": "Negativbestand erlaubt",
       "slug": "Arbeitsbereich-URL: /{{slug}}",
       "emptyTitle": "Keine Organisationen verfügbar",
       "emptyDescription": "Erstelle eine Organisation, um einen separaten Inventararbeitsbereich zu beginnen."
@@ -94,7 +95,9 @@
       "slug": "URL-Slug",
       "slugOptional": "URL-Slug (optional)",
       "slugHint": "Wird für kurze Arbeitsbereich-URLs verwendet. Leer lassen, um ihn aus dem Namen zu erzeugen; erlaubt sind Kleinbuchstaben, Zahlen und Bindestriche.",
-      "slugEditHint": "Eine Änderung aktualisiert die Arbeitsbereich-Links. Bestehende UUID-Links funktionieren weiterhin."
+      "slugEditHint": "Eine Änderung aktualisiert die Arbeitsbereich-Links. Bestehende UUID-Links funktionieren weiterhin.",
+      "allowNegativeStock": "Negativbestand erlauben",
+      "allowNegativeStockHint": "Erlaubt, dass Buchungen, Zuordnungen und Fertigungsverbrauch für Mengenbestand unter null fallen. Serialisierter Bestand benötigt weiterhin identifizierbare Einheiten."
     },
     "actions": {
       "refresh": "Organisationen aktualisieren",
