@@ -50,6 +50,10 @@ type EditorAction =
 
 type CandidateResource = ConnectionDiagramResource & {
   sku?: string | null;
+  cover?: {
+    url: string;
+    altText?: string | null;
+  } | null;
 };
 
 type RelationType = {
@@ -837,7 +841,7 @@ export function ResourceConnectionEditorPanel({
                   />
                 </span>
               </label>
-              <div className="mt-2 max-h-52 space-y-1 overflow-y-auto rounded-xl border border-border p-1.5">
+              <div className="mt-2 max-h-80 space-y-1 overflow-y-auto rounded-xl border border-border p-1.5">
                 {searching ? (
                   <div className="flex min-h-20 items-center justify-center gap-2 text-[11px] text-muted">
                     <LoaderCircle className="size-3.5 animate-spin" />
@@ -850,13 +854,26 @@ export function ResourceConnectionEditorPanel({
                       type="button"
                       onClick={() => setCandidateId(candidate.id)}
                       className={cn(
-                        "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition",
+                        "flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition",
                         candidate.id === candidateId
                           ? "bg-brand-soft text-brand"
                           : "hover:bg-surface-hover",
                       )}
                     >
-                      <Package className="size-3.5 shrink-0" aria-hidden="true" />
+                      <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-muted text-muted">
+                        {candidate.cover?.url ? (
+                          // Stored covers use an authenticated same-origin route.
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={candidate.cover.url}
+                            alt=""
+                            loading="lazy"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Package className="size-4" aria-hidden="true" />
+                        )}
+                      </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[11px] font-semibold">
                           {candidate.name}

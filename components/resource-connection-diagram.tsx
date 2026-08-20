@@ -30,7 +30,8 @@ import { Badge, Button, Card, cn } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
 import {
   buildResourceConnectionGraph,
-  orderConnectionColumns,
+  getConnectionFamilyGroups,
+  orderConnectionRows,
   type ConnectionDiagramBomComponent,
   type ConnectionDiagramConnection,
   type ConnectionDiagramFamily,
@@ -53,18 +54,23 @@ type ConnectionDiagramCover = {
   altText: string;
 };
 
-type DisplayColumnItem =
+type DisplayRowItem =
   | { type: "resource"; node: ConnectionDiagramGraphNode }
-  | { type: "overflow"; column: number; count: number };
+  | { type: "overflow"; row: number; count: number };
 
 type NodePosition = { x: number; y: number };
+type EdgeAnchors = { fromX: number; toX: number };
 
-const NODE_WIDTH = 232;
-const NODE_HEIGHT = 70;
-const ROW_GAP = 18;
-const COLUMN_STEP = 330;
+const NODE_WIDTH = 168;
+const NODE_HEIGHT = 112;
+const NODE_MEDIA_CENTER_Y = 37;
+const COLUMN_GAP = 32;
+const ROW_STEP = 182;
 const CANVAS_PADDING = 24;
-const MAX_VISIBLE_NODES_PER_COLUMN = 12;
+const SAME_ROW_EDGE_GUTTER = 48;
+const MIN_CANVAS_WIDTH = 860;
+const MIN_CANVAS_HEIGHT = 420;
+const MAX_VISIBLE_NODES_PER_ROW = 12;
 const MAX_GRAPH_NODES = 45;
 const FETCH_BATCH_SIZE = 6;
 const DEPTH_OPTIONS = [1, 2, 3] as const;
@@ -104,27 +110,114 @@ const primaryConnection = (connections: ConnectionDiagramConnection[]) =>
     (left, right) => kindPriority[left.kind] - kindPriority[right.kind],
   )[0];
 
-const truncateColumn = (
+const visualEdgeEndpoints = (edge: ConnectionDiagramGraphEdge) => {
+  const primary = primaryConnection(edge.connections);
+  if (!primary) return null;
+  const directed = edge.connections.every(
+    (connection) =>
+      connection.directed &&
+      connection.fromResourceId === edge.connections[0]?.fromResourceId &&
+      connection.toResourceId === edge.connections[0]?.toResourceId,
+  );
+  const hierarchyDown = directed && primary.kind === "bom";
+  return {
+    primary,
+    directed,
+    fromId: hierarchyDown
+      ? edge.connections[0].toResourceId
+      : directed
+        ? edge.connections[0].fromResourceId
+        : edge.firstResourceId,
+    toId: hierarchyDown
+      ? edge.connections[0].fromResourceId
+      : directed
+        ? edge.connections[0].toResourceId
+        : edge.secondResourceId,
+  };
+};
+
+const distributedAnchorX = (index: number, count: number) => {
+  if (count < 2) return NODE_WIDTH / 2;
+  const span = Math.min(NODE_WIDTH - 56, (count - 1) * 32);
+  return NODE_WIDTH / 2 - span / 2 + (span * index) / (count - 1);
+};
+
+const buildEdgeAnchorMap = (
+  edges: ConnectionDiagramGraphEdge[],
+  positions: ReadonlyMap<string, NodePosition>,
+) => {
+  const routes = edges.flatMap((edge) => {
+    const endpoints = visualEdgeEndpoints(edge);
+    const from = endpoints ? positions.get(endpoints.fromId) : null;
+    const to = endpoints ? positions.get(endpoints.toId) : null;
+    return endpoints && from && to ? [{ edge, endpoints, from, to }] : [];
+  });
+  const anchors = new Map<string, EdgeAnchors>(
+    routes.map((route) => [
+      route.edge.key,
+      {
+        fromX: route.from.x + NODE_WIDTH / 2,
+        toX: route.to.x + NODE_WIDTH / 2,
+      },
+    ]),
+  );
+  const outgoing = new Map<string, typeof routes>();
+  const incoming = new Map<string, typeof routes>();
+  for (const route of routes) {
+    outgoing.set(route.endpoints.fromId, [
+      ...(outgoing.get(route.endpoints.fromId) ?? []),
+      route,
+    ]);
+    incoming.set(route.endpoints.toId, [
+      ...(incoming.get(route.endpoints.toId) ?? []),
+      route,
+    ]);
+  }
+  for (const siblings of outgoing.values()) {
+    siblings
+      .sort((left, right) => left.to.x - right.to.x)
+      .forEach((route, index) => {
+        const anchor = anchors.get(route.edge.key);
+        if (anchor) {
+          anchor.fromX =
+            route.from.x + distributedAnchorX(index, siblings.length);
+        }
+      });
+  }
+  for (const siblings of incoming.values()) {
+    siblings
+      .sort((left, right) => left.from.x - right.from.x)
+      .forEach((route, index) => {
+        const anchor = anchors.get(route.edge.key);
+        if (anchor) {
+          anchor.toX = route.to.x + distributedAnchorX(index, siblings.length);
+        }
+      });
+  }
+  return anchors;
+};
+
+const truncateRow = (
   nodes: ConnectionDiagramGraphNode[],
-  column: number,
-): DisplayColumnItem[] => {
-  if (nodes.length <= MAX_VISIBLE_NODES_PER_COLUMN) {
+  row: number,
+): DisplayRowItem[] => {
+  if (nodes.length <= MAX_VISIBLE_NODES_PER_ROW) {
     return nodes.map((node) => ({ type: "resource" as const, node }));
   }
   return [
     ...nodes
-      .slice(0, MAX_VISIBLE_NODES_PER_COLUMN - 1)
+      .slice(0, MAX_VISIBLE_NODES_PER_ROW - 1)
       .map((node) => ({ type: "resource" as const, node })),
     {
       type: "overflow" as const,
-      column,
-      count: nodes.length - (MAX_VISIBLE_NODES_PER_COLUMN - 1),
+      row,
+      count: nodes.length - (MAX_VISIBLE_NODES_PER_ROW - 1),
     },
   ];
 };
 
 const centerRoot = (
-  items: DisplayColumnItem[],
+  items: DisplayRowItem[],
   rootResourceId: string,
 ) => {
   const rootIndex = items.findIndex(
@@ -138,12 +231,12 @@ const centerRoot = (
   return [...others.slice(0, middle), root, ...others.slice(middle)];
 };
 
-const rowPositions = (count: number, canvasHeight: number) => {
-  const contentHeight = count * NODE_HEIGHT + Math.max(0, count - 1) * ROW_GAP;
-  const start = (canvasHeight - contentHeight) / 2;
+const columnPositions = (count: number, canvasWidth: number) => {
+  const contentWidth = count * NODE_WIDTH + Math.max(0, count - 1) * COLUMN_GAP;
+  const start = (canvasWidth - contentWidth) / 2;
   return Array.from(
     { length: count },
-    (_, index) => start + index * (NODE_HEIGHT + ROW_GAP),
+    (_, index) => start + index * (NODE_WIDTH + COLUMN_GAP),
   );
 };
 
@@ -363,46 +456,91 @@ export function ResourceConnectionDiagram({
     [depth, payloadSnapshot, resource],
   );
 
-  const columns = useMemo(() => {
-    const result = new Map<number, DisplayColumnItem[]>();
-    const ordered = model
-      ? orderConnectionColumns(model.nodes, model.edges, depth, resource.id)
-      : null;
-    for (let column = -depth; column <= depth; column += 1) {
+  const rows = useMemo(() => {
+    const result = new Map<number, DisplayRowItem[]>();
+    if (!model) return result;
+    const ordered = orderConnectionRows(model.nodes, model.edges, resource.id);
+    for (const [row, nodes] of ordered) {
       result.set(
-        column,
-        centerRoot(
-          truncateColumn(ordered?.get(column) ?? [], column),
-          resource.id,
-        ),
+        row,
+        centerRoot(truncateRow(nodes, row), resource.id),
       );
     }
     return result;
-  }, [depth, model, resource.id]);
-  const maximumRows = Math.max(
+  }, [model, resource.id]);
+  const treeRowOf = useMemo(() => {
+    const result = new Map<string, number>();
+    for (const [row, items] of rows) {
+      for (const item of items) {
+        if (item.type === "resource") result.set(item.node.resource.id, row);
+      }
+    }
+    return result;
+  }, [rows]);
+  const bomEdges = useMemo(() => {
+    if (!model) return [];
+    return model.edges.flatMap((edge) => {
+      const connections = edge.connections.filter(
+        (connection) =>
+          connection.kind === "bom" &&
+          treeRowOf.has(connection.fromResourceId) &&
+          treeRowOf.has(connection.toResourceId) &&
+          treeRowOf.get(connection.fromResourceId) !==
+            treeRowOf.get(connection.toResourceId),
+      );
+      return connections.length
+        ? [
+            {
+              ...edge,
+              key: `${edge.key}:bom`,
+              visualOnly: false,
+              connections,
+            },
+          ]
+        : [];
+    });
+  }, [model, treeRowOf]);
+  const familyGroups = useMemo(() => {
+    if (!model) return [];
+    return getConnectionFamilyGroups(
+      model.nodes.filter((node) => treeRowOf.has(node.resource.id)),
+      model.edges,
+    );
+  }, [model, treeRowOf]);
+  const rowNumbers = Array.from(rows.keys());
+  const firstRow = Math.min(0, ...rowNumbers);
+  const lastRow = Math.max(0, ...rowNumbers);
+  const maximumColumns = Math.max(
     1,
-    ...Array.from(columns.values()).map((items) => items.length),
+    ...Array.from(rows.values()).map((items) => items.length),
   );
+  const canvasWidth = Math.max(
+    MIN_CANVAS_WIDTH,
+    maximumColumns * NODE_WIDTH +
+      Math.max(0, maximumColumns - 1) * COLUMN_GAP +
+      CANVAS_PADDING * 2,
+  );
+  const contentHeight =
+    NODE_HEIGHT + Math.max(0, lastRow - firstRow) * ROW_STEP;
   const canvasHeight = Math.max(
-    280,
-    maximumRows * NODE_HEIGHT + Math.max(0, maximumRows - 1) * ROW_GAP + 48,
+    MIN_CANVAS_HEIGHT,
+    contentHeight + CANVAS_PADDING * 2 + SAME_ROW_EDGE_GUTTER * 2,
   );
-  const canvasWidth =
-    CANVAS_PADDING * 2 + NODE_WIDTH + depth * 2 * COLUMN_STEP;
+  const firstRowY = (canvasHeight - contentHeight) / 2;
   const positions = useMemo(() => {
     const result = new Map<string, NodePosition>();
-    for (const [column, items] of columns) {
-      const ys = rowPositions(items.length, canvasHeight);
+    for (const [row, items] of rows) {
+      const xs = columnPositions(items.length, canvasWidth);
       for (const [index, item] of items.entries()) {
         if (item.type !== "resource") continue;
         result.set(item.node.resource.id, {
-          x: CANVAS_PADDING + (column + depth) * COLUMN_STEP,
-          y: ys[index] ?? 0,
+          x: xs[index] ?? 0,
+          y: firstRowY + (row - firstRow) * ROW_STEP,
         });
       }
     }
     return result;
-  }, [canvasHeight, columns, depth]);
+  }, [canvasWidth, firstRow, firstRowY, rows]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -463,8 +601,12 @@ export function ResourceConnectionDiagram({
                   <>
                     <LegendBadge kind="family" label={t("connectionDiagram.legend.family")} />
                     <LegendBadge kind="bom" label={t("connectionDiagram.legend.bom")} />
-                    <LegendBadge kind="containment" label={t("connectionDiagram.legend.containment")} />
-                    <LegendBadge kind="relationship" label={t("connectionDiagram.legend.relationship")} />
+                    {view === "list" ? (
+                      <>
+                        <LegendBadge kind="containment" label={t("connectionDiagram.legend.containment")} />
+                        <LegendBadge kind="relationship" label={t("connectionDiagram.legend.relationship")} />
+                      </>
+                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -644,8 +786,14 @@ export function ResourceConnectionDiagram({
                       className="relative mx-auto"
                       style={{ width: canvasWidth, height: canvasHeight }}
                     >
+                      <FamilyRails
+                        groups={familyGroups}
+                        positions={positions}
+                        width={canvasWidth}
+                        height={canvasHeight}
+                      />
                       <GraphEdges
-                        edges={model.edges}
+                        edges={bomEdges}
                         positions={positions}
                         width={canvasWidth}
                         height={canvasHeight}
@@ -671,17 +819,17 @@ export function ResourceConnectionDiagram({
                           });
                         }}
                       />
-                      {Array.from(columns.entries()).flatMap(
-                        ([column, items]) => {
-                          const ys = rowPositions(items.length, canvasHeight);
-                          const x =
-                            CANVAS_PADDING + (column + depth) * COLUMN_STEP;
+                      {Array.from(rows.entries()).flatMap(
+                        ([row, items]) => {
+                          const xs = columnPositions(items.length, canvasWidth);
+                          const y =
+                            firstRowY + (row - firstRow) * ROW_STEP;
                           return items.map((item, index) => (
                             <PositionedGraphNode
                               key={
                                 item.type === "resource"
                                   ? item.node.resource.id
-                                  : `overflow:${column}`
+                                  : `overflow:${row}`
                               }
                               item={item}
                               cover={
@@ -692,8 +840,8 @@ export function ResourceConnectionDiagram({
                                   : null
                               }
                               rootResourceId={resource.id}
-                              x={x}
-                              y={ys[index] ?? 0}
+                              x={xs[index] ?? 0}
+                              y={y}
                               number={number}
                               editing={editing}
                               selectedResourceId={
@@ -1141,6 +1289,59 @@ function LegendBadge({
   );
 }
 
+function FamilyRails({
+  groups,
+  positions,
+  width,
+  height,
+}: {
+  groups: string[][];
+  positions: ReadonlyMap<string, NodePosition>;
+  width: number;
+  height: number;
+}) {
+  const segments = groups.flatMap((group) => {
+    const members = group
+      .map((resourceId) => positions.get(resourceId))
+      .filter((position): position is NodePosition => Boolean(position))
+      .sort((left, right) => left.x - right.x);
+    return members.slice(1).flatMap((right, index) => {
+      const left = members[index];
+      if (!left || left.y !== right.y) return [];
+      return [
+        {
+          key: `${left.x}:${right.x}:${left.y}`,
+          x1: left.x + NODE_WIDTH,
+          x2: right.x,
+          y: left.y + NODE_MEDIA_CENTER_Y,
+        },
+      ];
+    });
+  });
+  if (!segments.length) return null;
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+    >
+      {segments.map((segment) => (
+        <path
+          key={segment.key}
+          d={`M ${segment.x1} ${segment.y} L ${segment.x2} ${segment.y}`}
+          fill="none"
+          stroke={kindColor.family}
+          strokeWidth="1.5"
+          strokeDasharray="4 5"
+          opacity="0.7"
+        />
+      ))}
+    </svg>
+  );
+}
+
 function GraphEdges({
   edges,
   positions,
@@ -1158,6 +1359,7 @@ function GraphEdges({
   selectedEdgeKey: string | null;
   onSelect: (edge: ConnectionDiagramGraphEdge) => void;
 }) {
+  const anchors = buildEdgeAnchorMap(edges, positions);
   return (
     <svg
       aria-hidden={editing ? undefined : "true"}
@@ -1176,9 +1378,10 @@ function GraphEdges({
             refX="7"
             refY="4"
             orient="auto"
-            markerUnits="strokeWidth"
+            markerUnits="userSpaceOnUse"
+            overflow="visible"
           >
-            <path d="M 0 0 L 8 4 L 0 8 z" fill={color} />
+            <path d="M 1 1 L 7 4 L 1 7 Z" fill={color} />
           </marker>
         ))}
       </defs>
@@ -1187,6 +1390,7 @@ function GraphEdges({
           key={edge.key}
           edge={edge}
           positions={positions}
+          anchors={anchors.get(edge.key)}
           editing={editing && !edge.visualOnly}
           selected={selectedEdgeKey === edge.key}
           onSelect={onSelect}
@@ -1199,49 +1403,46 @@ function GraphEdges({
 function GraphEdge({
   edge,
   positions,
+  anchors,
   editing,
   selected,
   onSelect,
 }: {
   edge: ConnectionDiagramGraphEdge;
   positions: ReadonlyMap<string, NodePosition>;
+  anchors: EdgeAnchors | undefined;
   editing: boolean;
   selected: boolean;
   onSelect: (edge: ConnectionDiagramGraphEdge) => void;
 }) {
-  const primary = primaryConnection(edge.connections);
-  if (!primary) return null;
+  const endpoints = visualEdgeEndpoints(edge);
+  if (!endpoints) return null;
+  const { primary, directed, fromId, toId } = endpoints;
   const visualOnly = Boolean(edge.visualOnly);
-  const directed = edge.connections.every(
-    (connection) =>
-      connection.directed &&
-      connection.fromResourceId === edge.connections[0]?.fromResourceId &&
-      connection.toResourceId === edge.connections[0]?.toResourceId,
-  );
-  const fromId = directed
-    ? edge.connections[0].fromResourceId
-    : edge.firstResourceId;
-  const toId = directed
-    ? edge.connections[0].toResourceId
-    : edge.secondResourceId;
   const from = positions.get(fromId);
   const to = positions.get(toId);
   if (!from || !to) return null;
-  const fromCenterY = from.y + NODE_HEIGHT / 2;
-  const toCenterY = to.y + NODE_HEIGHT / 2;
+  const fromCenterX = anchors?.fromX ?? from.x + NODE_WIDTH / 2;
+  const toCenterX = anchors?.toX ?? to.x + NODE_WIDTH / 2;
   let path: string;
-  if (from.x === to.x) {
-    const downward = fromCenterY <= toCenterY;
-    const startY = downward ? from.y + NODE_HEIGHT : from.y;
-    const endY = downward ? to.y : to.y + NODE_HEIGHT;
-    const curveX = from.x + NODE_WIDTH + 44;
-    path = `M ${from.x + NODE_WIDTH / 2} ${startY} C ${curveX} ${startY}, ${curveX} ${endY}, ${to.x + NODE_WIDTH / 2} ${endY}`;
+  if (from.y === to.y) {
+    const edgeY = visualOnly ? from.y + NODE_HEIGHT : from.y;
+    const span = Math.abs(fromCenterX - toCenterX);
+    const curve = Math.min(64, 32 + span * 0.035);
+    const controlY = visualOnly ? edgeY + curve : edgeY - curve;
+    path = `M ${fromCenterX} ${edgeY} C ${fromCenterX} ${controlY}, ${toCenterX} ${controlY}, ${toCenterX} ${edgeY}`;
   } else {
-    const leftToRight = from.x < to.x;
-    const startX = leftToRight ? from.x + NODE_WIDTH : from.x;
-    const endX = leftToRight ? to.x : to.x + NODE_WIDTH;
-    const middleX = (startX + endX) / 2;
-    path = `M ${startX} ${fromCenterY} C ${middleX} ${fromCenterY}, ${middleX} ${toCenterY}, ${endX} ${toCenterY}`;
+    const downward = from.y < to.y;
+    const startY = downward ? from.y + NODE_HEIGHT : from.y;
+    const arrowGap = directed ? 4 : 0;
+    const endY = downward
+      ? to.y - arrowGap
+      : to.y + NODE_HEIGHT + arrowGap;
+    const distance = Math.abs(endY - startY);
+    const tangent = Math.min(48, Math.max(20, distance * 0.36));
+    const startControlY = downward ? startY + tangent : startY - tangent;
+    const endControlY = downward ? endY - tangent : endY + tangent;
+    path = `M ${fromCenterX} ${startY} C ${fromCenterX} ${startControlY}, ${toCenterX} ${endControlY}, ${toCenterX} ${endY}`;
   }
   return (
     <g
@@ -1270,6 +1471,8 @@ function GraphEdge({
           directed ? `url(#connection-arrow-${primary.kind})` : undefined
         }
         opacity={selected ? "1" : visualOnly ? "0.55" : "0.78"}
+        strokeLinecap="round"
+        strokeLinejoin="round"
         pointerEvents="none"
       />
       {editing ? (
@@ -1296,7 +1499,7 @@ function PositionedGraphNode({
   selectedResourceId,
   onSelect,
 }: {
-  item: DisplayColumnItem;
+  item: DisplayRowItem;
   cover: ConnectionDiagramCover | null;
   rootResourceId: string;
   x: number;
@@ -1310,7 +1513,7 @@ function PositionedGraphNode({
   if (item.type === "overflow") {
     return (
       <div
-        className="absolute flex items-center gap-3 rounded-xl border border-dashed border-border-strong bg-surface/90 px-3.5 text-muted"
+        className="absolute flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-surface/90 px-3 text-center text-muted"
         style={{ left: x, top: y, width: NODE_WIDTH, height: NODE_HEIGHT }}
       >
         <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface-muted">
@@ -1338,43 +1541,46 @@ function PositionedGraphNode({
       humanize(item.node.resource.type ?? "inventory");
   const content = (
     <>
-      <span
-        className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-surface-muted"
-        style={
-          cover
-            ? undefined
-            : {
-                backgroundColor: `color-mix(in srgb, ${
-                  isRoot ? "var(--color-info)" : kindColor[kind]
-                } 13%, transparent)`,
-                color: isRoot ? "var(--color-info)" : kindColor[kind],
-              }
-        }
-      >
-        {cover ? (
-          // Stored covers use an authenticated same-origin route.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={cover.url}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        ) : isRoot ? (
-          <CircleDot className="size-4" aria-hidden="true" />
-        ) : (
-          <ConnectionIcon kind={kind} />
-        )}
+      <span className="relative shrink-0">
+        <span
+          className="grid size-10 place-items-center overflow-hidden rounded-xl bg-surface-muted"
+          style={
+            cover
+              ? undefined
+              : {
+                  backgroundColor: `color-mix(in srgb, ${
+                    isRoot ? "var(--color-info)" : kindColor[kind]
+                  } 13%, transparent)`,
+                  color: isRoot ? "var(--color-info)" : kindColor[kind],
+                }
+          }
+        >
+          {cover ? (
+            // Stored covers use an authenticated same-origin route.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={cover.url}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : isRoot ? (
+            <CircleDot className="size-4" aria-hidden="true" />
+          ) : (
+            <ConnectionIcon kind={kind} />
+          )}
+        </span>
+        {!isRoot && item.node.connections.length > 1 ? (
+          <Badge
+            tone={kindBadgeTone[kind]}
+            className="absolute -right-2 -top-2 min-h-5 px-1.5 text-[9px]"
+          >
+            {item.node.connections.length}
+          </Badge>
+        ) : null}
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
-            {item.node.resource.name}
-          </span>
-          {!isRoot && item.node.connections.length > 1 ? (
-            <Badge tone={kindBadgeTone[kind]} className="min-h-5 px-1.5 text-[9px]">
-              {item.node.connections.length}
-            </Badge>
-          ) : null}
+      <span className="min-w-0 w-full">
+        <span className="block truncate text-xs font-semibold text-foreground">
+          {item.node.resource.name}
         </span>
         <span
           className={`mt-1 block truncate text-[10px] ${
@@ -1394,9 +1600,8 @@ function PositionedGraphNode({
       ? "border-2 border-info shadow-[var(--shadow-md)]"
       : "border border-border shadow-[var(--shadow-sm)] hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-md)]"
   } ${selected ? "ring-4 ring-focus/15" : ""}`;
-  const contentClassName = `flex h-full w-full items-center gap-3 rounded-[inherit] px-3.5 text-left ${
-    editing ? "pr-11" : ""
-  }`;
+  const contentClassName =
+    "flex h-full w-full flex-col items-center justify-center gap-2 rounded-[inherit] px-3 py-2 text-center";
   const style = { left: x, top: y, width: NODE_WIDTH, height: NODE_HEIGHT };
   if (editing) {
     return (
@@ -1414,7 +1619,7 @@ function PositionedGraphNode({
         <button
           type="button"
           onClick={() => onSelect(item.node.resource)}
-          className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg bg-brand-soft text-brand transition hover:bg-brand-solid hover:text-on-brand"
+          className="absolute right-2 top-2 grid size-7 place-items-center rounded-lg bg-brand-soft text-brand transition hover:bg-brand-solid hover:text-on-brand"
           aria-label={t("connectionDiagram.editor.addTo", {
             name: item.node.resource.name,
           })}

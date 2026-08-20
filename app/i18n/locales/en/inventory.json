@@ -369,6 +369,14 @@
     "openOnMap": "Open on map",
     "noPosition": "No geographic position has been recorded.",
     "lastUpdated": "Last updated {{date}}",
+    "lightbox": {
+      "dialog": "Image viewer",
+      "open": "Open {{name}} in image viewer",
+      "close": "Close image viewer",
+      "previous": "Previous image",
+      "next": "Next image",
+      "position": "{{current}} of {{total}}"
+    },
     "sections": {
       "overview": "Overview",
       "media": "Media",

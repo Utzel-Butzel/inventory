@@ -11,6 +11,7 @@ import {
   Barcode,
   Box,
   CalendarDays,
+  ChevronLeft,
   ChevronRight,
   CircleDollarSign,
   Clock3,
@@ -22,14 +23,16 @@ import {
   Languages,
   LoaderCircle,
   MapPin,
+  Maximize2,
   Package,
   Paperclip,
   Pencil,
   Tag,
   Trash2,
   Warehouse,
+  X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CustomFieldValueDisplay } from "@/components/custom-field-inputs";
 import { ResourceShareButton } from "@/components/resource-share-button";
@@ -120,9 +123,11 @@ function DetailField({
 function MediaCard({
   item,
   kindLabel,
+  onOpenImage,
 }: {
   item: ClientMedia;
   kindLabel: string;
+  onOpenImage: (imageId: string) => void;
 }) {
   const { t } = useT("inventory");
   const Icon = item.kind === "document" ? FileText : Paperclip;
@@ -145,11 +150,12 @@ function MediaCard({
 
   if (item.kind === "image") {
     return (
-      <a
-        href={item.url}
-        target="_blank"
-        rel="noreferrer"
-        className="group relative aspect-square overflow-hidden rounded-2xl border border-border bg-surface-muted"
+      <button
+        type="button"
+        onClick={() => onOpenImage(item.id)}
+        aria-haspopup="dialog"
+        aria-label={t("details.lightbox.open", { name: item.name })}
+        className="group relative aspect-square overflow-hidden rounded-2xl border border-border bg-surface-muted text-left outline-none transition hover:border-border-strong focus-visible:ring-3 focus-visible:ring-focus/25"
       >
         {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -158,7 +164,12 @@ function MediaCard({
           alt={item.altText || item.name}
           className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
         />
-      </a>
+        <span className="absolute inset-0 grid place-items-center bg-black/0 transition group-hover:bg-black/20 group-focus-visible:bg-black/20">
+          <span className="grid size-10 scale-90 place-items-center rounded-full bg-black/55 text-white opacity-0 shadow-lg backdrop-blur-sm transition group-hover:scale-100 group-hover:opacity-100 group-focus-visible:scale-100 group-focus-visible:opacity-100">
+            <Maximize2 className="size-4" aria-hidden="true" />
+          </span>
+        </span>
+      </button>
     );
   }
 
@@ -181,6 +192,180 @@ function MediaCard({
         </span>
       </span>
     </a>
+  );
+}
+
+function ImageLightbox({
+  images,
+  initialImageId,
+  onClose,
+  labels,
+}: {
+  images: ClientMedia[];
+  initialImageId: string;
+  onClose: () => void;
+  labels: {
+    dialog: string;
+    close: string;
+    previous: string;
+    next: string;
+    position: (current: number, total: number) => string;
+  };
+}) {
+  const initialIndex = Math.max(
+    0,
+    images.findIndex((image) => image.id === initialImageId),
+  );
+  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  const showPrevious = useCallback(() => {
+    setSelectedIndex((current) =>
+      current === 0 ? images.length - 1 : current - 1,
+    );
+  }, [images.length]);
+  const showNext = useCallback(() => {
+    setSelectedIndex((current) => (current + 1) % images.length);
+  }, [images.length]);
+
+  useEffect(() => {
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() =>
+      closeButtonRef.current?.focus(),
+    );
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key === "ArrowLeft" && images.length > 1) {
+        event.preventDefault();
+        showPrevious();
+        return;
+      }
+      if (event.key === "ArrowRight" && images.length > 1) {
+        event.preventDefault();
+        showNext();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => element.getClientRects().length > 0);
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (
+        !event.shiftKey &&
+        (active === last || !dialog.contains(active))
+      ) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [images.length, onClose, showNext, showPrevious]);
+
+  const activeImage = images[selectedIndex] ?? images[0];
+  if (!activeImage) return null;
+
+  return (
+    <div className="fixed inset-0 z-[90] bg-black/90 backdrop-blur-md">
+      <div
+        className="absolute inset-0 cursor-zoom-out"
+        onMouseDown={onClose}
+        aria-hidden="true"
+      />
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={labels.dialog}
+        tabIndex={-1}
+        className="pointer-events-none relative flex h-full w-full flex-col text-white"
+      >
+        <header className="pointer-events-auto relative z-10 flex min-h-16 items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <div className="min-w-0" aria-live="polite">
+            <p className="truncate text-sm font-semibold text-white">
+              {activeImage.name}
+            </p>
+            <p className="mt-0.5 text-xs text-white/60">
+              {labels.position(selectedIndex + 1, images.length)}
+            </p>
+          </div>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-white/10 text-white outline-none ring-1 ring-inset ring-white/15 transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white"
+            aria-label={labels.close}
+          >
+            <X className="size-5" aria-hidden="true" />
+          </button>
+        </header>
+
+        <figure className="flex min-h-0 flex-1 items-center justify-center px-4 pb-5 sm:px-20 sm:pb-6">
+          {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            key={activeImage.id}
+            src={activeImage.url}
+            alt={activeImage.altText || activeImage.name}
+            draggable={false}
+            className="pointer-events-auto max-h-full max-w-full select-none object-contain shadow-2xl"
+          />
+        </figure>
+
+        {images.length > 1 ? (
+          <nav aria-label={labels.dialog}>
+            <button
+              type="button"
+              onClick={showPrevious}
+              className="pointer-events-auto absolute left-3 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white outline-none ring-1 ring-inset ring-white/15 backdrop-blur-sm transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white sm:left-5 sm:size-12"
+              aria-label={labels.previous}
+            >
+              <ChevronLeft className="size-6" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={showNext}
+              className="pointer-events-auto absolute right-3 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white outline-none ring-1 ring-inset ring-white/15 backdrop-blur-sm transition hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white sm:right-5 sm:size-12"
+              aria-label={labels.next}
+            >
+              <ChevronRight className="size-6" aria-hidden="true" />
+            </button>
+          </nav>
+        ) : null}
+      </section>
+    </div>
   );
 }
 
@@ -212,6 +397,8 @@ export function ResourceDetails({
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
+  const closeLightbox = useCallback(() => setLightboxImageId(null), []);
 
   const loadResource = useCallback(async () => {
     setLoading(true);
@@ -319,6 +506,7 @@ export function ResourceDetails({
     t(`mediaKinds.${value}`, { defaultValue: humanize(value) });
   const { model: objectModel, gallery: galleryMedia } =
     getObjectCapturePresentation(resource.media, resource.cover?.id ?? null);
+  const galleryImages = galleryMedia.filter((item) => item.kind === "image");
   const coordinateLabel =
     resource.gpsLatitude !== null && resource.gpsLongitude !== null
       ? `${resource.gpsLatitude.toFixed(5)}, ${resource.gpsLongitude.toFixed(5)}`
@@ -514,6 +702,7 @@ export function ResourceDetails({
                     key={item.id}
                     item={item}
                     kindLabel={mediaKindLabel(item.kind)}
+                    onOpenImage={setLightboxImageId}
                   />
                 ))}
               </div>
@@ -714,6 +903,25 @@ export function ResourceDetails({
           </details>
         </aside>
       </div>
+
+      {lightboxImageId && galleryImages.length ? (
+        <ImageLightbox
+          images={galleryImages}
+          initialImageId={lightboxImageId}
+          onClose={closeLightbox}
+          labels={{
+            dialog: t("details.lightbox.dialog"),
+            close: t("details.lightbox.close"),
+            previous: t("details.lightbox.previous"),
+            next: t("details.lightbox.next"),
+            position: (current, total) =>
+              t("details.lightbox.position", {
+                current: integer.format(current),
+                total: integer.format(total),
+              }),
+          }}
+        />
+      ) : null}
     </div>
   );
 }

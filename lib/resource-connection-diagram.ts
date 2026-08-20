@@ -464,7 +464,9 @@ export function buildResourceConnectionGraph(input: {
   };
 }
 
-const primaryGraphConnection = (connections: ConnectionDiagramConnection[]) =>
+const primaryGraphConnection = <T extends ConnectionDiagramConnection>(
+  connections: T[],
+) =>
   [...connections].sort(
     (left, right) => kindPriority[left.kind] - kindPriority[right.kind],
   )[0];
@@ -482,6 +484,184 @@ const compareGraphNodes =
       ] ||
     left.resource.name.localeCompare(right.resource.name) ||
     left.resource.id.localeCompare(right.resource.id);
+
+const buildFamilyGroupIndex = (
+  nodes: ConnectionDiagramGraphNode[],
+  edges: ConnectionDiagramGraphEdge[],
+) => {
+  const nodeById = new Map(nodes.map((node) => [node.resource.id, node]));
+  const parent = new Map(nodes.map((node) => [node.resource.id, node.resource.id]));
+  const find = (resourceId: string): string => {
+    const current = parent.get(resourceId);
+    if (!current || current === resourceId) return resourceId;
+    const root = find(current);
+    parent.set(resourceId, root);
+    return root;
+  };
+  const union = (firstResourceId: string, secondResourceId: string) => {
+    if (!nodeById.has(firstResourceId) || !nodeById.has(secondResourceId)) return;
+    const firstRoot = find(firstResourceId);
+    const secondRoot = find(secondResourceId);
+    if (firstRoot === secondRoot) return;
+    const [root, child] = [firstRoot, secondRoot].sort();
+    parent.set(child, root);
+  };
+  const familyDegree = new Map<string, number>();
+
+  for (const edge of edges) {
+    for (const connection of edge.connections) {
+      if (connection.kind !== "family") continue;
+      union(connection.fromResourceId, connection.toResourceId);
+      familyDegree.set(
+        connection.fromResourceId,
+        (familyDegree.get(connection.fromResourceId) ?? 0) + 1,
+      );
+      familyDegree.set(
+        connection.toResourceId,
+        (familyDegree.get(connection.toResourceId) ?? 0) + 1,
+      );
+    }
+  }
+
+  const groupIdOf = new Map<string, string>();
+  const membersByGroup = new Map<string, ConnectionDiagramGraphNode[]>();
+  for (const node of nodes) {
+    const groupId = find(node.resource.id);
+    groupIdOf.set(node.resource.id, groupId);
+    const members = membersByGroup.get(groupId);
+    if (members) members.push(node);
+    else membersByGroup.set(groupId, [node]);
+  }
+  return { familyDegree, groupIdOf, membersByGroup, nodeById };
+};
+
+export function getConnectionFamilyGroups(
+  nodes: ConnectionDiagramGraphNode[],
+  edges: ConnectionDiagramGraphEdge[],
+): string[][] {
+  const { membersByGroup } = buildFamilyGroupIndex(nodes, edges);
+  return Array.from(membersByGroup.values())
+    .filter((members) => members.length > 1)
+    .map((members) =>
+      members
+        .map((node) => node.resource.id)
+        .sort((left, right) => left.localeCompare(right)),
+    );
+}
+
+/**
+ * Builds a strict structural tree: the selected product and its family occupy
+ * level zero, each BOM family occupies the next level, and BOMs of those items
+ * continue one level lower. Containment and general relationships stay in the
+ * list view instead of competing with the assembly hierarchy on this canvas.
+ */
+export function orderConnectionRows(
+  nodes: ConnectionDiagramGraphNode[],
+  edges: ConnectionDiagramGraphEdge[],
+  rootResourceId: string,
+): Map<number, ConnectionDiagramGraphNode[]> {
+  const { familyDegree, groupIdOf, membersByGroup, nodeById } =
+    buildFamilyGroupIndex(nodes, edges);
+  const rootGroupId = groupIdOf.get(rootResourceId);
+  const result = new Map<number, ConnectionDiagramGraphNode[]>();
+  if (!rootGroupId) return result;
+
+  const childrenByGroup = new Map<string, Set<string>>();
+  const parentsByGroup = new Map<string, Set<string>>();
+  for (const edge of edges) {
+    for (const connection of edge.connections) {
+      if (connection.kind !== "bom") continue;
+      const assemblyGroupId = groupIdOf.get(connection.toResourceId);
+      const componentGroupId = groupIdOf.get(connection.fromResourceId);
+      if (
+        !assemblyGroupId ||
+        !componentGroupId ||
+        assemblyGroupId === componentGroupId
+      ) {
+        continue;
+      }
+      const children = childrenByGroup.get(assemblyGroupId);
+      if (children) children.add(componentGroupId);
+      else childrenByGroup.set(assemblyGroupId, new Set([componentGroupId]));
+      const parents = parentsByGroup.get(componentGroupId);
+      if (parents) parents.add(assemblyGroupId);
+      else parentsByGroup.set(componentGroupId, new Set([assemblyGroupId]));
+    }
+  }
+
+  const levelOf = new Map<string, number>([[rootGroupId, 0]]);
+  const queue = [rootGroupId];
+  while (queue.length) {
+    const groupId = queue.shift()!;
+    const level = levelOf.get(groupId)!;
+    const children = Array.from(childrenByGroup.get(groupId) ?? []).sort();
+    for (const childGroupId of children) {
+      if (levelOf.has(childGroupId)) continue;
+      levelOf.set(childGroupId, level + 1);
+      queue.push(childGroupId);
+    }
+  }
+
+  const groupPosition = new Map<string, number>([[rootGroupId, 0]]);
+  const maximumLevel = Math.max(0, ...levelOf.values());
+  const groupLabel = (groupId: string) =>
+    [...(membersByGroup.get(groupId) ?? [])]
+      .sort(
+        (left, right) =>
+          left.resource.name.localeCompare(right.resource.name) ||
+          left.resource.id.localeCompare(right.resource.id),
+      )[0]?.resource.name ?? groupId;
+  const arrangeMembers = (groupId: string) => {
+    const members = [...(membersByGroup.get(groupId) ?? [])].sort(
+      (left, right) =>
+        left.resource.name.localeCompare(right.resource.name) ||
+        left.resource.id.localeCompare(right.resource.id),
+    );
+    const hub = members.includes(nodeById.get(rootResourceId)!)
+      ? nodeById.get(rootResourceId)
+      : [...members].sort(
+          (left, right) =>
+            (familyDegree.get(right.resource.id) ?? 0) -
+              (familyDegree.get(left.resource.id) ?? 0) ||
+            left.resource.name.localeCompare(right.resource.name) ||
+            left.resource.id.localeCompare(right.resource.id),
+        )[0];
+    if (!hub || members.length < 2) return members;
+    const others = members.filter((member) => member !== hub);
+    const middle = Math.floor(others.length / 2);
+    return [...others.slice(0, middle), hub, ...others.slice(middle)];
+  };
+
+  for (let level = 0; level <= maximumLevel; level += 1) {
+    const groups = Array.from(levelOf.entries())
+      .filter(([, candidateLevel]) => candidateLevel === level)
+      .map(([groupId]) => groupId)
+      .sort((left, right) => {
+        const parentCenter = (groupId: string) => {
+          const positions = Array.from(parentsByGroup.get(groupId) ?? [])
+            .map((parentId) => groupPosition.get(parentId))
+            .filter((position): position is number => position !== undefined);
+          return positions.length
+            ? positions.reduce((sum, position) => sum + position, 0) /
+                positions.length
+            : 0;
+        };
+        return (
+          parentCenter(left) - parentCenter(right) ||
+          groupLabel(left).localeCompare(groupLabel(right)) ||
+          left.localeCompare(right)
+        );
+      });
+    const rowNodes: ConnectionDiagramGraphNode[] = [];
+    for (const groupId of groups) {
+      const members = arrangeMembers(groupId);
+      groupPosition.set(groupId, rowNodes.length + (members.length - 1) / 2);
+      rowNodes.push(...members);
+    }
+    if (rowNodes.length) result.set(level, rowNodes);
+  }
+  return result;
+}
 
 type Point = { x: number; y: number };
 

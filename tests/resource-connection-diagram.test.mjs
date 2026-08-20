@@ -6,6 +6,7 @@ import {
   buildResourceConnectionDiagram,
   buildResourceConnectionGraph,
   orderConnectionColumns,
+  orderConnectionRows,
 } from "../lib/resource-connection-diagram.ts";
 
 const item = (id, name) => ({ id, name, type: "item", status: "available" });
@@ -168,6 +169,107 @@ test("adds a visual dashed rail between adjacent primary-item variants", () => {
   assert.equal(siblingRail.connections[0].descriptor.type, "sibling");
   assert.equal(siblingRail.connections[0].directed, false);
   assert.equal(graph.connectionCount, 2);
+});
+
+test("lays out family members together with BOM components below the item", () => {
+  const root = item("root", "Root assembly");
+  const blue = item("blue", "Blue variation");
+  const red = item("red", "Red variation");
+  const component = item("component", "Component");
+  const componentVariation = item("component-variation", "Component variation");
+  const subcomponent = item("subcomponent", "Subcomponent");
+  const container = item("container", "Container");
+  const unrelated = item("unrelated", "Unrelated item");
+  const graph = buildResourceConnectionGraph({
+    root,
+    depth: 2,
+    payloads: new Map([
+      [
+        root.id,
+        {
+          family: {
+            role: "primary",
+            currentResourceId: root.id,
+            primary: root,
+            variants: [blue, red],
+          },
+          bomComponents: [
+            {
+              resourceId: component.id,
+              name: component.name,
+              type: component.type,
+              status: component.status,
+              quantityPerAssembly: 1,
+            },
+          ],
+          relations: [
+            {
+              id: "container-root",
+              sourceResourceId: container.id,
+              targetResourceId: root.id,
+              relationTypeKey: "contains",
+              source: container,
+              target: root,
+              relationType: { label: "Contains", inverseLabel: "Located in" },
+            },
+            {
+              id: "root-unrelated",
+              sourceResourceId: root.id,
+              targetResourceId: unrelated.id,
+              relationTypeKey: "related",
+              source: root,
+              target: unrelated,
+              relationType: { label: "Related", inverseLabel: "Related" },
+            },
+          ],
+        },
+      ],
+      [
+        component.id,
+        {
+          family: {
+            role: "primary",
+            currentResourceId: component.id,
+            primary: component,
+            variants: [componentVariation],
+          },
+          bomComponents: [
+            {
+              resourceId: subcomponent.id,
+              name: subcomponent.name,
+              type: subcomponent.type,
+              status: subcomponent.status,
+              quantityPerAssembly: 2,
+            },
+          ],
+          relations: [],
+        },
+      ],
+    ]),
+  });
+  const rows = orderConnectionRows(graph.nodes, graph.edges, root.id);
+  const rowOf = (resourceId) =>
+    Array.from(rows).find(([, nodes]) =>
+      nodes.some((node) => node.resource.id === resourceId),
+    )?.[0];
+
+  assert.equal(rowOf(root.id), 0);
+  assert.equal(rowOf(blue.id), rowOf(root.id));
+  assert.equal(rowOf(red.id), rowOf(root.id));
+  assert.ok(rowOf(component.id) > rowOf(root.id));
+  assert.equal(rowOf(componentVariation.id), rowOf(component.id));
+  assert.ok(rowOf(subcomponent.id) > rowOf(component.id));
+  assert.equal(rowOf(container.id), undefined);
+  assert.equal(rowOf(unrelated.id), undefined);
+  assert.deepEqual(Array.from(rows.keys()), [0, 1, 2]);
+  const componentRow = rows.get(1).map((node) => node.resource.id);
+  assert.equal(
+    Math.abs(
+      componentRow.indexOf(component.id) -
+        componentRow.indexOf(componentVariation.id),
+    ),
+    1,
+  );
 });
 
 test("expands loaded payloads across bounded levels without duplicating cycles", () => {
@@ -386,7 +488,21 @@ test("the detail-page connection flow opens by default and owns every connection
   assert.match(component, /useState\(3\)/);
   assert.match(component, /connectionDiagram\.depth\.label/);
   assert.match(component, /buildResourceConnectionGraph/);
+  assert.match(component, /orderConnectionRows/);
+  assert.match(component, /getConnectionFamilyGroups/);
+  assert.match(component, /<FamilyRails/);
+  assert.match(component, /hierarchyDown/);
+  assert.match(component, /buildEdgeAnchorMap/);
+  assert.match(component, /distributedAnchorX/);
+  assert.match(component, /markerUnits="userSpaceOnUse"/);
+  assert.match(component, /M 1 1 L 7 4 L 1 7 Z/);
+  assert.match(component, /NODE_WIDTH = 168/);
+  assert.match(component, /NODE_HEIGHT = 112/);
+  assert.match(component, /ROW_STEP = 182/);
+  assert.match(component, /flex h-full w-full flex-col items-center/);
   assert.match(component, /MAX_GRAPH_NODES = 45/);
+  assert.match(component, /MIN_CANVAS_HEIGHT = 420/);
+  assert.match(component, /Math\.max\(\s*MIN_CANVAS_HEIGHT/);
   assert.match(component, /className="relative mx-auto"/);
   assert.match(component, /new ResizeObserver\(centerRoot\)/);
   assert.match(component, /\/api\/v1\/resources\/covers/);
@@ -449,6 +565,8 @@ test("the diagram edits typed connections without bypassing existing APIs", asyn
   assert.match(editor, /relationTypeKey: relationType/);
   assert.match(editor, /method: "DELETE"/);
   assert.match(editor, /bomWritePayload/);
+  assert.match(editor, /max-h-80/);
+  assert.match(editor, /src=\{candidate\.cover\.url\}/);
   assert.match(assembly, /resource-bom-changed/);
   assert.match(relations, /resource-relations-changed/);
 });

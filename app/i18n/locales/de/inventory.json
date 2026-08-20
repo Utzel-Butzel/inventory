@@ -369,6 +369,14 @@
     "openOnMap": "Auf Karte öffnen",
     "noPosition": "Es wurde keine geografische Position erfasst.",
     "lastUpdated": "Zuletzt aktualisiert am {{date}}",
+    "lightbox": {
+      "dialog": "Bildansicht",
+      "open": "{{name}} in der Bildansicht öffnen",
+      "close": "Bildansicht schließen",
+      "previous": "Vorheriges Bild",
+      "next": "Nächstes Bild",
+      "position": "{{current}} von {{total}}"
+    },
     "sections": {
       "overview": "Überblick",
       "media": "Medien",
