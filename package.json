@@ -57,6 +57,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.42.0",
+    "@mdxeditor/editor": "3.54.0",
     "barcode-detector": "^3.2.1",
     "bcryptjs": "^3.0.2",
     "browser-image-compression": "^2.0.2",

@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 
 import { UI_LANGUAGE_HEADER, UI_LANGUAGES } from "@/i18n.config";
 
+import "@mdxeditor/editor/style.css";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {

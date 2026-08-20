@@ -20,6 +20,8 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "next-i18next/client";
 
+import { markdownToPlainText } from "@/lib/simple-markdown";
+
 type MediaItem = {
   id: string;
   url: string;
@@ -163,7 +165,9 @@ function ResourcePanel({ resource, side }: { resource: DuplicateResource; side: 
         </div>
 
         {resource.description ? (
-          <p className="mt-4 line-clamp-3 text-xs leading-5 text-muted">{resource.description}</p>
+          <p className="mt-4 line-clamp-3 text-xs leading-5 text-muted">
+            {markdownToPlainText(resource.description)}
+          </p>
         ) : null}
 
         <div className="mt-5 space-y-3 border-t border-border pt-4">

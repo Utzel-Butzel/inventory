@@ -15,6 +15,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   Copy,
+  Crop,
   FileText,
   GitBranch,
   ImageIcon,
@@ -51,6 +52,7 @@ import {
   type ClientResource,
 } from "@/lib/client-types";
 import { prepareUpload, readImageGps } from "@/lib/client-media";
+import { ImageUploadEditor } from "@/components/image-upload-editor";
 import { AssemblyManager } from "@/components/assembly-manager";
 import { CustomFieldInputs } from "@/components/custom-field-inputs";
 import { ResourceTranslations } from "@/components/resource-translations";
@@ -58,6 +60,7 @@ import {
   ImageModelSelector,
   useImageModelPreference,
 } from "@/components/image-model-selector";
+import { MarkdownEditor } from "@/components/markdown-editor";
 import {
   isCustomFieldDefinitionApplicable,
   type CustomFieldDefinition,
@@ -370,6 +373,7 @@ export function ResourceEditor({
   const [customFieldsError, setCustomFieldsError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [editingFileIndex, setEditingFileIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(Boolean(resourceId));
   const [saving, setSaving] = useState(false);
   const [aiAction, setAiAction] = useState<"analyze" | "cover" | null>(null);
@@ -836,6 +840,7 @@ export function ResourceEditor({
   };
 
   const removePendingFile = (index: number) => {
+    setEditingFileIndex((current) => current === index ? null : current);
     setFiles((current) =>
       current.filter((_, fileIndex) => fileIndex !== index),
     );
@@ -845,6 +850,17 @@ export function ResourceEditor({
       return current > index ? current - 1 : current;
     });
   };
+
+  const closeImageEditor = useCallback(() => setEditingFileIndex(null), []);
+
+  const saveEditedImage = useCallback((index: number, file: File) => {
+    setFiles((current) =>
+      current.map((currentFile, fileIndex) =>
+        fileIndex === index ? file : currentFile,
+      ),
+    );
+    setEditingFileIndex(null);
+  }, []);
 
   const moveMedia = async (mediaId: string, direction: -1 | 1) => {
     if (!resourceId || !resource) return;
@@ -895,6 +911,12 @@ export function ResourceEditor({
   };
 
   const itemMedia = resource?.media ?? [];
+  const descriptionImages = itemMedia
+    .filter((item) => item.kind === "image")
+    .map((item) => ({
+      url: item.url,
+      label: item.altText || item.name,
+    }));
   const totalMedia = itemMedia.length + files.length;
   const hasImage =
     itemMedia.some((item) => item.kind === "image") ||
@@ -1108,16 +1130,25 @@ export function ResourceEditor({
                   className={inputClass}
                 />
               </label>
-              <label className={`${labelClass} sm:col-span-2`}>
-                {t("details.itemDescription")}
-                <textarea
+              <div className="sm:col-span-2">
+                <p className={`${labelClass} mb-1.5`}>
+                  {t("details.itemDescription")}
+                </p>
+                <MarkdownEditor
                   value={form.description}
-                  onChange={(event) => setField("description", event.target.value)}
+                  onChange={(value) => setField("description", value)}
+                  ariaLabel={t("details.itemDescription")}
                   placeholder={t("details.descriptionPlaceholder")}
-                  rows={7}
-                  className={`${inputClass} h-auto resize-y py-3 leading-6`}
+                  availableImages={descriptionImages}
+                  imageButtonLabel={t("details.imageButton")}
+                  embedButtonLabel={t("details.embedUploadedImage")}
+                  closeImagePickerLabel={t("details.closeImagePicker")}
+                  availableImagesLabel={t("details.imagesAvailable", {
+                    count: descriptionImages.length,
+                  })}
+                  emptyImageMessage={t("details.noUploadedImages")}
                 />
-              </label>
+              </div>
               <label className={`${labelClass} sm:col-span-2`}>
                 {t("details.tags")} {" "}
                 <span className="font-normal text-muted">
@@ -1295,6 +1326,18 @@ export function ResourceEditor({
                       <div className="grid h-full place-items-center text-success"><Paperclip size={24} /></div>
                     )}
                     <button type="button" onClick={() => removePendingFile(index)} className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-slate-950/75 text-white" aria-label={t("media.removePending")}><X size={12} /></button>
+                    {files[index]?.type.startsWith("image/") ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditingFileIndex(index)}
+                        className="absolute bottom-1.5 right-1.5 grid h-8 w-8 place-items-center rounded-lg bg-slate-950/80 text-white shadow-lg backdrop-blur-sm transition hover:bg-slate-950"
+                        aria-label={t("media.editor.editButton", { name: files[index]?.name })}
+                        aria-haspopup="dialog"
+                        title={t("media.editor.editButton", { name: files[index]?.name })}
+                      >
+                        <Crop size={14} aria-hidden="true" />
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -1316,6 +1359,16 @@ export function ResourceEditor({
               </span>
             </label>
           </section>
+
+          {editingFileIndex !== null && files[editingFileIndex] && previews[editingFileIndex] ? (
+            <ImageUploadEditor
+              key={`${editingFileIndex}:${files[editingFileIndex].name}:${files[editingFileIndex].lastModified}`}
+              file={files[editingFileIndex]}
+              previewUrl={previews[editingFileIndex]}
+              onClose={closeImageEditor}
+              onSave={(file) => saveEditedImage(editingFileIndex, file)}
+            />
+          ) : null}
 
           <section className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
             <div className="mb-5 flex items-center gap-3 border-b border-border pb-4">

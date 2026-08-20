@@ -260,6 +260,200 @@ button:not(:disabled),
   scrollbar-width: thin;
 }
 
+.mdx-editor-input .mdxeditor-toolbar {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+}
+
+.mdx-editor-input .mdxeditor-toolbar button {
+  min-width: 2rem;
+  min-height: 2rem;
+}
+
+.mdx-editor-input .mdxeditor {
+  --accentBase: color-mix(in srgb, var(--color-brand-soft) 45%, var(--color-surface));
+  --accentBgSubtle: color-mix(in srgb, var(--color-brand-soft) 60%, var(--color-surface));
+  --accentBg: color-mix(in srgb, var(--color-brand-soft) 78%, var(--color-surface));
+  --accentBgHover: color-mix(in srgb, var(--color-brand-soft) 88%, var(--color-surface));
+  --accentBgActive: color-mix(in srgb, var(--color-brand-soft) 96%, var(--color-surface));
+  --accentLine: var(--color-brand-border);
+  --accentBorder: var(--color-brand-border);
+  --accentBorderHover: var(--color-brand);
+  --accentSolid: var(--color-brand-solid);
+  --accentSolidHover: var(--color-brand-hover);
+  --accentText: var(--color-brand);
+  --accentTextContrast: var(--color-foreground);
+  --basePageBg: var(--color-surface);
+  --baseBase: var(--color-surface);
+  --baseBgSubtle: color-mix(in srgb, var(--color-surface-muted) 58%, var(--color-surface));
+  --baseBg: color-mix(in srgb, var(--color-surface-muted) 78%, var(--color-surface));
+  --baseBgHover: color-mix(in srgb, var(--color-surface-muted) 88%, var(--color-surface));
+  --baseBgActive: var(--color-surface-muted);
+  --baseLine: var(--color-border);
+  --baseBorder: var(--color-border);
+  --baseBorderHover: var(--color-border-strong);
+  --baseSolid: var(--color-muted);
+  --baseSolidHover: var(--color-foreground);
+  --baseText: var(--color-muted);
+  --baseTextContrast: var(--color-foreground);
+  --error-color: var(--color-danger);
+}
+
+.mdx-editor-input .mdxeditor-root-contenteditable,
+.mdx-editor-input .mdxeditor-popup-container {
+  background: var(--color-surface);
+  color: var(--color-foreground);
+}
+
+.mdx-editor-input .mdxeditor-toolbar button,
+.mdx-editor-input .mdxeditor-toolbar [role="button"] {
+  border-radius: 0.5rem;
+  color: var(--color-foreground);
+}
+
+.mdx-editor-input .mdxeditor-toolbar button:focus-visible,
+.mdx-editor-input .mdxeditor-toolbar [role="button"]:focus-visible,
+.mdx-editor-input .mdxeditor-select-content [role="option"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-focus) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.mdx-editor-input [class*="_toolbarNodeKindSelectTrigger_"],
+.mdx-editor-input [class*="_toolbarButtonSelectTrigger_"],
+.mdx-editor-input [class*="_selectTrigger_"],
+.mdx-editor-input [class*="_linkDialogInputWrapper_"] {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+}
+
+.mdx-editor-input [class*="_toolbarNodeKindSelectContainer_"],
+.mdx-editor-input [class*="_toolbarButtonDropdownContainer_"],
+.mdx-editor-input [class*="_toolbarCodeBlockLanguageSelectContent_"],
+.mdx-editor-input [class*="_selectContainer_"],
+.mdx-editor-input [class*="_dialogContent_"],
+.mdx-editor-input [class*="_largeDialogContent_"],
+.mdx-editor-input [class*="_popoverContent_"],
+.mdx-editor-input [class*="_linkDialogPopoverContent_"] {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  box-shadow: 0 18px 44px color-mix(in srgb, var(--color-foreground) 16%, transparent);
+}
+
+.mdx-editor-input [class*="_linkDialogInput_"],
+.mdx-editor-input [class*="_dialogInput_"] {
+  color: var(--color-foreground);
+  caret-color: var(--color-foreground);
+}
+
+.mdx-editor-input [class*="_linkDialogInput_"]::placeholder,
+.mdx-editor-input [class*="_dialogInput_"]::placeholder {
+  color: var(--color-muted);
+}
+
+.mdx-editor-input [class*="_primaryActionButton_"],
+.mdx-editor-input [class*="_primaryButton_"] {
+  border-color: var(--color-brand-border);
+  background: var(--color-brand-solid);
+  color: var(--color-on-brand);
+}
+
+.mdx-editor-input [class*="_secondaryButton_"] {
+  border-color: var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-foreground);
+}
+
+.mdx-editor-input [class*="_toolbarNodeKindSelectTrigger_"]:focus-visible,
+.mdx-editor-input [class*="_toolbarButtonSelectTrigger_"]:focus-visible,
+.mdx-editor-input [class*="_selectTrigger_"]:focus-visible,
+.mdx-editor-input [class*="_linkDialogInputWrapper_"]:focus-within,
+.mdx-editor-input [class*="_primaryButton_"]:focus-visible,
+.mdx-editor-input [class*="_secondaryButton_"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-focus) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.mdx-editor-input__content {
+  min-height: 18rem;
+  padding: 1rem;
+  background: var(--color-surface);
+  caret-color: var(--color-foreground);
+  color: var(--color-foreground);
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.mdx-editor-input__content h1,
+.mdx-editor-input__content h2,
+.mdx-editor-input__content h3,
+.mdx-editor-input__content h4 {
+  color: var(--color-foreground);
+  font-weight: 700;
+}
+
+.mdx-editor-input__content h1 {
+  font-size: 1.8rem;
+}
+
+.mdx-editor-input__content h2 {
+  font-size: 1.45rem;
+}
+
+.mdx-editor-input__content h3 {
+  font-size: 1.2rem;
+}
+
+.mdx-editor-input__content p,
+.mdx-editor-input__content ul,
+.mdx-editor-input__content ol,
+.mdx-editor-input__content blockquote {
+  margin: 0.8rem 0;
+}
+
+.mdx-editor-input__content ul,
+.mdx-editor-input__content ol {
+  padding-left: 1.4rem;
+}
+
+.mdx-editor-input__content ul {
+  list-style: disc;
+}
+
+.mdx-editor-input__content ol {
+  list-style: decimal;
+}
+
+.mdx-editor-input__content blockquote {
+  border-left: 4px solid var(--color-border);
+  padding-left: 0.9rem;
+  color: var(--color-muted);
+}
+
+.mdx-editor-input__content img {
+  display: block;
+  max-width: 100%;
+  margin: 1rem 0;
+  border-radius: 1rem;
+}
+
+.mdx-editor-input__content a {
+  color: var(--color-brand);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.mdx-editor-input {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+.mdx-editor-input > div:last-child {
+  border-color: var(--color-border);
+  background: var(--color-surface-subtle);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

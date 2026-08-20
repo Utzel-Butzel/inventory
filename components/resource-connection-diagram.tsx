@@ -468,7 +468,7 @@ export function ResourceConnectionDiagram({
     }
     return result;
   }, [model, resource.id]);
-  const treeRowOf = useMemo(() => {
+  const flowRowOf = useMemo(() => {
     const result = new Map<string, number>();
     for (const [row, items] of rows) {
       for (const item of items) {
@@ -477,36 +477,34 @@ export function ResourceConnectionDiagram({
     }
     return result;
   }, [rows]);
-  const bomEdges = useMemo(() => {
+  const graphEdges = useMemo(() => {
     if (!model) return [];
     return model.edges.flatMap((edge) => {
       const connections = edge.connections.filter(
         (connection) =>
-          connection.kind === "bom" &&
-          treeRowOf.has(connection.fromResourceId) &&
-          treeRowOf.has(connection.toResourceId) &&
-          treeRowOf.get(connection.fromResourceId) !==
-            treeRowOf.get(connection.toResourceId),
+          connection.kind !== "family" &&
+          flowRowOf.has(connection.fromResourceId) &&
+          flowRowOf.has(connection.toResourceId),
       );
       return connections.length
         ? [
             {
               ...edge,
-              key: `${edge.key}:bom`,
+              key: `${edge.key}:flow`,
               visualOnly: false,
               connections,
             },
           ]
         : [];
     });
-  }, [model, treeRowOf]);
+  }, [flowRowOf, model]);
   const familyGroups = useMemo(() => {
     if (!model) return [];
     return getConnectionFamilyGroups(
-      model.nodes.filter((node) => treeRowOf.has(node.resource.id)),
+      model.nodes.filter((node) => flowRowOf.has(node.resource.id)),
       model.edges,
     );
-  }, [model, treeRowOf]);
+  }, [flowRowOf, model]);
   const rowNumbers = Array.from(rows.keys());
   const firstRow = Math.min(0, ...rowNumbers);
   const lastRow = Math.max(0, ...rowNumbers);
@@ -601,12 +599,8 @@ export function ResourceConnectionDiagram({
                   <>
                     <LegendBadge kind="family" label={t("connectionDiagram.legend.family")} />
                     <LegendBadge kind="bom" label={t("connectionDiagram.legend.bom")} />
-                    {view === "list" ? (
-                      <>
-                        <LegendBadge kind="containment" label={t("connectionDiagram.legend.containment")} />
-                        <LegendBadge kind="relationship" label={t("connectionDiagram.legend.relationship")} />
-                      </>
-                    ) : null}
+                    <LegendBadge kind="containment" label={t("connectionDiagram.legend.containment")} />
+                    <LegendBadge kind="relationship" label={t("connectionDiagram.legend.relationship")} />
                   </>
                 ) : null}
               </div>
@@ -793,7 +787,7 @@ export function ResourceConnectionDiagram({
                         height={canvasHeight}
                       />
                       <GraphEdges
-                        edges={bomEdges}
+                        edges={graphEdges}
                         positions={positions}
                         width={canvasWidth}
                         height={canvasHeight}

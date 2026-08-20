@@ -13,12 +13,14 @@ import {
 
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { LocalizedThemeToggle } from "@/components/theme-toggle";
+import { MarkdownContent } from "@/components/markdown-content";
 import { UsdzModelViewer } from "@/components/usdz-model-viewer";
 import type {
   PublicCustomFieldDefinition,
   PublicResource,
 } from "@/lib/public-shares";
 import { getT } from "@/lib/ui-i18n/server";
+import { markdownToPlainText } from "@/lib/simple-markdown";
 import { isUsdzMedia } from "@/lib/usdz";
 
 const statusStyles: Record<string, string> = {
@@ -165,7 +167,8 @@ export async function PublicInventoryView({
                     <ArrowRight className="mt-0.5 size-4 shrink-0 text-muted transition group-hover:translate-x-0.5" />
                   </div>
                   <p className="mt-1 line-clamp-2 min-h-10 text-xs leading-5 text-muted">
-                    {resource.description || t("resource.noDescriptionShort")}
+                    {markdownToPlainText(resource.description) ||
+                      t("resource.noDescriptionShort")}
                   </p>
                   <p className="mt-4 flex items-center gap-1.5 border-t border-border pt-3 text-xs text-muted">
                     <MapPin className="size-3.5" />
@@ -288,7 +291,13 @@ export async function PublicResourceView({
               </div>
               <div className="p-5 sm:p-6">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground"><FileText className="size-4 text-brand" /> {t("resource.overview")}</h2>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-muted-strong">{resource.description || t("resource.noDescription")}</p>
+                {resource.description ? (
+                  <MarkdownContent value={resource.description} className="mt-3" />
+                ) : (
+                  <p className="mt-3 text-sm leading-7 text-muted-strong">
+                    {t("resource.noDescription")}
+                  </p>
+                )}
               </div>
             </section>
             {resource.media.length > 1 || (resource.media.length === 1 && !resource.cover) ? (

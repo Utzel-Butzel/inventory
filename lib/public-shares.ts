@@ -135,7 +135,9 @@ function attachPublicMedia(
   mediaRows: MediaRecord[],
 ): PublicResource[] {
   const grouped = new Map<string, PublicMedia[]>();
+  const publicUrls = new Map<string, Map<string, string>>();
   for (const item of mediaRows) {
+    const shareUrl = publicMediaUrl(shareId, item.id);
     const publicItem: PublicMedia = {
       id: item.id,
       name: item.name,
@@ -146,11 +148,15 @@ function attachPublicMedia(
       height: item.height,
       position: item.position,
       altText: item.altText,
-      url: publicMediaUrl(shareId, item.id),
+      url: shareUrl,
     };
     const entries = grouped.get(item.resourceId) ?? [];
     entries.push(publicItem);
     grouped.set(item.resourceId, entries);
+
+    const resourceUrls = publicUrls.get(item.resourceId) ?? new Map();
+    resourceUrls.set(item.url, shareUrl);
+    publicUrls.set(item.resourceId, resourceUrls);
   }
 
   return rows.map((row) => {
@@ -160,7 +166,11 @@ function attachPublicMedia(
     return {
       id: row.id,
       name: row.name,
-      description: row.description,
+      description: Array.from(publicUrls.get(row.id) ?? []).reduce(
+        (description, [privateUrl, publicUrl]) =>
+          description.replaceAll(privateUrl, publicUrl),
+        row.description,
+      ),
       type: row.type,
       status: row.status,
       sku: row.sku,

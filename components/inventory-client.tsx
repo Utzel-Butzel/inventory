@@ -23,6 +23,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchJson, type ClientResource } from "@/lib/client-types";
+import { markdownToPlainText } from "@/lib/simple-markdown";
 
 type Pagination = { page: number; pageSize: number; total: number; pages: number };
 type View = "grid" | "table";
@@ -389,7 +390,8 @@ export function InventoryClient({
                   />
                 </div>
                 <p className="line-clamp-2 min-h-10 text-xs leading-5 text-muted">
-                  {resource.description || t("item.noDescription")}
+                  {markdownToPlainText(resource.description) ||
+                    t("item.noDescription")}
                 </p>
                 <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs">
                   <div className="flex min-w-0 items-center gap-1.5 text-muted">

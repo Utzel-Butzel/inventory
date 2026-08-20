@@ -35,6 +35,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CustomFieldValueDisplay } from "@/components/custom-field-inputs";
+import { MarkdownContent } from "@/components/markdown-content";
 import { ResourceShareButton } from "@/components/resource-share-button";
 import { UsdzModelViewer } from "@/components/usdz-model-viewer";
 import {
@@ -728,9 +729,7 @@ export function ResourceDetails({
               <h2 className="text-sm font-semibold text-foreground">
                 {t("details.sections.overview")}
               </h2>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-muted-strong">
-                {resource.description}
-              </p>
+              <MarkdownContent value={resource.description} className="mt-3" />
             </section>
           ) : null}
 

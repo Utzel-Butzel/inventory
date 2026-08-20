@@ -550,10 +550,11 @@ export function getConnectionFamilyGroups(
 }
 
 /**
- * Builds a strict structural tree: the selected product and its family occupy
- * level zero, each BOM family occupies the next level, and BOMs of those items
- * continue one level lower. Containment and general relationships stay in the
- * list view instead of competing with the assembly hierarchy on this canvas.
+ * Builds the flow rows while keeping families together. The selected product
+ * and its family occupy level zero and BOM families continue below it. Groups
+ * that are connected through containment or another relationship retain the
+ * directional column assigned by the graph builder, so every loaded connection
+ * remains visible without flattening the assembly hierarchy.
  */
 export function orderConnectionRows(
   nodes: ConnectionDiagramGraphNode[],
@@ -602,7 +603,20 @@ export function orderConnectionRows(
     }
   }
 
+  for (const [groupId, members] of membersByGroup) {
+    if (levelOf.has(groupId)) continue;
+    const representative = [...members].sort(
+      (left, right) =>
+        left.depth - right.depth ||
+        Math.abs(left.column) - Math.abs(right.column) ||
+        left.resource.name.localeCompare(right.resource.name) ||
+        left.resource.id.localeCompare(right.resource.id),
+    )[0];
+    if (representative) levelOf.set(groupId, representative.column);
+  }
+
   const groupPosition = new Map<string, number>([[rootGroupId, 0]]);
+  const minimumLevel = Math.min(0, ...levelOf.values());
   const maximumLevel = Math.max(0, ...levelOf.values());
   const groupLabel = (groupId: string) =>
     [...(membersByGroup.get(groupId) ?? [])]
@@ -632,7 +646,7 @@ export function orderConnectionRows(
     return [...others.slice(0, middle), hub, ...others.slice(middle)];
   };
 
-  for (let level = 0; level <= maximumLevel; level += 1) {
+  for (let level = minimumLevel; level <= maximumLevel; level += 1) {
     const groups = Array.from(levelOf.entries())
       .filter(([, candidateLevel]) => candidateLevel === level)
       .map(([groupId]) => groupId)

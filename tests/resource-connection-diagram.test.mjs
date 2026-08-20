@@ -171,7 +171,7 @@ test("adds a visual dashed rail between adjacent primary-item variants", () => {
   assert.equal(graph.connectionCount, 2);
 });
 
-test("lays out family members together with BOM components below the item", () => {
+test("lays out family and BOM groups while retaining every other relationship", () => {
   const root = item("root", "Root assembly");
   const blue = item("blue", "Blue variation");
   const red = item("red", "Red variation");
@@ -259,9 +259,9 @@ test("lays out family members together with BOM components below the item", () =
   assert.ok(rowOf(component.id) > rowOf(root.id));
   assert.equal(rowOf(componentVariation.id), rowOf(component.id));
   assert.ok(rowOf(subcomponent.id) > rowOf(component.id));
-  assert.equal(rowOf(container.id), undefined);
-  assert.equal(rowOf(unrelated.id), undefined);
-  assert.deepEqual(Array.from(rows.keys()), [0, 1, 2]);
+  assert.ok(rowOf(container.id) < rowOf(root.id));
+  assert.ok(rowOf(unrelated.id) > rowOf(root.id));
+  assert.deepEqual(Array.from(rows.keys()), [-1, 0, 1, 2]);
   const componentRow = rows.get(1).map((node) => node.resource.id);
   assert.equal(
     Math.abs(
@@ -489,6 +489,8 @@ test("the detail-page connection flow opens by default and owns every connection
   assert.match(component, /connectionDiagram\.depth\.label/);
   assert.match(component, /buildResourceConnectionGraph/);
   assert.match(component, /orderConnectionRows/);
+  assert.match(component, /connection\.kind !== "family"/);
+  assert.match(component, /edges=\{graphEdges\}/);
   assert.match(component, /getConnectionFamilyGroups/);
   assert.match(component, /<FamilyRails/);
   assert.match(component, /hierarchyDown/);
