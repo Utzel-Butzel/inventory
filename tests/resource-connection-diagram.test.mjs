@@ -497,8 +497,11 @@ test("the detail-page connection flow opens by default and owns every connection
   assert.match(component, /markerUnits="userSpaceOnUse"/);
   assert.match(component, /M 1 1 L 7 4 L 1 7 Z/);
   assert.match(component, /NODE_WIDTH = 168/);
-  assert.match(component, /NODE_HEIGHT = 112/);
-  assert.match(component, /ROW_STEP = 182/);
+  assert.match(component, /NODE_HEIGHT = 152/);
+  assert.match(component, /NODE_MEDIA_CENTER_Y = 55/);
+  assert.match(component, /ROW_STEP = 244/);
+  assert.match(component, /className="grid size-20 place-items-center/);
+  assert.match(component, /const middleY = \(startY \+ endY\) \/ 2/);
   assert.match(component, /flex h-full w-full flex-col items-center/);
   assert.match(component, /MAX_GRAPH_NODES = 45/);
   assert.match(component, /MIN_CANVAS_HEIGHT = 420/);

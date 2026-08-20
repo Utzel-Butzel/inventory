@@ -62,10 +62,10 @@ type NodePosition = { x: number; y: number };
 type EdgeAnchors = { fromX: number; toX: number };
 
 const NODE_WIDTH = 168;
-const NODE_HEIGHT = 112;
-const NODE_MEDIA_CENTER_Y = 37;
+const NODE_HEIGHT = 152;
+const NODE_MEDIA_CENTER_Y = 55;
 const COLUMN_GAP = 32;
-const ROW_STEP = 182;
+const ROW_STEP = 244;
 const CANVAS_PADDING = 24;
 const SAME_ROW_EDGE_GUTTER = 48;
 const MIN_CANVAS_WIDTH = 860;
@@ -1438,11 +1438,8 @@ function GraphEdge({
     const endY = downward
       ? to.y - arrowGap
       : to.y + NODE_HEIGHT + arrowGap;
-    const distance = Math.abs(endY - startY);
-    const tangent = Math.min(48, Math.max(20, distance * 0.36));
-    const startControlY = downward ? startY + tangent : startY - tangent;
-    const endControlY = downward ? endY - tangent : endY + tangent;
-    path = `M ${fromCenterX} ${startY} C ${fromCenterX} ${startControlY}, ${toCenterX} ${endControlY}, ${toCenterX} ${endY}`;
+    const middleY = (startY + endY) / 2;
+    path = `M ${fromCenterX} ${startY} C ${fromCenterX} ${middleY}, ${toCenterX} ${middleY}, ${toCenterX} ${endY}`;
   }
   return (
     <g
@@ -1543,7 +1540,7 @@ function PositionedGraphNode({
     <>
       <span className="relative shrink-0">
         <span
-          className="grid size-10 place-items-center overflow-hidden rounded-xl bg-surface-muted"
+          className="grid size-20 place-items-center overflow-hidden rounded-xl bg-surface-muted"
           style={
             cover
               ? undefined
@@ -1564,7 +1561,7 @@ function PositionedGraphNode({
               className="h-full w-full object-cover"
             />
           ) : isRoot ? (
-            <CircleDot className="size-4" aria-hidden="true" />
+            <CircleDot className="size-8" aria-hidden="true" />
           ) : (
             <ConnectionIcon kind={kind} />
           )}
@@ -1572,7 +1569,7 @@ function PositionedGraphNode({
         {!isRoot && item.node.connections.length > 1 ? (
           <Badge
             tone={kindBadgeTone[kind]}
-            className="absolute -right-2 -top-2 min-h-5 px-1.5 text-[9px]"
+            className="absolute -right-2 bottom-0 min-h-5 px-1.5 text-[9px]"
           >
             {item.node.connections.length}
           </Badge>
@@ -1648,10 +1645,10 @@ function PositionedGraphNode({
 }
 
 function ConnectionIcon({ kind }: { kind: ConnectionDiagramKind }) {
-  if (kind === "family") return <GitBranch className="size-4" aria-hidden="true" />;
-  if (kind === "bom") return <Package className="size-4" aria-hidden="true" />;
-  if (kind === "containment") return <MapPin className="size-4" aria-hidden="true" />;
-  return <Link2 className="size-4" aria-hidden="true" />;
+  if (kind === "family") return <GitBranch className="size-8" aria-hidden="true" />;
+  if (kind === "bom") return <Package className="size-8" aria-hidden="true" />;
+  if (kind === "containment") return <MapPin className="size-8" aria-hidden="true" />;
+  return <Link2 className="size-8" aria-hidden="true" />;
 }
 
 function connectionDescription(
