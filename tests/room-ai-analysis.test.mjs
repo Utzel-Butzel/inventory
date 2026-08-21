@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { zodTextFormat } from "openai/helpers/zod";
 import * as THREE from "three";
 
 import { createAiPrimitiveObjectModel } from "../components/room-object-models.ts";
 import { buildRoomAiAnalysis } from "../lib/room-ai-analysis.ts";
 import {
   roomAiAnalysisSchema,
+  roomAiDetectionSchema,
   roomPrimitiveModelSchema,
 } from "../lib/room-ai-analysis-contract.ts";
 
@@ -183,6 +185,20 @@ test("rejects unsafe or oversized AI primitive model recipes", () => {
     label: "Too many parts",
     parts: Array.from({ length: 33 }, () => validPart),
   }).success, false);
+  assert.equal(roomPrimitiveModelSchema.safeParse({
+    label: "Short vector",
+    parts: [{ ...validPart, position: [0, 0] }],
+  }).success, false);
+  assert.equal(roomPrimitiveModelSchema.safeParse({
+    label: "Long vector",
+    parts: [{ ...validPart, size: [0.5, 0.5, 0.5, 0.5] }],
+  }).success, false);
+});
+
+test("builds an OpenAI strict response format for room analysis", () => {
+  assert.doesNotThrow(() =>
+    zodTextFormat(roomAiDetectionSchema, "room_ai_analysis"),
+  );
 });
 
 test("renders a confirmed primitive recipe inside its RoomPlan bounds", () => {

@@ -22,23 +22,20 @@ const colorHexSchema = z
   .string()
   .regex(/^#[0-9A-F]{6}$/, "Expected an uppercase six-digit sRGB color.");
 
-const normalizedPositionSchema = z.tuple([
-  z.number().finite().min(-0.75).max(0.75),
-  z.number().finite().min(-0.75).max(0.75),
-  z.number().finite().min(-0.75).max(0.75),
-]);
+// OpenAI strict Structured Outputs cannot represent tuple-form JSON Schema
+// items. Fixed-length homogeneous arrays preserve the vector contract while
+// allowing zodTextFormat() to build the room-analysis response format.
+const normalizedPositionSchema = z
+  .array(z.number().finite().min(-0.75).max(0.75))
+  .length(3);
 
-const normalizedSizeSchema = z.tuple([
-  z.number().finite().min(0.01).max(1.5),
-  z.number().finite().min(0.01).max(1.5),
-  z.number().finite().min(0.01).max(1.5),
-]);
+const normalizedSizeSchema = z
+  .array(z.number().finite().min(0.01).max(1.5))
+  .length(3);
 
-const rotationDegreesSchema = z.tuple([
-  z.number().finite().min(-180).max(180),
-  z.number().finite().min(-180).max(180),
-  z.number().finite().min(-180).max(180),
-]);
+const rotationDegreesSchema = z
+  .array(z.number().finite().min(-180).max(180))
+  .length(3);
 
 export const roomPrimitivePartSchema = z
   .object({
