@@ -379,7 +379,7 @@ test("drops suggestions whose cited evidence is not an analyzed photo", () => {
   assert.deepEqual(analysis.objectSuggestions, []);
 });
 
-test("does not ground or generate placement from uncalibrated evidence", () => {
+test("keeps uncalibrated object placement explicitly estimated and movable", () => {
   const analysis = buildRoomAiAnalysis({
     scene,
     keyframeIds: [frameId],
@@ -424,7 +424,15 @@ test("does not ground or generate placement from uncalibrated evidence", () => {
 
   assert.equal(analysis.objectSuggestions.length, 1);
   assert.equal(analysis.objectSuggestions[0].roomObjectId, null);
-  assert.equal(analysis.objectSuggestions[0].primitiveModel, null);
+  assert.equal(analysis.objectSuggestions[0].primitiveModel?.parts.length, 6);
+  assert.deepEqual(
+    analysis.objectSuggestions[0].estimatedPlacement?.dimensions,
+    [0.55, 1, 0.55],
+  );
+  assert.ok(analysis.objectSuggestions[0].estimatedPlacement?.position.every(
+    (value, axis) =>
+      value >= scene.bounds.min[axis] && value <= scene.bounds.max[axis],
+  ));
 });
 
 test("does not override an explicit null RoomPlan match by category uniqueness", () => {
@@ -461,6 +469,7 @@ test("does not override an explicit null RoomPlan match by category uniqueness",
   });
 
   assert.equal(analysis.objectSuggestions[0].roomObjectId, null);
+  assert.ok(analysis.objectSuggestions[0].estimatedPlacement);
 });
 
 test("keeps detected window type and muntin grid pending until confirmation", () => {
@@ -619,6 +628,7 @@ test("keeps stored room analyses from before primitive models readable", () => {
   });
 
   assert.equal(legacy.objectSuggestions[0].primitiveModel, null);
+  assert.equal(legacy.objectSuggestions[0].estimatedPlacement, null);
   assert.deepEqual(legacy.objectSuggestions[0].imageEvidence, []);
   assert.deepEqual(legacy.surfaceAppearances[0].evidenceKeyframeIds, []);
 });

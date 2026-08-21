@@ -3,6 +3,7 @@ import {
   type RoomAiAnalysis,
   type RoomAiDetection,
 } from "@/lib/room-ai-analysis-contract";
+import { createEstimatedRoomObjectPlacement } from "@/lib/room-ai-estimated-placement";
 import type { RoomScene } from "@/lib/room-scene-contract";
 
 const normalizedCategory = (value: string) => value.trim().toLocaleLowerCase();
@@ -59,7 +60,7 @@ export function buildRoomAiAnalysis(options: {
           evidenceKeyframeIds,
         }];
       }),
-    objectSuggestions: options.detection.objectSuggestions.flatMap((suggestion) => {
+    objectSuggestions: options.detection.objectSuggestions.flatMap((suggestion, index) => {
       const evidenceKeyframeIds = suggestion.evidenceKeyframeIds.filter((id) =>
         allowedKeyframes.has(id)
       );
@@ -116,7 +117,15 @@ export function buildRoomAiAnalysis(options: {
         evidenceKeyframeIds: supportedKeyframeIds,
         imageEvidence,
         roomObjectId,
-        primitiveModel: roomObjectId ? suggestion.primitiveModel : null,
+        primitiveModel: suggestion.primitiveModel,
+        estimatedPlacement: roomObjectId
+          ? null
+          : createEstimatedRoomObjectPlacement({
+              scene: options.scene,
+              suggestion,
+              index,
+              total: options.detection.objectSuggestions.length,
+            }),
         status: "pending" as const,
       }];
     }),

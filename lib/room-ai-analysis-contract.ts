@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { roomSurfaceCategorySchema } from "@/lib/room-scene-contract";
+import {
+  roomSurfaceCategorySchema,
+  spatialVector3Schema,
+} from "@/lib/room-scene-contract";
 
 export const maximumRoomAnalysisKeyframes = 24;
 export const maximumRoomObjectSuggestions = 48;
@@ -120,6 +123,18 @@ export const roomAiReviewStatusSchema = z.enum([
   "dismissed",
 ]);
 
+export const roomEstimatedObjectPlacementSchema = z
+  .object({
+    position: spatialVector3Schema,
+    rotationYDegrees: z.number().finite().min(-180).max(180),
+    dimensions: z.tuple([
+      z.number().finite().min(0.02).max(5),
+      z.number().finite().min(0.02).max(5),
+      z.number().finite().min(0.02).max(5),
+    ]),
+  })
+  .strict();
+
 export const roomSurfaceAppearanceSchema = detectedRoomSurfaceAppearanceSchema
   .omit({ evidenceKeyframeIds: true })
   .extend({
@@ -183,6 +198,7 @@ export const roomObjectSuggestionSchema = detectedRoomObjectSuggestionSchema
     roomObjectId: z.uuid().nullable(),
     imageEvidence: z.array(roomObjectImageEvidenceSchema).max(4).default([]),
     primitiveModel: roomPrimitiveModelSchema.nullable().default(null),
+    estimatedPlacement: roomEstimatedObjectPlacementSchema.nullable().default(null),
     status: roomAiReviewStatusSchema,
   })
   .strict();
@@ -219,6 +235,14 @@ export const roomAiReviewPatchSchema = z.discriminatedUnion("target", [
       status: roomAiReviewStatusSchema,
     })
     .strict(),
+  z
+    .object({
+      target: z.literal("object-placement"),
+      id: z.uuid(),
+      position: spatialVector3Schema,
+      rotationYDegrees: z.number().finite().min(-180).max(180),
+    })
+    .strict(),
 ]);
 
 export type RoomMaterial = z.infer<typeof roomMaterialSchema>;
@@ -229,6 +253,9 @@ export type RoomObjectImageEvidence = z.infer<
 >;
 export type RoomPrimitivePart = z.infer<typeof roomPrimitivePartSchema>;
 export type RoomPrimitiveModel = z.infer<typeof roomPrimitiveModelSchema>;
+export type RoomEstimatedObjectPlacement = z.infer<
+  typeof roomEstimatedObjectPlacementSchema
+>;
 export type DetectedRoomSurfaceAppearance = z.infer<
   typeof detectedRoomSurfaceAppearanceSchema
 >;

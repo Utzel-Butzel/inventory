@@ -782,12 +782,13 @@ For objectSuggestions:
 - use the most specific useful name and explain the visible evidence briefly
 - roomPlanCategory must exactly copy a supplied RoomPlan category only when the suggestion clearly corresponds to it; otherwise return null
 - roomPlanObjectId must exactly copy one supplied RoomPlan object id only when category, measured dimensions, camera position/view/image-axis metadata, image bounds, and cross-photo evidence make that exact anchor plausible; use null when duplicate anchors remain ambiguous
-- the supplied roomPlanObjects list is exhaustive; when it is empty, every roomPlanObjectId and primitiveModel must be null
+- the supplied roomPlanObjects list is exhaustive; when it is empty, every roomPlanObjectId must be null, but a visually supported primitiveModel may still be an estimated free-standing reconstruction
 - different suggestions may not use the same roomPlanObjectId
 - camera.imageRightDirection and camera.imageUpDirection describe the displayed upright photo axes and may be used to compare an evidence box with supplied object centers
 - photos[].projectedRoomPlanObjects gives each visible RoomPlan center and projected measured bounds in the same 0…1000 upright coordinate system as imageEvidence; the chosen id must agree with both the cited box position and its approximate visible extent
 - uncalibrated photos have camera=null: they support object detection, colors, and materials, but not exact position by themselves
-- when roomPlanObjectId is not null, create a recognizable primitiveModel from 6 to 24 boxes, cylinders, or spheres; otherwise return primitiveModel as null
+- create a recognizable primitiveModel from 6 to 24 boxes, cylinders, or spheres for every clear, sufficiently understood object; use null only when the visible shape is too ambiguous to model responsibly
+- an ungrounded primitiveModel is an explicitly movable size-and-placement estimate; model its visible proportions in a normalized box without inventing an exact room position
 - model the object's silhouette and construction, not its surrounding RoomPlan bounding box: a chair needs a seat, back, and supports; a table needs a top and supports; storage needs a body, front divisions or doors, and handles; sofas need a base, back, arms, and cushions; appliances need a body plus their characteristic front, opening, controls, or handles
 - primitiveModel uses a centered normalized bounding box where x is width/right, y is height/up, and z is depth/front; position and size are fractions of the matched RoomPlan object's measured width, height, and depth
 - keep parts within x/y/z -0.5…0.5, use most of the measured extent without filling it with one solid slab, keep symmetric parts symmetric, and avoid disconnected or floating parts
@@ -844,7 +845,7 @@ Use the schema only and do not add facts that are not visible.`,
       });
       return hasProjectedSupport
         ? suggestion
-        : { ...suggestion, roomPlanObjectId: null, primitiveModel: null };
+        : { ...suggestion, roomPlanObjectId: null };
     }),
   };
   return {

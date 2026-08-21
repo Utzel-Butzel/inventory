@@ -267,6 +267,12 @@ export async function PATCH(request: Request, context: Context) {
   if (result.kind === "scan-not-found") {
     return Response.json({ error: "Room scan not found." }, { status: 404 });
   }
+  if (result.kind === "invalid-placement") {
+    return Response.json(
+      { error: "The estimated placement is outside the room editing area." },
+      { status: 422 },
+    );
+  }
   return Response.json(
     {
       error: result.kind === "analysis-not-found"

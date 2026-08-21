@@ -18,13 +18,14 @@ import type {
   RoomScene,
   SpatialPlacementInput,
 } from "@/lib/room-scene-contract";
+import { roomSceneSchema, spatialMatricesApproximatelyEqual } from "@/lib/room-scene-contract";
 import {
   roomAiAnalysisSchema,
   type RoomAiAnalysis,
   type RoomAiReviewPatch,
 } from "@/lib/room-ai-analysis-contract";
+import { createEstimatedRoomObjectPlacement } from "@/lib/room-ai-estimated-placement";
 import type { RoomKeyframeInput } from "@/lib/room-keyframe-contract";
-import { spatialMatricesApproximatelyEqual } from "@/lib/room-scene-contract";
 import {
   RoomScanSpatialConflictError,
   roomScanMatchesReplayIdentity,
@@ -521,6 +522,31 @@ export async function updateRoomAiReviewStatus(
     ? parsed.data.surfaceAppearances.some((candidate) => candidate.id === patch.id)
     : parsed.data.objectSuggestions.some((candidate) => candidate.id === patch.id);
   if (!exists) return { kind: "item-not-found" as const };
+  const scene = roomSceneSchema.safeParse(scan.scene);
+  if (!scene.success) return { kind: "analysis-not-found" as const };
+  const estimatedPlacementFor = (
+    candidate: RoomAiAnalysis["objectSuggestions"][number],
+    index: number,
+  ) => candidate.estimatedPlacement ?? createEstimatedRoomObjectPlacement({
+    scene: scene.data,
+    suggestion: candidate,
+    index,
+    total: parsed.data.objectSuggestions.length,
+  });
+  if (patch.target === "object-placement") {
+    const candidate = parsed.data.objectSuggestions.find(
+      (item) => item.id === patch.id,
+    );
+    if (!candidate || candidate.roomObjectId) {
+      return { kind: "invalid-placement" as const };
+    }
+    const padding = 2;
+    const withinRoomEnvelope = patch.position.every((value, axis) =>
+      value >= scene.data.bounds.min[axis]! - padding &&
+      value <= scene.data.bounds.max[axis]! + padding
+    );
+    if (!withinRoomEnvelope) return { kind: "invalid-placement" as const };
+  }
   const analysis = roomAiAnalysisSchema.parse({
     ...parsed.data,
     surfaceAppearances: patch.target === "surface"
@@ -530,11 +556,29 @@ export async function updateRoomAiReviewStatus(
             : candidate,
         )
       : parsed.data.surfaceAppearances,
-    objectSuggestions: parsed.data.objectSuggestions.map((candidate) =>
-      patch.target === "object" && candidate.id === patch.id
-        ? { ...candidate, status: patch.status }
-        : candidate,
-    ),
+    objectSuggestions: parsed.data.objectSuggestions.map((candidate, index) => {
+      if (candidate.id !== patch.id) return candidate;
+      if (patch.target === "object-placement") {
+        const estimate = estimatedPlacementFor(candidate, index);
+        return {
+          ...candidate,
+          estimatedPlacement: {
+            ...estimate,
+            position: patch.position,
+            rotationYDegrees: patch.rotationYDegrees,
+          },
+        };
+      }
+      if (patch.target !== "object") return candidate;
+      return {
+        ...candidate,
+        status: patch.status,
+        estimatedPlacement:
+          patch.status === "accepted" && !candidate.roomObjectId
+            ? estimatedPlacementFor(candidate, index)
+            : candidate.estimatedPlacement,
+      };
+    }),
   });
   await saveRoomAiAnalysis(organizationId, scanId, analysis);
   return { kind: "updated" as const, analysis };

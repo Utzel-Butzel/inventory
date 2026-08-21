@@ -88,6 +88,7 @@ function collectReceivers(roots: Iterable<THREE.Object3D>) {
         !(object instanceof THREE.Mesh) ||
         object instanceof THREE.InstancedMesh ||
         object instanceof THREE.SkinnedMesh ||
+        object.userData.roomLightMapExclude === true ||
         !isEffectivelyVisible(object)
       ) {
         return;
@@ -995,7 +996,7 @@ function createDirectionalLightMap(
   }
 }
 
-function keepEnvironmentSpecularOnly(
+function configureLightMappedMaterial(
   material: THREE.MeshStandardMaterial,
   directionalTexture: THREE.Texture,
 ) {
@@ -1009,6 +1010,13 @@ function keepEnvironmentSpecularOnly(
     shader.uniforms.roomDirectionalLightMap = {
       value: material.userData.roomDirectionalLightMap as THREE.Texture,
     };
+    shader.uniforms.roomDirectionalLightMapStrength = {
+      value: THREE.MathUtils.clamp(
+        Number(material.userData.roomDirectionalLightMapStrength ?? 1),
+        0,
+        1,
+      ),
+    };
     const mainAnchor = "void main() {";
     if (!shader.fragmentShader.includes(mainAnchor)) {
       throw new Error("The lightmapped material shader has no main function.");
@@ -1016,6 +1024,7 @@ function keepEnvironmentSpecularOnly(
     shader.fragmentShader = shader.fragmentShader.replace(
       mainAnchor,
       `uniform sampler2D roomDirectionalLightMap;
+      uniform float roomDirectionalLightMapStrength;
       ${mainAnchor}`,
     );
     // onBeforeCompile runs before Three expands ShaderChunk includes. Patch
@@ -1060,7 +1069,7 @@ function keepEnvironmentSpecularOnly(
           lightMapIrradiance *= mix(
             1.0,
             roomDirectionalRatio,
-            roomDirectionalSample.a
+            roomDirectionalSample.a * roomDirectionalLightMapStrength
           );
         }
         ${bakedIrradianceAnchor}`,
@@ -1069,36 +1078,9 @@ function keepEnvironmentSpecularOnly(
       lightMapInclude,
       directionalLightMapChunk,
     );
-    const environmentDiffuse =
-      "vec3 indirectDiffuse = diffuse * cosineWeightedIrradiance;";
-    // Three can compile the same physical material for auxiliary passes (most
-    // notably the transmission pre-pass). Patch only lit variants containing
-    // the physical environment lobe. Keeping iblIrradiance intact preserves
-    // sheen and rough-specular multiscattering; only its duplicate diffuse term
-    // is removed when the material already has baked irradiance.
-    const physicalParsInclude = "#include <lights_physical_pars_fragment>";
-    const installedPhysicalPars =
-      THREE.ShaderChunk.lights_physical_pars_fragment;
-    if (
-      shader.fragmentShader.includes(physicalParsInclude) &&
-      installedPhysicalPars.includes(environmentDiffuse)
-    ) {
-      const lightmappedPhysicalPars = installedPhysicalPars.replace(
-        environmentDiffuse,
-        `#ifdef USE_LIGHTMAP
-          vec3 indirectDiffuse = vec3(0.0);
-        #else
-          ${environmentDiffuse}
-        #endif`,
-      );
-      shader.fragmentShader = shader.fragmentShader.replace(
-        physicalParsInclude,
-        lightmappedPhysicalPars,
-      );
-    }
   };
   material.customProgramCacheKey = () =>
-    `${previousProgramCacheKey()}|room-directional-lightmap-v1`;
+    `${previousProgramCacheKey()}|room-directional-lightmap-v3`;
 }
 
 function applyLightMap(
@@ -1121,7 +1103,7 @@ function applyLightMap(
     }
   }
   for (const material of materials) {
-    keepEnvironmentSpecularOnly(material, directionalTexture);
+    configureLightMappedMaterial(material, directionalTexture);
     material.lightMap = texture;
     material.lightMapIntensity = 1;
     material.needsUpdate = true;
@@ -1153,20 +1135,26 @@ function cachedTexture(
 
 export async function createRoomLightMapBake({
   bakeOnlyObjects = [],
+  bounces = 8,
   cacheKey,
+  denoisePasses = 1,
   onProgress,
   renderer,
   resolution = 1024,
   roots,
   scene,
+  transmissiveBounces = 4,
 }: {
   bakeOnlyObjects?: Iterable<THREE.Object3D>;
+  bounces?: number;
   cacheKey: string;
+  denoisePasses?: number;
   onProgress?: (progress: number) => void;
   renderer: THREE.WebGLRenderer;
   resolution?: number;
   roots: Iterable<THREE.Object3D>;
   scene: THREE.Scene;
+  transmissiveBounces?: number;
 }): Promise<RoomLightMapBake> {
   onProgress?.(2);
   scene.updateMatrixWorld(true);
@@ -1220,8 +1208,8 @@ export async function createRoomLightMapBake({
 
   const { WebGLPathTracer } = await import("three-gpu-pathtracer");
   const tracer = new WebGLPathTracer(renderer);
-  tracer.bounces = 8;
-  tracer.transmissiveBounces = 4;
+  tracer.bounces = bounces;
+  tracer.transmissiveBounces = transmissiveBounces;
   // Match the interactive Rendering reference so the two modes differ by
   // storage/reconstruction rather than a separate glossy-path bias.
   tracer.filterGlossyFactor = 0.85;
@@ -1303,9 +1291,9 @@ export async function createRoomLightMapBake({
 
     let denoiseSource = denoiseTarget.texture;
     let readTarget = denoiseTarget;
-    // At 512 samples one step-1 a-trous pass is sufficient. A second, wider
-    // pass visibly softened table and chair contact shadows.
-    for (let pass = 0; pass < 1; pass += 1) {
+    // High-sample bakes retain the sharper single pass. The fast preset uses a
+    // second, wider pass to trade a little contact detail for a clean result.
+    for (let pass = 0; pass < denoisePasses; pass += 1) {
       readTarget = readTarget === denoiseTarget ? workTarget : denoiseTarget;
       denoiseMaterial.uniforms.map!.value = denoiseSource;
       denoiseMaterial.uniforms.stepWidth!.value = 2 ** pass;

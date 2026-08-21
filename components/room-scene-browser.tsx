@@ -5,6 +5,7 @@ import Image from "next/image";
 import {
   OrganizationLink as Link,
   useOrganizationHref,
+  useOrganizationReadOnly,
 } from "@/components/organization-routing";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useT } from "next-i18next/client";
@@ -153,6 +154,7 @@ function EvidencePhoto({
 export function RoomSceneBrowser() {
   const { t, i18n } = useT("spatial");
   const aiCostEstimates = useAiCostEstimateCatalog();
+  const isReadOnly = useOrganizationReadOnly();
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const coordinate = useMemo(
@@ -182,6 +184,7 @@ export function RoomSceneBrowser() {
   const [analyzingRoom, setAnalyzingRoom] = useState(false);
   const [updatingAnalysisItemId, setUpdatingAnalysisItemId] = useState<string | null>(null);
   const [previewAnalysisSuggestionId, setPreviewAnalysisSuggestionId] = useState<string | null>(null);
+  const [editingAnalysisSuggestionId, setEditingAnalysisSuggestionId] = useState<string | null>(null);
   const sceneRequestRef = useRef(0);
 
   const updateUrl = useCallback(
@@ -648,6 +651,21 @@ export function RoomSceneBrowser() {
     (suggestion) => suggestion.status !== "dismissed",
   ) ?? [];
 
+  useEffect(() => {
+    if (
+      editingAnalysisSuggestionId &&
+      !roomAnalysis?.objectSuggestions.some(
+        (suggestion) =>
+          suggestion.id === editingAnalysisSuggestionId &&
+          suggestion.status === "accepted" &&
+          !suggestion.roomObjectId &&
+          Boolean(suggestion.estimatedPlacement),
+      )
+    ) {
+      setEditingAnalysisSuggestionId(null);
+    }
+  }, [editingAnalysisSuggestionId, roomAnalysis]);
+
   const setVisibleRoomAnalysis = useCallback((scanId: string, analysis: RoomAiAnalysis) => {
     setManifest((current) => current?.scan.id === scanId
       ? {
@@ -676,6 +694,36 @@ export function RoomSceneBrowser() {
     }
   };
 
+  const moveEstimatedSuggestion = async (
+    suggestionId: string,
+    position: [number, number, number],
+    rotationYDegrees: number,
+  ) => {
+    if (!visibleManifest || updatingAnalysisItemId) return;
+    setUpdatingAnalysisItemId(suggestionId);
+    setError(null);
+    try {
+      const { analysis } = await fetchJson<{ analysis: RoomAiAnalysis }>(
+        `/api/v1/room-scans/${encodeURIComponent(visibleManifest.scan.id)}/analysis`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            target: "object-placement",
+            id: suggestionId,
+            position,
+            rotationYDegrees,
+          }),
+        },
+      );
+      setVisibleRoomAnalysis(visibleManifest.scan.id, analysis);
+    } catch {
+      setError(t("rooms.errors.reviewAnalysis"));
+    } finally {
+      setUpdatingAnalysisItemId(null);
+    }
+  };
+
   const reviewAnalysisItem = async (
     target: "surface" | "object",
     id: string,
@@ -694,6 +742,20 @@ export function RoomSceneBrowser() {
         },
       );
       setVisibleRoomAnalysis(visibleManifest.scan.id, analysis);
+      if (target === "object") {
+        const suggestion = analysis.objectSuggestions.find(
+          (candidate) => candidate.id === id,
+        );
+        if (
+          status === "accepted" &&
+          suggestion?.estimatedPlacement &&
+          !suggestion.roomObjectId
+        ) {
+          setEditingAnalysisSuggestionId(id);
+        } else if (status === "dismissed") {
+          setEditingAnalysisSuggestionId((current) => current === id ? null : current);
+        }
+      }
     } catch {
       setError(t("rooms.errors.reviewAnalysis"));
     } finally {
@@ -737,7 +799,14 @@ export function RoomSceneBrowser() {
   }
 
   return (
-    <main className="flex min-h-[calc(100dvh-68px)] flex-col gap-4 px-3 py-4 sm:px-5 lg:px-6">
+    <main
+      className={cn(
+        "flex flex-col gap-4 px-3 py-4 sm:px-5 lg:min-h-0 lg:px-6",
+        isReadOnly
+          ? "min-h-[calc(100dvh-109px)] lg:h-[calc(100dvh-109px)]"
+          : "min-h-[calc(100dvh-68px)] lg:h-[calc(100dvh-68px)]",
+      )}
+    >
       <header className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground sm:text-[28px]">
@@ -882,8 +951,8 @@ export function RoomSceneBrowser() {
         </div>
       ) : null}
 
-      <div className="grid min-h-[680px] flex-1 overflow-hidden rounded-xl border border-border bg-surface lg:grid-cols-[280px_minmax(0,1fr)_300px]">
-        <aside className="order-2 border-t border-border bg-surface-subtle p-3 lg:order-1 lg:border-r lg:border-t-0">
+      <div className="grid min-h-[680px] flex-1 overflow-hidden rounded-xl border border-border bg-surface lg:min-h-0 lg:grid-cols-[280px_minmax(0,1fr)_300px] lg:grid-rows-[minmax(0,1fr)]">
+        <aside className="order-2 border-t border-border bg-surface-subtle p-3 lg:order-1 lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-t-0">
           <p className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-muted">
             {t("rooms.scans.title")}
           </p>
@@ -943,7 +1012,7 @@ export function RoomSceneBrowser() {
           </div>
         </aside>
 
-        <section className="relative order-1 min-h-[430px] overflow-hidden bg-surface-muted lg:order-2">
+        <section className="relative order-1 min-h-[430px] overflow-hidden bg-surface-muted lg:order-2 lg:min-h-0">
           {mapBackgroundEnabled && hasLayoutMapAnchor ? (
             <div className="absolute inset-0 z-0">
               <RoomLayoutMapCanvas
@@ -969,7 +1038,18 @@ export function RoomSceneBrowser() {
                 linkedManifests={canvasLinkedManifests}
                 selectedResourceId={selectedResourceId}
                 previewObjectSuggestionId={previewAnalysisSuggestionId}
+                editableObjectSuggestionId={editingAnalysisSuggestionId}
                 onSelectResource={selectResource}
+                onSelectObjectSuggestion={setEditingAnalysisSuggestionId}
+                onChangeObjectSuggestionPlacement={(
+                  suggestionId,
+                  position,
+                  rotationYDegrees,
+                ) => void moveEstimatedSuggestion(
+                  suggestionId,
+                  position,
+                  rotationYDegrees,
+                )}
                 layoutEditing={layoutDrafts ? {
                   selectedScanId: layoutRoomId,
                   transforms: layoutDrafts,
@@ -1135,7 +1215,7 @@ export function RoomSceneBrowser() {
           ) : null}
         </section>
 
-        <aside className="order-3 flex min-h-0 flex-col border-t border-border bg-surface lg:border-l lg:border-t-0">
+        <aside className="order-3 flex min-h-0 flex-col border-t border-border bg-surface lg:overflow-hidden lg:border-l lg:border-t-0">
           <div className="border-b border-border p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1380,7 +1460,9 @@ export function RoomSceneBrowser() {
                               <p className="mt-1 text-[9px] font-medium text-muted-strong">
                                 {suggestion.roomObjectId
                                   ? t("rooms.ai.grounded")
-                                  : t("rooms.ai.unplaced")}
+                                  : t(suggestion.estimatedPlacement
+                                    ? "rooms.ai.estimated"
+                                    : "rooms.ai.estimatedAvailable")}
                               </p>
                               {suggestion.primitiveModel ? (
                                 <p className="mt-0.5 text-[9px] font-medium text-brand">
@@ -1392,7 +1474,7 @@ export function RoomSceneBrowser() {
                                   })}
                                 </p>
                               ) : null}
-                              {suggestion.roomObjectId ? (
+                              {suggestion.roomObjectId || suggestion.estimatedPlacement ? (
                                 <p className="mt-0.5 text-[9px] text-brand">
                                   {t("rooms.ai.hoverPreview")}
                                 </p>
@@ -1417,8 +1499,7 @@ export function RoomSceneBrowser() {
                             </div>
                           ) : null}
                           <div className="mt-2 flex gap-1.5">
-                            {suggestion.status === "pending" &&
-                                suggestion.roomObjectId ? (
+                            {suggestion.status === "pending" ? (
                               <button
                                 type="button"
                                 onClick={() => void reviewAnalysisItem(
@@ -1434,22 +1515,46 @@ export function RoomSceneBrowser() {
                                 ) : (
                                   <Check className="size-3" aria-hidden="true" />
                                 )}
-                                {t(suggestion.primitiveModel
-                                  ? "rooms.ai.acceptModel"
-                                  : "rooms.ai.accept")}
+                                {t(suggestion.roomObjectId
+                                  ? suggestion.primitiveModel
+                                    ? "rooms.ai.acceptModel"
+                                    : "rooms.ai.accept"
+                                  : "rooms.ai.acceptEstimate")}
                               </button>
-                            ) : suggestion.status === "pending" ? (
-                              <span className="inline-flex min-h-7 flex-1 items-center justify-center rounded-lg border border-border px-2 text-center text-[9px] font-medium text-muted">
-                                {t("rooms.ai.needsAnchor")}
-                              </span>
                             ) : (
                               <span className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[9px] font-semibold text-success">
                                 <Check className="size-3" aria-hidden="true" />
-                                {t(suggestion.primitiveModel
-                                  ? "rooms.ai.modelApplied"
-                                  : "rooms.ai.accepted")}
+                                {t(!suggestion.roomObjectId && suggestion.estimatedPlacement
+                                  ? "rooms.ai.estimateApplied"
+                                  : suggestion.primitiveModel
+                                    ? "rooms.ai.modelApplied"
+                                    : "rooms.ai.accepted")}
                               </span>
                             )}
+                            {suggestion.status === "accepted" &&
+                                !suggestion.roomObjectId &&
+                                suggestion.estimatedPlacement ? (
+                              <button
+                                type="button"
+                                onClick={() => setEditingAnalysisSuggestionId((current) =>
+                                  current === suggestion.id ? null : suggestion.id
+                                )}
+                                className={cn(
+                                  "grid size-7 place-items-center rounded-lg border transition",
+                                  editingAnalysisSuggestionId === suggestion.id
+                                    ? "border-brand-border bg-brand-soft text-brand"
+                                    : "border-border text-muted hover:text-brand",
+                                )}
+                                aria-label={t("rooms.ai.moveEstimate", {
+                                  name: suggestion.name,
+                                })}
+                                title={t("rooms.ai.moveEstimate", {
+                                  name: suggestion.name,
+                                })}
+                              >
+                                <Move3d className="size-3" aria-hidden="true" />
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               onClick={() => void reviewAnalysisItem(
