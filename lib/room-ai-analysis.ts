@@ -49,6 +49,8 @@ export function buildRoomAiAnalysis(options: {
       })
       .map((appearance) => ({
         ...appearance,
+        id: options.createId(),
+        status: "pending" as const,
         colorHex: appearance.colorHex.toUpperCase(),
         evidenceKeyframeIds: appearance.evidenceKeyframeIds.filter((id) =>
           allowedKeyframes.has(id),

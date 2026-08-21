@@ -154,7 +154,7 @@
       "loadScene": "Die Raumszene konnte nicht geladen werden.",
       "saveLayout": "Der Etagenplan konnte nicht gespeichert werden.",
       "analyzeRoom": "Die Raumfotos konnten nicht analysiert werden.",
-      "reviewSuggestion": "Der Objektvorschlag konnte nicht aktualisiert werden."
+      "reviewAnalysis": "Das Ergebnis der KI-Analyse konnte nicht aktualisiert werden."
     },
     "empty": {
       "title": "Noch keine Räume gescannt",
@@ -201,7 +201,10 @@
       "refresh": "Farben & Objekte aktualisieren",
       "analyzing": "Raumfotos werden analysiert…",
       "title": "KI-Raumanalyse",
-      "finishes": "Automatische Oberflächen",
+      "finishes": "Vorgeschlagene Oberflächen",
+      "finishReviewHint": "Bestätige jede Oberfläche, bevor sie den 3D-Raum verändert.",
+      "applyFinish": "Oberfläche anwenden",
+      "applied": "Angewendet",
       "suggestions": "Objektvorschläge",
       "confidence": "{{value}} % Sicherheit",
       "grounded": "Dem 3D-RoomPlan-Objekt zugeordnet",

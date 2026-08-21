@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
@@ -115,55 +116,88 @@ const sceneThemePalettes = {
 
 type TexturePattern = "plaster" | "grain" | "speckle";
 
+type ProceduralMaterialTextures = {
+  colorMap: THREE.DataTexture;
+  normalMap: THREE.DataTexture;
+  roughnessMap: THREE.DataTexture;
+};
+
+const proceduralTextureSize = 256;
+
 function textureNoise(x: number, y: number, seed: number) {
   const value = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43_758.5453;
   return value - Math.floor(value);
 }
 
-function patternValue(pattern: TexturePattern, x: number, y: number, seed: number) {
-  const fine = textureNoise(x, y, seed) * 2 - 1;
-  const broad = textureNoise(Math.floor(x / 9), Math.floor(y / 9), seed + 17) * 2 - 1;
-
-  if (pattern === "grain") {
-    const grain = Math.sin(x * 0.38 + Math.sin(y * 0.09 + seed) * 2.4);
-    return grain * 0.68 + fine * 0.2 + broad * 0.12;
-  }
-  if (pattern === "plaster") {
-    return fine * 0.36 + broad * 0.64;
-  }
-  return fine * 0.7 + broad * 0.3;
+function smoothTextureNoise(
+  x: number,
+  y: number,
+  seed: number,
+  scale: number,
+) {
+  const cellCount = Math.max(
+    1,
+    Math.round(proceduralTextureSize / scale),
+  );
+  const scaledX = (x / proceduralTextureSize) * cellCount;
+  const scaledY = (y / proceduralTextureSize) * cellCount;
+  const x0 = Math.floor(scaledX);
+  const y0 = Math.floor(scaledY);
+  const tx = scaledX - x0;
+  const ty = scaledY - y0;
+  const fadeX = tx * tx * (3 - 2 * tx);
+  const fadeY = ty * ty * (3 - 2 * ty);
+  const sample = (sampleX: number, sampleY: number) =>
+    textureNoise(
+      (sampleX + cellCount) % cellCount,
+      (sampleY + cellCount) % cellCount,
+      seed,
+    );
+  const top = THREE.MathUtils.lerp(
+    sample(x0, y0),
+    sample(x0 + 1, y0),
+    fadeX,
+  );
+  const bottom = THREE.MathUtils.lerp(
+    sample(x0, y0 + 1),
+    sample(x0 + 1, y0 + 1),
+    fadeX,
+  );
+  return THREE.MathUtils.lerp(top, bottom, fadeY) * 2 - 1;
 }
 
-function createProceduralTexture({
-  base,
-  variation,
-  pattern,
-  seed,
-  repeat,
-  colorSpace = false,
-  anisotropy,
-}: {
-  base: readonly [number, number, number];
-  variation: number;
-  pattern: TexturePattern;
-  seed: number;
-  repeat: readonly [number, number];
-  colorSpace?: boolean;
-  anisotropy: number;
-}) {
-  const size = 128;
-  const data = new Uint8Array(size * size * 4);
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      const offset = Math.round(patternValue(pattern, x, y, seed) * variation);
-      const index = (y * size + x) * 4;
-      data[index] = THREE.MathUtils.clamp(base[0] + offset, 0, 255);
-      data[index + 1] = THREE.MathUtils.clamp(base[1] + offset, 0, 255);
-      data[index + 2] = THREE.MathUtils.clamp(base[2] + offset, 0, 255);
-      data[index + 3] = 255;
-    }
-  }
+function patternValue(pattern: TexturePattern, x: number, y: number, seed: number) {
+  const fine = smoothTextureNoise(x, y, seed, 2.5);
+  const medium = smoothTextureNoise(x, y, seed + 13, 9);
+  const broad = smoothTextureNoise(x, y, seed + 29, 34);
 
+  if (pattern === "grain") {
+    const warp = smoothTextureNoise(x, y, seed + 47, 42) * 5;
+    const fiber = Math.sin(
+      (y + warp) * (Math.PI * 2 * 24 / proceduralTextureSize) + medium * 1.25,
+    );
+    const plankPosition = ((x + seed * 11) % 64 + 64) % 64;
+    const seamDistance = Math.min(plankPosition, 64 - plankPosition);
+    const seam = seamDistance < 1.15 ? -1 + seamDistance / 1.15 : 0;
+    return THREE.MathUtils.clamp(
+      broad * 0.5 + medium * 0.25 + fiber * 0.16 + fine * 0.06 + seam * 0.2,
+      -1,
+      1,
+    );
+  }
+  if (pattern === "plaster") {
+    return broad * 0.58 + medium * 0.3 + fine * 0.12;
+  }
+  return medium * 0.52 + fine * 0.3 + broad * 0.18;
+}
+
+function configuredDataTexture(
+  data: Uint8Array,
+  size: number,
+  repeat: readonly [number, number],
+  anisotropy: number,
+  colorSpace = false,
+) {
   const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
@@ -175,6 +209,84 @@ function createProceduralTexture({
   if (colorSpace) texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
   return texture;
+}
+
+function createProceduralMaterialTextures({
+  base,
+  variation,
+  pattern,
+  seed,
+  repeat,
+  anisotropy,
+  roughness,
+  normalStrength,
+}: {
+  base: readonly [number, number, number];
+  variation: number;
+  pattern: TexturePattern;
+  seed: number;
+  repeat: readonly [number, number];
+  anisotropy: number;
+  roughness: number;
+  normalStrength: number;
+}): ProceduralMaterialTextures {
+  const size = proceduralTextureSize;
+  const heights = new Float32Array(size * size);
+  const colorData = new Uint8Array(size * size * 4);
+  const normalData = new Uint8Array(size * size * 4);
+  const roughnessData = new Uint8Array(size * size * 4);
+
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const value = patternValue(pattern, x, y, seed);
+      heights[y * size + x] = value;
+      const offset = Math.round(value * variation);
+      const index = (y * size + x) * 4;
+      colorData[index] = THREE.MathUtils.clamp(base[0] + offset, 0, 255);
+      colorData[index + 1] = THREE.MathUtils.clamp(base[1] + offset, 0, 255);
+      colorData[index + 2] = THREE.MathUtils.clamp(base[2] + offset, 0, 255);
+      colorData[index + 3] = 255;
+
+      const microVariation = textureNoise(x, y, seed + 83) * 2 - 1;
+      const roughnessByte = Math.round(
+        THREE.MathUtils.clamp(
+          roughness + value * 0.035 + microVariation * 0.018,
+          0.04,
+          1,
+        ) * 255,
+      );
+      roughnessData[index] = roughnessByte;
+      roughnessData[index + 1] = roughnessByte;
+      roughnessData[index + 2] = roughnessByte;
+      roughnessData[index + 3] = 255;
+    }
+  }
+
+  const heightAt = (x: number, y: number) =>
+    heights[((y + size) % size) * size + ((x + size) % size)] ?? 0;
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const dx = (heightAt(x + 1, y) - heightAt(x - 1, y)) * normalStrength;
+      const dy = (heightAt(x, y + 1) - heightAt(x, y - 1)) * normalStrength;
+      const inverseLength = 1 / Math.hypot(dx, dy, 1);
+      const index = (y * size + x) * 4;
+      normalData[index] = Math.round((-dx * inverseLength * 0.5 + 0.5) * 255);
+      normalData[index + 1] = Math.round((-dy * inverseLength * 0.5 + 0.5) * 255);
+      normalData[index + 2] = Math.round((inverseLength * 0.5 + 0.5) * 255);
+      normalData[index + 3] = 255;
+    }
+  }
+
+  return {
+    colorMap: configuredDataTexture(colorData, size, repeat, anisotropy, true),
+    normalMap: configuredDataTexture(normalData, size, repeat, anisotropy),
+    roughnessMap: configuredDataTexture(
+      roughnessData,
+      size,
+      repeat,
+      anisotropy,
+    ),
+  };
 }
 
 function normalizedDimensions(
@@ -572,139 +684,141 @@ export function RoomSceneCanvas({
     environmentGenerator.dispose();
 
     const anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
-    const wallColorMap = createProceduralTexture({
+    const wallTextures = createProceduralMaterialTextures({
       base: [242, 239, 233],
-      variation: 7,
+      variation: 4,
       pattern: "plaster",
       seed: 11,
-      repeat: [5, 5],
-      colorSpace: true,
+      repeat: [7, 7],
       anisotropy,
+      roughness: 0.97,
+      normalStrength: 0.28,
     });
-    const wallBumpMap = createProceduralTexture({
-      base: [128, 128, 128],
-      variation: 34,
-      pattern: "plaster",
-      seed: 29,
-      repeat: [6, 6],
-      anisotropy,
-    });
-    const floorColorMap = createProceduralTexture({
-      base: [112, 91, 69],
-      variation: 15,
+    const floorTextures = createProceduralMaterialTextures({
+      base: [150, 116, 80],
+      variation: 9,
       pattern: "grain",
       seed: 43,
-      repeat: [6, 4],
-      colorSpace: true,
+      repeat: [4, 3],
       anisotropy,
+      roughness: 0.79,
+      normalStrength: 0.42,
     });
-    const floorBumpMap = createProceduralTexture({
-      base: [128, 128, 128],
-      variation: 25,
-      pattern: "grain",
-      seed: 47,
-      repeat: [6, 4],
-      anisotropy,
-    });
-    const doorColorMap = createProceduralTexture({
+    const doorTextures = createProceduralMaterialTextures({
       base: [177, 137, 96],
-      variation: 18,
+      variation: 10,
       pattern: "grain",
       seed: 59,
-      repeat: [4, 2],
-      colorSpace: true,
+      repeat: [2, 3],
       anisotropy,
+      roughness: 0.73,
+      normalStrength: 0.36,
     });
-    const objectColorMap = createProceduralTexture({
-      base: [246, 242, 235],
-      variation: 9,
+    const objectTextures = createProceduralMaterialTextures({
+      base: [240, 237, 231],
+      variation: 5,
       pattern: "speckle",
       seed: 71,
-      repeat: [3, 3],
-      colorSpace: true,
+      repeat: [5, 5],
       anisotropy,
+      roughness: 0.84,
+      normalStrength: 0.32,
     });
-    const objectBumpMap = createProceduralTexture({
-      base: [128, 128, 128],
-      variation: 22,
-      pattern: "speckle",
-      seed: 83,
-      repeat: [4, 4],
-      anisotropy,
-    });
+    const { colorMap: wallColorMap, normalMap: wallNormalMap, roughnessMap: wallRoughnessMap } = wallTextures;
+    const { colorMap: floorColorMap, normalMap: floorNormalMap, roughnessMap: floorRoughnessMap } = floorTextures;
+    const { colorMap: doorColorMap, normalMap: doorNormalMap, roughnessMap: doorRoughnessMap } = doorTextures;
+    const { colorMap: objectColorMap, normalMap: objectNormalMap, roughnessMap: objectRoughnessMap } = objectTextures;
     const materialTextures = [
-      wallColorMap,
-      wallBumpMap,
-      floorColorMap,
-      floorBumpMap,
-      doorColorMap,
-      objectColorMap,
-      objectBumpMap,
+      ...Object.values(wallTextures),
+      ...Object.values(floorTextures),
+      ...Object.values(doorTextures),
+      ...Object.values(objectTextures),
     ];
 
     const wallMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       map: wallColorMap,
-      bumpMap: wallBumpMap,
-      bumpScale: 0.012,
-      roughness: 0.96,
+      normalMap: wallNormalMap,
+      normalScale: new THREE.Vector2(0.42, 0.42),
+      roughnessMap: wallRoughnessMap,
+      roughness: 1,
       metalness: 0,
+      envMapIntensity: 0.18,
     });
     const floorMaterial = new THREE.MeshStandardMaterial({
-      color: 0xe4d8ca,
+      color: 0xffffff,
       map: floorColorMap,
-      bumpMap: floorBumpMap,
-      bumpScale: 0.008,
-      roughness: 0.76,
+      normalMap: floorNormalMap,
+      normalScale: new THREE.Vector2(0.58, 0.58),
+      roughnessMap: floorRoughnessMap,
+      roughness: 0.96,
       metalness: 0.01,
+      envMapIntensity: 0.35,
     });
     const doorMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       map: doorColorMap,
-      bumpMap: floorBumpMap,
-      bumpScale: 0.007,
-      roughness: 0.68,
+      normalMap: doorNormalMap,
+      normalScale: new THREE.Vector2(0.52, 0.52),
+      roughnessMap: doorRoughnessMap,
+      roughness: 0.94,
       metalness: 0.01,
+      envMapIntensity: 0.42,
     });
     const doorDetailMaterial = new THREE.MeshStandardMaterial({
       color: 0xc08d5d,
       map: doorColorMap,
-      roughness: 0.76,
+      normalMap: doorNormalMap,
+      normalScale: new THREE.Vector2(0.45, 0.45),
+      roughnessMap: doorRoughnessMap,
+      roughness: 1,
       metalness: 0,
+      envMapIntensity: 0.32,
     });
     const trimMaterial = new THREE.MeshStandardMaterial({
       color: 0xf0ece4,
       map: wallColorMap,
-      bumpMap: wallBumpMap,
-      bumpScale: 0.006,
-      roughness: 0.78,
+      normalMap: wallNormalMap,
+      normalScale: new THREE.Vector2(0.32, 0.32),
+      roughnessMap: wallRoughnessMap,
+      roughness: 0.9,
       metalness: 0,
+      envMapIntensity: 0.24,
     });
     const windowFrameMaterial = new THREE.MeshStandardMaterial({
       color: 0xe7eaeb,
       roughness: 0.5,
       metalness: 0.06,
+      envMapIntensity: 0.7,
     });
     const hardwareMaterial = new THREE.MeshStandardMaterial({
       color: 0xb9a56f,
       roughness: 0.27,
       metalness: 0.82,
+      envMapIntensity: 1.35,
     });
     const windowMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x82b4c8,
       roughness: 0.12,
       metalness: 0,
-      transmission: 0.42,
+      transmission: 0.58,
+      thickness: 0.012,
+      ior: 1.47,
       transparent: true,
-      opacity: 0.46,
+      opacity: 0.52,
       depthWrite: false,
       side: THREE.DoubleSide,
+      envMapIntensity: 1.25,
     });
     const openingMaterial = new THREE.MeshStandardMaterial({
       color: 0xd9d4ca,
       map: wallColorMap,
-      roughness: 0.86,
+      normalMap: wallNormalMap,
+      normalScale: new THREE.Vector2(0.3, 0.3),
+      roughnessMap: wallRoughnessMap,
+      roughness: 0.9,
       metalness: 0,
+      envMapIntensity: 0.24,
     });
     const objectMaterials = new Map<string, THREE.MeshStandardMaterial>();
     const objectMaterial = (category: string) => {
@@ -713,10 +827,12 @@ export function RoomSceneCanvas({
       const material = new THREE.MeshStandardMaterial({
         color: objectColors[category] ?? 0xb09b84,
         map: objectColorMap,
-        bumpMap: objectBumpMap,
-        bumpScale: 0.006,
-        roughness: 0.7,
+        normalMap: objectNormalMap,
+        normalScale: new THREE.Vector2(0.48, 0.48),
+        roughnessMap: objectRoughnessMap,
+        roughness: 0.88,
         metalness: 0.025,
+        envMapIntensity: 0.45,
       });
       objectMaterials.set(category, material);
       return material;
@@ -734,12 +850,14 @@ export function RoomSceneCanvas({
       material.metalness = materialMetalness(appearance.material);
       if (appearance.material === "carpet" || appearance.material === "fabric") {
         material.map = objectColorMap;
-        material.bumpMap = objectBumpMap;
-        material.bumpScale = 0.014;
+        material.normalMap = objectNormalMap;
+        material.normalScale.set(0.72, 0.72);
+        material.roughnessMap = objectRoughnessMap;
       } else if (appearance.material === "wood" || appearance.material === "laminate") {
         material.map = doorColorMap;
-        material.bumpMap = floorBumpMap;
-        material.bumpScale = 0.008;
+        material.normalMap = doorNormalMap;
+        material.normalScale.set(0.58, 0.58);
+        material.roughnessMap = doorRoughnessMap;
       } else if (
         appearance.material === "tile" ||
         appearance.material === "stone" ||
@@ -747,8 +865,8 @@ export function RoomSceneCanvas({
         appearance.material === "glass"
       ) {
         material.map = null;
-        material.bumpMap = null;
-        material.bumpScale = 0;
+        material.normalMap = null;
+        material.roughnessMap = null;
       }
       material.needsUpdate = true;
       return material;
@@ -759,7 +877,9 @@ export function RoomSceneCanvas({
       fallback: THREE.MeshStandardMaterial,
     ) => {
       const appearance = roomManifest.scan.aiAnalysis?.surfaceAppearances.find(
-        (candidate) => candidate.surfaceCategory === category,
+        (candidate) =>
+          candidate.status === "accepted" &&
+          candidate.surfaceCategory === category,
       );
       if (!appearance) return fallback;
       const key = `${roomManifest.scan.id}:surface:${category}`;
@@ -795,32 +915,43 @@ export function RoomSceneCanvas({
     const objectLightMaterial = new THREE.MeshStandardMaterial({
       color: 0xe8e1d6,
       map: objectColorMap,
-      bumpMap: objectBumpMap,
-      bumpScale: 0.004,
-      roughness: 0.72,
+      normalMap: objectNormalMap,
+      normalScale: new THREE.Vector2(0.4, 0.4),
+      roughnessMap: objectRoughnessMap,
+      roughness: 0.9,
       metalness: 0.01,
+      envMapIntensity: 0.42,
     });
     const objectDarkMaterial = new THREE.MeshStandardMaterial({
       color: 0x30363d,
       roughness: 0.52,
       metalness: 0.12,
+      envMapIntensity: 0.7,
     });
     const objectMetalMaterial = new THREE.MeshStandardMaterial({
       color: 0xaeb7bd,
       roughness: 0.3,
       metalness: 0.72,
+      envMapIntensity: 1.4,
     });
     const objectGlassMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x263947,
       roughness: 0.16,
-      metalness: 0.12,
+      metalness: 0.04,
+      transmission: 0.36,
+      thickness: 0.012,
+      ior: 1.5,
       transparent: true,
-      opacity: 0.82,
+      opacity: 0.76,
+      envMapIntensity: 1.4,
     });
-    const objectCeramicMaterial = new THREE.MeshStandardMaterial({
+    const objectCeramicMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xf0efeb,
-      roughness: 0.3,
+      roughness: 0.26,
       metalness: 0.02,
+      clearcoat: 0.18,
+      clearcoatRoughness: 0.22,
+      envMapIntensity: 0.8,
     });
     const objectWaterMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x69abc1,
@@ -829,13 +960,21 @@ export function RoomSceneCanvas({
       transparent: true,
       opacity: 0.72,
       depthWrite: false,
+      ior: 1.333,
+      thickness: 0.018,
+      envMapIntensity: 1.15,
     });
     const objectWarmMaterial = new THREE.MeshStandardMaterial({
       color: 0xc87543,
+      map: objectColorMap,
+      normalMap: objectNormalMap,
+      normalScale: new THREE.Vector2(0.5, 0.5),
+      roughnessMap: objectRoughnessMap,
       emissive: 0x6b2410,
       emissiveIntensity: 0.18,
-      roughness: 0.68,
+      roughness: 0.9,
       metalness: 0,
+      envMapIntensity: 0.35,
     });
     const camera = new THREE.PerspectiveCamera(48, 1, 0.02, 250);
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -882,6 +1021,7 @@ export function RoomSceneCanvas({
       material,
       castShadow = false,
       receiveShadow = true,
+      rounded = true,
     }: {
       parent: THREE.Object3D;
       size: readonly [number, number, number];
@@ -889,12 +1029,21 @@ export function RoomSceneCanvas({
       material: THREE.Material;
       castShadow?: boolean;
       receiveShadow?: boolean;
+      rounded?: boolean;
     }) => {
-      const geometry = new THREE.BoxGeometry(
-        Math.max(size[0], 0.002),
-        Math.max(size[1], 0.002),
-        Math.max(size[2], 0.002),
-      );
+      const width = Math.max(size[0], 0.002);
+      const height = Math.max(size[1], 0.002);
+      const depth = Math.max(size[2], 0.002);
+      const shortestSide = Math.min(width, height, depth);
+      const geometry = rounded
+        ? new RoundedBoxGeometry(
+            width,
+            height,
+            depth,
+            2,
+            THREE.MathUtils.clamp(shortestSide * 0.1, 0.0015, 0.018),
+          )
+        : new THREE.BoxGeometry(width, height, depth);
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(...position);
       mesh.castShadow = castShadow;
@@ -937,6 +1086,7 @@ export function RoomSceneCanvas({
           ],
           material,
           castShadow: true,
+          rounded: false,
         }));
       }
       return wall;
@@ -1079,6 +1229,7 @@ export function RoomSceneCanvas({
         size: [glassWidth, glassHeight, 0.012],
         material: glassMaterial,
         receiveShadow: false,
+        rounded: false,
       }));
       for (const x of [-width / 2 + frameWidth / 2, width / 2 - frameWidth / 2]) {
         addBox({

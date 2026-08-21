@@ -366,6 +366,129 @@ public final class APIClient: Sendable {
         return try await execute(request)
     }
 
+    public func resourceFamily(resourceID: UUID) async throws -> ResourceFamilyResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "family",
+        ])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func createResourceFamilyVariant(
+        resourceID: UUID,
+        request input: ResourceFamilyVariantRequest
+    ) async throws -> ResourceFamilyVariantResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "family",
+        ])
+        let request = try await jsonRequest(url: url, method: "POST", body: input)
+        return try await execute(request)
+    }
+
+    public func attachResourceFamilyVariant(
+        resourceID: UUID,
+        existingResourceID: UUID
+    ) async throws -> ResourceFamilyVariantResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "family",
+        ])
+        let request = try await jsonRequest(
+            url: url,
+            method: "POST",
+            body: ResourceFamilyAttachRequest(existingResourceId: existingResourceID)
+        )
+        return try await execute(request)
+    }
+
+    public func detachResourceFamilyVariant(
+        resourceID: UUID
+    ) async throws -> DetachedResourceFamilyResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "family",
+        ])
+        let request = try await authorizedRequest(url: url, method: "DELETE")
+        return try await execute(request)
+    }
+
+    public func resourceRelations(
+        resourceID: UUID
+    ) async throws -> ResourceRelationsResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "relations",
+        ])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func relationTypes() async throws -> RelationTypesResponse {
+        let url = try makeAPIURL(path: ["relation-types"])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func createResourceRelation(
+        resourceID: UUID,
+        request input: ResourceRelationCreateRequest
+    ) async throws -> ResourceRelationResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "relations",
+        ])
+        let request = try await jsonRequest(url: url, method: "POST", body: input)
+        return try await execute(request)
+    }
+
+    public func deleteResourceRelation(
+        relationID: UUID,
+        resourceID: UUID
+    ) async throws {
+        let url = try makeAPIURL(
+            path: ["relations", relationID.uuidString.lowercased()],
+            queryItems: [
+                URLQueryItem(
+                    name: "resourceId",
+                    value: resourceID.uuidString.lowercased()
+                ),
+            ]
+        )
+        let request = try await authorizedRequest(url: url, method: "DELETE")
+        try await executeWithoutResponse(request)
+    }
+
+    public func billOfMaterials(
+        resourceID: UUID
+    ) async throws -> BillOfMaterialsResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "bom",
+        ])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func replaceBillOfMaterials(
+        resourceID: UUID,
+        components: [BillOfMaterialsComponentRequest]
+    ) async throws -> BillOfMaterialsResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "bom",
+        ])
+        let request = try await jsonRequest(
+            url: url,
+            method: "PUT",
+            body: BillOfMaterialsReplaceRequest(components: components)
+        )
+        return try await execute(request)
+    }
+
+    public func resetBillOfMaterialsOverrides(
+        resourceID: UUID
+    ) async throws -> BillOfMaterialsResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "bom",
+        ])
+        let request = try await authorizedRequest(url: url, method: "DELETE")
+        return try await execute(request)
+    }
+
     public func createResource(
         _ input: ResourceCreateRequest,
         idempotencyKey: UUID? = nil

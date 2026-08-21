@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
 export type RoomObjectModelMaterials = {
   primary: THREE.Material;
@@ -21,13 +22,18 @@ function box(
   size: Vector3Tuple,
   position: Vector3Tuple = [0, 0, 0],
   rotation: Vector3Tuple = [0, 0, 0],
+  roundness = 0.085,
 ) {
+  const width = Math.max(size[0], MIN_PART_SIZE);
+  const height = Math.max(size[1], MIN_PART_SIZE);
+  const depth = Math.max(size[2], MIN_PART_SIZE);
+  const radius = THREE.MathUtils.clamp(
+    Math.min(width, height, depth) * roundness,
+    0.0015,
+    0.028,
+  );
   const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(
-      Math.max(size[0], MIN_PART_SIZE),
-      Math.max(size[1], MIN_PART_SIZE),
-      Math.max(size[2], MIN_PART_SIZE),
-    ),
+    new RoundedBoxGeometry(width, height, depth, 2, radius),
     material,
   );
   mesh.position.set(...position);
@@ -176,7 +182,7 @@ function makeSofa(
   [width, height, depth]: Vector3Tuple,
   materials: RoomObjectModelMaterials,
 ) {
-  box(root, materials.primary, [width * 0.96, height * 0.3, depth * 0.88], [0, -height * 0.3, 0]);
+  box(root, materials.primary, [width * 0.96, height * 0.3, depth * 0.88], [0, -height * 0.3, 0], [0, 0, 0], 0.13);
   box(root, materials.primary, [width * 0.9, height * 0.66, depth * 0.18], [0, height * 0.12, -depth * 0.38], [-0.08, 0, 0]);
   for (const x of [-width * 0.44, width * 0.44]) {
     box(root, materials.primary, [width * 0.11, height * 0.48, depth * 0.82], [x, -height * 0.08, depth * 0.02]);
@@ -185,8 +191,8 @@ function makeSofa(
   const cushionWidth = (width * 0.74) / cushionCount;
   for (let index = 0; index < cushionCount; index += 1) {
     const x = -width * 0.37 + cushionWidth / 2 + index * cushionWidth;
-    box(root, materials.light, [cushionWidth * 0.92, height * 0.11, depth * 0.58], [x, -height * 0.08, depth * 0.08], [-0.06, 0, 0]);
-    box(root, materials.light, [cushionWidth * 0.9, height * 0.38, depth * 0.12], [x, height * 0.17, -depth * 0.25], [-0.12, 0, 0]);
+    box(root, materials.light, [cushionWidth * 0.92, height * 0.11, depth * 0.58], [x, -height * 0.08, depth * 0.08], [-0.06, 0, 0], 0.24);
+    box(root, materials.light, [cushionWidth * 0.9, height * 0.38, depth * 0.12], [x, height * 0.17, -depth * 0.25], [-0.12, 0, 0], 0.24);
   }
   for (const x of [-width * 0.37, width * 0.37]) {
     box(root, materials.dark, [width * 0.05, height * 0.08, depth * 0.08], [x, -height * 0.46, 0]);
@@ -201,7 +207,7 @@ function makeBed(
   const frameHeight = height * 0.22;
   box(root, materials.primary, [width * 0.98, frameHeight, depth * 0.94], [0, -height / 2 + frameHeight / 2, depth * 0.02]);
   const mattressHeight = height * 0.34;
-  box(root, materials.light, [width * 0.92, mattressHeight, depth * 0.84], [0, -height / 2 + frameHeight + mattressHeight / 2, depth * 0.04]);
+  box(root, materials.light, [width * 0.92, mattressHeight, depth * 0.84], [0, -height / 2 + frameHeight + mattressHeight / 2, depth * 0.04], [0, 0, 0], 0.16);
   box(root, materials.primary, [width, height * 0.78, depth * 0.09], [0, height * 0.08, -depth * 0.45]);
   const pillowWidth = width * 0.36;
   for (const x of [-width * 0.22, width * 0.22]) {

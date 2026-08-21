@@ -14,13 +14,13 @@ import {
   requireResourcePermission,
 } from "@/lib/api-auth";
 import { buildRoomAiAnalysis } from "@/lib/room-ai-analysis";
-import { roomObjectSuggestionPatchSchema } from "@/lib/room-ai-analysis-contract";
+import { roomAiReviewPatchSchema } from "@/lib/room-ai-analysis-contract";
 import { sampleRoomKeyframes } from "@/lib/room-scene-visualization";
 import {
   findRoomScan,
   listRoomScanAnalysisKeyframes,
   saveRoomAiAnalysis,
-  updateRoomObjectSuggestion,
+  updateRoomAiReviewStatus,
 } from "@/lib/room-scans";
 import { readMediaBytes } from "@/lib/storage";
 
@@ -219,16 +219,16 @@ export async function PATCH(request: Request, context: Context) {
   try {
     payload = await request.json();
   } catch {
-    return Response.json({ error: "Expected a JSON suggestion update." }, { status: 400 });
+    return Response.json({ error: "Expected a JSON analysis review." }, { status: 400 });
   }
-  const parsed = roomObjectSuggestionPatchSchema.safeParse(payload);
+  const parsed = roomAiReviewPatchSchema.safeParse(payload);
   if (!parsed.success) {
     return Response.json(
-      { error: "Invalid suggestion update.", details: parsed.error.flatten() },
+      { error: "Invalid analysis review.", details: parsed.error.flatten() },
       { status: 422 },
     );
   }
-  const result = await updateRoomObjectSuggestion(
+  const result = await updateRoomAiReviewStatus(
     authorization.identity.organizationId,
     id,
     parsed.data,
@@ -243,7 +243,7 @@ export async function PATCH(request: Request, context: Context) {
     {
       error: result.kind === "analysis-not-found"
         ? "Analyze this room before reviewing suggestions."
-        : "Object suggestion not found.",
+        : "Analysis result not found.",
     },
     { status: 404 },
   );

@@ -22,7 +22,7 @@ const colorHexSchema = z
   .string()
   .regex(/^#[0-9A-F]{6}$/, "Expected an uppercase six-digit sRGB color.");
 
-export const roomSurfaceAppearanceSchema = z
+export const detectedRoomSurfaceAppearanceSchema = z
   .object({
     surfaceCategory: roomSurfaceCategorySchema,
     colorHex: colorHexSchema,
@@ -31,6 +31,19 @@ export const roomSurfaceAppearanceSchema = z
     roughness: z.number().finite().min(0).max(1),
     confidence: z.number().finite().min(0).max(1),
     evidenceKeyframeIds: z.array(z.uuid()).max(4),
+  })
+  .strict();
+
+export const roomAiReviewStatusSchema = z.enum([
+  "pending",
+  "accepted",
+  "dismissed",
+]);
+
+export const roomSurfaceAppearanceSchema = detectedRoomSurfaceAppearanceSchema
+  .extend({
+    id: z.uuid(),
+    status: roomAiReviewStatusSchema,
   })
   .strict();
 
@@ -51,23 +64,17 @@ export const detectedRoomObjectSuggestionSchema = z
 export const roomAiDetectionSchema = z
   .object({
     summary: z.string().trim().min(1).max(1_000),
-    surfaceAppearances: z.array(roomSurfaceAppearanceSchema).max(5),
+    surfaceAppearances: z.array(detectedRoomSurfaceAppearanceSchema).max(5),
     objectSuggestions: z.array(detectedRoomObjectSuggestionSchema).max(24),
   })
   .strict();
-
-export const roomObjectSuggestionStatusSchema = z.enum([
-  "pending",
-  "accepted",
-  "dismissed",
-]);
 
 export const roomObjectSuggestionSchema = detectedRoomObjectSuggestionSchema
   .omit({ roomPlanCategory: true })
   .extend({
     id: z.uuid(),
     roomObjectId: z.uuid().nullable(),
-    status: roomObjectSuggestionStatusSchema,
+    status: roomAiReviewStatusSchema,
   })
   .strict();
 
@@ -83,14 +90,27 @@ export const roomAiAnalysisSchema = z
   })
   .strict();
 
-export const roomObjectSuggestionPatchSchema = z
-  .object({
-    suggestionId: z.uuid(),
-    status: roomObjectSuggestionStatusSchema,
-  })
-  .strict();
+export const roomAiReviewPatchSchema = z.discriminatedUnion("target", [
+  z
+    .object({
+      target: z.literal("surface"),
+      id: z.uuid(),
+      status: roomAiReviewStatusSchema,
+    })
+    .strict(),
+  z
+    .object({
+      target: z.literal("object"),
+      id: z.uuid(),
+      status: roomAiReviewStatusSchema,
+    })
+    .strict(),
+]);
 
 export type RoomMaterial = z.infer<typeof roomMaterialSchema>;
+export type DetectedRoomSurfaceAppearance = z.infer<
+  typeof detectedRoomSurfaceAppearanceSchema
+>;
 export type RoomSurfaceAppearance = z.infer<
   typeof roomSurfaceAppearanceSchema
 >;
@@ -102,6 +122,5 @@ export type RoomObjectSuggestion = z.infer<
   typeof roomObjectSuggestionSchema
 >;
 export type RoomAiAnalysis = z.infer<typeof roomAiAnalysisSchema>;
-export type RoomObjectSuggestionPatch = z.infer<
-  typeof roomObjectSuggestionPatchSchema
->;
+export type RoomAiReviewStatus = z.infer<typeof roomAiReviewStatusSchema>;
+export type RoomAiReviewPatch = z.infer<typeof roomAiReviewPatchSchema>;

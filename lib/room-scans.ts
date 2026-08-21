@@ -21,7 +21,7 @@ import type {
 import {
   roomAiAnalysisSchema,
   type RoomAiAnalysis,
-  type RoomObjectSuggestionPatch,
+  type RoomAiReviewPatch,
 } from "@/lib/room-ai-analysis-contract";
 import type { RoomKeyframeInput } from "@/lib/room-keyframe-contract";
 import { spatialMatricesApproximatelyEqual } from "@/lib/room-scene-contract";
@@ -508,23 +508,30 @@ export async function saveRoomAiAnalysis(
   return scan ?? null;
 }
 
-export async function updateRoomObjectSuggestion(
+export async function updateRoomAiReviewStatus(
   organizationId: string,
   scanId: string,
-  patch: RoomObjectSuggestionPatch,
+  patch: RoomAiReviewPatch,
 ) {
   const scan = await findRoomScan(organizationId, scanId);
   if (!scan) return { kind: "scan-not-found" as const };
   const parsed = roomAiAnalysisSchema.safeParse(scan.aiAnalysis);
   if (!parsed.success) return { kind: "analysis-not-found" as const };
-  const suggestion = parsed.data.objectSuggestions.find(
-    (candidate) => candidate.id === patch.suggestionId,
-  );
-  if (!suggestion) return { kind: "suggestion-not-found" as const };
+  const exists = patch.target === "surface"
+    ? parsed.data.surfaceAppearances.some((candidate) => candidate.id === patch.id)
+    : parsed.data.objectSuggestions.some((candidate) => candidate.id === patch.id);
+  if (!exists) return { kind: "item-not-found" as const };
   const analysis = roomAiAnalysisSchema.parse({
     ...parsed.data,
+    surfaceAppearances: patch.target === "surface"
+      ? parsed.data.surfaceAppearances.map((candidate) =>
+          candidate.id === patch.id
+            ? { ...candidate, status: patch.status }
+            : candidate,
+        )
+      : parsed.data.surfaceAppearances,
     objectSuggestions: parsed.data.objectSuggestions.map((candidate) =>
-      candidate.id === patch.suggestionId
+      patch.target === "object" && candidate.id === patch.id
         ? { ...candidate, status: patch.status }
         : candidate,
     ),

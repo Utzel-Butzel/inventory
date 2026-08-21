@@ -154,7 +154,7 @@
       "loadScene": "Unable to load room scene.",
       "saveLayout": "Unable to save the floor layout.",
       "analyzeRoom": "Unable to analyze the room photos.",
-      "reviewSuggestion": "Unable to update the object suggestion."
+      "reviewAnalysis": "Unable to update the AI analysis result."
     },
     "empty": {
       "title": "No rooms have been scanned yet",
@@ -201,7 +201,10 @@
       "refresh": "Refresh colors & objects",
       "analyzing": "Analyzing room photos…",
       "title": "AI room analysis",
-      "finishes": "Automatic finishes",
+      "finishes": "Suggested finishes",
+      "finishReviewHint": "Confirm each finish before it changes the 3D room.",
+      "applyFinish": "Apply finish",
+      "applied": "Applied",
       "suggestions": "Object suggestions",
       "confidence": "{{value}}% confidence",
       "grounded": "Matched to the 3D RoomPlan object",

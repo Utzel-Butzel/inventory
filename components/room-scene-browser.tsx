@@ -46,7 +46,7 @@ import {
 import type { SpatialMatrix4 } from "@/lib/room-scene-contract";
 import type {
   RoomAiAnalysis,
-  RoomObjectSuggestion,
+  RoomAiReviewStatus,
 } from "@/lib/room-ai-analysis-contract";
 import {
   fetchJson,
@@ -126,7 +126,7 @@ export function RoomSceneBrowser() {
   const [layoutMapEnabled, setLayoutMapEnabled] = useState(false);
   const [savingLayout, setSavingLayout] = useState(false);
   const [analyzingRoom, setAnalyzingRoom] = useState(false);
-  const [updatingSuggestionId, setUpdatingSuggestionId] = useState<string | null>(null);
+  const [updatingAnalysisItemId, setUpdatingAnalysisItemId] = useState<string | null>(null);
   const sceneRequestRef = useRef(0);
 
   const updateUrl = useCallback(
@@ -536,6 +536,9 @@ export function RoomSceneBrowser() {
     (item) => item.scan.id === layoutRoomId,
   ) ?? null;
   const roomAnalysis = visibleManifest?.scan.aiAnalysis ?? null;
+  const visibleSurfaceAppearances = roomAnalysis?.surfaceAppearances.filter(
+    (appearance) => appearance.status !== "dismissed",
+  ) ?? [];
   const visibleSuggestions = roomAnalysis?.objectSuggestions.filter(
     (suggestion) => suggestion.status !== "dismissed",
   ) ?? [];
@@ -568,12 +571,13 @@ export function RoomSceneBrowser() {
     }
   };
 
-  const reviewSuggestion = async (
-    suggestion: RoomObjectSuggestion,
-    status: RoomObjectSuggestion["status"],
+  const reviewAnalysisItem = async (
+    target: "surface" | "object",
+    id: string,
+    status: RoomAiReviewStatus,
   ) => {
-    if (!visibleManifest || updatingSuggestionId) return;
-    setUpdatingSuggestionId(suggestion.id);
+    if (!visibleManifest || updatingAnalysisItemId) return;
+    setUpdatingAnalysisItemId(id);
     setError(null);
     try {
       const { analysis } = await fetchJson<{ analysis: RoomAiAnalysis }>(
@@ -581,14 +585,14 @@ export function RoomSceneBrowser() {
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ suggestionId: suggestion.id, status }),
+          body: JSON.stringify({ target, id, status }),
         },
       );
       setVisibleRoomAnalysis(visibleManifest.scan.id, analysis);
     } catch {
-      setError(t("rooms.errors.reviewSuggestion"));
+      setError(t("rooms.errors.reviewAnalysis"));
     } finally {
-      setUpdatingSuggestionId(null);
+      setUpdatingAnalysisItemId(null);
     }
   };
 
@@ -1079,34 +1083,85 @@ export function RoomSceneBrowser() {
                   {roomAnalysis.summary}
                 </p>
 
-                {roomAnalysis.surfaceAppearances.length ? (
+                {visibleSurfaceAppearances.length ? (
                   <div className="mt-3">
                     <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
                       {t("rooms.ai.finishes")}
                     </p>
+                    <p className="mt-1 text-[9px] leading-4 text-muted">
+                      {t("rooms.ai.finishReviewHint")}
+                    </p>
                     <div className="mt-1.5 space-y-1">
-                      {roomAnalysis.surfaceAppearances.map((appearance) => (
-                        <div
-                          key={appearance.surfaceCategory}
-                          className="flex items-center gap-2 rounded-lg bg-surface/75 px-2 py-1.5"
-                        >
-                          <span
-                            className="size-5 shrink-0 rounded-md border border-border shadow-inner"
-                            style={{ backgroundColor: appearance.colorHex }}
-                            aria-hidden="true"
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[10px] font-semibold text-foreground">
-                              {t(`rooms.ai.surfaces.${appearance.surfaceCategory}`)} · {appearance.colorName}
-                            </span>
-                            <span className="block truncate text-[9px] text-muted">
-                              {t(`rooms.ai.materials.${appearance.material}`)} · {t("rooms.ai.confidence", {
-                                value: integer.format(Math.round(appearance.confidence * 100)),
-                              })}
-                            </span>
-                          </span>
-                        </div>
-                      ))}
+                      {visibleSurfaceAppearances.map((appearance) => {
+                        const updating = updatingAnalysisItemId === appearance.id;
+                        const surfaceName = t(
+                          `rooms.ai.surfaces.${appearance.surfaceCategory}`,
+                        );
+                        return (
+                          <article
+                            key={appearance.id}
+                            className="rounded-lg bg-surface/75 p-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="size-5 shrink-0 rounded-md border border-border shadow-inner"
+                                style={{ backgroundColor: appearance.colorHex }}
+                                aria-hidden="true"
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[10px] font-semibold text-foreground">
+                                  {surfaceName} · {appearance.colorName}
+                                </span>
+                                <span className="block truncate text-[9px] text-muted">
+                                  {t(`rooms.ai.materials.${appearance.material}`)} · {t("rooms.ai.confidence", {
+                                    value: integer.format(Math.round(appearance.confidence * 100)),
+                                  })}
+                                </span>
+                              </span>
+                            </div>
+                            <div className="mt-2 flex gap-1.5">
+                              {appearance.status === "pending" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void reviewAnalysisItem(
+                                    "surface",
+                                    appearance.id,
+                                    "accepted",
+                                  )}
+                                  disabled={Boolean(updatingAnalysisItemId)}
+                                  className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[9px] font-semibold text-success disabled:opacity-50"
+                                >
+                                  {updating ? (
+                                    <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+                                  ) : (
+                                    <Check className="size-3" aria-hidden="true" />
+                                  )}
+                                  {t("rooms.ai.applyFinish")}
+                                </button>
+                              ) : (
+                                <span className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[9px] font-semibold text-success">
+                                  <Check className="size-3" aria-hidden="true" />
+                                  {t("rooms.ai.applied")}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => void reviewAnalysisItem(
+                                  "surface",
+                                  appearance.id,
+                                  "dismissed",
+                                )}
+                                disabled={Boolean(updatingAnalysisItemId)}
+                                className="grid size-7 place-items-center rounded-lg border border-border text-muted hover:text-danger disabled:opacity-50"
+                                aria-label={t("rooms.ai.dismiss", { name: surfaceName })}
+                                title={t("rooms.ai.dismiss", { name: surfaceName })}
+                              >
+                                <X className="size-3" aria-hidden="true" />
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}
@@ -1122,7 +1177,7 @@ export function RoomSceneBrowser() {
                 {visibleSuggestions.length ? (
                   <div className="mt-1.5 space-y-1.5">
                     {visibleSuggestions.map((suggestion) => {
-                      const updating = updatingSuggestionId === suggestion.id;
+                      const updating = updatingAnalysisItemId === suggestion.id;
                       return (
                         <article
                           key={suggestion.id}
@@ -1156,8 +1211,12 @@ export function RoomSceneBrowser() {
                             {suggestion.status === "pending" ? (
                               <button
                                 type="button"
-                                onClick={() => void reviewSuggestion(suggestion, "accepted")}
-                                disabled={Boolean(updatingSuggestionId)}
+                                onClick={() => void reviewAnalysisItem(
+                                  "object",
+                                  suggestion.id,
+                                  "accepted",
+                                )}
+                                disabled={Boolean(updatingAnalysisItemId)}
                                 className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[9px] font-semibold text-success disabled:opacity-50"
                               >
                                 {updating ? (
@@ -1175,8 +1234,12 @@ export function RoomSceneBrowser() {
                             )}
                             <button
                               type="button"
-                              onClick={() => void reviewSuggestion(suggestion, "dismissed")}
-                              disabled={Boolean(updatingSuggestionId)}
+                              onClick={() => void reviewAnalysisItem(
+                                "object",
+                                suggestion.id,
+                                "dismissed",
+                              )}
+                              disabled={Boolean(updatingAnalysisItemId)}
                               className="grid size-7 place-items-center rounded-lg border border-border text-muted hover:text-danger disabled:opacity-50"
                               aria-label={t("rooms.ai.dismiss", { name: suggestion.name })}
                               title={t("rooms.ai.dismiss", { name: suggestion.name })}
