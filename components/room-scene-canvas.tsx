@@ -156,6 +156,59 @@ function ensureRectAreaLightUniforms() {
   rectAreaLightUniformsInitialized = true;
 }
 
+function createPathTraceDenoiseMaterial() {
+  return new THREE.ShaderMaterial({
+    blending: THREE.NoBlending,
+    depthTest: false,
+    depthWrite: false,
+    uniforms: {
+      map: { value: null as THREE.Texture | null },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D map;
+      varying vec2 vUv;
+
+      float sampleLuminance(vec3 color) {
+        return dot(color, vec3(0.2126, 0.7152, 0.0722));
+      }
+
+      void main() {
+        vec2 texel = 1.0 / vec2(textureSize(map, 0));
+        vec4 samples[9];
+        int sampleIndex = 0;
+        for (int y = -1; y <= 1; y++) {
+          for (int x = -1; x <= 1; x++) {
+            samples[sampleIndex] = texture2D(map, vUv + vec2(float(x), float(y)) * texel);
+            sampleIndex++;
+          }
+        }
+
+        for (int left = 0; left < 9; left++) {
+          for (int right = left + 1; right < 9; right++) {
+            if (sampleLuminance(samples[right].rgb) < sampleLuminance(samples[left].rgb)) {
+              vec4 swapped = samples[left];
+              samples[left] = samples[right];
+              samples[right] = swapped;
+            }
+          }
+        }
+
+        gl_FragColor = (samples[3] + samples[4] + samples[5]) / 3.0;
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <premultiplied_alpha_fragment>
+      }
+    `,
+  });
+}
+
 type TexturePattern = "plaster" | "grain" | "speckle";
 
 type ProceduralMaterialTextures = {
@@ -2193,8 +2246,8 @@ export function RoomSceneCanvas({
     );
     const daylightShadowLights: THREE.SpotLight[] = [];
 
-    // The aperture itself is the dominant emitter: a cool, broad source just
-    // outside the glass. Its geometric falloff makes the window side brighter
+    // The aperture itself is the dominant emitter: a cool, broad source on the
+    // room side of the glass. Its geometric falloff makes the window side brighter
     // than the back of the room. The ray-traced modes use this geometry
     // directly; Live adds a multi-sample raster visibility rig below.
     for (const portal of activePortals) {
@@ -2830,9 +2883,7 @@ export function RoomSceneCanvas({
       if (!rayTracedLighting) return;
       setLightingProgress(2);
       try {
-        const { DenoiseMaterial, WebGLPathTracer } = await import(
-          "three-gpu-pathtracer"
-        );
+        const { WebGLPathTracer } = await import("three-gpu-pathtracer");
         if (disposed) return;
 
         const tracer = new WebGLPathTracer(renderer);
@@ -2850,11 +2901,9 @@ export function RoomSceneCanvas({
         tracer.lowResScale = 0.2;
         tracer.rasterizeScene = false;
         tracer.textureSize.set(1024, 1024);
-        pathTraceDenoiseQuad = new FullScreenQuad(new DenoiseMaterial({
-          sigma: 3,
-          kSigma: 2,
-          threshold: 0.22,
-        }));
+        pathTraceDenoiseQuad = new FullScreenQuad(
+          createPathTraceDenoiseMaterial(),
+        );
 
         scene.fog = null;
         tracer.setScene(scene, camera, {
@@ -3157,8 +3206,8 @@ export function RoomSceneCanvas({
             pathTracingFinished = true;
             if (pathTraceDenoiseQuad) {
               const denoiseMaterial = pathTraceDenoiseQuad.material as
-                THREE.ShaderMaterial & { map: THREE.Texture | null };
-              denoiseMaterial.map = pathTracer.target.texture;
+                THREE.ShaderMaterial;
+              denoiseMaterial.uniforms.map!.value = pathTracer.target.texture;
               renderer.setRenderTarget(null);
               pathTraceDenoiseQuad.render(renderer);
             }
