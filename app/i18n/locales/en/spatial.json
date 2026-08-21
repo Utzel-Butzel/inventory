@@ -323,8 +323,8 @@
       "realisticDescription": "Bake a ray-traced view with physically traced window shadows and indirect light.",
       "rendering": "Rendering",
       "renderingDescription": "Path-trace the current camera for up to 10 seconds with multi-bounce light.",
-      "baking": "Baking ray-traced light and shadows… {{progress}}%",
-      "baked": "Ray-traced light and shadows ready",
+      "baking": "Baking ray-traced global illumination and shadows… {{progress}}%",
+      "baked": "Baked global illumination and shadows ready",
       "renderingProgress": "Path tracing… {{progress}}%",
       "rendered": "Ray-traced rendering complete"
     },

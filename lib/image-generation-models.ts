@@ -1,5 +1,13 @@
 import "server-only";
 
+import {
+  getAiCostEstimateCatalog,
+  imageGenerationCostEstimate,
+  imageGenerationCostEstimatesBySize,
+  type AiCostEstimate,
+  type AiCostEstimateCatalog,
+} from "@/lib/ai-cost-estimates";
+
 export const imageGenerationProviders = ["openai", "google"] as const;
 
 export type ImageGenerationProvider =
@@ -10,11 +18,20 @@ export type ImageGenerationModel = {
   provider: ImageGenerationProvider;
   model: string;
   label: string;
+  estimatedCost?: Pick<
+    AiCostEstimate,
+    "minimumUsd" | "maximumUsd" | "unit"
+  >;
+  estimatedCostsBySize?: Record<
+    string,
+    Pick<AiCostEstimate, "minimumUsd" | "maximumUsd" | "unit">
+  >;
 };
 
 export type ImageGenerationModelCatalog = {
   models: ImageGenerationModel[];
   defaultModelId: string | null;
+  costEstimates: AiCostEstimateCatalog;
 };
 
 const friendlyModelLabels: Record<string, string> = {
@@ -45,6 +62,8 @@ const modelOption = (
     label:
       friendlyModelLabels[id] ??
       `${model} (${provider === "openai" ? "OpenAI" : "Google"})`,
+    estimatedCost: imageGenerationCostEstimate(provider, model),
+    estimatedCostsBySize: imageGenerationCostEstimatesBySize(provider, model),
   };
 };
 
@@ -136,6 +155,7 @@ export const getImageGenerationModelCatalog =
     return {
       models: availableModels,
       defaultModelId: defaultModel?.id ?? null,
+      costEstimates: getAiCostEstimateCatalog(),
     };
   };
 

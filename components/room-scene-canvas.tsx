@@ -845,8 +845,16 @@ export function RoomSceneCanvas({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(initialScenePalette.background, mapBackground ? 0 : 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = rayTracedLighting ? 1.3 : 0.93;
+    // AgX keeps bright window light photographic instead of driving white
+    // walls and pale floors into ACES' clipped-looking shoulder. Live retains
+    // its established ACES response; only the ray-traced views need the extra
+    // highlight latitude.
+    renderer.toneMapping = rayTracedLighting
+      ? THREE.AgXToneMapping
+      : THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = lightingMode === "realistic"
+      ? 1.15
+      : lightingMode === "rendering" ? 1.24 : 0.93;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.VSMShadowMap;
     ensureRectAreaLightUniforms();
@@ -1310,18 +1318,75 @@ export function RoomSceneCanvas({
 
       const wall = new THREE.Group();
       setMatrix(wall, surface.transform);
+      // RoomPlan surfaces can differ by a few millimetres at their measured
+      // floor junction. Hide the wall's horizontal bottom cap inside the floor
+      // so it cannot appear as a bright, lightmapped skirting strip.
+      const floorOverlap = 0.035;
+      const boundaryInset = 0.002;
+      const hasOnlyEnclosedApertures = apertures.length > 0 && apertures.every(
+        ({ rect }) =>
+          rect.left > -width / 2 + boundaryInset &&
+          rect.right < width / 2 - boundaryInset &&
+          rect.bottom > -height / 2 + boundaryInset &&
+          rect.top < height / 2 - boundaryInset,
+      );
+
+      if (hasOnlyEnclosedApertures) {
+        // A window used to split its wall into four independent BoxGeometry
+        // meshes. That also split the baked lightmap into four unrelated UV
+        // charts, making small sampling differences appear as a ruler-straight
+        // brightness seam beside the opening. An extruded shape keeps both
+        // room-facing wall regions in one continuous chart. Beveling remains
+        // disabled so the measured RoomPlan surface stays exact.
+        const shape = new THREE.Shape();
+        shape.moveTo(-width / 2, -height / 2 - floorOverlap);
+        shape.lineTo(width / 2, -height / 2 - floorOverlap);
+        shape.lineTo(width / 2, height / 2);
+        shape.lineTo(-width / 2, height / 2);
+        shape.closePath();
+        for (const { rect } of apertures) {
+          const hole = new THREE.Path();
+          hole.moveTo(rect.left, rect.bottom);
+          hole.lineTo(rect.left, rect.top);
+          hole.lineTo(rect.right, rect.top);
+          hole.lineTo(rect.right, rect.bottom);
+          hole.closePath();
+          shape.holes.push(hole);
+        }
+        const geometry = new THREE.ExtrudeGeometry(shape, {
+          bevelEnabled: false,
+          depth,
+          steps: 1,
+        });
+        geometry.translate(0, 0, -depth / 2);
+        geometry.computeVertexNormals();
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        wall.add(mesh);
+      }
+
       for (const piece of pieces) {
-        wallColliderMeshes.push(addBox({
+        const touchesFloor = piece.bottom <= -height / 2 + boundaryInset;
+        const pieceBottom = touchesFloor
+          ? piece.bottom - floorOverlap
+          : piece.bottom;
+        const pieceMesh = addBox({
           parent: wall,
-          size: [piece.right - piece.left, piece.top - piece.bottom, depth],
+          size: [piece.right - piece.left, piece.top - pieceBottom, depth],
           position: [
             (piece.left + piece.right) / 2,
-            (piece.bottom + piece.top) / 2,
+            (pieceBottom + piece.top) / 2,
             0,
           ],
           material,
           castShadow: true,
-        }));
+        });
+        // Continuous walls render through the extruded mesh above. Retain the
+        // rectangular pieces solely because the walk-mode collision system is
+        // intentionally box based.
+        pieceMesh.visible = !hasOnlyEnclosedApertures;
+        wallColliderMeshes.push(pieceMesh);
       }
       return wall;
     };
@@ -2212,6 +2277,7 @@ export function RoomSceneCanvas({
       roomBounds: THREE.Box3;
       width: number;
       height: number;
+      depth: number;
       area: number;
     };
     const webFromWorld = new THREE.Matrix4().fromArray(
@@ -2228,7 +2294,7 @@ export function RoomSceneCanvas({
       );
       for (const surface of roomManifest.scan.scene.surfaces) {
         if (surface.category !== "window") continue;
-        const [width, height] = normalizedDimensions(
+        const [width, height, depth] = normalizedDimensions(
           surface.category,
           surface.dimensions,
         );
@@ -2255,6 +2321,7 @@ export function RoomSceneCanvas({
           roomBounds,
           width,
           height,
+          depth,
           area: width * height,
         });
       }
@@ -2270,6 +2337,7 @@ export function RoomSceneCanvas({
       roomBounds: box.clone(),
       width: Math.max(1.2, size.x * 0.65),
       height: Math.max(1.2, size.z * 0.65),
+      depth: 0,
       area: Math.max(1.44, size.x * size.z * 0.42),
     };
     const activePortals = hasWindowDaylight
@@ -2292,16 +2360,30 @@ export function RoomSceneCanvas({
           ? rayTracedLighting ? 0xe4f0ff : 0xe9f4ff
           : rayTracedLighting ? 0xfff1df : 0xffe8c7,
         hasWindowDaylight
-          ? rayTracedLighting ? 19 : 1.8
+          ? lightingMode === "realistic" ? 21 : lightingMode === "rendering" ? 25 : 1.8
           : rayTracedLighting ? 12.5 : 1.6,
-        portal.width,
-        portal.height,
+        // One emitter covers the complete clear opening. A tiny inset keeps
+        // sampled points away from the solid frame while preserving the large
+        // softbox and its naturally broad penumbra.
+        hasWindowDaylight ? Math.max(0.05, portal.width - 0.024) : portal.width,
+        hasWindowDaylight ? Math.max(0.05, portal.height - 0.024) : portal.height,
       );
       areaLight.position
         .copy(portal.position)
         .addScaledVector(
           portal.outward,
-          hasWindowDaylight ? rayTracedLighting ? -0.035 : 0.025 : -0.04,
+          // The baked view uses a conventional portal light just inside the
+          // opening: the complete window becomes one softbox and no exterior
+          // sample can graze the wall edge. Rendering keeps the emitter outside
+          // because its camera-space tracer resolves the real frame visibility
+          // directly instead of projecting it through a lightmap atlas.
+          hasWindowDaylight
+            ? lightingMode === "realistic"
+              ? -0.035
+              : lightingMode === "rendering"
+                ? Math.max(0.14, portal.depth / 2 + 0.09)
+                : 0.025
+            : -0.04,
         );
       if (hasWindowDaylight) areaLight.lookAt(portal.roomCenter);
       else areaLight.rotation.x = -Math.PI / 2;
@@ -2903,8 +2985,9 @@ export function RoomSceneCanvas({
     let pathTracingFinished = false;
     let pathTracingStartedAt: number | null = null;
     let pathTracingLastStatusAt = 0;
-    const pathTracingDuration = lightingMode === "rendering" ? 10_000 : 18_000;
-    const pathTracingSampleTarget = lightingMode === "rendering" ? 2_048 : 64;
+    const pathTracingDuration = lightingMode === "rendering" ? 10_000 : 40_000;
+    const pathTracingSampleTarget = lightingMode === "rendering" ? 2_048 : 128;
+    const pathTracingMinimumSamples = lightingMode === "rendering" ? 1 : 80;
     const restartPathTracing = () => {
       if (!pathTracer || !pathTracingReady) return;
       pathTracer.updateCamera();
@@ -2930,7 +3013,7 @@ export function RoomSceneCanvas({
           } = await import("@/lib/room-lightmap-baker");
           if (disposed) return;
           const cacheKey = createRoomLightMapCacheKey({
-            version: 6,
+            version: 14,
             rooms: visibleManifests.map((roomManifest) => ({
               analysis: roomManifest.scan.aiAnalysis,
               id: roomManifest.scan.id,
@@ -2944,11 +3027,11 @@ export function RoomSceneCanvas({
               if (!disposed) setLightingProgress(progress);
             },
             renderer,
-            // A 512² atlas converges roughly four times faster than 1024² on
-            // integrated GPUs. For broad interior lighting and soft shadows,
-            // the extra samples produce a visibly higher-quality final map
-            // than sparse high-resolution texels.
-            resolution: Math.min(512, renderer.capabilities.maxTextureSize),
+            // 768² retains substantially more furniture-footprint detail than
+            // 512² without the fourfold cost of a 1024² atlas. The longer bake
+            // and higher sample floor keep the finer texels clean enough for a
+            // shorter, edge-preserving denoise pass.
+            resolution: Math.min(768, renderer.capabilities.maxTextureSize),
             roots: roomPlanRoots.values(),
             scene,
           });
@@ -2967,7 +3050,7 @@ export function RoomSceneCanvas({
               light.intensity = 0;
             });
             scene.environment = environmentTarget.texture;
-            scene.environmentIntensity = 0.06;
+            scene.environmentIntensity = 0.11;
             setLightingStatus("ready");
           }
           return;
@@ -3290,8 +3373,9 @@ export function RoomSceneCanvas({
             ) * 80,
           );
           const finished =
-            elapsed >= pathTracingDuration ||
-            lightMapBake.samples >= pathTracingSampleTarget;
+            lightMapBake.samples >= pathTracingSampleTarget ||
+            (elapsed >= pathTracingDuration &&
+              lightMapBake.samples >= pathTracingMinimumSamples);
           if (finished || frameTimestamp - pathTracingLastStatusAt >= 200) {
             pathTracingLastStatusAt = frameTimestamp;
             setLightingProgress(finished ? 100 : Math.round(tracingProgress));
@@ -3306,7 +3390,7 @@ export function RoomSceneCanvas({
             // PMREM also contributes diffuse IBL (not only reflections), so it
             // must stay very low here or it washes out baked visibility.
             scene.environment = environmentTarget.texture;
-            scene.environmentIntensity = 0.06;
+            scene.environmentIntensity = 0.11;
             setLightingStatus("ready");
           }
         }

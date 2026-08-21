@@ -40,6 +40,10 @@ import type { RoomMapViewport } from "@/components/room-layout-map-canvas";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/components/ui";
+import {
+  EstimatedAiCost,
+  useAiCostEstimateCatalog,
+} from "@/components/ai-cost-estimate";
 import { floorIdentifier } from "@/lib/spatial-map-features";
 import { roomKeyframeDisplayOrientation } from "@/lib/room-scene-visualization";
 import {
@@ -143,6 +147,7 @@ function EvidencePhoto({
 
 export function RoomSceneBrowser() {
   const { t, i18n } = useT("spatial");
+  const aiCostEstimates = useAiCostEstimateCatalog();
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const coordinate = useMemo(
@@ -1137,25 +1142,31 @@ export function RoomSceneBrowser() {
               ) : null}
             </div>
             {visibleManifest ? (
-              <button
-                type="button"
-                onClick={() => void analyzeRoom()}
-                disabled={
-                  analyzingRoom || !(visibleManifest.scan.keyframes?.length ?? 0)
-                }
-                className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-brand-solid px-3 text-[11px] font-semibold text-on-brand transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {analyzingRoom ? (
-                  <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Sparkles className="size-3.5" aria-hidden="true" />
-                )}
-                {analyzingRoom
-                  ? t("rooms.ai.analyzing")
-                  : roomAnalysis
-                    ? t("rooms.ai.refresh")
-                    : t("rooms.ai.analyze")}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => void analyzeRoom()}
+                  disabled={
+                    analyzingRoom || !(visibleManifest.scan.keyframes?.length ?? 0)
+                  }
+                  className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-brand-solid px-3 text-[11px] font-semibold text-on-brand transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {analyzingRoom ? (
+                    <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Sparkles className="size-3.5" aria-hidden="true" />
+                  )}
+                  {analyzingRoom
+                    ? t("rooms.ai.analyzing")
+                    : roomAnalysis
+                      ? t("rooms.ai.refresh")
+                      : t("rooms.ai.analyze")}
+                </button>
+                <EstimatedAiCost
+                  estimate={aiCostEstimates?.operations.roomAnalysis}
+                  className="mt-1.5 flex justify-center"
+                />
+              </>
             ) : null}
             <label className="relative mt-3 block">
               <span className="sr-only">{t("rooms.placements.searchPlaceholder")}</span>

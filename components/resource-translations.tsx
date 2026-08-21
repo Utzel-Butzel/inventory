@@ -12,6 +12,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
 
 import { fetchJson } from "@/lib/client-types";
+import {
+  EstimatedAiCost,
+  multipliedAiCost,
+  useAiCostEstimateCatalog,
+  type DisplayAiCost,
+} from "@/components/ai-cost-estimate";
 
 type TranslationFieldState =
   | "current"
@@ -70,12 +76,14 @@ function TranslationFieldEditor({
   language,
   sourceLanguageLabel,
   busy,
+  estimatedCost,
   onOperation,
 }: {
   field: TranslationField;
   language: TranslationLanguage;
   sourceLanguageLabel: string;
   busy: boolean;
+  estimatedCost?: DisplayAiCost;
   onOperation: (operation: TranslationOperation) => Promise<void>;
 }) {
   const { t } = useT("resource");
@@ -146,20 +154,23 @@ function TranslationFieldEditor({
               {t("translations.actions.saveHuman")}
             </button>
             {field.origin === "manual" ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void onOperation({
-                    action: "use_ai",
-                    fieldKey: field.fieldKey,
-                  })
-                }
-                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[10px] font-semibold text-muted-strong disabled:opacity-40"
-              >
-                <Languages className="size-3" />
-                {t("translations.actions.useAi")}
-              </button>
+              <span className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void onOperation({
+                      action: "use_ai",
+                      fieldKey: field.fieldKey,
+                    })
+                  }
+                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[10px] font-semibold text-muted-strong disabled:opacity-40"
+                >
+                  <Languages className="size-3" />
+                  {t("translations.actions.useAi")}
+                </button>
+                <EstimatedAiCost estimate={estimatedCost} />
+              </span>
             ) : null}
           </div>
           {field.suggestion !== null ? (
@@ -200,6 +211,8 @@ export function ResourceTranslations({
   resourceUpdatedAt?: string;
 }) {
   const { t } = useT("resource");
+  const aiCostEstimates = useAiCostEstimateCatalog();
+  const translationCostEstimate = aiCostEstimates?.operations.translation;
   const [overview, setOverview] = useState<TranslationOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [translatingCode, setTranslatingCode] = useState<string | null>(null);
@@ -333,19 +346,27 @@ export function ResourceTranslations({
           </div>
         </div>
         {overview?.languages.length ? (
-          <button
-            type="button"
-            onClick={() => void translate()}
-            disabled={Boolean(translatingCode)}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3 text-xs font-semibold text-brand transition hover:bg-brand-soft disabled:opacity-50"
-          >
-            {translatingCode === "all" ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
-            ) : (
-              <Languages className="size-3.5" />
-            )}
-            {t("translations.actions.translateStale")}
-          </button>
+          <div className="flex flex-col items-stretch gap-1 sm:items-end">
+            <button
+              type="button"
+              onClick={() => void translate()}
+              disabled={Boolean(translatingCode)}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3 text-xs font-semibold text-brand transition hover:bg-brand-soft disabled:opacity-50"
+            >
+              {translatingCode === "all" ? (
+                <LoaderCircle className="size-3.5 animate-spin" />
+              ) : (
+                <Languages className="size-3.5" />
+              )}
+              {t("translations.actions.translateStale")}
+            </button>
+            <EstimatedAiCost
+              estimate={multipliedAiCost(
+                translationCostEstimate,
+                overview.languages.length,
+              )}
+            />
+          </div>
         ) : null}
       </div>
 
@@ -395,6 +416,10 @@ export function ResourceTranslations({
                         ? t("translations.automaticSuffix")
                         : t("translations.manualSuffix")}
                     </span>
+                    <EstimatedAiCost
+                      estimate={translationCostEstimate}
+                      className="mt-0.5"
+                    />
                   </span>
                   <span
                     className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
@@ -443,6 +468,7 @@ export function ResourceTranslations({
                         language={language}
                         sourceLanguageLabel={overview.defaultLanguage.label}
                         busy={savingField === `${language.code}:${field.fieldKey}`}
+                        estimatedCost={translationCostEstimate}
                         onOperation={(operation) =>
                           updateField(language, operation)
                         }

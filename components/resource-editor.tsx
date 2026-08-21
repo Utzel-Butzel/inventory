@@ -68,6 +68,12 @@ import {
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import {
+  combinedAiCost,
+  EstimatedAiCost,
+  multipliedAiCost,
+  type DisplayAiCost,
+} from "@/components/ai-cost-estimate";
+import {
   isCustomFieldDefinitionApplicable,
   type CustomFieldDefinition,
   type CustomFieldValues,
@@ -354,6 +360,7 @@ function AiActionModal({
   actionIcon,
   busy,
   actionDisabled = false,
+  estimatedCost,
   onAction,
   onClose,
   children,
@@ -364,6 +371,7 @@ function AiActionModal({
   actionIcon: ReactNode;
   busy: boolean;
   actionDisabled?: boolean;
+  estimatedCost?: DisplayAiCost;
   onAction: () => void;
   onClose: () => void;
   children: ReactNode;
@@ -414,7 +422,8 @@ function AiActionModal({
           </button>
         </header>
         <div className="space-y-4 px-5 py-5 sm:px-6">{children}</div>
-        <footer className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-border bg-surface/95 px-5 py-4 backdrop-blur sm:px-6">
+        <footer className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-surface/95 px-5 py-4 backdrop-blur sm:px-6">
+          <EstimatedAiCost estimate={estimatedCost} className="mr-auto" />
           <button
             type="button"
             onClick={onClose}
@@ -463,6 +472,7 @@ export function ResourceEditor({
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const isNew = !resourceId;
   const imageModelPreference = useImageModelPreference();
+  const aiCostEstimates = imageModelPreference.costEstimates?.operations;
   const [resource, setResource] = useState<ClientResource | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [inventoryTypes, setInventoryTypes] = useState<InventoryTypeOption[]>(
@@ -508,6 +518,20 @@ export function ResourceEditor({
   const [transparentCover, setTransparentCover] = useState(false);
   const [coverTransparencyMethod, setCoverTransparencyMethod] =
     useState<CoverTransparencyMethod>("difference-matting");
+  const coverImagePasses =
+    transparentCover && coverTransparencyMethod === "difference-matting" ? 2 : 1;
+  const coverCostEstimate = multipliedAiCost(
+    imageModelPreference.effectiveModel?.estimatedCost,
+    coverImagePasses,
+  );
+  const generatedImageCostEstimate = multipliedAiCost(
+    imageModelPreference.effectiveModel?.estimatedCost,
+    1,
+  );
+  const createResourceCostEstimate = combinedAiCost([
+    autoAnalyze ? aiCostEstimates?.inventoryAnalysis : undefined,
+    autoCover ? coverCostEstimate : undefined,
+  ]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -1260,23 +1284,28 @@ export function ResourceEditor({
               <Trash2 size={17} />
             </button>
           ) : null}
-          <button
-            type="submit"
-            disabled={
-              saving ||
-              Boolean(aiAction) ||
-              customFieldsLoading ||
-              Boolean(customFieldsError)
-            }
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-strong px-4 text-sm font-semibold text-on-strong shadow-sm transition hover:bg-success disabled:cursor-wait disabled:opacity-60"
-          >
-            {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
-            {saving
-              ? t("actions.saving")
-              : isNew
-                ? t("actions.createItem")
-                : t("actions.saveChanges")}
-          </button>
+          <span className="flex flex-col items-end gap-1">
+            <button
+              type="submit"
+              disabled={
+                saving ||
+                Boolean(aiAction) ||
+                customFieldsLoading ||
+                Boolean(customFieldsError)
+              }
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-strong px-4 text-sm font-semibold text-on-strong shadow-sm transition hover:bg-success disabled:cursor-wait disabled:opacity-60"
+            >
+              {saving ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
+              {saving
+                ? t("actions.saving")
+                : isNew
+                  ? t("actions.createItem")
+                  : t("actions.saveChanges")}
+            </button>
+            {isNew ? (
+              <EstimatedAiCost estimate={createResourceCostEstimate} />
+            ) : null}
+          </span>
         </div>
       </header>
 
@@ -1779,8 +1808,8 @@ export function ResourceEditor({
             <div className="mb-4 flex items-center gap-3 border-b border-border pb-4"><div className="grid h-9 w-9 place-items-center rounded-xl bg-surface-muted text-muted-strong"><ImageIcon size={17} /></div><div><h2 className="text-sm font-semibold text-foreground">{t("ai.title")}</h2><p className="text-xs text-muted">{t("ai.description")}</p></div></div>
             {isNew ? (
               <div className="space-y-3">
-                <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => { aiPreferencesTouched.current.analyze = true; setAutoAnalyze(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.analyzeDescription")}</span></span></label>
-                <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoCover} onChange={(event) => { aiPreferencesTouched.current.cover = true; setAutoCover(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.coverDescription")}</span></span></label>
+                <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => { aiPreferencesTouched.current.analyze = true; setAutoAnalyze(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.analyzeDescription")}</span><EstimatedAiCost estimate={aiCostEstimates?.inventoryAnalysis} className="mt-1" /></span></label>
+                <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoCover} onChange={(event) => { aiPreferencesTouched.current.cover = true; setAutoCover(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.coverDescription")}</span><EstimatedAiCost estimate={coverCostEstimate} className="mt-1" /></span></label>
                 {autoCover ? (
                   <div className="rounded-xl border border-border bg-surface-subtle p-3">
                     <CoverReferencePicker
@@ -1916,6 +1945,7 @@ export function ResourceEditor({
         actionIcon={<ImageIcon size={15} />}
         busy={aiAction === "analyze"}
         actionDisabled={!hasImage}
+        estimatedCost={aiCostEstimates?.inventoryAnalysis}
         onClose={() => setAiDialog(null)}
         onAction={() => {
           void runAnalysis(resourceId, analysisOverwrite).then((result) => {
@@ -1964,6 +1994,7 @@ export function ResourceEditor({
         actionLabel={t("ai.research")}
         actionIcon={<Sparkles size={15} />}
         busy={aiAction === "research"}
+        estimatedCost={aiCostEstimates?.inventoryResearch}
         onClose={() => setAiDialog(null)}
         onAction={() => {
           void runResearch(resourceId).then((result) => {
@@ -1996,6 +2027,7 @@ export function ResourceEditor({
         actionIcon={<ImageIcon size={15} />}
         busy={aiAction === "cover"}
         actionDisabled={!hasImage || !coverSourceMediaId}
+        estimatedCost={coverCostEstimate}
         onClose={() => setAiDialog(null)}
         onAction={() => {
           void runCover(resourceId).then((result) => {
@@ -2081,6 +2113,11 @@ export function ResourceEditor({
           )
         }
         busy={aiAction === "image"}
+        estimatedCost={
+          imageAcquisitionMode === "search"
+            ? aiCostEstimates?.imageSearch
+            : generatedImageCostEstimate
+        }
         onClose={() => setAiDialog(null)}
         onAction={() => {
           void runImageAcquisition(resourceId).then((result) => {

@@ -47,6 +47,12 @@
     "counting": "Counting model",
     "serverDefault": "Server default"
   },
+  "aiCost": {
+    "action": "Estimated API cost: {{cost}}",
+    "itemLanguage": "Estimated API cost: {{cost}} per item and language",
+    "imagePass": "Estimated API cost: {{cost}} per image pass",
+    "disclaimer": "Estimate based on standard Google/OpenAI API prices as of August 21, 2026. Actual cost varies with tokens, images, service tier, taxes, and provider pricing changes."
+  },
   "theme": {
     "toggle": "Toggle color theme",
     "light": "Switch to light mode",

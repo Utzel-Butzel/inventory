@@ -15,6 +15,7 @@ final class AppState: ObservableObject {
     @Published private(set) var availableImageModels: [ImageGenerationModelOption] = []
     @Published private(set) var defaultImageModelID: String?
     @Published private(set) var selectedImageModelID: String?
+    @Published private(set) var aiCostEstimates: [String: AICostEstimate] = [:]
     @Published private(set) var maximumUploadImagePixelSize: Int
     @Published private(set) var maximumAIGeneratedImagePixelSize: Int
     @Published private(set) var analysisPrompt: String?
@@ -80,6 +81,23 @@ final class AppState: ObservableObject {
     }
     var allowsNegativeStock: Bool { activeOrganization?.allowNegativeStock ?? false }
     var organizationContextIdentifier: String { client?.contextIdentifier ?? "unconfigured" }
+
+    func aiCostEstimate(for operation: String) -> AICostRange? {
+        aiCostEstimates[operation]?.range
+    }
+
+    func imageGenerationCostEstimate(passes: Int = 1) -> AICostRange? {
+        let effectiveModel = selectedImageModelID.flatMap { selectedID in
+            availableImageModels.first(where: { $0.id == selectedID })
+        } ?? defaultImageModelID.flatMap { defaultID in
+            availableImageModels.first(where: { $0.id == defaultID })
+        }
+        guard let effectiveModel else { return nil }
+        let estimate = effectiveModel.estimatedCostsBySize?[
+            String(maximumAIGeneratedImagePixelSize)
+        ] ?? effectiveModel.estimatedCost
+        return estimate?.multiplied(by: Double(max(1, passes)))
+    }
 
     nonisolated static func supportsInventory(scopes: Set<String>) -> Bool {
         scopes.contains("read")
@@ -822,6 +840,7 @@ final class AppState: ObservableObject {
         }
         availableImageModels = []
         defaultImageModelID = nil
+        aiCostEstimates = [:]
         selectedImageModelID = storedImageModelID(for: activeClient)
         loadPromptPreferences(for: activeClient)
         Task { [weak self] in
@@ -845,6 +864,7 @@ final class AppState: ObservableObject {
                 !option.id.isEmpty && seen.insert(option.id).inserted
             }
             availableImageModels = models
+            aiCostEstimates = response.costEstimates?.operations ?? [:]
             defaultImageModelID = response.defaultModelId.flatMap { identifier in
                 models.contains(where: { $0.id == identifier }) ? identifier : nil
             }
@@ -865,6 +885,7 @@ final class AppState: ObservableObject {
             // keep using a remembered explicit selection when one exists.
             availableImageModels = []
             defaultImageModelID = nil
+            aiCostEstimates = [:]
         }
     }
 
@@ -893,6 +914,7 @@ final class AppState: ObservableObject {
         availableImageModels = []
         defaultImageModelID = nil
         selectedImageModelID = nil
+        aiCostEstimates = [:]
         analysisPrompt = nil
         coverPrompt = nil
         transparentCoverPrompt = nil

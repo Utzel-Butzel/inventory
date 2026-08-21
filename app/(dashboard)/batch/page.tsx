@@ -36,6 +36,11 @@ import {
   ImageModelSelector,
   useImageModelPreference,
 } from "@/components/image-model-selector";
+import {
+  combinedAiCost,
+  EstimatedAiCost,
+  multipliedAiCost,
+} from "@/components/ai-cost-estimate";
 import type { CoverTransparencyMethod } from "@/lib/cover-generation-contract";
 
 const MAX_PHOTOS = 12;
@@ -176,6 +181,16 @@ export default function BatchCapturePage() {
   const [transparentCover, setTransparentCover] = useState(false);
   const [coverTransparencyMethod, setCoverTransparencyMethod] =
     useState<CoverTransparencyMethod>("difference-matting");
+  const analysisCostEstimate =
+    imageModelPreference.costEstimates?.operations.inventoryAnalysis;
+  const coverCostEstimate = multipliedAiCost(
+    imageModelPreference.effectiveModel?.estimatedCost,
+    transparentCover && coverTransparencyMethod === "difference-matting" ? 2 : 1,
+  );
+  const captureCostEstimate = combinedAiCost([
+    analysisCostEstimate,
+    autoGenerateCover ? coverCostEstimate : undefined,
+  ]);
   const [formError, setFormError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<BatchJob[]>([]);
 
@@ -1097,6 +1112,7 @@ export default function BatchCapturePage() {
                     <span className="mt-0.5 block text-xs leading-5 text-muted">
                       {t("defaults.generateCoverDescription")}
                     </span>
+                    <EstimatedAiCost estimate={coverCostEstimate} className="mt-1" />
                   </span>
                 </span>
                 <span className="relative shrink-0">
@@ -1214,6 +1230,10 @@ export default function BatchCapturePage() {
                   <Send className="h-4 w-4" aria-hidden="true" />
                 </span>
               </button>
+              <EstimatedAiCost
+                estimate={captureCostEstimate}
+                className="mt-2 flex justify-center"
+              />
               <p className="mt-3 text-center text-xs leading-5 text-muted">
                 {t("submit.description")}
               </p>

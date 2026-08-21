@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useT } from "next-i18next/client";
 
+import { EstimatedAiCost } from "@/components/ai-cost-estimate";
+import type { AiCostEstimateCatalog } from "@/lib/ai-cost-estimates";
+
 const storageKey = "inventory.image-generation-model";
 
 export type ImageModelOption = {
@@ -10,11 +13,21 @@ export type ImageModelOption = {
   provider: string;
   model: string;
   label: string;
+  estimatedCost?: {
+    minimumUsd: number;
+    maximumUsd: number;
+    unit: "imagePass";
+  };
+  estimatedCostsBySize?: Record<
+    string,
+    { minimumUsd: number; maximumUsd: number; unit: "imagePass" }
+  >;
 };
 
 type ImageModelResponse = {
   models?: unknown;
   defaultModelId?: unknown;
+  costEstimates?: unknown;
 };
 
 export type ImageModelPreference = {
@@ -22,6 +35,8 @@ export type ImageModelPreference = {
   defaultModelId: string | undefined;
   selectedModelId: string | undefined;
   selectedModel: ImageModelOption | undefined;
+  effectiveModel: ImageModelOption | undefined;
+  costEstimates: AiCostEstimateCatalog | null;
   loading: boolean;
   setSelectedModelId: (modelId: string | undefined) => void;
 };
@@ -33,6 +48,16 @@ const isImageModelOption = (value: unknown): value is ImageModelOption => {
     (entry) => typeof entry === "string" && entry.trim().length > 0,
   );
 };
+
+const isCostCatalog = (value: unknown): value is AiCostEstimateCatalog =>
+  Boolean(
+    value &&
+      typeof value === "object" &&
+      (value as Partial<AiCostEstimateCatalog>).currency === "USD" &&
+      typeof (value as Partial<AiCostEstimateCatalog>).pricingUpdatedAt ===
+        "string" &&
+      (value as Partial<AiCostEstimateCatalog>).operations,
+  );
 
 const readStoredModelId = () => {
   try {
@@ -57,6 +82,8 @@ export function useImageModelPreference(): ImageModelPreference {
   const [selectedModelId, setSelectedModelIdState] = useState<string | undefined>(
     () => readStoredModelId(),
   );
+  const [costEstimates, setCostEstimates] =
+    useState<AiCostEstimateCatalog | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -89,6 +116,9 @@ export function useImageModelPreference(): ImageModelPreference {
 
         setModels(uniqueModels);
         setDefaultModelId(defaultModelId);
+        setCostEstimates(
+          isCostCatalog(payload.costEstimates) ? payload.costEstimates : null,
+        );
         setSelectedModelIdState(nextModelId);
         if (storedModelId && !nextModelId) writeStoredModelId(undefined);
       } catch (error) {
@@ -135,12 +165,16 @@ export function useImageModelPreference(): ImageModelPreference {
     () => models.find((model) => model.id === selectedModelId),
     [models, selectedModelId],
   );
+  const effectiveModel =
+    selectedModel ?? models.find((model) => model.id === defaultModelId);
 
   return {
     models,
     defaultModelId,
     selectedModelId,
     selectedModel,
+    effectiveModel,
+    costEstimates,
     loading,
     setSelectedModelId,
   };
@@ -201,6 +235,10 @@ export function ImageModelSelector({
           {description}
         </p>
       ) : null}
+      <EstimatedAiCost
+        estimate={preference.effectiveModel?.estimatedCost}
+        className="mt-1"
+      />
     </div>
   );
 }

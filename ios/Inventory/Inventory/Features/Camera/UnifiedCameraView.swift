@@ -1054,6 +1054,14 @@ struct UnifiedCameraView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(InventoryTheme.ink)
                 }
+                if let estimate = state.aiCostEstimate(for: "inventoryRecognition") {
+                    Label(
+                        "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                        systemImage: "dollarsign.circle"
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .inventoryCard()
@@ -1074,6 +1082,14 @@ struct UnifiedCameraView: View {
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                if let estimate = state.aiCostEstimate(for: "inventoryRecognition") {
+                    Label(
+                        "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                        systemImage: "dollarsign.circle"
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .inventoryCard()
@@ -1530,9 +1546,29 @@ struct UnifiedCameraView: View {
             }
 
             if state.canUseAI {
-                Toggle("Fotos analysieren", isOn: $captureModel.autoAnalyze)
-                Toggle("Cover erzeugen", isOn: $captureModel.autoCover)
-                    .disabled(!captureModel.autoAnalyze)
+                VStack(alignment: .leading, spacing: 3) {
+                    Toggle("Fotos analysieren", isOn: $captureModel.autoAnalyze)
+                    if let estimate = state.aiCostEstimate(for: "inventoryAnalysis") {
+                        Label(
+                            "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                            systemImage: "dollarsign.circle"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Toggle("Cover erzeugen", isOn: $captureModel.autoCover)
+                        .disabled(!captureModel.autoAnalyze)
+                    if let estimate = state.imageGenerationCostEstimate() {
+                        Label(
+                            "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                            systemImage: "dollarsign.circle"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }

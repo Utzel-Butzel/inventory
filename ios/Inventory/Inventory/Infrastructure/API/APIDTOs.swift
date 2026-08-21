@@ -163,22 +163,96 @@ public struct ImageGenerationModelOption: Codable, Equatable, Identifiable, Send
     public let provider: String
     public let model: String
     public let label: String
+    public let estimatedCost: AICostRange?
+    public let estimatedCostsBySize: [String: AICostRange]?
 
-    public init(id: String, provider: String, model: String, label: String) {
+    public init(
+        id: String,
+        provider: String,
+        model: String,
+        label: String,
+        estimatedCost: AICostRange? = nil,
+        estimatedCostsBySize: [String: AICostRange]? = nil
+    ) {
         self.id = id
         self.provider = provider
         self.model = model
         self.label = label
+        self.estimatedCost = estimatedCost
+        self.estimatedCostsBySize = estimatedCostsBySize
     }
+}
+
+public struct AICostRange: Codable, Equatable, Sendable {
+    public let minimumUsd: Double
+    public let maximumUsd: Double
+    public let unit: String
+
+    public func multiplied(by multiplier: Double, unit: String = "action") -> AICostRange {
+        AICostRange(
+            minimumUsd: minimumUsd * multiplier,
+            maximumUsd: maximumUsd * multiplier,
+            unit: unit
+        )
+    }
+
+    public func adding(_ other: AICostRange, unit: String = "action") -> AICostRange {
+        AICostRange(
+            minimumUsd: minimumUsd + other.minimumUsd,
+            maximumUsd: maximumUsd + other.maximumUsd,
+            unit: unit
+        )
+    }
+
+    public var formattedUSD: String {
+        let fractionDigits = maximumUsd < 0.01 ? 4 : maximumUsd < 0.1 ? 3 : 2
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.minimumFractionDigits = fractionDigits
+        formatter.maximumFractionDigits = fractionDigits
+        let minimum = formatter.string(from: NSNumber(value: minimumUsd)) ?? "$\(minimumUsd)"
+        let maximum = formatter.string(from: NSNumber(value: maximumUsd)) ?? "$\(maximumUsd)"
+        return minimum == maximum ? minimum : "\(minimum)–\(maximum)"
+    }
+}
+
+public struct AICostEstimate: Codable, Equatable, Sendable {
+    public let provider: String
+    public let model: String
+    public let minimumUsd: Double
+    public let maximumUsd: Double
+    public let unit: String
+
+    public var range: AICostRange {
+        AICostRange(
+            minimumUsd: minimumUsd,
+            maximumUsd: maximumUsd,
+            unit: unit
+        )
+    }
+}
+
+public struct AICostEstimateCatalog: Codable, Equatable, Sendable {
+    public let currency: String
+    public let pricingUpdatedAt: String
+    public let operations: [String: AICostEstimate]
 }
 
 public struct ImageGenerationModelsResponse: Codable, Equatable, Sendable {
     public let models: [ImageGenerationModelOption]
     public let defaultModelId: String?
+    public let costEstimates: AICostEstimateCatalog?
 
-    public init(models: [ImageGenerationModelOption], defaultModelId: String?) {
+    public init(
+        models: [ImageGenerationModelOption],
+        defaultModelId: String?,
+        costEstimates: AICostEstimateCatalog? = nil
+    ) {
         self.models = models
         self.defaultModelId = defaultModelId
+        self.costEstimates = costEstimates
     }
 }
 

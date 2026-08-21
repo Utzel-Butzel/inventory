@@ -14,6 +14,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
 
 import { Button, Card } from "@/components/ui";
+import {
+  EstimatedAiCost,
+  useAiCostEstimateCatalog,
+} from "@/components/ai-cost-estimate";
 import { fetchJson } from "@/lib/client-types";
 
 type ContentLanguage = {
@@ -38,6 +42,8 @@ const inputClass =
 
 export function LanguageManager() {
   const { t } = useT("settings");
+  const aiCostEstimates = useAiCostEstimateCatalog();
+  const translationCostEstimate = aiCostEstimates?.operations.translation;
   const [languages, setLanguages] = useState<ContentLanguage[]>([]);
   const [draft, setDraft] = useState(emptyDraft);
   const [creating, setCreating] = useState(false);
@@ -204,19 +210,26 @@ export function LanguageManager() {
               <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
                 {t("languages.description")}
               </p>
+              <EstimatedAiCost
+                estimate={translationCostEstimate}
+                className="mt-1"
+              />
             </div>
           </div>
           <div className="flex gap-2">
             {languages.some((language) => !language.isDefault && !language.archivedAt) ? (
-              <button
-                type="button"
-                onClick={() => void translateExistingInventory()}
-                disabled={bulkTranslating}
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3 text-xs font-semibold text-brand hover:bg-brand-soft disabled:opacity-50"
-              >
-                {bulkTranslating ? <LoaderCircle className="size-4 animate-spin" /> : <Languages className="size-4" />}
-                {bulkTranslating ? t("languages.translating") : t("languages.translateInventory")}
-              </button>
+              <span className="flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  onClick={() => void translateExistingInventory()}
+                  disabled={bulkTranslating}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3 text-xs font-semibold text-brand hover:bg-brand-soft disabled:opacity-50"
+                >
+                  {bulkTranslating ? <LoaderCircle className="size-4 animate-spin" /> : <Languages className="size-4" />}
+                  {bulkTranslating ? t("languages.translating") : t("languages.translateInventory")}
+                </button>
+                <EstimatedAiCost estimate={translationCostEstimate} />
+              </span>
             ) : null}
             <button
               type="button"
@@ -290,6 +303,7 @@ export function LanguageManager() {
                   className="size-4 rounded border-border-strong text-brand"
                 />
                 {t("languages.autoOnSave")}
+                <EstimatedAiCost estimate={translationCostEstimate} />
               </label>
               <Button type="submit" disabled={savingCode === "new"}>
                 {savingCode === "new" ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}

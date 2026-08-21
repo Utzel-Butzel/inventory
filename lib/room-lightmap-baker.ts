@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 type PathTracingMaterial = THREE.ShaderMaterial & {
   bounces: number;
@@ -46,7 +47,7 @@ export function createRoomLightMapCacheKey(value: unknown) {
     hash ^= source.charCodeAt(index);
     hash = Math.imul(hash, 16_777_619);
   }
-  return `room-lightmap-v4-${(hash >>> 0).toString(36)}`;
+  return `room-lightmap-v12-${(hash >>> 0).toString(36)}`;
 }
 
 function cacheLightMap(key: string, entry: BakeCacheEntry) {
@@ -224,8 +225,19 @@ async function unwrapReceiverGeometry(receivers: ReceiverMesh[]) {
   try {
     for (const mesh of receivers) {
       const originalGeometry = mesh.geometry;
-      const geometry = originalGeometry.clone();
+      let geometry = originalGeometry.clone();
       if (!geometry.getAttribute("normal")) geometry.computeVertexNormals();
+
+      // ExtrudeGeometry is deliberately non-indexed. Passing it straight to
+      // xatlas makes each coplanar triangle around a window an independent UV
+      // island, so normal sampling and denoising stop at its triangulation
+      // edges. Weld vertices that already agree in position, normal, and UV;
+      // hard wall/cap edges remain split because their normals differ.
+      if (!geometry.getIndex()) {
+        const indexedGeometry = mergeVertices(geometry, 1e-5);
+        geometry.dispose();
+        geometry = indexedGeometry;
+      }
 
       const position = geometry.getAttribute("position");
       const normal = geometry.getAttribute("normal");
@@ -469,7 +481,8 @@ function patchPathTracingMaterial(
          lightMapBitangent * sin(hemisphereAngle) * hemisphereRadius +
          lightMapNormal * hemisphereCosine
        );
-       float lightMapInitialPdf = hemisphereCosine * RECIPROCAL_PI;`,
+       float lightMapInitialPdf = hemisphereCosine * RECIPROCAL_PI;
+       float lightMapContactOcclusion = 0.0;`,
     )
     .replace(
       "ScatterRecord scatterRec;",
@@ -486,9 +499,8 @@ function patchPathTracingMaterial(
 
        // Explicitly sample the window emitter at the baked surface. Relying
        // only on a cosine ray randomly finding the window converges too slowly
-       // and causes the denoiser to erase direct furniture shadows. This is the
-       // diffuse irradiance form of next-event estimation, paired with the
-       // existing forward light hit through MIS so it stays unbiased.
+       // and produces bright, isolated light hits. The initial forward light
+       // hit is disabled below, so this direct sample carries the full weight.
        state.traversals = bounces;
        state.isShadowRay = true;
        if (lights.count != 0u) {
@@ -518,33 +530,108 @@ function patchPathTracingMaterial(
              lightMapLight.dist,
              lightMapAttenuation
            )) {
-             float lightMapSurfacePdf =
-               lightMapCosine * RECIPROCAL_PI;
-             float lightMapMisWeight =
-               lightMapLight.type == SPOT_LIGHT_TYPE ||
-               lightMapLight.type == DIR_LIGHT_TYPE ||
-               lightMapLight.type == POINT_LIGHT_TYPE
-                 ? 1.0
-                 : misHeuristic(lightMapLightPdf, lightMapSurfacePdf);
              gl_FragColor.rgb +=
                lightMapAttenuation *
                lightMapLight.emission *
                lightMapCosine *
-               lightMapMisWeight /
                lightMapLightPdf *
                RECIPROCAL_PI;
            }
          }
        }
-       state.isShadowRay = false;`,
+       state.isShadowRay = false;
+       vec3 lightMapDirectRadiance = gl_FragColor.rgb;`,
     )
     .replace(
       "state.firstRay = i == 0 && state.transmissiveTraversals == transmissiveBounces;",
       "state.firstRay = false;",
     )
     .replace(
+      "if ( ! state.firstRay && ! state.transmissiveRay ) {",
+      "if ( i > 0 && ! state.transmissiveRay ) {",
+    )
+    .replace(
+      "int hitType = traceScene( ray, state.fogMaterial, surfaceHit );",
+      `int hitType = traceScene( ray, state.fogMaterial, surfaceHit );
+       if (i == 0 && hitType == SURFACE_HIT) {
+         // A cosine-weighted visibility sample supplies stable, view-independent
+         // contact occlusion beneath nearby geometry. This remains separate
+         // from the long window penumbra and fades out before it can become a
+         // generic room-wide ambient shadow.
+         float lightMapContactSurfaceWeight = smoothstep(
+           0.55,
+           0.82,
+           lightMapNormal.y
+         );
+         lightMapContactOcclusion = lightMapContactSurfaceWeight *
+           (1.0 - smoothstep(0.025, 0.45, surfaceHit.dist));
+       }`,
+    )
+    .replace(
+      "scatterRec = bsdfSample( - ray.direction, surf );",
+      `// Lightmaps store diffuse irradiance. Sampling glossy, metallic, and
+       // transmissive lobes here adds unstable caustic fireflies that do not
+       // belong in a diffuse bake. A cosine-weighted Lambert bounce retains
+       // material colour bleeding and physically meaningful multi-bounce GI.
+       vec2 lightMapBounceSample = rand2(14);
+       float lightMapBounceRadius = sqrt(lightMapBounceSample.x);
+       float lightMapBounceAngle = 2.0 * PI * lightMapBounceSample.y;
+       float lightMapBounceCosine = sqrt(
+         max(0.0, 1.0 - lightMapBounceSample.x)
+       );
+       vec3 lightMapBounceNormal = surf.normal;
+       vec3 lightMapBounceTangent = normalize(
+         abs(lightMapBounceNormal.z) < 0.999
+           ? cross(vec3(0.0, 0.0, 1.0), lightMapBounceNormal)
+           : cross(vec3(0.0, 1.0, 0.0), lightMapBounceNormal)
+       );
+       vec3 lightMapBounceBitangent = cross(
+         lightMapBounceNormal,
+         lightMapBounceTangent
+       );
+       scatterRec.direction = normalize(
+         lightMapBounceTangent * cos(lightMapBounceAngle) * lightMapBounceRadius +
+         lightMapBounceBitangent * sin(lightMapBounceAngle) * lightMapBounceRadius +
+         lightMapBounceNormal * lightMapBounceCosine
+       );
+       scatterRec.pdf = max(
+         dot(lightMapBounceNormal, scatterRec.direction) * RECIPROCAL_PI,
+         1e-6
+       );
+       scatterRec.specularPdf = 0.0;
+       scatterRec.color = surf.color * scatterRec.pdf;`,
+    )
+    .replace(
       "gl_FragColor.a *= opacity;",
-      `gl_FragColor.rgb = min(gl_FragColor.rgb * PI, vec3(24.0));
+      `float lightMapContactVisibility =
+         1.0 - lightMapContactOcclusion * 0.46;
+       vec3 lightMapIndirectRadiance = max(
+         gl_FragColor.rgb - lightMapDirectRadiance,
+         vec3(0.0)
+       );
+       // Keep a single rare bounce from dominating one texel. Direct window
+       // illumination is not clamped, so legitimate bright apertures and soft
+       // shadow gradients retain their full energy.
+       float lightMapIndirectPeak = max(
+         lightMapIndirectRadiance.r,
+         max(lightMapIndirectRadiance.g, lightMapIndirectRadiance.b)
+       );
+       lightMapIndirectRadiance *= min(
+         1.0,
+         4.0 / max(lightMapIndirectPeak, 1e-6)
+       );
+       // Compress the direct-to-bounce ratio before display tone mapping.
+       // This preserves physical spatial variation while preventing a nearby
+       // white wall from overpowering the useful multi-bounce fill deeper in
+       // the room.
+       vec3 lightMapBalancedRadiance =
+         lightMapDirectRadiance * 0.82 +
+         lightMapIndirectRadiance * 1.18;
+       gl_FragColor.rgb = min(
+         lightMapBalancedRadiance *
+           PI * lightMapContactVisibility,
+         vec3(20.0)
+       );
        gl_FragColor.a = lightMapPositionSample.a * opacity;`,
     );
   material.needsUpdate = true;
@@ -608,7 +695,7 @@ function createDenoiseMaterial() {
             );
             float luminanceWeight = exp(
               -abs(centerLuminance - sampleLuminance) /
-              luminanceScale * 4.0
+              luminanceScale * 1.75
             );
             float weight =
               normalWeight * positionWeight * spatialWeight * luminanceWeight;
@@ -620,6 +707,88 @@ function createDenoiseMaterial() {
           totalWeight > 0.0 ? total / totalWeight : center.rgb,
           1.0
         );
+      }
+    `,
+  });
+}
+
+function createFireflyFilterMaterial() {
+  return new THREE.ShaderMaterial({
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.NoBlending,
+    uniforms: {
+      map: { value: null as THREE.Texture | null },
+      chartMap: { value: null as THREE.Texture | null },
+      normalMap: { value: null as THREE.Texture | null },
+      positionMap: { value: null as THREE.Texture | null },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = vec4(position.xy, 0.0, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D map;
+      uniform sampler2D chartMap;
+      uniform sampler2D normalMap;
+      uniform sampler2D positionMap;
+      varying vec2 vUv;
+
+      float lightMapLuminance(vec3 color) {
+        return dot(color, vec3(0.2126, 0.7152, 0.0722));
+      }
+
+      void main() {
+        vec4 center = texture2D(map, vUv);
+        vec4 centerPosition = texture2D(positionMap, vUv);
+        if (centerPosition.a < 0.5) {
+          gl_FragColor = vec4(0.0);
+          return;
+        }
+
+        vec2 texel = 1.0 / vec2(textureSize(map, 0));
+        float centerChart = texture2D(chartMap, vUv).r;
+        vec3 centerNormal = normalize(texture2D(normalMap, vUv).xyz);
+        float centerLuminance = lightMapLuminance(center.rgb);
+        float neighborTotal = 0.0;
+        float neighborSquaredTotal = 0.0;
+        float neighborWeight = 0.0;
+
+        for (int y = -1; y <= 1; y++) {
+          for (int x = -1; x <= 1; x++) {
+            if (x == 0 && y == 0) continue;
+            vec2 sampleUv = vUv + vec2(float(x), float(y)) * texel;
+            vec4 samplePosition = texture2D(positionMap, sampleUv);
+            if (samplePosition.a < 0.5) continue;
+            float sampleChart = texture2D(chartMap, sampleUv).r;
+            if (abs(centerChart - sampleChart) > 0.25) continue;
+            vec3 sampleNormal = normalize(texture2D(normalMap, sampleUv).xyz);
+            if (dot(centerNormal, sampleNormal) < 0.92) continue;
+            float sampleLuminance = lightMapLuminance(
+              texture2D(map, sampleUv).rgb
+            );
+            neighborTotal += sampleLuminance;
+            neighborSquaredTotal += sampleLuminance * sampleLuminance;
+            neighborWeight += 1.0;
+          }
+        }
+
+        vec3 filtered = center.rgb;
+        if (neighborWeight >= 3.0) {
+          float mean = neighborTotal / neighborWeight;
+          float variance = max(
+            neighborSquaredTotal / neighborWeight - mean * mean,
+            0.0
+          );
+          float maximumLuminance = mean + max(3.0 * sqrt(variance), 0.18);
+          if (centerLuminance > maximumLuminance) {
+            filtered *= maximumLuminance / max(centerLuminance, 1e-6);
+          }
+        }
+        gl_FragColor = vec4(filtered, 1.0);
       }
     `,
   });
@@ -700,9 +869,9 @@ function applyLightMap(receivers: UnwrappedReceiver[], texture: THREE.Texture) {
   }
   for (const material of materials) {
     material.lightMap = texture;
-    // Keep the baked irradiance below the compressed shoulder of ACES so
-    // window penumbrae retain visible tonal separation on bright materials.
-    material.lightMapIntensity = 0.85;
+    // Leave headroom for the display transform so window penumbrae retain
+    // visible tonal separation on bright materials.
+    material.lightMapIntensity = 0.92;
     material.needsUpdate = true;
   }
 }
@@ -817,13 +986,22 @@ export async function createRoomLightMapBake({
     const previousTarget = renderer.getRenderTarget();
     const previousToneMapping = renderer.toneMapping;
     renderer.toneMapping = THREE.NoToneMapping;
-    let denoiseSource = tracer.target.texture;
+    const fireflyMaterial = createFireflyFilterMaterial();
+    fireflyMaterial.uniforms.map!.value = tracer.target.texture;
+    fireflyMaterial.uniforms.chartMap!.value = chartTarget.texture;
+    fireflyMaterial.uniforms.normalMap!.value = normalTarget.texture;
+    fireflyMaterial.uniforms.positionMap!.value = positionTarget.texture;
+    const fireflyQuad = new FullScreenQuad(fireflyMaterial);
+    renderer.setRenderTarget(denoiseTarget);
+    fireflyQuad.render(renderer);
+
+    let denoiseSource = denoiseTarget.texture;
     let readTarget = denoiseTarget;
-    // Three a-trous passes remove path-tracing noise without the 62-texel
-    // effective radius of five passes, which erased broad penumbrae and all
-    // short contact shadows on shared floor charts.
-    for (let pass = 0; pass < 3; pass += 1) {
-      readTarget = pass % 2 === 0 ? denoiseTarget : workTarget;
+    // Two a-trous passes remove residual path-tracing noise while preserving
+    // the higher-resolution furniture footprints and short contact shadows.
+    // A third four-texel step visibly smeared chair and table detail.
+    for (let pass = 0; pass < 2; pass += 1) {
+      readTarget = readTarget === denoiseTarget ? workTarget : denoiseTarget;
       denoiseMaterial.uniforms.map!.value = denoiseSource;
       denoiseMaterial.uniforms.stepWidth!.value = 2 ** pass;
       renderer.setRenderTarget(readTarget);
@@ -844,6 +1022,8 @@ export async function createRoomLightMapBake({
     renderer.toneMapping = previousToneMapping;
     denoiseQuad.dispose();
     denoiseMaterial.dispose();
+    fireflyQuad.dispose();
+    fireflyMaterial.dispose();
     dilationQuad.dispose();
     dilationMaterial.dispose();
     writeTarget.dispose();

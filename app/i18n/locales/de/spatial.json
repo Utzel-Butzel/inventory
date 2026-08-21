@@ -323,8 +323,8 @@
       "realisticDescription": "Eine Raytracing-Ansicht mit physikalisch berechneten Fensterschatten und indirektem Licht backen.",
       "rendering": "Rendering",
       "renderingDescription": "Die aktuelle Kamera bis zu 10 Sekunden mit Mehrfachreflexionen per Raytracing rendern.",
-      "baking": "Licht und Schatten werden per Raytracing gebacken… {{progress}} %",
-      "baked": "Licht und Schatten per Raytracing sind bereit",
+      "baking": "Globale Beleuchtung und Schatten werden per Raytracing gebacken… {{progress}} %",
+      "baked": "Gebakene globale Beleuchtung und Schatten sind bereit",
       "renderingProgress": "Raytracing… {{progress}} %",
       "rendered": "Raytracing-Rendering abgeschlossen"
     },

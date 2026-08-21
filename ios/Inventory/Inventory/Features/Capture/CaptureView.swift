@@ -509,9 +509,29 @@ struct CaptureView: View {
             }
 
             if state.canUseAI {
-                Toggle("Fotos analysieren", isOn: $model.autoAnalyze)
-                Toggle("Cover erzeugen", isOn: $model.autoCover)
-                    .disabled(!model.autoAnalyze)
+                VStack(alignment: .leading, spacing: 3) {
+                    Toggle("Fotos analysieren", isOn: $model.autoAnalyze)
+                    if let estimate = state.aiCostEstimate(for: "inventoryAnalysis") {
+                        Label(
+                            "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                            systemImage: "dollarsign.circle"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Toggle("Cover erzeugen", isOn: $model.autoCover)
+                        .disabled(!model.autoAnalyze)
+                    if let estimate = state.imageGenerationCostEstimate() {
+                        Label(
+                            "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                            systemImage: "dollarsign.circle"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }

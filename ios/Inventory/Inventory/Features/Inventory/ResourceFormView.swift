@@ -180,6 +180,14 @@ struct ResourceFormView: View {
                         Text(objectCaptureProcessingDescription)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if let estimate = objectCaptureAICostEstimate {
+                            Label(
+                                "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                                systemImage: "dollarsign.circle"
+                            )
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -672,6 +680,14 @@ struct ResourceFormView: View {
             return "Artikelbild und USDZ-Modell werden hochgeladen. Anschließend folgen automatisch die übliche KI-Erkennung und eine transparente Freistellung."
         }
         return "Artikelbild und USDZ-Modell werden hochgeladen. KI-Erkennung und Freistellung bleiben aus, weil diesem Konto die KI-Berechtigung fehlt."
+    }
+
+    private var objectCaptureAICostEstimate: AICostRange? {
+        guard state.canUseAI else { return nil }
+        let analysis = state.aiCostEstimate(for: "inventoryAnalysis")
+        let cover = state.imageGenerationCostEstimate(passes: 2)
+        if let analysis, let cover { return analysis.adding(cover) }
+        return analysis ?? cover
     }
 
     private var closeAfterPartialCreationTitle: String {

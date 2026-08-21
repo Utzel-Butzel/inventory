@@ -47,6 +47,12 @@
     "counting": "Zählmodell",
     "serverDefault": "Serverstandard"
   },
+  "aiCost": {
+    "action": "Geschätzte API-Kosten: {{cost}}",
+    "itemLanguage": "Geschätzte API-Kosten: {{cost}} je Eintrag und Sprache",
+    "imagePass": "Geschätzte API-Kosten: {{cost}} je Bilddurchlauf",
+    "disclaimer": "Schätzung anhand der Standardpreise der Google-/OpenAI-API vom 21. August 2026. Die tatsächlichen Kosten hängen von Tokens, Bildern, Servicestufe, Steuern und Preisänderungen der Anbieter ab."
+  },
   "theme": {
     "toggle": "Farbmodus wechseln",
     "light": "Zum hellen Modus wechseln",
