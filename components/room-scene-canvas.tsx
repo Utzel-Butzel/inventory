@@ -45,6 +45,7 @@ import {
 import { applyDetectedRoomFinish } from "@/components/room-scene-materials";
 import { cn } from "@/components/ui";
 import type { RoomObjectSuggestion } from "@/lib/room-ai-analysis-contract";
+import type { RoomLightMapBake } from "@/lib/room-lightmap-baker";
 import type { SpatialMatrix4 } from "@/lib/room-scene-contract";
 import {
   hasPlyHeader,
@@ -840,7 +841,7 @@ export function RoomSceneCanvas({
     renderer.setClearColor(initialScenePalette.background, mapBackground ? 0 : 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = rayTracedLighting ? 1.08 : 0.93;
+    renderer.toneMappingExposure = rayTracedLighting ? 1.3 : 0.93;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.VSMShadowMap;
     ensureRectAreaLightUniforms();
@@ -1241,6 +1242,7 @@ export function RoomSceneCanvas({
     const splatMaterials = new Set<THREE.ShaderMaterial>();
     let disposed = false;
     let pathTracer: GpuPathTracer | null = null;
+    let lightMapBake: RoomLightMapBake | null = null;
     let pathTraceDenoiseQuad: FullScreenQuad | null = null;
     let restartPathTracingForTheme: () => void = () => undefined;
     const layoutTransformForManifest = (
@@ -2245,6 +2247,7 @@ export function RoomSceneCanvas({
       0,
     );
     const daylightShadowLights: THREE.SpotLight[] = [];
+    const daylightAreaLights: THREE.RectAreaLight[] = [];
 
     // The aperture itself is the dominant emitter: a cool, broad source on the
     // room side of the glass. Its geometric falloff makes the window side brighter
@@ -2252,10 +2255,12 @@ export function RoomSceneCanvas({
     // directly; Live adds a multi-sample raster visibility rig below.
     for (const portal of activePortals) {
       const areaLight = new THREE.RectAreaLight(
-        hasWindowDaylight ? 0xe9f4ff : 0xffe8c7,
         hasWindowDaylight
-          ? rayTracedLighting ? 15 : 1.8
-          : rayTracedLighting ? 10 : 1.6,
+          ? rayTracedLighting ? 0xe4f0ff : 0xe9f4ff
+          : rayTracedLighting ? 0xfff1df : 0xffe8c7,
+        hasWindowDaylight
+          ? rayTracedLighting ? 19 : 1.8
+          : rayTracedLighting ? 12.5 : 1.6,
         portal.width,
         portal.height,
       );
@@ -2268,6 +2273,7 @@ export function RoomSceneCanvas({
       if (hasWindowDaylight) areaLight.lookAt(portal.roomCenter);
       else areaLight.rotation.x = -Math.PI / 2;
       scene.add(areaLight);
+      daylightAreaLights.push(areaLight);
 
       // Path tracing computes this reflected light from the real surfaces.
       // The live renderer keeps its inexpensive fill emitters below.
@@ -2831,6 +2837,7 @@ export function RoomSceneCanvas({
     ));
     composer.addPass(new RenderPass(scene, camera));
     const ambientOcclusionPass = new GTAOPass(scene, camera, 1, 1);
+    ambientOcclusionPass.enabled = lightingMode === "live";
     ambientOcclusionPass.output = GTAOPass.OUTPUT.Default;
     ambientOcclusionPass.blendIntensity = lightingMode === "live" ? 0.44 : 0.5;
     ambientOcclusionPass.setSceneClipBox(
@@ -2863,8 +2870,8 @@ export function RoomSceneCanvas({
     let pathTracingFinished = false;
     let pathTracingStartedAt: number | null = null;
     let pathTracingLastStatusAt = 0;
-    const pathTracingDuration = lightingMode === "rendering" ? 10_000 : 5_000;
-    const pathTracingSampleTarget = lightingMode === "rendering" ? 2_048 : 512;
+    const pathTracingDuration = lightingMode === "rendering" ? 10_000 : 18_000;
+    const pathTracingSampleTarget = lightingMode === "rendering" ? 2_048 : 64;
     const restartPathTracing = () => {
       if (!pathTracer || !pathTracingReady) return;
       pathTracer.updateCamera();
@@ -2874,15 +2881,65 @@ export function RoomSceneCanvas({
       setLightingStatus("generating");
     };
     restartPathTracingForTheme = restartPathTracing;
-    const onControlsChange = () => {
-      if (lightingMode === "realistic") restartPathTracing();
-    };
+    // Realistic mode renders from camera-independent lightmaps. Only the
+    // one-off Rendering mode owns a view-space accumulation buffer.
+    const onControlsChange = () => undefined;
     controls.addEventListener("change", onControlsChange);
 
     const initializePathTracer = async () => {
       if (!rayTracedLighting) return;
       setLightingProgress(2);
       try {
+        if (lightingMode === "realistic") {
+          const {
+            createRoomLightMapBake,
+            createRoomLightMapCacheKey,
+          } = await import("@/lib/room-lightmap-baker");
+          if (disposed) return;
+          const cacheKey = createRoomLightMapCacheKey({
+            version: 3,
+            rooms: visibleManifests.map((roomManifest) => ({
+              analysis: roomManifest.scan.aiAnalysis,
+              id: roomManifest.scan.id,
+              layoutTransform: layoutTransformForManifest(roomManifest),
+              scene: roomManifest.scan.scene,
+            })),
+          });
+          const bake = await createRoomLightMapBake({
+            cacheKey,
+            onProgress: (progress) => {
+              if (!disposed) setLightingProgress(progress);
+            },
+            renderer,
+            // A 512² atlas converges roughly four times faster than 1024² on
+            // integrated GPUs. For broad interior lighting and soft shadows,
+            // the extra samples produce a visibly higher-quality final map
+            // than sparse high-resolution texels.
+            resolution: Math.min(512, renderer.capabilities.maxTextureSize),
+            roots: roomPlanRoots.values(),
+            scene,
+          });
+          if (disposed) {
+            bake.dispose();
+            return;
+          }
+          lightMapBake = bake;
+          renderer.shadowMap.enabled = false;
+          pathTracingReady = true;
+          pathTracingStartedAt = performance.now();
+          setLightingProgress(bake.cached ? 100 : 20);
+          if (bake.cached) {
+            pathTracingFinished = true;
+            daylightAreaLights.forEach((light) => {
+              light.intensity = 0;
+            });
+            scene.environment = environmentTarget.texture;
+            scene.environmentIntensity = 0.18;
+            setLightingStatus("ready");
+          }
+          return;
+        }
+
         const { WebGLPathTracer } = await import("three-gpu-pathtracer");
         if (disposed) return;
 
@@ -3111,7 +3168,7 @@ export function RoomSceneCanvas({
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       applyMapCamera();
-      if (pathTracingReady) restartPathTracing();
+      if (pathTracer && pathTracingReady) restartPathTracing();
     };
     const observer = new ResizeObserver(resize);
     observer.observe(host);
@@ -3183,7 +3240,45 @@ export function RoomSceneCanvas({
         controls.update();
       }
 
-      if (rayTracedLighting && pathTracingReady && pathTracer) {
+      if (
+        lightingMode === "realistic" &&
+        pathTracingReady &&
+        lightMapBake
+      ) {
+        if (!pathTracingFinished) {
+          pathTracingStartedAt ??= frameTimestamp;
+          lightMapBake.renderSample();
+          const elapsed = frameTimestamp - pathTracingStartedAt;
+          const tracingProgress = Math.min(
+            100,
+            20 + Math.max(
+              elapsed / pathTracingDuration,
+              lightMapBake.samples / pathTracingSampleTarget,
+            ) * 80,
+          );
+          const finished =
+            elapsed >= pathTracingDuration ||
+            lightMapBake.samples >= pathTracingSampleTarget;
+          if (finished || frameTimestamp - pathTracingLastStatusAt >= 200) {
+            pathTracingLastStatusAt = frameTimestamp;
+            setLightingProgress(finished ? 100 : Math.round(tracingProgress));
+          }
+          if (finished) {
+            lightMapBake.finish();
+            pathTracingFinished = true;
+            daylightAreaLights.forEach((light) => {
+              light.intensity = 0;
+            });
+            // Lightmaps contain direct and bounced diffuse irradiance. A weak
+            // PMREM remains only for the view-dependent material reflections
+            // that cannot be represented in a scalar baked map.
+            scene.environment = environmentTarget.texture;
+            scene.environmentIntensity = 0.18;
+            setLightingStatus("ready");
+          }
+        }
+        composer.render(delta);
+      } else if (rayTracedLighting && pathTracingReady && pathTracer) {
         if (!pathTracingFinished) {
           pathTracingStartedAt ??= frameTimestamp;
           pathTracer.renderSample();
@@ -3264,6 +3359,8 @@ export function RoomSceneCanvas({
       }
       controls.removeEventListener("change", onControlsChange);
       controls.dispose();
+      lightMapBake?.dispose();
+      lightMapBake = null;
       pathTracer?.dispose();
       pathTracer = null;
       if (pathTraceDenoiseQuad) {
