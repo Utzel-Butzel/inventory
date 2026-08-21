@@ -1205,6 +1205,16 @@ export function RoomSceneBrowser() {
                                   ? t("rooms.ai.grounded")
                                   : t("rooms.ai.unplaced")}
                               </p>
+                              {suggestion.primitiveModel ? (
+                                <p className="mt-0.5 text-[9px] font-medium text-brand">
+                                  {t("rooms.ai.generatedModel", {
+                                    count: suggestion.primitiveModel.parts.length,
+                                    value: integer.format(
+                                      suggestion.primitiveModel.parts.length,
+                                    ),
+                                  })}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
                           <div className="mt-2 flex gap-1.5">
@@ -1224,12 +1234,16 @@ export function RoomSceneBrowser() {
                                 ) : (
                                   <Check className="size-3" aria-hidden="true" />
                                 )}
-                                {t("rooms.ai.accept")}
+                                {t(suggestion.primitiveModel
+                                  ? "rooms.ai.acceptModel"
+                                  : "rooms.ai.accept")}
                               </button>
                             ) : (
                               <span className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[9px] font-semibold text-success">
                                 <Check className="size-3" aria-hidden="true" />
-                                {t("rooms.ai.accepted")}
+                                {t(suggestion.primitiveModel
+                                  ? "rooms.ai.modelApplied"
+                                  : "rooms.ai.accepted")}
                               </span>
                             )}
                             <button

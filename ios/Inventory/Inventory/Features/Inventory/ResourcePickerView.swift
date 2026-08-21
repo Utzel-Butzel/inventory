@@ -69,9 +69,9 @@ struct ResourcePickerView: View {
             defer { loading = false }
             do {
                 let response = try await client.listResources(
+                    query: query,
                     page: 1,
-                    pageSize: 100,
-                    query: query
+                    pageSize: 100
                 )
                 resources = response.resources.filter {
                     !excludedResourceIDs.contains($0.id) && $0.status != .archived

@@ -81,6 +81,7 @@ export function buildRoomAiAnalysis(options: {
           ? evidenceKeyframeIds
           : [fallbackKeyframeId],
         roomObjectId,
+        primitiveModel: roomObjectId ? suggestion.primitiveModel : null,
         status: "pending" as const,
       };
     }),

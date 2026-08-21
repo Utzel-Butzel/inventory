@@ -21,7 +21,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { LightProbeGenerator } from "three/examples/jsm/lights/LightProbeGenerator.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
@@ -32,7 +32,10 @@ import type {
   RoomMaterial,
   RoomSurfaceAppearance,
 } from "@/lib/room-ai-analysis-contract";
-import { createRoomObjectModel } from "@/components/room-object-models";
+import {
+  createAiPrimitiveObjectModel,
+  createRoomObjectModel,
+} from "@/components/room-object-models";
 import { cn } from "@/components/ui";
 import {
   hasPlyHeader,
@@ -912,6 +915,13 @@ export function RoomSceneCanvas({
       aiMaterials.set(key, material);
       return material;
     };
+    const acceptedSuggestionForObject = (
+      roomManifest: ClientRoomSceneManifest,
+      objectId: string,
+    ) => roomManifest.scan.aiAnalysis?.objectSuggestions.find(
+      (candidate) =>
+        candidate.status === "accepted" && candidate.roomObjectId === objectId,
+    );
     const objectLightMaterial = new THREE.MeshStandardMaterial({
       color: 0xe8e1d6,
       map: objectColorMap,
@@ -1021,7 +1031,6 @@ export function RoomSceneCanvas({
       material,
       castShadow = false,
       receiveShadow = true,
-      rounded = true,
     }: {
       parent: THREE.Object3D;
       size: readonly [number, number, number];
@@ -1029,21 +1038,11 @@ export function RoomSceneCanvas({
       material: THREE.Material;
       castShadow?: boolean;
       receiveShadow?: boolean;
-      rounded?: boolean;
     }) => {
       const width = Math.max(size[0], 0.002);
       const height = Math.max(size[1], 0.002);
       const depth = Math.max(size[2], 0.002);
-      const shortestSide = Math.min(width, height, depth);
-      const geometry = rounded
-        ? new RoundedBoxGeometry(
-            width,
-            height,
-            depth,
-            2,
-            THREE.MathUtils.clamp(shortestSide * 0.1, 0.0015, 0.018),
-          )
-        : new THREE.BoxGeometry(width, height, depth);
+      const geometry = new THREE.BoxGeometry(width, height, depth);
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(...position);
       mesh.castShadow = castShadow;
@@ -1086,7 +1085,6 @@ export function RoomSceneCanvas({
           ],
           material,
           castShadow: true,
-          rounded: false,
         }));
       }
       return wall;
@@ -1229,7 +1227,6 @@ export function RoomSceneCanvas({
         size: [glassWidth, glassHeight, 0.012],
         material: glassMaterial,
         receiveShadow: false,
-        rounded: false,
       }));
       for (const x of [-width / 2 + frameWidth / 2, width / 2 - frameWidth / 2]) {
         addBox({
@@ -1372,20 +1369,29 @@ export function RoomSceneCanvas({
 
       for (const item of roomManifest.scan.scene.objects) {
         const dimensions = normalizedDimensions(item.category, item.dimensions);
-        const objectModel = createRoomObjectModel({
-          category: item.category,
-          dimensions,
-          materials: {
-            primary: finishForObject(roomManifest, item.id, item.category),
-            light: objectLightMaterial,
-            dark: objectDarkMaterial,
-            metal: objectMetalMaterial,
-            glass: objectGlassMaterial,
-            ceramic: objectCeramicMaterial,
-            water: objectWaterMaterial,
-            warm: objectWarmMaterial,
-          },
-        });
+        const acceptedSuggestion = acceptedSuggestionForObject(
+          roomManifest,
+          item.id,
+        );
+        const objectModel = acceptedSuggestion?.primitiveModel
+          ? createAiPrimitiveObjectModel({
+              dimensions,
+              model: acceptedSuggestion.primitiveModel,
+            })
+          : createRoomObjectModel({
+              category: item.category,
+              dimensions,
+              materials: {
+                primary: finishForObject(roomManifest, item.id, item.category),
+                light: objectLightMaterial,
+                dark: objectDarkMaterial,
+                metal: objectMetalMaterial,
+                glass: objectGlassMaterial,
+                ceramic: objectCeramicMaterial,
+                water: objectWaterMaterial,
+                warm: objectWarmMaterial,
+              },
+            });
         setMatrix(objectModel, item.transform);
         modelRoot.add(objectModel);
       }
@@ -1849,6 +1855,87 @@ export function RoomSceneCanvas({
       0.0025,
       0.018,
     );
+
+    // Bake the already-lit room into a compact irradiance probe. This captures
+    // the directional colour of light reflected by the floor, walls, and large
+    // objects, then reduces the cubemap to nine spherical-harmonic coefficients.
+    // Unlike an ordinary ambient light, the result can make upward-facing areas
+    // warmer than walls facing the open sky, with no per-frame cubemap cost.
+    let bounceProbe: THREE.LightProbe | null = null;
+    const bakeDiffuseBounce = async () => {
+      const bounceTarget = new THREE.WebGLCubeRenderTarget(32, {
+        format: THREE.RGBAFormat,
+        type: THREE.UnsignedByteType,
+        generateMipmaps: false,
+        minFilter: THREE.LinearFilter,
+      });
+      const probeCamera = new THREE.CubeCamera(
+        Math.max(0.04, radius / 500),
+        Math.max(20, radius * 6),
+        bounceTarget,
+      );
+      probeCamera.position.copy(center);
+      probeCamera.position.y = THREE.MathUtils.clamp(
+        box.min.y + Math.min(1.45, size.y * 0.55),
+        box.min.y + 0.2,
+        box.max.y - 0.2,
+      );
+
+      const previousClearColor = renderer.getClearColor(new THREE.Color());
+      const previousClearAlpha = renderer.getClearAlpha();
+      const previousToneMapping = renderer.toneMapping;
+      const previousFog = scene.fog;
+      const previousKeyframeVisibility = keyframeRoot.visible;
+      const markerVisibility = markerMeshes.map((marker) => marker.visible);
+
+      // Black outside the room prevents the light probe from baking the light
+      // or dark application theme into the model. Fog, overlays, and tone
+      // mapping are presentation effects and should not become indirect light.
+      renderer.setClearColor(0x000000, 1);
+      renderer.toneMapping = THREE.NoToneMapping;
+      scene.fog = null;
+      keyframeRoot.visible = false;
+      markerMeshes.forEach((marker) => {
+        marker.visible = false;
+      });
+
+      try {
+        try {
+          probeCamera.update(renderer, scene);
+        } finally {
+          renderer.setClearColor(previousClearColor, previousClearAlpha);
+          renderer.toneMapping = previousToneMapping;
+          scene.fog = previousFog;
+          keyframeRoot.visible = previousKeyframeVisibility;
+          markerMeshes.forEach((marker, index) => {
+            marker.visible = markerVisibility[index] ?? true;
+          });
+        }
+
+        const generatedProbe = await LightProbeGenerator.fromCubeRenderTarget(
+          renderer,
+          bounceTarget,
+        );
+        if (disposed) return;
+
+        // The capture already contains the direct sun and sky. Keep a modest
+        // amount of explicit fill for stability, then let the room-coloured
+        // probe provide most of the soft indirect illumination.
+        generatedProbe.intensity = 0.68;
+        bounceProbe = generatedProbe;
+        scene.add(generatedProbe);
+        skyLight.intensity = 0.32;
+        fillLight.intensity = 0.1;
+        scene.environmentIntensity = 0.32;
+      } catch {
+        // Retain the original hemisphere/fill setup on GPUs where asynchronous
+        // cubemap readback is unavailable.
+      } finally {
+        bounceTarget.dispose();
+      }
+    };
+    void bakeDiffuseBounce();
+
     const gridSize = Math.max(10, Math.ceil(Math.max(size.x, size.z) * 1.8));
     const createGrid = (darkMode: boolean) => {
       const palette = sceneThemePalettes[darkMode ? "dark" : "light"];
@@ -2232,6 +2319,7 @@ export function RoomSceneCanvas({
       materials.forEach((material) => material.dispose());
       textures.forEach((texture) => texture.dispose());
       photoBitmap?.close();
+      if (bounceProbe) scene.remove(bounceProbe);
       environmentTarget.dispose();
       timer.dispose();
       ambientOcclusionPass.dispose();

@@ -40,6 +40,7 @@ struct ResourceDetailView: View {
                 if !current.description.isEmpty { descriptionCard }
                 if hasAdditionalDetails { additionalDetailsCard }
                 if !(current.customFields ?? [:]).isEmpty { customFieldsCard }
+                structureCard
                 mediaSection
                 if !current.tags.isEmpty || !current.categories.isEmpty { tagsSection }
             }
@@ -430,6 +431,77 @@ struct ResourceDetailView: View {
             }
         }
         .inventoryCard()
+    }
+
+    private var structureCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Struktur")
+                .font(.headline)
+                .padding(.bottom, 6)
+
+            structureLink(
+                title: "Varianten",
+                subtitle: "Produktfamilie und Varianten verwalten",
+                systemImage: "square.stack.3d.up"
+            ) {
+                ResourceFamilyView(
+                    resourceID: current.id,
+                    canEdit: canUpdateCurrentResource,
+                    canCreate: canUpdateCurrentResource && state.canCreateInventory
+                )
+            }
+            Divider().padding(.leading, 42)
+            structureLink(
+                title: "Beziehungen",
+                subtitle: "Verknüpfte Inventareinträge anzeigen",
+                systemImage: "link"
+            ) {
+                ResourceRelationsView(
+                    resourceID: current.id,
+                    canEdit: canUpdateCurrentResource
+                )
+            }
+            Divider().padding(.leading, 42)
+            structureLink(
+                title: "Stückliste",
+                subtitle: "Komponenten und baubare Menge verwalten",
+                systemImage: "list.bullet.rectangle"
+            ) {
+                BillOfMaterialsView(
+                    resourceID: current.id,
+                    canEdit: canUpdateCurrentResource
+                )
+            }
+        }
+        .inventoryCard()
+    }
+
+    private func structureLink<Destination: View>(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        @ViewBuilder destination: () -> Destination
+    ) -> some View {
+        NavigationLink(destination: destination) {
+            HStack(spacing: 12) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(InventoryTheme.accent)
+                    .frame(width: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 9)
+        }
     }
 
     private func customFieldLabel(for key: String) -> String {

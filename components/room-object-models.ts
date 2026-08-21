@@ -1,5 +1,9 @@
 import * as THREE from "three";
-import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+
+import type {
+  RoomMaterial,
+  RoomPrimitiveModel,
+} from "@/lib/room-ai-analysis-contract";
 
 export type RoomObjectModelMaterials = {
   primary: THREE.Material;
@@ -16,24 +20,92 @@ type Vector3Tuple = readonly [number, number, number];
 
 const MIN_PART_SIZE = 0.006;
 
+const primitiveMaterialColors: Record<RoomMaterial, string> = {
+  paint: "#D8D4CC",
+  plaster: "#D7D2C8",
+  concrete: "#999B99",
+  wood: "#9A6B42",
+  laminate: "#AF865E",
+  carpet: "#77736D",
+  tile: "#D4D2CB",
+  stone: "#99958D",
+  metal: "#A8B0B5",
+  glass: "#B8D7DF",
+  fabric: "#77736D",
+  plastic: "#C7C4BD",
+  other: "#AAA69E",
+};
+
+const primitiveMaterialRoughness: Record<RoomMaterial, number> = {
+  paint: 0.72,
+  plaster: 0.92,
+  concrete: 0.9,
+  wood: 0.72,
+  laminate: 0.52,
+  carpet: 0.98,
+  tile: 0.34,
+  stone: 0.72,
+  metal: 0.28,
+  glass: 0.12,
+  fabric: 0.96,
+  plastic: 0.48,
+  other: 0.72,
+};
+
+function primitiveMaterial(
+  colorHex: string | null,
+  material: RoomMaterial,
+) {
+  const color = new THREE.Color(colorHex ?? primitiveMaterialColors[material]);
+  if (material === "glass") {
+    return new THREE.MeshPhysicalMaterial({
+      color,
+      roughness: primitiveMaterialRoughness[material],
+      metalness: 0,
+      transparent: true,
+      opacity: 0.62,
+      transmission: 0.3,
+      thickness: 0.025,
+      side: THREE.DoubleSide,
+      envMapIntensity: 1.15,
+    });
+  }
+  return new THREE.MeshStandardMaterial({
+    color,
+    roughness: primitiveMaterialRoughness[material],
+    metalness: material === "metal" ? 0.72 : 0.01,
+    envMapIntensity: material === "metal" ? 1.25 : 0.55,
+  });
+}
+
+function fitContentToDimensions(
+  content: THREE.Group,
+  dimensions: Vector3Tuple,
+) {
+  const bounds = new THREE.Box3().setFromObject(content);
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const fit = new THREE.Vector3(
+    size.x > dimensions[0] ? dimensions[0] / size.x : 1,
+    size.y > dimensions[1] ? dimensions[1] / size.y : 1,
+    size.z > dimensions[2] ? dimensions[2] / size.z : 1,
+  );
+  content.scale.copy(fit);
+  content.position.set(-center.x * fit.x, -center.y * fit.y, -center.z * fit.z);
+}
+
 function box(
   root: THREE.Object3D,
   material: THREE.Material,
   size: Vector3Tuple,
   position: Vector3Tuple = [0, 0, 0],
   rotation: Vector3Tuple = [0, 0, 0],
-  roundness = 0.085,
 ) {
   const width = Math.max(size[0], MIN_PART_SIZE);
   const height = Math.max(size[1], MIN_PART_SIZE);
   const depth = Math.max(size[2], MIN_PART_SIZE);
-  const radius = THREE.MathUtils.clamp(
-    Math.min(width, height, depth) * roundness,
-    0.0015,
-    0.028,
-  );
   const mesh = new THREE.Mesh(
-    new RoundedBoxGeometry(width, height, depth, 2, radius),
+    new THREE.BoxGeometry(width, height, depth),
     material,
   );
   mesh.position.set(...position);
@@ -182,7 +254,7 @@ function makeSofa(
   [width, height, depth]: Vector3Tuple,
   materials: RoomObjectModelMaterials,
 ) {
-  box(root, materials.primary, [width * 0.96, height * 0.3, depth * 0.88], [0, -height * 0.3, 0], [0, 0, 0], 0.13);
+  box(root, materials.primary, [width * 0.96, height * 0.3, depth * 0.88], [0, -height * 0.3, 0]);
   box(root, materials.primary, [width * 0.9, height * 0.66, depth * 0.18], [0, height * 0.12, -depth * 0.38], [-0.08, 0, 0]);
   for (const x of [-width * 0.44, width * 0.44]) {
     box(root, materials.primary, [width * 0.11, height * 0.48, depth * 0.82], [x, -height * 0.08, depth * 0.02]);
@@ -191,8 +263,8 @@ function makeSofa(
   const cushionWidth = (width * 0.74) / cushionCount;
   for (let index = 0; index < cushionCount; index += 1) {
     const x = -width * 0.37 + cushionWidth / 2 + index * cushionWidth;
-    box(root, materials.light, [cushionWidth * 0.92, height * 0.11, depth * 0.58], [x, -height * 0.08, depth * 0.08], [-0.06, 0, 0], 0.24);
-    box(root, materials.light, [cushionWidth * 0.9, height * 0.38, depth * 0.12], [x, height * 0.17, -depth * 0.25], [-0.12, 0, 0], 0.24);
+    box(root, materials.light, [cushionWidth * 0.92, height * 0.11, depth * 0.58], [x, -height * 0.08, depth * 0.08], [-0.06, 0, 0]);
+    box(root, materials.light, [cushionWidth * 0.9, height * 0.38, depth * 0.12], [x, height * 0.17, -depth * 0.25], [-0.12, 0, 0]);
   }
   for (const x of [-width * 0.37, width * 0.37]) {
     box(root, materials.dark, [width * 0.05, height * 0.08, depth * 0.08], [x, -height * 0.46, 0]);
@@ -207,7 +279,7 @@ function makeBed(
   const frameHeight = height * 0.22;
   box(root, materials.primary, [width * 0.98, frameHeight, depth * 0.94], [0, -height / 2 + frameHeight / 2, depth * 0.02]);
   const mattressHeight = height * 0.34;
-  box(root, materials.light, [width * 0.92, mattressHeight, depth * 0.84], [0, -height / 2 + frameHeight + mattressHeight / 2, depth * 0.04], [0, 0, 0], 0.16);
+  box(root, materials.light, [width * 0.92, mattressHeight, depth * 0.84], [0, -height / 2 + frameHeight + mattressHeight / 2, depth * 0.04]);
   box(root, materials.primary, [width, height * 0.78, depth * 0.09], [0, height * 0.08, -depth * 0.45]);
   const pillowWidth = width * 0.36;
   for (const x of [-width * 0.22, width * 0.22]) {
@@ -421,6 +493,65 @@ function makeStairs(
   }
 }
 
+export function createAiPrimitiveObjectModel({
+  dimensions,
+  model,
+}: {
+  dimensions: Vector3Tuple;
+  model: RoomPrimitiveModel;
+}) {
+  const root = new THREE.Group();
+  const content = new THREE.Group();
+  const materials = new Map<string, THREE.Material>();
+  root.userData.aiGenerated = true;
+  root.userData.modelLabel = model.label;
+  root.add(content);
+
+  for (const part of model.parts) {
+    const size: Vector3Tuple = [
+      Math.max(part.size[0] * dimensions[0], MIN_PART_SIZE),
+      Math.max(part.size[1] * dimensions[1], MIN_PART_SIZE),
+      Math.max(part.size[2] * dimensions[2], MIN_PART_SIZE),
+    ];
+    const position: Vector3Tuple = [
+      part.position[0] * dimensions[0],
+      part.position[1] * dimensions[1],
+      part.position[2] * dimensions[2],
+    ];
+    const rotation: Vector3Tuple = [
+      THREE.MathUtils.degToRad(part.rotationDegrees[0]),
+      THREE.MathUtils.degToRad(part.rotationDegrees[1]),
+      THREE.MathUtils.degToRad(part.rotationDegrees[2]),
+    ];
+    const materialKey = `${part.colorHex ?? "default"}:${part.material}`;
+    let material = materials.get(materialKey);
+    if (!material) {
+      material = primitiveMaterial(part.colorHex, part.material);
+      materials.set(materialKey, material);
+    }
+
+    let geometry: THREE.BufferGeometry;
+    if (part.primitive === "box") {
+      geometry = new THREE.BoxGeometry(...size);
+    } else if (part.primitive === "cylinder") {
+      geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
+    } else {
+      geometry = new THREE.SphereGeometry(0.5, 20, 14);
+    }
+
+    const mesh = new THREE.Mesh(geometry, material);
+    if (part.primitive !== "box") mesh.scale.set(...size);
+    mesh.position.set(...position);
+    mesh.rotation.set(...rotation);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    content.add(mesh);
+  }
+
+  fitContentToDimensions(content, dimensions);
+  return root;
+}
+
 export function createRoomObjectModel({
   category,
   dimensions,
@@ -464,15 +595,6 @@ export function createRoomObjectModel({
   // RoomPlan's transform is centered on its measured bounding box. Keep every
   // decorative detail within that box and recenter the finished model so it is
   // a drop-in replacement for the former placeholder cuboid.
-  const bounds = new THREE.Box3().setFromObject(content);
-  const size = bounds.getSize(new THREE.Vector3());
-  const center = bounds.getCenter(new THREE.Vector3());
-  const fit = new THREE.Vector3(
-    size.x > dimensions[0] ? dimensions[0] / size.x : 1,
-    size.y > dimensions[1] ? dimensions[1] / size.y : 1,
-    size.z > dimensions[2] ? dimensions[2] / size.z : 1,
-  );
-  content.scale.copy(fit);
-  content.position.set(-center.x * fit.x, -center.y * fit.y, -center.z * fit.z);
+  fitContentToDimensions(content, dimensions);
   return root;
 }

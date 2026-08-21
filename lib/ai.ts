@@ -370,6 +370,11 @@ For objectSuggestions:
 - merge duplicates seen in multiple photos
 - use the most specific useful name and explain the visible evidence briefly
 - roomPlanCategory must exactly copy a supplied RoomPlan category only when the suggestion clearly corresponds to it; otherwise return null
+- when roomPlanCategory is not null, create a simple recognizable primitiveModel from 3 to 24 boxes, cylinders, or spheres; otherwise return primitiveModel as null
+- primitiveModel uses a centered normalized bounding box where x is right, y is up, and z is forward; position and size are fractions of the matched RoomPlan object's measured width, height, and depth
+- keep the model close to x/y/z -0.5…0.5, rest floor-standing models near y=-0.5, and use rotationDegrees for part orientation
+- use the photos to choose per-part colors and materials; use null colorHex only when a part's color cannot be estimated reliably
+- primitiveModel is a compact stylized reconstruction, not a claim of exact geometry; do not include text, URLs, code, textures, or unsupported primitives
 - never invent coordinates or claim a 3D match from appearance alone
 - cite only supplied keyframeId values
 

@@ -22,6 +22,42 @@ const colorHexSchema = z
   .string()
   .regex(/^#[0-9A-F]{6}$/, "Expected an uppercase six-digit sRGB color.");
 
+const normalizedPositionSchema = z.tuple([
+  z.number().finite().min(-0.75).max(0.75),
+  z.number().finite().min(-0.75).max(0.75),
+  z.number().finite().min(-0.75).max(0.75),
+]);
+
+const normalizedSizeSchema = z.tuple([
+  z.number().finite().min(0.01).max(1.5),
+  z.number().finite().min(0.01).max(1.5),
+  z.number().finite().min(0.01).max(1.5),
+]);
+
+const rotationDegreesSchema = z.tuple([
+  z.number().finite().min(-180).max(180),
+  z.number().finite().min(-180).max(180),
+  z.number().finite().min(-180).max(180),
+]);
+
+export const roomPrimitivePartSchema = z
+  .object({
+    primitive: z.enum(["box", "cylinder", "sphere"]),
+    position: normalizedPositionSchema,
+    size: normalizedSizeSchema,
+    rotationDegrees: rotationDegreesSchema,
+    colorHex: colorHexSchema.nullable(),
+    material: roomMaterialSchema,
+  })
+  .strict();
+
+export const roomPrimitiveModelSchema = z
+  .object({
+    label: z.string().trim().min(1).max(160),
+    parts: z.array(roomPrimitivePartSchema).min(1).max(32),
+  })
+  .strict();
+
 export const detectedRoomSurfaceAppearanceSchema = z
   .object({
     surfaceCategory: roomSurfaceCategorySchema,
@@ -58,6 +94,7 @@ export const detectedRoomObjectSuggestionSchema = z
     evidence: z.string().trim().min(1).max(500),
     evidenceKeyframeIds: z.array(z.uuid()).min(1).max(4),
     roomPlanCategory: z.string().trim().min(1).max(80).nullable(),
+    primitiveModel: roomPrimitiveModelSchema.nullable(),
   })
   .strict();
 
@@ -74,6 +111,7 @@ export const roomObjectSuggestionSchema = detectedRoomObjectSuggestionSchema
   .extend({
     id: z.uuid(),
     roomObjectId: z.uuid().nullable(),
+    primitiveModel: roomPrimitiveModelSchema.nullable().default(null),
     status: roomAiReviewStatusSchema,
   })
   .strict();
@@ -108,6 +146,8 @@ export const roomAiReviewPatchSchema = z.discriminatedUnion("target", [
 ]);
 
 export type RoomMaterial = z.infer<typeof roomMaterialSchema>;
+export type RoomPrimitivePart = z.infer<typeof roomPrimitivePartSchema>;
+export type RoomPrimitiveModel = z.infer<typeof roomPrimitiveModelSchema>;
 export type DetectedRoomSurfaceAppearance = z.infer<
   typeof detectedRoomSurfaceAppearanceSchema
 >;
