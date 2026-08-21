@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
@@ -115,6 +116,14 @@ const sceneThemePalettes = {
     grid: 0x252b34,
   },
 } as const;
+
+let rectAreaLightUniformsInitialized = false;
+
+function ensureRectAreaLightUniforms() {
+  if (rectAreaLightUniformsInitialized) return;
+  RectAreaLightUniformsLib.init();
+  rectAreaLightUniformsInitialized = true;
+}
 
 type TexturePattern = "plaster" | "grain" | "speckle";
 
@@ -660,6 +669,7 @@ export function RoomSceneCanvas({
     renderer.toneMappingExposure = 0.9;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.VSMShadowMap;
+    ensureRectAreaLightUniforms();
     renderer.domElement.className = "block size-full touch-none";
     renderer.domElement.tabIndex = 0;
     renderer.domElement.setAttribute(
@@ -995,22 +1005,12 @@ export function RoomSceneCanvas({
     controls.maxPolarAngle = Math.PI * 0.495;
     controls.screenSpacePanning = true;
 
-    // Open-roof architectural daylight: a cool sky and warm ground bounce keep
-    // unlit faces readable without flattening the room into uniform white.
-    const skyLight = new THREE.HemisphereLight(0xdcecff, 0x6c5847, 0.62);
+    // Low-energy sky illumination remains only as a stable base. The dominant
+    // light is constructed from the room's windows after geometry and bounds
+    // are known, so shadows have an architectural source rather than an
+    // arbitrary diagonal "sun" direction.
+    const skyLight = new THREE.HemisphereLight(0xdcecff, 0x5f4937, 0.34);
     scene.add(skyLight);
-
-    const sun = new THREE.DirectionalLight(0xffe7c7, 2.35);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.bias = -0.00008;
-    sun.shadow.normalBias = 0.006;
-    sun.shadow.radius = 4;
-    sun.shadow.blurSamples = 16;
-    sun.shadow.intensity = 0.96;
-
-    const fillLight = new THREE.DirectionalLight(0xc9ddf2, 0.28);
-    scene.add(sun, sun.target, fillLight, fillLight.target);
 
     const webRoot = new THREE.Group();
     setMatrix(webRoot, manifest.scan.scene.webFromWorld);
@@ -1796,64 +1796,188 @@ export function RoomSceneCanvas({
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const radius = Math.max(size.length() * 0.5, 1.5);
-    sun.position.copy(center).add(new THREE.Vector3(radius * 1.25, radius * 2.4, radius * 1.15));
-    sun.target.position.copy(center);
-    fillLight.position
-      .copy(center)
-      .add(new THREE.Vector3(-radius * 1.6, radius * 1.1, -radius * 0.9));
-    fillLight.target.position.copy(center);
-    // Fit the sun's orthographic shadow camera to the actual room bounds. A
-    // tighter projection spends the full 2K map on visible geometry instead of
-    // empty space, which gives the filtered VSM penumbra much finer contact
-    // detail than a radius-based square frustum.
-    sun.updateMatrixWorld(true);
-    sun.target.updateMatrixWorld(true);
-    const shadowCamera = sun.shadow.camera;
-    shadowCamera.position.copy(sun.position);
-    shadowCamera.lookAt(sun.target.position);
-    shadowCamera.updateMatrixWorld(true);
-    const lightSpaceBounds = new THREE.Box3().makeEmpty();
-    for (const x of [box.min.x, box.max.x]) {
-      for (const y of [box.min.y, box.max.y]) {
-        for (const z of [box.min.z, box.max.z]) {
-          lightSpaceBounds.expandByPoint(
-            new THREE.Vector3(x, y, z).applyMatrix4(
-              shadowCamera.matrixWorldInverse,
-            ),
-          );
+
+    type DaylightPortal = {
+      position: THREE.Vector3;
+      outward: THREE.Vector3;
+      right: THREE.Vector3;
+      up: THREE.Vector3;
+      roomCenter: THREE.Vector3;
+      width: number;
+      height: number;
+      area: number;
+    };
+    const webFromWorld = new THREE.Matrix4().fromArray(
+      manifest.scan.scene.webFromWorld,
+    );
+    const daylightPortals: DaylightPortal[] = [];
+    for (const roomManifest of visibleManifests) {
+      const roomCenter = boundsForManifest(roomManifest).getCenter(
+        new THREE.Vector3(),
+      );
+      const modelToWeb = webFromWorld.clone().multiply(
+        new THREE.Matrix4().fromArray(
+          roomManifest.scan.layoutTransform ??
+            roomManifest.scan.scene.worldFromModel,
+        ),
+      );
+      for (const surface of roomManifest.scan.scene.surfaces) {
+        if (surface.category !== "window") continue;
+        const [width, height] = normalizedDimensions(
+          surface.category,
+          surface.dimensions,
+        );
+        const portalTransform = modelToWeb.clone().multiply(
+          new THREE.Matrix4().fromArray(surface.transform),
+        );
+        const position = new THREE.Vector3().setFromMatrixPosition(
+          portalTransform,
+        );
+        const outward = new THREE.Vector3(0, 0, 1).transformDirection(
+          portalTransform,
+        );
+        if (outward.dot(position.clone().sub(roomCenter)) < 0) {
+          outward.negate();
         }
+        daylightPortals.push({
+          position,
+          outward,
+          right: new THREE.Vector3(1, 0, 0).transformDirection(
+            portalTransform,
+          ),
+          up: new THREE.Vector3(0, 1, 0).transformDirection(portalTransform),
+          roomCenter,
+          width,
+          height,
+          area: width * height,
+        });
       }
     }
-    const shadowMargin = THREE.MathUtils.clamp(radius * 0.08, 0.3, 1.25);
-    shadowCamera.left = lightSpaceBounds.min.x - shadowMargin;
-    shadowCamera.right = lightSpaceBounds.max.x + shadowMargin;
-    shadowCamera.bottom = lightSpaceBounds.min.y - shadowMargin;
-    shadowCamera.top = lightSpaceBounds.max.y + shadowMargin;
-    shadowCamera.near = Math.max(0.1, -lightSpaceBounds.max.z - shadowMargin);
-    shadowCamera.far = Math.max(
-      shadowCamera.near + 1,
-      -lightSpaceBounds.min.z + shadowMargin,
-    );
-    shadowCamera.updateProjectionMatrix();
 
-    const shadowWorldSize = Math.max(
-      shadowCamera.right - shadowCamera.left,
-      shadowCamera.top - shadowCamera.bottom,
+    const hasWindowDaylight = daylightPortals.length > 0;
+    const fallbackPortal: DaylightPortal = {
+      position: new THREE.Vector3(center.x, box.max.y + 0.2, center.z),
+      outward: new THREE.Vector3(0, 1, 0),
+      right: new THREE.Vector3(1, 0, 0),
+      up: new THREE.Vector3(0, 0, 1),
+      roomCenter: center.clone(),
+      width: Math.max(1.2, size.x * 0.65),
+      height: Math.max(1.2, size.z * 0.65),
+      area: Math.max(1.44, size.x * size.z * 0.42),
+    };
+    const activePortals = hasWindowDaylight
+      ? daylightPortals.sort((left, right) => right.area - left.area).slice(0, 2)
+      : [fallbackPortal];
+    const totalPortalArea = activePortals.reduce(
+      (total, portal) => total + portal.area,
+      0,
     );
-    const shadowWorldUnitsPerTexel = shadowWorldSize / sun.shadow.mapSize.x;
-    // Approximately 5.5 cm of softness remains visually consistent across a
-    // single room and a linked floor, while the scaled normal offset prevents
-    // acne without pulling the shadow away from its caster.
-    sun.shadow.radius = THREE.MathUtils.clamp(
-      0.055 / shadowWorldUnitsPerTexel,
-      2.5,
-      7,
-    );
-    sun.shadow.normalBias = THREE.MathUtils.clamp(
-      shadowWorldUnitsPerTexel * 0.75,
-      0.0025,
-      0.018,
-    );
+
+    // Rectangular emitters reproduce the broad, reflection-friendly window
+    // highlight found in offline interior renders. They do not cast shadows in
+    // WebGL, so a four-sample directional rig below supplies the visibility
+    // term from the same physical opening.
+    for (const portal of activePortals) {
+      const areaLight = new THREE.RectAreaLight(
+        hasWindowDaylight ? 0xfff3df : 0xffe4c2,
+        hasWindowDaylight ? 2.15 : 1.45,
+        portal.width,
+        portal.height,
+      );
+      areaLight.position
+        .copy(portal.position)
+        .addScaledVector(portal.outward, -0.04);
+      if (hasWindowDaylight) areaLight.lookAt(portal.roomCenter);
+      else areaLight.rotation.x = -Math.PI / 2;
+      scene.add(areaLight);
+    }
+
+    const configureDaylightShadow = (light: THREE.DirectionalLight) => {
+      light.castShadow = true;
+      light.shadow.mapSize.set(1024, 1024);
+      light.shadow.bias = -0.00006;
+      light.shadow.blurSamples = 8;
+      light.shadow.intensity = 0.82;
+      scene.add(light, light.target);
+      light.updateMatrixWorld(true);
+      light.target.updateMatrixWorld(true);
+
+      const shadowCamera = light.shadow.camera;
+      shadowCamera.position.copy(light.position);
+      shadowCamera.lookAt(light.target.position);
+      shadowCamera.updateMatrixWorld(true);
+      const lightSpaceBounds = new THREE.Box3().makeEmpty();
+      for (const x of [box.min.x, box.max.x]) {
+        for (const y of [box.min.y, box.max.y]) {
+          for (const z of [box.min.z, box.max.z]) {
+            lightSpaceBounds.expandByPoint(
+              new THREE.Vector3(x, y, z).applyMatrix4(
+                shadowCamera.matrixWorldInverse,
+              ),
+            );
+          }
+        }
+      }
+      const margin = THREE.MathUtils.clamp(radius * 0.08, 0.3, 1.25);
+      shadowCamera.left = lightSpaceBounds.min.x - margin;
+      shadowCamera.right = lightSpaceBounds.max.x + margin;
+      shadowCamera.bottom = lightSpaceBounds.min.y - margin;
+      shadowCamera.top = lightSpaceBounds.max.y + margin;
+      shadowCamera.near = Math.max(0.1, -lightSpaceBounds.max.z - margin);
+      shadowCamera.far = Math.max(
+        shadowCamera.near + 1,
+        -lightSpaceBounds.min.z + margin,
+      );
+      shadowCamera.updateProjectionMatrix();
+
+      const worldSize = Math.max(
+        shadowCamera.right - shadowCamera.left,
+        shadowCamera.top - shadowCamera.bottom,
+      );
+      const worldUnitsPerTexel = worldSize / light.shadow.mapSize.x;
+      light.shadow.radius = THREE.MathUtils.clamp(
+        0.075 / worldUnitsPerTexel,
+        2.5,
+        6,
+      );
+      light.shadow.normalBias = THREE.MathUtils.clamp(
+        worldUnitsPerTexel * 0.8,
+        0.003,
+        0.02,
+      );
+    };
+
+    const totalShadowIntensity = hasWindowDaylight ? 1.65 : 1.2;
+    for (const portal of activePortals) {
+      const samples = activePortals.length === 1
+        ? [
+            [-0.34, -0.28],
+            [0.34, -0.28],
+            [-0.34, 0.28],
+            [0.34, 0.28],
+          ] as const
+        : [
+            [-0.32, 0],
+            [0.32, 0],
+          ] as const;
+      const portalWeight = portal.area / totalPortalArea;
+      for (const [horizontal, vertical] of samples) {
+        const light = new THREE.DirectionalLight(
+          hasWindowDaylight ? 0xfff1dd : 0xffdfb6,
+          (totalShadowIntensity * portalWeight) / samples.length,
+        );
+        light.position
+          .copy(portal.position)
+          .addScaledVector(
+            portal.outward,
+            THREE.MathUtils.clamp(radius * 0.1, 0.3, 0.8),
+          )
+          .addScaledVector(portal.right, portal.width * horizontal)
+          .addScaledVector(portal.up, portal.height * vertical);
+        light.target.position.copy(portal.roomCenter);
+        configureDaylightShadow(light);
+      }
+    }
 
     // Bake the already-lit room into a compact irradiance probe. This captures
     // the directional colour of light reflected by the floor, walls, and large
@@ -2000,18 +2124,17 @@ export function RoomSceneCanvas({
         coefficients.forEach((coefficient) => {
           coefficient.multiplyScalar(normalization);
         });
-        const generatedProbe = new THREE.LightProbe(sh, 0.68);
+        const generatedProbe = new THREE.LightProbe(sh, 0.52);
 
-        // The capture already contains the direct sun and sky. Keep a modest
-        // amount of explicit fill for stability, then let the room-coloured
-        // probe provide most of the soft indirect illumination.
+        // The capture already contains all four window samples. Reduce the
+        // generic sky after the bake, then use this room-coloured probe only as
+        // the indirect bounce layer beneath the spatially correct direct light.
         bounceProbe = generatedProbe;
         scene.add(generatedProbe);
-        skyLight.intensity = 0.32;
-        fillLight.intensity = 0.1;
-        scene.environmentIntensity = 0.32;
+        skyLight.intensity = 0.14;
+        scene.environmentIntensity = 0.28;
       } catch {
-        // Retain the original hemisphere/fill setup if cubemap readback is
+        // Retain the window/ceiling rig and base sky if cubemap readback is
         // unavailable on a particular GPU.
       } finally {
         bounceTarget.dispose();
@@ -2121,37 +2244,35 @@ export function RoomSceneCanvas({
     };
     resetCamera();
 
-    // A conventional texture lightmap bake needs a non-overlapping UV atlas,
-    // while RoomPlan's generated box geometry deliberately reuses UVs on each
-    // face. Denoised GTAO supplies the missing low-frequency corner and contact
-    // shading without seams; the more expensive direct VSM shadow is still
-    // cached after its first frame below, so the static part behaves like a bake.
+    // Keep screen-space occlusion confined to short-range grounding. The broad
+    // shadow and colour separation comes from the window-area rig and bounce
+    // bake above, avoiding the generic grey halo of a large AO radius.
     const composer = new EffectComposer(renderer);
     composer.setPixelRatio(Math.min(renderer.getPixelRatio(), 1.5));
     composer.addPass(new RenderPass(scene, camera));
     const ambientOcclusionPass = new GTAOPass(scene, camera, 1, 1);
     ambientOcclusionPass.output = GTAOPass.OUTPUT.Default;
-    ambientOcclusionPass.blendIntensity = 0.62;
+    ambientOcclusionPass.blendIntensity = 0.44;
     ambientOcclusionPass.setSceneClipBox(
       box.clone().expandByScalar(THREE.MathUtils.clamp(radius * 0.05, 0.2, 0.8)),
     );
     ambientOcclusionPass.updateGtaoMaterial({
-      radius: THREE.MathUtils.clamp(radius * 0.085, 0.32, 0.9),
-      distanceExponent: 1.35,
-      thickness: 1.2,
+      radius: THREE.MathUtils.clamp(radius * 0.045, 0.18, 0.5),
+      distanceExponent: 1.5,
+      thickness: 0.82,
       distanceFallOff: 1,
       scale: 1,
-      samples: 16,
+      samples: 24,
       screenSpaceRadius: false,
     });
     ambientOcclusionPass.updatePdMaterial({
       lumaPhi: 5,
       depthPhi: 2,
       normalPhi: 3,
-      radius: 6,
+      radius: 4,
       radiusExponent: 2,
       rings: 2,
-      samples: 16,
+      samples: 12,
     });
     composer.addPass(ambientOcclusionPass);
     const outputPass = new OutputPass();
@@ -2336,8 +2457,8 @@ export function RoomSceneCanvas({
       }
       composer.render(delta);
       if (!shadowMapSettled) {
-        // Room geometry and the sun are static. Keep the costly 16-sample VSM
-        // blur cached after its first render; selections request a refresh.
+        // Room geometry and the four area-light samples are static. Keep their
+        // VSM maps cached after the first render; selections request a refresh.
         renderer.shadowMap.autoUpdate = false;
         shadowMapSettled = true;
       }
