@@ -21,7 +21,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { LightProbeGenerator } from "three/examples/jsm/lights/LightProbeGenerator.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
@@ -1862,8 +1861,9 @@ export function RoomSceneCanvas({
     // Unlike an ordinary ambient light, the result can make upward-facing areas
     // warmer than walls facing the open sky, with no per-frame cubemap cost.
     let bounceProbe: THREE.LightProbe | null = null;
-    const bakeDiffuseBounce = async () => {
-      const bounceTarget = new THREE.WebGLCubeRenderTarget(32, {
+    const bakeDiffuseBounce = () => {
+      const probeResolution = 32;
+      const bounceTarget = new THREE.WebGLCubeRenderTarget(probeResolution, {
         format: THREE.RGBAFormat,
         type: THREE.UnsignedByteType,
         generateMipmaps: false,
@@ -1912,29 +1912,112 @@ export function RoomSceneCanvas({
           });
         }
 
-        const generatedProbe = await LightProbeGenerator.fromCubeRenderTarget(
-          renderer,
-          bounceTarget,
-        );
-        if (disposed) return;
+        // A synchronous read is appropriate for this tiny one-time bake and
+        // avoids an asynchronous WebGL readback surviving React Strict Mode's
+        // development-only effect cleanup. The coordinate mapping mirrors
+        // Three.js's LightProbeGenerator for WebGL cube render targets.
+        const sh = new THREE.SphericalHarmonics3();
+        const coefficients = sh.coefficients;
+        const pixels = new Uint8Array(probeResolution * probeResolution * 4);
+        const direction = new THREE.Vector3();
+        const coordinate = new THREE.Vector3();
+        const basis = new Array<number>(9).fill(0);
+        const pixelSize = 2 / probeResolution;
+        const coordinateFlip =
+          renderer.coordinateSystem === THREE.WebGLCoordinateSystem ? -1 : 1;
+        let totalWeight = 0;
+        let capturedEnergy = 0;
+
+        for (let face = 0; face < 6; face += 1) {
+          renderer.readRenderTargetPixels(
+            bounceTarget,
+            0,
+            0,
+            probeResolution,
+            probeResolution,
+            pixels,
+            face,
+          );
+          for (let index = 0; index < pixels.length; index += 4) {
+            const red = (pixels[index] ?? 0) / 255;
+            const green = (pixels[index + 1] ?? 0) / 255;
+            const blue = (pixels[index + 2] ?? 0) / 255;
+            capturedEnergy += red + green + blue;
+
+            const pixelIndex = index / 4;
+            const column =
+              (1 - (pixelIndex % probeResolution + 0.5) * pixelSize) *
+              coordinateFlip;
+            const row =
+              1 -
+              (Math.floor(pixelIndex / probeResolution) + 0.5) * pixelSize;
+            switch (face) {
+              case 0:
+                coordinate.set(
+                  -coordinateFlip,
+                  row,
+                  column * coordinateFlip,
+                );
+                break;
+              case 1:
+                coordinate.set(
+                  coordinateFlip,
+                  row,
+                  -column * coordinateFlip,
+                );
+                break;
+              case 2:
+                coordinate.set(column, 1, -row);
+                break;
+              case 3:
+                coordinate.set(column, -1, row);
+                break;
+              case 4:
+                coordinate.set(column, row, 1);
+                break;
+              default:
+                coordinate.set(-column, row, -1);
+            }
+
+            const lengthSquared = coordinate.lengthSq();
+            const weight = 4 / (Math.sqrt(lengthSquared) * lengthSquared);
+            totalWeight += weight;
+            direction.copy(coordinate).normalize();
+            THREE.SphericalHarmonics3.getBasisAt(direction, basis);
+            for (let coefficient = 0; coefficient < 9; coefficient += 1) {
+              coefficients[coefficient]!.x +=
+                basis[coefficient]! * red * weight;
+              coefficients[coefficient]!.y +=
+                basis[coefficient]! * green * weight;
+              coefficients[coefficient]!.z +=
+                basis[coefficient]! * blue * weight;
+            }
+          }
+        }
+
+        if (capturedEnergy <= 0.001) return;
+        const normalization = (4 * Math.PI) / totalWeight;
+        coefficients.forEach((coefficient) => {
+          coefficient.multiplyScalar(normalization);
+        });
+        const generatedProbe = new THREE.LightProbe(sh, 0.68);
 
         // The capture already contains the direct sun and sky. Keep a modest
         // amount of explicit fill for stability, then let the room-coloured
         // probe provide most of the soft indirect illumination.
-        generatedProbe.intensity = 0.68;
         bounceProbe = generatedProbe;
         scene.add(generatedProbe);
         skyLight.intensity = 0.32;
         fillLight.intensity = 0.1;
         scene.environmentIntensity = 0.32;
       } catch {
-        // Retain the original hemisphere/fill setup on GPUs where asynchronous
-        // cubemap readback is unavailable.
+        // Retain the original hemisphere/fill setup if cubemap readback is
+        // unavailable on a particular GPU.
       } finally {
         bounceTarget.dispose();
       }
     };
-    void bakeDiffuseBounce();
+    bakeDiffuseBounce();
 
     const gridSize = Math.max(10, Math.ceil(Math.max(size.x, size.z) * 1.8));
     const createGrid = (darkMode: boolean) => {
