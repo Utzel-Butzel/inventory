@@ -34,8 +34,8 @@ test("estimates the default OpenAI actions from their bounded workloads", () => 
   assert.deepEqual(catalog.operations.roomAnalysis, {
     provider: "openai",
     model: "gpt-5.6-terra",
-    minimumUsd: 0.052,
-    maximumUsd: 0.224,
+    minimumUsd: 0.144,
+    maximumUsd: 1.632,
     unit: "action",
   });
 });
@@ -48,6 +48,7 @@ test("uses configured model rates and omits unsupported custom pricing", () => {
 
   assert.equal(catalog.operations.inventoryAnalysis?.model, "gpt-4.1-nano-2026-01-01");
   assert.equal(catalog.operations.inventoryAnalysis?.minimumUsd, 0.00034);
+  assert.equal(catalog.operations.roomAnalysis?.model, "gpt-5.6-terra");
   assert.equal(catalog.operations.inventoryResearch, undefined);
   assert.equal(catalog.operations.imageSearch, undefined);
 });

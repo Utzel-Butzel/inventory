@@ -41,6 +41,22 @@ export function roomKeyframeDisplayOrientation(orientation: string) {
   };
 }
 
+/** Maps a normalized native-camera pixel into the upright raster we display. */
+export function roomKeyframeDisplayPoint(
+  orientation: string,
+  x: number,
+  y: number,
+): [number, number] {
+  if (orientation === "up-mirrored") return [1 - x, y];
+  if (orientation === "down") return [1 - x, 1 - y];
+  if (orientation === "down-mirrored") return [x, 1 - y];
+  if (orientation === "left") return [y, 1 - x];
+  if (orientation === "left-mirrored") return [y, x];
+  if (orientation === "right") return [1 - y, x];
+  if (orientation === "right-mirrored") return [1 - y, 1 - x];
+  return [x, y];
+}
+
 export const maximumVisibleRoomKeyframes = 80;
 export const maximumTexturedMeshBytes = 80 * 1024 * 1024;
 export const maximumGaussianSplatBytes = 80 * 1024 * 1024;
@@ -110,6 +126,131 @@ export function sampleRoomKeyframes<T extends Pick<RoomCameraKeyframe, "id" | "q
     }
   }
   return [...sampled.values()];
+}
+
+type AnalysisKeyframe = Pick<
+  RoomCameraKeyframe,
+  "id" | "quality" | "cameraTransform"
+>;
+
+type CameraView = {
+  position: [number, number, number];
+  forward: [number, number, number];
+};
+
+const cameraView = (frame: AnalysisKeyframe): CameraView | null => {
+  const matrix = frame.cameraTransform;
+  if (matrix.length !== 16 || !matrix.every(Number.isFinite)) return null;
+  const forwardLength = Math.hypot(matrix[8]!, matrix[9]!, matrix[10]!);
+  if (forwardLength <= 1e-6) return null;
+  return {
+    position: [matrix[12]!, matrix[13]!, matrix[14]!],
+    // ARKit cameras look down their local negative Z axis.
+    forward: [
+      -matrix[8]! / forwardLength,
+      -matrix[9]! / forwardLength,
+      -matrix[10]! / forwardLength,
+    ],
+  };
+};
+
+const cameraPositionDistance = (left: CameraView, right: CameraView) =>
+  Math.hypot(
+    left.position[0] - right.position[0],
+    left.position[1] - right.position[1],
+    left.position[2] - right.position[2],
+  );
+
+const cameraAngleDistance = (left: CameraView, right: CameraView) => {
+  const dot = left.forward.reduce(
+    (sum, value, index) => sum + value * right.forward[index]!,
+    0,
+  );
+  return Math.acos(Math.max(-1, Math.min(1, dot))) / Math.PI;
+};
+
+/**
+ * Chooses analysis photos by camera coverage instead of capture time alone.
+ * A quality term keeps blurred frames out while farthest-view sampling retains
+ * different positions and look directions around the room.
+ */
+export function sampleRoomAnalysisKeyframes<T extends AnalysisKeyframe>(
+  keyframes: readonly T[],
+  limit: number,
+) {
+  if (limit <= 0 || keyframes.length === 0) return [];
+  if (keyframes.length <= limit) return [...keyframes];
+
+  const views = keyframes.map(cameraView);
+  if (!views.some(Boolean)) return sampleRoomKeyframes(keyframes, limit);
+
+  let maximumPositionSpan = 0;
+  for (let left = 0; left < views.length; left += 1) {
+    const leftView = views[left];
+    if (!leftView) continue;
+    for (let right = left + 1; right < views.length; right += 1) {
+      const rightView = views[right];
+      if (!rightView) continue;
+      maximumPositionSpan = Math.max(
+        maximumPositionSpan,
+        cameraPositionDistance(leftView, rightView),
+      );
+    }
+  }
+
+  const bestIndex = keyframes.reduce(
+    (current, frame, index) =>
+      frame.quality > keyframes[current]!.quality ? index : current,
+    0,
+  );
+  const selected = new Set<number>([bestIndex]);
+
+  while (selected.size < Math.min(limit, keyframes.length)) {
+    let nextIndex = -1;
+    let nextScore = -Infinity;
+    for (let index = 0; index < keyframes.length; index += 1) {
+      if (selected.has(index)) continue;
+      const view = views[index];
+      let minimumSpatialDistance = 1;
+      let hasSpatialComparison = false;
+      if (view) {
+        minimumSpatialDistance = Infinity;
+        for (const selectedIndex of selected) {
+          const selectedView = views[selectedIndex];
+          if (!selectedView) continue;
+          hasSpatialComparison = true;
+          const positionDistance = maximumPositionSpan > 1e-6
+            ? Math.min(
+                1,
+                cameraPositionDistance(view, selectedView) / maximumPositionSpan,
+              )
+            : 0;
+          const viewDistance = cameraAngleDistance(view, selectedView);
+          minimumSpatialDistance = Math.min(
+            minimumSpatialDistance,
+            viewDistance * 0.65 + positionDistance * 0.35,
+          );
+        }
+      }
+      const temporalDistance = Math.min(
+        ...[...selected].map((selectedIndex) =>
+          Math.abs(index - selectedIndex) / Math.max(1, keyframes.length - 1)
+        ),
+      );
+      const diversity = hasSpatialComparison
+        ? minimumSpatialDistance * 0.88 + temporalDistance * 0.12
+        : temporalDistance;
+      const score = diversity * 0.86 + keyframes[index]!.quality * 0.14;
+      if (score > nextScore + 1e-12) {
+        nextScore = score;
+        nextIndex = index;
+      }
+    }
+    if (nextIndex < 0) break;
+    selected.add(nextIndex);
+  }
+
+  return [...selected].map((index) => keyframes[index]!);
 }
 
 const decoder = new TextDecoder();

@@ -906,7 +906,7 @@ export function RoomSceneCanvas({
       seed: 43,
       repeat: [4, 3],
       anisotropy,
-      roughness: 0.92,
+      roughness: 0.76,
       normalStrength: 0.22,
     });
     const doorTextures = createProceduralMaterialTextures({
@@ -954,11 +954,14 @@ export function RoomSceneCanvas({
       color: 0xffffff,
       map: floorColorMap,
       normalMap: floorNormalMap,
-      normalScale: new THREE.Vector2(0.28, 0.28),
+      normalScale: new THREE.Vector2(0.2, 0.2),
       roughnessMap: floorRoughnessMap,
-      roughness: 0.82,
+      // Roughness and roughnessMap multiply in Three. This produces an
+      // effective roughness around 0.58: a broad sealed-wood reflection, not a
+      // mirror, while the normal map keeps the highlight broken by the grain.
+      roughness: 0.76,
       metalness: 0,
-      envMapIntensity: 0.48,
+      envMapIntensity: 0.5,
     });
     const doorMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
@@ -1069,6 +1072,16 @@ export function RoomSceneCanvas({
         appearance,
         detectedFinishTextures,
       );
+      if (
+        category === "floor" &&
+        (appearance.material === "wood" || appearance.material === "laminate")
+      ) {
+        // Keep accepted semantic materials authoritative, but make sealed wood
+        // retain the subtle grazing reflection requested for the room floor.
+        material.roughness = Math.min(material.roughness, 0.72);
+        material.normalScale.setScalar(Math.min(material.normalScale.x, 0.2));
+        material.envMapIntensity = Math.max(material.envMapIntensity, 0.5);
+      }
       aiMaterials.set(key, material);
       return material;
     };
@@ -1246,6 +1259,7 @@ export function RoomSceneCanvas({
     scene.add(webRoot);
     const assetAbortController = new AbortController();
     const roomPlanRoots = new Map<string, THREE.Object3D>();
+    const reflectiveFloorMeshes: THREE.Mesh[] = [];
     const roomWorldRoots = new Map<string, THREE.Group>();
     const roomWorldDeltas = new Map<string, THREE.Matrix4>();
     const capturedRoomTransforms = new Map<string, THREE.Matrix4>();
@@ -1690,13 +1704,22 @@ export function RoomSceneCanvas({
         } else {
           const dimensions = normalizedDimensions(surface.category, surface.dimensions);
           const geometry = new THREE.BoxGeometry(...dimensions);
-          const mesh = new THREE.Mesh(
-            geometry,
-            finishForSurface(roomManifest, "floor", floorMaterial),
+          const material = finishForSurface(
+            roomManifest,
+            "floor",
+            floorMaterial,
           );
+          const mesh = new THREE.Mesh(geometry, material);
+          // Contact shadows are stored on the receiving floor, not on the
+          // chair/table UVs. Give floor charts extra atlas area so furniture
+          // feet remain several texels wide instead of collapsing to a blur.
+          mesh.userData.roomLightMapTexelScale = 1.6;
           mesh.receiveShadow = true;
           setMatrix(mesh, surface.transform);
           modelRoot.add(mesh);
+          // The stable room probe is reserved for sealed wood/laminate, tile,
+          // and similarly smooth floors. Rough carpet/concrete remains matte.
+          if (material.roughness <= 0.8) reflectiveFloorMeshes.push(mesh);
         }
       }
 
@@ -2258,15 +2281,74 @@ export function RoomSceneCanvas({
         ));
       return modelBox.applyMatrix4(modelToWeb);
     };
-    const primaryBox = boundsForManifest(manifest);
-    const box = visibleManifests.reduce((combined, roomManifest) => {
-      return combined.union(boundsForManifest(roomManifest));
+    const roomBoundsById = new Map(
+      visibleManifests.map((roomManifest) => [
+        roomManifest.scan.id,
+        boundsForManifest(roomManifest),
+      ] as const),
+    );
+    const primaryBox = roomBoundsById.get(manifest.scan.id)
+      ?? boundsForManifest(manifest);
+    const box = [...roomBoundsById.values()].reduce((combined, roomBounds) => {
+      return combined.union(roomBounds);
     }, new THREE.Box3());
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const radius = Math.max(size.length() * 0.5, 1.5);
 
+    // The overview deliberately removes ceilings so the room stays legible.
+    // Path tracing still needs a closed architectural envelope, otherwise most
+    // window energy escapes through the cutaway instead of returning as soft
+    // ceiling bounce. These caps are uploaded only to the ray tracer and remain
+    // camera-hidden in every interactive view.
+    const bakeCeilingMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe0ded8,
+      metalness: 0,
+      roughness: 1,
+    });
+    const bakeOnlyObjects: THREE.Object3D[] = [];
+    for (const [roomId, roomBounds] of roomBoundsById) {
+      const roomSize = roomBounds.getSize(new THREE.Vector3());
+      const roomCenter = roomBounds.getCenter(new THREE.Vector3());
+      const ceilingThickness = 0.06;
+      const ceiling = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          Math.max(0.3, roomSize.x + 0.14),
+          ceilingThickness,
+          Math.max(0.3, roomSize.z + 0.14),
+        ),
+        bakeCeilingMaterial,
+      );
+      ceiling.position.set(
+        roomCenter.x,
+        roomBounds.max.y + ceilingThickness / 2,
+        roomCenter.z,
+      );
+      ceiling.visible = false;
+      ceiling.userData.roomBakeOnly = true;
+      ceiling.userData.roomScanId = roomId;
+      scene.add(ceiling);
+      bakeOnlyObjects.push(ceiling);
+    }
+
+    const withBakeOnlyObjectsVisible = <Value,>(callback: () => Value) => {
+      const visibility = bakeOnlyObjects.map((object) => object.visible);
+      bakeOnlyObjects.forEach((object) => {
+        object.visible = true;
+      });
+      scene.updateMatrixWorld(true);
+      try {
+        return callback();
+      } finally {
+        bakeOnlyObjects.forEach((object, index) => {
+          object.visible = visibility[index] ?? false;
+        });
+        scene.updateMatrixWorld(true);
+      }
+    };
+
     type DaylightPortal = {
+      roomId: string;
       position: THREE.Vector3;
       outward: THREE.Vector3;
       right: THREE.Vector3;
@@ -2283,7 +2365,8 @@ export function RoomSceneCanvas({
     );
     const daylightPortals: DaylightPortal[] = [];
     for (const roomManifest of visibleManifests) {
-      const roomBounds = boundsForManifest(roomManifest);
+      const roomBounds = roomBoundsById.get(roomManifest.scan.id)
+        ?? boundsForManifest(roomManifest);
       const roomCenter = roomBounds.getCenter(new THREE.Vector3());
       const modelToWeb = webFromWorld.clone().multiply(
         new THREE.Matrix4().fromArray(
@@ -2309,6 +2392,7 @@ export function RoomSceneCanvas({
           outward.negate();
         }
         daylightPortals.push({
+          roomId: roomManifest.scan.id,
           position,
           outward,
           right: new THREE.Vector3(1, 0, 0).transformDirection(
@@ -2327,7 +2411,8 @@ export function RoomSceneCanvas({
 
     const hasWindowDaylight = daylightPortals.length > 0;
     const fallbackPortal: DaylightPortal = {
-      position: new THREE.Vector3(center.x, box.max.y + 0.2, center.z),
+      roomId: manifest.scan.id,
+      position: new THREE.Vector3(center.x, box.max.y - 0.075, center.z),
       outward: new THREE.Vector3(0, 1, 0),
       right: new THREE.Vector3(1, 0, 0),
       up: new THREE.Vector3(0, 0, 1),
@@ -2350,6 +2435,7 @@ export function RoomSceneCanvas({
       (total, portal) => total + portal.area,
       0,
     );
+    const tracedWindowRadiance = 25;
     const daylightShadowLights: THREE.SpotLight[] = [];
     const daylightAreaLights: THREE.RectAreaLight[] = [];
 
@@ -2381,7 +2467,7 @@ export function RoomSceneCanvas({
           ? rayTracedLighting ? 0xe4f0ff : 0xe9f4ff
           : rayTracedLighting ? 0xfff1df : 0xffe8c7,
         hasWindowDaylight
-          ? rayTracedLighting ? 25 : 1.8
+          ? rayTracedLighting ? tracedWindowRadiance : 1.8
           : rayTracedLighting ? 12.5 : 1.6,
         // One emitter covers the complete clear opening. A tiny inset keeps
         // sampled points away from the solid frame while preserving the large
@@ -2469,6 +2555,52 @@ export function RoomSceneCanvas({
         wallBounce.position.copy(farWallPosition);
         wallBounce.lookAt(portal.roomCenter);
         scene.add(wallBounce);
+      }
+    }
+
+    if (rayTracedLighting && hasWindowDaylight) {
+      for (const [roomId, roomBounds] of roomBoundsById) {
+        const roomPortals = activePortals.filter(
+          (portal) => portal.roomId === roomId,
+        );
+        const roomSize = roomBounds.getSize(new THREE.Vector3());
+        const roomCenter = roomBounds.getCenter(new THREE.Vector3());
+        const fillWidth = Math.max(0.8, roomSize.x * 0.78);
+        const fillHeight = Math.max(0.8, roomSize.z * 0.78);
+        const fillArea = fillWidth * fillHeight;
+        const windowPower = roomPortals.reduce(
+          (power, portal) => power + tracedWindowRadiance * portal.area,
+          0,
+        );
+
+        // A photography-style source is useful for a cutaway overview, but it
+        // must remain subordinate to the architectural daylight. Matching ten
+        // percent of the room's window power (rather than ten percent of raw
+        // radiance) accounts for the much larger overhead emitting area.
+        const fillIntensity = roomPortals.length > 0
+          ? THREE.MathUtils.clamp(windowPower * 0.1 / fillArea, 0.12, 0.75)
+          : 2.4;
+        const topFill = new THREE.RectAreaLight(
+          0xfff6e9,
+          fillIntensity,
+          fillWidth,
+          fillHeight,
+        );
+        topFill.position.set(
+          roomCenter.x,
+          roomBounds.max.y - 0.075,
+          roomCenter.z,
+        );
+        // RectAreaLight emits along local -Z. Point local +Z upward so the
+        // source illuminates the room, not the bake-only ceiling above it.
+        topFill.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, 0, 1),
+          new THREE.Vector3(0, 1, 0),
+        );
+        topFill.userData.roomArchitecturalFill = true;
+        topFill.userData.roomScanId = roomId;
+        scene.add(topFill);
+        daylightAreaLights.push(topFill);
       }
     }
 
@@ -3000,6 +3132,107 @@ export function RoomSceneCanvas({
     let pathTracingLastStatusAt = 0;
     let lightMapActiveElapsed = 0;
     let lightMapLastFrameAt: number | null = null;
+    let roomReflectionTarget: THREE.WebGLRenderTarget | null = null;
+    const enableStableFloorSheen = (environmentMap: THREE.Texture) => {
+      for (const mesh of reflectiveFloorMeshes) {
+        const materials = Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material];
+        for (const material of materials) {
+          if (!(material instanceof THREE.MeshStandardMaterial)) continue;
+          // An explicit envMap lets the floor keep its own restrained strength;
+          // otherwise Three replaces envMapIntensity with the scene-wide 0.18.
+          material.envMap = environmentMap;
+          material.envMapIntensity = 0.5;
+          material.needsUpdate = true;
+        }
+      }
+    };
+    const captureLocalReflectionProbe = () => {
+      const cubeTarget = new THREE.WebGLCubeRenderTarget(128, {
+        colorSpace: THREE.LinearSRGBColorSpace,
+        generateMipmaps: true,
+        magFilter: THREE.LinearFilter,
+        minFilter: THREE.LinearMipmapLinearFilter,
+        type: THREE.HalfFloatType,
+      });
+      const cubeCamera = new THREE.CubeCamera(
+        Math.max(0.03, radius / 500),
+        Math.max(20, radius * 8),
+        cubeTarget,
+      );
+      const probeCenter = primaryBox.getCenter(new THREE.Vector3());
+      const probeSize = primaryBox.getSize(new THREE.Vector3());
+      cubeCamera.position.set(
+        probeCenter.x,
+        primaryBox.min.y + THREE.MathUtils.clamp(
+          probeSize.y * 0.48,
+          0.9,
+          1.55,
+        ),
+        probeCenter.z,
+      );
+      scene.add(cubeCamera);
+
+      const hiddenDuringCapture = [
+        keyframeRoot,
+        photoPose,
+        ...markerMeshes.filter((object) => object instanceof THREE.Group),
+        ...(transformHelper ? [transformHelper] : []),
+      ];
+      const hiddenVisibility = hiddenDuringCapture.map((object) => object.visible);
+      const previousTarget = renderer.getRenderTarget();
+      const previousToneMapping = renderer.toneMapping;
+      const previousBackground = scene.background;
+      const previousEnvironment = scene.environment;
+      const previousEnvironmentIntensity = scene.environmentIntensity;
+      const previousXr = renderer.xr.enabled;
+      try {
+        hiddenDuringCapture.forEach((object) => {
+          object.visible = false;
+        });
+        scene.background = new THREE.Color(0xdce8f2);
+        scene.environment = environmentTarget.texture;
+        scene.environmentIntensity = 0.18;
+        renderer.toneMapping = THREE.NoToneMapping;
+        renderer.xr.enabled = false;
+        withBakeOnlyObjectsVisible(() => {
+          cubeCamera.update(renderer, scene);
+        });
+
+        const generator = new THREE.PMREMGenerator(renderer);
+        try {
+          const generated = generator.fromCubemap(cubeTarget.texture);
+          roomReflectionTarget?.dispose();
+          roomReflectionTarget = generated;
+          return generated.texture;
+        } finally {
+          generator.dispose();
+        }
+      } catch {
+        return environmentTarget.texture;
+      } finally {
+        hiddenDuringCapture.forEach((object, index) => {
+          object.visible = hiddenVisibility[index] ?? false;
+        });
+        renderer.setRenderTarget(previousTarget);
+        renderer.toneMapping = previousToneMapping;
+        renderer.xr.enabled = previousXr;
+        scene.background = previousBackground;
+        scene.environment = previousEnvironment;
+        scene.environmentIntensity = previousEnvironmentIntensity;
+        scene.remove(cubeCamera);
+        cubeTarget.dispose();
+      }
+    };
+    const applyFinishedReflectionEnvironment = () => {
+      scene.environment = environmentTarget.texture;
+      scene.environmentIntensity = 0.18;
+      const reflectionMap = captureLocalReflectionProbe();
+      scene.environment = reflectionMap;
+      scene.environmentIntensity = 0.18;
+      enableStableFloorSheen(reflectionMap);
+    };
     const onBakeVisibilityChange = () => {
       // Break the active-time interval whenever the page is hidden or shown so
       // background throttling can never consume the five-minute bake budget.
@@ -3036,7 +3269,7 @@ export function RoomSceneCanvas({
           } = await import("@/lib/room-lightmap-baker");
           if (disposed) return;
           const cacheKey = createRoomLightMapCacheKey({
-            version: 16,
+            version: 19,
             rooms: visibleManifests.map((roomManifest) => ({
               analysis: roomManifest.scan.aiAnalysis,
               id: roomManifest.scan.id,
@@ -3045,15 +3278,16 @@ export function RoomSceneCanvas({
             })),
           });
           const bake = await createRoomLightMapBake({
+            bakeOnlyObjects,
             cacheKey,
             onProgress: (progress) => {
               if (!disposed) setLightingProgress(progress);
             },
             renderer,
-            // A full 1024² HDR atlas gives furniture feet and window reveals
-            // enough texels for attached shadows. The bake then spends up to
-            // five minutes converging before a mild edge-aware denoise.
-            resolution: Math.min(1024, renderer.capabilities.maxTextureSize),
+            // 1280² plus receiver priorities fits materially more floor/contact
+            // detail than the old global 1024² atlas while remaining inside the
+            // five-minute active bake budget on the reference room.
+            resolution: Math.min(1280, renderer.capabilities.maxTextureSize),
             roots: roomPlanRoots.values(),
             scene,
           });
@@ -3071,10 +3305,9 @@ export function RoomSceneCanvas({
             daylightAreaLights.forEach((light) => {
               light.intensity = 0;
             });
-            scene.environment = environmentTarget.texture;
-            // Lightmapped materials suppress diffuse IBL but retain this PMREM
-            // for view-dependent PBR reflections.
-            scene.environmentIntensity = 0.18;
+            // Lightmapped materials suppress diffuse IBL but retain a closed-
+            // room PMREM for view-dependent PBR reflections.
+            applyFinishedReflectionEnvironment();
             setLightingStatus("ready");
           }
           return;
@@ -3103,12 +3336,14 @@ export function RoomSceneCanvas({
         );
 
         scene.fog = null;
-        tracer.setScene(scene, camera, {
-          onProgress: (progress) => {
-            if (!disposed) {
-              setLightingProgress(Math.max(2, Math.round(progress * 12)));
-            }
-          },
+        withBakeOnlyObjectsVisible(() => {
+          tracer.setScene(scene, camera, {
+            onProgress: (progress) => {
+              if (!disposed) {
+                setLightingProgress(Math.max(2, Math.round(progress * 12)));
+              }
+            },
+          });
         });
         if (disposed) {
           tracer.dispose();
@@ -3429,8 +3664,7 @@ export function RoomSceneCanvas({
             // Lightmaps contain direct and bounced diffuse irradiance. The
             // lightmapped material shader keeps PMREM diffuse out while still
             // using the probe for view-dependent reflections.
-            scene.environment = environmentTarget.texture;
-            scene.environmentIntensity = 0.18;
+            applyFinishedReflectionEnvironment();
             setLightingStatus("ready");
           }
         }
@@ -3567,6 +3801,7 @@ export function RoomSceneCanvas({
       textures.forEach((texture) => texture.dispose());
       photoBitmap?.close();
       if (bounceProbe) scene.remove(bounceProbe);
+      roomReflectionTarget?.dispose();
       environmentTarget.dispose();
       timer.dispose();
       ambientOcclusionPass.dispose();

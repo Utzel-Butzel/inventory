@@ -9,6 +9,9 @@ import {
 } from "../components/room-object-models.ts";
 import { applyDetectedRoomFinish } from "../components/room-scene-materials.ts";
 import { buildRoomAiAnalysis } from "../lib/room-ai-analysis.ts";
+import { selectRoomAnalysisPhotoSources } from "../lib/room-analysis-photo-sources.ts";
+import { roomVisionModelCapabilities } from "../lib/openai-model-capabilities.ts";
+import { roomObjectProjectionMatchesEvidence } from "../lib/room-photo-grounding.ts";
 import { resolveRoomWindowPaneGrid } from "../lib/room-window-details.ts";
 import {
   maximumRoomAnalysisKeyframes,
@@ -16,6 +19,7 @@ import {
   detectedRoomPrimitiveModelSchema,
   roomAiAnalysisSchema,
   roomAiDetectionSchema,
+  roomPhotoDetectionSchema,
   roomPrimitiveModelSchema,
   roomWindowDetailsSchema,
 } from "../lib/room-ai-analysis-contract.ts";
@@ -28,6 +32,87 @@ const matrix = [
 ];
 const frameId = "11111111-1111-4111-8111-111111111111";
 const missingFrameId = "22222222-2222-4222-8222-222222222222";
+
+test("uses an uncalibrated guide image when a scan has no keyframes", () => {
+  const sources = selectRoomAnalysisPhotoSources({
+    keyframes: [],
+    guideImage: {
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      storageKey: "room/guide.jpg",
+      storageUrl: "file:///room/guide.jpg",
+    },
+  });
+
+  assert.deepEqual(sources, [{
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    quality: 1,
+    orientation: "up",
+    storageKey: "room/guide.jpg",
+    storageUrl: "file:///room/guide.jpg",
+    cameraTransform: null,
+    intrinsics: null,
+    nativeWidth: null,
+    nativeHeight: null,
+  }]);
+});
+
+test("retains pose, intrinsics, and native dimensions for calibrated photos", () => {
+  const intrinsics = [900, 0, 0, 0, 900, 0, 800, 600, 1];
+  const [source] = selectRoomAnalysisPhotoSources({
+    guideImage: null,
+    keyframes: [{
+      id: frameId,
+      quality: 0.9,
+      orientation: "right",
+      storageKey: "room/frame.jpg",
+      storageUrl: "file:///room/frame.jpg",
+      cameraTransform: matrix,
+      intrinsics,
+      imageWidth: 1_600,
+      imageHeight: 1_200,
+    }],
+  });
+
+  assert.deepEqual(source, {
+    id: frameId,
+    quality: 0.9,
+    orientation: "right",
+    storageKey: "room/frame.jpg",
+    storageUrl: "file:///room/frame.jpg",
+    cameraTransform: matrix,
+    intrinsics,
+    nativeWidth: 1_600,
+    nativeHeight: 1_200,
+  });
+});
+
+test("uses only vision parameters supported by the configured model", () => {
+  assert.deepEqual(roomVisionModelCapabilities("gpt-4.1-mini"), {
+    imageDetail: "high",
+    reasoning: null,
+  });
+  assert.deepEqual(roomVisionModelCapabilities("gpt-5.6-terra"), {
+    imageDetail: "original",
+    reasoning: { effort: "medium" },
+  });
+});
+
+test("rejects a tiny photo object mapped onto a much larger RoomPlan anchor", () => {
+  const projection = {
+    imagePoint: [500, 500],
+    imageBounds: [100, 100, 900, 900],
+  };
+  assert.equal(roomObjectProjectionMatchesEvidence({
+    ...projection,
+    evidenceBounds: [460, 460, 530, 530],
+    visibility: "clear",
+  }), false);
+  assert.equal(roomObjectProjectionMatchesEvidence({
+    ...projection,
+    evidenceBounds: [140, 160, 860, 880],
+    visibility: "clear",
+  }), true);
+});
 
 const scene = {
   schemaVersion: 1,
@@ -69,11 +154,12 @@ const scene = {
   ],
 };
 
-test("grounds only unique RoomPlan categories and keeps evidence within analyzed frames", () => {
+test("grounds explicit duplicate RoomPlan categories and keeps real evidence only", () => {
   let id = 7;
   const analysis = buildRoomAiAnalysis({
     scene,
     keyframeIds: [frameId],
+    calibratedKeyframeIds: [frameId],
     model: "vision-test",
     analyzedAt: "2026-08-21T10:00:00.000Z",
     createId: () => `${id++}`.repeat(8).slice(0, 8) + "-7777-4777-8777-777777777777",
@@ -110,8 +196,15 @@ test("grounds only unique RoomPlan categories and keeps evidence within analyzed
           material: "wood",
           confidence: 0.9,
           evidence: "Clearly visible in the first photo.",
-          evidenceKeyframeIds: [missingFrameId],
+          evidenceKeyframeIds: [missingFrameId, frameId],
+          imageEvidence: [{
+            keyframeId: frameId,
+            bounds: [80, 240, 720, 840],
+            visibility: "clear",
+            confidence: 0.94,
+          }],
           roomPlanCategory: "table",
+          roomPlanObjectId: scene.objects[0].id,
           primitiveModel: {
             label: "Wooden work table",
             parts: [
@@ -131,6 +224,14 @@ test("grounds only unique RoomPlan categories and keeps evidence within analyzed
                 colorHex: "#704522",
                 material: "wood",
               }))),
+              {
+                primitive: "box",
+                position: [0, -0.12, 0],
+                size: [0.72, 0.06, 0.06],
+                rotationDegrees: [0, 0, 0],
+                colorHex: "#704522",
+                material: "wood",
+              },
             ],
           },
         },
@@ -143,7 +244,14 @@ test("grounds only unique RoomPlan categories and keeps evidence within analyzed
           confidence: 0.7,
           evidence: "Visible beside the table.",
           evidenceKeyframeIds: [frameId],
+          imageEvidence: [{
+            keyframeId: frameId,
+            bounds: [950, 920, 700, 300],
+            visibility: "partial",
+            confidence: 0.72,
+          }],
           roomPlanCategory: "chair",
+          roomPlanObjectId: scene.objects[1].id,
           primitiveModel: null,
         },
         {
@@ -155,7 +263,14 @@ test("grounds only unique RoomPlan categories and keeps evidence within analyzed
           confidence: 0.5,
           evidence: "May be the same table.",
           evidenceKeyframeIds: [frameId],
+          imageEvidence: [{
+            keyframeId: frameId,
+            bounds: [80, 240, 720, 840],
+            visibility: "clear",
+            confidence: 0.55,
+          }],
           roomPlanCategory: "table",
+          roomPlanObjectId: scene.objects[0].id,
           primitiveModel: null,
         },
       ],
@@ -167,9 +282,13 @@ test("grounds only unique RoomPlan categories and keeps evidence within analyzed
   assert.equal(analysis.surfaceAppearances[0].status, "pending");
   assert.deepEqual(analysis.surfaceAppearances[0].evidenceKeyframeIds, [frameId]);
   assert.equal(analysis.objectSuggestions[0].roomObjectId, scene.objects[0].id);
-  assert.equal(analysis.objectSuggestions[0].primitiveModel?.parts.length, 5);
+  assert.equal(analysis.objectSuggestions[0].primitiveModel?.parts.length, 6);
   assert.deepEqual(analysis.objectSuggestions[0].evidenceKeyframeIds, [frameId]);
-  assert.equal(analysis.objectSuggestions[1].roomObjectId, null);
+  assert.equal(analysis.objectSuggestions[1].roomObjectId, scene.objects[1].id);
+  assert.deepEqual(
+    analysis.objectSuggestions[1].imageEvidence[0].bounds,
+    [700, 300, 950, 920],
+  );
   assert.equal(analysis.objectSuggestions[2].roomObjectId, null);
   assert.ok(analysis.objectSuggestions.every(({ status }) => status === "pending"));
 });
@@ -206,16 +325,142 @@ test("rejects unsafe or oversized AI primitive model recipes", () => {
   }).success, false);
   assert.equal(detectedRoomPrimitiveModelSchema.safeParse({
     label: "Under-specified chair",
-    parts: [validPart],
+    parts: Array.from({ length: 5 }, () => validPart),
   }).success, false);
+  assert.equal(detectedRoomPrimitiveModelSchema.safeParse({
+    label: "Structured chair",
+    parts: Array.from({ length: 6 }, () => validPart),
+  }).success, true);
 });
 
 test("builds an OpenAI strict response format for room analysis", () => {
-  assert.equal(maximumRoomAnalysisKeyframes, 16);
+  assert.equal(maximumRoomAnalysisKeyframes, 24);
   assert.equal(maximumRoomObjectSuggestions, 48);
   assert.doesNotThrow(() =>
     zodTextFormat(roomAiDetectionSchema, "room_ai_analysis"),
   );
+  assert.doesNotThrow(() =>
+    zodTextFormat(roomPhotoDetectionSchema, "room_photo_detection"),
+  );
+});
+
+test("drops suggestions whose cited evidence is not an analyzed photo", () => {
+  const analysis = buildRoomAiAnalysis({
+    scene,
+    keyframeIds: [frameId],
+    model: "vision-test",
+    analyzedAt: "2026-08-21T10:00:00.000Z",
+    createId: () => "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    detection: {
+      summary: "One unsupported candidate.",
+      surfaceAppearances: [],
+      objectSuggestions: [{
+        name: "Unsupported chair",
+        category: "furniture",
+        description: "Only linked to an unknown photo.",
+        colorHex: null,
+        material: "plastic",
+        confidence: 0.4,
+        evidence: "Not present in an analyzed photo.",
+        evidenceKeyframeIds: [missingFrameId],
+        imageEvidence: [{
+          keyframeId: missingFrameId,
+          bounds: [100, 100, 500, 900],
+          visibility: "partial",
+          confidence: 0.4,
+        }],
+        roomPlanCategory: "chair",
+        roomPlanObjectId: scene.objects[1].id,
+        primitiveModel: null,
+      }],
+    },
+  });
+
+  assert.deepEqual(analysis.objectSuggestions, []);
+});
+
+test("does not ground or generate placement from uncalibrated evidence", () => {
+  const analysis = buildRoomAiAnalysis({
+    scene,
+    keyframeIds: [frameId],
+    calibratedKeyframeIds: [],
+    model: "vision-test",
+    analyzedAt: "2026-08-21T10:00:00.000Z",
+    createId: () => "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    detection: {
+      summary: "A chair is visible in an uncalibrated guide photo.",
+      surfaceAppearances: [],
+      objectSuggestions: [{
+        name: "Mesh office chair",
+        category: "furniture",
+        description: "Black chair beside the desk.",
+        colorHex: "#202124",
+        material: "fabric",
+        confidence: 0.94,
+        evidence: "Visible in the guide photo.",
+        evidenceKeyframeIds: [frameId],
+        imageEvidence: [{
+          keyframeId: frameId,
+          bounds: [100, 180, 520, 940],
+          visibility: "clear",
+          confidence: 0.94,
+        }],
+        roomPlanCategory: "chair",
+        roomPlanObjectId: scene.objects[1].id,
+        primitiveModel: {
+          label: "Office chair",
+          parts: Array.from({ length: 6 }, () => ({
+            primitive: "box",
+            position: [0, 0, 0],
+            size: [0.2, 0.2, 0.2],
+            rotationDegrees: [0, 0, 0],
+            colorHex: "#202124",
+            material: "fabric",
+          })),
+        },
+      }],
+    },
+  });
+
+  assert.equal(analysis.objectSuggestions.length, 1);
+  assert.equal(analysis.objectSuggestions[0].roomObjectId, null);
+  assert.equal(analysis.objectSuggestions[0].primitiveModel, null);
+});
+
+test("does not override an explicit null RoomPlan match by category uniqueness", () => {
+  const analysis = buildRoomAiAnalysis({
+    scene,
+    keyframeIds: [frameId],
+    calibratedKeyframeIds: [frameId],
+    model: "vision-test",
+    analyzedAt: "2026-08-21T10:00:00.000Z",
+    createId: () => "abababab-abab-4bab-8bab-abababababab",
+    detection: {
+      summary: "A newly visible side table is not an existing RoomPlan anchor.",
+      surfaceAppearances: [],
+      objectSuggestions: [{
+        name: "Small side table",
+        category: "furniture",
+        description: "A partial table at the edge of the photo.",
+        colorHex: "#A07040",
+        material: "wood",
+        confidence: 0.75,
+        evidence: "Only part of the table is visible.",
+        evidenceKeyframeIds: [frameId],
+        imageEvidence: [{
+          keyframeId: frameId,
+          bounds: [0, 300, 180, 850],
+          visibility: "partial",
+          confidence: 0.75,
+        }],
+        roomPlanCategory: "table",
+        roomPlanObjectId: null,
+        primitiveModel: null,
+      }],
+    },
+  });
+
+  assert.equal(analysis.objectSuggestions[0].roomObjectId, null);
 });
 
 test("keeps detected window type and muntin grid pending until confirmation", () => {
@@ -346,7 +591,18 @@ test("keeps stored room analyses from before primitive models readable", () => {
     model: "vision-test",
     summary: "Legacy analysis",
     analyzedKeyframeIds: [frameId],
-    surfaceAppearances: [],
+    surfaceAppearances: [{
+      id: "12121212-1212-4212-8212-121212121212",
+      surfaceCategory: "wall",
+      colorHex: "#F0F0F0",
+      colorName: "White",
+      material: "paint",
+      roughness: 0.8,
+      confidence: 0.7,
+      evidenceKeyframeIds: [],
+      windowDetails: null,
+      status: "pending",
+    }],
     objectSuggestions: [{
       id: "77777777-7777-4777-8777-777777777777",
       name: "Table",
@@ -363,6 +619,8 @@ test("keeps stored room analyses from before primitive models readable", () => {
   });
 
   assert.equal(legacy.objectSuggestions[0].primitiveModel, null);
+  assert.deepEqual(legacy.objectSuggestions[0].imageEvidence, []);
+  assert.deepEqual(legacy.surfaceAppearances[0].evidenceKeyframeIds, []);
 });
 
 test("keeps an accepted light-gray door finish free of the brown base texture", () => {

@@ -11,23 +11,22 @@ export function buildRoomAiAnalysis(options: {
   detection: RoomAiDetection;
   scene: RoomScene;
   keyframeIds: string[];
+  calibratedKeyframeIds?: string[];
   model: string;
   analyzedAt?: string;
   createId: () => string;
 }): RoomAiAnalysis {
   const allowedKeyframes = new Set(options.keyframeIds);
-  const fallbackKeyframeId = options.keyframeIds[0]!;
+  const calibratedKeyframes = new Set(
+    options.calibratedKeyframeIds ?? options.keyframeIds,
+  );
   const surfaceCategories = new Set(
     options.scene.surfaces.map((surface) => surface.category),
   );
   const usedSurfaceCategories = new Set<string>();
-  const objectsByCategory = new Map<string, typeof options.scene.objects>();
-  for (const object of options.scene.objects) {
-    const category = normalizedCategory(object.category);
-    const values = objectsByCategory.get(category);
-    if (values) values.push(object);
-    else objectsByCategory.set(category, [object]);
-  }
+  const objectsById = new Map(
+    options.scene.objects.map((object) => [object.id, object]),
+  );
   const boundObjectIds = new Set<string>();
 
   return roomAiAnalysisSchema.parse({
@@ -37,41 +36,75 @@ export function buildRoomAiAnalysis(options: {
     summary: options.detection.summary,
     analyzedKeyframeIds: options.keyframeIds,
     surfaceAppearances: options.detection.surfaceAppearances
-      .filter((appearance) => {
+      .flatMap((appearance) => {
+        const evidenceKeyframeIds = appearance.evidenceKeyframeIds.filter(
+          (id) => allowedKeyframes.has(id),
+        );
         if (
           !surfaceCategories.has(appearance.surfaceCategory) ||
-          usedSurfaceCategories.has(appearance.surfaceCategory)
+          usedSurfaceCategories.has(appearance.surfaceCategory) ||
+          !evidenceKeyframeIds.length
         ) {
-          return false;
+          return [];
         }
         usedSurfaceCategories.add(appearance.surfaceCategory);
-        return true;
-      })
-      .map((appearance) => ({
-        ...appearance,
-        id: options.createId(),
-        status: "pending" as const,
-        colorHex: appearance.colorHex.toUpperCase(),
-        windowDetails: appearance.surfaceCategory === "window"
-          ? appearance.windowDetails
-          : null,
-        evidenceKeyframeIds: appearance.evidenceKeyframeIds.filter((id) =>
-          allowedKeyframes.has(id),
-        ),
-      })),
-    objectSuggestions: options.detection.objectSuggestions.map((suggestion) => {
-      const candidates = suggestion.roomPlanCategory
-        ? objectsByCategory.get(normalizedCategory(suggestion.roomPlanCategory)) ?? []
-        : [];
-      const candidate = candidates.length === 1 ? candidates[0]! : null;
+        return [{
+          ...appearance,
+          id: options.createId(),
+          status: "pending" as const,
+          colorHex: appearance.colorHex.toUpperCase(),
+          windowDetails: appearance.surfaceCategory === "window"
+            ? appearance.windowDetails
+            : null,
+          evidenceKeyframeIds,
+        }];
+      }),
+    objectSuggestions: options.detection.objectSuggestions.flatMap((suggestion) => {
+      const evidenceKeyframeIds = suggestion.evidenceKeyframeIds.filter((id) =>
+        allowedKeyframes.has(id)
+      );
+      const evidenceIds = new Set(evidenceKeyframeIds);
+      const imageEvidence = suggestion.imageEvidence.flatMap((item) => {
+        if (
+          !evidenceIds.has(item.keyframeId) ||
+          !allowedKeyframes.has(item.keyframeId)
+        ) {
+          return [];
+        }
+        const [firstX, firstY, secondX, secondY] = item.bounds;
+        const left = Math.min(firstX!, secondX!);
+        const top = Math.min(firstY!, secondY!);
+        const right = Math.max(firstX!, secondX!);
+        const bottom = Math.max(firstY!, secondY!);
+        if (left === right || top === bottom) return [];
+        return [{ ...item, bounds: [left, top, right, bottom] }];
+      });
+      if (!imageEvidence.length) return [];
+      const supportedEvidenceIds = new Set(
+        imageEvidence.map(({ keyframeId }) => keyframeId),
+      );
+      const supportedKeyframeIds = evidenceKeyframeIds.filter((id) =>
+        supportedEvidenceIds.has(id)
+      );
+      if (!supportedKeyframeIds.length) return [];
+      const hasCalibratedEvidence = supportedKeyframeIds.some((id) =>
+        calibratedKeyframes.has(id)
+      );
+
+      const explicitCandidate = suggestion.roomPlanObjectId
+        ? objectsById.get(suggestion.roomPlanObjectId) ?? null
+        : null;
+      const candidate = hasCalibratedEvidence && explicitCandidate &&
+          suggestion.roomPlanCategory &&
+          normalizedCategory(explicitCandidate.category) ===
+            normalizedCategory(suggestion.roomPlanCategory)
+        ? explicitCandidate
+        : null;
       const roomObjectId = candidate && !boundObjectIds.has(candidate.id)
         ? candidate.id
         : null;
       if (roomObjectId) boundObjectIds.add(roomObjectId);
-      const evidenceKeyframeIds = suggestion.evidenceKeyframeIds.filter((id) =>
-        allowedKeyframes.has(id),
-      );
-      return {
+      return [{
         id: options.createId(),
         name: suggestion.name,
         category: suggestion.category,
@@ -80,13 +113,12 @@ export function buildRoomAiAnalysis(options: {
         material: suggestion.material,
         confidence: suggestion.confidence,
         evidence: suggestion.evidence,
-        evidenceKeyframeIds: evidenceKeyframeIds.length
-          ? evidenceKeyframeIds
-          : [fallbackKeyframeId],
+        evidenceKeyframeIds: supportedKeyframeIds,
+        imageEvidence,
         roomObjectId,
         primitiveModel: roomObjectId ? suggestion.primitiveModel : null,
         status: "pending" as const,
-      };
+      }];
     }),
   });
 }

@@ -21,6 +21,47 @@ type Vector3Tuple = readonly [number, number, number];
 
 const MIN_PART_SIZE = 0.006;
 
+function scaleBoxTextureUvs(
+  geometry: THREE.BoxGeometry,
+  size: Vector3Tuple,
+) {
+  const uv = geometry.getAttribute("uv");
+  const index = geometry.getIndex();
+  if (!uv || !index) return;
+
+  // BoxGeometry maps every face to 0..1, which made a 5 cm chair leg and a
+  // two-metre sofa repeat the same texture equally often. Scale each face by
+  // its physical side lengths; the shared texture repeat now means repeats per
+  // metre and keeps wood/fabric relief consistent across furniture sizes.
+  const faceScale: ReadonlyArray<readonly [number, number]> = [
+    [size[2], size[1]],
+    [size[2], size[1]],
+    [size[0], size[2]],
+    [size[0], size[2]],
+    [size[0], size[1]],
+    [size[0], size[1]],
+  ];
+  geometry.groups.forEach((group, face) => {
+    const [uScale, vScale] = faceScale[face] ?? [1, 1];
+    const scaledVertices = new Set<number>();
+    for (let offset = group.start; offset < group.start + group.count; offset += 1) {
+      const vertex = index.getX(offset);
+      if (scaledVertices.has(vertex)) continue;
+      scaledVertices.add(vertex);
+      uv.setXY(vertex, uv.getX(vertex) * uScale, uv.getY(vertex) * vScale);
+    }
+  });
+  uv.needsUpdate = true;
+}
+
+function prioritizeFurnitureLightMap(root: THREE.Object3D) {
+  root.traverse((object) => {
+    if (object instanceof THREE.Mesh) {
+      object.userData.roomLightMapTexelScale = 1.35;
+    }
+  });
+}
+
 const floorAnchoredObjectCategories = new Set([
   "bathtub",
   "bed",
@@ -100,7 +141,7 @@ function primitiveMaterial(
   return new THREE.MeshStandardMaterial({
     color,
     roughness: primitiveMaterialRoughness[material],
-    metalness: material === "metal" ? 0.72 : 0.01,
+    metalness: material === "metal" ? 1 : 0,
     envMapIntensity: material === "metal" ? 1.25 : 0.55,
   });
 }
@@ -193,10 +234,9 @@ function box(
   const width = Math.max(size[0], MIN_PART_SIZE);
   const height = Math.max(size[1], MIN_PART_SIZE);
   const depth = Math.max(size[2], MIN_PART_SIZE);
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(width, height, depth),
-    material,
-  );
+  const geometry = new THREE.BoxGeometry(width, height, depth);
+  scaleBoxTextureUvs(geometry, [width, height, depth]);
+  const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(...position);
   mesh.rotation.set(...rotation);
   mesh.castShadow = true;
@@ -646,6 +686,7 @@ export function createAiPrimitiveObjectModel({
   }
 
   fitAiContentToDimensions(content, dimensions, category);
+  prioritizeFurnitureLightMap(root);
   return root;
 }
 
@@ -693,5 +734,6 @@ export function createRoomObjectModel({
   // decorative detail within that box and recenter the finished model so it is
   // a drop-in replacement for the former placeholder cuboid.
   fitContentToDimensions(content, dimensions);
+  prioritizeFurnitureLightMap(root);
   return root;
 }

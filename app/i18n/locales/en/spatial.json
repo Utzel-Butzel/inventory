@@ -217,6 +217,7 @@
       "evidencePhoto": "Photo {{value}} showing {{name}}",
       "accept": "Accept",
       "acceptModel": "Use suggestion & 3D model",
+      "needsAnchor": "No reliable 3D placement to apply",
       "accepted": "Accepted",
       "modelApplied": "3D model applied",
       "dismiss": "Dismiss {{name}}",

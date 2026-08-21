@@ -5,11 +5,25 @@ import {
   hasPlyHeader,
   maximumGaussianSplatSourcePoints,
   parseSampledGaussianSplat,
+  roomKeyframeDisplayPoint,
   roomKeyframeDisplayOrientation,
+  sampleRoomAnalysisKeyframes,
   sampleRoomKeyframes,
   selectPhotorealAssetBudget,
   validateEmbeddedGlb,
 } from "../lib/room-scene-visualization.ts";
+
+test("maps native camera pixels through every display orientation", () => {
+  const point = [0.2, 0.3];
+  assert.deepEqual(roomKeyframeDisplayPoint("up", ...point), [0.2, 0.3]);
+  assert.deepEqual(roomKeyframeDisplayPoint("up-mirrored", ...point), [0.8, 0.3]);
+  assert.deepEqual(roomKeyframeDisplayPoint("down", ...point), [0.8, 0.7]);
+  assert.deepEqual(roomKeyframeDisplayPoint("down-mirrored", ...point), [0.2, 0.7]);
+  assert.deepEqual(roomKeyframeDisplayPoint("left", ...point), [0.3, 0.8]);
+  assert.deepEqual(roomKeyframeDisplayPoint("left-mirrored", ...point), [0.3, 0.2]);
+  assert.deepEqual(roomKeyframeDisplayPoint("right", ...point), [0.7, 0.2]);
+  assert.deepEqual(roomKeyframeDisplayPoint("right-mirrored", ...point), [0.7, 0.8]);
+});
 
 function binaryPositionPly(points, extraProperties = []) {
   const properties = [
@@ -93,6 +107,35 @@ test("samples long keyframe captures deterministically and retains the best fram
   assert.equal(new Set(sampled.map((frame) => frame.id)).size, 40);
   assert.ok(sampled.some((frame) => frame.id === "frame-157"));
   assert.deepEqual(sampled, sampleRoomKeyframes(frames, 40));
+});
+
+test("samples analysis photos across distinct camera viewpoints", () => {
+  const cameraTransform = (yawDegrees, x) => {
+    const yaw = yawDegrees * Math.PI / 180;
+    const cosine = Math.cos(yaw);
+    const sine = Math.sin(yaw);
+    return [
+      cosine, 0, -sine, 0,
+      0, 1, 0, 0,
+      sine, 0, cosine, 0,
+      x, 1.5, 0, 1,
+    ];
+  };
+  const frames = [0, 90, 180, 270].flatMap((yaw, direction) =>
+    Array.from({ length: 6 }, (_, index) => ({
+      id: `view-${direction}-${index}`,
+      quality: direction === 0 && index === 0 ? 1 : 0.78 + index / 100,
+      cameraTransform: cameraTransform(yaw, direction * 0.2 + index * 0.01),
+      direction,
+    }))
+  );
+
+  const sampled = sampleRoomAnalysisKeyframes(frames, 4);
+
+  assert.equal(sampled.length, 4);
+  assert.deepEqual(new Set(sampled.map(({ direction }) => direction)), new Set([0, 1, 2, 3]));
+  assert.ok(sampled.some(({ id }) => id === "view-0-0"));
+  assert.deepEqual(sampled, sampleRoomAnalysisKeyframes(frames, 4));
 });
 
 test("keeps multi-room photoreal assets inside one aggregate memory budget", () => {

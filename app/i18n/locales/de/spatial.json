@@ -217,6 +217,7 @@
       "evidencePhoto": "Foto {{value}} mit {{name}}",
       "accept": "Übernehmen",
       "acceptModel": "Vorschlag & 3D-Modell übernehmen",
+      "needsAnchor": "Keine verlässliche 3D-Platzierung zum Anwenden",
       "accepted": "Übernommen",
       "modelApplied": "3D-Modell angewendet",
       "dismiss": "{{name}} verwerfen",

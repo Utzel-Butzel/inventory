@@ -107,11 +107,16 @@ const formatDate = (value: string, locale: string) =>
     timeStyle: "short",
   }).format(new Date(value));
 
+type RoomAnalysisEvidencePhoto = Pick<
+  ClientRoomKeyframe,
+  "id" | "url" | "width" | "height" | "orientation"
+>;
+
 function EvidencePhoto({
   frame,
   alt,
 }: {
-  frame: ClientRoomKeyframe;
+  frame: RoomAnalysisEvidencePhoto;
   alt: string;
 }) {
   const display = roomKeyframeDisplayOrientation(frame.orientation);
@@ -616,11 +621,25 @@ export function RoomSceneBrowser() {
     (item) => item.scan.id === layoutRoomId,
   ) ?? null;
   const roomAnalysis = visibleManifest?.scan.aiAnalysis ?? null;
-  const analysisKeyframesById = useMemo(
-    () => new Map(
-      (visibleManifest?.scan.keyframes ?? []).map((frame) => [frame.id, frame]),
-    ),
-    [visibleManifest?.scan.keyframes],
+  const guideImageAsset = visibleManifest?.scan.assets.find(
+    (asset) => asset.kind === "guide_image",
+  ) ?? null;
+  const analysisPhotosById = useMemo(
+    () => new Map<string, RoomAnalysisEvidencePhoto>([
+      ...(visibleManifest?.scan.keyframes ?? []).map(
+        (frame) => [frame.id, frame] as const,
+      ),
+      ...(guideImageAsset
+        ? [[guideImageAsset.id, {
+            id: guideImageAsset.id,
+            url: guideImageAsset.url,
+            width: 1,
+            height: 1,
+            orientation: "up" as const,
+          }] as const]
+        : []),
+    ]),
+    [guideImageAsset, visibleManifest?.scan.keyframes],
   );
   const visibleSurfaceAppearances = roomAnalysis?.surfaceAppearances.filter(
     (appearance) => appearance.status !== "dismissed",
@@ -1147,7 +1166,10 @@ export function RoomSceneBrowser() {
                   type="button"
                   onClick={() => void analyzeRoom()}
                   disabled={
-                    analyzingRoom || !(visibleManifest.scan.keyframes?.length ?? 0)
+                    analyzingRoom || !(
+                      (visibleManifest.scan.keyframes?.length ?? 0) ||
+                      guideImageAsset
+                    )
                   }
                   className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-brand-solid px-3 text-[11px] font-semibold text-on-brand transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -1316,7 +1338,7 @@ export function RoomSceneBrowser() {
                       const updating = updatingAnalysisItemId === suggestion.id;
                       const evidenceFrames = suggestion.evidenceKeyframeIds.flatMap(
                         (id) => {
-                          const frame = analysisKeyframesById.get(id);
+                          const frame = analysisPhotosById.get(id);
                           return frame ? [frame] : [];
                         },
                       );
@@ -1395,7 +1417,8 @@ export function RoomSceneBrowser() {
                             </div>
                           ) : null}
                           <div className="mt-2 flex gap-1.5">
-                            {suggestion.status === "pending" ? (
+                            {suggestion.status === "pending" &&
+                                suggestion.roomObjectId ? (
                               <button
                                 type="button"
                                 onClick={() => void reviewAnalysisItem(
@@ -1415,6 +1438,10 @@ export function RoomSceneBrowser() {
                                   ? "rooms.ai.acceptModel"
                                   : "rooms.ai.accept")}
                               </button>
+                            ) : suggestion.status === "pending" ? (
+                              <span className="inline-flex min-h-7 flex-1 items-center justify-center rounded-lg border border-border px-2 text-center text-[9px] font-medium text-muted">
+                                {t("rooms.ai.needsAnchor")}
+                              </span>
                             ) : (
                               <span className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[9px] font-semibold text-success">
                                 <Check className="size-3" aria-hidden="true" />

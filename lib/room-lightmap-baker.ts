@@ -17,6 +17,7 @@ type PathTracerInternals = {
 
 type BakeCacheEntry = {
   data: Float32Array;
+  directionData: Float32Array;
   height: number;
   width: number;
 };
@@ -47,7 +48,7 @@ export function createRoomLightMapCacheKey(value: unknown) {
     hash ^= source.charCodeAt(index);
     hash = Math.imul(hash, 16_777_619);
   }
-  return `room-lightmap-v14-${(hash >>> 0).toString(36)}`;
+  return `room-lightmap-v17-${(hash >>> 0).toString(36)}`;
 }
 
 function cacheLightMap(key: string, entry: BakeCacheEntry) {
@@ -116,6 +117,43 @@ function attributeAsFloat32(
     }
   }
   return values;
+}
+
+function worldSpaceAtlasAttributes(
+  mesh: ReceiverMesh,
+  position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  normal: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+) {
+  const positions = new Float32Array(position.count * 3);
+  const normals = new Float32Array(normal.count * 3);
+  const point = new THREE.Vector3();
+  const direction = new THREE.Vector3();
+  const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+  const texelScale = THREE.MathUtils.clamp(
+    Number(mesh.userData.roomLightMapTexelScale) || 1,
+    0.5,
+    4,
+  );
+
+  // xatlas decides chart scale from the positions it receives. Furniture made
+  // from unit cylinders/spheres and fitted AI groups is scaled by Object3D
+  // transforms, so local-space input gives it the wrong texel density even
+  // though the resulting UV coordinates are technically valid. Feed metric
+  // world-space geometry to the unwrapper, while retaining the original local
+  // attributes below for rendering.
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    point
+      .set(position.getX(vertex), position.getY(vertex), position.getZ(vertex))
+      .applyMatrix4(mesh.matrixWorld)
+      .multiplyScalar(texelScale)
+      .toArray(positions, vertex * 3);
+    direction
+      .set(normal.getX(vertex), normal.getY(vertex), normal.getZ(vertex))
+      .applyNormalMatrix(normalMatrix)
+      .toArray(normals, vertex * 3);
+  }
+
+  return { normals, positions };
 }
 
 function copyAttributeForAtlas(
@@ -247,6 +285,11 @@ async function unwrapReceiverGeometry(receivers: ReceiverMesh[]) {
       const uv = sourceUv
         ? attributeAsFloat32(sourceUv)
         : new Float32Array(position.count * 2);
+      const atlasAttributes = worldSpaceAtlasAttributes(
+        mesh,
+        position,
+        normal,
+      );
       const sourceIndex = geometry.getIndex();
       const indexCount = sourceIndex?.count ?? position.count;
       const indices = new Uint16Array(indexCount);
@@ -262,11 +305,11 @@ async function unwrapReceiverGeometry(receivers: ReceiverMesh[]) {
         meshInfo.indexOffset / Uint16Array.BYTES_PER_ELEMENT,
       );
       atlas.HEAPF32.set(
-        attributeAsFloat32(position),
+        atlasAttributes.positions,
         meshInfo.positionOffset / Float32Array.BYTES_PER_ELEMENT,
       );
       atlas.HEAPF32.set(
-        attributeAsFloat32(normal),
+        atlasAttributes.normals,
         meshInfo.normalOffset / Float32Array.BYTES_PER_ELEMENT,
       );
       atlas.HEAPF32.set(
@@ -632,8 +675,8 @@ function createDenoiseMaterial() {
         vec3 centerNormal = normalize(texture2D(normalMap, vUv).xyz);
         vec3 total = vec3(0.0);
         float totalWeight = 0.0;
-        for (int y = -2; y <= 2; y++) {
-          for (int x = -2; x <= 2; x++) {
+        for (int y = -1; y <= 1; y++) {
+          for (int x = -1; x <= 1; x++) {
             vec2 sampleUv = vUv + vec2(float(x), float(y)) * texel * stepWidth;
             vec4 sampleColor = texture2D(map, sampleUv);
             vec4 samplePosition = texture2D(positionMap, sampleUv);
@@ -812,13 +855,220 @@ function createLightMapTarget(resolution: number) {
   return target;
 }
 
-function keepEnvironmentSpecularOnly(material: THREE.MeshStandardMaterial) {
+function collectDirectionalBakeLights(scene: THREE.Scene) {
+  const lights: Array<{
+    position: THREE.Vector3;
+    power: number;
+  }> = [];
+  scene.updateMatrixWorld(true);
+  scene.traverse((object) => {
+    if (
+      !(object instanceof THREE.RectAreaLight) ||
+      !isEffectivelyVisible(object) ||
+      object.intensity <= 0
+    ) {
+      return;
+    }
+    const luminance =
+      object.color.r * 0.2126 +
+      object.color.g * 0.7152 +
+      object.color.b * 0.0722;
+    lights.push({
+      position: object.getWorldPosition(new THREE.Vector3()),
+      power: Math.max(
+        object.intensity * object.width * object.height * luminance,
+        0,
+      ),
+    });
+  });
+  return lights
+    .sort((left, right) => right.power - left.power)
+    .slice(0, 8);
+}
+
+function createDirectionalLightMap(
+  renderer: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  positionMap: THREE.Texture,
+  normalMap: THREE.Texture,
+  resolution: number,
+) {
+  const lights = collectDirectionalBakeLights(scene);
+  const lightPositions = Array.from(
+    { length: 8 },
+    (_, index) => lights[index]?.position ?? new THREE.Vector3(),
+  );
+  const lightPowers = Array.from(
+    { length: 8 },
+    (_, index) => lights[index]?.power ?? 0,
+  );
+  const material = new THREE.ShaderMaterial({
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.NoBlending,
+    uniforms: {
+      positionMap: { value: positionMap },
+      normalMap: { value: normalMap },
+      lightCount: { value: lights.length },
+      lightPositions: { value: lightPositions },
+      lightPowers: { value: lightPowers },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = vec4(position.xy, 0.0, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D positionMap;
+      uniform sampler2D normalMap;
+      uniform int lightCount;
+      uniform vec3 lightPositions[8];
+      uniform float lightPowers[8];
+      varying vec2 vUv;
+
+      void main() {
+        vec4 positionSample = texture2D(positionMap, vUv);
+        if (positionSample.a < 0.5) {
+          gl_FragColor = vec4(0.0);
+          return;
+        }
+        vec3 surfaceNormal = normalize(texture2D(normalMap, vUv).xyz);
+        vec3 directionSum = vec3(0.0);
+        float weightSum = 0.0;
+        for (int index = 0; index < 8; index++) {
+          if (index >= lightCount) break;
+          vec3 toLight = lightPositions[index] - positionSample.xyz;
+          float distanceSquared = max(dot(toLight, toLight), 0.04);
+          vec3 lightDirection = normalize(toLight);
+          float cosine = max(dot(surfaceNormal, lightDirection), 0.0);
+          float weight = lightPowers[index] * cosine / distanceSquared;
+          directionSum += lightDirection * weight;
+          weightSum += weight;
+        }
+        if (weightSum <= 1e-6 || length(directionSum) <= 1e-6) {
+          gl_FragColor = vec4(surfaceNormal * 0.5 + 0.5, 0.0);
+          return;
+        }
+        float coherence = clamp(length(directionSum) / weightSum, 0.0, 1.0);
+        vec3 dominantDirection = normalize(directionSum);
+        // Direction only reconstructs the response of normal-mapped detail;
+        // the converged HDR atlas remains authoritative for total energy.
+        gl_FragColor = vec4(
+          dominantDirection * 0.5 + 0.5,
+          min(coherence * 0.55, 0.55)
+        );
+      }
+    `,
+  });
+  const targetA = createLightMapTarget(resolution);
+  const targetB = createLightMapTarget(resolution);
+  targetA.texture.colorSpace = THREE.NoColorSpace;
+  targetB.texture.colorSpace = THREE.NoColorSpace;
+  const quad = new FullScreenQuad(material);
+  const dilationMaterial = createDilationMaterial();
+  const dilationQuad = new FullScreenQuad(dilationMaterial);
+  const previousTarget = renderer.getRenderTarget();
+  const previousToneMapping = renderer.toneMapping;
+  renderer.toneMapping = THREE.NoToneMapping;
+  try {
+    renderer.setRenderTarget(targetA);
+    quad.render(renderer);
+    let readTarget = targetA;
+    let writeTarget = targetB;
+    for (let pass = 0; pass < 4; pass += 1) {
+      dilationMaterial.uniforms.map!.value = readTarget.texture;
+      renderer.setRenderTarget(writeTarget);
+      dilationQuad.render(renderer);
+      [readTarget, writeTarget] = [writeTarget, readTarget];
+    }
+    writeTarget.dispose();
+    return readTarget;
+  } finally {
+    renderer.setRenderTarget(previousTarget);
+    renderer.toneMapping = previousToneMapping;
+    quad.dispose();
+    material.dispose();
+    dilationQuad.dispose();
+    dilationMaterial.dispose();
+  }
+}
+
+function keepEnvironmentSpecularOnly(
+  material: THREE.MeshStandardMaterial,
+  directionalTexture: THREE.Texture,
+) {
+  material.userData.roomDirectionalLightMap = directionalTexture;
   if (material.userData.roomLightMapSpecularIbl) return;
   material.userData.roomLightMapSpecularIbl = true;
   const previousOnBeforeCompile = material.onBeforeCompile.bind(material);
   const previousProgramCacheKey = material.customProgramCacheKey.bind(material);
   material.onBeforeCompile = (shader, renderer) => {
     previousOnBeforeCompile(shader, renderer);
+    shader.uniforms.roomDirectionalLightMap = {
+      value: material.userData.roomDirectionalLightMap as THREE.Texture,
+    };
+    const mainAnchor = "void main() {";
+    if (!shader.fragmentShader.includes(mainAnchor)) {
+      throw new Error("The lightmapped material shader has no main function.");
+    }
+    shader.fragmentShader = shader.fragmentShader.replace(
+      mainAnchor,
+      `uniform sampler2D roomDirectionalLightMap;
+      ${mainAnchor}`,
+    );
+    // onBeforeCompile runs before Three expands ShaderChunk includes. Patch
+    // the installed light-map chunk, then inline it at its include site. This
+    // keeps the hook aligned with the exact Three version used by the app and
+    // also works for the physical material's transmission pre-pass.
+    const lightMapInclude = "#include <lights_fragment_maps>";
+    const bakedIrradianceAnchor = "irradiance += lightMapIrradiance;";
+    const installedLightMapChunk = THREE.ShaderChunk.lights_fragment_maps;
+    if (
+      !shader.fragmentShader.includes(lightMapInclude) ||
+      !installedLightMapChunk.includes(bakedIrradianceAnchor)
+    ) {
+      throw new Error("The lightmapped material shader has no irradiance anchor.");
+    }
+    const directionalLightMapChunk = installedLightMapChunk.replace(
+      bakedIrradianceAnchor,
+      `vec4 roomDirectionalSample = texture2D(
+          roomDirectionalLightMap,
+          vLightMapUv
+        );
+        if (roomDirectionalSample.a > 0.001) {
+          vec3 roomDominantDirection = normalize(
+            roomDirectionalSample.rgb * 2.0 - 1.0
+          );
+          vec3 roomDominantViewDirection = normalize(
+            mat3(viewMatrix) * roomDominantDirection
+          );
+          float roomGeometryResponse = max(
+            dot(geometryNormal, roomDominantViewDirection),
+            0.08
+          );
+          float roomShadingResponse = max(
+            dot(normal, roomDominantViewDirection),
+            0.0
+          );
+          float roomDirectionalRatio = clamp(
+            roomShadingResponse / roomGeometryResponse,
+            0.35,
+            1.65
+          );
+          lightMapIrradiance *= mix(
+            1.0,
+            roomDirectionalRatio,
+            roomDirectionalSample.a
+          );
+        }
+        ${bakedIrradianceAnchor}`,
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      lightMapInclude,
+      directionalLightMapChunk,
+    );
     const environmentDiffuse =
       "vec3 indirectDiffuse = diffuse * cosineWeightedIrradiance;";
     // Three can compile the same physical material for auxiliary passes (most
@@ -826,8 +1076,14 @@ function keepEnvironmentSpecularOnly(material: THREE.MeshStandardMaterial) {
     // the physical environment lobe. Keeping iblIrradiance intact preserves
     // sheen and rough-specular multiscattering; only its duplicate diffuse term
     // is removed when the material already has baked irradiance.
-    if (shader.fragmentShader.includes(environmentDiffuse)) {
-      shader.fragmentShader = shader.fragmentShader.replace(
+    const physicalParsInclude = "#include <lights_physical_pars_fragment>";
+    const installedPhysicalPars =
+      THREE.ShaderChunk.lights_physical_pars_fragment;
+    if (
+      shader.fragmentShader.includes(physicalParsInclude) &&
+      installedPhysicalPars.includes(environmentDiffuse)
+    ) {
+      const lightmappedPhysicalPars = installedPhysicalPars.replace(
         environmentDiffuse,
         `#ifdef USE_LIGHTMAP
           vec3 indirectDiffuse = vec3(0.0);
@@ -835,16 +1091,26 @@ function keepEnvironmentSpecularOnly(material: THREE.MeshStandardMaterial) {
           ${environmentDiffuse}
         #endif`,
       );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        physicalParsInclude,
+        lightmappedPhysicalPars,
+      );
     }
   };
   material.customProgramCacheKey = () =>
-    `${previousProgramCacheKey()}|room-lightmap-specular-ibl-v3`;
+    `${previousProgramCacheKey()}|room-directional-lightmap-v1`;
 }
 
-function applyLightMap(receivers: UnwrappedReceiver[], texture: THREE.Texture) {
+function applyLightMap(
+  receivers: UnwrappedReceiver[],
+  texture: THREE.Texture,
+  directionalTexture: THREE.Texture,
+) {
   texture.channel = 1;
   texture.flipY = false;
   texture.colorSpace = THREE.LinearSRGBColorSpace;
+  directionalTexture.flipY = false;
+  directionalTexture.colorSpace = THREE.NoColorSpace;
   const materials = new Set<THREE.MeshStandardMaterial>();
   for (const { mesh } of receivers) {
     const meshMaterials = Array.isArray(mesh.material)
@@ -855,18 +1121,23 @@ function applyLightMap(receivers: UnwrappedReceiver[], texture: THREE.Texture) {
     }
   }
   for (const material of materials) {
-    keepEnvironmentSpecularOnly(material);
+    keepEnvironmentSpecularOnly(material, directionalTexture);
     material.lightMap = texture;
     material.lightMapIntensity = 1;
     material.needsUpdate = true;
   }
 }
 
-function cachedTexture(entry: BakeCacheEntry) {
+function cachedTexture(
+  data: Float32Array,
+  width: number,
+  height: number,
+  colorSpace: THREE.ColorSpace,
+) {
   const texture = new THREE.DataTexture(
-    entry.data,
-    entry.width,
-    entry.height,
+    data,
+    width,
+    height,
     THREE.RGBAFormat,
     THREE.FloatType,
   );
@@ -875,12 +1146,13 @@ function cachedTexture(entry: BakeCacheEntry) {
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.generateMipmaps = false;
-  texture.colorSpace = THREE.LinearSRGBColorSpace;
+  texture.colorSpace = colorSpace;
   texture.needsUpdate = true;
   return texture;
 }
 
 export async function createRoomLightMapBake({
+  bakeOnlyObjects = [],
   cacheKey,
   onProgress,
   renderer,
@@ -888,6 +1160,7 @@ export async function createRoomLightMapBake({
   roots,
   scene,
 }: {
+  bakeOnlyObjects?: Iterable<THREE.Object3D>;
   cacheKey: string;
   onProgress?: (progress: number) => void;
   renderer: THREE.WebGLRenderer;
@@ -905,13 +1178,25 @@ export async function createRoomLightMapBake({
 
   const cached = lightMapCache.get(cacheKey);
   if (cached && cached.width === resolution && cached.height === resolution) {
-    const texture = cachedTexture(cached);
-    applyLightMap(unwrapped, texture);
+    const texture = cachedTexture(
+      cached.data,
+      cached.width,
+      cached.height,
+      THREE.LinearSRGBColorSpace,
+    );
+    const directionalTexture = cachedTexture(
+      cached.directionData,
+      cached.width,
+      cached.height,
+      THREE.NoColorSpace,
+    );
+    applyLightMap(unwrapped, texture, directionalTexture);
     onProgress?.(100);
     return {
       cached: true,
       samples: Number.POSITIVE_INFINITY,
       dispose: () => {
+        directionalTexture.dispose();
         for (const { originalGeometry } of unwrapped) originalGeometry.dispose();
       },
       finish: () => texture,
@@ -922,6 +1207,13 @@ export async function createRoomLightMapBake({
   const { chartTarget, normalTarget, positionTarget } = createGeometryBuffers(
     renderer,
     unwrapped,
+    resolution,
+  );
+  const directionalTarget = createDirectionalLightMap(
+    renderer,
+    scene,
+    positionTarget.texture,
+    normalTarget.texture,
     resolution,
   );
   onProgress?.(12);
@@ -941,7 +1233,7 @@ export async function createRoomLightMapBake({
   tracer.rasterizeScene = false;
   tracer.renderToCanvas = false;
   tracer.synchronizeRenderSize = false;
-  tracer.textureSize.set(1024, 1024);
+  tracer.textureSize.set(resolution, resolution);
   // The HDR RoomEnvironment is useful for runtime reflections but its diffuse
   // component must not be baked a second time. The shader also reuses the
   // background/environment sampler slots for position and normal G-buffers, so
@@ -949,10 +1241,16 @@ export async function createRoomLightMapBake({
   const previousBackground = scene.background;
   const previousEnvironment = scene.environment;
   const previousEnvironmentIntensity = scene.environmentIntensity;
+  const bakeOnly = [...bakeOnlyObjects];
+  const bakeOnlyVisibility = bakeOnly.map((object) => object.visible);
   try {
     scene.background = null;
     scene.environment = null;
     scene.environmentIntensity = 0;
+    bakeOnly.forEach((object) => {
+      object.visible = true;
+    });
+    scene.updateMatrixWorld(true);
     tracer.setScene(scene, new THREE.PerspectiveCamera(), {
       onProgress: (progress) => onProgress?.(12 + Math.round(progress * 8)),
     });
@@ -960,6 +1258,10 @@ export async function createRoomLightMapBake({
     scene.background = previousBackground;
     scene.environment = previousEnvironment;
     scene.environmentIntensity = previousEnvironmentIntensity;
+    bakeOnly.forEach((object, index) => {
+      object.visible = bakeOnlyVisibility[index] ?? false;
+    });
+    scene.updateMatrixWorld(true);
   }
   const internals = tracer as unknown as PathTracerInternals;
   internals._pathTracer.setSize(resolution, resolution);
@@ -1035,9 +1337,10 @@ export async function createRoomLightMapBake({
 
     retainedTarget = readTarget;
     appliedTexture = readTarget.texture;
-    applyLightMap(unwrapped, appliedTexture);
+    applyLightMap(unwrapped, appliedTexture, directionalTarget.texture);
 
     const pixels = new Float32Array(resolution * resolution * 4);
+    const directionPixels = new Float32Array(resolution * resolution * 4);
     renderer.readRenderTargetPixels(
       readTarget,
       0,
@@ -1046,7 +1349,20 @@ export async function createRoomLightMapBake({
       resolution,
       pixels,
     );
-    cacheLightMap(cacheKey, { data: pixels, height: resolution, width: resolution });
+    renderer.readRenderTargetPixels(
+      directionalTarget,
+      0,
+      0,
+      resolution,
+      resolution,
+      directionPixels,
+    );
+    cacheLightMap(cacheKey, {
+      data: pixels,
+      directionData: directionPixels,
+      height: resolution,
+      width: resolution,
+    });
 
     tracer.dispose();
     positionTarget.dispose();
@@ -1071,6 +1387,7 @@ export async function createRoomLightMapBake({
         normalTarget.dispose();
         chartTarget.dispose();
       }
+      directionalTarget.dispose();
       retainedTarget?.dispose();
       for (const { originalGeometry } of unwrapped) originalGeometry.dispose();
     },

@@ -18,9 +18,13 @@ import {
   maximumRoomAnalysisKeyframes,
   roomAiReviewPatchSchema,
 } from "@/lib/room-ai-analysis-contract";
-import { sampleRoomKeyframes } from "@/lib/room-scene-visualization";
+import {
+  selectRoomAnalysisPhotoSources,
+  type RoomAnalysisPhotoSource,
+} from "@/lib/room-analysis-photo-sources";
 import {
   findRoomScan,
+  getRoomScanAsset,
   listRoomScanAnalysisKeyframes,
   saveRoomAiAnalysis,
   updateRoomAiReviewStatus,
@@ -30,7 +34,7 @@ import { readMediaBytes } from "@/lib/storage";
 type Context = { params: Promise<{ id: string }> };
 
 export const runtime = "nodejs";
-export const maxDuration = 180;
+export const maxDuration = 300;
 
 const imageRotation = (orientation: string) => {
   if (orientation.startsWith("right")) return 90;
@@ -39,29 +43,33 @@ const imageRotation = (orientation: string) => {
   return 0;
 };
 
-const prepareKeyframe = async (
-  frame: Awaited<ReturnType<typeof listRoomScanAnalysisKeyframes>>[number],
-) => {
+const preparePhoto = async (photo: RoomAnalysisPhotoSource) => {
   const bytes = await readMediaBytes({
-    storageKey: frame.storageKey,
-    url: frame.storageUrl,
+    storageKey: photo.storageKey,
+    url: photo.storageUrl,
   });
-  let image = sharp(bytes, { failOn: "none" }).rotate(
-    imageRotation(frame.orientation),
-  );
-  if (frame.orientation.endsWith("mirrored")) image = image.flop();
-  const prepared = await image
+  let image = sharp(bytes, { failOn: "none" });
+  if (photo.orientation.endsWith("mirrored")) image = image.flop();
+  image = image.rotate(imageRotation(photo.orientation));
+  const { data: prepared, info } = await image
     .resize({
-      width: 1_200,
-      height: 1_200,
+      width: 1_600,
+      height: 1_600,
       fit: "inside",
       withoutEnlargement: true,
     })
-    .jpeg({ quality: 78, mozjpeg: true })
-    .toBuffer();
+    .jpeg({ quality: 88, chromaSubsampling: "4:4:4", mozjpeg: true })
+    .toBuffer({ resolveWithObject: true });
   return {
-    keyframeId: frame.id,
-    quality: frame.quality,
+    keyframeId: photo.id,
+    quality: photo.quality,
+    width: info.width,
+    height: info.height,
+    orientation: photo.orientation,
+    cameraTransform: photo.cameraTransform,
+    intrinsics: photo.intrinsics,
+    nativeWidth: photo.nativeWidth,
+    nativeHeight: photo.nativeHeight,
     dataUrl: `data:image/jpeg;base64,${prepared.toString("base64")}`,
   };
 };
@@ -120,15 +128,23 @@ export async function POST(request: Request, context: Context) {
   const authorization = await authorizeRoomScan(request, id, { requireAi: true });
   if (authorization.response) return authorization.response;
 
-  const frames = await listRoomScanAnalysisKeyframes(
-    authorization.identity.organizationId,
-    id,
-  );
-  const selectedFrames = sampleRoomKeyframes(
-    frames,
-    maximumRoomAnalysisKeyframes,
-  );
-  if (!selectedFrames.length) {
+  const [frames, guideImage] = await Promise.all([
+    listRoomScanAnalysisKeyframes(
+      authorization.identity.organizationId,
+      id,
+    ),
+    getRoomScanAsset(
+      authorization.identity.organizationId,
+      id,
+      "guide_image",
+    ),
+  ]);
+  const photoSources = selectRoomAnalysisPhotoSources({
+    keyframes: frames,
+    guideImage,
+    limit: maximumRoomAnalysisKeyframes,
+  });
+  if (!photoSources.length) {
     return Response.json(
       { error: "This room scan has no reference photos to analyze." },
       { status: 400 },
@@ -136,7 +152,7 @@ export async function POST(request: Request, context: Context) {
   }
 
   const preparedResults = await Promise.allSettled(
-    selectedFrames.map(prepareKeyframe),
+    photoSources.map(preparePhoto),
   );
   const images = preparedResults.flatMap((result) =>
     result.status === "fulfilled" ? [result.value] : [],
@@ -174,7 +190,12 @@ export async function POST(request: Request, context: Context) {
   }
 
   try {
-    const { result, model } = await analyzeRoomImages({
+    const {
+      result,
+      model,
+      analyzedKeyframeIds,
+      calibratedKeyframeIds,
+    } = await analyzeRoomImages({
       roomName: authorization.resource.name,
       images,
       scene: authorization.scan.scene,
@@ -182,7 +203,8 @@ export async function POST(request: Request, context: Context) {
     const analysis = buildRoomAiAnalysis({
       detection: result,
       scene: authorization.scan.scene,
-      keyframeIds: images.map((image) => image.keyframeId),
+      keyframeIds: analyzedKeyframeIds,
+      calibratedKeyframeIds,
       model,
       createId: randomUUID,
     });

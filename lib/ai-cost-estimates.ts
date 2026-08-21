@@ -172,7 +172,6 @@ export const getAiCostEstimateCatalog = (
     environment.OPENAI_TRANSLATION_MODEL?.trim() || "gpt-5.6-terra";
   const roomModel =
     environment.OPENAI_ROOM_VISION_MODEL?.trim() ||
-    environment.OPENAI_VISION_MODEL?.trim() ||
     "gpt-5.6-terra";
 
   const operations: AiCostEstimateCatalog["operations"] = {};
@@ -228,8 +227,9 @@ export const getAiCostEstimateCatalog = (
     "roomAnalysis",
     openAiOperationEstimate({
       model: roomModel,
-      minimum: { input: 8_000, output: 3_000 },
-      maximum: { input: 40_000, output: 12_000 },
+      // Focused visual passes, optional low-recall audits, and consolidation.
+      minimum: { input: 12_000, output: 10_000 },
+      maximum: { input: 240_000, output: 96_000 },
     }),
   );
 
