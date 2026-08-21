@@ -47,7 +47,7 @@ export function createRoomLightMapCacheKey(value: unknown) {
     hash ^= source.charCodeAt(index);
     hash = Math.imul(hash, 16_777_619);
   }
-  return `room-lightmap-v12-${(hash >>> 0).toString(36)}`;
+  return `room-lightmap-v14-${(hash >>> 0).toString(36)}`;
 }
 
 function cacheLightMap(key: string, entry: BakeCacheEntry) {
@@ -455,10 +455,27 @@ function patchPathTracingMaterial(
     map: THREE.Texture;
   };
   environmentInfo.map = normalMap;
-  material.fragmentShader = material.fragmentShader
-    .replace(
-      "Ray ray = getCameraRay();",
-      `vec4 lightMapPositionSample = texture2D(backgroundMap, vUv);
+  const replaceShaderChunk = (
+    source: string,
+    search: string,
+    replacement: string,
+    label: string,
+  ) => {
+    const first = source.indexOf(search);
+    if (first < 0) {
+      throw new Error(`The room lightmap shader is missing its ${label} anchor.`);
+    }
+    if (source.indexOf(search, first + search.length) >= 0) {
+      throw new Error(`The room lightmap shader has more than one ${label} anchor.`);
+    }
+    return source.replace(search, replacement);
+  };
+
+  let fragmentShader = material.fragmentShader;
+  fragmentShader = replaceShaderChunk(
+    fragmentShader,
+    "Ray ray = getCameraRay();",
+    `vec4 lightMapPositionSample = texture2D(backgroundMap, vUv);
        if (lightMapPositionSample.a < 0.5) {
          gl_FragColor = vec4(0.0);
          return;
@@ -475,26 +492,34 @@ function patchPathTracingMaterial(
        );
        vec3 lightMapBitangent = cross(lightMapNormal, lightMapTangent);
        Ray ray;
-       ray.origin = lightMapPositionSample.xyz + lightMapNormal * RAY_OFFSET * 4.0;
        ray.direction = normalize(
          lightMapTangent * cos(hemisphereAngle) * hemisphereRadius +
          lightMapBitangent * sin(hemisphereAngle) * hemisphereRadius +
          lightMapNormal * hemisphereCosine
        );
-       float lightMapInitialPdf = hemisphereCosine * RECIPROCAL_PI;
-       float lightMapContactOcclusion = 0.0;`,
-    )
-    .replace(
-      "ScatterRecord scatterRec;",
-      `ScatterRecord scatterRec;
+       ray.origin = stepRayOrigin(
+         lightMapPositionSample.xyz,
+         ray.direction,
+         lightMapNormal,
+         0.0
+       );
+       float lightMapInitialPdf = hemisphereCosine * RECIPROCAL_PI;`,
+    "camera ray",
+  );
+  fragmentShader = replaceShaderChunk(
+    fragmentShader,
+    "ScatterRecord scatterRec;",
+    `ScatterRecord scatterRec;
        scatterRec.pdf = max(lightMapInitialPdf, 1e-6);
        scatterRec.specularPdf = 0.0;
        scatterRec.direction = ray.direction;
        scatterRec.color = vec3(1.0);`,
-    )
-    .replace(
-      "state.transmissiveTraversals = transmissiveBounces;",
-      `state.transmissiveTraversals = transmissiveBounces;
+    "scatter initialization",
+  );
+  fragmentShader = replaceShaderChunk(
+    fragmentShader,
+    "state.transmissiveTraversals = transmissiveBounces;",
+    `state.transmissiveTraversals = transmissiveBounces;
        state.transmissiveRay = false;
 
        // Explicitly sample the window emitter at the baked surface. Relying
@@ -534,106 +559,38 @@ function patchPathTracingMaterial(
                lightMapAttenuation *
                lightMapLight.emission *
                lightMapCosine *
-               lightMapLightPdf *
-               RECIPROCAL_PI;
+               RECIPROCAL_PI /
+               lightMapLightPdf;
            }
          }
        }
-       state.isShadowRay = false;
-       vec3 lightMapDirectRadiance = gl_FragColor.rgb;`,
-    )
-    .replace(
-      "state.firstRay = i == 0 && state.transmissiveTraversals == transmissiveBounces;",
-      "state.firstRay = false;",
-    )
-    .replace(
-      "if ( ! state.firstRay && ! state.transmissiveRay ) {",
-      "if ( i > 0 && ! state.transmissiveRay ) {",
-    )
-    .replace(
-      "int hitType = traceScene( ray, state.fogMaterial, surfaceHit );",
-      `int hitType = traceScene( ray, state.fogMaterial, surfaceHit );
-       if (i == 0 && hitType == SURFACE_HIT) {
-         // A cosine-weighted visibility sample supplies stable, view-independent
-         // contact occlusion beneath nearby geometry. This remains separate
-         // from the long window penumbra and fades out before it can become a
-         // generic room-wide ambient shadow.
-         float lightMapContactSurfaceWeight = smoothstep(
-           0.55,
-           0.82,
-           lightMapNormal.y
-         );
-         lightMapContactOcclusion = lightMapContactSurfaceWeight *
-           (1.0 - smoothstep(0.025, 0.45, surfaceHit.dist));
-       }`,
-    )
-    .replace(
-      "scatterRec = bsdfSample( - ray.direction, surf );",
-      `// Lightmaps store diffuse irradiance. Sampling glossy, metallic, and
-       // transmissive lobes here adds unstable caustic fireflies that do not
-       // belong in a diffuse bake. A cosine-weighted Lambert bounce retains
-       // material colour bleeding and physically meaningful multi-bounce GI.
-       vec2 lightMapBounceSample = rand2(14);
-       float lightMapBounceRadius = sqrt(lightMapBounceSample.x);
-       float lightMapBounceAngle = 2.0 * PI * lightMapBounceSample.y;
-       float lightMapBounceCosine = sqrt(
-         max(0.0, 1.0 - lightMapBounceSample.x)
-       );
-       vec3 lightMapBounceNormal = surf.normal;
-       vec3 lightMapBounceTangent = normalize(
-         abs(lightMapBounceNormal.z) < 0.999
-           ? cross(vec3(0.0, 0.0, 1.0), lightMapBounceNormal)
-           : cross(vec3(0.0, 1.0, 0.0), lightMapBounceNormal)
-       );
-       vec3 lightMapBounceBitangent = cross(
-         lightMapBounceNormal,
-         lightMapBounceTangent
-       );
-       scatterRec.direction = normalize(
-         lightMapBounceTangent * cos(lightMapBounceAngle) * lightMapBounceRadius +
-         lightMapBounceBitangent * sin(lightMapBounceAngle) * lightMapBounceRadius +
-         lightMapBounceNormal * lightMapBounceCosine
-       );
-       scatterRec.pdf = max(
-         dot(lightMapBounceNormal, scatterRec.direction) * RECIPROCAL_PI,
-         1e-6
-       );
-       scatterRec.specularPdf = 0.0;
-       scatterRec.color = surf.color * scatterRec.pdf;`,
-    )
-    .replace(
-      "gl_FragColor.a *= opacity;",
-      `float lightMapContactVisibility =
-         1.0 - lightMapContactOcclusion * 0.46;
-       vec3 lightMapIndirectRadiance = max(
-         gl_FragColor.rgb - lightMapDirectRadiance,
-         vec3(0.0)
-       );
-       // Keep a single rare bounce from dominating one texel. Direct window
-       // illumination is not clamped, so legitimate bright apertures and soft
-       // shadow gradients retain their full energy.
-       float lightMapIndirectPeak = max(
-         lightMapIndirectRadiance.r,
-         max(lightMapIndirectRadiance.g, lightMapIndirectRadiance.b)
-       );
-       lightMapIndirectRadiance *= min(
-         1.0,
-         4.0 / max(lightMapIndirectPeak, 1e-6)
-       );
-       // Compress the direct-to-bounce ratio before display tone mapping.
-       // This preserves physical spatial variation while preventing a nearby
-       // white wall from overpowering the useful multi-bounce fill deeper in
-       // the room.
-       vec3 lightMapBalancedRadiance =
-         lightMapDirectRadiance * 0.82 +
-         lightMapIndirectRadiance * 1.18;
-       gl_FragColor.rgb = min(
-         lightMapBalancedRadiance *
-           PI * lightMapContactVisibility,
-         vec3(20.0)
-       );
+       state.isShadowRay = false;`,
+    "path state",
+  );
+  fragmentShader = replaceShaderChunk(
+    fragmentShader,
+    "state.firstRay = i == 0 && state.transmissiveTraversals == transmissiveBounces;",
+    "state.firstRay = false;",
+    "first ray",
+  );
+  fragmentShader = replaceShaderChunk(
+    fragmentShader,
+    "if ( ! state.firstRay && ! state.transmissiveRay ) {",
+    "if ( i > 0 && ! state.transmissiveRay ) {",
+    "forward light hit",
+  );
+  fragmentShader = replaceShaderChunk(
+    fragmentShader,
+    "gl_FragColor.a *= opacity;",
+    `// The first direction is sampled with a cosine-weighted hemisphere.
+       // Multiplying its returned radiance by PI converts it to the diffuse
+       // irradiance expected by MeshStandardMaterial.lightMap. Keep the HDR
+       // result unclamped; display exposure and AgX own highlight compression.
+       gl_FragColor.rgb = max(gl_FragColor.rgb * PI, vec3(0.0));
        gl_FragColor.a = lightMapPositionSample.a * opacity;`,
-    );
+    "lightmap output",
+  );
+  material.fragmentShader = fragmentShader;
   material.needsUpdate = true;
 }
 
@@ -695,7 +652,7 @@ function createDenoiseMaterial() {
             );
             float luminanceWeight = exp(
               -abs(centerLuminance - sampleLuminance) /
-              luminanceScale * 1.75
+              luminanceScale * 4.0
             );
             float weight =
               normalWeight * positionWeight * spatialWeight * luminanceWeight;
@@ -855,9 +812,39 @@ function createLightMapTarget(resolution: number) {
   return target;
 }
 
+function keepEnvironmentSpecularOnly(material: THREE.MeshStandardMaterial) {
+  if (material.userData.roomLightMapSpecularIbl) return;
+  material.userData.roomLightMapSpecularIbl = true;
+  const previousOnBeforeCompile = material.onBeforeCompile.bind(material);
+  const previousProgramCacheKey = material.customProgramCacheKey.bind(material);
+  material.onBeforeCompile = (shader, renderer) => {
+    previousOnBeforeCompile(shader, renderer);
+    const environmentDiffuse =
+      "vec3 indirectDiffuse = diffuse * cosineWeightedIrradiance;";
+    // Three can compile the same physical material for auxiliary passes (most
+    // notably the transmission pre-pass). Patch only lit variants containing
+    // the physical environment lobe. Keeping iblIrradiance intact preserves
+    // sheen and rough-specular multiscattering; only its duplicate diffuse term
+    // is removed when the material already has baked irradiance.
+    if (shader.fragmentShader.includes(environmentDiffuse)) {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        environmentDiffuse,
+        `#ifdef USE_LIGHTMAP
+          vec3 indirectDiffuse = vec3(0.0);
+        #else
+          ${environmentDiffuse}
+        #endif`,
+      );
+    }
+  };
+  material.customProgramCacheKey = () =>
+    `${previousProgramCacheKey()}|room-lightmap-specular-ibl-v3`;
+}
+
 function applyLightMap(receivers: UnwrappedReceiver[], texture: THREE.Texture) {
   texture.channel = 1;
   texture.flipY = false;
+  texture.colorSpace = THREE.LinearSRGBColorSpace;
   const materials = new Set<THREE.MeshStandardMaterial>();
   for (const { mesh } of receivers) {
     const meshMaterials = Array.isArray(mesh.material)
@@ -868,10 +855,9 @@ function applyLightMap(receivers: UnwrappedReceiver[], texture: THREE.Texture) {
     }
   }
   for (const material of materials) {
+    keepEnvironmentSpecularOnly(material);
     material.lightMap = texture;
-    // Leave headroom for the display transform so window penumbrae retain
-    // visible tonal separation on bright materials.
-    material.lightMapIntensity = 0.92;
+    material.lightMapIntensity = 1;
     material.needsUpdate = true;
   }
 }
@@ -889,7 +875,7 @@ function cachedTexture(entry: BakeCacheEntry) {
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.generateMipmaps = false;
-  texture.colorSpace = THREE.NoColorSpace;
+  texture.colorSpace = THREE.LinearSRGBColorSpace;
   texture.needsUpdate = true;
   return texture;
 }
@@ -944,7 +930,9 @@ export async function createRoomLightMapBake({
   const tracer = new WebGLPathTracer(renderer);
   tracer.bounces = 8;
   tracer.transmissiveBounces = 4;
-  tracer.filterGlossyFactor = 1;
+  // Match the interactive Rendering reference so the two modes differ by
+  // storage/reconstruction rather than a separate glossy-path bias.
+  tracer.filterGlossyFactor = 0.85;
   tracer.multipleImportanceSampling = true;
   tracer.tiles.set(2, 2);
   tracer.renderDelay = 0;
@@ -954,9 +942,25 @@ export async function createRoomLightMapBake({
   tracer.renderToCanvas = false;
   tracer.synchronizeRenderSize = false;
   tracer.textureSize.set(1024, 1024);
-  tracer.setScene(scene, new THREE.PerspectiveCamera(), {
-    onProgress: (progress) => onProgress?.(12 + Math.round(progress * 8)),
-  });
+  // The HDR RoomEnvironment is useful for runtime reflections but its diffuse
+  // component must not be baked a second time. The shader also reuses the
+  // background/environment sampler slots for position and normal G-buffers, so
+  // build the tracer with both sources explicitly disabled.
+  const previousBackground = scene.background;
+  const previousEnvironment = scene.environment;
+  const previousEnvironmentIntensity = scene.environmentIntensity;
+  try {
+    scene.background = null;
+    scene.environment = null;
+    scene.environmentIntensity = 0;
+    tracer.setScene(scene, new THREE.PerspectiveCamera(), {
+      onProgress: (progress) => onProgress?.(12 + Math.round(progress * 8)),
+    });
+  } finally {
+    scene.background = previousBackground;
+    scene.environment = previousEnvironment;
+    scene.environmentIntensity = previousEnvironmentIntensity;
+  }
   const internals = tracer as unknown as PathTracerInternals;
   internals._pathTracer.setSize(resolution, resolution);
   internals._pathTracer.stableNoise = false;
@@ -997,10 +1001,9 @@ export async function createRoomLightMapBake({
 
     let denoiseSource = denoiseTarget.texture;
     let readTarget = denoiseTarget;
-    // Two a-trous passes remove residual path-tracing noise while preserving
-    // the higher-resolution furniture footprints and short contact shadows.
-    // A third four-texel step visibly smeared chair and table detail.
-    for (let pass = 0; pass < 2; pass += 1) {
+    // At 512 samples one step-1 a-trous pass is sufficient. A second, wider
+    // pass visibly softened table and chair contact shadows.
+    for (let pass = 0; pass < 1; pass += 1) {
       readTarget = readTarget === denoiseTarget ? workTarget : denoiseTarget;
       denoiseMaterial.uniforms.map!.value = denoiseSource;
       denoiseMaterial.uniforms.stepWidth!.value = 2 ** pass;
@@ -1012,7 +1015,9 @@ export async function createRoomLightMapBake({
     const dilationMaterial = createDilationMaterial();
     const dilationQuad = new FullScreenQuad(dilationMaterial);
     let writeTarget = readTarget === denoiseTarget ? workTarget : denoiseTarget;
-    for (let pass = 0; pass < 4; pass += 1) {
+    // Six two-texel dilations give the 1024px atlas a twelve-pixel gutter so
+    // bilinear filtering cannot pull black or a neighboring chart into seams.
+    for (let pass = 0; pass < 6; pass += 1) {
       dilationMaterial.uniforms.map!.value = readTarget.texture;
       renderer.setRenderTarget(writeTarget);
       dilationQuad.render(renderer);

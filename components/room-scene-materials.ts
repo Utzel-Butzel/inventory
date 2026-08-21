@@ -18,9 +18,11 @@ export type RoomFinishTextures = {
 };
 
 const materialMetalness = (material: RoomMaterial) => {
-  if (material === "metal") return 0.72;
-  if (material === "glass") return 0.08;
-  return 0.01;
+  // Metallic-roughness is a material classification, not a generic shine
+  // control: bare metal is metallic, while paint, wood, plastic, and glass are
+  // dielectrics. Roughness controls how broad their reflections appear.
+  if (material === "metal") return 1;
+  return 0;
 };
 
 export function applyDetectedRoomFinish(

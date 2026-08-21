@@ -852,9 +852,9 @@ export function RoomSceneCanvas({
     renderer.toneMapping = rayTracedLighting
       ? THREE.AgXToneMapping
       : THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = lightingMode === "realistic"
-      ? 1.15
-      : lightingMode === "rendering" ? 1.24 : 0.93;
+    // Use the same photographic display transform for both ray-traced modes so
+    // differences reflect the bake itself, not a hidden exposure advantage.
+    renderer.toneMappingExposure = rayTracedLighting ? 1.12 : 0.93;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.VSMShadowMap;
     ensureRectAreaLightUniforms();
@@ -888,44 +888,46 @@ export function RoomSceneCanvas({
 
     const anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
     const wallTextures = createProceduralMaterialTextures({
-      base: [242, 239, 233],
-      variation: 4,
+      // Architectural white paint is not a perfect reflector. Keeping its
+      // diffuse albedo below pure white preserves highlight and bounce headroom.
+      base: [228, 226, 222],
+      variation: 3,
       pattern: "plaster",
       seed: 11,
       repeat: [7, 7],
       anisotropy,
-      roughness: 0.97,
-      normalStrength: 0.28,
+      roughness: 0.98,
+      normalStrength: 0.12,
     });
     const floorTextures = createProceduralMaterialTextures({
-      base: [150, 116, 80],
-      variation: 9,
+      base: [145, 112, 79],
+      variation: 6,
       pattern: "grain",
       seed: 43,
       repeat: [4, 3],
       anisotropy,
-      roughness: 0.79,
-      normalStrength: 0.42,
+      roughness: 0.92,
+      normalStrength: 0.22,
     });
     const doorTextures = createProceduralMaterialTextures({
-      base: [177, 137, 96],
-      variation: 10,
+      base: [165, 128, 92],
+      variation: 7,
       pattern: "grain",
       seed: 59,
       repeat: [2, 3],
       anisotropy,
-      roughness: 0.73,
-      normalStrength: 0.36,
+      roughness: 0.9,
+      normalStrength: 0.2,
     });
     const objectTextures = createProceduralMaterialTextures({
-      base: [240, 237, 231],
-      variation: 5,
+      base: [226, 224, 220],
+      variation: 3,
       pattern: "speckle",
       seed: 71,
       repeat: [5, 5],
       anisotropy,
-      roughness: 0.84,
-      normalStrength: 0.32,
+      roughness: 0.94,
+      normalStrength: 0.16,
     });
     const { colorMap: wallColorMap, normalMap: wallNormalMap, roughnessMap: wallRoughnessMap } = wallTextures;
     const { colorMap: floorColorMap, normalMap: floorNormalMap, roughnessMap: floorRoughnessMap } = floorTextures;
@@ -942,9 +944,9 @@ export function RoomSceneCanvas({
       color: 0xffffff,
       map: wallColorMap,
       normalMap: wallNormalMap,
-      normalScale: new THREE.Vector2(0.42, 0.42),
+      normalScale: new THREE.Vector2(0.18, 0.18),
       roughnessMap: wallRoughnessMap,
-      roughness: 1,
+      roughness: 0.94,
       metalness: 0,
       envMapIntensity: 0.18,
     });
@@ -952,27 +954,27 @@ export function RoomSceneCanvas({
       color: 0xffffff,
       map: floorColorMap,
       normalMap: floorNormalMap,
-      normalScale: new THREE.Vector2(0.58, 0.58),
+      normalScale: new THREE.Vector2(0.28, 0.28),
       roughnessMap: floorRoughnessMap,
-      roughness: 0.96,
-      metalness: 0.01,
-      envMapIntensity: 0.35,
+      roughness: 0.82,
+      metalness: 0,
+      envMapIntensity: 0.48,
     });
     const doorMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       map: doorColorMap,
       normalMap: doorNormalMap,
-      normalScale: new THREE.Vector2(0.52, 0.52),
+      normalScale: new THREE.Vector2(0.25, 0.25),
       roughnessMap: doorRoughnessMap,
-      roughness: 0.94,
-      metalness: 0.01,
-      envMapIntensity: 0.42,
+      roughness: 0.84,
+      metalness: 0,
+      envMapIntensity: 0.5,
     });
     const trimMaterial = new THREE.MeshStandardMaterial({
       color: 0xf0ece4,
       map: wallColorMap,
       normalMap: wallNormalMap,
-      normalScale: new THREE.Vector2(0.32, 0.32),
+      normalScale: new THREE.Vector2(0.14, 0.14),
       roughnessMap: wallRoughnessMap,
       roughness: 0.9,
       metalness: 0,
@@ -980,27 +982,25 @@ export function RoomSceneCanvas({
     });
     const windowFrameMaterial = new THREE.MeshStandardMaterial({
       color: 0xe7eaeb,
-      roughness: 0.5,
-      metalness: 0.06,
+      roughness: 0.46,
+      metalness: 0,
       envMapIntensity: 0.7,
     });
     const hardwareMaterial = new THREE.MeshStandardMaterial({
       color: 0xb9a56f,
-      roughness: 0.27,
-      metalness: 0.82,
+      roughness: 0.3,
+      metalness: 1,
       envMapIntensity: 1.35,
     });
     const windowMaterial = new THREE.MeshPhysicalMaterial({
-      color: 0x82b4c8,
-      emissive: 0x6fa6be,
-      emissiveIntensity: 0.34,
-      roughness: 0.12,
+      color: 0xd5e8ef,
+      roughness: 0.045,
       metalness: 0,
-      transmission: 0.58,
-      thickness: 0.012,
-      ior: 1.47,
+      transmission: 0.96,
+      thickness: 0.006,
+      ior: 1.5,
       transparent: true,
-      opacity: 0.52,
+      opacity: 1,
       depthWrite: false,
       side: THREE.DoubleSide,
       envMapIntensity: 1.25,
@@ -1009,7 +1009,7 @@ export function RoomSceneCanvas({
       color: 0xd9d4ca,
       map: wallColorMap,
       normalMap: wallNormalMap,
-      normalScale: new THREE.Vector2(0.3, 0.3),
+      normalScale: new THREE.Vector2(0.14, 0.14),
       roughnessMap: wallRoughnessMap,
       roughness: 0.9,
       metalness: 0,
@@ -1023,10 +1023,10 @@ export function RoomSceneCanvas({
         color: objectColors[category] ?? 0xb09b84,
         map: objectColorMap,
         normalMap: objectNormalMap,
-        normalScale: new THREE.Vector2(0.48, 0.48),
+        normalScale: new THREE.Vector2(0.22, 0.22),
         roughnessMap: objectRoughnessMap,
-        roughness: 0.88,
-        metalness: 0.025,
+        roughness: 0.78,
+        metalness: 0,
         envMapIntensity: 0.45,
       });
       objectMaterials.set(category, material);
@@ -1037,17 +1037,17 @@ export function RoomSceneCanvas({
       paint: {
         normalMap: wallNormalMap,
         roughnessMap: wallRoughnessMap,
-        normalScale: 0.42,
+        normalScale: 0.18,
       },
       wood: {
         normalMap: doorNormalMap,
         roughnessMap: doorRoughnessMap,
-        normalScale: 0.58,
+        normalScale: 0.25,
       },
       fabric: {
         normalMap: objectNormalMap,
         roughnessMap: objectRoughnessMap,
-        normalScale: 0.72,
+        normalScale: 0.32,
       },
     };
     const finishForSurface = (
@@ -1132,39 +1132,39 @@ export function RoomSceneCanvas({
       color: 0xe8e1d6,
       map: objectColorMap,
       normalMap: objectNormalMap,
-      normalScale: new THREE.Vector2(0.4, 0.4),
+      normalScale: new THREE.Vector2(0.2, 0.2),
       roughnessMap: objectRoughnessMap,
-      roughness: 0.9,
-      metalness: 0.01,
+      roughness: 0.82,
+      metalness: 0,
       envMapIntensity: 0.42,
     });
     const objectDarkMaterial = new THREE.MeshStandardMaterial({
       color: 0x30363d,
       roughness: 0.52,
-      metalness: 0.12,
+      metalness: 0,
       envMapIntensity: 0.7,
     });
     const objectMetalMaterial = new THREE.MeshStandardMaterial({
       color: 0xaeb7bd,
       roughness: 0.3,
-      metalness: 0.72,
+      metalness: 1,
       envMapIntensity: 1.4,
     });
     const objectGlassMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x263947,
-      roughness: 0.16,
-      metalness: 0.04,
-      transmission: 0.36,
+      roughness: 0.08,
+      metalness: 0,
+      transmission: 0.88,
       thickness: 0.012,
       ior: 1.5,
       transparent: true,
-      opacity: 0.76,
+      opacity: 1,
       envMapIntensity: 1.4,
     });
     const objectCeramicMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xf0efeb,
       roughness: 0.26,
-      metalness: 0.02,
+      metalness: 0,
       clearcoat: 0.18,
       clearcoatRoughness: 0.22,
       envMapIntensity: 0.8,
@@ -1184,11 +1184,9 @@ export function RoomSceneCanvas({
       color: 0xc87543,
       map: objectColorMap,
       normalMap: objectNormalMap,
-      normalScale: new THREE.Vector2(0.5, 0.5),
+      normalScale: new THREE.Vector2(0.22, 0.22),
       roughnessMap: objectRoughnessMap,
-      emissive: 0x6b2410,
-      emissiveIntensity: 0.18,
-      roughness: 0.9,
+      roughness: 0.8,
       metalness: 0,
       envMapIntensity: 0.35,
     });
@@ -2340,8 +2338,13 @@ export function RoomSceneCanvas({
       depth: 0,
       area: Math.max(1.44, size.x * size.z * 0.42),
     };
+    const sortedDaylightPortals = [...daylightPortals].sort(
+      (left, right) => right.area - left.area,
+    );
     const activePortals = hasWindowDaylight
-      ? daylightPortals.sort((left, right) => right.area - left.area).slice(0, 2)
+      ? rayTracedLighting
+        ? sortedDaylightPortals
+        : sortedDaylightPortals.slice(0, 2)
       : [fallbackPortal];
     const totalPortalArea = activePortals.reduce(
       (total, portal) => total + portal.area,
@@ -2350,17 +2353,35 @@ export function RoomSceneCanvas({
     const daylightShadowLights: THREE.SpotLight[] = [];
     const daylightAreaLights: THREE.RectAreaLight[] = [];
 
-    // The aperture itself is the dominant emitter: a cool, broad source on the
-    // room side of the glass. Its geometric falloff makes the window side brighter
-    // than the back of the room. The ray-traced modes use this geometry
-    // directly; Live adds a multi-sample raster visibility rig below.
+    const alignAreaLightWithPortal = (
+      areaLight: THREE.RectAreaLight,
+      portal: DaylightPortal,
+    ) => {
+      const lightZ = portal.outward.clone().normalize();
+      const lightX = portal.right
+        .clone()
+        .addScaledVector(lightZ, -portal.right.dot(lightZ))
+        .normalize();
+      const lightY = lightZ.clone().cross(lightX).normalize();
+      if (lightY.dot(portal.up) < 0) {
+        lightX.negate();
+        lightY.negate();
+      }
+      areaLight.quaternion.setFromRotationMatrix(
+        new THREE.Matrix4().makeBasis(lightX, lightY, lightZ),
+      );
+    };
+
+    // The complete clear aperture is the dominant emitter. It stays parallel
+    // to and just outside the window so the physical opening and frame occlude
+    // it; aiming the rectangle at the room center tilted it through the wall.
     for (const portal of activePortals) {
       const areaLight = new THREE.RectAreaLight(
         hasWindowDaylight
           ? rayTracedLighting ? 0xe4f0ff : 0xe9f4ff
           : rayTracedLighting ? 0xfff1df : 0xffe8c7,
         hasWindowDaylight
-          ? lightingMode === "realistic" ? 21 : lightingMode === "rendering" ? 25 : 1.8
+          ? rayTracedLighting ? 25 : 1.8
           : rayTracedLighting ? 12.5 : 1.6,
         // One emitter covers the complete clear opening. A tiny inset keeps
         // sampled points away from the solid frame while preserving the large
@@ -2372,21 +2393,13 @@ export function RoomSceneCanvas({
         .copy(portal.position)
         .addScaledVector(
           portal.outward,
-          // The baked view uses a conventional portal light just inside the
-          // opening: the complete window becomes one softbox and no exterior
-          // sample can graze the wall edge. Rendering keeps the emitter outside
-          // because its camera-space tracer resolves the real frame visibility
-          // directly instead of projecting it through a lightmap atlas.
           hasWindowDaylight
-            ? lightingMode === "realistic"
-              ? -0.035
-              : lightingMode === "rendering"
-                ? Math.max(0.14, portal.depth / 2 + 0.09)
-                : 0.025
+            ? rayTracedLighting
+              ? Math.max(0.12, portal.depth / 2 + 0.06)
+              : 0.025
             : -0.04,
         );
-      if (hasWindowDaylight) areaLight.lookAt(portal.roomCenter);
-      else areaLight.rotation.x = -Math.PI / 2;
+      alignAreaLightWithPortal(areaLight, portal);
       scene.add(areaLight);
       daylightAreaLights.push(areaLight);
 
@@ -2985,13 +2998,23 @@ export function RoomSceneCanvas({
     let pathTracingFinished = false;
     let pathTracingStartedAt: number | null = null;
     let pathTracingLastStatusAt = 0;
-    const pathTracingDuration = lightingMode === "rendering" ? 10_000 : 40_000;
-    const pathTracingSampleTarget = lightingMode === "rendering" ? 2_048 : 128;
-    const pathTracingMinimumSamples = lightingMode === "rendering" ? 1 : 80;
+    let lightMapActiveElapsed = 0;
+    let lightMapLastFrameAt: number | null = null;
+    const onBakeVisibilityChange = () => {
+      // Break the active-time interval whenever the page is hidden or shown so
+      // background throttling can never consume the five-minute bake budget.
+      lightMapLastFrameAt = null;
+    };
+    document.addEventListener("visibilitychange", onBakeVisibilityChange);
+    const pathTracingDuration = lightingMode === "rendering" ? 10_000 : 300_000;
+    const pathTracingSampleTarget = lightingMode === "rendering" ? 2_048 : 512;
+    const lightMapSampleFloor = 80;
     const restartPathTracing = () => {
       if (!pathTracer || !pathTracingReady) return;
       pathTracer.updateCamera();
       pathTracingStartedAt = null;
+      lightMapActiveElapsed = 0;
+      lightMapLastFrameAt = null;
       pathTracingFinished = false;
       setLightingProgress(14);
       setLightingStatus("generating");
@@ -3013,7 +3036,7 @@ export function RoomSceneCanvas({
           } = await import("@/lib/room-lightmap-baker");
           if (disposed) return;
           const cacheKey = createRoomLightMapCacheKey({
-            version: 14,
+            version: 16,
             rooms: visibleManifests.map((roomManifest) => ({
               analysis: roomManifest.scan.aiAnalysis,
               id: roomManifest.scan.id,
@@ -3027,11 +3050,10 @@ export function RoomSceneCanvas({
               if (!disposed) setLightingProgress(progress);
             },
             renderer,
-            // 768² retains substantially more furniture-footprint detail than
-            // 512² without the fourfold cost of a 1024² atlas. The longer bake
-            // and higher sample floor keep the finer texels clean enough for a
-            // shorter, edge-preserving denoise pass.
-            resolution: Math.min(768, renderer.capabilities.maxTextureSize),
+            // A full 1024² HDR atlas gives furniture feet and window reveals
+            // enough texels for attached shadows. The bake then spends up to
+            // five minutes converging before a mild edge-aware denoise.
+            resolution: Math.min(1024, renderer.capabilities.maxTextureSize),
             roots: roomPlanRoots.values(),
             scene,
           });
@@ -3050,7 +3072,9 @@ export function RoomSceneCanvas({
               light.intensity = 0;
             });
             scene.environment = environmentTarget.texture;
-            scene.environmentIntensity = 0.11;
+            // Lightmapped materials suppress diffuse IBL but retain this PMREM
+            // for view-dependent PBR reflections.
+            scene.environmentIntensity = 0.18;
             setLightingStatus("ready");
           }
           return;
@@ -3362,9 +3386,21 @@ export function RoomSceneCanvas({
         lightMapBake
       ) {
         if (!pathTracingFinished) {
-          pathTracingStartedAt ??= frameTimestamp;
+          const frameGap = lightMapLastFrameAt === null
+            ? 0
+            : frameTimestamp - lightMapLastFrameAt;
+          lightMapLastFrameAt = frameTimestamp;
+          // requestAnimationFrame pauses or throttles in a background tab. Do
+          // not turn that idle wall time into a low-sample "finished" bake on
+          // resume; the five-minute ceiling measures active baking time only.
+          if (
+            document.visibilityState === "visible" &&
+            frameGap >= 0
+          ) {
+            lightMapActiveElapsed += frameGap;
+          }
           lightMapBake.renderSample();
-          const elapsed = frameTimestamp - pathTracingStartedAt;
+          const elapsed = lightMapActiveElapsed;
           const tracingProgress = Math.min(
             100,
             20 + Math.max(
@@ -3374,11 +3410,15 @@ export function RoomSceneCanvas({
           );
           const finished =
             lightMapBake.samples >= pathTracingSampleTarget ||
-            (elapsed >= pathTracingDuration &&
-              lightMapBake.samples >= pathTracingMinimumSamples);
+            (
+              elapsed >= pathTracingDuration &&
+              lightMapBake.samples >= lightMapSampleFloor
+            );
           if (finished || frameTimestamp - pathTracingLastStatusAt >= 200) {
             pathTracingLastStatusAt = frameTimestamp;
-            setLightingProgress(finished ? 100 : Math.round(tracingProgress));
+            setLightingProgress(
+              finished ? 100 : Math.min(99, Math.round(tracingProgress)),
+            );
           }
           if (finished) {
             lightMapBake.finish();
@@ -3386,11 +3426,11 @@ export function RoomSceneCanvas({
             daylightAreaLights.forEach((light) => {
               light.intensity = 0;
             });
-            // Lightmaps contain direct and bounced diffuse irradiance. Three's
-            // PMREM also contributes diffuse IBL (not only reflections), so it
-            // must stay very low here or it washes out baked visibility.
+            // Lightmaps contain direct and bounced diffuse irradiance. The
+            // lightmapped material shader keeps PMREM diffuse out while still
+            // using the probe for view-dependent reflections.
             scene.environment = environmentTarget.texture;
-            scene.environmentIntensity = 0.11;
+            scene.environmentIntensity = 0.18;
             setLightingStatus("ready");
           }
         }
@@ -3467,6 +3507,7 @@ export function RoomSceneCanvas({
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onWindowBlur);
+      document.removeEventListener("visibilitychange", onBakeVisibilityChange);
       document.removeEventListener("mousemove", onMouseMove);
       if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
       if (transformControls && transformHelper) {
