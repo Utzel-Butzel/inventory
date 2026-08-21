@@ -126,6 +126,53 @@ test("drills into one floor with room and positioned-item geometry", () => {
   assert.equal(item.properties.coordinateSpaceId, "frame-a");
 });
 
+test("moves room footprints and positioned items with the saved layout transform", () => {
+  const detail = {
+    ...structure,
+    floors: [{ identifier: "ground", index: 0, roomCount: 1, rooms: [room] }],
+  };
+  const original = spatialStructureMapFeatures([structure], detail, {
+    activeStructureId: structure.id,
+    activeFloorIdentifier: "ground",
+  });
+  const movedRoom = {
+    ...room,
+    scan: {
+      ...room.scan,
+      layoutTransform: [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        4, 0, 0, 1,
+      ],
+    },
+  };
+  const movedDetail = {
+    ...detail,
+    floors: [{ identifier: "ground", index: 0, roomCount: 1, rooms: [movedRoom] }],
+  };
+  const moved = spatialStructureMapFeatures([structure], movedDetail, {
+    activeStructureId: structure.id,
+    activeFloorIdentifier: "ground",
+  });
+  const coordinate = (collection, kind) => {
+    const feature = collection.features.find(
+      (candidate) => candidate.properties.spatialKind === kind,
+    );
+    return feature.geometry.type === "Point"
+      ? feature.geometry.coordinates
+      : feature.geometry.coordinates[0][0];
+  };
+  assert.ok(
+    coordinate(moved, "room-footprint")[1] <
+      coordinate(original, "room-footprint")[1],
+  );
+  assert.ok(
+    coordinate(moved, "positioned-item")[1] <
+      coordinate(original, "positioned-item")[1],
+  );
+});
+
 test("omits structure bounds without their exact coordinate-space georeference", () => {
   const collection = spatialStructureMapFeatures([
     { ...structure, boundsGeoreference: null },

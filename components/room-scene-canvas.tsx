@@ -21,6 +21,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 
 import type { ClientRoomSceneManifest } from "@/lib/client-types";
 import { createRoomObjectModel } from "@/components/room-object-models";
@@ -1686,6 +1690,42 @@ export function RoomSceneCanvas({
     };
     resetCamera();
 
+    // A conventional texture lightmap bake needs a non-overlapping UV atlas,
+    // while RoomPlan's generated box geometry deliberately reuses UVs on each
+    // face. Denoised GTAO supplies the missing low-frequency corner and contact
+    // shading without seams; the more expensive direct VSM shadow is still
+    // cached after its first frame below, so the static part behaves like a bake.
+    const composer = new EffectComposer(renderer);
+    composer.setPixelRatio(Math.min(renderer.getPixelRatio(), 1.5));
+    composer.addPass(new RenderPass(scene, camera));
+    const ambientOcclusionPass = new GTAOPass(scene, camera, 1, 1);
+    ambientOcclusionPass.output = GTAOPass.OUTPUT.Default;
+    ambientOcclusionPass.blendIntensity = 0.62;
+    ambientOcclusionPass.setSceneClipBox(
+      box.clone().expandByScalar(THREE.MathUtils.clamp(radius * 0.05, 0.2, 0.8)),
+    );
+    ambientOcclusionPass.updateGtaoMaterial({
+      radius: THREE.MathUtils.clamp(radius * 0.085, 0.32, 0.9),
+      distanceExponent: 1.35,
+      thickness: 1.2,
+      distanceFallOff: 1,
+      scale: 1,
+      samples: 16,
+      screenSpaceRadius: false,
+    });
+    ambientOcclusionPass.updatePdMaterial({
+      lumaPhi: 5,
+      depthPhi: 2,
+      normalPhi: 3,
+      radius: 6,
+      radiusExponent: 2,
+      rings: 2,
+      samples: 16,
+    });
+    composer.addPass(ambientOcclusionPass);
+    const outputPass = new OutputPass();
+    composer.addPass(outputPass);
+
     const movementKey = (key: string) =>
       ["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(
         key.toLowerCase(),
@@ -1811,6 +1851,7 @@ export function RoomSceneCanvas({
       const width = Math.max(1, host.clientWidth);
       const height = Math.max(1, host.clientHeight);
       renderer.setSize(width, height, false);
+      composer.setSize(width, height);
       splatMaterials.forEach((material) => {
         material.uniforms.viewportHeight!.value = height * renderer.getPixelRatio();
       });
@@ -1860,7 +1901,7 @@ export function RoomSceneCanvas({
       } else {
         controls.update();
       }
-      renderer.render(scene, camera);
+      composer.render(delta);
       if (!shadowMapSettled) {
         // Room geometry and the sun are static. Keep the costly 16-sample VSM
         // blur cached after its first render; selections request a refresh.
@@ -1929,6 +1970,11 @@ export function RoomSceneCanvas({
       textures.forEach((texture) => texture.dispose());
       photoBitmap?.close();
       environmentTarget.dispose();
+      ambientOcclusionPass.dispose();
+      ambientOcclusionPass.gtaoMaterial.dispose();
+      ambientOcclusionPass.blendMaterial.dispose();
+      outputPass.dispose();
+      composer.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       commandRef.current = () => undefined;

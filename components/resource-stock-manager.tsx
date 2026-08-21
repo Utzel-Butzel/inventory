@@ -8,14 +8,12 @@ import {
 import {
   AlertTriangle,
   ArrowDownRight,
-  ArrowLeft,
   ArrowUpRight,
   Barcode,
   Boxes,
   CalendarDays,
   Check,
   ChevronDown,
-  ChevronRight,
   Copy,
   History,
   Info,
@@ -849,14 +847,6 @@ export function ResourceStockManager({
     <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <header className="mb-5 flex items-center justify-between gap-4 border-b border-border pb-4">
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted">
-            <Link href="/inventory" className="inline-flex items-center gap-1 hover:text-foreground">
-              <ArrowLeft className="size-3.5" aria-hidden="true" />{" "}
-              {t("resource.inventory")}
-            </Link>
-            <ChevronRight className="size-3" aria-hidden="true" />
-            <span className="text-muted">{t("resource.stock")}</span>
-          </div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="truncate text-2xl font-semibold tracking-[-0.035em] text-foreground sm:text-3xl">
               {stock.resource.name}

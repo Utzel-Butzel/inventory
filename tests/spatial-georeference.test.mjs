@@ -99,6 +99,37 @@ test("applies column-major ARKit transforms before georeferencing a scene", () =
   assert.equal(feature.properties.roomName, "Studio");
 });
 
+test("applies a room layout delta before projecting a footprint onto the map", () => {
+  const scene = {
+    schemaVersion: 1,
+    coordinateSystem: "arkit-right-handed-y-up",
+    units: "meter",
+    matrixOrder: "column-major",
+    worldFromModel: identitySpatialMatrix,
+    webFromWorld: identitySpatialMatrix,
+    bounds: { min: [-1, 0, -1], max: [1, 2.5, 1] },
+    surfaces: [],
+    objects: [],
+  };
+  const original = roomSceneFootprintToGeoJson(scene, anchor, {});
+  const moved = roomSceneFootprintToGeoJson(scene, anchor, {}, [
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    5, 0, 0, 1,
+  ]);
+  assert.ok(
+    moved.geometry.coordinates[0][0][0] >
+      original.geometry.coordinates[0][0][0],
+  );
+  assert.ok(
+    Math.abs(
+      moved.geometry.coordinates[0][0][1] -
+        original.geometry.coordinates[0][0][1],
+    ) < 1e-10,
+  );
+});
+
 test("uses RoomPlan's local XY floor dimensions instead of collapsing the footprint", () => {
   const angle = Math.PI / 4;
   const rotatedFloor = [

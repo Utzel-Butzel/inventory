@@ -33,6 +33,9 @@ export const APP_PERMISSIONS = Object.freeze([
   "spatial.manage",
   "orders.read",
   "orders.manage",
+  "requests.read",
+  "requests.create",
+  "requests.manage",
   "workflows.read",
   "workflows.manage",
   "labels.read",
@@ -56,6 +59,7 @@ export const VIEWER_PERMISSIONS = Object.freeze([
   "counts.read",
   "spatial.read",
   "orders.read",
+  "requests.read",
   "workflows.read",
   "labels.read",
 ]);

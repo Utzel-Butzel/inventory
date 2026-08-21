@@ -201,6 +201,7 @@
       "description": "Move and rotate rooms until their doors meet.",
       "room": "Room to arrange",
       "automatic": "Restore automatic side-by-side layout",
+      "mapAutomatic": "Restore captured map alignment",
       "mapBackground": "Use Mapbox map as background",
       "mapHint": "Drag a room to move it. Drag the orange handle to rotate it.",
       "mapUnavailable": "A geographic anchor is required to arrange rooms on the map.",

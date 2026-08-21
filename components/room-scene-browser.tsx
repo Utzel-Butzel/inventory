@@ -378,6 +378,10 @@ export function RoomSceneBrowser() {
     }
     return transforms;
   }, [automaticLayout, layoutDrafts]);
+  const layoutMapFallbackGeoreference = structureDetail?.georeference ?? null;
+  const hasLayoutMapAnchor = floorManifests.some(
+    (item) => Boolean(item.scan.georeference ?? item.georeference),
+  ) || Boolean(layoutMapFallbackGeoreference);
   const visibleManifests = useMemo(
     () => floorManifests.map((item) => ({
       ...item,
@@ -411,10 +415,17 @@ export function RoomSceneBrowser() {
     // Geographic editing starts from the captured AR world transform. The 3D
     // automatic layout deliberately places unarranged rooms side by side and
     // therefore cannot be aligned to a north-up basemap.
-    setLayoutDrafts(Object.fromEntries(floorManifests.map((item) => [
-      item.scan.id,
-      item.scan.layoutTransform ?? item.scan.scene.worldFromModel,
-    ])) as Record<string, SpatialMatrix4>);
+    setLayoutDrafts(Object.fromEntries(floorManifests.map((item) => {
+      const hasOwnGeoreference = Boolean(
+        item.scan.georeference ?? item.georeference,
+      );
+      return [
+        item.scan.id,
+        item.scan.layoutTransform ?? (hasOwnGeoreference
+          ? item.scan.scene.worldFromModel
+          : effectiveTransforms.get(item.scan.id) ?? item.scan.scene.worldFromModel),
+      ];
+    })) as Record<string, SpatialMatrix4>);
   };
   const adjustRoomLayout = (
     scanId: string,
@@ -427,13 +438,6 @@ export function RoomSceneBrowser() {
     });
   };
   const resetAutomaticLayout = () => {
-    if (layoutMapEnabled) {
-      setLayoutDrafts(Object.fromEntries(floorManifests.map((item) => [
-        item.scan.id,
-        item.scan.scene.worldFromModel,
-      ])) as Record<string, SpatialMatrix4>);
-      return;
-    }
     const reset = arrangeFloorRooms(floorManifests.map((item) => ({
       id: item.scan.id,
       coordinateSpaceId: item.scan.coordinateSpaceId,
@@ -441,6 +445,15 @@ export function RoomSceneBrowser() {
       worldFromModel: item.scan.scene.worldFromModel,
       layoutTransform: null,
     })));
+    if (layoutMapEnabled) {
+      setLayoutDrafts(Object.fromEntries(floorManifests.map((item) => [
+        item.scan.id,
+        item.scan.georeference ?? item.georeference
+          ? item.scan.scene.worldFromModel
+          : reset.transforms.get(item.scan.id) ?? item.scan.scene.worldFromModel,
+      ])) as Record<string, SpatialMatrix4>);
+      return;
+    }
     setLayoutDrafts(Object.fromEntries(reset.transforms) as Record<string, SpatialMatrix4>);
   };
   const saveLayout = async () => {
@@ -584,33 +597,40 @@ export function RoomSceneBrowser() {
         </div>
       </header>
 
-      {structures.length ? (
+      {structures.length || floorManifests.length ? (
         <div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-3 shadow-sm md:flex-row md:items-center">
-          <label className="flex min-w-0 flex-1 items-center gap-2">
-            <Building2 className="size-4 shrink-0 text-brand" aria-hidden="true" />
-            <span className="sr-only">{t("rooms.structures.building")}</span>
-            <select
-              value={selectedStructureId ?? ""}
-              onChange={(event) => selectStructure(event.target.value || null)}
-              className="h-9 min-w-0 flex-1 rounded-xl border border-border bg-surface-subtle px-3 text-xs font-semibold text-muted-strong outline-none focus:border-focus focus:bg-surface"
-            >
-              <option value="">{t("rooms.structures.individualRooms")}</option>
-              {structures.map((structure) => (
-                <option key={structure.id} value={structure.id}>
-                  {structure.name} · {t("rooms.structures.summary", {
-                    floors: t("rooms.structures.floors", {
-                      count: structure.floorCount,
-                      value: integer.format(structure.floorCount),
-                    }),
-                    rooms: t("rooms.structures.rooms", {
-                      count: structure.roomCount,
-                      value: integer.format(structure.roomCount),
-                    }),
-                  })}
-                </option>
-              ))}
-            </select>
-          </label>
+          {structures.length ? (
+            <label className="flex min-w-0 flex-1 items-center gap-2">
+              <Building2 className="size-4 shrink-0 text-brand" aria-hidden="true" />
+              <span className="sr-only">{t("rooms.structures.building")}</span>
+              <select
+                value={selectedStructureId ?? ""}
+                onChange={(event) => selectStructure(event.target.value || null)}
+                className="h-9 min-w-0 flex-1 rounded-xl border border-border bg-surface-subtle px-3 text-xs font-semibold text-muted-strong outline-none focus:border-focus focus:bg-surface"
+              >
+                <option value="">{t("rooms.structures.individualRooms")}</option>
+                {structures.map((structure) => (
+                  <option key={structure.id} value={structure.id}>
+                    {structure.name} · {t("rooms.structures.summary", {
+                      floors: t("rooms.structures.floors", {
+                        count: structure.floorCount,
+                        value: integer.format(structure.floorCount),
+                      }),
+                      rooms: t("rooms.structures.rooms", {
+                        count: structure.roomCount,
+                        value: integer.format(structure.roomCount),
+                      }),
+                    })}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-1 text-xs font-semibold text-muted-strong">
+              <Box className="size-4 shrink-0 text-brand" aria-hidden="true" />
+              <span className="truncate">{visibleManifest?.room.name}</span>
+            </div>
+          )}
           {structureDetail?.floors.length ? (
             <div className="flex items-center gap-1.5 overflow-x-auto">
               <Layers3 className="mx-1 size-4 shrink-0 text-muted" aria-hidden="true" />
@@ -733,6 +753,7 @@ export function RoomSceneBrowser() {
           {layoutDrafts && layoutMapEnabled ? (
             <RoomLayoutMapCanvas
               manifests={visibleManifests}
+              fallbackGeoreference={layoutMapFallbackGeoreference}
               selectedScanId={layoutRoomId}
               onSelectRoom={setLayoutRoomId}
               onChangeTransform={(scanId, transform) => {
@@ -773,8 +794,12 @@ export function RoomSceneBrowser() {
                   type="button"
                   onClick={resetAutomaticLayout}
                   className="grid size-8 shrink-0 place-items-center rounded-lg border border-border text-muted hover:text-brand"
-                  title={t("rooms.layout.automatic")}
-                  aria-label={t("rooms.layout.automatic")}
+                  title={t(layoutMapEnabled
+                    ? "rooms.layout.mapAutomatic"
+                    : "rooms.layout.automatic")}
+                  aria-label={t(layoutMapEnabled
+                    ? "rooms.layout.mapAutomatic"
+                    : "rooms.layout.automatic")}
                 >
                   <Undo2 className="size-3.5" aria-hidden="true" />
                 </button>
@@ -796,9 +821,7 @@ export function RoomSceneBrowser() {
                   type="checkbox"
                   checked={layoutMapEnabled}
                   onChange={(event) => setMapLayoutEnabled(event.target.checked)}
-                  disabled={!floorManifests.some(
-                    (item) => Boolean(item.scan.georeference ?? item.georeference),
-                  )}
+                  disabled={!hasLayoutMapAnchor}
                   className="mt-0.5 size-4 shrink-0 accent-brand-solid disabled:opacity-50"
                 />
                 <span>
@@ -806,9 +829,7 @@ export function RoomSceneBrowser() {
                     {t("rooms.layout.mapBackground")}
                   </span>
                   <span className="mt-0.5 block text-[9px] leading-4 text-muted">
-                    {floorManifests.some(
-                      (item) => Boolean(item.scan.georeference ?? item.georeference),
-                    )
+                    {hasLayoutMapAnchor
                       ? t("rooms.layout.mapHint")
                       : t("rooms.layout.mapUnavailable")}
                   </span>

@@ -88,12 +88,6 @@ const navigation: Array<{
     ],
   },
   {
-    labelKey: "navigation.statistics",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    permission: "inventory.read",
-  },
-  {
     labelKey: "navigation.stock",
     href: "/stock",
     icon: Warehouse,
@@ -117,6 +111,12 @@ const navigation: Array<{
         permission: "spatial.read",
       },
     ],
+  },
+  {
+    labelKey: "navigation.statistics",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    permission: "inventory.read",
   },
   { labelKey: "navigation.settings", href: "/settings", icon: Settings },
 ];
@@ -468,13 +468,17 @@ export function AppShell({
       ? settingsPageNames[pathSegments[1]]
       : undefined;
   const settingsPageName = settingsPageKey ? t(settingsPageKey) : undefined;
-  const inventoryDetailPageName =
+  const inventoryNestedPageName =
     section === "inventory" &&
     pathSegments.length === 2 &&
     pathSegments[1] !== "new"
       ? t("breadcrumb.details")
-      : undefined;
-  const nestedPageName = settingsPageName ?? inventoryDetailPageName;
+      : section === "inventory" &&
+          pathSegments.length === 3 &&
+          pathSegments[2] === "stock"
+        ? t("navigation.stock")
+        : undefined;
+  const nestedPageName = settingsPageName ?? inventoryNestedPageName;
   const showGlobalSearch = scopedPathname !== "/inventory";
 
   const closeMobileNavigation = () => {

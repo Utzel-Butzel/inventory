@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   arrangeFloorRooms,
+  invertSpatialMatrix,
   rotateRoomTransform,
+  roomWorldDeltaTransform,
   transformedRoomBounds,
   translateRoomTransform,
 } from "../lib/room-floor-layout.ts";
@@ -64,4 +66,14 @@ test("room transforms can be nudged and rotated without moving their origin", ()
   assert.deepEqual(rotated.slice(12, 15), [2, 0, -1]);
   assert.ok(Math.abs(rotated[0]) < 1e-12);
   assert.ok(Math.abs(rotated[2] + 1) < 1e-12);
+});
+
+test("derives a world-space layout delta from captured and edited transforms", () => {
+  const captured = translateRoomTransform(identity, [10, 2, -4]);
+  const edited = translateRoomTransform(captured, [2, 0, -1]);
+  const inverse = invertSpatialMatrix(captured);
+  assert.ok(inverse);
+  const delta = roomWorldDeltaTransform(captured, edited);
+  assert.deepEqual(delta.slice(12, 15), [2, 0, -1]);
+  assert.deepEqual(roomWorldDeltaTransform(captured, null), identity);
 });

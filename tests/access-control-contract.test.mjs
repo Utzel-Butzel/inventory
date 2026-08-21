@@ -270,6 +270,7 @@ test("built-in roles have the intended default permission boundaries", () => {
     "counts.read",
     "spatial.read",
     "orders.read",
+    "requests.read",
     "workflows.read",
     "labels.read",
   ]);

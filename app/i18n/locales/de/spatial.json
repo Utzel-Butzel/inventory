@@ -201,6 +201,7 @@
       "description": "Verschiebe und drehe Räume, bis ihre Türen aufeinandertreffen.",
       "room": "Raum zum Anordnen",
       "automatic": "Automatische Anordnung nebeneinander wiederherstellen",
+      "mapAutomatic": "Erfasste Kartenausrichtung wiederherstellen",
       "mapBackground": "Mapbox-Karte als Hintergrund verwenden",
       "mapHint": "Ziehe einen Raum zum Verschieben. Ziehe den orangefarbenen Griff zum Drehen.",
       "mapUnavailable": "Zum Anordnen auf der Karte wird eine geografische Verankerung benötigt.",

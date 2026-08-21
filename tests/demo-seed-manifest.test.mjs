@@ -45,6 +45,7 @@ test("demo manifest is coherent, fixed, and read-only by contract", () => {
     "counts.read",
     "spatial.read",
     "orders.read",
+    "requests.read",
     "workflows.read",
     "labels.read",
   ]);

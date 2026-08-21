@@ -4,10 +4,11 @@ import { test } from "node:test";
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("inventory details use one shell breadcrumb with linked ancestors", async () => {
-  const [shell, resourceDetails] = await Promise.all([
+test("inventory resource pages use one shell breadcrumb with linked ancestors", async () => {
+  const [shell, resourceDetails, resourceStock] = await Promise.all([
     source("components/app-shell.tsx"),
     source("components/resource-details.tsx"),
+    source("components/resource-stock-manager.tsx"),
   ]);
 
   assert.match(shell, /aria-label=\{t\("breadcrumb\.label"\)\}/);
@@ -15,5 +16,8 @@ test("inventory details use one shell breadcrumb with linked ancestors", async (
   assert.match(shell, /href=\{`\/\$\{section\}`\}/);
   assert.match(shell, /aria-current="page"/);
   assert.match(shell, /t\("breadcrumb\.details"\)/);
+  assert.match(shell, /t\("navigation\.stock"\)/);
   assert.doesNotMatch(resourceDetails, /details\.breadcrumb/);
+  assert.doesNotMatch(resourceStock, /href="\/inventory"/);
+  assert.doesNotMatch(resourceStock, /<ArrowLeft/);
 });

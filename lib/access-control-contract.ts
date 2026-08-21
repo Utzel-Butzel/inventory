@@ -15,6 +15,9 @@ export const appPermissions = [
   "spatial.manage",
   "orders.read",
   "orders.manage",
+  "requests.read",
+  "requests.create",
+  "requests.manage",
   "workflows.read",
   "workflows.manage",
   "labels.read",
@@ -137,6 +140,9 @@ export const permissionGroups: Array<{
       { key: "spatial.manage", label: "Manage spaces", description: "Create scans, structures, and item placements." },
       { key: "orders.read", label: "View orders", description: "View purchase orders and receipts." },
       { key: "orders.manage", label: "Manage orders", description: "Create and update purchase orders and receive stock." },
+      { key: "requests.read", label: "View requests", description: "View internal requests and reservation calendars." },
+      { key: "requests.create", label: "Create requests", description: "Request inventory for a future time period." },
+      { key: "requests.manage", label: "Manage requests", description: "Approve, reject, cancel, and fulfill internal requests." },
       { key: "workflows.read", label: "View scan workflows", description: "View stock scanning workflows." },
       { key: "workflows.manage", label: "Manage scan workflows", description: "Create, edit, and run stock scanning workflows." },
       { key: "labels.read", label: "View labels", description: "View label layouts and print labels." },
@@ -169,6 +175,7 @@ const viewerPermissions: AppPermission[] = [
   "counts.read",
   "spatial.read",
   "orders.read",
+  "requests.read",
   "workflows.read",
   "labels.read",
 ];
@@ -218,6 +225,7 @@ export function permissionScope(permission: AppPermission): ApiScope {
     permission === "counts.read" ||
     permission === "spatial.read" ||
     permission === "orders.read" ||
+    permission === "requests.read" ||
     permission === "workflows.read"
   ) {
     return "read";

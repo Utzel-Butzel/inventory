@@ -41,6 +41,7 @@ import {
 
 type RoomLayoutMapCanvasProps = {
   manifests: ClientRoomSceneManifest[];
+  fallbackGeoreference?: SpatialGeoreference | null;
   selectedScanId: string | null;
   onSelectRoom: (scanId: string) => void;
   onChangeTransform: (scanId: string, transform: SpatialMatrix4) => void;
@@ -124,9 +125,15 @@ const layerIds = {
   rotation: "room-layout-rotation",
 };
 
-function manifestAnchor(manifest: ClientRoomSceneManifest) {
+function manifestAnchor(
+  manifest: ClientRoomSceneManifest,
+  fallbackGeoreference?: SpatialGeoreference | null,
+) {
   const anchor = manifest.scan.georeference ?? manifest.georeference;
-  return isSpatialGeoreference(anchor) ? anchor : null;
+  if (isSpatialGeoreference(anchor)) return anchor;
+  return isSpatialGeoreference(fallbackGeoreference)
+    ? fallbackGeoreference
+    : null;
 }
 
 function layoutTransform(manifest: ClientRoomSceneManifest) {
@@ -149,8 +156,9 @@ function averagePoint(points: readonly SpatialVector3[]): SpatialVector3 {
 
 function roomMapGeometry(
   manifest: ClientRoomSceneManifest,
+  fallbackGeoreference?: SpatialGeoreference | null,
 ): RoomMapGeometry | null {
-  const anchor = manifestAnchor(manifest);
+  const anchor = manifestAnchor(manifest, fallbackGeoreference);
   if (!anchor) return null;
   const capturedPoints = sceneFloorPolygons(manifest.scan.scene).flat();
   if (!capturedPoints.length) return null;
@@ -183,7 +191,7 @@ function geographicPosition(point: SpatialVector3, anchor: SpatialGeoreference):
 function mapCollection(props: RoomLayoutMapCanvasProps): FeatureCollection {
   const features: LayoutFeature[] = [];
   for (const manifest of props.manifests) {
-    const geometry = roomMapGeometry(manifest);
+    const geometry = roomMapGeometry(manifest, props.fallbackGeoreference);
     if (!geometry) continue;
     const selected = manifest.scan.id === props.selectedScanId;
     const worldDelta = roomWorldDeltaTransform(
@@ -357,7 +365,7 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
       },
     });
     mapRef.current = map;
-    map.addControl(new NavigationControl({ visualizePitch: false }), "top-right");
+    map.addControl(new NavigationControl({ visualizePitch: false }), "bottom-right");
 
     const fitRooms = (data: FeatureCollection) => {
       const coordinates = collectionCoordinates(data);
@@ -395,7 +403,9 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
     map.on("mousedown", layerIds.fill, (event: MapLayerMouseEvent) => {
       const scanId = scanIdFromEvent(event);
       const manifest = scanId ? manifestForScan(scanId) : null;
-      const anchor = manifest ? manifestAnchor(manifest) : null;
+      const anchor = manifest
+        ? manifestAnchor(manifest, latestRef.current.fallbackGeoreference)
+        : null;
       if (!scanId || !manifest || !anchor) return;
       disableMapGesture(event);
       latestRef.current.onSelectRoom(scanId);
@@ -414,7 +424,9 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
     map.on("mousedown", layerIds.rotation, (event: MapLayerMouseEvent) => {
       const scanId = scanIdFromEvent(event);
       const manifest = scanId ? manifestForScan(scanId) : null;
-      const geometry = manifest ? roomMapGeometry(manifest) : null;
+      const geometry = manifest
+        ? roomMapGeometry(manifest, latestRef.current.fallbackGeoreference)
+        : null;
       if (!scanId || !manifest || !geometry) return;
       disableMapGesture(event);
       const pointer = geographicToLocalArkit(

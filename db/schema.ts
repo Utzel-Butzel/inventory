@@ -288,6 +288,25 @@ export type AssignmentKind = (typeof assignmentKinds)[number];
 export const assignmentStatuses = ["active", "returned", "cancelled"] as const;
 export type AssignmentStatus = (typeof assignmentStatuses)[number];
 
+export const internalRequestStatuses = [
+  "submitted",
+  "approved",
+  "rejected",
+  "fulfilled",
+  "cancelled",
+] as const;
+export type InternalRequestStatus = (typeof internalRequestStatuses)[number];
+
+export const internalRequestEventTypes = [
+  "submitted",
+  "approved",
+  "rejected",
+  "fulfilled",
+  "cancelled",
+] as const;
+export type InternalRequestEventType =
+  (typeof internalRequestEventTypes)[number];
+
 export const stockTrackingModes = ["bulk", "serialized"] as const;
 export type StockTrackingMode = (typeof stockTrackingModes)[number];
 
@@ -625,6 +644,160 @@ export const resourceComments = pgTable(
     check(
       "resource_comments_author_identity_hash_check",
       sql`${table.authorIdentityHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
+export const internalRequests = pgTable(
+  "internal_requests",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    reference: varchar("reference", { length: 24 }).notNull(),
+    status: varchar("status", { length: 24 })
+      .$type<InternalRequestStatus>()
+      .notNull()
+      .default("submitted"),
+    requesterUserId: uuid("requester_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    requesterName: varchar("requester_name", { length: 160 }).notNull(),
+    requesterEmail: varchar("requester_email", { length: 320 }),
+    deliveryResourceId: uuid("delivery_resource_id").references(
+      () => resources.id,
+      { onDelete: "set null" },
+    ),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    note: text("note").notNull().default(""),
+    decisionNote: text("decision_note").notNull().default(""),
+    decidedBy: varchar("decided_by", { length: 320 }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    fulfilledBy: varchar("fulfilled_by", { length: 320 }),
+    fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
+    idempotencyKey: uuid("idempotency_key"),
+    requestHash: varchar("request_hash", { length: 64 }),
+    createdBy: varchar("created_by", { length: 320 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("internal_requests_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    uniqueIndex("internal_requests_reference_unique").on(
+      table.organizationId,
+      table.reference,
+    ),
+    uniqueIndex("internal_requests_idempotency_key_unique").on(
+      table.organizationId,
+      table.idempotencyKey,
+    ),
+    index("internal_requests_status_starts_idx").on(
+      table.organizationId,
+      table.status,
+      table.startsAt,
+    ),
+    index("internal_requests_requester_idx").on(
+      table.organizationId,
+      table.requesterUserId,
+      table.createdAt,
+    ),
+    index("internal_requests_window_idx").on(
+      table.organizationId,
+      table.startsAt,
+      table.dueAt,
+    ),
+    check(
+      "internal_requests_status_check",
+      sql`${table.status} in ('submitted', 'approved', 'rejected', 'fulfilled', 'cancelled')`,
+    ),
+    check(
+      "internal_requests_window_check",
+      sql`${table.dueAt} > ${table.startsAt}`,
+    ),
+    check(
+      "internal_requests_requester_name_nonempty",
+      sql`length(btrim(${table.requesterName})) > 0`,
+    ),
+    check(
+      "internal_requests_idempotency_fields_consistent",
+      sql`(${table.idempotencyKey} is null and ${table.requestHash} is null) or (${table.idempotencyKey} is not null and ${table.requestHash} ~ '^[0-9a-f]{64}$')`,
+    ),
+  ],
+);
+
+export const internalRequestLines = pgTable(
+  "internal_request_lines",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    requestId: uuid("request_id")
+      .notNull()
+      .references(() => internalRequests.id, { onDelete: "cascade" }),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "restrict" }),
+    quantity: integer("quantity").notNull(),
+    note: text("note").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("internal_request_lines_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    uniqueIndex("internal_request_lines_request_resource_unique").on(
+      table.requestId,
+      table.resourceId,
+    ),
+    index("internal_request_lines_resource_idx").on(
+      table.organizationId,
+      table.resourceId,
+    ),
+    check(
+      "internal_request_lines_quantity_positive",
+      sql`${table.quantity} > 0`,
+    ),
+  ],
+);
+
+export const internalRequestEvents = pgTable(
+  "internal_request_events",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    requestId: uuid("request_id")
+      .notNull()
+      .references(() => internalRequests.id, { onDelete: "cascade" }),
+    type: varchar("type", { length: 24 })
+      .$type<InternalRequestEventType>()
+      .notNull(),
+    actor: varchar("actor", { length: 320 }).notNull(),
+    note: text("note").notNull().default(""),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("internal_request_events_request_occurred_idx").on(
+      table.organizationId,
+      table.requestId,
+      table.occurredAt,
+    ),
+    check(
+      "internal_request_events_type_check",
+      sql`${table.type} in ('submitted', 'approved', 'rejected', 'fulfilled', 'cancelled')`,
     ),
   ],
 );
@@ -2318,6 +2491,10 @@ export const inventoryAssignments = pgTable(
     stockUnitId: uuid("stock_unit_id").references(() => stockUnits.id, {
       onDelete: "restrict",
     }),
+    internalRequestLineId: uuid("internal_request_line_id").references(
+      () => internalRequestLines.id,
+      { onDelete: "restrict" },
+    ),
     kind: varchar("kind", { length: 24 })
       .$type<AssignmentKind>()
       .notNull(),
@@ -2356,6 +2533,9 @@ export const inventoryAssignments = pgTable(
     ),
     index("inventory_assignments_due_idx").on(table.status, table.dueAt),
     index("inventory_assignments_stock_unit_idx").on(table.stockUnitId),
+    index("inventory_assignments_internal_request_line_idx").on(
+      table.internalRequestLineId,
+    ),
     index("inventory_assignments_assignee_user_idx").on(table.assigneeUserId),
     index("inventory_assignments_assignee_resource_idx").on(
       table.assigneeResourceId,
@@ -3296,6 +3476,9 @@ export type InventoryCyclePolicyRecord =
 export type InventoryCountRecord = typeof inventoryCounts.$inferSelect;
 export type InventoryAssignmentRecord =
   typeof inventoryAssignments.$inferSelect;
+export type InternalRequestRecord = typeof internalRequests.$inferSelect;
+export type InternalRequestLineRecord = typeof internalRequestLines.$inferSelect;
+export type InternalRequestEventRecord = typeof internalRequestEvents.$inferSelect;
 export type BomLineRecord = typeof bomLines.$inferSelect;
 export type VariantBomOverrideRecord = typeof variantBomOverrides.$inferSelect;
 export type ResourceOptionGroupRecord = typeof resourceOptionGroups.$inferSelect;
