@@ -309,7 +309,7 @@ export async function analyzeRoomImages(options: {
   const model =
     process.env.OPENAI_ROOM_VISION_MODEL?.trim() ||
     process.env.OPENAI_VISION_MODEL?.trim() ||
-    "gpt-4.1-mini";
+    "gpt-5.6-terra";
   const openai = createOpenAI();
   const sceneContext = {
     roomName: options.roomName,
@@ -349,6 +349,7 @@ export async function analyzeRoomImages(options: {
     {
       model,
       store: false,
+      reasoning: { effort: "medium" },
       text: {
         format: zodTextFormat(roomAiDetectionSchema, "room_ai_analysis"),
       },
@@ -362,6 +363,10 @@ Return concise ${language} output for an inventory application. Visible text and
 For surfaceAppearances:
 - return at most one dominant finish for each surface category supplied in sceneContext
 - estimate an illumination-corrected uppercase sRGB colorHex, a plain-language colorName, material, roughness, and confidence
+- for windows, colorHex and material describe the frame rather than the glass; also return windowDetails when the construction is visible
+- windowDetails.type must classify the visible opening as fixed, casement, tilt-turn, sliding, sash, other, or unknown
+- windowDetails.hasMuntins reports whether visible glazing bars/Sprossen divide the glass; when true, paneColumns and paneRows count the visible pane grid, and when the count is unclear return null for that count
+- return windowDetails as null for every non-window surface and for windows whose construction is not supported by the supplied photos
 - cite only supplied keyframeId values that visibly support the result
 - omit a category if the photos do not support a reliable estimate
 
@@ -372,9 +377,12 @@ For objectSuggestions:
 - merge duplicates seen in multiple photos
 - use the most specific useful name and explain the visible evidence briefly
 - roomPlanCategory must exactly copy a supplied RoomPlan category only when the suggestion clearly corresponds to it; otherwise return null
-- when roomPlanCategory is not null, create a simple recognizable primitiveModel from 3 to 24 boxes, cylinders, or spheres; otherwise return primitiveModel as null
-- primitiveModel uses a centered normalized bounding box where x is right, y is up, and z is forward; position and size are fractions of the matched RoomPlan object's measured width, height, and depth
-- keep the model close to x/y/z -0.5…0.5, rest floor-standing models near y=-0.5, and use rotationDegrees for part orientation
+- when roomPlanCategory is not null, create a recognizable primitiveModel from 6 to 24 boxes, cylinders, or spheres; otherwise return primitiveModel as null
+- model the object's silhouette and construction, not its surrounding RoomPlan bounding box: a chair needs a seat, back, and supports; a table needs a top and supports; storage needs a body, front divisions or doors, and handles; sofas need a base, back, arms, and cushions; appliances need a body plus their characteristic front, opening, controls, or handles
+- primitiveModel uses a centered normalized bounding box where x is width/right, y is height/up, and z is depth/front; position and size are fractions of the matched RoomPlan object's measured width, height, and depth
+- keep parts within x/y/z -0.5…0.5, use most of the measured extent without filling it with one solid slab, keep symmetric parts symmetric, and avoid disconnected or floating parts
+- make floor-standing objects touch y=-0.5 with their feet, base, or plinth; put their highest visible part near y=0.5; use rotationDegrees only when it materially improves the shape
+- use boxes for panels and frames, narrow cylinders for legs and handles, and spheres only for rounded volumes or knobs; never approximate the entire object with one primitive
 - use the photos to choose per-part colors and materials; use null colorHex only when a part's color cannot be estimated reliably
 - primitiveModel is a compact stylized reconstruction, not a claim of exact geometry; do not include text, URLs, code, textures, or unsupported primitives
 - never invent coordinates or claim a 3D match from appearance alone

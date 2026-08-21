@@ -204,6 +204,7 @@
       "finishes": "Suggested finishes",
       "finishReviewHint": "Confirm each finish before it changes the 3D room.",
       "applyFinish": "Apply finish",
+      "applyWindow": "Apply finish & window type",
       "applied": "Applied",
       "suggestions": "Object suggestions",
       "confidence": "{{value}}% confidence",
@@ -227,6 +228,21 @@
         "door": "Doors",
         "window": "Windows",
         "opening": "Openings"
+      },
+      "windowDetails": {
+        "muntins": "Muntins",
+        "muntinsGrid": "Muntins · {{columns}} × {{rows}} panes",
+        "noMuntins": "No muntins",
+        "muntinsUnknown": "Muntins not clearly visible",
+        "types": {
+          "fixed": "Fixed window",
+          "casement": "Casement window",
+          "tilt-turn": "Tilt-and-turn window",
+          "sliding": "Sliding window",
+          "sash": "Sash window",
+          "other": "Other window type",
+          "unknown": "Window type unclear"
+        }
       },
       "materials": {
         "paint": "Paint",

@@ -1200,6 +1200,19 @@ export function RoomSceneBrowser() {
                         const surfaceName = t(
                           `rooms.ai.surfaces.${appearance.surfaceCategory}`,
                         );
+                        const windowDetails = appearance.surfaceCategory === "window"
+                          ? appearance.windowDetails
+                          : null;
+                        const muntinLabel = windowDetails?.hasMuntins === true
+                          ? windowDetails.paneColumns && windowDetails.paneRows
+                            ? t("rooms.ai.windowDetails.muntinsGrid", {
+                                columns: integer.format(windowDetails.paneColumns),
+                                rows: integer.format(windowDetails.paneRows),
+                              })
+                            : t("rooms.ai.windowDetails.muntins")
+                          : windowDetails?.hasMuntins === false
+                            ? t("rooms.ai.windowDetails.noMuntins")
+                            : t("rooms.ai.windowDetails.muntinsUnknown");
                         return (
                           <article
                             key={appearance.id}
@@ -1220,6 +1233,13 @@ export function RoomSceneBrowser() {
                                     value: integer.format(Math.round(appearance.confidence * 100)),
                                   })}
                                 </span>
+                                {windowDetails ? (
+                                  <span className="mt-0.5 block text-[9px] leading-4 text-muted-strong">
+                                    {t(`rooms.ai.windowDetails.types.${windowDetails.type}`)} · {muntinLabel} · {t("rooms.ai.confidence", {
+                                      value: integer.format(Math.round(windowDetails.confidence * 100)),
+                                    })}
+                                  </span>
+                                ) : null}
                               </span>
                             </div>
                             <div className="mt-2 flex gap-1.5">
@@ -1239,7 +1259,9 @@ export function RoomSceneBrowser() {
                                   ) : (
                                     <Check className="size-3" aria-hidden="true" />
                                   )}
-                                  {t("rooms.ai.applyFinish")}
+                                  {t(windowDetails
+                                    ? "rooms.ai.applyWindow"
+                                    : "rooms.ai.applyFinish")}
                                 </button>
                               ) : (
                                 <span className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[9px] font-semibold text-success">

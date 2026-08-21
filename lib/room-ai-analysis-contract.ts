@@ -21,6 +21,26 @@ export const roomMaterialSchema = z.enum([
   "other",
 ]);
 
+export const roomWindowTypeSchema = z.enum([
+  "fixed",
+  "casement",
+  "tilt-turn",
+  "sliding",
+  "sash",
+  "other",
+  "unknown",
+]);
+
+export const roomWindowDetailsSchema = z
+  .object({
+    type: roomWindowTypeSchema,
+    hasMuntins: z.boolean().nullable(),
+    paneColumns: z.number().int().min(1).max(8).nullable(),
+    paneRows: z.number().int().min(1).max(8).nullable(),
+    confidence: z.number().finite().min(0).max(1),
+  })
+  .strict();
+
 const colorHexSchema = z
   .string()
   .regex(/^#[0-9A-F]{6}$/, "Expected an uppercase six-digit sRGB color.");
@@ -58,6 +78,15 @@ export const roomPrimitiveModelSchema = z
   })
   .strict();
 
+// Keep the persisted schema backward-compatible with early one-part recipes,
+// but require new generations to contain enough structure to describe a
+// recognizable object instead of a colored replacement cuboid.
+export const detectedRoomPrimitiveModelSchema = roomPrimitiveModelSchema
+  .extend({
+    parts: z.array(roomPrimitivePartSchema).min(4).max(32),
+  })
+  .strict();
+
 export const detectedRoomSurfaceAppearanceSchema = z
   .object({
     surfaceCategory: roomSurfaceCategorySchema,
@@ -67,6 +96,7 @@ export const detectedRoomSurfaceAppearanceSchema = z
     roughness: z.number().finite().min(0).max(1),
     confidence: z.number().finite().min(0).max(1),
     evidenceKeyframeIds: z.array(z.uuid()).max(4),
+    windowDetails: roomWindowDetailsSchema.nullable(),
   })
   .strict();
 
@@ -80,6 +110,7 @@ export const roomSurfaceAppearanceSchema = detectedRoomSurfaceAppearanceSchema
   .extend({
     id: z.uuid(),
     status: roomAiReviewStatusSchema,
+    windowDetails: roomWindowDetailsSchema.nullable().default(null),
   })
   .strict();
 
@@ -94,7 +125,7 @@ export const detectedRoomObjectSuggestionSchema = z
     evidence: z.string().trim().min(1).max(500),
     evidenceKeyframeIds: z.array(z.uuid()).min(1).max(4),
     roomPlanCategory: z.string().trim().min(1).max(80).nullable(),
-    primitiveModel: roomPrimitiveModelSchema.nullable(),
+    primitiveModel: detectedRoomPrimitiveModelSchema.nullable(),
   })
   .strict();
 
@@ -153,6 +184,8 @@ export const roomAiReviewPatchSchema = z.discriminatedUnion("target", [
 ]);
 
 export type RoomMaterial = z.infer<typeof roomMaterialSchema>;
+export type RoomWindowType = z.infer<typeof roomWindowTypeSchema>;
+export type RoomWindowDetails = z.infer<typeof roomWindowDetailsSchema>;
 export type RoomPrimitivePart = z.infer<typeof roomPrimitivePartSchema>;
 export type RoomPrimitiveModel = z.infer<typeof roomPrimitiveModelSchema>;
 export type DetectedRoomSurfaceAppearance = z.infer<

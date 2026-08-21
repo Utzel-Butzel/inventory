@@ -46,7 +46,7 @@ export function createRoomLightMapCacheKey(value: unknown) {
     hash ^= source.charCodeAt(index);
     hash = Math.imul(hash, 16_777_619);
   }
-  return `room-lightmap-v1-${(hash >>> 0).toString(36)}`;
+  return `room-lightmap-v4-${(hash >>> 0).toString(36)}`;
 }
 
 function cacheLightMap(key: string, entry: BakeCacheEntry) {
@@ -134,6 +134,75 @@ function copyAttributeForAtlas(
   return new THREE.Float32BufferAttribute(values, attribute.itemSize, attribute.normalized);
 }
 
+function validateAtlasUvs(uvs: Float32Array) {
+  for (let index = 0; index < uvs.length; index += 1) {
+    const value = uvs[index];
+    if (!Number.isFinite(value) || value < -0.001 || value > 1.001) {
+      throw new Error(
+        `xatlas returned an invalid normalized lightmap UV (${String(value)}).`,
+      );
+    }
+  }
+}
+
+function addLightMapChartIds(
+  geometry: THREE.BufferGeometry,
+  firstChartId: number,
+) {
+  const position = geometry.getAttribute("position");
+  const index = geometry.getIndex();
+  if (!position || !index) return firstChartId;
+
+  // xatlas duplicates vertices at chart seams. Connected components in its
+  // output index buffer are therefore the UV islands we must keep isolated
+  // while filtering the baked map.
+  const parents = new Uint32Array(position.count);
+  for (let vertex = 0; vertex < parents.length; vertex += 1) parents[vertex] = vertex;
+
+  const find = (vertex: number) => {
+    let root = vertex;
+    while (parents[root] !== root) root = parents[root] ?? root;
+    while (parents[vertex] !== vertex) {
+      const parent = parents[vertex] ?? vertex;
+      parents[vertex] = root;
+      vertex = parent;
+    }
+    return root;
+  };
+  const union = (left: number, right: number) => {
+    const leftRoot = find(left);
+    const rightRoot = find(right);
+    if (leftRoot !== rightRoot) parents[rightRoot] = leftRoot;
+  };
+
+  for (let offset = 0; offset + 2 < index.count; offset += 3) {
+    const a = index.getX(offset);
+    const b = index.getX(offset + 1);
+    const c = index.getX(offset + 2);
+    union(a, b);
+    union(a, c);
+  }
+
+  const roots = new Map<number, number>();
+  const chartIds = new Float32Array(position.count);
+  let nextChartId = firstChartId;
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    const root = find(vertex);
+    let chartId = roots.get(root);
+    if (chartId === undefined) {
+      chartId = nextChartId;
+      nextChartId += 1;
+      roots.set(root, chartId);
+    }
+    chartIds[vertex] = chartId;
+  }
+  geometry.setAttribute(
+    "lightMapChart",
+    new THREE.Float32BufferAttribute(chartIds, 1),
+  );
+  return nextChartId;
+}
+
 async function unwrapReceiverGeometry(receivers: ReceiverMesh[]) {
   const { default: createXAtlas } = await import("xatlas-web");
   const atlas = createXAtlas({
@@ -201,6 +270,7 @@ async function unwrapReceiverGeometry(receivers: ReceiverMesh[]) {
     atlas.generateAtlas();
 
     const results: UnwrappedReceiver[] = [];
+    let nextChartId = 1;
     for (const input of inputs) {
       const meshData = atlas.getMeshData(input.meshId);
       const originalVertexIndices = new Uint32Array(
@@ -218,6 +288,7 @@ async function unwrapReceiverGeometry(receivers: ReceiverMesh[]) {
         meshData.uvOffset,
         meshData.newVertexCount * 2,
       ).slice();
+      validateAtlasUvs(atlasUvs);
 
       const output = new THREE.BufferGeometry();
       for (const [name, attribute] of Object.entries(input.geometry.attributes)) {
@@ -228,6 +299,7 @@ async function unwrapReceiverGeometry(receivers: ReceiverMesh[]) {
       }
       output.setAttribute("uv1", new THREE.Float32BufferAttribute(atlasUvs, 2));
       output.setIndex(new THREE.Uint32BufferAttribute(atlasIndices, 1));
+      nextChartId = addLightMapChartIds(output, nextChartId);
       for (const group of input.geometry.groups) {
         output.addGroup(group.start, group.count, group.materialIndex);
       }
@@ -272,6 +344,30 @@ function createGeometryBufferMaterial(kind: "normal" | "position") {
   });
 }
 
+function createChartBufferMaterial() {
+  return new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.NoBlending,
+    vertexShader: `
+      attribute vec2 uv1;
+      attribute float lightMapChart;
+      varying float vLightMapChart;
+      void main() {
+        vLightMapChart = lightMapChart;
+        gl_Position = vec4(uv1 * 2.0 - 1.0, 0.0, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying float vLightMapChart;
+      void main() {
+        gl_FragColor = vec4(vLightMapChart, 0.0, 0.0, 1.0);
+      }
+    `,
+  });
+}
+
 function createGeometryBuffers(
   renderer: THREE.WebGLRenderer,
   receivers: UnwrappedReceiver[],
@@ -288,6 +384,7 @@ function createGeometryBuffers(
   };
   const positionTarget = new THREE.WebGLRenderTarget(resolution, resolution, options);
   const normalTarget = new THREE.WebGLRenderTarget(resolution, resolution, options);
+  const chartTarget = new THREE.WebGLRenderTarget(resolution, resolution, options);
   const bakeScene = new THREE.Scene();
   for (const { mesh } of receivers) {
     const clone = new THREE.Mesh(mesh.geometry, mesh.material);
@@ -298,6 +395,7 @@ function createGeometryBuffers(
   const bakeCamera = new THREE.Camera();
   const positionMaterial = createGeometryBufferMaterial("position");
   const normalMaterial = createGeometryBufferMaterial("normal");
+  const chartMaterial = createChartBufferMaterial();
   const previousTarget = renderer.getRenderTarget();
   const previousClearAlpha = renderer.getClearAlpha();
   const previousClearColor = renderer.getClearColor(new THREE.Color());
@@ -315,6 +413,10 @@ function createGeometryBuffers(
     renderer.setRenderTarget(normalTarget);
     renderer.clear();
     renderer.render(bakeScene, bakeCamera);
+    bakeScene.overrideMaterial = chartMaterial;
+    renderer.setRenderTarget(chartTarget);
+    renderer.clear();
+    renderer.render(bakeScene, bakeCamera);
   } finally {
     renderer.setRenderTarget(previousTarget);
     renderer.setClearColor(previousClearColor, previousClearAlpha);
@@ -322,8 +424,9 @@ function createGeometryBuffers(
     renderer.toneMapping = previousToneMapping;
     positionMaterial.dispose();
     normalMaterial.dispose();
+    chartMaterial.dispose();
   }
-  return { normalTarget, positionTarget };
+  return { chartTarget, normalTarget, positionTarget };
 }
 
 function patchPathTracingMaterial(
@@ -379,7 +482,61 @@ function patchPathTracingMaterial(
     .replace(
       "state.transmissiveTraversals = transmissiveBounces;",
       `state.transmissiveTraversals = transmissiveBounces;
-       state.transmissiveRay = false;`,
+       state.transmissiveRay = false;
+
+       // Explicitly sample the window emitter at the baked surface. Relying
+       // only on a cosine ray randomly finding the window converges too slowly
+       // and causes the denoiser to erase direct furniture shadows. This is the
+       // diffuse irradiance form of next-event estimation, paired with the
+       // existing forward light hit through MIS so it stays unbiased.
+       state.traversals = bounces;
+       state.isShadowRay = true;
+       if (lights.count != 0u) {
+         LightRecord lightMapLight = randomLightSample(
+           lights.tex,
+           iesProfiles,
+           lights.count,
+           ray.origin,
+           rand3(13)
+         );
+         float lightMapCosine = max(
+           dot(lightMapNormal, lightMapLight.direction),
+           0.0
+         );
+         float lightMapLightPdf = lightMapLight.pdf / max(
+           float(lights.count),
+           1.0
+         );
+         if (lightMapCosine > 0.0 && lightMapLightPdf > 0.0) {
+           Ray lightMapShadowRay;
+           lightMapShadowRay.origin = ray.origin;
+           lightMapShadowRay.direction = lightMapLight.direction;
+           vec3 lightMapAttenuation;
+           if (!attenuateHit(
+             state,
+             lightMapShadowRay,
+             lightMapLight.dist,
+             lightMapAttenuation
+           )) {
+             float lightMapSurfacePdf =
+               lightMapCosine * RECIPROCAL_PI;
+             float lightMapMisWeight =
+               lightMapLight.type == SPOT_LIGHT_TYPE ||
+               lightMapLight.type == DIR_LIGHT_TYPE ||
+               lightMapLight.type == POINT_LIGHT_TYPE
+                 ? 1.0
+                 : misHeuristic(lightMapLightPdf, lightMapSurfacePdf);
+             gl_FragColor.rgb +=
+               lightMapAttenuation *
+               lightMapLight.emission *
+               lightMapCosine *
+               lightMapMisWeight /
+               lightMapLightPdf *
+               RECIPROCAL_PI;
+           }
+         }
+       }
+       state.isShadowRay = false;`,
     )
     .replace(
       "state.firstRay = i == 0 && state.transmissiveTraversals == transmissiveBounces;",
@@ -400,6 +557,7 @@ function createDenoiseMaterial() {
     blending: THREE.NoBlending,
     uniforms: {
       map: { value: null as THREE.Texture | null },
+      chartMap: { value: null as THREE.Texture | null },
       normalMap: { value: null as THREE.Texture | null },
       positionMap: { value: null as THREE.Texture | null },
       stepWidth: { value: 1 },
@@ -413,6 +571,7 @@ function createDenoiseMaterial() {
     `,
     fragmentShader: `
       uniform sampler2D map;
+      uniform sampler2D chartMap;
       uniform sampler2D normalMap;
       uniform sampler2D positionMap;
       uniform float stepWidth;
@@ -425,6 +584,7 @@ function createDenoiseMaterial() {
           gl_FragColor = vec4(0.0);
           return;
         }
+        float centerChart = texture2D(chartMap, vUv).r;
         vec3 centerNormal = normalize(texture2D(normalMap, vUv).xyz);
         vec3 total = vec3(0.0);
         float totalWeight = 0.0;
@@ -434,11 +594,24 @@ function createDenoiseMaterial() {
             vec4 sampleColor = texture2D(map, sampleUv);
             vec4 samplePosition = texture2D(positionMap, sampleUv);
             if (sampleColor.a <= 0.0 || samplePosition.a < 0.5) continue;
+            float sampleChart = texture2D(chartMap, sampleUv).r;
+            if (abs(centerChart - sampleChart) > 0.25) continue;
             vec3 sampleNormal = normalize(texture2D(normalMap, sampleUv).xyz);
             float normalWeight = pow(max(dot(centerNormal, sampleNormal), 0.0), 16.0);
-            float positionWeight = exp(-length(centerPosition.xyz - samplePosition.xyz) * 4.0);
+            float positionWeight = exp(-length(centerPosition.xyz - samplePosition.xyz) * 8.0);
             float spatialWeight = exp(-float(x * x + y * y) * 0.22);
-            float weight = normalWeight * positionWeight * spatialWeight;
+            float centerLuminance = dot(center.rgb, vec3(0.2126, 0.7152, 0.0722));
+            float sampleLuminance = dot(sampleColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+            float luminanceScale = max(
+              max(centerLuminance, sampleLuminance),
+              0.08
+            );
+            float luminanceWeight = exp(
+              -abs(centerLuminance - sampleLuminance) /
+              luminanceScale * 4.0
+            );
+            float weight =
+              normalWeight * positionWeight * spatialWeight * luminanceWeight;
             total += sampleColor.rgb * weight;
             totalWeight += weight;
           }
@@ -475,8 +648,8 @@ function createDilationMaterial() {
           return;
         }
         vec2 texel = 1.0 / vec2(textureSize(map, 0));
-        vec3 total = vec3(0.0);
-        float totalWeight = 0.0;
+        vec4 nearest = vec4(0.0);
+        float nearestDistance = 1e10;
         for (int y = -2; y <= 2; y++) {
           for (int x = -2; x <= 2; x++) {
             vec4 sampleColor = texture2D(
@@ -484,14 +657,14 @@ function createDilationMaterial() {
               vUv + vec2(float(x), float(y)) * texel
             );
             if (sampleColor.a <= 0.0) continue;
-            float weight = 1.0 / (1.0 + float(x * x + y * y));
-            total += sampleColor.rgb * weight;
-            totalWeight += weight;
+            float distanceSquared = float(x * x + y * y);
+            if (distanceSquared < nearestDistance) {
+              nearest = sampleColor;
+              nearestDistance = distanceSquared;
+            }
           }
         }
-        gl_FragColor = totalWeight > 0.0
-          ? vec4(total / totalWeight, 1.0)
-          : vec4(0.0);
+        gl_FragColor = nearest;
       }
     `,
   });
@@ -527,7 +700,9 @@ function applyLightMap(receivers: UnwrappedReceiver[], texture: THREE.Texture) {
   }
   for (const material of materials) {
     material.lightMap = texture;
-    material.lightMapIntensity = 1;
+    // Keep the baked irradiance below the compressed shoulder of ACES so
+    // window penumbrae retain visible tonal separation on bright materials.
+    material.lightMapIntensity = 0.85;
     material.needsUpdate = true;
   }
 }
@@ -589,7 +764,7 @@ export async function createRoomLightMapBake({
     };
   }
 
-  const { normalTarget, positionTarget } = createGeometryBuffers(
+  const { chartTarget, normalTarget, positionTarget } = createGeometryBuffers(
     renderer,
     unwrapped,
     resolution,
@@ -635,6 +810,7 @@ export async function createRoomLightMapBake({
     const denoiseTarget = createLightMapTarget(resolution);
     const workTarget = createLightMapTarget(resolution);
     const denoiseMaterial = createDenoiseMaterial();
+    denoiseMaterial.uniforms.chartMap!.value = chartTarget.texture;
     denoiseMaterial.uniforms.normalMap!.value = normalTarget.texture;
     denoiseMaterial.uniforms.positionMap!.value = positionTarget.texture;
     const denoiseQuad = new FullScreenQuad(denoiseMaterial);
@@ -643,7 +819,10 @@ export async function createRoomLightMapBake({
     renderer.toneMapping = THREE.NoToneMapping;
     let denoiseSource = tracer.target.texture;
     let readTarget = denoiseTarget;
-    for (let pass = 0; pass < 5; pass += 1) {
+    // Three a-trous passes remove path-tracing noise without the 62-texel
+    // effective radius of five passes, which erased broad penumbrae and all
+    // short contact shadows on shared floor charts.
+    for (let pass = 0; pass < 3; pass += 1) {
       readTarget = pass % 2 === 0 ? denoiseTarget : workTarget;
       denoiseMaterial.uniforms.map!.value = denoiseSource;
       denoiseMaterial.uniforms.stepWidth!.value = 2 ** pass;
@@ -687,6 +866,7 @@ export async function createRoomLightMapBake({
     tracer.dispose();
     positionTarget.dispose();
     normalTarget.dispose();
+    chartTarget.dispose();
     finished = true;
     onProgress?.(100);
     return appliedTexture;
@@ -704,6 +884,7 @@ export async function createRoomLightMapBake({
         tracer.dispose();
         positionTarget.dispose();
         normalTarget.dispose();
+        chartTarget.dispose();
       }
       retainedTarget?.dispose();
       for (const { originalGeometry } of unwrapped) originalGeometry.dispose();

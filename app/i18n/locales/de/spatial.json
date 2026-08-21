@@ -204,6 +204,7 @@
       "finishes": "Vorgeschlagene Oberflächen",
       "finishReviewHint": "Bestätige jede Oberfläche, bevor sie den 3D-Raum verändert.",
       "applyFinish": "Oberfläche anwenden",
+      "applyWindow": "Oberfläche & Fenstertyp anwenden",
       "applied": "Angewendet",
       "suggestions": "Objektvorschläge",
       "confidence": "{{value}} % Sicherheit",
@@ -227,6 +228,21 @@
         "door": "Türen",
         "window": "Fenster",
         "opening": "Öffnungen"
+      },
+      "windowDetails": {
+        "muntins": "Sprossen",
+        "muntinsGrid": "Sprossen · {{columns}} × {{rows}} Felder",
+        "noMuntins": "Ohne Sprossen",
+        "muntinsUnknown": "Sprossen nicht sicher erkennbar",
+        "types": {
+          "fixed": "Festverglasung",
+          "casement": "Drehfenster",
+          "tilt-turn": "Dreh-Kipp-Fenster",
+          "sliding": "Schiebefenster",
+          "sash": "Vertikalschiebefenster",
+          "other": "Andere Fensterbauart",
+          "unknown": "Fensterbauart unklar"
+        }
       },
       "materials": {
         "paint": "Farbe",

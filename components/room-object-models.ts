@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
 import type {
   RoomMaterial,
@@ -19,6 +20,32 @@ export type RoomObjectModelMaterials = {
 type Vector3Tuple = readonly [number, number, number];
 
 const MIN_PART_SIZE = 0.006;
+
+const floorAnchoredObjectCategories = new Set([
+  "bathtub",
+  "bed",
+  "chair",
+  "dishwasher",
+  "fireplace",
+  "oven",
+  "refrigerator",
+  "sink",
+  "sofa",
+  "stairs",
+  "storage",
+  "stove",
+  "table",
+  "toilet",
+  "washer-dryer",
+]);
+
+const minimumAiPartsByCategory: Record<string, number> = {
+  bed: 4,
+  chair: 5,
+  sofa: 5,
+  storage: 3,
+  table: 3,
+};
 
 const primitiveMaterialColors: Record<RoomMaterial, string> = {
   paint: "#D8D4CC",
@@ -92,6 +119,68 @@ function fitContentToDimensions(
   );
   content.scale.copy(fit);
   content.position.set(-center.x * fit.x, -center.y * fit.y, -center.z * fit.z);
+}
+
+function fitAiContentToDimensions(
+  content: THREE.Group,
+  dimensions: Vector3Tuple,
+  category: string,
+) {
+  const bounds = new THREE.Box3().setFromObject(content);
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const padding = 0.96;
+  const scale = Math.min(
+    1,
+    size.x > 0 ? (dimensions[0] * padding) / size.x : 1,
+    size.y > 0 ? (dimensions[1] * padding) / size.y : 1,
+    size.z > 0 ? (dimensions[2] * padding) / size.z : 1,
+  );
+  content.scale.setScalar(scale);
+  content.position.x = -center.x * scale;
+  content.position.z = -center.z * scale;
+  content.position.y = floorAnchoredObjectCategories.has(
+    category.trim().toLocaleLowerCase(),
+  )
+    ? -dimensions[1] / 2 - bounds.min.y * scale
+    : -center.y * scale;
+}
+
+export function isRecognizableAiPrimitiveModel({
+  category,
+  model,
+}: {
+  category: string;
+  model: RoomPrimitiveModel;
+}) {
+  const normalizedCategory = category.trim().toLocaleLowerCase();
+  const minimumParts = minimumAiPartsByCategory[normalizedCategory] ?? 3;
+  if (model.parts.length < minimumParts) return false;
+
+  const minimum = [Infinity, Infinity, Infinity];
+  const maximum = [-Infinity, -Infinity, -Infinity];
+  for (const part of model.parts) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      const halfSize = part.size[axis]! / 2;
+      minimum[axis] = Math.min(
+        minimum[axis]!,
+        part.position[axis]! - halfSize,
+      );
+      maximum[axis] = Math.max(
+        maximum[axis]!,
+        part.position[axis]! + halfSize,
+      );
+    }
+  }
+  const span = maximum.map((value, axis) => value - minimum[axis]!);
+  const minimumDepth = normalizedCategory === "television" ? 0.03 : 0.12;
+  if (span[0]! < 0.25 || span[1]! < 0.3 || span[2]! < minimumDepth) {
+    return false;
+  }
+  return (
+    !floorAnchoredObjectCategories.has(normalizedCategory) ||
+    minimum[1]! <= -0.25
+  );
 }
 
 function box(
@@ -494,9 +583,11 @@ function makeStairs(
 }
 
 export function createAiPrimitiveObjectModel({
+  category,
   dimensions,
   model,
 }: {
+  category: string;
   dimensions: Vector3Tuple;
   model: RoomPrimitiveModel;
 }) {
@@ -532,7 +623,13 @@ export function createAiPrimitiveObjectModel({
 
     let geometry: THREE.BufferGeometry;
     if (part.primitive === "box") {
-      geometry = new THREE.BoxGeometry(...size);
+      geometry = new RoundedBoxGeometry(
+        size[0],
+        size[1],
+        size[2],
+        2,
+        Math.min(Math.min(size[0], size[1], size[2]) * 0.08, 0.025),
+      );
     } else if (part.primitive === "cylinder") {
       geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
     } else {
@@ -548,7 +645,7 @@ export function createAiPrimitiveObjectModel({
     content.add(mesh);
   }
 
-  fitContentToDimensions(content, dimensions);
+  fitAiContentToDimensions(content, dimensions, category);
   return root;
 }
 

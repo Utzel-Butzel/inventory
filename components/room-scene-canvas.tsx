@@ -41,12 +41,17 @@ import type { RoomMapViewport } from "@/components/room-layout-map-canvas";
 import {
   createAiPrimitiveObjectModel,
   createRoomObjectModel,
+  isRecognizableAiPrimitiveModel,
 } from "@/components/room-object-models";
 import { applyDetectedRoomFinish } from "@/components/room-scene-materials";
 import { cn } from "@/components/ui";
-import type { RoomObjectSuggestion } from "@/lib/room-ai-analysis-contract";
+import type {
+  RoomObjectSuggestion,
+  RoomWindowDetails,
+} from "@/lib/room-ai-analysis-contract";
 import type { RoomLightMapBake } from "@/lib/room-lightmap-baker";
 import type { SpatialMatrix4 } from "@/lib/room-scene-contract";
+import { resolveRoomWindowPaneGrid } from "@/lib/room-window-details";
 import {
   hasPlyHeader,
   maximumGaussianSplatBytes,
@@ -1184,8 +1189,12 @@ export function RoomSceneCanvas({
       suggestion: RoomObjectSuggestion,
       category: string,
       dimensions: readonly [number, number, number],
-    ) => suggestion.primitiveModel
+    ) => suggestion.primitiveModel && isRecognizableAiPrimitiveModel({
+      category,
+      model: suggestion.primitiveModel,
+    })
       ? createAiPrimitiveObjectModel({
+          category,
           dimensions,
           model: suggestion.primitiveModel,
         })
@@ -1432,6 +1441,8 @@ export function RoomSceneCanvas({
     const makeWindowNode = (
       surface: RoomSurface,
       glassMaterial: THREE.Material,
+      frameMaterial: THREE.Material,
+      details: RoomWindowDetails | null,
     ) => {
       const [width, height, measuredDepth] = normalizedDimensions(
         surface.category,
@@ -1460,7 +1471,7 @@ export function RoomSceneCanvas({
           parent: window,
           size: [frameWidth, height, frameDepth],
           position: [x, 0, 0],
-          material: windowFrameMaterial,
+          material: frameMaterial,
           castShadow: true,
         });
       }
@@ -1472,23 +1483,37 @@ export function RoomSceneCanvas({
           parent: window,
           size: [width - frameWidth * 2, frameWidth, frameDepth],
           position: [0, y, 0],
-          material: windowFrameMaterial,
+          material: frameMaterial,
           castShadow: true,
         });
       }
-      if (glassWidth > 0.68) {
+      const paneGrid = resolveRoomWindowPaneGrid(
+        details,
+        [glassWidth, glassHeight],
+      );
+      for (let column = 1; column < paneGrid.columns; column += 1) {
         addBox({
           parent: window,
           size: [frameWidth * 0.58, glassHeight, frameDepth * 0.82],
-          material: windowFrameMaterial,
+          position: [
+            -glassWidth / 2 + (glassWidth * column) / paneGrid.columns,
+            0,
+            0,
+          ],
+          material: frameMaterial,
           castShadow: true,
         });
       }
-      if (glassHeight > 1.05) {
+      for (let row = 1; row < paneGrid.rows; row += 1) {
         addBox({
           parent: window,
           size: [glassWidth, frameWidth * 0.58, frameDepth * 0.82],
-          material: windowFrameMaterial,
+          position: [
+            0,
+            -glassHeight / 2 + (glassHeight * row) / paneGrid.rows,
+            0,
+          ],
+          material: frameMaterial,
           castShadow: true,
         });
       }
@@ -1582,9 +1607,17 @@ export function RoomSceneCanvas({
             finishForSurface(roomManifest, "door", doorMaterial),
           ));
         } else if (surface.category === "window") {
+          const acceptedWindowAppearance = roomManifest.scan.aiAnalysis
+            ?.surfaceAppearances.find(
+              (candidate) =>
+                candidate.status === "accepted" &&
+                candidate.surfaceCategory === "window",
+            );
           modelRoot.add(makeWindowNode(
             surface,
-            finishForSurface(roomManifest, "window", windowMaterial),
+            windowMaterial,
+            finishForSurface(roomManifest, "window", windowFrameMaterial),
+            acceptedWindowAppearance?.windowDetails ?? null,
           ));
         } else if (surface.category === "opening") {
           modelRoot.add(makeOpeningNode(
@@ -2897,7 +2930,7 @@ export function RoomSceneCanvas({
           } = await import("@/lib/room-lightmap-baker");
           if (disposed) return;
           const cacheKey = createRoomLightMapCacheKey({
-            version: 3,
+            version: 6,
             rooms: visibleManifests.map((roomManifest) => ({
               analysis: roomManifest.scan.aiAnalysis,
               id: roomManifest.scan.id,
@@ -2934,7 +2967,7 @@ export function RoomSceneCanvas({
               light.intensity = 0;
             });
             scene.environment = environmentTarget.texture;
-            scene.environmentIntensity = 0.18;
+            scene.environmentIntensity = 0.06;
             setLightingStatus("ready");
           }
           return;
@@ -3269,11 +3302,11 @@ export function RoomSceneCanvas({
             daylightAreaLights.forEach((light) => {
               light.intensity = 0;
             });
-            // Lightmaps contain direct and bounced diffuse irradiance. A weak
-            // PMREM remains only for the view-dependent material reflections
-            // that cannot be represented in a scalar baked map.
+            // Lightmaps contain direct and bounced diffuse irradiance. Three's
+            // PMREM also contributes diffuse IBL (not only reflections), so it
+            // must stay very low here or it washes out baked visibility.
             scene.environment = environmentTarget.texture;
-            scene.environmentIntensity = 0.18;
+            scene.environmentIntensity = 0.06;
             setLightingStatus("ready");
           }
         }

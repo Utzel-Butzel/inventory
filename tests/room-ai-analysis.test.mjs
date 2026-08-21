@@ -3,15 +3,21 @@ import test from "node:test";
 import { zodTextFormat } from "openai/helpers/zod";
 import * as THREE from "three";
 
-import { createAiPrimitiveObjectModel } from "../components/room-object-models.ts";
+import {
+  createAiPrimitiveObjectModel,
+  isRecognizableAiPrimitiveModel,
+} from "../components/room-object-models.ts";
 import { applyDetectedRoomFinish } from "../components/room-scene-materials.ts";
 import { buildRoomAiAnalysis } from "../lib/room-ai-analysis.ts";
+import { resolveRoomWindowPaneGrid } from "../lib/room-window-details.ts";
 import {
   maximumRoomAnalysisKeyframes,
   maximumRoomObjectSuggestions,
+  detectedRoomPrimitiveModelSchema,
   roomAiAnalysisSchema,
   roomAiDetectionSchema,
   roomPrimitiveModelSchema,
+  roomWindowDetailsSchema,
 } from "../lib/room-ai-analysis-contract.ts";
 
 const matrix = [
@@ -82,6 +88,7 @@ test("grounds only unique RoomPlan categories and keeps evidence within analyzed
           roughness: 0.86,
           confidence: 0.9,
           evidenceKeyframeIds: [frameId, missingFrameId],
+          windowDetails: null,
         },
         {
           surfaceCategory: "floor",
@@ -91,6 +98,7 @@ test("grounds only unique RoomPlan categories and keeps evidence within analyzed
           roughness: 0.95,
           confidence: 0.8,
           evidenceKeyframeIds: [frameId],
+          windowDetails: null,
         },
       ],
       objectSuggestions: [
@@ -196,6 +204,10 @@ test("rejects unsafe or oversized AI primitive model recipes", () => {
     label: "Long vector",
     parts: [{ ...validPart, size: [0.5, 0.5, 0.5, 0.5] }],
   }).success, false);
+  assert.equal(detectedRoomPrimitiveModelSchema.safeParse({
+    label: "Under-specified chair",
+    parts: [validPart],
+  }).success, false);
 });
 
 test("builds an OpenAI strict response format for room analysis", () => {
@@ -206,8 +218,65 @@ test("builds an OpenAI strict response format for room analysis", () => {
   );
 });
 
+test("keeps detected window type and muntin grid pending until confirmation", () => {
+  const windowDetails = roomWindowDetailsSchema.parse({
+    type: "tilt-turn",
+    hasMuntins: true,
+    paneColumns: 3,
+    paneRows: 2,
+    confidence: 0.88,
+  });
+  const analysis = buildRoomAiAnalysis({
+    scene: {
+      ...scene,
+      surfaces: [
+        ...scene.surfaces,
+        {
+          id: "88888888-8888-4888-8888-888888888888",
+          category: "window",
+          dimensions: [1.8, 1.2, 0.08],
+          transform: matrix,
+          confidence: "high",
+        },
+      ],
+    },
+    keyframeIds: [frameId],
+    model: "vision-test",
+    analyzedAt: "2026-08-21T10:00:00.000Z",
+    createId: () => "99999999-9999-4999-8999-999999999999",
+    detection: {
+      summary: "A white tilt-and-turn window with muntins.",
+      surfaceAppearances: [{
+        surfaceCategory: "window",
+        colorHex: "#F4F2EC",
+        colorName: "Warm white",
+        material: "paint",
+        roughness: 0.72,
+        confidence: 0.9,
+        evidenceKeyframeIds: [frameId],
+        windowDetails,
+      }],
+      objectSuggestions: [],
+    },
+  });
+
+  assert.equal(analysis.surfaceAppearances[0].status, "pending");
+  assert.deepEqual(analysis.surfaceAppearances[0].windowDetails, windowDetails);
+  assert.deepEqual(resolveRoomWindowPaneGrid(windowDetails, [1.7, 1.1]), {
+    columns: 3,
+    rows: 2,
+  });
+  assert.deepEqual(resolveRoomWindowPaneGrid({
+    ...windowDetails,
+    hasMuntins: false,
+    paneColumns: null,
+    paneRows: null,
+  }, [1.7, 1.1]), { columns: 1, rows: 1 });
+});
+
 test("renders a confirmed primitive recipe inside its RoomPlan bounds", () => {
   const model = createAiPrimitiveObjectModel({
+    category: "table",
     dimensions: [1.2, 0.8, 0.7],
     model: roomPrimitiveModelSchema.parse({
       label: "Side table",
@@ -247,6 +316,27 @@ test("renders a confirmed primitive recipe inside its RoomPlan bounds", () => {
   assert.ok(size.x <= 1.2 + 1e-6);
   assert.ok(size.y <= 0.8 + 1e-6);
   assert.ok(size.z <= 0.7 + 1e-6);
+  assert.ok(Math.abs(bounds.min.y + 0.4) <= 1e-6);
+  assert.equal(model.children[0].scale.x, model.children[0].scale.y);
+  assert.equal(model.children[0].scale.y, model.children[0].scale.z);
+});
+
+test("rejects visually incomplete primitive recipes before replacing RoomPlan models", () => {
+  const singleBox = roomPrimitiveModelSchema.parse({
+    label: "Orange chair",
+    parts: [{
+      primitive: "box",
+      position: [0, 0, 0],
+      size: [0.8, 0.9, 0.8],
+      rotationDegrees: [0, 0, 0],
+      colorHex: "#D96835",
+      material: "plastic",
+    }],
+  });
+  assert.equal(isRecognizableAiPrimitiveModel({
+    category: "chair",
+    model: singleBox,
+  }), false);
 });
 
 test("keeps stored room analyses from before primitive models readable", () => {

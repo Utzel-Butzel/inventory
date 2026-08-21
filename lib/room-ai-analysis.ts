@@ -52,6 +52,9 @@ export function buildRoomAiAnalysis(options: {
         id: options.createId(),
         status: "pending" as const,
         colorHex: appearance.colorHex.toUpperCase(),
+        windowDetails: appearance.surfaceCategory === "window"
+          ? appearance.windowDetails
+          : null,
         evidenceKeyframeIds: appearance.evidenceKeyframeIds.filter((id) =>
           allowedKeyframes.has(id),
         ),
