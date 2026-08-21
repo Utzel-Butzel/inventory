@@ -1180,7 +1180,7 @@ export async function bookStockMovement(
           409,
         );
       }
-      if (!resource.allowNegativeStock) {
+      if (!resource.allowNegativeStock && balanceAfter >= 0) {
         const variantAllocation = await allocatedVariantQuantity(
           transaction,
           resourceId,
