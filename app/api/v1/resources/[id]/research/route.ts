@@ -184,17 +184,19 @@ export async function POST(request: Request, context: Context) {
     const values: Partial<NewResource> = { ...researchPatch.values };
     const generatedFields = [...researchPatch.generatedFields];
 
-    if (values.barcode) {
+    for (const field of ["sku", "barcode"] as const) {
+      const identifier = values[field];
+      if (!identifier) continue;
       try {
         await assertResourceIdentifiersAvailable(
           authorization.identity.organizationId,
-          { barcode: values.barcode },
+          { [field]: identifier },
           resource.id,
         );
       } catch (error) {
         if (!(error instanceof ResourceIdentifierConflictError)) throw error;
-        delete values.barcode;
-        const fieldIndex = generatedFields.indexOf("barcode");
+        delete values[field];
+        const fieldIndex = generatedFields.indexOf(field);
         if (fieldIndex >= 0) generatedFields.splice(fieldIndex, 1);
       }
     }
@@ -231,7 +233,9 @@ export async function POST(request: Request, context: Context) {
         updatedFields: generatedFields,
         translation: {
           status: generatedFields.some((field) =>
-            ["name", "description", "type", "categories"].includes(field),
+            ["name", "description", "type", "categories", "notes"].includes(
+              field,
+            ),
           )
             ? "queued"
             : "not_needed",

@@ -68,3 +68,14 @@ test("the notification inbox uses the settings navigation shell", async () => {
   assert.match(sectionLayout, /<SettingsNavigation/);
   assert.match(navigation, /activeHrefs: \["\/notifications"\]/);
 });
+
+test("the dashboard theme control lives in user settings", async () => {
+  const [shell, userSettings] = await Promise.all([
+    source("components/app-shell.tsx"),
+    source("app/(dashboard)/settings/user/page.tsx"),
+  ]);
+
+  assert.doesNotMatch(shell, /LocalizedThemeToggle/);
+  assert.match(userSettings, /<LocalizedThemeToggle \/>/);
+  assert.match(userSettings, /user\.appearance\.title/);
+});

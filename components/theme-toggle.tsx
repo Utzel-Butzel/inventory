@@ -7,6 +7,7 @@ import { useT } from "next-i18next/client";
 import { cn } from "@/components/ui";
 
 type Theme = "light" | "dark";
+const themeStorageKey = "inventory-theme";
 
 function resolvedTheme(): Theme {
   const explicitTheme = document.documentElement.dataset.theme;
@@ -22,6 +23,24 @@ function updateThemeColor(theme: Theme) {
   document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach(
     (meta) => meta.setAttribute("content", theme === "dark" ? "#0a0c10" : "#f6f7f9"),
   );
+}
+
+function savedTheme(): Theme | null {
+  try {
+    const theme = localStorage.getItem(themeStorageKey);
+    return theme === "light" || theme === "dark" ? theme : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveTheme(theme: Theme) {
+  try {
+    localStorage.setItem(themeStorageKey, theme);
+  } catch {}
+  try {
+    document.cookie = `${themeStorageKey}=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
+  } catch {}
 }
 
 type ThemeToggleProps = {
@@ -49,6 +68,11 @@ export function ThemeToggle({
       }
     };
 
+    const storedTheme = savedTheme();
+    if (!document.documentElement.dataset.theme && storedTheme) {
+      document.documentElement.dataset.theme = storedTheme;
+      saveTheme(storedTheme);
+    }
     const initialTheme = resolvedTheme();
     setTheme(initialTheme);
     updateThemeColor(initialTheme);
@@ -59,9 +83,7 @@ export function ThemeToggle({
   function toggleTheme() {
     const nextTheme = resolvedTheme() === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = nextTheme;
-    try {
-      localStorage.setItem("inventory-theme", nextTheme);
-    } catch {}
+    saveTheme(nextTheme);
     updateThemeColor(nextTheme);
     setTheme(nextTheme);
   }

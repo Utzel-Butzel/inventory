@@ -37,6 +37,86 @@ export function multiplySpatialMatrices(
   return result as SpatialMatrix4;
 }
 
+/** Inverts an affine 4x4 transform stored in the RoomPlan column-major format. */
+export function invertSpatialMatrix(
+  matrix: readonly number[],
+): SpatialMatrix4 | null {
+  const a00 = matrix[0] ?? 0;
+  const a01 = matrix[1] ?? 0;
+  const a02 = matrix[2] ?? 0;
+  const a10 = matrix[4] ?? 0;
+  const a11 = matrix[5] ?? 0;
+  const a12 = matrix[6] ?? 0;
+  const a20 = matrix[8] ?? 0;
+  const a21 = matrix[9] ?? 0;
+  const a22 = matrix[10] ?? 0;
+
+  const b01 = a22 * a11 - a12 * a21;
+  const b11 = -a22 * a10 + a12 * a20;
+  const b21 = a21 * a10 - a11 * a20;
+  const determinant = a00 * b01 + a01 * b11 + a02 * b21;
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-12) {
+    return null;
+  }
+
+  const inverseDeterminant = 1 / determinant;
+  const result: SpatialMatrix4 = [
+    b01 * inverseDeterminant,
+    (-a22 * a01 + a02 * a21) * inverseDeterminant,
+    (a12 * a01 - a02 * a11) * inverseDeterminant,
+    0,
+    b11 * inverseDeterminant,
+    (a22 * a00 - a02 * a20) * inverseDeterminant,
+    (-a12 * a00 + a02 * a10) * inverseDeterminant,
+    0,
+    b21 * inverseDeterminant,
+    (-a21 * a00 + a01 * a20) * inverseDeterminant,
+    (a11 * a00 - a01 * a10) * inverseDeterminant,
+    0,
+    0,
+    0,
+    0,
+    1,
+  ];
+  const translation: SpatialVector3 = [
+    matrix[12] ?? 0,
+    matrix[13] ?? 0,
+    matrix[14] ?? 0,
+  ];
+  result[12] = -(
+    result[0] * translation[0] +
+    result[4] * translation[1] +
+    result[8] * translation[2]
+  );
+  result[13] = -(
+    result[1] * translation[0] +
+    result[5] * translation[1] +
+    result[9] * translation[2]
+  );
+  result[14] = -(
+    result[2] * translation[0] +
+    result[6] * translation[1] +
+    result[10] * translation[2]
+  );
+  return result;
+}
+
+/**
+ * Converts a model-to-layout transform into the delta applied to captured AR
+ * world coordinates. This is the transform used by both the 3D floor view and
+ * the georeferenced map view.
+ */
+export function roomWorldDeltaTransform(
+  capturedWorldFromModel: readonly number[],
+  layoutWorldFromModel: readonly number[] | null | undefined,
+): SpatialMatrix4 {
+  if (!layoutWorldFromModel) return [...identity] as SpatialMatrix4;
+  const modelFromCapturedWorld = invertSpatialMatrix(capturedWorldFromModel);
+  return modelFromCapturedWorld
+    ? multiplySpatialMatrices(layoutWorldFromModel, modelFromCapturedWorld)
+    : [...identity] as SpatialMatrix4;
+}
+
 export function translateRoomTransform(
   transform: readonly number[],
   delta: SpatialVector3,

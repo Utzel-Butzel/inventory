@@ -17,6 +17,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   Clock3,
+  CodeXml,
   FileText,
   Flag,
   Hash,
@@ -513,12 +514,16 @@ export function ResourceDetails({
   canDelete,
   canShare,
   canViewStock,
+  developerMode,
+  organizationId,
 }: {
   resourceId: string;
   canEdit: boolean;
   canDelete: boolean;
   canShare: boolean;
   canViewStock: boolean;
+  developerMode: boolean;
+  organizationId: string;
 }) {
   const router = useRouter();
   const organizationHref = useOrganizationHref();
@@ -700,17 +705,6 @@ export function ResourceDetails({
     <div className="mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <header className="mb-6 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <div className="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted">
-            <Link
-              href="/inventory"
-              className="inline-flex items-center gap-1 transition hover:text-foreground"
-            >
-              <ArrowLeft className="size-3.5" />{" "}
-              {t("details.breadcrumb.inventory")}
-            </Link>
-            <ChevronRight className="size-3.5" />
-            <span className="truncate">{t("details.breadcrumb.details")}</span>
-          </div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">
               {resource.name}
@@ -1105,6 +1099,80 @@ export function ResourceDetails({
                   </div>
                 ))}
               </dl>
+            </section>
+          ) : null}
+
+          {developerMode ? (
+            <section className="rounded-xl border border-brand-border bg-brand-soft/30 p-5">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <CodeXml className="size-4 text-brand" aria-hidden="true" />
+                {t("developer.title")}
+              </h2>
+              <p className="mt-2 text-xs leading-5 text-muted">
+                {t("developer.description")}
+              </p>
+              <dl className="mt-4 space-y-3">
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    {t("developer.resourceId")}
+                  </dt>
+                  <dd className="mt-1 break-all font-mono text-xs text-foreground">
+                    {resource.id}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    {t("developer.organizationHeader")}
+                  </dt>
+                  <dd className="mt-1 break-all font-mono text-xs text-foreground">
+                    X-Organization-ID: {organizationId}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    {t("developer.endpoints")}
+                  </dt>
+                  <dd className="mt-1 space-y-1.5">
+                    <p className="flex min-w-0 gap-2 font-mono text-xs">
+                      <span className="w-12 shrink-0 font-semibold text-brand">GET</span>
+                      <span className="break-all text-foreground">
+                        /api/v1/resources/{resource.id}
+                      </span>
+                    </p>
+                    {canEdit ? (
+                      <p className="flex min-w-0 gap-2 font-mono text-xs">
+                        <span className="w-12 shrink-0 font-semibold text-brand">PATCH</span>
+                        <span className="break-all text-foreground">
+                          /api/v1/resources/{resource.id}
+                        </span>
+                      </p>
+                    ) : null}
+                    {canDelete ? (
+                      <p className="flex min-w-0 gap-2 font-mono text-xs">
+                        <span className="w-12 shrink-0 font-semibold text-danger">DELETE</span>
+                        <span className="break-all text-foreground">
+                          /api/v1/resources/{resource.id}
+                        </span>
+                      </p>
+                    ) : null}
+                    {canViewStock && !isRoom ? (
+                      <p className="flex min-w-0 gap-2 font-mono text-xs">
+                        <span className="w-12 shrink-0 font-semibold text-brand">GET</span>
+                        <span className="break-all text-foreground">
+                          /api/v1/resources/{resource.id}/stock
+                        </span>
+                      </p>
+                    ) : null}
+                  </dd>
+                </div>
+              </dl>
+              <Link
+                href="/settings/api"
+                className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-brand hover:text-brand"
+              >
+                {t("developer.apiSettings")}
+                <ChevronRight className="size-3.5" aria-hidden="true" />
+              </Link>
             </section>
           ) : null}
 

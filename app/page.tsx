@@ -5,5 +5,5 @@ import { organizationPath } from "@/lib/organization-path";
 
 export default async function HomePage() {
   const identity = await getSessionIdentity();
-  redirect(identity ? organizationPath(identity.organization.slug, "/dashboard") : "/login");
+  redirect(identity ? organizationPath(identity.organization.slug, "/inventory") : "/login");
 }

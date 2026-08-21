@@ -17,7 +17,7 @@
   },
   "navigation": {
     "mainLabel": "Main navigation",
-    "overview": "Overview",
+    "statistics": "Statistics",
     "inventory": "Inventory",
     "entries": "Items",
     "stock": "Stock",
@@ -58,6 +58,8 @@
     "signedIn": "Signed in"
   },
   "breadcrumb": {
+    "label": "Breadcrumb",
+    "details": "Details",
     "workspace": "Workspace"
   },
   "search": {

@@ -66,6 +66,31 @@
     }
   },
   "user": {
+    "appearance": {
+      "title": "Erscheinungsbild",
+      "description": "Wähle ein helles oder dunkles Farbschema für die Benutzeroberfläche.",
+      "selectionLabel": "Farbschema"
+    },
+    "pagination": {
+      "title": "Inventar-Seitengröße",
+      "description": "Lege fest, wie viele Inventareinträge standardmäßig auf einer Seite angezeigt werden.",
+      "selectionLabel": "Einträge pro Seite",
+      "hint": "Wird beim nächsten Öffnen des Inventars verwendet.",
+      "saving": "Wird gespeichert…",
+      "saved": "Standard gespeichert.",
+      "error": "Der Standard konnte nicht gespeichert werden."
+    },
+    "developerMode": {
+      "title": "Entwicklermodus",
+      "description": "Zeigt Ressourcen-IDs, Organisationskontext und exakte API-Endpunkte bei Inventareinträgen an.",
+      "selectionLabel": "Entwicklerinformationen",
+      "enabled": "API-Informationen sind sichtbar.",
+      "disabled": "API-Informationen sind ausgeblendet.",
+      "saving": "Wird gespeichert…",
+      "saved": "Entwicklermodus gespeichert.",
+      "error": "Der Entwicklermodus konnte nicht gespeichert werden.",
+      "readOnly": "Diese Einstellung kann in einem schreibgeschützten Arbeitsbereich nicht geändert werden."
+    },
     "language": {
       "title": "Sprache der Benutzeroberfläche",
       "description": "Wähle die Sprache für Navigation, Einstellungen und andere Texte der Benutzeroberfläche.",

@@ -12,8 +12,8 @@ export function LoginForm({
   auth0Enabled,
   demoEnabled = false,
   demoHighlighted = false,
-  callbackUrl = "/dashboard",
-  demoCallbackUrl = "/demo/dashboard",
+  callbackUrl = "/inventory",
+  demoCallbackUrl = "/demo/inventory",
 }: {
   auth0Enabled: boolean;
   demoEnabled?: boolean;

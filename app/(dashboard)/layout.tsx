@@ -53,7 +53,7 @@ export default async function DashboardLayout({
   };
   if (!organizationIdentity.organization) redirect("/login");
   const originalPath =
-    requestHeaders.get("x-inventory-original-path") ?? "/dashboard";
+    requestHeaders.get("x-inventory-original-path") ?? "/inventory";
   const [pathname, query] = originalPath.split("?", 2);
   const routeReference = organizationReferenceFromPathname(pathname);
   const routeSegment = pathname.split("/").filter(Boolean)[0];

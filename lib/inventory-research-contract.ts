@@ -9,10 +9,12 @@ export const inventoryResearchResultSchema = z
     type: z.enum(resourceTypes),
     tags: z.array(z.string().trim().min(1).max(60)).max(20),
     categories: z.array(z.string().trim().min(1).max(120)).max(12),
+    sku: z.string().trim().max(80),
     serialNumber: z.string().trim().max(180),
     barcode: z.string().trim().max(180),
     valueCents: z.number().int().min(0).max(2_000_000_000).nullable(),
     currency: z.union([z.literal(""), z.string().trim().length(3).toUpperCase()]),
+    internalNotes: z.string().trim().max(8_000),
     confidence: z.number().min(0).max(1),
   })
   .strict();
@@ -27,10 +29,12 @@ export type InventoryResearchResource = {
   type: string;
   tags: string[];
   categories: Array<{ name: string; color?: string }>;
+  sku: string | null;
   serialNumber: string | null;
   barcode: string | null;
   valueCents: number | null;
   currency: string;
+  notes: string;
 };
 
 export type InventoryResearchValues = Partial<InventoryResearchResource>;
@@ -131,6 +135,10 @@ export function buildInventoryResearchValues(
   }
 
   if (research.confidence >= 0.85) {
+    if (!resource.sku && research.sku) {
+      values.sku = research.sku;
+      generatedFields.push("sku");
+    }
     if (!resource.serialNumber && research.serialNumber) {
       values.serialNumber = research.serialNumber;
       generatedFields.push("serialNumber");
@@ -148,6 +156,15 @@ export function buildInventoryResearchValues(
       values.currency = research.currency;
       generatedFields.push("valueCents", "currency");
     }
+  }
+
+  if (
+    research.confidence >= 0.65 &&
+    !resource.notes.trim() &&
+    research.internalNotes
+  ) {
+    values.notes = research.internalNotes;
+    generatedFields.push("notes");
   }
 
   return { values, generatedFields };

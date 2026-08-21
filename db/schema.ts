@@ -146,6 +146,8 @@ export const users = pgTable(
       .default("editor"),
     isActive: boolean("is_active").notNull().default(true),
     sessionVersion: integer("session_version").notNull().default(1),
+    inventoryPageSize: integer("inventory_page_size").notNull().default(50),
+    developerMode: boolean("developer_mode").notNull().default(false),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     passwordUpdatedAt: timestamp("password_updated_at", { withTimezone: true })
       .notNull()
@@ -164,6 +166,10 @@ export const users = pgTable(
     index("users_role_active_idx").on(table.role, table.isActive),
     check("users_email_lowercase", sql`${table.email} = lower(${table.email})`),
     check("users_session_version_positive", sql`${table.sessionVersion} > 0`),
+    check(
+      "users_inventory_page_size_check",
+      sql`${table.inventoryPageSize} in (50, 100, 200, 500)`,
+    ),
   ],
 );
 
@@ -571,6 +577,54 @@ export const resources = pgTable(
     check(
       "resources_custom_fields_object",
       sql`jsonb_typeof(${table.customFields}) = 'object'`,
+    ),
+  ],
+);
+
+export const resourceComments = pgTable(
+  "resource_comments",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    authorName: varchar("author_name", { length: 160 }).notNull(),
+    authorIdentityHash: varchar("author_identity_hash", {
+      length: 64,
+    }).notNull(),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "resource_comments_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    index("resource_comments_resource_created_idx").on(
+      table.organizationId,
+      table.resourceId,
+      table.createdAt,
+    ),
+    check(
+      "resource_comments_body_length_check",
+      sql`length(btrim(${table.body})) between 1 and 10000`,
+    ),
+    check(
+      "resource_comments_author_name_nonempty",
+      sql`length(btrim(${table.authorName})) > 0`,
+    ),
+    check(
+      "resource_comments_author_identity_hash_check",
+      sql`${table.authorIdentityHash} ~ '^[0-9a-f]{64}$'`,
     ),
   ],
 );
@@ -3199,6 +3253,8 @@ export const apiTokens = pgTable(
 
 export type ResourceRecord = typeof resources.$inferSelect;
 export type NewResource = typeof resources.$inferInsert;
+export type ResourceCommentRecord = typeof resourceComments.$inferSelect;
+export type NewResourceComment = typeof resourceComments.$inferInsert;
 export type ResourceVariantRecord = typeof resourceVariants.$inferSelect;
 export type NewResourceVariant = typeof resourceVariants.$inferInsert;
 export type TranslationLanguageRecord =

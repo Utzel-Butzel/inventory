@@ -233,11 +233,17 @@ export function roomSceneFootprintToGeoJson<P extends object>(
   scene: RoomScene,
   anchor: SpatialGeoreference,
   properties: P,
+  worldTransform?: SpatialMatrix4 | readonly number[] | null,
 ): Feature<Polygon | MultiPolygon, P> {
   const rings = sceneFloorPolygons(scene).map((polygon) =>
     closePositions(
       polygon.map((coordinate) =>
-        geographicPosition(localArkitToGeographic(coordinate, anchor)),
+        geographicPosition(localArkitToGeographic(
+          worldTransform
+            ? transformSpatialPoint(worldTransform, coordinate)
+            : coordinate,
+          anchor,
+        )),
       ),
     ),
   );

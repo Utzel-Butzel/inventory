@@ -1819,7 +1819,7 @@ paths:
         - { name: type, in: query, schema: { $ref: "#/components/schemas/InventoryTypeKey" } }
         - { name: status, in: query, schema: { type: string } }
         - { name: page, in: query, schema: { type: integer, minimum: 1 } }
-        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 500 } }
         - { name: language, in: query, description: Active BCP 47 content locale. Missing or stale fields fall back individually to canonical content., schema: { type: string, maxLength: 35 } }
       responses:
         "200":
@@ -3120,7 +3120,7 @@ paths:
     post:
       tags: [AI]
       summary: Add missing item details using saved content, images, and GPT web search
-      description: Preserves existing fields, appends newly researched description details, merges tags and categories, and only fills exact identifiers or value at high confidence.
+      description: Preserves existing fields, appends newly researched description details, merges tags and categories, fills tracking identifiers or value only at high confidence, and adds sourced internal notes only when blank.
       parameters:
         - { $ref: "#/components/parameters/ResourceId" }
         - { $ref: "#/components/parameters/IdempotencyKey" }
@@ -3195,6 +3195,57 @@ paths:
             Retry-After:
               schema: { type: integer, minimum: 1 }
         "502": { description: AI provider error }
+        "503": { description: Shared AI rate limiter unavailable }
+  /resources/{id}/image:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    post:
+      tags: [AI]
+      summary: Find a reusable web image or generate a new AI image and append it to an item
+      parameters:
+        - { $ref: "#/components/parameters/ResourceId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required: [mode]
+                  properties:
+                    mode: { type: string, const: search }
+                    query:
+                      type: string
+                      minLength: 1
+                      maxLength: 500
+                      description: Optional brand, model, or exact-item search hint. Saved item details are always included.
+                - type: object
+                  additionalProperties: false
+                  required: [mode]
+                  properties:
+                    mode: { type: string, const: generate }
+                    prompt:
+                      type: string
+                      minLength: 1
+                      maxLength: 5000
+                      description: Optional image direction. Omit it for a catalogue-style prompt based on the saved item.
+                    modelId:
+                      type: string
+                      maxLength: 240
+                      description: An ID returned by GET /ai/image-models. Omit it to use the deployment default.
+                    maximumImageSize:
+                      type: integer
+                      enum: [1024, 2048, 4096]
+                      default: 1024
+      responses:
+        "200": { description: Image imported or generated, appended to the item, or completed response replayed }
+        "202": { description: An operation with this key is still processing }
+        "409": { description: Idempotency key belongs to another resource or payload }
+        "422": { description: Invalid request or unavailable image model }
+        "429": { description: AI research or image-generation limit reached }
+        "502": { description: AI provider, web-search, remote-image, or storage error }
         "503": { description: Shared AI rate limiter unavailable }
   /stats:
     parameters:

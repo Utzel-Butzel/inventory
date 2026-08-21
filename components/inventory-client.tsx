@@ -6,13 +6,17 @@ import {
   ArrowRight,
   Box,
   Car,
+  Check,
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
+  CodeXml,
   Columns3,
   Grid2X2,
   Layers3,
   List,
+  ListChecks,
+  LoaderCircle,
   MapPin,
   PackageOpen,
   Search,
@@ -23,12 +27,34 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchJson, type ClientResource } from "@/lib/client-types";
+import {
+  INVENTORY_PAGE_SIZE_OPTIONS,
+  normalizeInventoryPageSize,
+  type InventoryPageSize,
+} from "@/lib/inventory-pagination";
 import { markdownToPlainText } from "@/lib/simple-markdown";
 
 type Pagination = { page: number; pageSize: number; total: number; pages: number };
 type View = "grid" | "table";
+type BatchForm = {
+  status: string;
+  type: string;
+  priority: string;
+  location: string;
+  addTags: string;
+};
 
 type InventoryTypeOption = { key: string; label: string };
+
+const MAX_BATCH_SELECTION = 100;
+
+const emptyBatchForm: BatchForm = {
+  status: "",
+  type: "",
+  priority: "",
+  location: "",
+  addTags: "",
+};
 
 const fallbackTypeKeys = [
   "tool",
@@ -94,17 +120,22 @@ function ResourceVisual({ resource }: { resource: ClientResource }) {
 
 export function InventoryClient({
   initialQuery = "",
+  initialPageSize,
+  developerMode = false,
 }: {
   initialQuery?: string;
+  initialPageSize?: number;
+  developerMode?: boolean;
 }) {
   const { t, i18n } = useT("inventory");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const normalizedInitialQuery = initialQuery.trim();
+  const normalizedInitialPageSize = normalizeInventoryPageSize(initialPageSize);
   const [resources, setResources] = useState<ClientResource[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
-    pageSize: 24,
+    pageSize: normalizedInitialPageSize,
     total: 0,
     pages: 1,
   });
@@ -113,10 +144,19 @@ export function InventoryClient({
   const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<InventoryPageSize>(
+    normalizedInitialPageSize,
+  );
   const [view, setView] = useState<View>("grid");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [inventoryTypes, setInventoryTypes] = useState<InventoryTypeOption[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchForm, setBatchForm] = useState<BatchForm>(emptyBatchForm);
+  const [applyLocation, setApplyLocation] = useState(false);
+  const [batchSaving, setBatchSaving] = useState(false);
 
   useEffect(() => {
     setQuery(normalizedInitialQuery);
@@ -150,7 +190,7 @@ export function InventoryClient({
     setError(null);
     const search = new URLSearchParams({
       page: String(page),
-      pageSize: "24",
+      pageSize: String(pageSize),
       type,
       status,
     });
@@ -167,7 +207,7 @@ export function InventoryClient({
     } finally {
       setLoading(false);
     }
-  }, [debouncedQuery, page, status, t, type]);
+  }, [debouncedQuery, page, pageSize, status, t, type]);
 
   useEffect(() => {
     void loadResources();
@@ -197,12 +237,118 @@ export function InventoryClient({
   };
   const statusLabel = (value: string) =>
     t(`statuses.${value}`, { defaultValue: value.replaceAll("-", " ") });
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const pageIds = useMemo(() => resources.map((resource) => resource.id), [resources]);
+  const pageIsSelected =
+    pageIds.length > 0 && pageIds.every((resourceId) => selectedSet.has(resourceId));
 
   const clearFilters = () => {
     setQuery("");
     setType("all");
     setStatus("all");
     setPage(1);
+  };
+
+  const clearSelection = () => {
+    setError(null);
+    setSelectedIds([]);
+    setBatchForm(emptyBatchForm);
+    setApplyLocation(false);
+  };
+
+  const toggleSelectionMode = () => {
+    if (selectionMode) clearSelection();
+    setSelectionMode(!selectionMode);
+    setError(null);
+    setNotice(null);
+  };
+
+  const toggleResourceSelection = (resourceId: string) => {
+    if (selectedSet.has(resourceId)) {
+      setError(null);
+      setSelectedIds((current) => current.filter((id) => id !== resourceId));
+      return;
+    }
+    if (selectedIds.length >= MAX_BATCH_SELECTION) {
+      setError(
+        t("batchSelection.errors.limit", {
+          max: integer.format(MAX_BATCH_SELECTION),
+        }),
+      );
+      return;
+    }
+    setError(null);
+    setSelectedIds((current) => [...current, resourceId]);
+  };
+
+  const togglePageSelection = () => {
+    if (pageIsSelected) {
+      const currentPageIds = new Set(pageIds);
+      setError(null);
+      setSelectedIds((current) => current.filter((id) => !currentPageIds.has(id)));
+      return;
+    }
+    const additions = pageIds.filter((id) => !selectedSet.has(id));
+    const remainingCapacity = MAX_BATCH_SELECTION - selectedIds.length;
+    if (remainingCapacity <= 0) {
+      setError(
+        t("batchSelection.errors.limit", {
+          max: integer.format(MAX_BATCH_SELECTION),
+        }),
+      );
+      return;
+    }
+    const selectedAdditions = additions.slice(0, remainingCapacity);
+    setSelectedIds((current) => [...current, ...selectedAdditions]);
+    setError(
+      selectedAdditions.length < additions.length
+        ? t("batchSelection.errors.limit", {
+            max: integer.format(MAX_BATCH_SELECTION),
+          })
+        : null,
+    );
+  };
+
+  const applyBatch = async () => {
+    if (!selectedIds.length) return;
+    const changes: Record<string, unknown> = {};
+    if (batchForm.status) changes.status = batchForm.status;
+    if (batchForm.type) changes.type = batchForm.type;
+    if (batchForm.priority) changes.priority = Number(batchForm.priority);
+    if (applyLocation) changes.location = batchForm.location.trim() || null;
+    const addTags = batchForm.addTags
+      .split(",")
+      .map((tag) => tag.trim().toLowerCase())
+      .filter(Boolean);
+    if (!Object.keys(changes).length && !addTags.length) {
+      setError(t("batchSelection.errors.noChanges"));
+      return;
+    }
+
+    const selectedCount = selectedIds.length;
+    setBatchSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await fetchJson<{ updated: number; ids: string[] }>("/api/v1/resources/batch", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds, changes, addTags }),
+      });
+      clearSelection();
+      setSelectionMode(false);
+      await loadResources();
+      setNotice(
+        t("batchSelection.notices.updated", {
+          count: selectedCount,
+          value: integer.format(selectedCount),
+        }),
+      );
+    } catch {
+      setError(t("batchSelection.errors.update"));
+    } finally {
+      setBatchSaving(false);
+    }
   };
 
   return (
@@ -292,6 +438,28 @@ export function InventoryClient({
                 })}
               </span>
             )}
+            <button
+              type="button"
+              onClick={toggleSelectionMode}
+              className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition ${
+                selectionMode
+                  ? "border-success-border bg-success-soft text-success"
+                  : "border-border bg-surface text-muted-strong hover:bg-surface-hover"
+              }`}
+              aria-label={
+                selectionMode
+                  ? t("batchSelection.finish")
+                  : t("batchSelection.start")
+              }
+              aria-pressed={selectionMode}
+            >
+              <ListChecks size={16} />
+              <span className="hidden sm:inline">
+                {selectionMode
+                  ? t("batchSelection.finish")
+                  : t("batchSelection.start")}
+              </span>
+            </button>
             <div className="flex rounded-xl bg-surface-muted p-1">
               <button
                 type="button"
@@ -324,6 +492,204 @@ export function InventoryClient({
         <div className="mb-5 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
           {error}
         </div>
+      ) : null}
+
+      {notice ? (
+        <div className="mb-5 rounded-xl border border-success-border bg-success-soft px-4 py-3 text-sm text-success">
+          {notice}
+        </div>
+      ) : null}
+
+      {selectionMode ? (
+        <section className="mb-5 rounded-xl border border-success-border bg-success-soft/60 p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={togglePageSelection}
+                disabled={
+                  !pageIds.length ||
+                  loading ||
+                  (!pageIsSelected && selectedIds.length >= MAX_BATCH_SELECTION)
+                }
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-success-border bg-surface px-3 text-xs font-semibold text-success disabled:opacity-40"
+              >
+                <span
+                  className={`grid size-4 place-items-center rounded border ${
+                    pageIsSelected
+                      ? "border-success bg-success text-on-brand"
+                      : "border-border-strong bg-surface"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {pageIsSelected ? <Check size={11} /> : null}
+                </span>
+                {pageIsSelected
+                  ? t("batchSelection.deselectPage")
+                  : selectedIds.length >= MAX_BATCH_SELECTION
+                    ? t("batchSelection.limitReached", {
+                        max: integer.format(MAX_BATCH_SELECTION),
+                      })
+                    : t("batchSelection.selectPage")}
+              </button>
+              <span className="text-xs font-semibold text-muted-strong" aria-live="polite">
+                {t("batchSelection.selected", {
+                  count: selectedIds.length,
+                  value: integer.format(selectedIds.length),
+                })}
+              </span>
+            </div>
+            {selectedIds.length ? (
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="text-xs font-semibold text-muted hover:text-foreground"
+              >
+                {t("batchSelection.clear")}
+              </button>
+            ) : null}
+          </div>
+
+          {selectedIds.length ? (
+            <form
+              className="mt-4 border-t border-success-border pt-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void applyBatch();
+              }}
+            >
+              <div className="mb-3">
+                <h2 className="text-sm font-semibold text-foreground">
+                  {t("batchSelection.title")}
+                </h2>
+                <p className="mt-0.5 text-xs text-muted">
+                  {t("batchSelection.description")}
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <label className="text-xs font-semibold text-muted-strong">
+                  {t("batchSelection.fields.status")}
+                  <select
+                    value={batchForm.status}
+                    onChange={(event) =>
+                      setBatchForm((current) => ({
+                        ...current,
+                        status: event.target.value,
+                      }))
+                    }
+                    className="mt-1.5 h-10 w-full rounded-lg border border-border bg-surface px-3 text-xs text-foreground outline-none focus:border-success focus:ring-4 focus:ring-success-border"
+                  >
+                    <option value="">{t("batchSelection.keepStatus")}</option>
+                    <option value="available">{t("statuses.available")}</option>
+                    <option value="in-use">{t("statuses.in-use")}</option>
+                    <option value="maintenance">{t("statuses.maintenance")}</option>
+                    <option value="archived">{t("statuses.archived")}</option>
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-muted-strong">
+                  {t("batchSelection.fields.type")}
+                  <select
+                    value={batchForm.type}
+                    onChange={(event) =>
+                      setBatchForm((current) => ({
+                        ...current,
+                        type: event.target.value,
+                      }))
+                    }
+                    className="mt-1.5 h-10 w-full rounded-lg border border-border bg-surface px-3 text-xs text-foreground outline-none focus:border-success focus:ring-4 focus:ring-success-border"
+                  >
+                    <option value="">{t("batchSelection.keepType")}</option>
+                    {typeOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-muted-strong">
+                  {t("batchSelection.fields.priority")}
+                  <select
+                    value={batchForm.priority}
+                    onChange={(event) =>
+                      setBatchForm((current) => ({
+                        ...current,
+                        priority: event.target.value,
+                      }))
+                    }
+                    className="mt-1.5 h-10 w-full rounded-lg border border-border bg-surface px-3 text-xs text-foreground outline-none focus:border-success focus:ring-4 focus:ring-success-border"
+                  >
+                    <option value="">{t("batchSelection.keepPriority")}</option>
+                    {[1, 2, 3, 4, 5].map((priority) => (
+                      <option key={priority} value={priority}>
+                        {t("batchSelection.priority", {
+                          value: integer.format(priority),
+                        })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-muted-strong sm:col-span-2">
+                  {t("batchSelection.fields.tags")}
+                  <input
+                    value={batchForm.addTags}
+                    onChange={(event) =>
+                      setBatchForm((current) => ({
+                        ...current,
+                        addTags: event.target.value,
+                      }))
+                    }
+                    placeholder={t("batchSelection.addTagsPlaceholder")}
+                    className="mt-1.5 h-10 w-full rounded-lg border border-border bg-surface px-3 text-xs text-foreground outline-none placeholder:text-muted focus:border-success focus:ring-4 focus:ring-success-border"
+                  />
+                </label>
+                <div className="text-xs font-semibold text-muted-strong">
+                  <span>{t("batchSelection.fields.location")}</span>
+                  <label className="mt-1.5 flex h-10 items-center gap-2 rounded-lg border border-border bg-surface px-3">
+                    <input
+                      type="checkbox"
+                      checked={applyLocation}
+                      onChange={(event) => setApplyLocation(event.target.checked)}
+                      className="size-4 accent-brand-solid"
+                    />
+                    {t("batchSelection.changeLocation")}
+                  </label>
+                </div>
+                {applyLocation ? (
+                  <label className="text-xs font-semibold text-muted-strong sm:col-span-2 lg:col-span-3">
+                    {t("batchSelection.locationValue")}
+                    <input
+                      value={batchForm.location}
+                      onChange={(event) =>
+                        setBatchForm((current) => ({
+                          ...current,
+                          location: event.target.value,
+                        }))
+                      }
+                      placeholder={t("batchSelection.locationPlaceholder")}
+                      className="mt-1.5 h-10 w-full rounded-lg border border-border bg-surface px-3 text-xs text-foreground outline-none placeholder:text-muted focus:border-success focus:ring-4 focus:ring-success-border"
+                    />
+                  </label>
+                ) : null}
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={batchSaving}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-strong px-4 text-xs font-semibold text-on-strong disabled:opacity-50"
+                >
+                  {batchSaving ? (
+                    <LoaderCircle size={15} className="animate-spin" />
+                  ) : (
+                    <ListChecks size={15} />
+                  )}
+                  {batchSaving
+                    ? t("batchSelection.applying")
+                    : t("batchSelection.apply")}
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </section>
       ) : null}
 
       {loading ? (
@@ -365,48 +731,99 @@ export function InventoryClient({
         </div>
       ) : view === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {resources.map((resource) => (
-            <Link
-              key={resource.id}
-              href={`/inventory/${resource.id}`}
-              className="group overflow-hidden rounded-xl border border-border bg-surface transition-colors hover:border-border-strong"
-            >
-              <div className="relative aspect-square overflow-hidden bg-surface-muted">
-                <ResourceVisual resource={resource} />
-                <span
-                  className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}
-                >
-                  {statusLabel(resource.status)}
-                </span>
-              </div>
-              <div className="p-4">
-                <div className="mb-1 flex items-start justify-between gap-3">
-                  <h2 className="line-clamp-1 font-semibold tracking-[-0.01em] text-foreground">
-                    {resource.name}
-                  </h2>
-                  <ArrowRight
-                    size={16}
-                    className="mt-0.5 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-muted-strong"
-                  />
+          {resources.map((resource) => {
+            const selected = selectedSet.has(resource.id);
+            const content = (
+              <>
+                <div className="relative aspect-square overflow-hidden bg-surface-muted">
+                  <ResourceVisual resource={resource} />
+                  <span
+                    className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}
+                  >
+                    {statusLabel(resource.status)}
+                  </span>
+                  {selectionMode ? (
+                    <span
+                      className={`absolute right-3 top-3 grid size-7 place-items-center rounded-lg border shadow-sm ${
+                        selected
+                          ? "border-success bg-success text-on-brand"
+                          : "border-border-strong bg-surface/95 text-transparent"
+                      }`}
+                      aria-hidden="true"
+                    >
+                      <Check size={16} />
+                    </span>
+                  ) : null}
                 </div>
-                <p className="line-clamp-2 min-h-10 text-xs leading-5 text-muted">
-                  {markdownToPlainText(resource.description) ||
-                    t("item.noDescription")}
-                </p>
-                <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs">
-                  <div className="flex min-w-0 items-center gap-1.5 text-muted">
-                    <MapPin size={13} className="shrink-0" />
-                    <span className="truncate">
-                      {resource.location || t("item.noLocation")}
+                <div className="p-4 text-left">
+                  <div className="mb-1 flex items-start justify-between gap-3">
+                    <h2 className="line-clamp-1 font-semibold tracking-[-0.01em] text-foreground">
+                      {resource.name}
+                    </h2>
+                    {!selectionMode ? (
+                      <ArrowRight
+                        size={16}
+                        className="mt-0.5 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-muted-strong"
+                      />
+                    ) : null}
+                  </div>
+                  <p className="line-clamp-2 min-h-10 text-xs leading-5 text-muted">
+                    {markdownToPlainText(resource.description) ||
+                      t("item.noDescription")}
+                  </p>
+                  {developerMode ? (
+                    <div className="mt-3 flex min-w-0 items-center gap-2 rounded-lg border border-brand-border bg-brand-soft/60 px-2.5 py-2 text-[10px] text-brand">
+                      <CodeXml className="size-3.5 shrink-0" aria-hidden="true" />
+                      <span className="shrink-0 font-semibold">GET</span>
+                      <code className="truncate font-mono">
+                        /api/v1/resources/{resource.id}
+                      </code>
+                    </div>
+                  ) : null}
+                  <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs">
+                    <div className="flex min-w-0 items-center gap-1.5 text-muted">
+                      <MapPin size={13} className="shrink-0" />
+                      <span className="truncate">
+                        {resource.location || t("item.noLocation")}
+                      </span>
+                    </div>
+                    <span className="ml-3 shrink-0 font-semibold text-muted-strong">
+                      {formatValue(resource.valueCents, resource.currency, locale)}
                     </span>
                   </div>
-                  <span className="ml-3 shrink-0 font-semibold text-muted-strong">
-                    {formatValue(resource.valueCents, resource.currency, locale)}
-                  </span>
                 </div>
-              </div>
-            </Link>
-          ))}
+              </>
+            );
+            const cardClass = `group block w-full overflow-hidden rounded-xl border bg-surface transition-colors ${
+              selected
+                ? "border-success ring-2 ring-success-border"
+                : "border-border hover:border-border-strong"
+            }`;
+            return selectionMode ? (
+              <button
+                key={resource.id}
+                type="button"
+                onClick={() => toggleResourceSelection(resource.id)}
+                className={cardClass}
+                aria-label={
+                  selected
+                    ? t("batchSelection.itemDeselect", { name: resource.name })
+                    : t("batchSelection.itemSelect", { name: resource.name })
+                }
+                aria-pressed={selected}
+              >
+                {content}
+              </button>
+            ) : (
+              <Link
+                key={resource.id}
+                href={`/inventory/${resource.id}`}
+                className={cardClass}
+              >
+                {content}
+              </Link>
+            );
+          })}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-border bg-surface">
@@ -419,43 +836,94 @@ export function InventoryClient({
             <span />
           </div>
           <div className="divide-y divide-border">
-            {resources.map((resource) => (
-              <Link
-                key={resource.id}
-                href={`/inventory/${resource.id}`}
-                className="group grid gap-3 px-4 py-3 transition hover:bg-surface-subtle lg:grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] lg:items-center lg:gap-4"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
-                    <ResourceVisual resource={resource} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-foreground">{resource.name}</div>
-                    <div className="mt-0.5 truncate text-xs text-muted">
-                      {typeLabel(resource.type)} · {t("item.units", {
-                        count: resource.quantity,
-                        value: integer.format(resource.quantity),
-                      })}
+            {resources.map((resource) => {
+              const selected = selectedSet.has(resource.id);
+              const content = (
+                <>
+                  <div className="flex min-w-0 items-center gap-3">
+                    {selectionMode ? (
+                      <span
+                        className={`grid size-5 shrink-0 place-items-center rounded-md border ${
+                          selected
+                            ? "border-success bg-success text-on-brand"
+                            : "border-border-strong bg-surface text-transparent"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        <Check size={12} />
+                      </span>
+                    ) : null}
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
+                      <ResourceVisual resource={resource} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-foreground">{resource.name}</div>
+                      <div className="mt-0.5 truncate text-xs text-muted">
+                        {typeLabel(resource.type)} · {t("item.units", {
+                          count: resource.quantity,
+                          value: integer.format(resource.quantity),
+                        })}
+                      </div>
+                      {developerMode ? (
+                        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-brand">
+                          <CodeXml className="size-3 shrink-0" aria-hidden="true" />
+                          <span className="shrink-0 font-semibold">GET</span>
+                          <code className="truncate font-mono">
+                            /api/v1/resources/{resource.id}
+                          </code>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
-                </div>
-                <span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
-                  {statusLabel(resource.status)}
-                </span>
-                <span className="truncate font-mono text-xs text-muted">{resource.sku || "—"}</span>
-                <span className="truncate text-xs text-muted">{resource.location || "—"}</span>
-                <span className="text-xs font-semibold text-muted-strong">
-                  {formatValue(resource.valueCents, resource.currency, locale)}
-                </span>
-                <ArrowRight size={16} className="hidden text-muted transition group-hover:translate-x-0.5 group-hover:text-muted-strong lg:block" />
-              </Link>
-            ))}
+                  <span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
+                    {statusLabel(resource.status)}
+                  </span>
+                  <span className="truncate font-mono text-xs text-muted">{resource.sku || "—"}</span>
+                  <span className="truncate text-xs text-muted">{resource.location || "—"}</span>
+                  <span className="text-xs font-semibold text-muted-strong">
+                    {formatValue(resource.valueCents, resource.currency, locale)}
+                  </span>
+                  {!selectionMode ? (
+                    <ArrowRight size={16} className="hidden text-muted transition group-hover:translate-x-0.5 group-hover:text-muted-strong lg:block" />
+                  ) : (
+                    <span className="hidden lg:block" />
+                  )}
+                </>
+              );
+              const rowClass = `group grid w-full gap-3 px-4 py-3 text-left transition lg:grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] lg:items-center lg:gap-4 ${
+                selected ? "bg-success-soft/70" : "hover:bg-surface-subtle"
+              }`;
+              return selectionMode ? (
+                <button
+                  key={resource.id}
+                  type="button"
+                  onClick={() => toggleResourceSelection(resource.id)}
+                  className={rowClass}
+                  aria-label={
+                    selected
+                      ? t("batchSelection.itemDeselect", { name: resource.name })
+                      : t("batchSelection.itemSelect", { name: resource.name })
+                  }
+                  aria-pressed={selected}
+                >
+                  {content}
+                </button>
+              ) : (
+                <Link
+                  key={resource.id}
+                  href={`/inventory/${resource.id}`}
+                  className={rowClass}
+                >
+                  {content}
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {!loading && pagination.pages > 1 ? (
-        <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
+      {!loading && resources.length > 0 ? (
+        <div className="mt-6 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted">
             {t("pagination.summary", {
               count: pagination.total,
@@ -464,23 +932,49 @@ export function InventoryClient({
               total: integer.format(pagination.total),
             })}
           </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={page <= 1}
-              onClick={() => setPage((value) => Math.max(1, value - 1))}
-              className="inline-flex h-9 items-center gap-1 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-muted-strong disabled:opacity-40"
-            >
-              <ChevronLeft size={15} /> {t("pagination.previous")}
-            </button>
-            <button
-              type="button"
-              disabled={page >= pagination.pages}
-              onClick={() => setPage((value) => Math.min(pagination.pages, value + 1))}
-              className="inline-flex h-9 items-center gap-1 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-muted-strong disabled:opacity-40"
-            >
-              {t("pagination.next")} <ChevronRight size={15} />
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex h-9 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-muted-strong">
+              <span>{t("pagination.pageSize")}</span>
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(
+                    normalizeInventoryPageSize(Number(event.target.value)),
+                  );
+                  setPage(1);
+                }}
+                className="cursor-pointer bg-transparent font-semibold outline-none"
+                aria-label={t("pagination.pageSize")}
+              >
+                {INVENTORY_PAGE_SIZE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {pagination.pages > 1 ? (
+              <>
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((value) => Math.max(1, value - 1))}
+                  className="inline-flex h-9 items-center gap-1 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-muted-strong disabled:opacity-40"
+                >
+                  <ChevronLeft size={15} /> {t("pagination.previous")}
+                </button>
+                <button
+                  type="button"
+                  disabled={page >= pagination.pages}
+                  onClick={() =>
+                    setPage((value) => Math.min(pagination.pages, value + 1))
+                  }
+                  className="inline-flex h-9 items-center gap-1 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-muted-strong disabled:opacity-40"
+                >
+                  {t("pagination.next")} <ChevronRight size={15} />
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}

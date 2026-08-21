@@ -25,7 +25,7 @@ test("organization paths use short slugs and preserve query strings", () => {
   );
   assert.equal(
     organizationPath(organizationSlug, `/${organizationId}?view=compact`),
-    `/${organizationSlug}/dashboard?view=compact`,
+    `/${organizationSlug}/inventory?view=compact`,
   );
   assert.equal(
     organizationPath(organizationSlug.toUpperCase(), "/dashboard"),
@@ -33,7 +33,7 @@ test("organization paths use short slugs and preserve query strings", () => {
   );
   assert.equal(
     organizationPath(organizationSlug, "/"),
-    `/${organizationSlug}/dashboard`,
+    `/${organizationSlug}/inventory`,
   );
 });
 

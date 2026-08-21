@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 
 function safeCallback(
   value: string | string[] | undefined,
-  fallback = "/dashboard",
+  fallback = "/inventory",
 ) {
   const candidate = Array.isArray(value) ? value[0] : value;
   return candidate?.startsWith("/") && !candidate.startsWith("//")
@@ -62,14 +62,14 @@ export default async function LoginPage({
     searchParams,
   ]);
   if (identity) {
-    redirect(organizationPath(identity.organization.slug, "/dashboard"));
+    redirect(organizationPath(identity.organization.slug, "/inventory"));
   }
   const demoHighlighted =
     demoAccessEnabled && enabledQueryFlag(resolvedSearchParams.demo);
   const callbackUrl = safeCallback(resolvedSearchParams.callbackUrl);
   const demoCallbackUrl = safeCallback(
     resolvedSearchParams.callbackUrl,
-    organizationPath(configuredDemoSlug(), "/dashboard"),
+    organizationPath(configuredDemoSlug(), "/inventory"),
   );
   const resources = getResources(translation.i18n, ["auth", "common"]);
   const { t } = translation;

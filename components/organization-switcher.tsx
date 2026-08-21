@@ -74,7 +74,7 @@ export function OrganizationSwitcher({
       window.location.assign(
         organizationPath(
           selectedOrganization?.slug ?? organization.slug,
-          "/dashboard",
+          "/inventory",
         ),
       );
     } catch (switchError) {

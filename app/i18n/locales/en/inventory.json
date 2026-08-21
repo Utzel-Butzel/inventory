@@ -192,6 +192,46 @@
     "addItem": "Add item",
     "addAnItem": "Add an item"
   },
+  "batchSelection": {
+    "start": "Select items",
+    "finish": "Exit selection",
+    "selectPage": "Select this page",
+    "deselectPage": "Deselect this page",
+    "limitReached": "{{max}}-item limit reached",
+    "selected_one": "{{value}} item selected",
+    "selected_other": "{{value}} items selected",
+    "clear": "Clear selection",
+    "title": "Batch actions",
+    "description": "Only the fields you choose will be changed on the selected items.",
+    "keepStatus": "Keep status",
+    "keepType": "Keep type",
+    "keepPriority": "Keep priority",
+    "priority": "Priority {{value}}",
+    "addTagsPlaceholder": "fragile, loaner",
+    "changeLocation": "Change location",
+    "locationValue": "New location",
+    "locationPlaceholder": "Workshop · Shelf A3 (empty clears)",
+    "apply": "Apply changes",
+    "applying": "Applying changes…",
+    "itemSelect": "Select {{name}}",
+    "itemDeselect": "Deselect {{name}}",
+    "fields": {
+      "status": "Status",
+      "type": "Type",
+      "priority": "Priority",
+      "tags": "Add tags",
+      "location": "Location"
+    },
+    "notices": {
+      "updated_one": "Updated {{value}} item.",
+      "updated_other": "Updated {{value}} items."
+    },
+    "errors": {
+      "noChanges": "Choose at least one batch change.",
+      "limit": "Batch actions support up to {{max}} items at once.",
+      "update": "The selected items could not be updated. Check your access and try again."
+    }
+  },
   "list": {
     "title": "Inventory"
   },
@@ -239,9 +279,18 @@
     "location": "Location",
     "value": "Value"
   },
+  "developer": {
+    "title": "API access",
+    "description": "Use a scoped API token and include the organization header when calling these endpoints.",
+    "resourceId": "Resource ID",
+    "organizationHeader": "Organization header",
+    "endpoints": "Available endpoints",
+    "apiSettings": "Open API settings"
+  },
   "pagination": {
     "summary_one": "Page {{page}} of {{pages}} · {{total}} item",
     "summary_other": "Page {{page}} of {{pages}} · {{total}} items",
+    "pageSize": "Items per page",
     "previous": "Previous",
     "next": "Next"
   },
@@ -369,6 +418,36 @@
     "openOnMap": "Open on map",
     "noPosition": "No geographic position has been recorded.",
     "lastUpdated": "Last updated {{date}}",
+    "comments": {
+      "title": "Comments",
+      "count_one": "{{value}} comment",
+      "count_other": "{{value}} comments",
+      "write": "Write",
+      "preview": "Preview",
+      "placeholder": "Add context, a question, or an update…",
+      "inputLabel": "New comment",
+      "editInputLabel": "Edit comment",
+      "emptyPreview": "Nothing to preview yet.",
+      "markdownHelp": "Markdown is supported.",
+      "post": "Comment",
+      "posting": "Posting…",
+      "loading": "Loading comments",
+      "retry": "Try again",
+      "emptyTitle": "No comments yet",
+      "emptyDescription": "Start the conversation about this inventory item.",
+      "edited": "edited",
+      "edit": "Edit comment",
+      "delete": "Delete comment",
+      "cancel": "Cancel",
+      "save": "Save",
+      "confirmDelete": "Delete this comment? This cannot be undone.",
+      "errors": {
+        "load": "Comments could not be loaded.",
+        "create": "The comment could not be posted.",
+        "update": "The comment could not be updated.",
+        "delete": "The comment could not be deleted."
+      }
+    },
     "roomScan": {
       "eyebrow": "Spatial inventory record",
       "title": "Room capture",

@@ -86,6 +86,19 @@ const objectColors: Record<string, number> = {
   stairs: 0x9f9788,
 };
 
+const sceneThemePalettes = {
+  light: {
+    background: 0xe7ebef,
+    gridCenter: 0xb5bcc6,
+    grid: 0xd8dde3,
+  },
+  dark: {
+    background: 0x111419,
+    gridCenter: 0x3b424d,
+    grid: 0x252b34,
+  },
+} as const;
+
 type TexturePattern = "plaster" | "grain" | "speckle";
 
 function textureNoise(x: number, y: number, seed: number) {
@@ -501,13 +514,24 @@ export function RoomSceneCanvas({
       return;
     }
 
+    const darkModePreference = window.matchMedia("(prefers-color-scheme: dark)");
+    const usesDarkMode = () => {
+      const selectedTheme = document.documentElement.dataset.theme;
+      return selectedTheme === "dark" ||
+        (selectedTheme !== "light" && darkModePreference.matches);
+    };
+    let sceneUsesDarkMode = usesDarkMode();
+    const initialScenePalette = sceneThemePalettes[
+      sceneUsesDarkMode ? "dark" : "light"
+    ];
+
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setClearColor(0xf3f5f7, 1);
+    renderer.setClearColor(initialScenePalette.background, 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
+    renderer.toneMappingExposure = 0.9;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.VSMShadowMap;
     renderer.domElement.className = "block size-full touch-none";
     renderer.domElement.tabIndex = 0;
     renderer.domElement.setAttribute(
@@ -523,12 +547,13 @@ export function RoomSceneCanvas({
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xf3f5f7, 18, 55);
+    const sceneFog = new THREE.Fog(initialScenePalette.background, 18, 55);
+    scene.fog = sceneFog;
     const roomEnvironment = new RoomEnvironment();
     const environmentGenerator = new THREE.PMREMGenerator(renderer);
     const environmentTarget = environmentGenerator.fromScene(roomEnvironment, 0.035);
     scene.environment = environmentTarget.texture;
-    scene.environmentIntensity = 0.82;
+    scene.environmentIntensity = 0.4;
     roomEnvironment.dispose();
     environmentGenerator.dispose();
 
@@ -737,18 +762,22 @@ export function RoomSceneCanvas({
     controls.maxPolarAngle = Math.PI * 0.495;
     controls.screenSpacePanning = true;
 
-    const ambientLight = new THREE.HemisphereLight(0xfffaf1, 0x66758a, 1.45);
-    scene.add(ambientLight);
+    // Open-roof architectural daylight: a cool sky and warm ground bounce keep
+    // unlit faces readable without flattening the room into uniform white.
+    const skyLight = new THREE.HemisphereLight(0xdcecff, 0x6c5847, 0.62);
+    scene.add(skyLight);
 
-    const sun = new THREE.DirectionalLight(0xfff1dc, 3.15);
+    const sun = new THREE.DirectionalLight(0xffe7c7, 2.35);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.bias = -0.00025;
-    sun.shadow.normalBias = 0.025;
+    sun.shadow.bias = -0.00008;
+    sun.shadow.normalBias = 0.006;
+    sun.shadow.radius = 4;
+    sun.shadow.blurSamples = 16;
+    sun.shadow.intensity = 0.96;
 
-    const fillLight = new THREE.DirectionalLight(0xdcecff, 1.15);
-    const rimLight = new THREE.DirectionalLight(0xffe2c2, 0.7);
-    scene.add(sun, sun.target, fillLight, fillLight.target, rimLight, rimLight.target);
+    const fillLight = new THREE.DirectionalLight(0xc9ddf2, 0.28);
+    scene.add(sun, sun.target, fillLight, fillLight.target);
 
     const webRoot = new THREE.Group();
     setMatrix(webRoot, manifest.scan.scene.webFromWorld);
@@ -818,6 +847,7 @@ export function RoomSceneCanvas({
             0,
           ],
           material: wallMaterial,
+          castShadow: true,
         }));
       }
       return wall;
@@ -1470,6 +1500,7 @@ export function RoomSceneCanvas({
         style.stemMaterial.color.setHex(selected ? 0xf97316 : 0x635bff);
         style.halo.visible = selected;
       }
+      renderer.shadowMap.needsUpdate = true;
     };
     selectionCommandRef.current = applySelection;
     applySelection(selectedResourceRef.current);
@@ -1501,23 +1532,99 @@ export function RoomSceneCanvas({
       .copy(center)
       .add(new THREE.Vector3(-radius * 1.6, radius * 1.1, -radius * 0.9));
     fillLight.target.position.copy(center);
-    rimLight.position
-      .copy(center)
-      .add(new THREE.Vector3(radius * 0.25, radius * 1.4, -radius * 1.8));
-    rimLight.target.position.copy(center);
+    // Fit the sun's orthographic shadow camera to the actual room bounds. A
+    // tighter projection spends the full 2K map on visible geometry instead of
+    // empty space, which gives the filtered VSM penumbra much finer contact
+    // detail than a radius-based square frustum.
+    sun.updateMatrixWorld(true);
+    sun.target.updateMatrixWorld(true);
+    const shadowCamera = sun.shadow.camera;
+    shadowCamera.position.copy(sun.position);
+    shadowCamera.lookAt(sun.target.position);
+    shadowCamera.updateMatrixWorld(true);
+    const lightSpaceBounds = new THREE.Box3().makeEmpty();
+    for (const x of [box.min.x, box.max.x]) {
+      for (const y of [box.min.y, box.max.y]) {
+        for (const z of [box.min.z, box.max.z]) {
+          lightSpaceBounds.expandByPoint(
+            new THREE.Vector3(x, y, z).applyMatrix4(
+              shadowCamera.matrixWorldInverse,
+            ),
+          );
+        }
+      }
+    }
+    const shadowMargin = THREE.MathUtils.clamp(radius * 0.08, 0.3, 1.25);
+    shadowCamera.left = lightSpaceBounds.min.x - shadowMargin;
+    shadowCamera.right = lightSpaceBounds.max.x + shadowMargin;
+    shadowCamera.bottom = lightSpaceBounds.min.y - shadowMargin;
+    shadowCamera.top = lightSpaceBounds.max.y + shadowMargin;
+    shadowCamera.near = Math.max(0.1, -lightSpaceBounds.max.z - shadowMargin);
+    shadowCamera.far = Math.max(
+      shadowCamera.near + 1,
+      -lightSpaceBounds.min.z + shadowMargin,
+    );
+    shadowCamera.updateProjectionMatrix();
 
-    const shadowExtent = radius * 1.45;
-    sun.shadow.camera.left = -shadowExtent;
-    sun.shadow.camera.right = shadowExtent;
-    sun.shadow.camera.top = shadowExtent;
-    sun.shadow.camera.bottom = -shadowExtent;
-    sun.shadow.camera.near = Math.max(0.1, radius * 0.05);
-    sun.shadow.camera.far = radius * 6;
-    sun.shadow.camera.updateProjectionMatrix();
+    const shadowWorldSize = Math.max(
+      shadowCamera.right - shadowCamera.left,
+      shadowCamera.top - shadowCamera.bottom,
+    );
+    const shadowWorldUnitsPerTexel = shadowWorldSize / sun.shadow.mapSize.x;
+    // Approximately 5.5 cm of softness remains visually consistent across a
+    // single room and a linked floor, while the scaled normal offset prevents
+    // acne without pulling the shadow away from its caster.
+    sun.shadow.radius = THREE.MathUtils.clamp(
+      0.055 / shadowWorldUnitsPerTexel,
+      2.5,
+      7,
+    );
+    sun.shadow.normalBias = THREE.MathUtils.clamp(
+      shadowWorldUnitsPerTexel * 0.75,
+      0.0025,
+      0.018,
+    );
     const gridSize = Math.max(10, Math.ceil(Math.max(size.x, size.z) * 1.8));
-    const grid = new THREE.GridHelper(gridSize, Math.max(10, gridSize * 2), 0xb5bcc6, 0xd8dde3);
-    grid.position.set(center.x, box.min.y - 0.025, center.z);
+    const createGrid = (darkMode: boolean) => {
+      const palette = sceneThemePalettes[darkMode ? "dark" : "light"];
+      const helper = new THREE.GridHelper(
+        gridSize,
+        Math.max(10, gridSize * 2),
+        palette.gridCenter,
+        palette.grid,
+      );
+      helper.position.set(center.x, box.min.y - 0.025, center.z);
+      return helper;
+    };
+    const disposeGrid = (helper: THREE.GridHelper) => {
+      helper.geometry.dispose();
+      const gridMaterials = Array.isArray(helper.material)
+        ? helper.material
+        : [helper.material];
+      gridMaterials.forEach((material) => material.dispose());
+    };
+    let grid = createGrid(sceneUsesDarkMode);
     scene.add(grid);
+
+    const applySceneTheme = () => {
+      const darkMode = usesDarkMode();
+      const palette = sceneThemePalettes[darkMode ? "dark" : "light"];
+      renderer.setClearColor(palette.background, 1);
+      sceneFog.color.setHex(palette.background);
+      if (darkMode === sceneUsesDarkMode) return;
+
+      sceneUsesDarkMode = darkMode;
+      scene.remove(grid);
+      disposeGrid(grid);
+      grid = createGrid(darkMode);
+      scene.add(grid);
+    };
+    const themeObserver = new MutationObserver(applySceneTheme);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    darkModePreference.addEventListener("change", applySceneTheme);
 
     webRoot.updateMatrixWorld(true);
     const playerRadius = 0.2;
@@ -1715,6 +1822,7 @@ export function RoomSceneCanvas({
     resize();
 
     let animationFrame = 0;
+    let shadowMapSettled = false;
     const clock = new THREE.Clock();
     const draw = () => {
       animationFrame = requestAnimationFrame(draw);
@@ -1753,6 +1861,12 @@ export function RoomSceneCanvas({
         controls.update();
       }
       renderer.render(scene, camera);
+      if (!shadowMapSettled) {
+        // Room geometry and the sun are static. Keep the costly 16-sample VSM
+        // blur cached after its first render; selections request a refresh.
+        renderer.shadowMap.autoUpdate = false;
+        shadowMapSettled = true;
+      }
     };
     draw();
 
@@ -1762,6 +1876,8 @@ export function RoomSceneCanvas({
       photoRequestController?.abort();
       cancelAnimationFrame(animationFrame);
       observer.disconnect();
+      themeObserver.disconnect();
+      darkModePreference.removeEventListener("change", applySceneTheme);
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointermove", onPointerMove);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);

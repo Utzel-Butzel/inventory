@@ -140,5 +140,5 @@ export function organizationPath(organizationReference: string, href: string) {
   const normalizedReference = organizationReference.toLowerCase();
   const existingPagePath = organizationPagePathFromPathname(pathname);
   const unscopedHref = existingPagePath ?? pathname;
-  return `/${normalizedReference}${unscopedHref === "/" ? "/dashboard" : unscopedHref}${suffix}`;
+  return `/${normalizedReference}${unscopedHref === "/" ? "/inventory" : unscopedHref}${suffix}`;
 }

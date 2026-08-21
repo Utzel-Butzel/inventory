@@ -14,6 +14,9 @@ import type {
   RoomCameraIntrinsics,
   RoomKeyframeFeatureDescriptor,
 } from "@/lib/room-keyframe-contract";
+import type { ResourceCommentDto } from "@/lib/resource-comment-contract";
+
+export type ClientResourceComment = ResourceCommentDto;
 
 export type ClientMedia = Omit<MediaRecord, "createdAt"> & {
   createdAt: string;

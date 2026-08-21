@@ -192,6 +192,46 @@
     "addItem": "Eintrag hinzufügen",
     "addAnItem": "Eintrag hinzufügen"
   },
+  "batchSelection": {
+    "start": "Einträge auswählen",
+    "finish": "Auswahl beenden",
+    "selectPage": "Diese Seite auswählen",
+    "deselectPage": "Diese Seite abwählen",
+    "limitReached": "Limit von {{max}} Einträgen erreicht",
+    "selected_one": "{{value}} Eintrag ausgewählt",
+    "selected_other": "{{value}} Einträge ausgewählt",
+    "clear": "Auswahl aufheben",
+    "title": "Stapelaktionen",
+    "description": "Nur die ausgewählten Felder werden bei den markierten Einträgen geändert.",
+    "keepStatus": "Status beibehalten",
+    "keepType": "Typ beibehalten",
+    "keepPriority": "Priorität beibehalten",
+    "priority": "Priorität {{value}}",
+    "addTagsPlaceholder": "zerbrechlich, Leihgerät",
+    "changeLocation": "Standort ändern",
+    "locationValue": "Neuer Standort",
+    "locationPlaceholder": "Werkstatt · Regal A3 (leer löscht)",
+    "apply": "Änderungen anwenden",
+    "applying": "Änderungen werden angewendet…",
+    "itemSelect": "{{name}} auswählen",
+    "itemDeselect": "{{name}} abwählen",
+    "fields": {
+      "status": "Status",
+      "type": "Typ",
+      "priority": "Priorität",
+      "tags": "Tags hinzufügen",
+      "location": "Standort"
+    },
+    "notices": {
+      "updated_one": "{{value}} Eintrag wurde aktualisiert.",
+      "updated_other": "{{value}} Einträge wurden aktualisiert."
+    },
+    "errors": {
+      "noChanges": "Wähle mindestens eine Stapeländerung aus.",
+      "limit": "Stapelaktionen unterstützen bis zu {{max}} Einträge auf einmal.",
+      "update": "Die ausgewählten Einträge konnten nicht aktualisiert werden. Prüfe deine Zugriffsrechte und versuche es erneut."
+    }
+  },
   "list": {
     "title": "Inventar"
   },
@@ -239,9 +279,18 @@
     "location": "Standort",
     "value": "Wert"
   },
+  "developer": {
+    "title": "API-Zugriff",
+    "description": "Verwende ein bereichsbezogenes API-Token und sende bei diesen Endpunkten den Organisations-Header mit.",
+    "resourceId": "Ressourcen-ID",
+    "organizationHeader": "Organisations-Header",
+    "endpoints": "Verfügbare Endpunkte",
+    "apiSettings": "API-Einstellungen öffnen"
+  },
   "pagination": {
     "summary_one": "Seite {{page}} von {{pages}} · {{total}} Eintrag",
     "summary_other": "Seite {{page}} von {{pages}} · {{total}} Einträge",
+    "pageSize": "Einträge pro Seite",
     "previous": "Zurück",
     "next": "Weiter"
   },
@@ -369,6 +418,36 @@
     "openOnMap": "Auf Karte öffnen",
     "noPosition": "Es wurde keine geografische Position erfasst.",
     "lastUpdated": "Zuletzt aktualisiert am {{date}}",
+    "comments": {
+      "title": "Kommentare",
+      "count_one": "{{value}} Kommentar",
+      "count_other": "{{value}} Kommentare",
+      "write": "Schreiben",
+      "preview": "Vorschau",
+      "placeholder": "Kontext, eine Frage oder ein Update hinzufügen…",
+      "inputLabel": "Neuer Kommentar",
+      "editInputLabel": "Kommentar bearbeiten",
+      "emptyPreview": "Noch nichts für die Vorschau vorhanden.",
+      "markdownHelp": "Markdown wird unterstützt.",
+      "post": "Kommentieren",
+      "posting": "Wird gesendet…",
+      "loading": "Kommentare werden geladen",
+      "retry": "Erneut versuchen",
+      "emptyTitle": "Noch keine Kommentare",
+      "emptyDescription": "Beginne eine Unterhaltung über diesen Inventareintrag.",
+      "edited": "bearbeitet",
+      "edit": "Kommentar bearbeiten",
+      "delete": "Kommentar löschen",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "confirmDelete": "Diesen Kommentar löschen? Dies kann nicht rückgängig gemacht werden.",
+      "errors": {
+        "load": "Die Kommentare konnten nicht geladen werden.",
+        "create": "Der Kommentar konnte nicht gesendet werden.",
+        "update": "Der Kommentar konnte nicht aktualisiert werden.",
+        "delete": "Der Kommentar konnte nicht gelöscht werden."
+      }
+    },
     "roomScan": {
       "eyebrow": "Räumlicher Inventareintrag",
       "title": "Raumerfassung",

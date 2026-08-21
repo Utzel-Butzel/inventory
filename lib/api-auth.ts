@@ -23,6 +23,11 @@ import {
 } from "@/lib/access-control-contract";
 import { db } from "@/lib/db";
 import {
+  DEFAULT_INVENTORY_PAGE_SIZE,
+  normalizeInventoryPageSize,
+  type InventoryPageSize,
+} from "@/lib/inventory-pagination";
+import {
   isPinnedReadOnlyDemoMembershipSet,
   organizationAllowsPermission,
   PUBLIC_DEMO_ORGANIZATION_ID,
@@ -60,6 +65,8 @@ export type RequestIdentity = {
   organizationId: string;
   organization: IdentityOrganization;
   organizations: IdentityOrganization[];
+  inventoryPageSize: InventoryPageSize;
+  developerMode: boolean;
   userId?: string;
   tokenId?: string;
 };
@@ -191,6 +198,8 @@ async function identityForUser(options: {
     organizationId: selected.id,
     organization,
     organizations: memberships.map(identityOrganization),
+    inventoryPageSize: normalizeInventoryPageSize(options.user.inventoryPageSize),
+    developerMode: options.user.developerMode,
     userId: options.user.id,
     ...(options.tokenId ? { tokenId: options.tokenId } : {}),
   } satisfies RequestIdentity;
@@ -292,6 +301,8 @@ export async function getRequestIdentity(
       organizationId: organization.id,
       organization,
       organizations: [organization],
+      inventoryPageSize: DEFAULT_INVENTORY_PAGE_SIZE,
+      developerMode: false,
       tokenId: token.id,
     } satisfies RequestIdentity;
     if (!organization.isReadOnly) {

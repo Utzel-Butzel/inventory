@@ -40,6 +40,10 @@ import {
   type NewResource,
   type ResourceRecord,
 } from "@/db/schema";
+import {
+  DEFAULT_INVENTORY_PAGE_SIZE,
+  MAX_INVENTORY_PAGE_SIZE,
+} from "@/lib/inventory-pagination";
 import { db } from "@/lib/db";
 import {
   enqueueStockMovementWebhookEvents,
@@ -131,7 +135,10 @@ export async function listResources(options: {
   pageSize?: number;
 }) {
   const page = Math.max(1, options.page ?? 1);
-  const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 24));
+  const pageSize = Math.min(
+    MAX_INVENTORY_PAGE_SIZE,
+    Math.max(1, options.pageSize ?? DEFAULT_INVENTORY_PAGE_SIZE),
+  );
   const conditions = [eq(resources.organizationId, options.organizationId)];
 
   if (options.query?.trim()) {

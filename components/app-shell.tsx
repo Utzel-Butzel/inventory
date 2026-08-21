@@ -31,7 +31,6 @@ import {
   type ActiveOrganization,
   type OrganizationMembershipSummary,
 } from "@/components/organization-switcher";
-import { LocalizedThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/components/ui";
 import { BrandMark } from "@/components/brand-mark";
 import type { UserRole } from "@/db/schema";
@@ -65,12 +64,6 @@ const navigation: Array<{
   children?: NavigationChild[];
 }> = [
   {
-    labelKey: "navigation.overview",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    permission: "inventory.read",
-  },
-  {
     labelKey: "navigation.inventory",
     href: "/inventory",
     icon: PackageOpen,
@@ -93,6 +86,12 @@ const navigation: Array<{
         permission: "inventory.read",
       },
     ],
+  },
+  {
+    labelKey: "navigation.statistics",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    permission: "inventory.read",
   },
   {
     labelKey: "navigation.stock",
@@ -123,7 +122,7 @@ const navigation: Array<{
 ];
 
 const pageNames: Record<string, string> = {
-  dashboard: "navigation.overview",
+  dashboard: "navigation.statistics",
   inventory: "navigation.inventory",
   stock: "navigation.stock",
   map: "navigation.map",
@@ -310,7 +309,7 @@ function SidebarContent({
     <div className="flex h-full flex-col bg-surface-subtle">
       <div className="flex h-[68px] items-center px-5">
         <Link
-          href="/dashboard"
+          href="/inventory"
           onClick={onNavigate}
           className="flex items-center gap-2.5 rounded-lg text-foreground"
         >
@@ -412,9 +411,6 @@ function SidebarContent({
       </nav>
 
       <div className="border-t border-border p-3">
-        <div className="mb-2 flex justify-end px-2">
-          <LocalizedThemeToggle />
-        </div>
         <div className="flex items-center gap-2.5 rounded-xl px-2 py-2">
           <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft text-[10px] font-bold text-brand">
             {initials(user.name, user.email, t("user.generic"))}
@@ -465,13 +461,20 @@ export function AppShell({
   const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileCloseButtonRef = useRef<HTMLButtonElement>(null);
   const pathSegments = scopedPathname.split("/").filter(Boolean);
-  const section = pathSegments[0] ?? "dashboard";
+  const section = pathSegments[0] ?? "inventory";
   const pageName = t(pageNames[section] ?? "navigation.inventory");
   const settingsPageKey =
     section === "settings" && pathSegments[1]
       ? settingsPageNames[pathSegments[1]]
       : undefined;
   const settingsPageName = settingsPageKey ? t(settingsPageKey) : undefined;
+  const inventoryDetailPageName =
+    section === "inventory" &&
+    pathSegments.length === 2 &&
+    pathSegments[1] !== "new"
+      ? t("breadcrumb.details")
+      : undefined;
+  const nestedPageName = settingsPageName ?? inventoryDetailPageName;
   const showGlobalSearch = scopedPathname !== "/inventory";
 
   const closeMobileNavigation = () => {
@@ -599,32 +602,54 @@ export function AppShell({
             <Menu className="size-[18px]" aria-hidden="true" />
           </button>
 
-          <div className="min-w-0 text-sm">
-            <span className="block truncate font-semibold text-foreground lg:hidden">
-              {settingsPageName ?? pageName}
-            </span>
-            <div className="hidden min-w-0 items-center gap-2 lg:flex">
-              <span className="max-w-40 truncate text-muted">
-                {organization.name}
-              </span>
-              <ChevronRight
-                className="size-3.5 shrink-0 text-muted"
-                aria-hidden="true"
-              />
-              <span className="shrink-0 font-semibold text-foreground">
-                {pageName}
-              </span>
-              {settingsPageName ? (
-                <ChevronRight
-                  className="size-3.5 shrink-0 text-muted"
-                  aria-hidden="true"
-                />
+          <nav
+            aria-label={t("breadcrumb.label")}
+            className="min-w-0 flex-1 overflow-hidden text-sm"
+          >
+            <ol className="flex min-w-0 items-center gap-2">
+              <li className="min-w-0 shrink">
+                <Link
+                  href="/"
+                  className="block max-w-24 truncate text-muted transition hover:text-foreground sm:max-w-40"
+                >
+                  {organization.name}
+                </Link>
+              </li>
+              <li aria-hidden="true">
+                <ChevronRight className="size-3.5 shrink-0 text-muted" />
+              </li>
+              <li className={cn("min-w-0", !nestedPageName && "truncate")}>
+                {nestedPageName ? (
+                  <Link
+                    href={`/${section}`}
+                    className="font-semibold text-foreground transition hover:text-brand"
+                  >
+                    {pageName}
+                  </Link>
+                ) : (
+                  <span
+                    aria-current="page"
+                    className="font-semibold text-foreground"
+                  >
+                    {pageName}
+                  </span>
+                )}
+              </li>
+              {nestedPageName ? (
+                <li aria-hidden="true">
+                  <ChevronRight className="size-3.5 shrink-0 text-muted" />
+                </li>
               ) : null}
-              {settingsPageName ? (
-                <span className="truncate font-semibold text-foreground">{settingsPageName}</span>
+              {nestedPageName ? (
+                <li
+                  aria-current="page"
+                  className="min-w-0 truncate font-semibold text-foreground"
+                >
+                  {nestedPageName}
+                </li>
               ) : null}
-            </div>
-          </div>
+            </ol>
+          </nav>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             {showGlobalSearch ? (

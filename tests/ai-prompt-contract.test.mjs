@@ -8,7 +8,11 @@ import {
   defaultInventoryResearchPrompt,
   defaultTransparentCoverPrompt,
 } from "../lib/ai-prompts.ts";
-import { analyzeInputSchema, coverInputSchema } from "../lib/validators.ts";
+import {
+  analyzeInputSchema,
+  coverInputSchema,
+  inventoryImageInputSchema,
+} from "../lib/validators.ts";
 
 test("analysis prompt overrides are optional, trimmed, and bounded", () => {
   assert.deepEqual(analyzeInputSchema.parse({}), { overwrite: true });
@@ -46,6 +50,34 @@ test("cover prompt overrides remain optional, trimmed, and bounded", () => {
   );
   assert.equal(
     coverInputSchema.safeParse({ prompt: "x".repeat(5_001) }).success,
+    false,
+  );
+});
+
+test("image acquisition keeps web search and generation inputs separate", () => {
+  assert.deepEqual(inventoryImageInputSchema.parse({ mode: "search" }), {
+    mode: "search",
+  });
+  assert.deepEqual(
+    inventoryImageInputSchema.parse({
+      mode: "generate",
+      prompt: "  Neutral catalogue photo.  ",
+      maximumImageSize: 2048,
+    }),
+    {
+      mode: "generate",
+      prompt: "Neutral catalogue photo.",
+      maximumImageSize: 2048,
+    },
+  );
+  assert.equal(
+    inventoryImageInputSchema.safeParse({ mode: "search", modelId: "model" })
+      .success,
+    false,
+  );
+  assert.equal(
+    inventoryImageInputSchema.safeParse({ mode: "generate", query: "drill" })
+      .success,
     false,
   );
 });

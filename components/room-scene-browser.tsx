@@ -74,6 +74,17 @@ const RoomSceneCanvas = dynamic(
   },
 );
 
+const RoomLayoutMapCanvas = dynamic(
+  () =>
+    import("@/components/room-layout-map-canvas").then(
+      (module) => module.RoomLayoutMapCanvas,
+    ),
+  {
+    ssr: false,
+    loading: () => <RoomSceneLoading />,
+  },
+);
+
 const formatDate = (value: string, locale: string) =>
   new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
@@ -105,6 +116,7 @@ export function RoomSceneBrowser() {
   const [selectedFloorIdentifier, setSelectedFloorIdentifier] = useState<string | null>(null);
   const [layoutDrafts, setLayoutDrafts] = useState<Record<string, SpatialMatrix4> | null>(null);
   const [layoutRoomId, setLayoutRoomId] = useState<string | null>(null);
+  const [layoutMapEnabled, setLayoutMapEnabled] = useState(false);
   const [savingLayout, setSavingLayout] = useState(false);
   const sceneRequestRef = useRef(0);
 
@@ -385,8 +397,24 @@ export function RoomSceneBrowser() {
   );
 
   const beginLayout = () => {
+    setLayoutMapEnabled(false);
     setLayoutDrafts(Object.fromEntries(effectiveTransforms) as Record<string, SpatialMatrix4>);
     setLayoutRoomId(selectedScanId ?? floorManifests[0]?.scan.id ?? null);
+  };
+  const closeLayout = () => {
+    setLayoutDrafts(null);
+    setLayoutMapEnabled(false);
+  };
+  const setMapLayoutEnabled = (enabled: boolean) => {
+    setLayoutMapEnabled(enabled);
+    if (!enabled) return;
+    // Geographic editing starts from the captured AR world transform. The 3D
+    // automatic layout deliberately places unarranged rooms side by side and
+    // therefore cannot be aligned to a north-up basemap.
+    setLayoutDrafts(Object.fromEntries(floorManifests.map((item) => [
+      item.scan.id,
+      item.scan.layoutTransform ?? item.scan.scene.worldFromModel,
+    ])) as Record<string, SpatialMatrix4>);
   };
   const adjustRoomLayout = (
     scanId: string,
@@ -399,6 +427,13 @@ export function RoomSceneBrowser() {
     });
   };
   const resetAutomaticLayout = () => {
+    if (layoutMapEnabled) {
+      setLayoutDrafts(Object.fromEntries(floorManifests.map((item) => [
+        item.scan.id,
+        item.scan.scene.worldFromModel,
+      ])) as Record<string, SpatialMatrix4>);
+      return;
+    }
     const reset = arrangeFloorRooms(floorManifests.map((item) => ({
       id: item.scan.id,
       coordinateSpaceId: item.scan.coordinateSpaceId,
@@ -448,6 +483,7 @@ export function RoomSceneBrowser() {
           }
         : current);
       setLayoutDrafts(null);
+      setLayoutMapEnabled(false);
     } catch {
       setError(t("rooms.errors.saveLayout"));
     } finally {
@@ -607,10 +643,10 @@ export function RoomSceneBrowser() {
               <MapIcon className="size-3.5" aria-hidden="true" /> {t("rooms.structures.viewMap")}
             </Link>
           ) : null}
-          {floorManifests.length > 1 ? (
+          {floorManifests.length ? (
             <button
               type="button"
-              onClick={layoutDrafts ? () => setLayoutDrafts(null) : beginLayout}
+              onClick={layoutDrafts ? closeLayout : beginLayout}
               className={cn(
                 "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-[11px] font-semibold transition",
                 layoutDrafts
@@ -694,7 +730,18 @@ export function RoomSceneBrowser() {
         </aside>
 
         <section className="relative order-1 min-h-[430px] overflow-hidden bg-surface-muted lg:order-2">
-          {visibleManifest && !loadingScene ? (
+          {layoutDrafts && layoutMapEnabled ? (
+            <RoomLayoutMapCanvas
+              manifests={visibleManifests}
+              selectedScanId={layoutRoomId}
+              onSelectRoom={setLayoutRoomId}
+              onChangeTransform={(scanId, transform) => {
+                setLayoutDrafts((current) => current
+                  ? { ...current, [scanId]: transform }
+                  : current);
+              }}
+            />
+          ) : visibleManifest && !loadingScene ? (
             <RoomSceneCanvas
               manifest={visibleManifest}
               linkedManifests={linkedManifests}
@@ -744,6 +791,29 @@ export function RoomSceneBrowser() {
                   </option>
                 ))}
               </select>
+              <label className="mt-3 flex items-start gap-2.5 rounded-xl border border-border bg-surface-subtle p-2.5 text-left">
+                <input
+                  type="checkbox"
+                  checked={layoutMapEnabled}
+                  onChange={(event) => setMapLayoutEnabled(event.target.checked)}
+                  disabled={!floorManifests.some(
+                    (item) => Boolean(item.scan.georeference ?? item.georeference),
+                  )}
+                  className="mt-0.5 size-4 shrink-0 accent-brand-solid disabled:opacity-50"
+                />
+                <span>
+                  <span className="block text-[11px] font-semibold text-foreground">
+                    {t("rooms.layout.mapBackground")}
+                  </span>
+                  <span className="mt-0.5 block text-[9px] leading-4 text-muted">
+                    {floorManifests.some(
+                      (item) => Boolean(item.scan.georeference ?? item.georeference),
+                    )
+                      ? t("rooms.layout.mapHint")
+                      : t("rooms.layout.mapUnavailable")}
+                  </span>
+                </span>
+              </label>
               <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <button
                   type="button"
@@ -803,12 +873,14 @@ export function RoomSceneBrowser() {
                 </button>
               </div>
               <p className="mt-2 text-center text-[9px] text-muted">
-                {t("rooms.layout.step")}
+                {layoutMapEnabled
+                  ? t("rooms.layout.mapStep")
+                  : t("rooms.layout.step")}
               </p>
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setLayoutDrafts(null)}
+                  onClick={closeLayout}
                   disabled={savingLayout}
                   className="h-9 flex-1 rounded-xl border border-border text-[11px] font-semibold text-muted hover:bg-surface-hover disabled:opacity-50"
                 >

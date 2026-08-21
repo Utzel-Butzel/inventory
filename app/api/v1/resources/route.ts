@@ -30,6 +30,7 @@ import {
   assertResourceIdentifiersAvailable,
   ResourceIdentifierConflictError,
 } from "@/lib/resource-identifiers";
+import { DEFAULT_INVENTORY_PAGE_SIZE } from "@/lib/inventory-pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -39,14 +40,18 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const page = Number(url.searchParams.get("page") ?? "1");
-  const pageSize = Number(url.searchParams.get("pageSize") ?? "24");
+  const pageSize = Number(
+    url.searchParams.get("pageSize") ?? DEFAULT_INVENTORY_PAGE_SIZE,
+  );
   const result = await listResources({
     organizationId: authorization.identity.organizationId,
     query: url.searchParams.get("q") ?? undefined,
     type: url.searchParams.get("type") ?? undefined,
     status: url.searchParams.get("status") ?? undefined,
     page: Number.isFinite(page) ? page : 1,
-    pageSize: Number.isFinite(pageSize) ? pageSize : 24,
+    pageSize: Number.isFinite(pageSize)
+      ? pageSize
+      : DEFAULT_INVENTORY_PAGE_SIZE,
   });
   try {
     const localized = await localizeResourceList(

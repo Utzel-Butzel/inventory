@@ -66,6 +66,31 @@
     }
   },
   "user": {
+    "appearance": {
+      "title": "Appearance",
+      "description": "Choose whether the interface uses a light or dark color theme.",
+      "selectionLabel": "Color theme"
+    },
+    "pagination": {
+      "title": "Inventory pagination",
+      "description": "Choose how many inventory items are shown on each page by default.",
+      "selectionLabel": "Items per page",
+      "hint": "Used the next time you open the inventory.",
+      "saving": "Saving…",
+      "saved": "Default saved.",
+      "error": "The default could not be saved."
+    },
+    "developerMode": {
+      "title": "Developer Mode",
+      "description": "Show resource IDs, organization context, and exact API endpoints beside inventory items.",
+      "selectionLabel": "Developer information",
+      "enabled": "API information is visible.",
+      "disabled": "API information is hidden.",
+      "saving": "Saving…",
+      "saved": "Developer Mode saved.",
+      "error": "Developer Mode could not be saved.",
+      "readOnly": "This preference cannot be changed in a read-only workspace."
+    },
     "language": {
       "title": "Interface language",
       "description": "Choose the language used for navigation, settings, and other interface text.",

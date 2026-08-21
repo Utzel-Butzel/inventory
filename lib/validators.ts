@@ -490,6 +490,23 @@ export const coverInputSchema = z.object({
   transparencyMethod: z.enum(coverTransparencyMethods).optional(),
 });
 
+export const inventoryImageInputSchema = z.discriminatedUnion("mode", [
+  z
+    .object({
+      mode: z.literal("search"),
+      query: z.string().trim().min(1).max(500).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      mode: z.literal("generate"),
+      prompt: z.string().trim().min(1).max(5_000).optional(),
+      modelId: z.string().trim().min(1).max(240).optional(),
+      maximumImageSize: z.literal(maximumGeneratedImageSizes).optional(),
+    })
+    .strict(),
+]);
+
 export const inventoryCountInputSchema = z
   .object({
     itemHint: z.string().trim().min(1).max(240).optional(),

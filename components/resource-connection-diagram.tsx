@@ -93,16 +93,6 @@ const kindColor: Record<ConnectionDiagramKind, string> = {
   relationship: "var(--color-info)",
 };
 
-const kindBadgeTone: Record<
-  ConnectionDiagramKind,
-  "brand" | "warning" | "success" | "neutral"
-> = {
-  family: "brand",
-  bom: "warning",
-  containment: "success",
-  relationship: "neutral",
-};
-
 const stockTone: Record<
   ConnectionStockStatus,
   { badge: string; media: string }
@@ -1720,14 +1710,6 @@ function PositionedGraphNode({
             <ConnectionIcon kind={kind} />
           )}
         </span>
-        {!isRoot && item.node.connections.length > 1 ? (
-          <Badge
-            tone={kindBadgeTone[kind]}
-            className="absolute -right-2 bottom-0 min-h-5 px-1.5 text-[9px]"
-          >
-            {item.node.connections.length}
-          </Badge>
-        ) : null}
         {stock ? (
           <StockIndicator
             stock={stock}

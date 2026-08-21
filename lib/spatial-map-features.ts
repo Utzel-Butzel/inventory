@@ -16,8 +16,10 @@ import {
   localArkitToGeographic,
   localFloorRingToGeoJson,
   roomSceneFootprintToGeoJson,
+  transformSpatialPoint,
   type SpatialGeoreference,
 } from "@/lib/spatial-georeference";
+import { roomWorldDeltaTransform } from "@/lib/room-floor-layout";
 
 export type SpatialMapFeatureKind =
   | "structure-marker"
@@ -144,15 +146,23 @@ function roomFeatures(
     ...(coordinateSpaceId ? { coordinateSpaceId } : {}),
     selected,
   };
+  const roomWorldDelta = roomWorldDeltaTransform(
+    room.scan.scene.worldFromModel,
+    room.scan.layoutTransform,
+  );
   const footprint = roomSceneFootprintToGeoJson(
     room.scan.scene,
     anchor,
     { spatialKind: "room-footprint" as const, ...baseProperties },
+    roomWorldDelta,
   );
   footprint.id = `room-footprint:${room.scan.id}`;
 
   const placements: SpatialMapFeature[] = room.placements.map((placement) => {
-    const coordinate = localArkitToGeographic(placement.position, anchor);
+    const coordinate = localArkitToGeographic(
+      transformSpatialPoint(roomWorldDelta, placement.position),
+      anchor,
+    );
     return {
       type: "Feature",
       id: `positioned-item:${placement.id}`,

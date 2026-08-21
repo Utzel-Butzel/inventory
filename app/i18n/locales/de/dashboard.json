@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "title": "Übersicht"
+    "title": "Statistik"
   },
   "greeting": {
     "morning": "Guten Morgen",
@@ -12,8 +12,8 @@
     "viewAll": "Alle anzeigen"
   },
   "errors": {
-    "load": "Die Dashboard-Daten konnten nicht geladen werden.",
-    "title": "Dashboard-Daten sind nicht verfügbar",
+    "load": "Die Statistikdaten konnten nicht geladen werden.",
+    "title": "Statistikdaten sind nicht verfügbar",
     "description": "{{error}} Prüfe, ob Postgres läuft und die Datenbank migriert wurde."
   },
   "metrics": {

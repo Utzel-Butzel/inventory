@@ -18,13 +18,14 @@ import {
   Crop,
   FileText,
   GitBranch,
+  Globe2,
   ImageIcon,
   LoaderCircle,
   MapPin,
   Package,
   Paperclip,
-  RefreshCcw,
   Save,
+  Search,
   Sparkles,
   Trash2,
   UploadCloud,
@@ -35,8 +36,10 @@ import {
   type ChangeEvent,
   type DragEvent,
   type FormEvent,
+  type ReactNode,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -332,6 +335,97 @@ function CoverTransparencyOptions({
   );
 }
 
+function AiActionModal({
+  title,
+  description,
+  actionLabel,
+  actionIcon,
+  busy,
+  actionDisabled = false,
+  onAction,
+  onClose,
+  children,
+}: {
+  title: string;
+  description: string;
+  actionLabel: string;
+  actionIcon: ReactNode;
+  busy: boolean;
+  actionDisabled?: boolean;
+  onAction: () => void;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const { t } = useT("resource");
+  const titleId = useId();
+  const descriptionId = useId();
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [busy, onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target && !busy) onClose();
+      }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-border bg-surface shadow-2xl sm:rounded-3xl"
+      >
+        <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border bg-surface/95 px-5 py-4 backdrop-blur sm:px-6">
+          <div>
+            <h2 id={titleId} className="text-base font-semibold text-foreground">
+              {title}
+            </h2>
+            <p id={descriptionId} className="mt-1 text-xs leading-5 text-muted">
+              {description}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            aria-label={t("ai.closeModal")}
+            className="grid size-9 shrink-0 place-items-center rounded-full border border-border text-muted transition hover:bg-surface-muted hover:text-foreground disabled:opacity-50"
+          >
+            <X size={16} />
+          </button>
+        </header>
+        <div className="space-y-4 px-5 py-5 sm:px-6">{children}</div>
+        <footer className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-border bg-surface/95 px-5 py-4 backdrop-blur sm:px-6">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-xl border border-border bg-surface px-4 py-2.5 text-xs font-semibold text-muted-strong transition hover:bg-surface-muted disabled:opacity-50"
+          >
+            {t("ai.cancel")}
+          </button>
+          <button
+            type="button"
+            onClick={onAction}
+            disabled={busy || actionDisabled}
+            className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-brand-solid px-4 py-2.5 text-xs font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover disabled:bg-muted disabled:text-background disabled:opacity-100"
+          >
+            {busy ? <LoaderCircle size={15} className="animate-spin" /> : actionIcon}
+            {actionLabel}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 export function ResourceEditor({
   resourceId,
   canDelete = false,
@@ -378,8 +472,17 @@ export function ResourceEditor({
   const [loading, setLoading] = useState(Boolean(resourceId));
   const [saving, setSaving] = useState(false);
   const [aiAction, setAiAction] = useState<
-    "analyze" | "research" | "cover" | null
+    "analyze" | "research" | "cover" | "image" | null
   >(null);
+  const [aiDialog, setAiDialog] = useState<
+    "analyze" | "research" | "cover" | "image" | null
+  >(null);
+  const [analysisOverwrite, setAnalysisOverwrite] = useState(true);
+  const [imageAcquisitionMode, setImageAcquisitionMode] = useState<
+    "search" | "generate"
+  >("search");
+  const [imageSearchQuery, setImageSearchQuery] = useState("");
+  const [imageGenerationPrompt, setImageGenerationPrompt] = useState("");
   const [autoAnalyze, setAutoAnalyze] = useState(canUseAi);
   const [autoCover, setAutoCover] = useState(false);
   const [coverPrompt, setCoverPrompt] = useState("");
@@ -420,6 +523,7 @@ export function ResourceEditor({
       setCustomFields(response.resource.customFields ?? {});
       setCoverPrompt(defaultCoverPrompt(response.resource.name));
       setCoverPromptCustomized(false);
+      setImageSearchQuery((current) => current || response.resource.name);
       setCoverSourceMediaId((current) =>
         current && response.resource.media.some((item) => item.id === current)
           ? current
@@ -776,6 +880,56 @@ export function ResourceEditor({
     } catch (coverError) {
       setError(
         coverError instanceof Error ? coverError.message : t("errors.cover"),
+      );
+      return null;
+    } finally {
+      setAiAction(null);
+    }
+  };
+
+  const runImageAcquisition = async (id = resourceId) => {
+    if (!id) return null;
+    setAiAction("image");
+    setError(null);
+    try {
+      const response = await fetchJson<{ resource: ClientResource }>(
+        `/api/v1/resources/${id}/image`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            imageAcquisitionMode === "search"
+              ? {
+                  mode: "search",
+                  query: imageSearchQuery.trim() || undefined,
+                }
+              : {
+                  mode: "generate",
+                  prompt: imageGenerationPrompt.trim() || undefined,
+                  ...(imageModelPreference.selectedModelId
+                    ? { modelId: imageModelPreference.selectedModelId }
+                    : {}),
+                },
+          ),
+        },
+      );
+      setResource(response.resource);
+      setForm(toForm(response.resource));
+      setCustomFields(response.resource.customFields ?? {});
+      setCoverSourceMediaId((current) =>
+        current && response.resource.media.some((item) => item.id === current)
+          ? current
+          : defaultCoverSourceMediaId(response.resource.media),
+      );
+      setNotice(
+        imageAcquisitionMode === "search"
+          ? t("notices.imageSearchComplete")
+          : t("notices.imageGenerationComplete"),
+      );
+      return response.resource;
+    } catch (imageError) {
+      setError(
+        imageError instanceof Error ? imageError.message : t("errors.image"),
       );
       return null;
     } finally {
@@ -1500,56 +1654,45 @@ export function ResourceEditor({
             ) : (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runAnalysis(resourceId, true)} className="flex min-h-12 min-w-0 items-center gap-2 rounded-xl bg-brand-solid px-3 py-2.5 text-left text-xs font-semibold leading-4 text-on-brand shadow-sm transition hover:bg-brand-hover disabled:bg-muted disabled:text-background disabled:opacity-100">{aiAction === "analyze" ? <LoaderCircle size={15} className="shrink-0 animate-spin" /> : <ImageIcon size={15} className="shrink-0" />}<span>{t("ai.rewrite")}</span></button>
-                  <button type="button" disabled={Boolean(aiAction)} onClick={() => void runResearch(resourceId)} className="flex min-h-12 min-w-0 items-center gap-2 rounded-xl bg-strong px-3 py-2.5 text-left text-xs font-semibold leading-4 text-on-strong shadow-sm transition hover:bg-success disabled:bg-muted disabled:text-background disabled:opacity-100">{aiAction === "research" ? <LoaderCircle size={15} className="shrink-0 animate-spin" /> : <Sparkles size={15} className="shrink-0" />}<span>{t("ai.research")}</span></button>
-                </div>
-                <div className="rounded-xl border border-border bg-surface-subtle p-3">
-                  <CoverReferencePicker
-                    name="existing-cover-reference"
-                    options={itemMedia.flatMap((item) =>
-                      item.kind === "image"
-                        ? [
-                            {
-                              id: item.id,
-                              url: item.url,
-                              label: item.name,
-                              isAi: item.source === "ai",
-                            },
-                          ]
-                        : [],
-                    )}
-                    selectedId={coverSourceMediaId}
+                  <button
+                    type="button"
+                    disabled={!hasImage || Boolean(aiAction)}
+                    onClick={() => setAiDialog("analyze")}
+                    className="flex min-h-16 min-w-0 flex-col items-start justify-center gap-1.5 rounded-xl bg-brand-solid px-3 py-2.5 text-left text-xs font-semibold leading-4 text-on-brand shadow-sm transition hover:bg-brand-hover disabled:bg-muted disabled:text-background disabled:opacity-100"
+                  >
+                    <ImageIcon size={16} className="shrink-0" />
+                    <span>{t("ai.rewrite")}</span>
+                  </button>
+                  <button
+                    type="button"
                     disabled={Boolean(aiAction)}
-                    onSelect={setCoverSourceMediaId}
-                  />
-                  <label className="mt-3 block text-[11px] font-semibold text-muted">
-                    {t("ai.coverDirection")}
-                    <textarea value={coverPrompt} onChange={(event) => { setCoverPrompt(event.target.value); setCoverPromptCustomized(true); }} rows={5} className="mt-2 w-full resize-none rounded-lg border border-border bg-surface p-2.5 text-xs leading-5 text-muted-strong outline-none focus:border-focus" />
-                  </label>
-                  <details className="group mt-3 rounded-lg border border-border bg-surface px-3 py-2.5">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[11px] font-semibold text-muted-strong marker:content-none">
-                      {t("ai.advancedImageOptions")}
-                      <ChevronRight size={14} className="text-muted transition group-open:rotate-90" aria-hidden="true" />
-                    </summary>
-                    <div className="mt-3 border-t border-border pt-3">
-                      <CoverTransparencyOptions
-                        transparentBackground={transparentCover}
-                        transparencyMethod={coverTransparencyMethod}
-                        disabled={Boolean(aiAction)}
-                        onTransparentBackgroundChange={changeTransparentCover}
-                        onTransparencyMethodChange={setCoverTransparencyMethod}
-                      />
-                      <ImageModelSelector
-                        preference={imageModelPreference}
-                        disabled={Boolean(aiAction)}
-                        className="mt-3"
-                      />
-                      {resource?.aiMetadata ? <p className="mt-3 flex items-center justify-between gap-3 text-[10px] text-muted"><span>{t("ai.lastModel")}</span><span className="max-w-40 truncate font-mono">{resource.aiMetadata.model ?? t("ai.automaticProcessing")}</span></p> : null}
-                    </div>
-                  </details>
-                  <button type="button" disabled={!hasImage || Boolean(aiAction)} onClick={() => void runCover(resourceId)} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold text-muted-strong transition hover:bg-surface-muted disabled:bg-surface-muted disabled:text-muted disabled:opacity-100">{aiAction === "cover" ? <LoaderCircle size={14} className="animate-spin" /> : <ImageIcon size={14} />}{t("ai.generateNewCover")}</button>
+                    onClick={() => setAiDialog("research")}
+                    className="flex min-h-16 min-w-0 flex-col items-start justify-center gap-1.5 rounded-xl bg-strong px-3 py-2.5 text-left text-xs font-semibold leading-4 text-on-strong shadow-sm transition hover:bg-success disabled:bg-muted disabled:text-background disabled:opacity-100"
+                  >
+                    <Sparkles size={16} className="shrink-0" />
+                    <span>{t("ai.research")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!hasImage || Boolean(aiAction)}
+                    onClick={() => setAiDialog("cover")}
+                    className="flex min-h-16 min-w-0 flex-col items-start justify-center gap-1.5 rounded-xl border border-border bg-surface-subtle px-3 py-2.5 text-left text-xs font-semibold leading-4 text-muted-strong transition hover:border-border-strong hover:bg-surface-muted disabled:text-muted disabled:opacity-50"
+                  >
+                    <ImageIcon size={16} className="shrink-0" />
+                    <span>{t("ai.generateNewCover")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(aiAction)}
+                    onClick={() => setAiDialog("image")}
+                    className="flex min-h-16 min-w-0 flex-col items-start justify-center gap-1.5 rounded-xl border border-border bg-surface-subtle px-3 py-2.5 text-left text-xs font-semibold leading-4 text-muted-strong transition hover:border-brand-border hover:bg-brand-soft hover:text-brand disabled:text-muted disabled:opacity-50"
+                  >
+                    <Globe2 size={16} className="shrink-0" />
+                    <span>{t("ai.findOrCreateImage")}</span>
+                  </button>
                 </div>
                 {!hasImage ? <p className="text-[11px] text-warning">{t("ai.imageRequired")}</p> : null}
+                <p className="text-[11px] leading-4 text-muted">{t("ai.modalHint")}</p>
               </div>
             )}
           </section>
@@ -1583,12 +1726,275 @@ export function ResourceEditor({
             <section className="rounded-2xl border border-border bg-surface p-5">
               <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">{t("record.title")}</h2>
               <button type="button" onClick={() => void navigator.clipboard.writeText(resource.id).then(() => setNotice(t("notices.idCopied")))} className="flex w-full items-center justify-between rounded-xl bg-surface-subtle px-3 py-2.5 text-left"><span className="min-w-0"><span className="block text-[10px] text-muted">{t("record.id")}</span><span className="block truncate font-mono text-xs text-muted">{resource.id}</span></span><Copy size={14} className="ml-3 shrink-0 text-muted" /></button>
-              <button type="button" onClick={() => void loadResource()} className="mt-2 inline-flex items-center gap-2 text-xs font-semibold text-muted hover:text-foreground"><RefreshCcw size={13} /> {t("record.reload")}</button>
             </section>
           ) : null}
         </aside>
       </div>
     </form>
+    {aiDialog === "analyze" ? (
+      <AiActionModal
+        title={t("ai.analyzeModalTitle")}
+        description={t("ai.analyzeModalDescription")}
+        actionLabel={t("ai.rewrite")}
+        actionIcon={<ImageIcon size={15} />}
+        busy={aiAction === "analyze"}
+        actionDisabled={!hasImage}
+        onClose={() => setAiDialog(null)}
+        onAction={() => {
+          void runAnalysis(resourceId, analysisOverwrite).then((result) => {
+            if (result) setAiDialog(null);
+          });
+        }}
+      >
+        <div className="rounded-2xl border border-border bg-surface-subtle p-4">
+          <div className="flex items-start gap-3">
+            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+              <ImageIcon size={16} />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-muted-strong">
+                {t("ai.savedPhotos")}
+              </p>
+              <p className="mt-1 text-[11px] leading-5 text-muted">
+                {t("ai.savedPhotosDescription")}
+              </p>
+            </div>
+          </div>
+        </div>
+        <label className="flex items-start gap-3 rounded-2xl border border-border p-4">
+          <input
+            type="checkbox"
+            checked={analysisOverwrite}
+            disabled={aiAction === "analyze"}
+            onChange={(event) => setAnalysisOverwrite(event.target.checked)}
+            className="mt-0.5 size-4 accent-brand-solid"
+          />
+          <span>
+            <span className="block text-xs font-semibold text-muted-strong">
+              {t("ai.overwriteFields")}
+            </span>
+            <span className="mt-1 block text-[11px] leading-5 text-muted">
+              {t("ai.overwriteFieldsDescription")}
+            </span>
+          </span>
+        </label>
+      </AiActionModal>
+    ) : null}
+    {aiDialog === "research" ? (
+      <AiActionModal
+        title={t("ai.researchModalTitle")}
+        description={t("ai.researchModalDescription")}
+        actionLabel={t("ai.research")}
+        actionIcon={<Sparkles size={15} />}
+        busy={aiAction === "research"}
+        onClose={() => setAiDialog(null)}
+        onAction={() => {
+          void runResearch(resourceId).then((result) => {
+            if (result) setAiDialog(null);
+          });
+        }}
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          {([
+            ["ai.researchSavedDetails", "ai.researchSavedDetailsDescription"],
+            ["ai.researchPhotos", "ai.researchPhotosDescription"],
+            ["ai.researchWeb", "ai.researchWebDescription"],
+          ] as const).map(([titleKey, descriptionKey]) => (
+            <div key={titleKey} className="rounded-2xl border border-border bg-surface-subtle p-4">
+              <p className="text-xs font-semibold text-muted-strong">{t(titleKey)}</p>
+              <p className="mt-1 text-[11px] leading-5 text-muted">{t(descriptionKey)}</p>
+            </div>
+          ))}
+        </div>
+        <p className="rounded-xl border border-success-border bg-success-soft px-3 py-2.5 text-[11px] leading-5 text-success">
+          {t("ai.researchPreservesExisting")}
+        </p>
+      </AiActionModal>
+    ) : null}
+    {aiDialog === "cover" ? (
+      <AiActionModal
+        title={t("ai.coverModalTitle")}
+        description={t("ai.coverModalDescription")}
+        actionLabel={t("ai.generateNewCover")}
+        actionIcon={<ImageIcon size={15} />}
+        busy={aiAction === "cover"}
+        actionDisabled={!hasImage || !coverSourceMediaId}
+        onClose={() => setAiDialog(null)}
+        onAction={() => {
+          void runCover(resourceId).then((result) => {
+            if (result) setAiDialog(null);
+          });
+        }}
+      >
+        <CoverReferencePicker
+          name="existing-cover-reference-modal"
+          options={itemMedia.flatMap((item) =>
+            item.kind === "image"
+              ? [
+                  {
+                    id: item.id,
+                    url: item.url,
+                    label: item.name,
+                    isAi: item.source === "ai",
+                  },
+                ]
+              : [],
+          )}
+          selectedId={coverSourceMediaId}
+          disabled={aiAction === "cover"}
+          onSelect={setCoverSourceMediaId}
+        />
+        <label className="block text-[11px] font-semibold text-muted">
+          {t("ai.coverDirection")}
+          <textarea
+            value={coverPrompt}
+            onChange={(event) => {
+              setCoverPrompt(event.target.value);
+              setCoverPromptCustomized(true);
+            }}
+            disabled={aiAction === "cover"}
+            rows={5}
+            className="mt-2 w-full resize-y rounded-xl border border-border bg-surface-subtle p-3 text-xs leading-5 text-muted-strong outline-none focus:border-focus disabled:text-muted"
+          />
+        </label>
+        <details className="group rounded-xl border border-border bg-surface px-3 py-2.5">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[11px] font-semibold text-muted-strong marker:content-none">
+            {t("ai.advancedImageOptions")}
+            <ChevronRight size={14} className="text-muted transition group-open:rotate-90" aria-hidden="true" />
+          </summary>
+          <div className="mt-3 border-t border-border pt-3">
+            <CoverTransparencyOptions
+              transparentBackground={transparentCover}
+              transparencyMethod={coverTransparencyMethod}
+              disabled={aiAction === "cover"}
+              onTransparentBackgroundChange={changeTransparentCover}
+              onTransparencyMethodChange={setCoverTransparencyMethod}
+            />
+            <ImageModelSelector
+              preference={imageModelPreference}
+              disabled={aiAction === "cover"}
+              className="mt-3"
+            />
+            {resource?.aiMetadata ? (
+              <p className="mt-3 flex items-center justify-between gap-3 text-[10px] text-muted">
+                <span>{t("ai.lastModel")}</span>
+                <span className="max-w-64 truncate font-mono">
+                  {resource.aiMetadata.model ?? t("ai.automaticProcessing")}
+                </span>
+              </p>
+            ) : null}
+          </div>
+        </details>
+      </AiActionModal>
+    ) : null}
+    {aiDialog === "image" ? (
+      <AiActionModal
+        title={t("ai.imageModalTitle")}
+        description={t("ai.imageModalDescription")}
+        actionLabel={
+          imageAcquisitionMode === "search"
+            ? t("ai.searchForImage")
+            : t("ai.generateImage")
+        }
+        actionIcon={
+          imageAcquisitionMode === "search" ? (
+            <Search size={15} />
+          ) : (
+            <Sparkles size={15} />
+          )
+        }
+        busy={aiAction === "image"}
+        onClose={() => setAiDialog(null)}
+        onAction={() => {
+          void runImageAcquisition(resourceId).then((result) => {
+            if (result) setAiDialog(null);
+          });
+        }}
+      >
+        <fieldset disabled={aiAction === "image"}>
+          <legend className="text-xs font-semibold text-muted-strong">
+            {t("ai.imageSource")}
+          </legend>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            {(["search", "generate"] as const).map((mode) => {
+              const selected = imageAcquisitionMode === mode;
+              return (
+                <label
+                  key={mode}
+                  className={`cursor-pointer rounded-2xl border-2 p-4 transition ${
+                    selected
+                      ? "border-brand-solid bg-brand-soft"
+                      : "border-border bg-surface-subtle hover:border-border-strong"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="image-acquisition-mode"
+                    value={mode}
+                    checked={selected}
+                    onChange={() => setImageAcquisitionMode(mode)}
+                    className="sr-only"
+                  />
+                  <span className="flex items-center gap-2 text-xs font-semibold text-muted-strong">
+                    {mode === "search" ? <Globe2 size={15} /> : <Sparkles size={15} />}
+                    {t(mode === "search" ? "ai.searchInternet" : "ai.generateWithAi")}
+                  </span>
+                  <span className="mt-1.5 block text-[11px] leading-5 text-muted">
+                    {t(
+                      mode === "search"
+                        ? "ai.searchInternetDescription"
+                        : "ai.generateWithAiDescription",
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+        {imageAcquisitionMode === "search" ? (
+          <>
+            <label className="block text-xs font-semibold text-muted-strong">
+              {t("ai.imageSearchQuery")}
+              <input
+                value={imageSearchQuery}
+                onChange={(event) => setImageSearchQuery(event.target.value)}
+                disabled={aiAction === "image"}
+                placeholder={resource?.name ?? t("ai.imageSearchPlaceholder")}
+                maxLength={500}
+                className={inputClass}
+              />
+            </label>
+            <p className="rounded-xl border border-warning-border bg-warning-soft px-3 py-2.5 text-[11px] leading-5 text-warning">
+              {t("ai.imageSearchRights")}
+            </p>
+          </>
+        ) : (
+          <>
+            <label className="block text-xs font-semibold text-muted-strong">
+              {t("ai.imageGenerationPrompt")}
+              <textarea
+                value={imageGenerationPrompt}
+                onChange={(event) => setImageGenerationPrompt(event.target.value)}
+                disabled={aiAction === "image"}
+                placeholder={t("ai.imageGenerationPlaceholder", {
+                  name: resource?.name ?? form.name,
+                })}
+                rows={6}
+                maxLength={5_000}
+                className="mt-1.5 w-full resize-y rounded-xl border border-border bg-surface-subtle p-3 text-xs leading-5 text-muted-strong outline-none transition placeholder:text-muted focus:border-success focus:ring-4 focus:ring-success-border disabled:text-muted"
+              />
+            </label>
+            <ImageModelSelector
+              preference={imageModelPreference}
+              disabled={aiAction === "image"}
+            />
+            <p className="rounded-xl border border-warning-border bg-warning-soft px-3 py-2.5 text-[11px] leading-5 text-warning">
+              {t("ai.imageGenerationAccuracy")}
+            </p>
+          </>
+        )}
+      </AiActionModal>
+    ) : null}
     {resourceId ? (
       <section className="mx-auto w-full max-w-[1450px] px-4 pb-8 sm:px-6 lg:px-8">
         <AssemblyManager resourceId={resourceId} mode="bom" />

@@ -28,9 +28,11 @@ Research rules:
 - additionalDescription contains only useful, source-supported facts missing from the existing description. Use concise Markdown paragraphs or bullets and do not repeat existing text.
 - Classify type as exactly one of: ${allowedResourceTypes.join(", ")}.
 - tags and categories contain only useful additions not already present.
+- sku may only contain a verified manufacturer part number or catalog code for the exact product. Never invent an organization-specific SKU.
 - serialNumber may only be copied when it is clearly visible in a supplied photo. Never obtain or infer an individual serial number from the web.
 - barcode must be a verified GTIN/EAN/UPC for the exact product variant.
 - valueCents and currency may only contain a current, source-supported price for the exact product and variant; otherwise use null and an empty currency.
+- internalNotes contains a short operational note only when a reliable source identifies an important lifecycle, safety, warranty, maintenance, replacement, or compatibility fact. Never invent organization-specific ownership, location, stock, service history, or condition.
 - confidence is confidence in the exact product identity, not merely its broad category.
 
 Return only the requested structured result.`;

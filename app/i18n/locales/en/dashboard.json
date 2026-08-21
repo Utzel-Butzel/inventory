@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "title": "Overview"
+    "title": "Statistics"
   },
   "greeting": {
     "morning": "Good morning",
@@ -12,8 +12,8 @@
     "viewAll": "View all"
   },
   "errors": {
-    "load": "The dashboard data could not be loaded.",
-    "title": "Dashboard data is unavailable",
+    "load": "The statistics data could not be loaded.",
+    "title": "Statistics data is unavailable",
     "description": "{{error}} Make sure Postgres is running and the database has been migrated."
   },
   "metrics": {

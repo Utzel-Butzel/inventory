@@ -77,7 +77,7 @@ export function proxy(request: NextRequest) {
   ) {
     const rewriteUrl = request.nextUrl.clone();
     rewriteUrl.pathname =
-      internalPathname === "/" ? "/dashboard" : internalPathname;
+      internalPathname === "/" ? "/inventory" : internalPathname;
     const response = NextResponse.rewrite(rewriteUrl, {
       request: {
         headers: routedHeaders(request, routeOrganizationReference),
