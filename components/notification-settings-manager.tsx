@@ -248,6 +248,7 @@ export function NotificationSettingsManager() {
       if (permission !== "granted") throw new Error(t("notifications.errors.pushDenied"));
       const registration = await navigator.serviceWorker.register("/notification-sw.js", {
         scope: "/",
+        updateViaCache: "none",
       });
       await navigator.serviceWorker.ready;
       const existing = await registration.pushManager.getSubscription();

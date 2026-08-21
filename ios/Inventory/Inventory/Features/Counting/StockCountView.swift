@@ -72,7 +72,7 @@ struct StockCountView: View {
         } message: {
             Text(
                 "Der Bestand wird von \(resource.quantity) auf "
-                    + "\(max(0, resource.quantity - model.adjustedCount)) reduziert."
+                    + "\(resource.quantity - model.adjustedCount) reduziert."
             )
         }
         .onAppear {
@@ -359,7 +359,7 @@ struct StockCountView: View {
                     .font(.subheadline.monospacedDigit().weight(.semibold))
             }
 
-            if model.adjustedCount > resource.quantity {
+            if model.adjustedCount > resource.quantity && !state.allowsNegativeStock {
                 Label(
                     "Für eine Entnahme sind nur \(resource.quantity) Einheiten verfügbar.",
                     systemImage: "exclamationmark.circle"
@@ -374,13 +374,18 @@ struct StockCountView: View {
                 } label: {
                     VStack(spacing: 4) {
                         Label("Entnehmen", systemImage: "minus.circle.fill")
-                        Text("danach \(max(0, resource.quantity - model.adjustedCount))")
+                        Text("danach \(resource.quantity - model.adjustedCount)")
                             .font(.caption.monospacedDigit())
                     }
                     .frame(maxWidth: .infinity, minHeight: 50)
                 }
                 .buttonStyle(.bordered)
-                .disabled(!model.canApplyIssue(currentQuantity: resource.quantity))
+                .disabled(
+                    !model.canApplyIssue(
+                        currentQuantity: resource.quantity,
+                        allowNegativeStock: state.allowsNegativeStock
+                    )
+                )
 
                 Button {
                     apply(.receipt)
@@ -481,7 +486,12 @@ struct StockCountView: View {
             model.errorMessage = "Keine Verbindung zum Inventarserver."
             return
         }
-        model.apply(operation, to: resource, using: client) { updated in
+        model.apply(
+            operation,
+            to: resource,
+            allowNegativeStock: state.allowsNegativeStock,
+            using: client
+        ) { updated in
             onApplied(updated)
             dismiss()
         }

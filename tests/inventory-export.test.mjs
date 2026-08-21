@@ -48,6 +48,7 @@ const sampleResources = [
     priority: 2,
     tags: ["Elektro", "Außen"],
     categories: [{ id: "energy", label: "Energie" }],
+    slugs: ["verlaengerungskabel", "cable-25"],
     customFields: { prüfung: "2027-04-03", anmerkung: "=HYPERLINK(\"bad\")" },
     relatedResourceIds: [],
     gpsLatitude: 52.520008,
@@ -75,6 +76,7 @@ const sampleResources = [
     priority: 4,
     tags: [],
     categories: [],
+    slugs: [],
     customFields: {},
     relatedResourceIds: ["10000000-0000-4000-8000-000000000001"],
     gpsLatitude: null,
@@ -151,15 +153,16 @@ test("XLSX is typed, filterable, frozen, and contains a formatted variant sheet"
   assert.equal(inventory.getCell("A1").value, "Inventarexport");
   assert.equal(inventory.getCell("A4").value, "id");
   assert.equal(inventory.getCell("G5").value, 7);
-  assert.ok(inventory.getCell("V5").value instanceof Date);
-  assert.equal(inventory.getCell("X5").value, "4006381333931");
-  assert.equal(inventory.getColumn("X").numFmt, "@");
+  assert.equal(inventory.getCell("O5").value, '["verlaengerungskabel","cable-25"]');
+  assert.ok(inventory.getCell("W5").value instanceof Date);
+  assert.equal(inventory.getCell("Y5").value, "4006381333931");
+  assert.equal(inventory.getColumn("Y").numFmt, "@");
   assert.equal(inventory.views[0]?.state, "frozen");
   assert.equal(inventory.views[0]?.ySplit, 4);
   assert.ok(inventory.autoFilter);
   assert.equal(inventory.pageSetup.fitToPage, false);
   assert.equal(inventory.pageSetup.scale, 65);
-  assert.equal(inventory.getColumn("Y").hidden, true);
+  assert.equal(inventory.getColumn("Z").hidden, true);
 
   const variantSheet = workbook.getWorksheet("Varianten");
   assert.ok(variantSheet);

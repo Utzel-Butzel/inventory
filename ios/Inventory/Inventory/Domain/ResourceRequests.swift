@@ -6,6 +6,7 @@ public struct ResourceCreateRequest: Codable, Equatable, Sendable {
     public var type: InventoryResourceType
     public var status: InventoryResourceStatus
     public var sku: String?
+    public var barcode: String?
     public var quantity: Int
     public var location: String?
     public var serialNumber: String?
@@ -14,6 +15,7 @@ public struct ResourceCreateRequest: Codable, Equatable, Sendable {
     public var priority: Int
     public var tags: [String]
     public var categories: [InventoryResourceCategory]
+    public var customFields: [String: CustomFieldValue]?
     public var relatedResourceIDs: [UUID]
     public var gpsLatitude: Double?
     public var gpsLongitude: Double?
@@ -26,6 +28,7 @@ public struct ResourceCreateRequest: Codable, Equatable, Sendable {
         type: InventoryResourceType = .object,
         status: InventoryResourceStatus = .available,
         sku: String? = nil,
+        barcode: String? = nil,
         quantity: Int = 1,
         location: String? = nil,
         serialNumber: String? = nil,
@@ -34,6 +37,7 @@ public struct ResourceCreateRequest: Codable, Equatable, Sendable {
         priority: Int = 3,
         tags: [String] = [],
         categories: [InventoryResourceCategory] = [],
+        customFields: [String: CustomFieldValue]? = nil,
         relatedResourceIDs: [UUID] = [],
         gpsLatitude: Double? = nil,
         gpsLongitude: Double? = nil,
@@ -45,6 +49,7 @@ public struct ResourceCreateRequest: Codable, Equatable, Sendable {
         self.type = type
         self.status = status
         self.sku = sku
+        self.barcode = barcode
         self.quantity = quantity
         self.location = location
         self.serialNumber = serialNumber
@@ -53,6 +58,7 @@ public struct ResourceCreateRequest: Codable, Equatable, Sendable {
         self.priority = priority
         self.tags = tags
         self.categories = categories
+        self.customFields = customFields
         self.relatedResourceIDs = relatedResourceIDs
         self.gpsLatitude = gpsLatitude
         self.gpsLongitude = gpsLongitude
@@ -66,6 +72,7 @@ public struct ResourceCreateRequest: Codable, Equatable, Sendable {
         case type
         case status
         case sku
+        case barcode
         case quantity
         case location
         case serialNumber
@@ -74,6 +81,7 @@ public struct ResourceCreateRequest: Codable, Equatable, Sendable {
         case priority
         case tags
         case categories
+        case customFields
         case relatedResourceIDs = "relatedResourceIds"
         case gpsLatitude
         case gpsLongitude
@@ -114,6 +122,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
     public var type: InventoryResourceType?
     public var status: InventoryResourceStatus?
     public var sku: NullablePatch<String>
+    public var barcode: NullablePatch<String>
     public var location: NullablePatch<String>
     public var serialNumber: NullablePatch<String>
     public var valueCents: NullablePatch<Int>
@@ -121,6 +130,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
     public var priority: Int?
     public var tags: [String]?
     public var categories: [InventoryResourceCategory]?
+    public var customFields: [String: CustomFieldValue]?
     public var relatedResourceIDs: [UUID]?
     public var gpsLatitude: NullablePatch<Double>
     public var gpsLongitude: NullablePatch<Double>
@@ -133,6 +143,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
         type: InventoryResourceType? = nil,
         status: InventoryResourceStatus? = nil,
         sku: NullablePatch<String> = .unchanged,
+        barcode: NullablePatch<String> = .unchanged,
         location: NullablePatch<String> = .unchanged,
         serialNumber: NullablePatch<String> = .unchanged,
         valueCents: NullablePatch<Int> = .unchanged,
@@ -140,6 +151,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
         priority: Int? = nil,
         tags: [String]? = nil,
         categories: [InventoryResourceCategory]? = nil,
+        customFields: [String: CustomFieldValue]? = nil,
         relatedResourceIDs: [UUID]? = nil,
         gpsLatitude: NullablePatch<Double> = .unchanged,
         gpsLongitude: NullablePatch<Double> = .unchanged,
@@ -151,6 +163,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
         self.type = type
         self.status = status
         self.sku = sku
+        self.barcode = barcode
         self.location = location
         self.serialNumber = serialNumber
         self.valueCents = valueCents
@@ -158,6 +171,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
         self.priority = priority
         self.tags = tags
         self.categories = categories
+        self.customFields = customFields
         self.relatedResourceIDs = relatedResourceIDs
         self.gpsLatitude = gpsLatitude
         self.gpsLongitude = gpsLongitude
@@ -171,6 +185,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
         case type
         case status
         case sku
+        case barcode
         case location
         case serialNumber
         case valueCents
@@ -178,6 +193,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
         case priority
         case tags
         case categories
+        case customFields
         case relatedResourceIDs = "relatedResourceIds"
         case gpsLatitude
         case gpsLongitude
@@ -192,6 +208,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
         type = try container.decodeIfPresent(InventoryResourceType.self, forKey: .type)
         status = try container.decodeIfPresent(InventoryResourceStatus.self, forKey: .status)
         sku = try container.decodePatch(String.self, forKey: .sku)
+        barcode = try container.decodePatch(String.self, forKey: .barcode)
         location = try container.decodePatch(String.self, forKey: .location)
         serialNumber = try container.decodePatch(String.self, forKey: .serialNumber)
         valueCents = try container.decodePatch(Int.self, forKey: .valueCents)
@@ -201,6 +218,10 @@ public struct ResourcePatchRequest: Codable, Sendable {
         categories = try container.decodeIfPresent(
             [InventoryResourceCategory].self,
             forKey: .categories
+        )
+        customFields = try container.decodeIfPresent(
+            [String: CustomFieldValue].self,
+            forKey: .customFields
         )
         relatedResourceIDs = try container.decodeIfPresent([UUID].self, forKey: .relatedResourceIDs)
         gpsLatitude = try container.decodePatch(Double.self, forKey: .gpsLatitude)
@@ -216,6 +237,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
         try container.encodeIfPresent(type, forKey: .type)
         try container.encodeIfPresent(status, forKey: .status)
         try container.encodePatch(sku, forKey: .sku)
+        try container.encodePatch(barcode, forKey: .barcode)
         try container.encodePatch(location, forKey: .location)
         try container.encodePatch(serialNumber, forKey: .serialNumber)
         try container.encodePatch(valueCents, forKey: .valueCents)
@@ -223,6 +245,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
         try container.encodeIfPresent(priority, forKey: .priority)
         try container.encodeIfPresent(tags, forKey: .tags)
         try container.encodeIfPresent(categories, forKey: .categories)
+        try container.encodeIfPresent(customFields, forKey: .customFields)
         try container.encodeIfPresent(relatedResourceIDs, forKey: .relatedResourceIDs)
         try container.encodePatch(gpsLatitude, forKey: .gpsLatitude)
         try container.encodePatch(gpsLongitude, forKey: .gpsLongitude)

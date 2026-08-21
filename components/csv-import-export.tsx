@@ -37,6 +37,7 @@ const supportedHeaders = new Set([
   "priority",
   "tags",
   "categories",
+  "slugs",
   "custom_fields",
   "related_resource_ids",
   "gps_latitude",
@@ -218,7 +219,7 @@ const validateJson = (
 ) => {
   if (!value.trim()) return null;
   if (
-    ["tags", "categories", "related_resource_ids"].includes(label) &&
+    ["tags", "categories", "slugs", "related_resource_ids"].includes(label) &&
     !value.trim().startsWith("[")
   ) {
     return null;
@@ -305,6 +306,7 @@ function validateRow(
     }, t),
     validateJson(value("tags"), "tags", "array", t),
     validateJson(value("categories"), "categories", "array", t),
+    validateJson(value("slugs"), "slugs", "array", t),
     validateJson(value("related_resource_ids"), "related_resource_ids", "array", t),
     validateJson(value("map_features"), "map_features", "array", t),
     validateJson(value("custom_fields"), "custom_fields", "object", t),

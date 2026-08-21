@@ -33,6 +33,7 @@ import {
   type InventoryPageSize,
 } from "@/lib/inventory-pagination";
 import { markdownToPlainText } from "@/lib/simple-markdown";
+import { primaryResourceReference } from "@/lib/resource-slug-contract";
 
 type Pagination = { page: number; pageSize: number; total: number; pages: number };
 type View = "grid" | "table";
@@ -817,7 +818,7 @@ export function InventoryClient({
             ) : (
               <Link
                 key={resource.id}
-                href={`/inventory/${resource.id}`}
+                href={`/inventory/${primaryResourceReference(resource)}`}
                 className={cardClass}
               >
                 {content}
@@ -911,7 +912,7 @@ export function InventoryClient({
               ) : (
                 <Link
                   key={resource.id}
-                  href={`/inventory/${resource.id}`}
+                  href={`/inventory/${primaryResourceReference(resource)}`}
                   className={rowClass}
                 >
                   {content}

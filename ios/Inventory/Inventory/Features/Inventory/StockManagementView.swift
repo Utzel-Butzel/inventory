@@ -110,7 +110,7 @@ private final class StockManagementViewModel: ObservableObject {
         loading = false
     }
 
-    func bookMovement(using client: APIClient) async {
+    func bookMovement(using client: APIClient, allowNegativeStock: Bool) async {
         guard let detail else { return }
         guard detail.config.trackingMode == .bulk else {
             errorMessage = "Bei serialisiertem Bestand wird jede Einheit einzeln verwaltet."
@@ -120,7 +120,9 @@ private final class StockManagementViewModel: ObservableObject {
             errorMessage = "Die Menge muss mindestens eins sein."
             return
         }
-        if direction == .outgoing, movementQuantity > detail.resource.quantity {
+        if direction == .outgoing,
+           !allowNegativeStock,
+           movementQuantity > detail.resource.quantity {
             errorMessage = "Es sind nur \(detail.resource.quantity) Einheiten verfügbar."
             return
         }
@@ -337,7 +339,7 @@ struct StockManagementView: View {
             Button("Abbrechen", role: .cancel) { }
         } message: {
             if let quantity = model.detail?.resource.quantity {
-                Text("Der Bestand sinkt von \(quantity) auf \(max(0, quantity - model.movementQuantity)).")
+                Text("Der Bestand sinkt von \(quantity) auf \(quantity - model.movementQuantity).")
             }
         }
         .confirmationDialog(
@@ -464,7 +466,12 @@ struct StockManagementView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(model.direction == .incoming ? InventoryTheme.ink : InventoryTheme.danger)
-            .disabled(model.movementQuantity < 1 || (model.direction == .outgoing && detail.resource.quantity == 0))
+            .disabled(
+                model.movementQuantity < 1 ||
+                    (model.direction == .outgoing &&
+                        detail.resource.quantity <= 0 &&
+                        !state.allowsNegativeStock)
+            )
         }
     }
 
@@ -653,7 +660,12 @@ struct StockManagementView: View {
 
     private func submitMovement() {
         guard let client = state.client else { return }
-        Task { await model.bookMovement(using: client) }
+        Task {
+            await model.bookMovement(
+                using: client,
+                allowNegativeStock: state.allowsNegativeStock
+            )
+        }
     }
 
     private func saveConfig() {

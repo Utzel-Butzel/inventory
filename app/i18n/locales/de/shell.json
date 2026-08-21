@@ -27,6 +27,8 @@
     "labels": "Etiketten",
     "duplicates": "Duplikate",
     "notifications": "Benachrichtigungen",
+    "requests": "Anfragen",
+    "reservationCalendar": "Reservierungskalender",
     "settings": "Einstellungen"
   },
   "notifications": {
@@ -38,6 +40,10 @@
     "bannerDescription": "Du kannst alles ansehen; Änderungen sind deaktiviert.",
     "backToWebsite": "Zur Produktseite"
   },
+  "offline": {
+    "bannerSaved": "Offline · Gespeicherte Inhalte werden angezeigt. Änderungen benötigen eine Verbindung.",
+    "bannerReconnect": "Du bist offline · Stelle die Verbindung wieder her."
+  },
   "badges": {
     "ai": "KI"
   },
@@ -48,6 +54,8 @@
     "manualEntryDescription": "Details selbst eingeben",
     "photoCapture": "Per Foto erfassen",
     "photoCaptureDescription": "Fotos aufnehmen oder hochladen",
+    "internalRequest": "Interne Anfrage",
+    "internalRequestDescription": "Inventar für einen späteren Zeitpunkt reservieren",
     "signOut": "Abmelden",
     "openNavigation": "Navigation öffnen",
     "closeNavigation": "Navigation schließen"

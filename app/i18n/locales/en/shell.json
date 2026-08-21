@@ -27,6 +27,8 @@
     "labels": "Labels",
     "duplicates": "Duplicates",
     "notifications": "Notifications",
+    "requests": "Requests",
+    "reservationCalendar": "Reservation calendar",
     "settings": "Settings"
   },
   "notifications": {
@@ -38,6 +40,10 @@
     "bannerDescription": "You can explore everything; changes are disabled.",
     "backToWebsite": "Back to product site"
   },
+  "offline": {
+    "bannerSaved": "Offline · Showing saved content. Changes need a connection.",
+    "bannerReconnect": "You’re offline · Reconnect to continue."
+  },
   "badges": {
     "ai": "AI"
   },
@@ -48,6 +54,8 @@
     "manualEntryDescription": "Add the details yourself",
     "photoCapture": "Capture with photos",
     "photoCaptureDescription": "Take or upload photos",
+    "internalRequest": "Internal request",
+    "internalRequestDescription": "Reserve inventory for a future time",
     "signOut": "Sign out",
     "openNavigation": "Open navigation",
     "closeNavigation": "Close navigation"

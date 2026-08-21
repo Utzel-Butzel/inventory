@@ -71,6 +71,23 @@
       "description": "Choose whether the interface uses a light or dark color theme.",
       "selectionLabel": "Color theme"
     },
+    "offline": {
+      "title": "Offline & fast loading",
+      "description": "Keep the app shell, static assets, and recently visited screens on this device for faster loading and read-only access during connection drops.",
+      "selectionLabel": "Offline mode on this device",
+      "securityHint": "Saved screens can contain inventory data. Enable this only on a trusted device; switching it off or signing out removes the offline copies.",
+      "checking": "Checking browser support…",
+      "enabling": "Preparing saved screens…",
+      "disabling": "Removing saved screens…",
+      "enabled": "Offline mode is ready on this device.",
+      "disabled": "Nothing is stored for offline use.",
+      "unsupported": "Offline mode requires a secure connection and service worker support.",
+      "errors": {
+        "enable": "Offline mode could not be enabled.",
+        "disable": "Saved offline data could not be removed.",
+        "initialize": "Offline mode could not be initialized. Try switching it on again."
+      }
+    },
     "pagination": {
       "title": "Inventory pagination",
       "description": "Choose how many inventory items are shown on each page by default.",
@@ -812,6 +829,9 @@
       "stock_manage": { "label": "Manage stock", "description": "Change balances, units, locations, and builds." },
       "assignments_read": { "label": "View assignments", "description": "View checkouts, reservations, and assignments." },
       "assignments_manage": { "label": "Manage assignments", "description": "Create, return, and cancel assignments." },
+      "requests_read": { "label": "View requests", "description": "View internal requests and reservation calendars." },
+      "requests_create": { "label": "Create requests", "description": "Request inventory for a future time period." },
+      "requests_manage": { "label": "Manage requests", "description": "Approve, reject, cancel, and fulfill internal requests." },
       "counts_read": { "label": "View counts", "description": "View inventory cycles and count history." },
       "counts_manage": { "label": "Manage counts", "description": "Configure cycles and record inventory counts." },
       "spatial_read": { "label": "View spaces", "description": "View rooms, scans, maps, and placements." },

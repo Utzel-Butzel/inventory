@@ -22,6 +22,10 @@ import {
   type ResourceRulePermission,
 } from "@/lib/access-control-contract";
 import { db } from "@/lib/db";
+import {
+  listResourceSlugRows,
+  resolveResourceId,
+} from "@/lib/resource-slugs";
 
 export type EffectiveRole = Pick<
   AccessRoleRecord,
@@ -118,6 +122,21 @@ export async function getResourceRecord(
     )
     .limit(1);
   return resource ?? null;
+}
+
+export async function getResourceRecordByReference(
+  reference: string,
+  organizationId: string,
+) {
+  const resourceId = await resolveResourceId(organizationId, reference);
+  if (!resourceId) return null;
+  const [resource, slugRows] = await Promise.all([
+    getResourceRecord(resourceId, organizationId),
+    listResourceSlugRows(organizationId, [resourceId]),
+  ]);
+  return resource
+    ? { ...resource, slugs: slugRows.map((row) => row.slug) }
+    : null;
 }
 
 export async function getResourceRecords(

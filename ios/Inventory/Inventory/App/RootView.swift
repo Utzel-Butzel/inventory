@@ -55,8 +55,10 @@ struct RootView: View {
                 InventoryMapView()
             }
 
-            Tab("Räume", systemImage: "cube.transparent", value: RootTab.rooms) {
-                SpatialRoomsView()
+            if state.canReadSpatial {
+                Tab("Räume", systemImage: "cube.transparent", value: RootTab.rooms) {
+                    SpatialRoomsView()
+                }
             }
 
             Tab("Einstellungen", systemImage: "gearshape", value: RootTab.settings) {
@@ -83,11 +85,13 @@ struct RootView: View {
                 }
                 .tag(RootTab.map)
 
-            SpatialRoomsView()
-                .tabItem {
-                    Label("Räume", systemImage: "cube.transparent")
-                }
-                .tag(RootTab.rooms)
+            if state.canReadSpatial {
+                SpatialRoomsView()
+                    .tabItem {
+                        Label("Räume", systemImage: "cube.transparent")
+                    }
+                    .tag(RootTab.rooms)
+            }
 
             SettingsView(onboarding: false)
                 .tabItem {
@@ -150,7 +154,7 @@ struct RootView: View {
     private var presentedTool: some View {
         switch state.presentedTool {
         case .capture:
-            if state.canWrite {
+            if state.canCaptureInventory {
                 UnifiedCameraView(
                     initialMode: .capture,
                     maximumUploadImagePixelSize: state.maximumUploadImagePixelSize,

@@ -12,6 +12,7 @@ struct CaptureView: View {
     @State private var showDetails = false
     @State private var detailsDetent: PresentationDetent = .medium
     @State private var showSpatialCapture = false
+    @State private var inventoryTypes: [InventoryTypeDefinition] = []
 
     let onClose: (() -> Void)?
     let onSubmit: (IntakeSubmission) -> Void
@@ -63,6 +64,10 @@ struct CaptureView: View {
                 camera.start()
             }
             .onDisappear { camera.stop() }
+            .task {
+                guard let client = state.client else { return }
+                inventoryTypes = (try? await client.inventoryTypes().types) ?? []
+            }
             .onChange(of: pickerItems) { _, items in
                 model.addPickerItems(items)
                 pickerItems = []
@@ -162,7 +167,9 @@ struct CaptureView: View {
                 if !codeScanning {
                     HStack(spacing: 10) {
                         detailsButton
-                        spatialCaptureButton
+                        if state.canManageSpatial {
+                            spatialCaptureButton
+                        }
                     }
                     .padding(.bottom, 14)
 
@@ -331,7 +338,7 @@ struct CaptureView: View {
     }
 
     private var detailsSummary: String {
-        let count = [model.name, model.locationName, model.sku, model.serialNumber]
+        let count = [model.name, model.locationName, model.sku, model.barcode, model.serialNumber]
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .count + (model.locationService.coordinates == nil ? 0 : 1)
         return count == 0 ? "Details" : "Details · \(count) Angaben"
@@ -426,8 +433,8 @@ struct CaptureView: View {
 
             HStack(spacing: 12) {
                 Picker("Typ", selection: $model.resourceType) {
-                    ForEach(InventoryResourceType.allCases, id: \.self) { type in
-                        Text(type.localizedName).tag(type)
+                    ForEach(captureTypes, id: \.self) { type in
+                        Text(captureTypeLabel(type)).tag(type)
                     }
                 }
                 .pickerStyle(.menu)
@@ -484,7 +491,12 @@ struct CaptureView: View {
                     }
                     .font(.caption.weight(.semibold))
                 }
-                TextField("SKU / Barcode", text: $model.sku)
+                TextField("SKU", text: $model.sku)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(12)
+                    .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                TextField("Barcode", text: $model.barcode)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .padding(12)
@@ -580,6 +592,18 @@ struct CaptureView: View {
         guard let code = state.pendingCaptureCode else { return }
         state.pendingCaptureCode = nil
         model.applyScannedCode(code)
+    }
+
+    private var captureTypes: [InventoryResourceType] {
+        let definitions = inventoryTypes
+            .filter { $0.archivedAt == nil }
+            .sorted { ($0.position, $0.label) < ($1.position, $1.label) }
+        let values = definitions.compactMap { InventoryResourceType(rawValue: $0.key) }
+        return values.isEmpty ? InventoryResourceType.allCases : values
+    }
+
+    private func captureTypeLabel(_ type: InventoryResourceType) -> String {
+        inventoryTypes.first(where: { $0.key == type.rawValue })?.label ?? type.localizedName
     }
 }
 

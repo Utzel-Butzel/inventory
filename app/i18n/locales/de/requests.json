@@ -1,0 +1,128 @@
+{
+  "metadata": {
+    "title": "Interne Anfragen",
+    "description": "Inventar für eine zukünftige Nutzung anfragen, genehmigen und ausgeben."
+  },
+  "eyebrow": "Abläufe",
+  "title": "Interne Anfragen",
+  "description": "Plane zukünftigen Inventarbedarf, ohne den aktuellen Bestand zu verändern, bis eine genehmigte Anfrage erfüllt wird.",
+  "nav": {
+    "label": "Ansichten für Anfragen",
+    "requests": "Anfragen",
+    "calendar": "Kalender"
+  },
+  "actions": {
+    "close": "Formular schließen",
+    "new": "Neue Anfrage",
+    "submit": "Anfrage absenden",
+    "refresh": "Aktualisieren",
+    "approve": "Genehmigen",
+    "reject": "Ablehnen",
+    "fulfill": "Erfüllen",
+    "cancel": "Stornieren",
+    "less": "Weniger",
+    "details": "Details"
+  },
+  "errors": {
+    "load": "Die internen Anfragen konnten nicht geladen werden.",
+    "linesRequired": "Füge der Anfrage mindestens einen Inventareintrag hinzu.",
+    "create": "Die Anfrage konnte nicht erstellt werden.",
+    "action": "Die Anfrage konnte nicht aktualisiert werden."
+  },
+  "notices": {
+    "created": "Anfrage wurde eingereicht.",
+    "approve": "Anfrage genehmigt und Inventar reserviert.",
+    "reject": "Anfrage abgelehnt.",
+    "fulfill": "Anfrage erfüllt und Bestand ausgegeben.",
+    "cancel": "Anfrage storniert."
+  },
+  "confirm": {
+    "fulfill": "{{reference}} jetzt erfüllen? Dadurch wird der reservierte Bestand ausgegeben und es werden aktive Ausleihen erstellt.",
+    "reject": "{{reference}} ablehnen?",
+    "cancel": "{{reference}} stornieren?"
+  },
+  "create": {
+    "title": "Inventar anfragen",
+    "description": "Wähle die benötigten Einträge und den Zeitraum, in dem sie verfügbar sein sollen."
+  },
+  "form": {
+    "startsAt": "Benötigt ab",
+    "dueAt": "Rückgabe bis",
+    "delivery": "Lieferort (optional)",
+    "removeDelivery": "Lieferort entfernen",
+    "deliveryPlaceholder": "Räume oder Orte suchen…",
+    "noDeliveryResults": "Kein passender Ort gefunden.",
+    "note": "Anmerkung zur Anfrage",
+    "notePlaceholder": "Zweck, Projekt, Kontakt oder Hinweise zur Handhabung…",
+    "items": "Angefragte Einträge",
+    "itemsDescription": "Eine Anfrage kann mehrere Inventareinträge enthalten.",
+    "itemSearch": "Inventar durchsuchen…",
+    "noSku": "Keine SKU",
+    "removeItem": "{{name}} entfernen",
+    "quantity": "Menge",
+    "lineNote": "Anmerkung zum Eintrag",
+    "lineNotePlaceholder": "Optionale Anmerkung",
+    "emptyItems": "Suche oben und füge mindestens einen Eintrag hinzu."
+  },
+  "filters": {
+    "search": "Anfragen durchsuchen…",
+    "label": "Anfragen nach Status filtern",
+    "active": "Aktiv",
+    "all": "Alle Anfragen",
+    "submitted": "Eingereicht",
+    "approved": "Genehmigt",
+    "fulfilled": "Erfüllt",
+    "rejected": "Abgelehnt",
+    "cancelled": "Storniert"
+  },
+  "status": {
+    "submitted": "Eingereicht",
+    "approved": "Genehmigt",
+    "fulfilled": "Erfüllt",
+    "rejected": "Abgelehnt",
+    "cancelled": "Storniert",
+    "reserved": "Direkte Reservierung"
+  },
+  "list": {
+    "lineCount_one": "{{count}} Eintrag",
+    "lineCount_other": "{{count}} Einträge",
+    "current": "Aktuell {{count}} auf Lager"
+  },
+  "tracking": {
+    "bulk": "Mengenbestand",
+    "serialized": "Serialisiert"
+  },
+  "empty": {
+    "title": "Keine Anfragen gefunden",
+    "filtered": "Keine Anfrage entspricht dieser Suche und dem Statusfilter.",
+    "description": "Neue interne Inventaranfragen werden hier angezeigt."
+  },
+  "calendar": {
+    "metadata": {
+      "title": "Reservierungskalender",
+      "description": "Angefragtes, genehmigtes und direkt reserviertes Inventar im Zeitverlauf anzeigen."
+    },
+    "eyebrow": "Planung",
+    "title": "Reservierungskalender",
+    "description": "Sieh den kommenden Bedarf, bevor du Anfragen genehmigst oder Inventar anderweitig einplanst.",
+    "previous": "Vorheriger Monat",
+    "next": "Nächster Monat",
+    "today": "Heute",
+    "loading": "Reservierungen werden geladen…",
+    "error": "Der Reservierungskalender konnte nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "more_one": "+{{count}} weitere",
+    "more_other": "+{{count}} weitere",
+    "selected": "Ausgewählter Tag",
+    "entryCount_one": "{{count}} Reservierung",
+    "entryCount_other": "{{count}} Reservierungen",
+    "directReservation": "Direkte Reservierung",
+    "quantity_one": "{{count}} Einheit",
+    "quantity_other": "{{count}} Einheiten",
+    "noEnd": "Kein Enddatum",
+    "openRequest": "Anfragen öffnen",
+    "openStock": "Bestand öffnen",
+    "emptyTitle": "Keine Reservierungen an diesem Tag",
+    "emptyDescription": "Wähle einen anderen Tag oder erstelle eine interne Anfrage für zukünftiges Inventar."
+  }
+}

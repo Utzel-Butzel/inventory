@@ -17,6 +17,7 @@ export const ORGANIZATION_ROUTE_ROOTS = new Set([
   "labels",
   "duplicates",
   "notifications",
+  "requests",
   "settings",
 ]);
 

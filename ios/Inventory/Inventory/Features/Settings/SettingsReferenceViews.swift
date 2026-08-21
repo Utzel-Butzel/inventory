@@ -645,6 +645,7 @@ private extension CustomFieldValueType {
         case .datetime: "Datum und Uhrzeit"
         case .select: "Auswahl"
         case .multiSelect: "Mehrfachauswahl"
+        case .reference: "Referenz"
         case .email: "E-Mail-Adresse"
         case .url: "URL"
         }
@@ -657,6 +658,7 @@ private extension CustomFieldValueType {
         case .boolean: "checkmark.circle"
         case .date, .datetime: "calendar"
         case .select, .multiSelect: "list.bullet"
+        case .reference: "arrowshape.turn.up.right"
         case .email: "envelope"
         case .url: "link"
         }

@@ -18,6 +18,11 @@ import type {
   RoomScene,
   SpatialPlacementInput,
 } from "@/lib/room-scene-contract";
+import {
+  roomAiAnalysisSchema,
+  type RoomAiAnalysis,
+  type RoomObjectSuggestionPatch,
+} from "@/lib/room-ai-analysis-contract";
 import type { RoomKeyframeInput } from "@/lib/room-keyframe-contract";
 import { spatialMatricesApproximatelyEqual } from "@/lib/room-scene-contract";
 import {
@@ -295,6 +300,7 @@ export async function getRoomScene(organizationId: string, scanId: string) {
       revision: row.scan.revision,
       status: row.scan.status,
       scene: row.scan.scene,
+      aiAnalysis: row.scan.aiAnalysis,
       capturedAt: row.scan.capturedAt,
       deviceModel: row.scan.deviceModel,
       assets: assetRows.map(serializeAsset),
@@ -465,6 +471,66 @@ export async function findRoomScan(organizationId: string, scanId: string) {
     )
     .limit(1);
   return scan ?? null;
+}
+
+export async function listRoomScanAnalysisKeyframes(
+  organizationId: string,
+  scanId: string,
+) {
+  return db
+    .select()
+    .from(roomScanKeyframes)
+    .where(
+      and(
+        eq(roomScanKeyframes.organizationId, organizationId),
+        eq(roomScanKeyframes.roomScanId, scanId),
+      ),
+    )
+    .orderBy(asc(roomScanKeyframes.frameTimestamp));
+}
+
+export async function saveRoomAiAnalysis(
+  organizationId: string,
+  scanId: string,
+  analysis: RoomAiAnalysis,
+) {
+  const validated = roomAiAnalysisSchema.parse(analysis);
+  const [scan] = await db
+    .update(roomScans)
+    .set({ aiAnalysis: validated, updatedAt: new Date() })
+    .where(
+      and(
+        eq(roomScans.organizationId, organizationId),
+        eq(roomScans.id, scanId),
+      ),
+    )
+    .returning({ id: roomScans.id, aiAnalysis: roomScans.aiAnalysis });
+  return scan ?? null;
+}
+
+export async function updateRoomObjectSuggestion(
+  organizationId: string,
+  scanId: string,
+  patch: RoomObjectSuggestionPatch,
+) {
+  const scan = await findRoomScan(organizationId, scanId);
+  if (!scan) return { kind: "scan-not-found" as const };
+  const parsed = roomAiAnalysisSchema.safeParse(scan.aiAnalysis);
+  if (!parsed.success) return { kind: "analysis-not-found" as const };
+  const suggestion = parsed.data.objectSuggestions.find(
+    (candidate) => candidate.id === patch.suggestionId,
+  );
+  if (!suggestion) return { kind: "suggestion-not-found" as const };
+  const analysis = roomAiAnalysisSchema.parse({
+    ...parsed.data,
+    objectSuggestions: parsed.data.objectSuggestions.map((candidate) =>
+      candidate.id === patch.suggestionId
+        ? { ...candidate, status: patch.status }
+        : candidate,
+    ),
+  });
+  await saveRoomAiAnalysis(organizationId, scanId, analysis);
+  return { kind: "updated" as const, analysis };
 }
 
 export async function updateRoomLayoutTransform(

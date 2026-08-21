@@ -71,6 +71,23 @@
       "description": "Wähle ein helles oder dunkles Farbschema für die Benutzeroberfläche.",
       "selectionLabel": "Farbschema"
     },
+    "offline": {
+      "title": "Offline & schnelles Laden",
+      "description": "Speichere App-Oberfläche, statische Dateien und zuletzt besuchte Ansichten auf diesem Gerät – für schnelleres Laden und Lesezugriff bei Verbindungsabbrüchen.",
+      "selectionLabel": "Offline-Modus auf diesem Gerät",
+      "securityHint": "Gespeicherte Ansichten können Inventardaten enthalten. Aktiviere dies nur auf einem vertrauenswürdigen Gerät; beim Ausschalten oder Abmelden werden die Offline-Kopien entfernt.",
+      "checking": "Browserunterstützung wird geprüft…",
+      "enabling": "Gespeicherte Ansichten werden vorbereitet…",
+      "disabling": "Gespeicherte Ansichten werden entfernt…",
+      "enabled": "Der Offline-Modus ist auf diesem Gerät bereit.",
+      "disabled": "Für die Offline-Nutzung ist nichts gespeichert.",
+      "unsupported": "Der Offline-Modus benötigt eine sichere Verbindung und Service-Worker-Unterstützung.",
+      "errors": {
+        "enable": "Der Offline-Modus konnte nicht aktiviert werden.",
+        "disable": "Gespeicherte Offline-Daten konnten nicht entfernt werden.",
+        "initialize": "Der Offline-Modus konnte nicht initialisiert werden. Versuche erneut, ihn einzuschalten."
+      }
+    },
     "pagination": {
       "title": "Inventar-Seitengröße",
       "description": "Lege fest, wie viele Inventareinträge standardmäßig auf einer Seite angezeigt werden.",
@@ -841,6 +858,18 @@
       "assignments_manage": {
         "label": "Zuweisungen verwalten",
         "description": "Zuweisungen erstellen, zurückgeben und stornieren."
+      },
+      "requests_read": {
+        "label": "Anfragen anzeigen",
+        "description": "Interne Anfragen und Reservierungskalender anzeigen."
+      },
+      "requests_create": {
+        "label": "Anfragen erstellen",
+        "description": "Inventar für einen zukünftigen Zeitraum anfragen."
+      },
+      "requests_manage": {
+        "label": "Anfragen verwalten",
+        "description": "Interne Anfragen genehmigen, ablehnen, stornieren und erfüllen."
       },
       "counts_read": {
         "label": "Zählungen anzeigen",

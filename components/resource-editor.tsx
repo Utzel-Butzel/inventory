@@ -24,6 +24,7 @@ import {
   MapPin,
   Package,
   Paperclip,
+  Plus,
   Save,
   Search,
   Sparkles,
@@ -73,9 +74,14 @@ import {
 import type { CoverTransparencyMethod } from "@/lib/cover-generation-contract";
 import { getObjectCaptureUploadState } from "@/lib/object-capture-presentation";
 import { canonicalUsdzMimeType, isUsdzMedia } from "@/lib/usdz";
+import {
+  primaryResourceReference,
+  resourceSlugsSchema,
+} from "@/lib/resource-slug-contract";
 
 type FormState = {
   name: string;
+  slugs: string[];
   description: string;
   type: string;
   status: string;
@@ -95,8 +101,11 @@ type FormState = {
   notes: string;
 };
 
+type TextFormField = Exclude<keyof FormState, "slugs">;
+
 const emptyForm: FormState = {
   name: "",
+  slugs: [],
   description: "",
   type: "object",
   status: "available",
@@ -140,6 +149,7 @@ const labelClass = "block text-xs font-semibold text-muted-strong";
 
 const toForm = (resource: ClientResource): FormState => ({
   name: resource.name,
+  slugs: resource.slugs ?? [],
   description: resource.description,
   type: resource.type,
   status: resource.status,
@@ -605,8 +615,43 @@ export function ResourceEditor({
     });
   }, [files]);
 
-  const setField = (field: keyof FormState, value: string) =>
+  const setField = (field: TextFormField, value: string) =>
     setForm((current) => ({ ...current, [field]: value }));
+
+  const setSlug = (index: number, value: string) =>
+    setForm((current) => ({
+      ...current,
+      slugs: current.slugs.map((slug, slugIndex) =>
+        slugIndex === index ? value : slug,
+      ),
+    }));
+
+  const addSlug = () =>
+    setForm((current) =>
+      current.slugs.length >= 20
+        ? current
+        : { ...current, slugs: [...current.slugs, ""] },
+    );
+
+  const removeSlug = (index: number) =>
+    setForm((current) => ({
+      ...current,
+      slugs: current.slugs.filter((_, slugIndex) => slugIndex !== index),
+    }));
+
+  const moveSlug = (index: number, direction: -1 | 1) =>
+    setForm((current) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= current.slugs.length) {
+        return current;
+      }
+      const slugs = [...current.slugs];
+      [slugs[index], slugs[targetIndex]] = [
+        slugs[targetIndex]!,
+        slugs[index]!,
+      ];
+      return { ...current, slugs };
+    });
 
   const changeTransparentCover = (transparent: boolean) => {
     aiPreferencesTouched.current.transparency = true;
@@ -734,6 +779,9 @@ export function ResourceEditor({
 
   const payload = () => ({
     name: form.name.trim() || t("fallback.untitled"),
+    slugs: form.slugs
+      .map((slug) => slug.trim().toLowerCase())
+      .filter(Boolean),
     description: form.description.trim(),
     type: form.type,
     status: form.status,
@@ -939,6 +987,13 @@ export function ResourceEditor({
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    const parsedSlugs = resourceSlugsSchema.safeParse(
+      form.slugs.map((slug) => slug.trim()).filter(Boolean),
+    );
+    if (!parsedSlugs.success) {
+      setError(t("errors.invalidSlugs"));
+      return;
+    }
     const missingCustomField = applicableCustomFieldDefinitions.find((definition) => {
       if (!definition.required) return false;
       const value = customFields[definition.key];
@@ -996,10 +1051,15 @@ export function ResourceEditor({
             (await runCover(created.resource.id, uploadedCoverSourceId)) ??
             latest;
         }
-        router.push(organizationHref(`/inventory/${latest.id}`));
+        router.push(
+          organizationHref(
+            `/inventory/${primaryResourceReference(latest)}`,
+          ),
+        );
         router.refresh();
       } else {
         const saved = await fetchJson<{
+          resource: ClientResource;
           translation?: { status: string; error?: string };
         }>(`/api/v1/resources/${resourceId}`, {
           method: "PATCH",
@@ -1009,6 +1069,11 @@ export function ResourceEditor({
         await uploadMedia(resourceId!);
         setFiles([]);
         await loadResource();
+        router.replace(
+          organizationHref(
+            `/inventory/${primaryResourceReference(saved.resource)}/edit`,
+          ),
+        );
         setNotice(
           saved.translation?.status === "queued"
             ? t("notices.savedTranslations")
@@ -1108,6 +1173,9 @@ export function ResourceEditor({
   };
 
   const itemMedia = resource?.media ?? [];
+  const primaryReference = resource
+    ? primaryResourceReference(resource)
+    : resourceId;
   const descriptionImages = itemMedia
     .filter((item) => item.kind === "image")
     .map((item) => ({
@@ -1145,7 +1213,7 @@ export function ResourceEditor({
               <span className="truncate text-muted">{t("header.newItem")}</span>
             ) : (
               <>
-                <Link href={`/inventory/${resourceId}`} className="truncate hover:text-muted-strong">
+                <Link href={`/inventory/${primaryReference}`} className="truncate hover:text-muted-strong">
                   {resource?.name}
                 </Link>
                 <ChevronRight size={13} />
@@ -1173,7 +1241,7 @@ export function ResourceEditor({
         <div className="flex shrink-0 items-center gap-2">
           {!isNew && canViewStock ? (
             <Link
-              href={`/inventory/${resourceId}/stock`}
+              href={`/inventory/${primaryReference}/stock`}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3.5 text-sm font-semibold text-brand transition hover:bg-brand-soft"
             >
               <Warehouse size={16} />
@@ -1293,6 +1361,108 @@ export function ResourceEditor({
                   className={inputClass}
                 />
               </label>
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className={labelClass}>{t("details.slugs")}</p>
+                    <p className="mt-1 text-[11px] leading-4 text-muted">
+                      {t("details.slugsDescription")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addSlug}
+                    disabled={form.slugs.length >= 20}
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong transition hover:bg-surface-muted disabled:opacity-50"
+                  >
+                    <Plus size={13} aria-hidden="true" />
+                    {t("details.addSlug")}
+                  </button>
+                </div>
+                {form.slugs.length ? (
+                  <div className="mt-3 space-y-2">
+                    {form.slugs.map((slug, index) => (
+                      <div
+                        key={index}
+                        className="grid gap-2 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center"
+                      >
+                        <span
+                          className={`w-fit rounded-full px-2 py-1 text-[10px] font-semibold ${
+                            index === 0
+                              ? "bg-brand-soft text-brand"
+                              : "bg-surface-muted text-muted-strong"
+                          }`}
+                        >
+                          {index === 0
+                            ? t("details.standardSlug")
+                            : t("details.aliasSlug", { number: index })}
+                        </span>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="shrink-0 font-mono text-xs text-muted">/</span>
+                          <input
+                            value={slug}
+                            onChange={(event) =>
+                              setSlug(index, event.target.value.toLowerCase())
+                            }
+                            onBlur={(event) =>
+                              setSlug(index, event.target.value.trim().toLowerCase())
+                            }
+                            maxLength={80}
+                            pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                            title={t("details.slugsDescription")}
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            placeholder={t("details.slugPlaceholder")}
+                            aria-label={t("details.slugLabel", {
+                              number: index + 1,
+                            })}
+                            className={`${inputClass} mt-0 min-w-0 font-mono`}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1 sm:justify-end">
+                          <button
+                            type="button"
+                            onClick={() => moveSlug(index, -1)}
+                            disabled={index === 0}
+                            aria-label={t("details.moveSlugUp", {
+                              number: index + 1,
+                            })}
+                            className="grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-surface text-muted transition hover:bg-surface-muted hover:text-muted-strong disabled:cursor-not-allowed disabled:opacity-35"
+                          >
+                            <ArrowUp size={14} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveSlug(index, 1)}
+                            disabled={index === form.slugs.length - 1}
+                            aria-label={t("details.moveSlugDown", {
+                              number: index + 1,
+                            })}
+                            className="grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-surface text-muted transition hover:bg-surface-muted hover:text-muted-strong disabled:cursor-not-allowed disabled:opacity-35"
+                          >
+                            <ArrowDown size={14} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeSlug(index)}
+                            aria-label={t("details.removeSlug", {
+                              number: index + 1,
+                            })}
+                            className="grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-surface text-muted transition hover:border-danger-border hover:bg-danger-soft hover:text-danger"
+                          >
+                            <X size={14} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 rounded-xl border border-dashed border-border bg-surface-subtle px-3.5 py-3 text-xs text-muted">
+                    {t("details.noSlugs")}
+                  </p>
+                )}
+              </div>
               <label className={labelClass}>
                 {t("details.type")}
                 <select value={form.type} onChange={(event) => setField("type", event.target.value)} className={inputClass}>

@@ -129,6 +129,7 @@ export function assembleRoomSceneManifests(
       revision: scan.revision,
       status: scan.status,
       scene: scan.scene,
+      aiAnalysis: scan.aiAnalysis,
       capturedAt: scan.capturedAt,
       deviceModel: scan.deviceModel,
       assets: (assetsByScan.get(scan.id) ?? []).map(serializeRoomScanAsset),

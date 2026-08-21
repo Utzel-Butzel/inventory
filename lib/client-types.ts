@@ -14,6 +14,7 @@ import type {
   RoomCameraIntrinsics,
   RoomKeyframeFeatureDescriptor,
 } from "@/lib/room-keyframe-contract";
+import type { RoomAiAnalysis } from "@/lib/room-ai-analysis-contract";
 import type { ResourceCommentDto } from "@/lib/resource-comment-contract";
 
 export type ClientResourceComment = ResourceCommentDto;
@@ -26,6 +27,7 @@ export type ClientResource = Omit<
   ResourceRecord,
   "createdAt" | "updatedAt"
 > & {
+  slugs: string[];
   createdAt: string;
   updatedAt: string;
   media: ClientMedia[];
@@ -154,6 +156,7 @@ export type ClientRoomSceneScan = {
   revision: number;
   status: "active" | "superseded";
   scene: RoomScene;
+  aiAnalysis?: RoomAiAnalysis | null;
   capturedAt: string;
   deviceModel: string | null;
   assets: ClientRoomScanAsset[];

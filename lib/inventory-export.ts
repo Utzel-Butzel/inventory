@@ -16,6 +16,7 @@ export const INVENTORY_EXPORT_HEADERS = [
   "priority",
   "tags",
   "categories",
+  "slugs",
   "custom_fields",
   "related_resource_ids",
   "gps_latitude",
@@ -71,6 +72,7 @@ export type InventoryExportResource = {
   priority: number;
   tags: unknown;
   categories: unknown;
+  slugs?: unknown;
   customFields: unknown;
   relatedResourceIds: unknown;
   gpsLatitude: number | null;
@@ -164,6 +166,7 @@ export function inventoryExportRow(
     priority: resource.priority,
     tags: stringifyJson(resource.tags),
     categories: stringifyJson(resource.categories),
+    slugs: stringifyJson(resource.slugs ?? []),
     custom_fields: stringifyJson(resource.customFields),
     related_resource_ids: stringifyJson(resource.relatedResourceIds),
     gps_latitude: resource.gpsLatitude,
@@ -220,6 +223,7 @@ const columnWidths: Record<InventoryExportHeader, number> = {
   priority: 10,
   tags: 28,
   categories: 30,
+  slugs: 30,
   custom_fields: 45,
   related_resource_ids: 40,
   gps_latitude: 14,
@@ -377,6 +381,7 @@ export async function buildInventoryXlsx(
         "description",
         "tags",
         "categories",
+        "slugs",
         "custom_fields",
         "related_resource_ids",
         "map_features",

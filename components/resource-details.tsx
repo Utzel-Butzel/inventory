@@ -55,6 +55,7 @@ import type {
   CustomFieldValue,
 } from "@/lib/custom-field-contract";
 import { getObjectCapturePresentation } from "@/lib/object-capture-presentation";
+import { primaryResourceReference } from "@/lib/resource-slug-contract";
 import { isUsdzMedia } from "@/lib/usdz";
 
 const statusStyles: Record<string, string> = {
@@ -696,6 +697,7 @@ export function ResourceDetails({
           }
         : null);
   const isRoom = resource.type === "place";
+  const primaryReference = primaryResourceReference(resource);
   const coordinateLabel =
     resource.gpsLatitude !== null && resource.gpsLongitude !== null
       ? `${resource.gpsLatitude.toFixed(5)}, ${resource.gpsLongitude.toFixed(5)}`
@@ -715,6 +717,28 @@ export function ResourceDetails({
               {statusLabel(resource.status)}
             </span>
           </div>
+          {resource.slugs.length ? (
+            <div className="mt-2 flex flex-wrap gap-1.5" aria-label={resourceT("details.slugs")}>
+              {resource.slugs.map((slug, index) => (
+                <Link
+                  key={slug}
+                  href={`/inventory/${slug}`}
+                  className={`rounded-md px-2 py-1 font-mono text-[11px] transition ${
+                    index === 0
+                      ? "bg-brand-soft text-brand"
+                      : "bg-surface-muted text-muted-strong hover:bg-brand-soft hover:text-brand"
+                  }`}
+                  title={
+                    index === 0
+                      ? resourceT("details.standardSlug")
+                      : resourceT("details.aliasSlug", { number: index })
+                  }
+                >
+                  /{slug}
+                </Link>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           {localization && localization.availableLanguages.length > 1 ? (
@@ -746,7 +770,7 @@ export function ResourceDetails({
           ) : null}
           {canViewStock && !isRoom ? (
             <Link
-              href={`/inventory/${resource.id}/stock`}
+              href={`/inventory/${primaryReference}/stock`}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3.5 text-sm font-semibold text-brand transition hover:bg-brand-soft"
             >
               <Warehouse className="size-4" /> {t("details.actions.stock")}
@@ -754,7 +778,7 @@ export function ResourceDetails({
           ) : null}
           {canEdit ? (
             <Link
-              href={`/inventory/${resource.id}/edit`}
+              href={`/inventory/${primaryReference}/edit`}
               className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-solid px-4 text-sm font-semibold text-on-brand transition hover:bg-brand-hover"
             >
               <Pencil className="size-4" /> {t("details.actions.edit")}
@@ -817,7 +841,7 @@ export function ResourceDetails({
                       </p>
                       {canEdit ? (
                         <Link
-                          href={`/inventory/${resource.id}/edit`}
+                          href={`/inventory/${primaryReference}/edit`}
                           className="mt-2 inline-flex text-xs font-semibold text-success hover:text-success"
                         >
                           {t("details.addArticleImage")}

@@ -129,6 +129,7 @@ export const config = {
     "/labels/:path*",
     "/duplicates/:path*",
     "/notifications/:path*",
+    "/requests/:path*",
     "/settings/:path*",
     "/:organizationId/:path*",
   ],

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { CodeXml, Languages, ListFilter, Palette } from "lucide-react";
+import { CloudDownload, CodeXml, Languages, ListFilter, Palette } from "lucide-react";
 
 import { DeveloperModeSetting } from "@/components/developer-mode-setting";
 import { InventoryPageSizeSetting } from "@/components/inventory-page-size-setting";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { OfflineSupportSetting } from "@/components/offline-support";
 import { SettingsPageHeader } from "@/components/settings-page-header";
 import { LocalizedThemeToggle } from "@/components/theme-toggle";
 import { Card } from "@/components/ui";
@@ -51,6 +52,33 @@ export default async function UserSettingsPage() {
               {t("user.appearance.selectionLabel")}
             </p>
             <LocalizedThemeToggle />
+          </div>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <div className="flex items-start gap-3 border-b border-border px-5 py-4 sm:px-6">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+              <CloudDownload className="size-[18px]" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-foreground">
+                {t("user.offline.title")}
+              </h2>
+              <p className="mt-1 text-[13px] leading-5 text-muted">
+                {t("user.offline.description")}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+            <div className="min-w-0">
+              <p className="pt-1 text-[13px] font-medium text-muted-strong">
+                {t("user.offline.selectionLabel")}
+              </p>
+              <p className="mt-1 max-w-xl text-xs leading-5 text-muted">
+                {t("user.offline.securityHint")}
+              </p>
+            </div>
+            <OfflineSupportSetting />
           </div>
         </Card>
 

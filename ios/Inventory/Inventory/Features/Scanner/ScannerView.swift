@@ -167,7 +167,7 @@ struct ScannerView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
                     .textSelection(.enabled)
-                if state.canWrite {
+                if state.canCreateInventory {
                     Button {
                         state.pendingCaptureCode = code
                         unmatchedCode = nil

@@ -4,7 +4,10 @@ import { ResourceComments } from "@/components/resource-comments";
 import { ResourceDetails } from "@/components/resource-details";
 import { ResourceVariantsManager } from "@/components/resource-variants-manager";
 import { canAccessResource, getSessionIdentity } from "@/lib/api-auth";
-import { getResourceRecord } from "@/lib/access-control";
+import { getResourceRecordByReference } from "@/lib/access-control";
+import { organizationPath } from "@/lib/organization-path";
+import { primaryResourceReference } from "@/lib/resource-slug-contract";
+import { redirect } from "next/navigation";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -12,8 +15,20 @@ export default async function InventoryItemPage({ params }: Props) {
   const { id } = await params;
   const identity = await getSessionIdentity();
   const resource = identity
-    ? await getResourceRecord(id, identity.organizationId)
+    ? await getResourceRecordByReference(id, identity.organizationId)
     : null;
+  if (identity && resource) {
+    const primaryReference = primaryResourceReference(resource);
+    if (id !== primaryReference) {
+      redirect(
+        organizationPath(
+          identity.organization.slug,
+          `/inventory/${primaryReference}`,
+        ),
+      );
+    }
+  }
+  const resourceId = resource?.id ?? id;
   const [canEdit, canDelete, canManageAssignments, canManageStock] =
     identity && resource
       ? await Promise.all([
@@ -36,7 +51,7 @@ export default async function InventoryItemPage({ params }: Props) {
   return (
     <>
       <ResourceDetails
-        resourceId={id}
+        resourceId={resourceId}
         canEdit={canEdit}
         canDelete={canDelete}
         canShare={canShare}
@@ -45,7 +60,7 @@ export default async function InventoryItemPage({ params }: Props) {
         organizationId={identity?.organizationId ?? ""}
       />
       {resource ? (
-        <ResourceComments resourceId={id} canComment={canEdit} />
+        <ResourceComments resourceId={resourceId} canComment={canEdit} />
       ) : null}
       {resource ? (
         <ResourceConnectionDiagram
@@ -62,7 +77,7 @@ export default async function InventoryItemPage({ params }: Props) {
       ) : null}
       {!isPlace ? (
         <ResourceVariantsManager
-          resourceId={id}
+          resourceId={resourceId}
           canEdit={canEdit}
           canManageStock={canManageStock}
           hideWhenEmpty
@@ -71,7 +86,7 @@ export default async function InventoryItemPage({ params }: Props) {
       ) : null}
       {canViewAssignments && !isPlace ? (
         <ResourceAssignmentsManager
-          resourceId={id}
+          resourceId={resourceId}
           canEdit={canManageAssignments}
         />
       ) : null}

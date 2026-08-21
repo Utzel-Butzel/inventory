@@ -8,6 +8,7 @@ import {
   ArrowRight,
   Camera,
   ChevronRight,
+  ClipboardList,
   LayoutDashboard,
   LockKeyhole,
   LogOut,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { NotificationBell } from "@/components/notification-bell";
+import { OfflineSupportProvider } from "@/components/offline-support";
 import {
   OrganizationLink as Link,
   OrganizationRoutingProvider,
@@ -35,6 +37,7 @@ import { cn } from "@/components/ui";
 import { BrandMark } from "@/components/brand-mark";
 import type { UserRole } from "@/db/schema";
 import type { ApiScope, AppPermission } from "@/lib/access-control-contract";
+import { disableOfflineModeBeforeSignOut } from "@/lib/offline-support-client";
 import {
   organizationPath,
   stripOrganizationPathname,
@@ -94,6 +97,12 @@ const navigation: Array<{
     permission: "stock.read",
   },
   {
+    labelKey: "navigation.requests",
+    href: "/requests",
+    icon: ClipboardList,
+    permission: "requests.read",
+  },
+  {
     labelKey: "navigation.locations",
     href: "/map",
     icon: MapPinned,
@@ -131,6 +140,7 @@ const pageNames: Record<string, string> = {
   labels: "navigation.labels",
   duplicates: "navigation.duplicates",
   notifications: "navigation.notifications",
+  requests: "navigation.requests",
   settings: "navigation.settings",
 };
 
@@ -206,7 +216,11 @@ function CreateMenu({
     };
   }, [open]);
 
-  if (!user.permissions.includes("inventory.create")) return null;
+  const canCreateInventory = user.permissions.includes("inventory.create");
+  const canCreateRequest =
+    user.permissions.includes("requests.create") &&
+    user.permissions.includes("inventory.read");
+  if (!canCreateInventory && !canCreateRequest) return null;
 
   const closeMenu = () => {
     setOpen(false);
@@ -248,22 +262,24 @@ function CreateMenu({
           )}
           aria-label={t("actions.createMenu")}
         >
-          <Link
-            href="/inventory/new"
-            onClick={closeMenu}
-            className="flex items-start gap-3 rounded-lg px-3 py-2.5 text-foreground transition hover:bg-surface-muted"
-          >
-            <Plus className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
-            <span className="min-w-0">
-              <span className="block text-[12px] font-semibold">
-                {t("actions.manualEntry")}
+          {canCreateInventory ? (
+            <Link
+              href="/inventory/new"
+              onClick={closeMenu}
+              className="flex items-start gap-3 rounded-lg px-3 py-2.5 text-foreground transition hover:bg-surface-muted"
+            >
+              <Plus className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+              <span className="min-w-0">
+                <span className="block text-[12px] font-semibold">
+                  {t("actions.manualEntry")}
+                </span>
+                <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                  {t("actions.manualEntryDescription")}
+                </span>
               </span>
-              <span className="mt-0.5 block text-[10px] leading-4 text-muted">
-                {t("actions.manualEntryDescription")}
-              </span>
-            </span>
-          </Link>
-          {user.scopes.includes("ai") ? (
+            </Link>
+          ) : null}
+          {canCreateInventory && user.scopes.includes("ai") ? (
             <Link
               href="/batch"
               onClick={closeMenu}
@@ -279,6 +295,26 @@ function CreateMenu({
                 </span>
                 <span className="mt-0.5 block text-[10px] leading-4 text-muted">
                   {t("actions.photoCaptureDescription")}
+                </span>
+              </span>
+            </Link>
+          ) : null}
+          {canCreateRequest ? (
+            <Link
+              href="/requests"
+              onClick={closeMenu}
+              className="flex items-start gap-3 rounded-lg px-3 py-2.5 text-foreground transition hover:bg-surface-muted"
+            >
+              <ClipboardList
+                className="mt-0.5 size-4 shrink-0 text-brand"
+                aria-hidden="true"
+              />
+              <span className="min-w-0">
+                <span className="block text-[12px] font-semibold">
+                  {t("actions.internalRequest")}
+                </span>
+                <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                  {t("actions.internalRequestDescription")}
                 </span>
               </span>
             </Link>
@@ -305,6 +341,13 @@ function SidebarContent({
   showCreateMenu?: boolean;
 }) {
   const { t } = useT(["shell", "common"]);
+  const handleSignOut = async () => {
+    try {
+      await disableOfflineModeBeforeSignOut();
+    } finally {
+      await signOut({ redirectTo: "/login" });
+    }
+  };
   return (
     <div className="flex h-full flex-col bg-surface-subtle">
       <div className="flex h-[68px] items-center px-5">
@@ -428,7 +471,7 @@ function SidebarContent({
           </div>
           <button
             type="button"
-            onClick={() => signOut({ redirectTo: "/login" })}
+            onClick={() => void handleSignOut()}
             className="grid size-8 shrink-0 place-items-center rounded-lg text-sidebar-muted transition hover:bg-surface-muted hover:text-foreground"
             aria-label={t("actions.signOut")}
             title={t("actions.signOut")}
@@ -443,12 +486,14 @@ function SidebarContent({
 
 export function AppShell({
   children,
+  offlineOwnerKey,
   user,
   organization,
   organizations,
   websiteUrl,
 }: {
   children: React.ReactNode;
+  offlineOwnerKey: string;
   user: ShellUser;
   organization: ActiveOrganization;
   organizations: OrganizationMembershipSummary[];
@@ -478,7 +523,12 @@ export function AppShell({
           pathSegments[2] === "stock"
         ? t("navigation.stock")
         : undefined;
-  const nestedPageName = settingsPageName ?? inventoryNestedPageName;
+  const requestNestedPageName =
+    section === "requests" && pathSegments[1] === "calendar"
+      ? t("navigation.reservationCalendar")
+      : undefined;
+  const nestedPageName =
+    settingsPageName ?? inventoryNestedPageName ?? requestNestedPageName;
   const showGlobalSearch = scopedPathname !== "/inventory";
 
   const closeMobileNavigation = () => {
@@ -520,12 +570,13 @@ export function AppShell({
   }, [mobileOpen]);
 
   return (
-    <OrganizationRoutingProvider
-      organizationSlug={organization.slug}
-      isReadOnly={organization.isReadOnly}
-      allowNegativeStock={organization.allowNegativeStock}
-    >
-    <div className="min-h-dvh bg-background">
+    <OfflineSupportProvider ownerKey={offlineOwnerKey}>
+      <OrganizationRoutingProvider
+        organizationSlug={organization.slug}
+        isReadOnly={organization.isReadOnly}
+        allowNegativeStock={organization.allowNegativeStock}
+      >
+      <div className="min-h-dvh bg-background">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[244px] border-r border-border lg:block">
         <SidebarContent
           pathname={scopedPathname}
@@ -733,7 +784,8 @@ export function AppShell({
           {children}
         </main>
       </div>
-    </div>
-    </OrganizationRoutingProvider>
+      </div>
+      </OrganizationRoutingProvider>
+    </OfflineSupportProvider>
   );
 }

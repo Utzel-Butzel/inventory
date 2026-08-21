@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { createHash } from "node:crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -76,6 +77,10 @@ export default async function DashboardLayout({
         },
       ];
   const resources = getResources(translation.i18n);
+  const offlineOwnerKey = createHash("sha256")
+    .update(identity.subject)
+    .digest("hex")
+    .slice(0, 24);
   const configuredWebsiteUrl = process.env.WEBSITE_URL?.trim();
   const websiteUrl =
     configuredWebsiteUrl && /^https?:\/\//i.test(configuredWebsiteUrl)
@@ -85,6 +90,7 @@ export default async function DashboardLayout({
   return (
     <UiI18nProvider language={translation.lng} resources={resources}>
       <AppShell
+        offlineOwnerKey={offlineOwnerKey}
         organization={organizationIdentity.organization}
         organizations={organizations}
         websiteUrl={websiteUrl}

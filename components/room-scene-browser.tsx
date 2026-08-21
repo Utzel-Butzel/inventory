@@ -24,12 +24,15 @@ import {
   Search,
   Smartphone,
   Building2,
+  Check,
   Layers3,
   Map as MapIcon,
   Move3d,
   RotateCcw,
   Save,
+  Sparkles,
   Undo2,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -41,6 +44,10 @@ import {
   translateRoomTransform,
 } from "@/lib/room-floor-layout";
 import type { SpatialMatrix4 } from "@/lib/room-scene-contract";
+import type {
+  RoomAiAnalysis,
+  RoomObjectSuggestion,
+} from "@/lib/room-ai-analysis-contract";
 import {
   fetchJson,
   type ClientRoomPlacement,
@@ -118,6 +125,8 @@ export function RoomSceneBrowser() {
   const [layoutRoomId, setLayoutRoomId] = useState<string | null>(null);
   const [layoutMapEnabled, setLayoutMapEnabled] = useState(false);
   const [savingLayout, setSavingLayout] = useState(false);
+  const [analyzingRoom, setAnalyzingRoom] = useState(false);
+  const [updatingSuggestionId, setUpdatingSuggestionId] = useState<string | null>(null);
   const sceneRequestRef = useRef(0);
 
   const updateUrl = useCallback(
@@ -412,9 +421,9 @@ export function RoomSceneBrowser() {
   const setMapLayoutEnabled = (enabled: boolean) => {
     setLayoutMapEnabled(enabled);
     if (!enabled) return;
-    // Geographic editing starts from the captured AR world transform. The 3D
-    // automatic layout deliberately places unarranged rooms side by side and
-    // therefore cannot be aligned to a north-up basemap.
+    // Exact room anchors start from their captured AR world transform. Rooms
+    // using the broader building anchor keep the compact automatic layout so
+    // every footprint is visible and can be aligned manually on the basemap.
     setLayoutDrafts(Object.fromEntries(floorManifests.map((item) => {
       const hasOwnGeoreference = Boolean(
         item.scan.georeference ?? item.georeference,
@@ -448,7 +457,7 @@ export function RoomSceneBrowser() {
     if (layoutMapEnabled) {
       setLayoutDrafts(Object.fromEntries(floorManifests.map((item) => [
         item.scan.id,
-        item.scan.georeference ?? item.georeference
+        (item.scan.georeference ?? item.georeference)
           ? item.scan.scene.worldFromModel
           : reset.transforms.get(item.scan.id) ?? item.scan.scene.worldFromModel,
       ])) as Record<string, SpatialMatrix4>);
@@ -526,6 +535,62 @@ export function RoomSceneBrowser() {
   const selectedLayoutManifest = floorManifests.find(
     (item) => item.scan.id === layoutRoomId,
   ) ?? null;
+  const roomAnalysis = visibleManifest?.scan.aiAnalysis ?? null;
+  const visibleSuggestions = roomAnalysis?.objectSuggestions.filter(
+    (suggestion) => suggestion.status !== "dismissed",
+  ) ?? [];
+
+  const setVisibleRoomAnalysis = useCallback((scanId: string, analysis: RoomAiAnalysis) => {
+    setManifest((current) => current?.scan.id === scanId
+      ? {
+          ...current,
+          scan: { ...current.scan, aiAnalysis: analysis },
+        }
+      : current);
+  }, []);
+
+  const analyzeRoom = async () => {
+    if (!visibleManifest || analyzingRoom) return;
+    setAnalyzingRoom(true);
+    setError(null);
+    try {
+      const { analysis } = await fetchJson<{ analysis: RoomAiAnalysis }>(
+        `/api/v1/room-scans/${encodeURIComponent(visibleManifest.scan.id)}/analysis`,
+        {
+          method: "POST",
+        },
+      );
+      setVisibleRoomAnalysis(visibleManifest.scan.id, analysis);
+    } catch {
+      setError(t("rooms.errors.analyzeRoom"));
+    } finally {
+      setAnalyzingRoom(false);
+    }
+  };
+
+  const reviewSuggestion = async (
+    suggestion: RoomObjectSuggestion,
+    status: RoomObjectSuggestion["status"],
+  ) => {
+    if (!visibleManifest || updatingSuggestionId) return;
+    setUpdatingSuggestionId(suggestion.id);
+    setError(null);
+    try {
+      const { analysis } = await fetchJson<{ analysis: RoomAiAnalysis }>(
+        `/api/v1/room-scans/${encodeURIComponent(visibleManifest.scan.id)}/analysis`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ suggestionId: suggestion.id, status }),
+        },
+      );
+      setVisibleRoomAnalysis(visibleManifest.scan.id, analysis);
+    } catch {
+      setError(t("rooms.errors.reviewSuggestion"));
+    } finally {
+      setUpdatingSuggestionId(null);
+    }
+  };
 
   if (loadingScans) {
     return (
@@ -964,7 +1029,28 @@ export function RoomSceneBrowser() {
                 </a>
               ) : null}
             </div>
-            <label className="relative mt-4 block">
+            {visibleManifest ? (
+              <button
+                type="button"
+                onClick={() => void analyzeRoom()}
+                disabled={
+                  analyzingRoom || !(visibleManifest.scan.keyframes?.length ?? 0)
+                }
+                className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-brand-solid px-3 text-[11px] font-semibold text-on-brand transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {analyzingRoom ? (
+                  <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Sparkles className="size-3.5" aria-hidden="true" />
+                )}
+                {analyzingRoom
+                  ? t("rooms.ai.analyzing")
+                  : roomAnalysis
+                    ? t("rooms.ai.refresh")
+                    : t("rooms.ai.analyze")}
+              </button>
+            ) : null}
+            <label className="relative mt-3 block">
               <span className="sr-only">{t("rooms.placements.searchPlaceholder")}</span>
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted"
@@ -981,6 +1067,137 @@ export function RoomSceneBrowser() {
           </div>
 
           <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-2">
+            {roomAnalysis ? (
+              <section className="mb-2 rounded-xl border border-brand-border bg-brand-soft/45 p-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="size-3.5 shrink-0 text-brand" aria-hidden="true" />
+                  <h3 className="text-[11px] font-semibold text-foreground">
+                    {t("rooms.ai.title")}
+                  </h3>
+                </div>
+                <p className="mt-2 text-[10px] leading-4 text-muted">
+                  {roomAnalysis.summary}
+                </p>
+
+                {roomAnalysis.surfaceAppearances.length ? (
+                  <div className="mt-3">
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+                      {t("rooms.ai.finishes")}
+                    </p>
+                    <div className="mt-1.5 space-y-1">
+                      {roomAnalysis.surfaceAppearances.map((appearance) => (
+                        <div
+                          key={appearance.surfaceCategory}
+                          className="flex items-center gap-2 rounded-lg bg-surface/75 px-2 py-1.5"
+                        >
+                          <span
+                            className="size-5 shrink-0 rounded-md border border-border shadow-inner"
+                            style={{ backgroundColor: appearance.colorHex }}
+                            aria-hidden="true"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[10px] font-semibold text-foreground">
+                              {t(`rooms.ai.surfaces.${appearance.surfaceCategory}`)} · {appearance.colorName}
+                            </span>
+                            <span className="block truncate text-[9px] text-muted">
+                              {t(`rooms.ai.materials.${appearance.material}`)} · {t("rooms.ai.confidence", {
+                                value: integer.format(Math.round(appearance.confidence * 100)),
+                              })}
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    {t("rooms.ai.suggestions")}
+                  </p>
+                  <span className="text-[9px] text-muted">
+                    {integer.format(visibleSuggestions.length)}
+                  </span>
+                </div>
+                {visibleSuggestions.length ? (
+                  <div className="mt-1.5 space-y-1.5">
+                    {visibleSuggestions.map((suggestion) => {
+                      const updating = updatingSuggestionId === suggestion.id;
+                      return (
+                        <article
+                          key={suggestion.id}
+                          className="rounded-lg border border-border bg-surface/85 p-2"
+                        >
+                          <div className="flex items-start gap-2">
+                            {suggestion.colorHex ? (
+                              <span
+                                className="mt-0.5 size-5 shrink-0 rounded-md border border-border"
+                                style={{ backgroundColor: suggestion.colorHex }}
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <PackageOpen className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[10px] font-semibold text-foreground">
+                                {suggestion.name}
+                              </p>
+                              <p className="mt-0.5 text-[9px] leading-4 text-muted">
+                                {suggestion.evidence}
+                              </p>
+                              <p className="mt-1 text-[9px] font-medium text-muted-strong">
+                                {suggestion.roomObjectId
+                                  ? t("rooms.ai.grounded")
+                                  : t("rooms.ai.unplaced")}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-2 flex gap-1.5">
+                            {suggestion.status === "pending" ? (
+                              <button
+                                type="button"
+                                onClick={() => void reviewSuggestion(suggestion, "accepted")}
+                                disabled={Boolean(updatingSuggestionId)}
+                                className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[9px] font-semibold text-success disabled:opacity-50"
+                              >
+                                {updating ? (
+                                  <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+                                ) : (
+                                  <Check className="size-3" aria-hidden="true" />
+                                )}
+                                {t("rooms.ai.accept")}
+                              </button>
+                            ) : (
+                              <span className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[9px] font-semibold text-success">
+                                <Check className="size-3" aria-hidden="true" />
+                                {t("rooms.ai.accepted")}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => void reviewSuggestion(suggestion, "dismissed")}
+                              disabled={Boolean(updatingSuggestionId)}
+                              className="grid size-7 place-items-center rounded-lg border border-border text-muted hover:text-danger disabled:opacity-50"
+                              aria-label={t("rooms.ai.dismiss", { name: suggestion.name })}
+                              title={t("rooms.ai.dismiss", { name: suggestion.name })}
+                            >
+                              <X className="size-3" aria-hidden="true" />
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-1.5 text-[10px] leading-4 text-muted">
+                    {t("rooms.ai.noSuggestions")}
+                  </p>
+                )}
+                <p className="mt-2 text-[9px] leading-4 text-muted">
+                  {t("rooms.ai.reviewHint")}
+                </p>
+              </section>
+            ) : null}
             {placements.length ? (
               <div className="space-y-1">
                 {placements.map((placement) => {

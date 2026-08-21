@@ -192,6 +192,25 @@ public final class APIClient: Sendable {
         return try await execute(request)
     }
 
+    public func customFieldReferenceOptions(
+        definitionID: String,
+        query: String? = nil,
+        selectedIDs: [String] = [],
+        limit: Int = 25
+    ) async throws -> CustomFieldReferenceOptionsResponse {
+        var queryItems = selectedIDs.map { URLQueryItem(name: "selected", value: $0) }
+        if let query, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            queryItems.append(URLQueryItem(name: "q", value: query))
+        }
+        queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
+        let url = try makeAPIURL(
+            path: ["custom-fields", definitionID, "options"],
+            queryItems: queryItems
+        )
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
     public func imageGenerationModels() async throws -> ImageGenerationModelsResponse {
         let url = try makeAPIURL(path: ["ai", "image-models"])
         let request = try await authorizedRequest(url: url, method: "GET")
@@ -338,10 +357,13 @@ public final class APIClient: Sendable {
     }
 
     public func getResource(id: UUID) async throws -> InventoryResource {
+        try await getResourceDetail(id: id).resource
+    }
+
+    public func getResourceDetail(id: UUID) async throws -> ResourceResponse {
         let url = try makeAPIURL(path: ["resources", id.uuidString.lowercased()])
         let request = try await authorizedRequest(url: url, method: "GET")
-        let response: ResourceResponse = try await execute(request)
-        return response.resource
+        return try await execute(request)
     }
 
     public func createResource(

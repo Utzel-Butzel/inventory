@@ -237,7 +237,7 @@
   },
   "search": {
     "label": "Search inventory",
-    "placeholder": "Search name, description, SKU, tag or location…",
+    "placeholder": "Search name, slug, description, SKU, tag or location…",
     "clear": "Clear search"
   },
   "filters": {

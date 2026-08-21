@@ -1,0 +1,128 @@
+{
+  "metadata": {
+    "title": "Internal requests",
+    "description": "Request, approve, and issue inventory for future use."
+  },
+  "eyebrow": "Operations",
+  "title": "Internal requests",
+  "description": "Coordinate future inventory needs without changing on-hand stock until an approved request is fulfilled.",
+  "nav": {
+    "label": "Request views",
+    "requests": "Requests",
+    "calendar": "Calendar"
+  },
+  "actions": {
+    "close": "Close form",
+    "new": "New request",
+    "submit": "Submit request",
+    "refresh": "Refresh",
+    "approve": "Approve",
+    "reject": "Reject",
+    "fulfill": "Fulfill",
+    "cancel": "Cancel",
+    "less": "Less",
+    "details": "Details"
+  },
+  "errors": {
+    "load": "Internal requests could not be loaded.",
+    "linesRequired": "Add at least one inventory item to the request.",
+    "create": "The request could not be created.",
+    "action": "The request could not be updated."
+  },
+  "notices": {
+    "created": "Request submitted.",
+    "approve": "Request approved and inventory reserved.",
+    "reject": "Request rejected.",
+    "fulfill": "Request fulfilled and stock issued.",
+    "cancel": "Request cancelled."
+  },
+  "confirm": {
+    "fulfill": "Fulfill {{reference}} now? This issues the reserved stock and creates active checkouts.",
+    "reject": "Reject {{reference}}?",
+    "cancel": "Cancel {{reference}}?"
+  },
+  "create": {
+    "title": "Request inventory",
+    "description": "Choose the required items and the period in which they need to be available."
+  },
+  "form": {
+    "startsAt": "Needed from",
+    "dueAt": "Return by",
+    "delivery": "Delivery location (optional)",
+    "removeDelivery": "Remove delivery location",
+    "deliveryPlaceholder": "Search rooms or locations…",
+    "noDeliveryResults": "No matching location found.",
+    "note": "Request note",
+    "notePlaceholder": "Purpose, project, contact, or handling instructions…",
+    "items": "Requested items",
+    "itemsDescription": "One request can contain multiple inventory items.",
+    "itemSearch": "Search inventory…",
+    "noSku": "No SKU",
+    "removeItem": "Remove {{name}}",
+    "quantity": "Quantity",
+    "lineNote": "Item note",
+    "lineNotePlaceholder": "Optional note",
+    "emptyItems": "Search above and add at least one item."
+  },
+  "filters": {
+    "search": "Search requests…",
+    "label": "Filter requests by status",
+    "active": "Active",
+    "all": "All requests",
+    "submitted": "Submitted",
+    "approved": "Approved",
+    "fulfilled": "Fulfilled",
+    "rejected": "Rejected",
+    "cancelled": "Cancelled"
+  },
+  "status": {
+    "submitted": "Submitted",
+    "approved": "Approved",
+    "fulfilled": "Fulfilled",
+    "rejected": "Rejected",
+    "cancelled": "Cancelled",
+    "reserved": "Direct reservation"
+  },
+  "list": {
+    "lineCount_one": "{{count}} item",
+    "lineCount_other": "{{count}} items",
+    "current": "{{count}} currently on hand"
+  },
+  "tracking": {
+    "bulk": "Bulk stock",
+    "serialized": "Serialized"
+  },
+  "empty": {
+    "title": "No requests found",
+    "filtered": "No requests match this search and status filter.",
+    "description": "New internal inventory requests will appear here."
+  },
+  "calendar": {
+    "metadata": {
+      "title": "Reservation calendar",
+      "description": "See requested, approved, and directly reserved inventory over time."
+    },
+    "eyebrow": "Planning",
+    "title": "Reservation calendar",
+    "description": "See upcoming demand before approving requests or committing inventory elsewhere.",
+    "previous": "Previous month",
+    "next": "Next month",
+    "today": "Today",
+    "loading": "Loading reservations…",
+    "error": "The reservation calendar could not be loaded.",
+    "retry": "Try again",
+    "more_one": "+{{count}} more",
+    "more_other": "+{{count}} more",
+    "selected": "Selected day",
+    "entryCount_one": "{{count}} reservation",
+    "entryCount_other": "{{count}} reservations",
+    "directReservation": "Direct reservation",
+    "quantity_one": "{{count}} unit",
+    "quantity_other": "{{count}} units",
+    "noEnd": "No end date",
+    "openRequest": "Open requests",
+    "openStock": "Open stock",
+    "emptyTitle": "No reservations on this day",
+    "emptyDescription": "Select another day or create an internal request for future inventory."
+  }
+}

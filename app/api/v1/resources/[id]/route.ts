@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import {
   canAccessResource,
   requirePermission,
-  requireResourcePermission,
+  requireResourceReferencePermission,
 } from "@/lib/api-auth";
 import {
   deleteResource,
@@ -27,6 +27,10 @@ import {
   assertResourceIdentifiersAvailable,
   ResourceIdentifierConflictError,
 } from "@/lib/resource-identifiers";
+import {
+  isResourceSlugConflict,
+} from "@/lib/resource-slug-contract";
+import { resolveResourceId } from "@/lib/resource-slugs";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -35,7 +39,12 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request, context: Context) {
   const authorization = await requirePermission(request, "inventory.read");
   if (authorization.response) return authorization.response;
-  const { id } = await context.params;
+  const { id: reference } = await context.params;
+  const id = await resolveResourceId(
+    authorization.identity.organizationId,
+    reference,
+  );
+  if (!id) return Response.json({ error: "Not found" }, { status: 404 });
   const resource = await getResource(
     authorization.identity.organizationId,
     id,
@@ -92,13 +101,14 @@ export async function GET(request: Request, context: Context) {
 }
 
 export async function PATCH(request: Request, context: Context) {
-  const { id } = await context.params;
-  const authorization = await requireResourcePermission(
+  const { id: reference } = await context.params;
+  const authorization = await requireResourceReferencePermission(
     request,
     "inventory.update",
-    id,
+    reference,
   );
   if (authorization.response) return authorization.response;
+  const id = authorization.resource.id;
 
   let payload: unknown;
   try {
@@ -116,7 +126,8 @@ export async function PATCH(request: Request, context: Context) {
   if (!Object.keys(parsed.data).length) {
     return Response.json({ error: "No fields to update." }, { status: 400 });
   }
-  if (parsed.data.quantity !== undefined) {
+  const { slugs, ...resourcePatch } = parsed.data;
+  if (resourcePatch.quantity !== undefined) {
     return Response.json(
       {
         error:
@@ -128,35 +139,36 @@ export async function PATCH(request: Request, context: Context) {
   let spatialDataChanged = false;
 
   try {
-    if (parsed.data.type !== undefined) {
+    if (resourcePatch.type !== undefined) {
       await assertActiveInventoryType(
         authorization.identity.organizationId,
-        parsed.data.type,
+        resourcePatch.type,
       );
     }
-    if (parsed.data.sku !== undefined || parsed.data.barcode !== undefined) {
+    if (resourcePatch.sku !== undefined || resourcePatch.barcode !== undefined) {
       await assertResourceIdentifiersAvailable(
         authorization.identity.organizationId,
-        parsed.data,
+        resourcePatch,
         id,
       );
     }
     const validateCustomFields =
-      parsed.data.customFields !== undefined ||
-      parsed.data.type !== undefined ||
-      parsed.data.categories !== undefined;
+      resourcePatch.customFields !== undefined ||
+      resourcePatch.type !== undefined ||
+      resourcePatch.categories !== undefined;
     const values = {
-      ...parsed.data,
-      ...(parsed.data.mapFeatures !== undefined
-        ? positionFromMapFeatures(parsed.data.mapFeatures)
+      ...resourcePatch,
+      ...(resourcePatch.mapFeatures !== undefined
+        ? positionFromMapFeatures(resourcePatch.mapFeatures)
         : {}),
     };
     const resource = await updateResourceWithCustomFieldValidation({
       organizationId: authorization.identity.organizationId,
       id,
       values,
+      slugs,
       validateCustomFields,
-      customFieldsProvided: parsed.data.customFields !== undefined,
+      customFieldsProvided: resourcePatch.customFields !== undefined,
       actor: authorization.identity.subject,
       authorize: async (current, proposed) => {
         const canUpdate =
@@ -263,6 +275,12 @@ export async function PATCH(request: Request, context: Context) {
     if (error instanceof ResourceIdentifierConflictError) {
       return Response.json({ error: error.message }, { status: 409 });
     }
+    if (isResourceSlugConflict(error)) {
+      return Response.json(
+        { error: "That slug is already in use." },
+        { status: 409 },
+      );
+    }
     const duplicateSku = message.includes("resources_sku_unique");
     return Response.json(
       { error: duplicateSku ? "That SKU is already in use." : message },
@@ -272,13 +290,14 @@ export async function PATCH(request: Request, context: Context) {
 }
 
 export async function DELETE(request: Request, context: Context) {
-  const { id } = await context.params;
-  const authorization = await requireResourcePermission(
+  const { id: reference } = await context.params;
+  const authorization = await requireResourceReferencePermission(
     request,
     "inventory.delete",
-    id,
+    reference,
   );
   if (authorization.response) return authorization.response;
+  const id = authorization.resource.id;
   let resource;
   try {
     resource = await deleteResource(

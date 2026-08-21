@@ -139,8 +139,9 @@ final class StockCountViewModel: ObservableObject {
         }
     }
 
-    func canApplyIssue(currentQuantity: Int) -> Bool {
-        result != nil && adjustedCount > 0 && adjustedCount <= currentQuantity && !isBusy
+    func canApplyIssue(currentQuantity: Int, allowNegativeStock: Bool) -> Bool {
+        result != nil && adjustedCount > 0 &&
+            (allowNegativeStock || adjustedCount <= currentQuantity) && !isBusy
     }
 
     func analyzeCapturedData(
@@ -249,12 +250,13 @@ final class StockCountViewModel: ObservableObject {
     func apply(
         _ operation: StockCountOperation,
         to resource: InventoryResource,
+        allowNegativeStock: Bool,
         using client: APIClient,
         onSuccess: @escaping @MainActor (InventoryResource) -> Void
     ) {
         let count = adjustedCount
         guard result != nil, count > 0, !isBusy else { return }
-        if operation == .issue, count > resource.quantity {
+        if operation == .issue, !allowNegativeStock, count > resource.quantity {
             errorMessage = "Es können höchstens \(resource.quantity) Einheiten entnommen werden."
             return
         }

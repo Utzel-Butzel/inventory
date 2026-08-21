@@ -119,6 +119,44 @@ public struct InventoryResourceCategory: Codable, Hashable, Sendable {
     }
 }
 
+public enum CustomFieldValue: Codable, Equatable, Sendable {
+    case string(String)
+    case number(Double)
+    case boolean(Bool)
+    case strings([String])
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode(Bool.self) {
+            self = .boolean(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .number(value)
+        } else if let value = try? container.decode([String].self) {
+            self = .strings(value)
+        } else {
+            throw DecodingError.typeMismatch(
+                CustomFieldValue.self,
+                DecodingError.Context(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "Unsupported custom-field value."
+                )
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value): try container.encode(value)
+        case .number(let value): try container.encode(value)
+        case .boolean(let value): try container.encode(value)
+        case .strings(let value): try container.encode(value)
+        }
+    }
+}
+
 public struct InventoryAIMetadata: Codable, Equatable, Sendable {
     public let analyzedAt: Date?
     public let model: String?
@@ -211,6 +249,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
     public let type: InventoryResourceType
     public let status: InventoryResourceStatus
     public let sku: String?
+    public let barcode: String?
     public let quantity: Int
     public let location: String?
     public let serialNumber: String?
@@ -219,6 +258,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
     public let priority: Int
     public let tags: [String]
     public let categories: [InventoryResourceCategory]
+    public let customFields: [String: CustomFieldValue]?
     public let relatedResourceIDs: [UUID]
     public let gpsLatitude: Double?
     public let gpsLongitude: Double?
@@ -238,6 +278,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
         type: InventoryResourceType,
         status: InventoryResourceStatus,
         sku: String? = nil,
+        barcode: String? = nil,
         quantity: Int,
         location: String? = nil,
         serialNumber: String? = nil,
@@ -246,6 +287,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
         priority: Int,
         tags: [String] = [],
         categories: [InventoryResourceCategory] = [],
+        customFields: [String: CustomFieldValue]? = nil,
         relatedResourceIDs: [UUID] = [],
         gpsLatitude: Double? = nil,
         gpsLongitude: Double? = nil,
@@ -264,6 +306,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
         self.type = type
         self.status = status
         self.sku = sku
+        self.barcode = barcode
         self.quantity = quantity
         self.location = location
         self.serialNumber = serialNumber
@@ -272,6 +315,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
         self.priority = priority
         self.tags = tags
         self.categories = categories
+        self.customFields = customFields
         self.relatedResourceIDs = relatedResourceIDs
         self.gpsLatitude = gpsLatitude
         self.gpsLongitude = gpsLongitude
@@ -292,6 +336,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
         case type
         case status
         case sku
+        case barcode
         case quantity
         case location
         case serialNumber
@@ -300,6 +345,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
         case priority
         case tags
         case categories
+        case customFields
         case relatedResourceIDs = "relatedResourceIds"
         case gpsLatitude
         case gpsLongitude

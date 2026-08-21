@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
   title: Inventory API
-  version: 1.18.0
+  version: 1.19.0
   description: >-
     Organization-scoped API for configurable inventory structures, localized
     content, indoor 3D room scans, location-aware stock, cycle counts,
-    assignments, CSV exchange, typed custom fields, label setups, media, AI,
+    assignments, internal requests, reservation planning, CSV exchange, typed custom fields, label setups, media, AI,
     outgoing integration webhooks, and data quality. User-bound credentials may
     select one of their memberships with X-Organization-ID. Standalone API
     tokens are pinned to their issuing organization.
@@ -41,6 +41,8 @@ tags:
     description: Recurring count policies, due-count queues, and stock reconciliation.
   - name: Assignments
     description: Checkout, assignment, reservation, return, and cancellation workflows.
+  - name: Internal requests
+    description: Multi-item inventory requests with approval, reservation, fulfillment, and calendar planning.
   - name: Manufacturing
     description: Bills of materials and atomic assembly builds.
   - name: Purchasing
@@ -1964,7 +1966,7 @@ paths:
   /resources/{id}:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
-      - { $ref: "#/components/parameters/ResourceId" }
+      - { $ref: "#/components/parameters/ResourceReference" }
     get:
       tags: [Resources]
       summary: Retrieve an inventory item
@@ -2670,6 +2672,130 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: "Serialized count differs from current unit availability, conflicting idempotency key, or an invalid global count below assigned location stock" }
         "422": { description: Invalid count or structured location }
+  /internal-requests:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    get:
+      tags: [Internal requests]
+      summary: List visible internal requests
+      description: Users with request-management access see the workspace queue; other users see only requests they submitted.
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/InternalRequestStatus" }
+        - name: mine
+          in: query
+          schema: { type: boolean, default: false }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+      responses:
+        "200":
+          description: Requests visible to the current principal and their available actions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests, capabilities]
+                properties:
+                  requests:
+                    type: array
+                    items: { $ref: "#/components/schemas/InternalRequest" }
+                  capabilities:
+                    type: object
+                    required: [canCreate, canManage]
+                    properties:
+                      canCreate: { type: boolean }
+                      canManage: { type: boolean }
+        "403": { description: Request read access is required }
+    post:
+      tags: [Internal requests]
+      summary: Submit a multi-item inventory request
+      description: Creates a submitted request without changing stock. Availability is reserved only when a manager approves it.
+      parameters:
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InternalRequestCreate" }
+      responses:
+        "200":
+          description: Replayed the original request for this Idempotency-Key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalRequestMutation" }
+        "201":
+          description: Request submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalRequestMutation" }
+        "400": { description: Missing or invalid Idempotency-Key }
+        "403": { description: Request creation and inventory read access are required }
+        "409": { description: Conflicting Idempotency-Key }
+        "422": { description: Invalid request window, items, quantities, or delivery resource }
+  /internal-requests/calendar:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    get:
+      tags: [Internal requests]
+      summary: List reservation calendar entries
+      description: Returns submitted, approved, and fulfilled request lines that overlap the range. Active direct reservations are included when the caller may view assignments.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Calendar entries in the requested range
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReservationCalendar" }
+        "403": { description: Request read access is required }
+        "422": { description: Invalid or greater-than-370-day range }
+  /internal-requests/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Internal requests]
+      summary: Read one visible internal request
+      responses:
+        "200":
+          description: Request with item lines and lifecycle events
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalRequestMutation" }
+        "403": { description: Request read access is required }
+        "404": { description: Request not found or not visible to this principal }
+        "422": { description: Invalid request id }
+    patch:
+      tags: [Internal requests]
+      summary: Transition an internal request
+      description: Managers may approve, reject, cancel, or fulfill requests. A requester may cancel their own submitted or approved request. Approval atomically checks overlapping availability; fulfillment issues stock and creates active checkouts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InternalRequestAction" }
+      responses:
+        "200":
+          description: Updated request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalRequestMutation" }
+        "403": { description: The principal cannot perform this transition }
+        "404": { description: Request not found }
+        "409": { description: Invalid lifecycle transition or unavailable inventory }
+        "422": { description: Invalid request id or action }
   /resources/{id}/assignments:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -3379,6 +3505,15 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    ResourceReference:
+      name: id
+      in: path
+      required: true
+      description: Resource UUID or one of the resource's organization-scoped slugs.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 80
     CustomFieldId:
       name: id
       in: path
@@ -5492,6 +5627,138 @@ components:
         intervalDays: { type: integer, minimum: 1, maximum: 3650 }
         nextDueAt: { type: string, format: date-time }
         lastCompletedAt: { type: [string, "null"], format: date-time }
+    InternalRequestStatus:
+      type: string
+      enum: [submitted, approved, rejected, fulfilled, cancelled]
+    InternalRequestCreate:
+      type: object
+      required: [startsAt, dueAt, lines]
+      additionalProperties: false
+      properties:
+        deliveryResourceId: { type: [string, "null"], format: uuid }
+        startsAt: { type: string, format: date-time }
+        dueAt: { type: string, format: date-time }
+        note: { type: string, maxLength: 20000 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required: [resourceId, quantity]
+            additionalProperties: false
+            properties:
+              resourceId: { type: string, format: uuid }
+              quantity: { type: integer, minimum: 1, maximum: 2000000000 }
+              note: { type: string, maxLength: 20000 }
+    InternalRequestAction:
+      type: object
+      required: [action]
+      additionalProperties: false
+      properties:
+        action: { type: string, enum: [approve, reject, cancel, fulfill] }
+        note: { type: string, maxLength: 20000 }
+    InternalRequestLine:
+      type: object
+      required: [id, resource, quantity, note, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        resource:
+          type: object
+          required: [id, name, sku, status, currentQuantity, trackingMode]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            sku: { type: [string, "null"] }
+            status: { type: string }
+            currentQuantity: { type: integer }
+            trackingMode: { type: string, enum: [bulk, serialized] }
+        quantity: { type: integer, minimum: 1 }
+        note: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    InternalRequestEvent:
+      type: object
+      required: [id, type, actor, note, occurredAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: "#/components/schemas/InternalRequestStatus" }
+        actor: { type: string }
+        note: { type: string }
+        occurredAt: { type: string, format: date-time }
+    InternalRequest:
+      type: object
+      required: [id, reference, status, requester, delivery, startsAt, dueAt, note, decisionNote, decidedBy, decidedAt, fulfilledBy, fulfilledAt, createdBy, createdAt, updatedAt, canCancel, lines, events]
+      properties:
+        id: { type: string, format: uuid }
+        reference: { type: string, example: REQ-A1B2C3D4 }
+        status: { $ref: "#/components/schemas/InternalRequestStatus" }
+        requester:
+          type: object
+          required: [userId, name, email]
+          properties:
+            userId: { type: [string, "null"], format: uuid }
+            name: { type: string }
+            email: { type: [string, "null"], format: email }
+        delivery:
+          oneOf:
+            - type: object
+              required: [resourceId, name]
+              properties:
+                resourceId: { type: string, format: uuid }
+                name: { type: string }
+            - { type: "null" }
+        startsAt: { type: string, format: date-time }
+        dueAt: { type: string, format: date-time }
+        note: { type: string }
+        decisionNote: { type: string }
+        decidedBy: { type: [string, "null"] }
+        decidedAt: { type: [string, "null"], format: date-time }
+        fulfilledBy: { type: [string, "null"] }
+        fulfilledAt: { type: [string, "null"], format: date-time }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        canCancel: { type: boolean }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/InternalRequestLine" }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/InternalRequestEvent" }
+    InternalRequestMutation:
+      type: object
+      required: [request]
+      properties:
+        request: { $ref: "#/components/schemas/InternalRequest" }
+    ReservationCalendarEntry:
+      type: object
+      required: [id, source, sourceId, reference, status, title, subtitle, resourceId, quantity, startsAt, dueAt]
+      properties:
+        id: { type: string }
+        source: { type: string, enum: [internal-request, reservation] }
+        sourceId: { type: string, format: uuid }
+        reference: { type: [string, "null"] }
+        status: { type: string, enum: [submitted, approved, fulfilled, reserved] }
+        title: { type: string }
+        subtitle: { type: string }
+        resourceId: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1 }
+        startsAt: { type: string, format: date-time }
+        dueAt: { type: [string, "null"], format: date-time }
+    ReservationCalendar:
+      type: object
+      required: [entries, range]
+      properties:
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/ReservationCalendarEntry" }
+        range:
+          type: object
+          required: [from, to]
+          properties:
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
     InventoryAssignmentRecipientInput:
       oneOf:
         - type: object
@@ -5789,6 +6056,16 @@ components:
       required: [name]
       properties:
         name: { type: string, minLength: 1, maxLength: 240 }
+        slugs:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 80
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          description: Ordered organization-scoped URL slugs. The first value is the standard slug; remaining values are aliases. Values are normalized to lowercase; `new` and UUID-shaped values are reserved.
         description: { type: string, maxLength: 20000 }
         type: { $ref: "#/components/schemas/InventoryTypeKey" }
         status: { type: string, enum: [available, in-use, maintenance, archived] }
@@ -5828,6 +6105,16 @@ components:
       description: Any subset of the writable resource fields.
       properties:
         name: { type: string, minLength: 1, maxLength: 240 }
+        slugs:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 80
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          description: Replaces the ordered URL slugs for this resource. The first value becomes the standard slug; remaining values are aliases.
         description: { type: string, maxLength: 20000 }
         type: { $ref: "#/components/schemas/InventoryTypeKey" }
         status: { type: string, enum: [available, in-use, maintenance, archived] }
@@ -6132,7 +6419,7 @@ components:
       allOf:
         - { $ref: "#/components/schemas/ResourceInput" }
         - type: object
-          required: [id, customFields, createdAt, updatedAt, media]
+          required: [id, slugs, customFields, createdAt, updatedAt, media]
           properties:
             id: { type: string, format: uuid }
             createdAt: { type: string, format: date-time }

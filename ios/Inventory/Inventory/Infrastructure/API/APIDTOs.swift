@@ -4,6 +4,7 @@ public struct CapabilitiesResponse: Codable, Equatable, Sendable {
     public let name: String
     public let principal: String?
     public let scopes: [String]
+    public let permissions: [String]?
     public let organizations: [InventoryOrganization]?
     public let activeOrganization: InventoryOrganization?
 
@@ -11,6 +12,7 @@ public struct CapabilitiesResponse: Codable, Equatable, Sendable {
         case name
         case principal
         case scopes
+        case permissions
         case organizations
         case activeOrganization = "organization"
     }
@@ -22,6 +24,9 @@ public struct InventoryOrganization: Codable, Equatable, Identifiable, Sendable 
     public let slug: String
     public let role: String?
     public let roleName: String?
+    public let isReadOnly: Bool?
+    public let allowNegativeStock: Bool?
+    public let canManage: Bool?
 }
 
 public struct OrganizationListResponse: Codable, Equatable, Sendable {
@@ -93,6 +98,7 @@ public enum CustomFieldValueType: String, Codable, CaseIterable, Sendable {
     case datetime
     case select
     case multiSelect = "multi_select"
+    case reference
     case email
     case url
 }
@@ -120,9 +126,26 @@ public struct CustomFieldDefinition: Codable, Equatable, Identifiable, Sendable 
     public let resourceTypes: [String]
     public let categories: [String]
     public let options: [CustomFieldOption]
+    public let referenceEntityType: CustomFieldEntityType?
+    public let referenceMultiple: Bool?
+    public let referenceResourceTypes: [String]?
+    public let referenceCategories: [String]?
+    public let referenceStatuses: [String]?
     public let position: Int
     public let revision: Int
     public let archivedAt: Date?
+}
+
+public struct CustomFieldReferenceOption: Codable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public let entityType: CustomFieldEntityType
+    public let label: String
+    public let description: String
+    public let status: String
+}
+
+public struct CustomFieldReferenceOptionsResponse: Codable, Equatable, Sendable {
+    public let options: [CustomFieldReferenceOption]
 }
 
 public struct CustomFieldDefinitionsResponse: Codable, Equatable, Sendable {
@@ -225,10 +248,22 @@ public struct ResourceListResponse: Codable, Equatable, Sendable {
 
 public struct ResourceResponse: Codable, Equatable, Sendable {
     public let resource: InventoryResource
+    public let access: InventoryResourceAccess?
 
-    public init(resource: InventoryResource) {
+    public init(resource: InventoryResource, access: InventoryResourceAccess? = nil) {
         self.resource = resource
+        self.access = access
     }
+}
+
+public struct InventoryResourceAccess: Codable, Equatable, Sendable {
+    public let update: Bool
+    public let delete: Bool
+    public let stock: Bool
+    public let assignments: Bool
+    public let counts: Bool
+    public let spatial: Bool
+    public let ai: Bool
 }
 
 public enum ResourceCodeMatch: String, Codable, CaseIterable, Sendable {

@@ -29,6 +29,7 @@ import {
   assertResourceIdentifiersAvailable,
   ResourceIdentifierConflictError,
 } from "@/lib/resource-identifiers";
+import { isResourceSlugConflict } from "@/lib/resource-slug-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ const writableHeaders = [
   "priority",
   "tags",
   "categories",
+  "slugs",
   "custom_fields",
   "related_resource_ids",
   "gps_latitude",
@@ -349,6 +351,7 @@ function payloadFromRow(
     }
   }
   if (has("tags")) payload.tags = parseStringArray(get("tags"), "tags");
+  if (has("slugs")) payload.slugs = parseStringArray(get("slugs"), "slugs");
   if (has("categories")) payload.categories = parseCategories(get("categories"));
   if (has("related_resource_ids")) {
     payload.relatedResourceIds = parseStringArray(
@@ -602,6 +605,7 @@ export async function POST(request: Request) {
     }
 
     try {
+      const { slugs, ...resourceInput } = parsed.data;
       const rowIdempotencyKey = uuidForImportRow(idempotency.key, rowIndex);
       const requestHash = hashIdempotentPayload({
         actor: authorization.identity.subject,
@@ -629,24 +633,24 @@ export async function POST(request: Request) {
 
       await assertActiveInventoryType(
         authorization.identity.organizationId,
-        parsed.data.type,
+        resourceInput.type,
       );
       await assertResourceIdentifiersAvailable(
         authorization.identity.organizationId,
-        parsed.data,
+        resourceInput,
       );
       const customFields = await validateCustomFieldValues({
         organizationId: authorization.identity.organizationId,
         entityType: "inventory",
         target: {
-          type: parsed.data.type,
-          categories: parsed.data.categories,
+          type: resourceInput.type,
+          categories: resourceInput.categories,
         },
         values: parsedCustomFields.data,
         enforceRequired: parsedRow.customFields !== undefined,
       });
       const values: NewResource = {
-        ...parsed.data,
+        ...resourceInput,
         organizationId: authorization.identity.organizationId,
         customFields,
         ...(parsed.data.mapFeatures.length
@@ -657,6 +661,7 @@ export async function POST(request: Request) {
       const result = await createResourceIdempotently({
         organizationId: authorization.identity.organizationId,
         values,
+        slugs,
         idempotencyKey: rowIdempotencyKey,
         requestHash,
         actor: authorization.identity.subject,
@@ -704,6 +709,15 @@ export async function POST(request: Request) {
           line: row.line,
           status: "error",
           error: `${error.message} Existing items are never overwritten by CSV import.`,
+        });
+        continue;
+      }
+      if (isResourceSlugConflict(error)) {
+        results.push({
+          line: row.line,
+          status: "error",
+          error:
+            "That slug is already in use; existing items are never overwritten by CSV import.",
         });
         continue;
       }

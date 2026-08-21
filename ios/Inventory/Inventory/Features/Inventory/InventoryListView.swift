@@ -50,7 +50,7 @@ struct InventoryListView: View {
                     } actions: {
                         if hasActiveSearchOrFilters {
                             Button("Suche und Filter zurücksetzen") { resetSearchAndFilters() }
-                        } else if state.canWrite {
+                        } else if state.canCreateInventory {
                             creationMenu
                                 .buttonStyle(.borderedProminent)
                         }
@@ -83,7 +83,7 @@ struct InventoryListView: View {
                 }
 
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    if state.canWrite {
+                    if state.canCaptureInventory {
                         Button(action: onCapture) {
                             Image(systemName: "camera")
                         }
@@ -95,7 +95,7 @@ struct InventoryListView: View {
                     }
                     .accessibilityLabel("Scannen")
 
-                    if state.canWrite {
+                    if state.canCreateInventory {
                         Menu {
                             creationMenuActions
                         } label: {
@@ -200,10 +200,12 @@ struct InventoryListView: View {
             Label("Manuell anlegen", systemImage: "doc.badge.plus")
         }
 
-        Button {
-            showObjectCapture = true
-        } label: {
-            Label("3D-Objekt scannen", systemImage: "cube.transparent")
+        if state.canCaptureInventory {
+            Button {
+                showObjectCapture = true
+            } label: {
+                Label("3D-Objekt scannen", systemImage: "cube.transparent")
+            }
         }
     }
 
@@ -267,7 +269,7 @@ struct InventoryListView: View {
             if resource.id == resources.last?.id { loadNextPage() }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if state.canWrite {
+            if state.canDeleteInventory {
                 Button(role: .destructive) {
                     resourcePendingDeletion = resource
                 } label: {
@@ -398,7 +400,7 @@ struct InventoryListView: View {
     }
 
     private func delete(_ resource: InventoryResource) async {
-        guard state.canWrite,
+        guard state.canDeleteInventory,
               let client = state.client,
               deletingResourceID == nil else { return }
         deletingResourceID = resource.id

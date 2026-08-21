@@ -168,7 +168,7 @@ until configured in `.env`.
 | Authentication | Local accounts by default; optional `AUTH0_*` settings |
 | Storage | Persistent local files or `OPENINARY_*` |
 | Maps | Token-free defaults or `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` |
-| AI | `OPENAI_API_KEY`, `REPLICATE_API_TOKEN`, or `GOOGLE_AI_API_KEY` |
+| AI | `OPENAI_API_KEY` for inventory and room-photo analysis; optional `REPLICATE_API_TOKEN` or `GOOGLE_AI_API_KEY` |
 | Notifications | In-app by default; optional SMTP, Web Push, Slack, Teams, or webhook delivery |
 | Integrations | Scoped API tokens and HMAC-signed outgoing webhooks |
 

@@ -27,6 +27,7 @@ import {
   resourceOptionSelections,
   resourceOptionValues,
   resourceRelations,
+  resourceSlugs,
   resourceVariants,
   roomScanAssets,
   roomScanKeyframes,
@@ -60,8 +61,13 @@ import {
   VARIANT_INHERITED_CATALOG_FIELDS,
   VARIANT_RELATION_TYPE,
 } from "@/lib/resource-families";
+import {
+  listResourceSlugRows,
+  replaceResourceSlugs,
+} from "@/lib/resource-slugs";
 
 export type ResourceWithMedia = ResourceRecord & {
+  slugs: string[];
   media: MediaRecord[];
   cover: MediaRecord | null;
 };
@@ -106,6 +112,7 @@ const inheritedCatalogPatch = (
 const attachMedia = (
   rows: ResourceRecord[],
   mediaRows: MediaRecord[],
+  slugRows: Array<{ resourceId: string; slug: string; position: number }> = [],
 ): ResourceWithMedia[] => {
   const grouped = new Map<string, MediaRecord[]>();
   for (const item of mediaRows) {
@@ -114,12 +121,22 @@ const attachMedia = (
     grouped.set(item.resourceId, existing);
   }
 
+  const groupedSlugs = new Map<string, Array<{ slug: string; position: number }>>();
+  for (const item of slugRows) {
+    const existing = groupedSlugs.get(item.resourceId) ?? [];
+    existing.push({ slug: item.slug, position: item.position });
+    groupedSlugs.set(item.resourceId, existing);
+  }
+
   return rows.map((resource) => {
     const resourceMedia = (grouped.get(resource.id) ?? []).sort(
       (left, right) => left.position - right.position,
     );
     return {
       ...resource,
+      slugs: (groupedSlugs.get(resource.id) ?? [])
+        .sort((left, right) => left.position - right.position)
+        .map((item) => item.slug),
       media: resourceMedia,
       cover: resourceMedia.find((item) => item.kind === "image") ?? null,
     };
@@ -143,6 +160,15 @@ export async function listResources(options: {
 
   if (options.query?.trim()) {
     const pattern = `%${options.query.trim()}%`;
+    const slugMatches = db
+      .select({ resourceId: resourceSlugs.resourceId })
+      .from(resourceSlugs)
+      .where(
+        and(
+          eq(resourceSlugs.organizationId, options.organizationId),
+          ilike(resourceSlugs.slug, pattern),
+        ),
+      );
     const variantMatches = db
       .select({ resourceId: resourceVariants.resourceId })
       .from(resourceVariants)
@@ -165,6 +191,7 @@ export async function listResources(options: {
         ilike(resources.location, pattern),
         sql`${resources.tags}::text ILIKE ${pattern}`,
         sql`${resources.customFields}::text ILIKE ${pattern}`,
+        inArray(resources.id, slugMatches),
         inArray(resources.id, variantMatches),
       )!,
     );
@@ -188,21 +215,27 @@ export async function listResources(options: {
     db.select({ value: count() }).from(resources).where(where),
   ]);
 
-  const mediaRows = rows.length
-    ? await db
-        .select()
-        .from(media)
-        .where(
-          and(
-            eq(media.organizationId, options.organizationId),
-            inArray(media.resourceId, rows.map((row) => row.id)),
-          ),
-        )
-        .orderBy(asc(media.position))
-    : [];
+  const [mediaRows, slugRows] = rows.length
+    ? await Promise.all([
+        db
+          .select()
+          .from(media)
+          .where(
+            and(
+              eq(media.organizationId, options.organizationId),
+              inArray(media.resourceId, rows.map((row) => row.id)),
+            ),
+          )
+          .orderBy(asc(media.position)),
+        listResourceSlugRows(
+          options.organizationId,
+          rows.map((row) => row.id),
+        ),
+      ])
+    : [[], []];
 
   return {
-    resources: attachMedia(rows, mediaRows),
+    resources: attachMedia(rows, mediaRows, slugRows),
     pagination: {
       page,
       pageSize,
@@ -335,21 +368,27 @@ export async function listResourcesForRecognition(
       [...matchingRows, ...fallbackRows].map((row) => [row.id, row] as const),
     ).values(),
   ).slice(0, boundedLimit);
-  const mediaRows = rows.length
-    ? await db
-        .select()
-        .from(media)
-        .where(
-          and(
-            eq(media.organizationId, organizationId),
-            inArray(media.resourceId, rows.map((row) => row.id)),
-            eq(media.kind, "image"),
-          ),
-        )
-        .orderBy(asc(media.position))
-    : [];
+  const [mediaRows, slugRows] = rows.length
+    ? await Promise.all([
+        db
+          .select()
+          .from(media)
+          .where(
+            and(
+              eq(media.organizationId, organizationId),
+              inArray(media.resourceId, rows.map((row) => row.id)),
+              eq(media.kind, "image"),
+            ),
+          )
+          .orderBy(asc(media.position)),
+        listResourceSlugRows(
+          organizationId,
+          rows.map((row) => row.id),
+        ),
+      ])
+    : [[], []];
   return {
-    resources: attachMedia(rows, mediaRows),
+    resources: attachMedia(rows, mediaRows, slugRows),
     visualFallbackResourceIds: fallbackIds,
     matchingTotal: matchingTotalRows[0]?.value ?? 0,
     inventoryTotal: inventoryTotalRows[0]?.value ?? 0,
@@ -372,17 +411,20 @@ export async function getResource(organizationId: string, id: string) {
     .limit(1);
   if (!row) return null;
 
-  const mediaRows = await db
-    .select()
-    .from(media)
-    .where(
-      and(
-        eq(media.resourceId, id),
-        eq(media.organizationId, organizationId),
-      ),
-    )
-    .orderBy(asc(media.position));
-  return attachMedia([row], mediaRows)[0];
+  const [mediaRows, slugRows] = await Promise.all([
+    db
+      .select()
+      .from(media)
+      .where(
+        and(
+          eq(media.resourceId, id),
+          eq(media.organizationId, organizationId),
+        ),
+      )
+      .orderBy(asc(media.position)),
+    listResourceSlugRows(organizationId, [id]),
+  ]);
+  return attachMedia([row], mediaRows, slugRows)[0];
 }
 
 export async function getResourceCovers(
@@ -420,23 +462,35 @@ export async function createResource(
   organizationId: string,
   values: NewResource,
   actor?: string | null,
+  slugs: readonly string[] = [],
 ) {
   const created = await db.transaction(async (transaction) => {
     const [row] = await transaction
       .insert(resources)
       .values({ ...values, organizationId })
       .returning();
+    await replaceResourceSlugs(transaction, {
+      organizationId,
+      resourceId: row.id,
+      slugs,
+      actor: actor ?? values.createdBy ?? null,
+    });
     await enqueueWebhookEvent(transaction, {
       organizationId,
       type: "inventory.resource.created",
       aggregateType: "resource",
       aggregateId: row.id,
       actor: actor ?? values.createdBy ?? null,
-      data: { resource: { ...row, media: [], cover: null } },
+      data: { resource: { ...row, slugs, media: [], cover: null } },
     });
     return row;
   });
-  return { ...created, media: [], cover: null } satisfies ResourceWithMedia;
+  return {
+    ...created,
+    slugs: [...slugs],
+    media: [],
+    cover: null,
+  } satisfies ResourceWithMedia;
 }
 
 export class IdempotencyConflictError extends Error {
@@ -448,8 +502,18 @@ export class IdempotencyConflictError extends Error {
 
 type StoredCreationResponse = { resource: ResourceWithMedia };
 
-const deserializeCreationResponse = (value: Record<string, unknown>) =>
-  value as unknown as StoredCreationResponse;
+const deserializeCreationResponse = (value: Record<string, unknown>) => {
+  const response = value as unknown as StoredCreationResponse;
+  return {
+    ...response,
+    resource: {
+      ...response.resource,
+      slugs: Array.isArray(response.resource.slugs)
+        ? response.resource.slugs
+        : [],
+    },
+  } satisfies StoredCreationResponse;
+};
 
 async function findResourceCreationRequest(
   organizationId: string,
@@ -490,6 +554,7 @@ export async function replayResourceCreation(options: {
 export async function createResourceIdempotently(options: {
   organizationId: string;
   values: NewResource;
+  slugs?: readonly string[];
   idempotencyKey: string;
   requestHash: string;
   actor?: string | null;
@@ -505,8 +570,15 @@ export async function createResourceIdempotently(options: {
         .insert(resources)
         .values({ ...options.values, organizationId: options.organizationId })
         .returning();
+      const slugs = [...(options.slugs ?? [])];
+      await replaceResourceSlugs(transaction, {
+        organizationId: options.organizationId,
+        resourceId: created.id,
+        slugs,
+        actor: options.actor ?? options.values.createdBy ?? null,
+      });
       const envelope = {
-        resource: { ...created, media: [], cover: null },
+        resource: { ...created, slugs, media: [], cover: null },
       } satisfies StoredCreationResponse;
       const snapshot = JSON.parse(JSON.stringify(envelope)) as Record<
         string,
@@ -559,6 +631,7 @@ export async function updateResourceWithCustomFieldValidation(options: {
   organizationId: string;
   id: string;
   values: Partial<NewResource>;
+  slugs?: readonly string[];
   validateCustomFields: boolean;
   customFieldsProvided: boolean;
   authorize?: (
@@ -583,6 +656,16 @@ export async function updateResourceWithCustomFieldValidation(options: {
       .limit(1)
       .for("update");
     if (!current) return null;
+
+    const currentSlugRows = await listResourceSlugRows(
+      options.organizationId,
+      [current.id],
+      transaction,
+    );
+    const currentSlugs = currentSlugRows.map((row) => row.slug);
+    const slugsChanged =
+      options.slugs !== undefined &&
+      !isDeepStrictEqual(currentSlugs, options.slugs);
 
     let values = options.values;
     if (values.type !== undefined && values.type !== "place") {
@@ -627,6 +710,7 @@ export async function updateResourceWithCustomFieldValidation(options: {
       proposed,
       Object.keys(values),
     );
+    if (slugsChanged) changedFields.push("slugs");
     if (
       options.authorize &&
       (!(await options.authorize(current, proposed)))
@@ -805,13 +889,23 @@ export async function updateResourceWithCustomFieldValidation(options: {
       )
       .returning();
     if (saved) {
+      if (slugsChanged && options.slugs) {
+        await replaceResourceSlugs(transaction, {
+          organizationId: options.organizationId,
+          resourceId: saved.id,
+          slugs: options.slugs,
+          actor: options.actor ?? null,
+        });
+      }
+      const savedSlugs =
+        options.slugs === undefined ? currentSlugs : [...options.slugs];
       await enqueueWebhookEvent(transaction, {
         organizationId: options.organizationId,
         type: "inventory.resource.updated",
         aggregateType: "resource",
         aggregateId: saved.id,
         actor: options.actor ?? null,
-        data: { resource: saved, changedFields },
+        data: { resource: { ...saved, slugs: savedSlugs }, changedFields },
       });
       if (membership && nextVariantOverrides) {
         await transaction
@@ -1198,18 +1292,24 @@ export async function findDuplicateResources(organizationId: string) {
     .where(eq(resources.organizationId, organizationId))
     .orderBy(desc(resources.updatedAt))
     .limit(1_000);
-  const mediaRows = rows.length
-    ? await db
-        .select()
-        .from(media)
-        .where(
-          and(
-            eq(media.organizationId, organizationId),
-            inArray(media.resourceId, rows.map((row) => row.id)),
+  const [mediaRows, slugRows] = rows.length
+    ? await Promise.all([
+        db
+          .select()
+          .from(media)
+          .where(
+            and(
+              eq(media.organizationId, organizationId),
+              inArray(media.resourceId, rows.map((row) => row.id)),
+            ),
           ),
-        )
-    : [];
-  const enriched = attachMedia(rows, mediaRows);
+        listResourceSlugRows(
+          organizationId,
+          rows.map((row) => row.id),
+        ),
+      ])
+    : [[], []];
+  const enriched = attachMedia(rows, mediaRows, slugRows);
   const pairs: Array<{
     left: ResourceWithMedia;
     right: ResourceWithMedia;

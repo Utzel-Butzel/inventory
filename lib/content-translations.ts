@@ -34,6 +34,7 @@ import { listCustomFieldDefinitions } from "@/lib/custom-fields";
 import { db } from "@/lib/db";
 import { organizationAllowsWorkerSideEffects } from "@/lib/organization-read-only";
 import type { ResourceWithMedia } from "@/lib/resources";
+import { listResourceSlugRows } from "@/lib/resource-slugs";
 import {
   applicableTranslationDefinitions,
   applyCurrentTranslations,
@@ -167,18 +168,22 @@ async function resourceBundle(
     )
     .limit(1);
   if (!resource) return null;
-  const mediaRows = await executor
-    .select()
-    .from(media)
-    .where(
-      and(
-        eq(media.organizationId, organizationId),
-        eq(media.resourceId, resourceId),
-      ),
-    )
-    .orderBy(asc(media.position));
+  const [mediaRows, slugRows] = await Promise.all([
+    executor
+      .select()
+      .from(media)
+      .where(
+        and(
+          eq(media.organizationId, organizationId),
+          eq(media.resourceId, resourceId),
+        ),
+      )
+      .orderBy(asc(media.position)),
+    listResourceSlugRows(organizationId, [resourceId], executor),
+  ]);
   return {
     ...resource,
+    slugs: slugRows.map((row) => row.slug),
     media: mediaRows,
     cover: mediaRows.find((item) => item.kind === "image") ?? null,
   } satisfies ResourceWithMedia;

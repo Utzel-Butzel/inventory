@@ -23,6 +23,9 @@ struct ResourceDetailView: View {
     @State private var modelDownloadID: UUID?
     @State private var downloadedModel: DownloadedObjectModel?
     @State private var modelErrorMessage: String?
+    @State private var inventoryTypes: [InventoryTypeDefinition] = []
+    @State private var customFieldDefinitions: [CustomFieldDefinition] = []
+    @State private var resourceAccess: InventoryResourceAccess?
 
     init(resource: InventoryResource) {
         _current = State(initialValue: resource)
@@ -35,8 +38,10 @@ struct ResourceDetailView: View {
                 identityCard
                 stockCard
                 if !current.description.isEmpty { descriptionCard }
+                if hasAdditionalDetails { additionalDetailsCard }
+                if !(current.customFields ?? [:]).isEmpty { customFieldsCard }
                 mediaSection
-                if !current.tags.isEmpty { tagsSection }
+                if !current.tags.isEmpty || !current.categories.isEmpty { tagsSection }
             }
             .padding(16)
             .padding(.bottom, 24)
@@ -45,13 +50,16 @@ struct ResourceDetailView: View {
         .navigationTitle(current.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if state.canWrite {
+            if canUpdateCurrentResource {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Bearbeiten") { showEditor = true }
                 }
             }
         }
-        .task { await refresh() }
+        .task {
+            await refresh()
+            await loadMetadata()
+        }
         .sheet(isPresented: $showEditor) {
             ResourceFormView(resource: current, prefilledCode: nil) {
                 current = $0
@@ -146,7 +154,7 @@ struct ResourceDetailView: View {
     private var identityCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label(current.type.localizedName, systemImage: current.type.symbolName)
+                Label(typeLabel, systemImage: current.type.symbolName)
                 Spacer()
                 Text(current.status.localizedName)
                     .font(.caption.weight(.semibold))
@@ -159,6 +167,9 @@ struct ResourceDetailView: View {
 
             if let sku = current.sku {
                 LabeledContent("SKU", value: sku)
+            }
+            if let barcode = current.barcode {
+                LabeledContent("Barcode", value: barcode)
             }
             if let serial = current.serialNumber {
                 LabeledContent("Seriennummer", value: serial)
@@ -178,7 +189,7 @@ struct ResourceDetailView: View {
                 Text("\(current.quantity)")
                     .font(.title2.monospacedDigit().bold())
             }
-            if state.canWrite {
+            if canManageCurrentStock {
                 HStack(spacing: 12) {
                     Button {
                         confirmIssue = true
@@ -187,7 +198,7 @@ struct ResourceDetailView: View {
                             .frame(maxWidth: .infinity, minHeight: 42)
                     }
                     .buttonStyle(.bordered)
-                    .disabled(booking || current.quantity == 0)
+                    .disabled(booking || (current.quantity <= 0 && !state.allowsNegativeStock))
 
                     Button {
                         book(delta: 1, type: "receipt", reason: "Zugang per iOS-App")
@@ -220,10 +231,10 @@ struct ResourceDetailView: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(InventoryTheme.ink)
-                .disabled(booking || !state.canUseAI)
+                .disabled(booking || !canUseAIForCurrentResource)
             }
 
-            if state.canWrite && !state.canUseAI {
+            if canManageCurrentStock && !canUseAIForCurrentResource {
                 Label(
                     "Die Fotozählung benötigt die KI-Berechtigung für dieses Konto.",
                     systemImage: "lock.fill"
@@ -328,14 +339,28 @@ struct ResourceDetailView: View {
 
     private var tagsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Tags").font(.headline)
-            FlowLayout(spacing: 7) {
-                ForEach(current.tags, id: \.self) { tag in
-                    Text(tag)
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.secondary.opacity(0.1), in: Capsule())
+            if !current.categories.isEmpty {
+                Text("Kategorien").font(.headline)
+                FlowLayout(spacing: 7) {
+                    ForEach(current.categories, id: \.name) { category in
+                        Text(category.name)
+                            .font(.caption.weight(.medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(InventoryTheme.accent.opacity(0.12), in: Capsule())
+                    }
+                }
+            }
+            if !current.tags.isEmpty {
+                Text("Tags").font(.headline)
+                FlowLayout(spacing: 7) {
+                    ForEach(current.tags, id: \.self) { tag in
+                        Text(tag)
+                            .font(.caption.weight(.medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(.secondary.opacity(0.1), in: Capsule())
+                    }
                 }
             }
         }
@@ -344,7 +369,88 @@ struct ResourceDetailView: View {
 
     private func refresh() async {
         guard let client = state.client else { return }
-        do { current = try await client.getResource(id: current.id) } catch { }
+        do {
+            let response = try await client.getResourceDetail(id: current.id)
+            current = response.resource
+            resourceAccess = response.access
+        } catch { }
+    }
+
+    private var typeLabel: String {
+        inventoryTypes.first(where: { $0.key == current.type.rawValue })?.label
+            ?? current.type.localizedName
+    }
+
+    private var hasAdditionalDetails: Bool {
+        current.valueCents != nil || current.priority != 3 ||
+            current.gpsLatitude != nil || current.gpsLongitude != nil ||
+            current.gpsAltitude != nil || !current.notes.isEmpty
+    }
+
+    private var additionalDetailsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Weitere Angaben").font(.headline)
+            if let valueCents = current.valueCents {
+                LabeledContent(
+                    "Wert",
+                    value: (Double(valueCents) / 100).formatted(
+                        .currency(code: current.currency)
+                    )
+                )
+            }
+            if current.priority != 3 {
+                LabeledContent("Priorität", value: "\(current.priority)")
+            }
+            if let latitude = current.gpsLatitude {
+                LabeledContent("Breitengrad", value: latitude.formatted())
+            }
+            if let longitude = current.gpsLongitude {
+                LabeledContent("Längengrad", value: longitude.formatted())
+            }
+            if let altitude = current.gpsAltitude {
+                LabeledContent("Höhe", value: "\(altitude.formatted()) m")
+            }
+            if !current.notes.isEmpty {
+                Divider()
+                Text(current.notes)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+        }
+        .inventoryCard()
+    }
+
+    private var customFieldsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Benutzerdefinierte Felder").font(.headline)
+            ForEach((current.customFields ?? [:]).keys.sorted(), id: \.self) { key in
+                if let value = current.customFields?[key] {
+                    LabeledContent(customFieldLabel(for: key), value: display(value))
+                }
+            }
+        }
+        .inventoryCard()
+    }
+
+    private func customFieldLabel(for key: String) -> String {
+        customFieldDefinitions.first(where: { $0.key == key })?.label ?? key
+    }
+
+    private func display(_ value: CustomFieldValue) -> String {
+        switch value {
+        case .string(let value): value
+        case .number(let value): value.formatted()
+        case .boolean(let value): value ? "Ja" : "Nein"
+        case .strings(let values): values.joined(separator: ", ")
+        }
+    }
+
+    private func loadMetadata() async {
+        guard let client = state.client else { return }
+        inventoryTypes = (try? await client.inventoryTypes().types) ?? []
+        customFieldDefinitions = (
+            try? await client.customFieldDefinitions(entityType: .inventory).definitions
+        ) ?? []
     }
 
     private func openObjectModel(_ media: InventoryMedia) {
@@ -382,7 +488,7 @@ struct ResourceDetailView: View {
     }
 
     private func book(delta: Int, type: String, reason: String) {
-        guard state.canWrite else { return }
+        guard canManageCurrentStock else { return }
         let action = PendingStockAction(
             id: UUID(),
             delta: delta,
@@ -400,7 +506,7 @@ struct ResourceDetailView: View {
     }
 
     private func performStockAction(_ action: PendingStockAction) {
-        guard state.canWrite, let client = state.client else { return }
+        guard canManageCurrentStock, let client = state.client else { return }
         booking = true
         Task {
             do {
@@ -419,6 +525,18 @@ struct ResourceDetailView: View {
             }
             booking = false
         }
+    }
+
+    private var canUpdateCurrentResource: Bool {
+        state.canUpdateInventory && (resourceAccess?.update ?? true)
+    }
+
+    private var canManageCurrentStock: Bool {
+        state.canManageStock && (resourceAccess?.stock ?? true)
+    }
+
+    private var canUseAIForCurrentResource: Bool {
+        state.canUseAI && (resourceAccess?.ai ?? true)
     }
 }
 

@@ -18,6 +18,7 @@ import {
   isOrganizationSlug,
   ORGANIZATION_SLUG_MAX_LENGTH,
 } from "@/lib/organization-path";
+import { resourceSlugsSchema } from "@/lib/resource-slug-contract";
 
 const passwordSchema = z
   .string()
@@ -340,6 +341,7 @@ export const resourceMapFeatureSchema = z.discriminatedUnion("type", [
 
 const resourceShape = {
   name: z.string().trim().min(1).max(240),
+  slugs: resourceSlugsSchema,
   description: z.string().trim().max(20_000),
   type: inventoryTypeKeySchema,
   status: z.enum(["available", "in-use", "maintenance", "archived"]),
@@ -371,6 +373,7 @@ const resourceShape = {
 
 export const resourceInputSchema = z.object({
   ...resourceShape,
+  slugs: resourceShape.slugs.optional().default([]),
   description: resourceShape.description.optional().default(""),
   type: resourceShape.type.optional().default("object"),
   status: resourceShape.status.optional().default("available"),

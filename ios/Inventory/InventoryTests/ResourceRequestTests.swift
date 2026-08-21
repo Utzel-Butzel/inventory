@@ -19,6 +19,49 @@ final class ResourceRequestTests: XCTestCase {
         XCTAssertFalse(object.keys.contains("quantity"))
     }
 
+    func testResourceRequestEncodesBarcodeAndCustomFields() throws {
+        let request = ResourceCreateRequest(
+            name: "Messgerät",
+            barcode: "4006381333931",
+            customFields: [
+                "calibrated": .boolean(true),
+                "accuracy": .number(0.01),
+                "owners": .strings(["7ad4ac4e-189e-4bc9-ab2d-6bd2ac3ff9bb"]),
+            ]
+        )
+
+        let data = try JSONEncoder().encode(request)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let fields = try XCTUnwrap(object["customFields"] as? [String: Any])
+
+        XCTAssertEqual(object["barcode"] as? String, "4006381333931")
+        XCTAssertEqual(fields["calibrated"] as? Bool, true)
+        XCTAssertEqual(fields["accuracy"] as? Double, 0.01)
+        XCTAssertEqual(
+            fields["owners"] as? [String],
+            ["7ad4ac4e-189e-4bc9-ab2d-6bd2ac3ff9bb"]
+        )
+    }
+
+    func testPatchCanExplicitlyClearBarcode() throws {
+        let data = try JSONEncoder().encode(ResourcePatchRequest(barcode: .null))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertTrue(object.keys.contains("barcode"))
+        XCTAssertTrue(object["barcode"] is NSNull)
+    }
+
+    func testCapabilitiesDecodeGranularPermissionsAndStockPolicy() throws {
+        let data = Data(
+            #"{"name":"Editor","principal":"user:abc","scopes":["read","write"],"permissions":["inventory.read","inventory.update","stock.manage"],"organization":{"id":"7ad4ac4e-189e-4bc9-ab2d-6bd2ac3ff9bb","name":"Werkstatt","slug":"werkstatt","role":"editor","roleName":"Editor","isReadOnly":false,"allowNegativeStock":true,"canManage":false}}"#.utf8
+        )
+
+        let response = try JSONDecoder().decode(CapabilitiesResponse.self, from: data)
+
+        XCTAssertEqual(response.permissions, ["inventory.read", "inventory.update", "stock.manage"])
+        XCTAssertEqual(response.activeOrganization?.allowNegativeStock, true)
+    }
+
     func testUnknownResourceTypeRoundTripsWithoutLosingServerValue() throws {
         let source = try XCTUnwrap("\"network-switch\"".data(using: .utf8))
 

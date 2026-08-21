@@ -46,6 +46,7 @@ import {
   type OrganizationMembershipSummary,
   type OrganizationSummary,
 } from "@/lib/organizations";
+import { resolveResourceId } from "@/lib/resource-slugs";
 
 export type { ApiScope } from "@/lib/auth-roles";
 
@@ -548,6 +549,54 @@ export async function requireResourcePermission(
       : resourceOrId.organizationId === identity.organizationId
         ? resourceOrId
         : null;
+  if (!resource) {
+    return {
+      identity: null,
+      resource: null,
+      response: Response.json({ error: "Not found" }, { status: 404 }),
+    } as const;
+  }
+  if (!(await canAccessResource(identity, permission, resource))) {
+    return {
+      identity: null,
+      resource: null,
+      response: Response.json(
+        { error: "You do not have permission to perform this action." },
+        { status: 403 },
+      ),
+    } as const;
+  }
+  return { identity, resource, response: null } as const;
+}
+
+export async function requireResourceReferencePermission(
+  request: Request,
+  permission: AppPermission,
+  reference: string,
+) {
+  const identity = await getRequestIdentity(request);
+  if (!identity) {
+    return {
+      identity: null,
+      resource: null,
+      response: Response.json({ error: "Unauthorized" }, { status: 401 }),
+    } as const;
+  }
+  const requiredScope = permissionScope(permission);
+  if (!identity.scopes.includes(requiredScope)) {
+    return {
+      identity: null,
+      resource: null,
+      response: Response.json(
+        { error: "This token is missing the " + requiredScope + " scope." },
+        { status: 403 },
+      ),
+    } as const;
+  }
+  const resourceId = await resolveResourceId(identity.organizationId, reference);
+  const resource = resourceId
+    ? await getResourceRecord(resourceId, identity.organizationId)
+    : null;
   if (!resource) {
     return {
       identity: null,

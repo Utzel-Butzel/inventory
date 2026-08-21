@@ -34,6 +34,7 @@ final class CaptureViewModel: ObservableObject {
     @Published var name = ""
     @Published var resourceType: InventoryResourceType = .object
     @Published var sku = ""
+    @Published var barcode = ""
     @Published var serialNumber = ""
     @Published var locationName = ""
     @Published var autoAnalyze = true
@@ -57,6 +58,7 @@ final class CaptureViewModel: ObservableObject {
         !photos.isEmpty ||
             !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
             !sku.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !barcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
             !serialNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -147,10 +149,8 @@ final class CaptureViewModel: ObservableObject {
     func applyScannedCode(_ rawCode: String) {
         let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !code.isEmpty else { return }
-        if code.count <= 80 {
-            sku = code
-        } else if code.count <= 180 {
-            serialNumber = code
+        if code.count <= 180 {
+            barcode = code
         } else {
             errorMessage = "Der gescannte Code ist länger als die unterstützten 180 Zeichen."
         }
@@ -176,10 +176,11 @@ final class CaptureViewModel: ObservableObject {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let request = ResourceCreateRequest(
             name: normalizedName.isEmpty
-                ? (sku.nilIfBlank ?? serialNumber.nilIfBlank ?? "Untitled item")
+                ? (sku.nilIfBlank ?? barcode.nilIfBlank ?? serialNumber.nilIfBlank ?? "Untitled item")
                 : normalizedName,
             type: resourceType,
             sku: sku.nilIfBlank,
+            barcode: barcode.nilIfBlank,
             location: locationName.nilIfBlank,
             serialNumber: serialNumber.nilIfBlank,
             gpsLatitude: coordinates?.latitude,
@@ -206,6 +207,7 @@ final class CaptureViewModel: ObservableObject {
     func resetAfterSubmitting() {
         name = ""
         sku = ""
+        barcode = ""
         serialNumber = ""
         photos = []
         spatialPlacement = nil

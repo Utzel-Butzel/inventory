@@ -8,6 +8,7 @@ final class AppState: ObservableObject {
     @Published private(set) var client: APIClient?
     @Published private(set) var configurationError: String?
     @Published private(set) var grantedScopes: Set<String> = []
+    @Published private(set) var grantedPermissions: Set<String> = []
     @Published private(set) var organizations: [InventoryOrganization] = []
     @Published private(set) var activeOrganization: InventoryOrganization?
     @Published private(set) var isSwitchingOrganization = false
@@ -40,6 +41,7 @@ final class AppState: ObservableObject {
     private var activeClientID = UUID()
     private var authenticationOperationID = UUID()
     private var isVerifyingStoredCredential = false
+    private var hasGranularPermissions = false
 
     init(
         credentialStore: any CredentialStore = KeychainCredentialStore(),
@@ -62,8 +64,21 @@ final class AppState: ObservableObject {
     }
 
     var isConfigured: Bool { client != nil && hasStoredToken }
-    var canUseAI: Bool { grantedScopes.contains("ai") }
-    var canWrite: Bool { grantedScopes.contains("write") }
+    var canReadInventory: Bool { allows("inventory.read", legacyScope: "read") }
+    var canCreateInventory: Bool { allows("inventory.create", legacyScope: "write") }
+    var canUpdateInventory: Bool { allows("inventory.update", legacyScope: "write") }
+    var canDeleteInventory: Bool { allows("inventory.delete", legacyScope: "write") }
+    var canReadStock: Bool { allows("stock.read", legacyScope: "read") }
+    var canManageStock: Bool { allows("stock.manage", legacyScope: "write") }
+    var canReadSpatial: Bool { allows("spatial.read", legacyScope: "read") }
+    var canManageSpatial: Bool { allows("spatial.manage", legacyScope: "write") }
+    var canUseAI: Bool { allows("ai.use", legacyScope: "ai") }
+    var canCaptureInventory: Bool { canCreateInventory && canUpdateInventory }
+    var canWrite: Bool {
+        canCreateInventory || canUpdateInventory || canDeleteInventory ||
+            canManageStock || canManageSpatial
+    }
+    var allowsNegativeStock: Bool { activeOrganization?.allowNegativeStock ?? false }
     var organizationContextIdentifier: String { client?.contextIdentifier ?? "unconfigured" }
 
     nonisolated static func supportsInventory(scopes: Set<String>) -> Bool {
@@ -222,6 +237,8 @@ final class AppState: ObservableObject {
 
         try ensureCurrent(operationID)
         let candidateScopes = Set(organizationContext.capabilities.scopes)
+        let candidatePermissions = Set(organizationContext.capabilities.permissions ?? [])
+        let candidateHasGranularPermissions = organizationContext.capabilities.permissions != nil
         guard Self.supportsInventory(scopes: candidateScopes) else {
             throw APIClientError.invalidRequest("Dieses Konto darf Inventar nicht anzeigen.")
         }
@@ -286,6 +303,8 @@ final class AppState: ObservableObject {
         serverAddress = nextClient.serverURL.absoluteString
         hasStoredToken = true
         grantedScopes = candidateScopes
+        grantedPermissions = candidatePermissions
+        hasGranularPermissions = candidateHasGranularPermissions
         organizations = organizationContext.organizations
         activeOrganization = organizationContext.activeOrganization
         rememberActiveOrganization(
@@ -302,7 +321,14 @@ final class AppState: ObservableObject {
         pendingScanCode = nil
         pendingCaptureCode = nil
         configurationError = nil
-        intakeQueue.configure(client: nextClient, canWrite: candidateScopes.contains("write"))
+        intakeQueue.configure(
+            client: nextClient,
+            canWrite: canProcessIntakeQueue(
+                scopes: candidateScopes,
+                permissions: candidatePermissions,
+                hasGranularPermissions: candidateHasGranularPermissions
+            )
+        )
         scheduleImageModelDiscovery(
             using: nextClient,
             activeClient: nextClient,
@@ -354,6 +380,8 @@ final class AppState: ObservableObject {
         )
         let capabilities = try await validationClient.capabilities()
         let nextScopes = Set(capabilities.scopes)
+        let nextPermissions = Set(capabilities.permissions ?? [])
+        let nextHasGranularPermissions = capabilities.permissions != nil
         guard Self.supportsInventory(scopes: nextScopes) else {
             throw APIClientError.invalidRequest("Dieses Konto darf Inventar nicht anzeigen.")
         }
@@ -370,9 +398,11 @@ final class AppState: ObservableObject {
             )
         )
         organizations = nextOrganizations
-        activeOrganization = nextOrganization
+        activeOrganization = capabilities.activeOrganization ?? nextOrganization
         rememberActiveOrganization(nextOrganization, for: nextClient.serverURL)
         grantedScopes = nextScopes
+        grantedPermissions = nextPermissions
+        hasGranularPermissions = nextHasGranularPermissions
         defaults.set(Array(nextScopes).sorted(), forKey: scopesKey)
         activeClientID = nextClientID
         client = nextClient
@@ -381,7 +411,14 @@ final class AppState: ObservableObject {
         pendingScanCode = nil
         pendingCaptureCode = nil
         configurationError = nil
-        intakeQueue.configure(client: nextClient, canWrite: nextScopes.contains("write"))
+        intakeQueue.configure(
+            client: nextClient,
+            canWrite: canProcessIntakeQueue(
+                scopes: nextScopes,
+                permissions: nextPermissions,
+                hasGranularPermissions: nextHasGranularPermissions
+            )
+        )
         scheduleImageModelDiscovery(
             using: nextClient,
             activeClient: nextClient,
@@ -416,7 +453,7 @@ final class AppState: ObservableObject {
                 if authenticationOperationID == operationID,
                    activeClientID == currentClientID,
                    self.client === currentClient {
-                    intakeQueue.configure(client: currentClient, canWrite: grantedScopes.contains("write"))
+                    intakeQueue.configure(client: currentClient, canWrite: canCaptureInventory)
                     configurationError = error.localizedDescription
                 }
                 throw error
@@ -442,7 +479,7 @@ final class AppState: ObservableObject {
                let currentClient {
                 intakeQueue.configure(
                     client: currentClient,
-                    canWrite: grantedScopes.contains("write")
+                    canWrite: canCaptureInventory
                 )
                 configurationError = error.localizedDescription
             }
@@ -459,7 +496,7 @@ final class AppState: ObservableObject {
             return
         }
         if let client {
-            intakeQueue.configure(client: client, canWrite: grantedScopes.contains("write"))
+            intakeQueue.configure(client: client, canWrite: canCaptureInventory)
             return
         }
         guard hasStoredToken else { return }
@@ -480,6 +517,8 @@ final class AppState: ObservableObject {
             hasStoredToken = true
             client = nil
             grantedScopes = []
+            grantedPermissions = []
+            hasGranularPermissions = false
 
             if authenticationMethod == .login, isLoginExpired {
                 await clearLocalCredential(
@@ -533,6 +572,8 @@ final class AppState: ObservableObject {
             try ensureCurrent(operationID)
             guard currentToken == token else { throw CancellationError() }
             let scopes = Set(organizationContext.capabilities.scopes)
+            let permissions = Set(organizationContext.capabilities.permissions ?? [])
+            let receivedGranularPermissions = organizationContext.capabilities.permissions != nil
             guard Self.supportsInventory(scopes: scopes) else {
                 throw APIClientError.invalidRequest("Dieses Konto darf Inventar nicht anzeigen.")
             }
@@ -546,6 +587,8 @@ final class AppState: ObservableObject {
             client = restoredClient
             hasStoredToken = true
             grantedScopes = scopes
+            grantedPermissions = permissions
+            hasGranularPermissions = receivedGranularPermissions
             organizations = organizationContext.organizations
             activeOrganization = organizationContext.activeOrganization
             rememberActiveOrganization(
@@ -554,7 +597,14 @@ final class AppState: ObservableObject {
             )
             defaults.set(Array(scopes).sorted(), forKey: scopesKey)
             configurationError = nil
-            intakeQueue.configure(client: restoredClient, canWrite: scopes.contains("write"))
+            intakeQueue.configure(
+                client: restoredClient,
+                canWrite: canProcessIntakeQueue(
+                    scopes: scopes,
+                    permissions: permissions,
+                    hasGranularPermissions: receivedGranularPermissions
+                )
+            )
             scheduleImageModelDiscovery(
                 using: restoredClient,
                 activeClient: restoredClient,
@@ -573,6 +623,8 @@ final class AppState: ObservableObject {
             guard authenticationOperationID == operationID else { return }
             client = nil
             grantedScopes = []
+            grantedPermissions = []
+            hasGranularPermissions = false
             organizations = []
             activeOrganization = nil
             resetImageModelState()
@@ -628,6 +680,8 @@ final class AppState: ObservableObject {
         defaults.removeObject(forKey: tokenExpiresAtKey)
         hasStoredToken = false
         grantedScopes = []
+        grantedPermissions = []
+        hasGranularPermissions = false
         organizations = []
         activeOrganization = nil
         isSwitchingOrganization = false
@@ -719,6 +773,24 @@ final class AppState: ObservableObject {
             !organization.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 && seen.insert(organization.id).inserted
         }
+    }
+
+    private func allows(_ permission: String, legacyScope: String) -> Bool {
+        hasGranularPermissions
+            ? grantedPermissions.contains(permission)
+            : grantedScopes.contains(legacyScope)
+    }
+
+    private func canProcessIntakeQueue(
+        scopes: Set<String>,
+        permissions: Set<String>,
+        hasGranularPermissions: Bool
+    ) -> Bool {
+        if hasGranularPermissions {
+            return permissions.contains("inventory.create") &&
+                permissions.contains("inventory.update")
+        }
+        return scopes.contains("write")
     }
 
     private func storedOrganizationID(for serverURL: URL) -> UUID? {

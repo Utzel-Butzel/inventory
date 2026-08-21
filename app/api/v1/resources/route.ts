@@ -31,6 +31,7 @@ import {
   ResourceIdentifierConflictError,
 } from "@/lib/resource-identifiers";
 import { DEFAULT_INVENTORY_PAGE_SIZE } from "@/lib/inventory-pagination";
+import { isResourceSlugConflict } from "@/lib/resource-slug-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +113,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const { slugs, ...resourceInput } = parsed.data;
     const requestHash = hashIdempotentPayload({
       actor: authorization.identity.subject,
       resource: parsed.data,
@@ -132,25 +134,25 @@ export async function POST(request: Request) {
 
     await assertActiveInventoryType(
       authorization.identity.organizationId,
-      parsed.data.type,
+      resourceInput.type,
     );
     await assertResourceIdentifiersAvailable(
       authorization.identity.organizationId,
-      parsed.data,
+      resourceInput,
     );
     const customFields = await validateCustomFieldValues({
       organizationId: authorization.identity.organizationId,
       entityType: "inventory",
-      target: { type: parsed.data.type, categories: parsed.data.categories },
-      values: parsed.data.customFields ?? {},
-      enforceRequired: parsed.data.customFields !== undefined,
+      target: { type: resourceInput.type, categories: resourceInput.categories },
+      values: resourceInput.customFields ?? {},
+      enforceRequired: resourceInput.customFields !== undefined,
     });
     const values = {
-      ...parsed.data,
+      ...resourceInput,
       organizationId: authorization.identity.organizationId,
       customFields,
-      ...(parsed.data.mapFeatures.length
-        ? positionFromMapFeatures(parsed.data.mapFeatures)
+      ...(resourceInput.mapFeatures.length
+        ? positionFromMapFeatures(resourceInput.mapFeatures)
         : {}),
       createdBy: authorization.identity.subject,
     };
@@ -158,6 +160,7 @@ export async function POST(request: Request) {
       const result = await createResourceIdempotently({
         organizationId: authorization.identity.organizationId,
         values,
+        slugs,
         idempotencyKey: idempotency.key,
         requestHash,
         actor: authorization.identity.subject,
@@ -196,6 +199,7 @@ export async function POST(request: Request) {
       authorization.identity.organizationId,
       values,
       authorization.identity.subject,
+      slugs,
     );
     if (
       parsed.data.mapFeatures.length > 0 ||
@@ -238,6 +242,12 @@ export async function POST(request: Request) {
     }
     if (error instanceof ResourceIdentifierConflictError) {
       return Response.json({ error: error.message }, { status: 409 });
+    }
+    if (isResourceSlugConflict(error)) {
+      return Response.json(
+        { error: "That slug is already in use." },
+        { status: 409 },
+      );
     }
     const message = error instanceof Error ? error.message : "Unable to create item.";
     const duplicateSku = message.includes("resources_sku_unique");

@@ -203,7 +203,7 @@ struct SpatialRoomsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("Räume")
             .toolbar {
-                if state.canWrite {
+                if state.canManageSpatial {
                     ToolbarItem(placement: .primaryAction) {
                         Button("Raum scannen", systemImage: "plus") {
                             presentation = RoomScanPresentation(mode: .newStructure)
@@ -246,7 +246,7 @@ struct SpatialRoomsView: View {
                     : "Dieses iPhone unterstützt RoomPlan nicht. Dafür ist ein LiDAR-fähiges iPhone erforderlich."
             )
         } actions: {
-            if state.canWrite && RoomCaptureSession.isSupported {
+            if state.canManageSpatial && RoomCaptureSession.isSupported {
                 Button("Ersten Raum scannen") {
                     presentation = RoomScanPresentation(mode: .newStructure)
                 }
@@ -298,7 +298,7 @@ struct SpatialRoomsView: View {
                 }
             }
 
-            if state.canWrite {
+            if state.canManageSpatial {
                 Button("Raum oder Etage hinzufügen", systemImage: "plus") {
                     guard let seed = structure.appendSeed else { return }
                     presentation = RoomScanPresentation(mode: .appendToStructure(seed))
@@ -335,7 +335,7 @@ struct SpatialRoomsView: View {
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if state.canWrite {
+            if state.canManageSpatial {
                 Button("Neu scannen", systemImage: "viewfinder") {
                     presentation = RoomScanPresentation(mode: .replaceRoom(scan))
                 }
@@ -867,7 +867,7 @@ private struct RoomScanFlowView: View {
 
     @MainActor
     private func uploadDrafts() async {
-        guard state.canWrite, !drafts.isEmpty, let client = state.client else { return }
+        guard state.canManageSpatial, !drafts.isEmpty, let client = state.client else { return }
         phase = .uploading
         uploadProgress = 0
         do {

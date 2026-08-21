@@ -151,6 +151,7 @@ test("the locale and organization proxy is scoped to application routes", async 
     "/labels/:path*",
     "/duplicates/:path*",
     "/notifications/:path*",
+    "/requests/:path*",
     "/settings/:path*",
     "/:organizationId/:path*",
   ];

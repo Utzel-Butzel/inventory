@@ -152,7 +152,9 @@
     "errors": {
       "loadRooms": "Unable to load rooms.",
       "loadScene": "Unable to load room scene.",
-      "saveLayout": "Unable to save the floor layout."
+      "saveLayout": "Unable to save the floor layout.",
+      "analyzeRoom": "Unable to analyze the room photos.",
+      "reviewSuggestion": "Unable to update the object suggestion."
     },
     "empty": {
       "title": "No rooms have been scanned yet",
@@ -193,6 +195,44 @@
       "noItemsDescription": "Capture an item in this room with the AR mode in the iPhone app.",
       "roomFallback": "Room",
       "downloadUsdz": "Download original USDZ"
+    },
+    "ai": {
+      "analyze": "Automatic colors & objects",
+      "refresh": "Refresh colors & objects",
+      "analyzing": "Analyzing room photos…",
+      "title": "AI room analysis",
+      "finishes": "Automatic finishes",
+      "suggestions": "Object suggestions",
+      "confidence": "{{value}}% confidence",
+      "grounded": "Matched to the 3D RoomPlan object",
+      "unplaced": "Visible in photos · no reliable 3D anchor",
+      "accept": "Accept",
+      "accepted": "Accepted",
+      "dismiss": "Dismiss {{name}}",
+      "noSuggestions": "No inventory-worthy objects were suggested.",
+      "reviewHint": "Accepted suggestions only change a 3D object when RoomPlan provides one unique matching anchor.",
+      "surfaces": {
+        "wall": "Walls",
+        "floor": "Floor",
+        "door": "Doors",
+        "window": "Windows",
+        "opening": "Openings"
+      },
+      "materials": {
+        "paint": "Paint",
+        "plaster": "Plaster",
+        "concrete": "Concrete",
+        "wood": "Wood",
+        "laminate": "Laminate",
+        "carpet": "Carpet",
+        "tile": "Tile",
+        "stone": "Stone",
+        "metal": "Metal",
+        "glass": "Glass",
+        "fabric": "Fabric",
+        "plastic": "Plastic",
+        "other": "Other material"
+      }
     },
     "layout": {
       "open": "Arrange rooms",

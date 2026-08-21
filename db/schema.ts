@@ -32,6 +32,7 @@ import {
 } from "@/lib/custom-field-contract";
 import type { LabelElement } from "@/lib/label-setup-contract";
 import type { RoomScene, SpatialMatrix4 } from "@/lib/room-scene-contract";
+import type { RoomAiAnalysis } from "@/lib/room-ai-analysis-contract";
 import type {
   RoomCameraIntrinsics,
   RoomKeyframeFeatureDescriptor,
@@ -600,6 +601,44 @@ export const resources = pgTable(
   ],
 );
 
+export const resourceSlugs = pgTable(
+  "resource_slugs",
+  {
+    organizationId: organizationIdColumn(),
+    slug: varchar("slug", { length: 80 }).notNull(),
+    resourceId: uuid("resource_id").notNull(),
+    position: integer("position").notNull().default(0),
+    createdBy: varchar("created_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "resource_slugs_organization_slug_pk",
+      columns: [table.organizationId, table.slug],
+    }),
+    foreignKey({
+      name: "resource_slugs_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    index("resource_slugs_resource_position_idx").on(
+      table.organizationId,
+      table.resourceId,
+      table.position,
+    ),
+    check(
+      "resource_slugs_slug_check",
+      sql`${table.slug} ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$' and ${table.slug} <> 'new' and ${table.slug} !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`,
+    ),
+    check(
+      "resource_slugs_position_nonnegative",
+      sql`${table.position} >= 0`,
+    ),
+  ],
+);
+
 export const resourceComments = pgTable(
   "resource_comments",
   {
@@ -686,6 +725,11 @@ export const internalRequests = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "internal_requests_organization_delivery_fk",
+      columns: [table.organizationId, table.deliveryResourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }),
     uniqueIndex("internal_requests_organization_id_id_unique").on(
       table.organizationId,
       table.id,
@@ -753,6 +797,16 @@ export const internalRequestLines = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "internal_request_lines_organization_request_fk",
+      columns: [table.organizationId, table.requestId],
+      foreignColumns: [internalRequests.organizationId, internalRequests.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "internal_request_lines_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("restrict"),
     uniqueIndex("internal_request_lines_organization_id_id_unique").on(
       table.organizationId,
       table.id,
@@ -790,6 +844,11 @@ export const internalRequestEvents = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "internal_request_events_organization_request_fk",
+      columns: [table.organizationId, table.requestId],
+      foreignColumns: [internalRequests.organizationId, internalRequests.id],
+    }).onDelete("cascade"),
     index("internal_request_events_request_occurred_idx").on(
       table.organizationId,
       table.requestId,
@@ -1113,6 +1172,7 @@ export const roomScans = pgTable(
       .notNull()
       .default("active"),
     scene: jsonb("scene").$type<RoomScene>().notNull(),
+    aiAnalysis: jsonb("ai_analysis").$type<RoomAiAnalysis>(),
     layoutTransform: jsonb("layout_transform").$type<SpatialMatrix4>(),
     capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
     deviceModel: varchar("device_model", { length: 120 }),
@@ -1167,6 +1227,10 @@ export const roomScans = pgTable(
       sql`${table.status} in ('active', 'superseded')`,
     ),
     check("room_scans_scene_object", sql`jsonb_typeof(${table.scene}) = 'object'`),
+    check(
+      "room_scans_ai_analysis_object",
+      sql`${table.aiAnalysis} is null or jsonb_typeof(${table.aiAnalysis}) = 'object'`,
+    ),
     check(
       "room_scans_layout_transform_array",
       sql`${table.layoutTransform} is null or (jsonb_typeof(${table.layoutTransform}) = 'array' and jsonb_array_length(${table.layoutTransform}) = 16)`,
@@ -2527,6 +2591,14 @@ export const inventoryAssignments = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      name: "inventory_assignments_organization_internal_request_line_fk",
+      columns: [table.organizationId, table.internalRequestLineId],
+      foreignColumns: [
+        internalRequestLines.organizationId,
+        internalRequestLines.id,
+      ],
+    }).onDelete("restrict"),
     index("inventory_assignments_resource_status_idx").on(
       table.resourceId,
       table.status,
@@ -3433,6 +3505,7 @@ export const apiTokens = pgTable(
 
 export type ResourceRecord = typeof resources.$inferSelect;
 export type NewResource = typeof resources.$inferInsert;
+export type ResourceSlugRecord = typeof resourceSlugs.$inferSelect;
 export type ResourceCommentRecord = typeof resourceComments.$inferSelect;
 export type NewResourceComment = typeof resourceComments.$inferInsert;
 export type ResourceVariantRecord = typeof resourceVariants.$inferSelect;

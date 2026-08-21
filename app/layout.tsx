@@ -26,6 +26,12 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description,
     applicationName: "Open Inventory",
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "default",
+      title: "Open Inventory",
+    },
+    formatDetection: { telephone: false },
     robots: { index: false, follow: false },
   };
 }

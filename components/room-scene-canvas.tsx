@@ -27,6 +27,10 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 
 import type { ClientRoomSceneManifest } from "@/lib/client-types";
+import type {
+  RoomMaterial,
+  RoomSurfaceAppearance,
+} from "@/lib/room-ai-analysis-contract";
 import { createRoomObjectModel } from "@/components/room-object-models";
 import { cn } from "@/components/ui";
 import {
@@ -88,6 +92,12 @@ const objectColors: Record<string, number> = {
   fireplace: 0x9c7d68,
   television: 0x555c65,
   stairs: 0x9f9788,
+};
+
+const materialMetalness = (material: RoomMaterial) => {
+  if (material === "metal") return 0.72;
+  if (material === "glass") return 0.08;
+  return 0.01;
 };
 
 const sceneThemePalettes = {
@@ -711,6 +721,77 @@ export function RoomSceneCanvas({
       objectMaterials.set(category, material);
       return material;
     };
+    const aiMaterials = new Map<string, THREE.MeshStandardMaterial>();
+    const applyDetectedFinish = (
+      material: THREE.MeshStandardMaterial,
+      appearance: Pick<
+        RoomSurfaceAppearance,
+        "colorHex" | "material" | "roughness"
+      >,
+    ) => {
+      material.color.set(appearance.colorHex);
+      material.roughness = appearance.roughness;
+      material.metalness = materialMetalness(appearance.material);
+      if (appearance.material === "carpet" || appearance.material === "fabric") {
+        material.map = objectColorMap;
+        material.bumpMap = objectBumpMap;
+        material.bumpScale = 0.014;
+      } else if (appearance.material === "wood" || appearance.material === "laminate") {
+        material.map = doorColorMap;
+        material.bumpMap = floorBumpMap;
+        material.bumpScale = 0.008;
+      } else if (
+        appearance.material === "tile" ||
+        appearance.material === "stone" ||
+        appearance.material === "metal" ||
+        appearance.material === "glass"
+      ) {
+        material.map = null;
+        material.bumpMap = null;
+        material.bumpScale = 0;
+      }
+      material.needsUpdate = true;
+      return material;
+    };
+    const finishForSurface = (
+      roomManifest: ClientRoomSceneManifest,
+      category: RoomSurface["category"],
+      fallback: THREE.MeshStandardMaterial,
+    ) => {
+      const appearance = roomManifest.scan.aiAnalysis?.surfaceAppearances.find(
+        (candidate) => candidate.surfaceCategory === category,
+      );
+      if (!appearance) return fallback;
+      const key = `${roomManifest.scan.id}:surface:${category}`;
+      const cached = aiMaterials.get(key);
+      if (cached) return cached;
+      const material = applyDetectedFinish(fallback.clone(), appearance);
+      aiMaterials.set(key, material);
+      return material;
+    };
+    const finishForObject = (
+      roomManifest: ClientRoomSceneManifest,
+      objectId: string,
+      category: string,
+    ) => {
+      const fallback = objectMaterial(category);
+      const suggestion = roomManifest.scan.aiAnalysis?.objectSuggestions.find(
+        (candidate) =>
+          candidate.status === "accepted" && candidate.roomObjectId === objectId,
+      );
+      if (!suggestion) return fallback;
+      const key = `${roomManifest.scan.id}:object:${objectId}`;
+      const cached = aiMaterials.get(key);
+      if (cached) return cached;
+      const material = applyDetectedFinish(fallback.clone(), {
+        colorHex:
+          suggestion.colorHex ?? `#${fallback.color.getHexString().toUpperCase()}`,
+        material: suggestion.material,
+        roughness: suggestion.material === "metal" ? 0.32 : 0.7,
+      });
+      aiMaterials.set(key, material);
+      return material;
+    };
     const objectLightMaterial = new THREE.MeshStandardMaterial({
       color: 0xe8e1d6,
       map: objectColorMap,
@@ -822,7 +903,11 @@ export function RoomSceneCanvas({
       return mesh;
     };
 
-    const makeWallNode = (surface: RoomSurface, apertures: WallAperture[]) => {
+    const makeWallNode = (
+      surface: RoomSurface,
+      apertures: WallAperture[],
+      material: THREE.MeshStandardMaterial,
+    ) => {
       const [width, height, depth] = normalizedDimensions(
         surface.category,
         surface.dimensions,
@@ -850,14 +935,17 @@ export function RoomSceneCanvas({
             (piece.bottom + piece.top) / 2,
             0,
           ],
-          material: wallMaterial,
+          material,
           castShadow: true,
         }));
       }
       return wall;
     };
 
-    const makeDoorNode = (surface: RoomSurface) => {
+    const makeDoorNode = (
+      surface: RoomSurface,
+      panelMaterial: THREE.MeshStandardMaterial,
+    ) => {
       const [width, height, measuredDepth] = normalizedDimensions(
         surface.category,
         surface.dimensions,
@@ -902,7 +990,7 @@ export function RoomSceneCanvas({
           parent: door,
           size: [panelWidth, panelHeight, panelDepth],
           position: [0, -frameWidth / 2, 0],
-          material: doorMaterial,
+          material: panelMaterial,
           castShadow: true,
         });
       }
@@ -966,7 +1054,10 @@ export function RoomSceneCanvas({
       return door;
     };
 
-    const makeWindowNode = (surface: RoomSurface) => {
+    const makeWindowNode = (
+      surface: RoomSurface,
+      glassMaterial: THREE.Material,
+    ) => {
       const [width, height, measuredDepth] = normalizedDimensions(
         surface.category,
         surface.dimensions,
@@ -986,7 +1077,7 @@ export function RoomSceneCanvas({
       wallColliderMeshes.push(addBox({
         parent: window,
         size: [glassWidth, glassHeight, 0.012],
-        material: windowMaterial,
+        material: glassMaterial,
         receiveShadow: false,
       }));
       for (const x of [-width / 2 + frameWidth / 2, width / 2 - frameWidth / 2]) {
@@ -1036,7 +1127,10 @@ export function RoomSceneCanvas({
       return window;
     };
 
-    const makeOpeningNode = (surface: RoomSurface) => {
+    const makeOpeningNode = (
+      surface: RoomSurface,
+      material: THREE.MeshStandardMaterial,
+    ) => {
       const [width, height, measuredDepth] = normalizedDimensions(
         surface.category,
         surface.dimensions,
@@ -1054,14 +1148,14 @@ export function RoomSceneCanvas({
           parent: opening,
           size: [trimWidth, height, trimDepth],
           position: [x, 0, 0],
-          material: openingMaterial,
+          material,
         });
       }
       addBox({
         parent: opening,
         size: [width - trimWidth * 2, trimWidth, trimDepth],
         position: [0, height / 2 - trimWidth / 2, 0],
-        material: openingMaterial,
+        material,
       });
       return opening;
     };
@@ -1092,17 +1186,33 @@ export function RoomSceneCanvas({
 
       for (const surface of roomManifest.scan.scene.surfaces) {
         if (surface.category === "wall") {
-          modelRoot.add(makeWallNode(surface, aperturesByWall.get(surface.id) ?? []));
+          modelRoot.add(makeWallNode(
+            surface,
+            aperturesByWall.get(surface.id) ?? [],
+            finishForSurface(roomManifest, "wall", wallMaterial),
+          ));
         } else if (surface.category === "door") {
-          modelRoot.add(makeDoorNode(surface));
+          modelRoot.add(makeDoorNode(
+            surface,
+            finishForSurface(roomManifest, "door", doorMaterial),
+          ));
         } else if (surface.category === "window") {
-          modelRoot.add(makeWindowNode(surface));
+          modelRoot.add(makeWindowNode(
+            surface,
+            finishForSurface(roomManifest, "window", windowMaterial),
+          ));
         } else if (surface.category === "opening") {
-          modelRoot.add(makeOpeningNode(surface));
+          modelRoot.add(makeOpeningNode(
+            surface,
+            finishForSurface(roomManifest, "opening", openingMaterial),
+          ));
         } else {
           const dimensions = normalizedDimensions(surface.category, surface.dimensions);
           const geometry = new THREE.BoxGeometry(...dimensions);
-          const mesh = new THREE.Mesh(geometry, floorMaterial);
+          const mesh = new THREE.Mesh(
+            geometry,
+            finishForSurface(roomManifest, "floor", floorMaterial),
+          );
           mesh.receiveShadow = true;
           setMatrix(mesh, surface.transform);
           modelRoot.add(mesh);
@@ -1115,7 +1225,7 @@ export function RoomSceneCanvas({
           category: item.category,
           dimensions,
           materials: {
-            primary: objectMaterial(item.category),
+            primary: finishForObject(roomManifest, item.id, item.category),
             light: objectLightMaterial,
             dark: objectDarkMaterial,
             metal: objectMetalMaterial,
@@ -1864,10 +1974,12 @@ export function RoomSceneCanvas({
 
     let animationFrame = 0;
     let shadowMapSettled = false;
-    const clock = new THREE.Clock();
-    const draw = () => {
+    const timer = new THREE.Timer();
+    timer.connect(document);
+    const draw = (timestamp?: number) => {
       animationFrame = requestAnimationFrame(draw);
-      const delta = Math.min(clock.getDelta(), 0.05);
+      timer.update(timestamp);
+      const delta = Math.min(timer.getDelta(), 0.05);
       if (navigationMode === "walk") {
         const active = (key: string) => pressedKeys.has(key) || virtualKeys.has(key);
         const forwardAmount = Number(active("w") || active("arrowup")) -
@@ -1970,6 +2082,7 @@ export function RoomSceneCanvas({
       textures.forEach((texture) => texture.dispose());
       photoBitmap?.close();
       environmentTarget.dispose();
+      timer.dispose();
       ambientOcclusionPass.dispose();
       ambientOcclusionPass.gtaoMaterial.dispose();
       ambientOcclusionPass.blendMaterial.dispose();

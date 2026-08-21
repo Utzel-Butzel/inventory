@@ -84,6 +84,7 @@ struct UnifiedCameraView: View {
     @State private var lookupRequestID: UUID?
     @State private var activeCodePurpose: CodePurpose?
     @State private var confirmIssue = false
+    @State private var inventoryTypes: [InventoryTypeDefinition] = []
 
     private let onClose: (() -> Void)?
     private let onSubmit: (IntakeSubmission) -> Void
@@ -162,6 +163,7 @@ struct UnifiedCameraView: View {
         .task {
             if let client = state.client {
                 await countModel.loadCountModels(using: client)
+                inventoryTypes = (try? await client.inventoryTypes().types) ?? []
             }
         }
         .onDisappear(perform: tearDown)
@@ -246,7 +248,7 @@ struct UnifiedCameraView: View {
             if let resource = countResource {
                 Text(
                     "Der Bestand wird von \(resource.quantity) auf "
-                        + "\(max(0, resource.quantity - countModel.adjustedCount)) reduziert."
+                        + "\(resource.quantity - countModel.adjustedCount) reduziert."
                 )
             }
         }
@@ -761,7 +763,7 @@ struct UnifiedCameraView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
                         .textSelection(.enabled)
-                    if state.canWrite {
+                    if state.canCreateInventory {
                         Button {
                             captureModel.applyScannedCode(code)
                             unmatchedCode = nil
@@ -1260,7 +1262,7 @@ struct UnifiedCameraView: View {
                     .font(.subheadline.monospacedDigit().weight(.semibold))
             }
 
-            if countModel.adjustedCount > resource.quantity {
+            if countModel.adjustedCount > resource.quantity && !state.allowsNegativeStock {
                 Label(
                     "Für eine Entnahme sind nur \(resource.quantity) Einheiten verfügbar.",
                     systemImage: "exclamationmark.circle"
@@ -1275,13 +1277,18 @@ struct UnifiedCameraView: View {
                 } label: {
                     VStack(spacing: 4) {
                         Label("Entnehmen", systemImage: "minus.circle.fill")
-                        Text("danach \(max(0, resource.quantity - countModel.adjustedCount))")
+                        Text("danach \(resource.quantity - countModel.adjustedCount)")
                             .font(.caption.monospacedDigit())
                     }
                     .frame(maxWidth: .infinity, minHeight: 50)
                 }
                 .buttonStyle(.bordered)
-                .disabled(!countModel.canApplyIssue(currentQuantity: resource.quantity))
+                .disabled(
+                    !countModel.canApplyIssue(
+                        currentQuantity: resource.quantity,
+                        allowNegativeStock: state.allowsNegativeStock
+                    )
+                )
 
                 Button {
                     applyCount(.receipt)
@@ -1435,8 +1442,8 @@ struct UnifiedCameraView: View {
 
             HStack(spacing: 12) {
                 Picker("Typ", selection: $captureModel.resourceType) {
-                    ForEach(InventoryResourceType.allCases, id: \.self) { type in
-                        Text(type.localizedName).tag(type)
+                    ForEach(captureTypes, id: \.self) { type in
+                        Text(captureTypeLabel(type)).tag(type)
                     }
                 }
                 .pickerStyle(.menu)
@@ -1462,7 +1469,12 @@ struct UnifiedCameraView: View {
             TextField("Ort, Regal oder Raum", text: $captureModel.locationName)
                 .padding(13)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
-            TextField("SKU / Barcode", text: $captureModel.sku)
+            TextField("SKU", text: $captureModel.sku)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(13)
+                .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
+            TextField("Barcode", text: $captureModel.barcode)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(13)
@@ -1473,21 +1485,23 @@ struct UnifiedCameraView: View {
                 .padding(13)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
 
-            Button {
-                camera.scanningEnabled = false
-                camera.stop()
-                showCaptureDetails = false
-                showSpatialCapture = true
-            } label: {
-                Label(
-                    captureModel.spatialPlacement?.roomName ?? "Im Raum positionieren",
-                    systemImage: captureModel.spatialPlacement == nil
-                        ? "cube.transparent"
-                        : "mappin.and.ellipse"
-                )
-                .frame(maxWidth: .infinity, minHeight: 44)
+            if state.canManageSpatial {
+                Button {
+                    camera.scanningEnabled = false
+                    camera.stop()
+                    showCaptureDetails = false
+                    showSpatialCapture = true
+                } label: {
+                    Label(
+                        captureModel.spatialPlacement?.roomName ?? "Im Raum positionieren",
+                        systemImage: captureModel.spatialPlacement == nil
+                            ? "cube.transparent"
+                            : "mappin.and.ellipse"
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
 
             if let placement = captureModel.spatialPlacement {
                 HStack(spacing: 10) {
@@ -1866,7 +1880,7 @@ struct UnifiedCameraView: View {
     }
 
     private func submitCapture() {
-        guard state.canWrite,
+        guard state.canCaptureInventory,
               captureModel.canSubmit,
               captureModel.processingCount == 0 else { return }
         let submission = captureModel.makeSubmission(
@@ -1883,13 +1897,18 @@ struct UnifiedCameraView: View {
     }
 
     private func applyCount(_ operation: StockCountOperation) {
-        guard state.canWrite,
+        guard state.canManageStock,
               let client = state.client,
               let resource = countResource else {
             countModel.errorMessage = "Keine Verbindung zum Inventarserver."
             return
         }
-        countModel.apply(operation, to: resource, using: client) { updated in
+        countModel.apply(
+            operation,
+            to: resource,
+            allowNegativeStock: state.allowsNegativeStock,
+            using: client
+        ) { updated in
             countResource = updated
             onCountApplied?(updated)
             close()
@@ -1909,7 +1928,26 @@ struct UnifiedCameraView: View {
     }
 
     private var availableCameraModes: [CameraMode] {
-        state.canWrite ? CameraMode.allCases : [.scan, .recognize]
+        CameraMode.allCases.filter { candidate in
+            switch candidate {
+            case .capture: state.canCaptureInventory
+            case .scan: true
+            case .recognize: state.canUseAI
+            case .count: state.canManageStock && state.canUseAI
+            }
+        }
+    }
+
+    private var captureTypes: [InventoryResourceType] {
+        let definitions = inventoryTypes
+            .filter { $0.archivedAt == nil }
+            .sorted { ($0.position, $0.label) < ($1.position, $1.label) }
+        let values = definitions.compactMap { InventoryResourceType(rawValue: $0.key) }
+        return values.isEmpty ? InventoryResourceType.allCases : values
+    }
+
+    private func captureTypeLabel(_ type: InventoryResourceType) -> String {
+        inventoryTypes.first(where: { $0.key == type.rawValue })?.label ?? type.localizedName
     }
 }
 
