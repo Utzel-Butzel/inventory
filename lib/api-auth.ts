@@ -361,11 +361,12 @@ export async function getSessionIdentity(
       .limit(1);
   }
 
-  // External identities are accepted only when Auth0 verified the email and
-  // an administrator already provisioned that email into an organization.
+  // External identities are accepted only when their provider verified the
+  // email and an administrator already provisioned it into an organization.
   // This keeps the identity provider from becoming an implicit tenant invite.
   const mayLinkByEmail =
-    session.user.authProvider === "local" || session.user.auth0EmailVerified;
+    session.user.authProvider === "local" ||
+    session.user.externalEmailVerified;
   if (
     !user &&
     !isDemoSession &&

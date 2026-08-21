@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "next-i18next/client";
 
 import { markdownToPlainText } from "@/lib/simple-markdown";
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 
 type MediaItem = {
   id: string;
@@ -91,10 +92,11 @@ function ResourceImage({ resource }: { resource: DuplicateResource }) {
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={image.url}
+    <ResponsiveMediaImage
+      media={image}
       alt={image.name || resource.name}
+      widths={[384, 640, 960]}
+      sizes="(max-width: 767px) calc(100vw - 32px), 50vw"
       onError={() => setFailed(true)}
       className="aspect-[4/3] w-full bg-surface-muted object-cover"
     />

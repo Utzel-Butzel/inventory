@@ -41,6 +41,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CustomFieldValueDisplay } from "@/components/custom-field-inputs";
 import { MarkdownContent } from "@/components/markdown-content";
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import { ResourceShareButton } from "@/components/resource-share-button";
 import { UsdzModelViewer } from "@/components/usdz-model-viewer";
 import {
@@ -297,11 +298,11 @@ function MediaCard({
         aria-label={t("details.lightbox.open", { name: item.name })}
         className="group relative aspect-square overflow-hidden rounded-2xl border border-border bg-surface-muted text-left outline-none transition hover:border-border-strong focus-visible:ring-3 focus-visible:ring-focus/25"
       >
-        {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={item.url}
+        <ResponsiveMediaImage
+          media={item}
           alt={item.altText || item.name}
+          widths={[192, 384, 640]}
+          sizes="(max-width: 639px) calc(100vw - 32px), (max-width: 1023px) calc(50vw - 32px), 220px"
           className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
         />
         <span className="absolute inset-0 grid place-items-center bg-black/0 transition group-hover:bg-black/20 group-focus-visible:bg-black/20">
@@ -473,12 +474,14 @@ function ImageLightbox({
         </header>
 
         <figure className="flex min-h-0 flex-1 items-center justify-center px-4 pb-5 sm:px-20 sm:pb-6">
-          {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <ResponsiveMediaImage
             key={activeImage.id}
-            src={activeImage.url}
+            media={activeImage}
             alt={activeImage.altText || activeImage.name}
+            widths={[640, 960, 1280, 1600]}
+            sizes="100vw"
+            fit="contain"
+            eager
             draggable={false}
             className="pointer-events-auto max-h-full max-w-full select-none object-contain shadow-2xl"
           />
@@ -684,7 +687,10 @@ export function ResourceDetails({
   );
   const articleImage = resource.cover
     ? {
+        id: resource.cover.id,
         url: resource.cover.url,
+        width: resource.cover.width,
+        height: resource.cover.height,
         altText: resource.cover.altText || resource.name,
       }
     : curatedArticleImages[resource.id] ??
@@ -816,11 +822,13 @@ export function ResourceDetails({
               <div className="grid border-b border-border lg:grid-cols-2">
                 {articleImage ? (
                   <div className="relative aspect-square self-start overflow-hidden bg-[radial-gradient(circle_at_50%_35%,var(--color-surface),var(--color-surface-muted))]">
-                    {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={articleImage.url}
+                    <ResponsiveMediaImage
+                      media={articleImage}
                       alt={articleImage.altText}
+                      widths={[640, 960, 1280]}
+                      sizes="(max-width: 1023px) calc(100vw - 32px), 50vw"
+                      fit="contain"
+                      eager
                       className="h-full w-full object-contain"
                     />
                     <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1 text-[10px] font-semibold text-muted shadow-sm">
@@ -871,11 +879,12 @@ export function ResourceDetails({
                   isRoom ? "aspect-[3/2]" : "aspect-square"
                 }`}
               >
-                {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={articleImage.url}
+                <ResponsiveMediaImage
+                  media={articleImage}
                   alt={articleImage.altText}
+                  widths={[640, 960, 1280]}
+                  sizes="(max-width: 1279px) calc(100vw - 32px), 50vw"
+                  eager
                   className="h-full w-full object-cover"
                 />
                 {isRoom && roomScan ? (

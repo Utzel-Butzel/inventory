@@ -499,7 +499,7 @@
       "imageModelDescription": "Used for covers created in this browser.",
       "authentication": "Authentication",
       "password": "Password",
-      "bothAuth": "Password and Auth0 enabled",
+      "bothAuth": "Multiple sign-in providers enabled",
       "authDescription": "Workspace sign-in provider",
       "ready": "Ready",
       "notConfigured": "Not configured"
@@ -684,7 +684,7 @@
     "resetPassword": "Reset password",
     "disable": "Disable",
     "enable": "Enable",
-    "auth0Note": "Auth0 identities are managed in Auth0. Their workspace role comes from the configured role claim or the deployment's Auth0 default role.",
+    "externalAuthNote": "External identities are managed by the configured identity provider. Open Inventory keeps workspace membership and roles under local administrator control.",
     "resetDescription": "Set a new password for {{name}}. Existing sessions will be signed out.",
     "newPassword": "New password",
     "cancel": "Cancel",

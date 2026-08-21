@@ -11,6 +11,10 @@ import {
   USDZ_MEDIA_TYPE,
   type ResourceMediaKind,
 } from "@/lib/resource-media-contract";
+import {
+  normalizeStoredImage,
+  prewarmStoredImageVariants,
+} from "@/lib/image-variants";
 
 export type StorageProvider = "local" | "openinary";
 
@@ -185,22 +189,36 @@ export async function storeMedia(options: {
   resourceId: string;
 }): Promise<StoredMedia> {
   assertStorageSupportsMediaType(options.mimeType);
-  const dimensions = await imageMetadata(options.bytes, options.mimeType);
+  const bytes = options.mimeType.startsWith("image/")
+    ? await normalizeStoredImage(options.bytes, options.mimeType)
+    : options.bytes;
+  const dimensions = await imageMetadata(bytes, options.mimeType);
   const stored = await storeBytes({
-    bytes: options.bytes,
+    bytes,
     mimeType: options.mimeType,
     originalName: options.originalName,
     folder: `resources/${options.resourceId}`,
   });
 
-  return {
+  const result = {
     ...stored,
     name: options.originalName,
     mimeType: options.mimeType,
     kind: getMediaKind(options.mimeType),
-    size: options.bytes.length,
+    size: bytes.length,
     ...dimensions,
   };
+  if (
+    result.kind === "image" &&
+    result.mimeType !== "image/svg+xml"
+  ) {
+    try {
+      await prewarmStoredImageVariants(result, bytes);
+    } catch {
+      // The original remains usable if optional thumbnail pre-generation fails.
+    }
+  }
+  return result;
 }
 
 export async function storeRoomScanAsset(options: {

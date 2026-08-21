@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import {
   OrganizationLink as Link,
   useOrganizationHref,
@@ -34,10 +35,13 @@ import {
   Undo2,
   X,
 } from "lucide-react";
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
+import type { RoomMapViewport } from "@/components/room-layout-map-canvas";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/components/ui";
 import { floorIdentifier } from "@/lib/spatial-map-features";
+import { roomKeyframeDisplayOrientation } from "@/lib/room-scene-visualization";
 import {
   arrangeFloorRooms,
   rotateRoomTransform,
@@ -50,6 +54,7 @@ import type {
 } from "@/lib/room-ai-analysis-contract";
 import {
   fetchJson,
+  type ClientRoomKeyframe,
   type ClientRoomPlacement,
   type ClientRoomScanSummary,
   type ClientRoomSceneManifest,
@@ -98,6 +103,44 @@ const formatDate = (value: string, locale: string) =>
     timeStyle: "short",
   }).format(new Date(value));
 
+function EvidencePhoto({
+  frame,
+  alt,
+}: {
+  frame: ClientRoomKeyframe;
+  alt: string;
+}) {
+  const display = roomKeyframeDisplayOrientation(frame.orientation);
+  return (
+    <div
+      className="relative size-11 shrink-0 origin-bottom-right overflow-hidden rounded-lg border border-border bg-surface-muted shadow-sm transition duration-150 hover:z-20 hover:scale-[1.8]"
+      title={alt}
+    >
+      <Image
+        src={frame.url}
+        alt={alt}
+        width={frame.width}
+        height={frame.height}
+        sizes="44px"
+        unoptimized
+        className="max-w-none object-cover"
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          width: display.quarterTurn
+            ? `${(100 * frame.width) / Math.max(frame.height, 1)}%`
+            : "100%",
+          height: display.quarterTurn
+            ? `${(100 * frame.height) / Math.max(frame.width, 1)}%`
+            : "100%",
+          transform: `translate(-50%, -50%) ${display.transform}`,
+        }}
+      />
+    </div>
+  );
+}
+
 export function RoomSceneBrowser() {
   const { t, i18n } = useT("spatial");
   const locale = i18n.resolvedLanguage ?? i18n.language;
@@ -123,10 +166,12 @@ export function RoomSceneBrowser() {
   const [selectedFloorIdentifier, setSelectedFloorIdentifier] = useState<string | null>(null);
   const [layoutDrafts, setLayoutDrafts] = useState<Record<string, SpatialMatrix4> | null>(null);
   const [layoutRoomId, setLayoutRoomId] = useState<string | null>(null);
-  const [layoutMapEnabled, setLayoutMapEnabled] = useState(false);
+  const [mapBackgroundEnabled, setMapBackgroundEnabled] = useState(false);
+  const [mapViewport, setMapViewport] = useState<RoomMapViewport | null>(null);
   const [savingLayout, setSavingLayout] = useState(false);
   const [analyzingRoom, setAnalyzingRoom] = useState(false);
   const [updatingAnalysisItemId, setUpdatingAnalysisItemId] = useState<string | null>(null);
+  const [previewAnalysisSuggestionId, setPreviewAnalysisSuggestionId] = useState<string | null>(null);
   const sceneRequestRef = useRef(0);
 
   const updateUrl = useCallback(
@@ -405,22 +450,53 @@ export function RoomSceneBrowser() {
   const visibleManifest = visibleManifests.find(
     (item) => item.scan.id === manifest?.scan.id,
   ) ?? manifest;
-  const linkedManifests = visibleManifests.filter(
-    (item) => item.scan.id !== visibleManifest?.scan.id,
+  const linkedManifests = useMemo(
+    () => visibleManifests.filter(
+      (item) => item.scan.id !== visibleManifest?.scan.id,
+    ),
+    [visibleManifest?.scan.id, visibleManifests],
   );
+  const canvasManifests = layoutDrafts ? floorManifests : visibleManifests;
+  const canvasManifest = canvasManifests.find(
+    (item) => item.scan.id === visibleManifest?.scan.id,
+  ) ?? visibleManifest;
+  const canvasLinkedManifests = useMemo(
+    () => canvasManifests.filter(
+      (item) => item.scan.id !== canvasManifest?.scan.id,
+    ),
+    [canvasManifest?.scan, canvasManifests],
+  );
+  const mapViewGeoreference = visibleManifest?.scan.georeference
+    ?? visibleManifest?.georeference
+    ?? layoutMapFallbackGeoreference;
+
+  useEffect(() => {
+    setPreviewAnalysisSuggestionId(null);
+  }, [visibleManifest?.scan.id]);
 
   const beginLayout = () => {
-    setLayoutMapEnabled(false);
-    setLayoutDrafts(Object.fromEntries(effectiveTransforms) as Record<string, SpatialMatrix4>);
+    setLayoutDrafts(mapBackgroundEnabled
+      ? Object.fromEntries(floorManifests.map((item) => {
+          const hasOwnGeoreference = Boolean(
+            item.scan.georeference ?? item.georeference,
+          );
+          return [
+            item.scan.id,
+            item.scan.layoutTransform ?? (hasOwnGeoreference
+              ? item.scan.scene.worldFromModel
+              : effectiveTransforms.get(item.scan.id) ?? item.scan.scene.worldFromModel),
+          ];
+        })) as Record<string, SpatialMatrix4>
+      : Object.fromEntries(effectiveTransforms) as Record<string, SpatialMatrix4>);
     setLayoutRoomId(selectedScanId ?? floorManifests[0]?.scan.id ?? null);
   };
   const closeLayout = () => {
     setLayoutDrafts(null);
-    setLayoutMapEnabled(false);
   };
-  const setMapLayoutEnabled = (enabled: boolean) => {
-    setLayoutMapEnabled(enabled);
-    if (!enabled) return;
+  const setMapBackground = (enabled: boolean) => {
+    setMapBackgroundEnabled(enabled);
+    setMapViewport(null);
+    if (!enabled || !layoutDrafts) return;
     // Exact room anchors start from their captured AR world transform. Rooms
     // using the broader building anchor keep the compact automatic layout so
     // every footprint is visible and can be aligned manually on the basemap.
@@ -454,7 +530,7 @@ export function RoomSceneBrowser() {
       worldFromModel: item.scan.scene.worldFromModel,
       layoutTransform: null,
     })));
-    if (layoutMapEnabled) {
+    if (mapBackgroundEnabled) {
       setLayoutDrafts(Object.fromEntries(floorManifests.map((item) => [
         item.scan.id,
         (item.scan.georeference ?? item.georeference)
@@ -505,7 +581,6 @@ export function RoomSceneBrowser() {
           }
         : current);
       setLayoutDrafts(null);
-      setLayoutMapEnabled(false);
     } catch {
       setError(t("rooms.errors.saveLayout"));
     } finally {
@@ -536,6 +611,12 @@ export function RoomSceneBrowser() {
     (item) => item.scan.id === layoutRoomId,
   ) ?? null;
   const roomAnalysis = visibleManifest?.scan.aiAnalysis ?? null;
+  const analysisKeyframesById = useMemo(
+    () => new Map(
+      (visibleManifest?.scan.keyframes ?? []).map((frame) => [frame.id, frame]),
+    ),
+    [visibleManifest?.scan.keyframes],
+  );
   const visibleSurfaceAppearances = roomAnalysis?.surfaceAppearances.filter(
     (appearance) => appearance.status !== "dismissed",
   ) ?? [];
@@ -735,6 +816,26 @@ export function RoomSceneBrowser() {
           {floorManifests.length ? (
             <button
               type="button"
+              onClick={() => setMapBackground(!mapBackgroundEnabled)}
+              disabled={!hasLayoutMapAnchor}
+              className={cn(
+                "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
+                mapBackgroundEnabled
+                  ? "border-brand-border bg-brand-soft text-brand-strong"
+                  : "border-border text-muted hover:bg-surface-hover",
+              )}
+              title={hasLayoutMapAnchor
+                ? t("rooms.layout.mapBackgroundHint")
+                : t("rooms.layout.mapUnavailable")}
+              aria-pressed={mapBackgroundEnabled}
+            >
+              <MapIcon className="size-3.5" aria-hidden="true" />
+              {t("rooms.layout.mapBackground")}
+            </button>
+          ) : null}
+          {floorManifests.length ? (
+            <button
+              type="button"
               onClick={layoutDrafts ? closeLayout : beginLayout}
               className={cn(
                 "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-[11px] font-semibold transition",
@@ -819,28 +920,49 @@ export function RoomSceneBrowser() {
         </aside>
 
         <section className="relative order-1 min-h-[430px] overflow-hidden bg-surface-muted lg:order-2">
-          {layoutDrafts && layoutMapEnabled ? (
-            <RoomLayoutMapCanvas
-              manifests={visibleManifests}
-              fallbackGeoreference={layoutMapFallbackGeoreference}
-              selectedScanId={layoutRoomId}
-              onSelectRoom={setLayoutRoomId}
-              onChangeTransform={(scanId, transform) => {
-                setLayoutDrafts((current) => current
-                  ? { ...current, [scanId]: transform }
-                  : current);
-              }}
-            />
-          ) : visibleManifest && !loadingScene ? (
-            <RoomSceneCanvas
-              manifest={visibleManifest}
-              linkedManifests={linkedManifests}
-              selectedResourceId={selectedResourceId}
-              onSelectResource={selectResource}
-            />
+          {mapBackgroundEnabled && hasLayoutMapAnchor ? (
+            <div className="absolute inset-0 z-0">
+              <RoomLayoutMapCanvas
+                manifests={visibleManifests}
+                fallbackGeoreference={layoutMapFallbackGeoreference}
+                viewGeoreference={mapViewGeoreference}
+                selectedScanId={layoutRoomId}
+                onSelectRoom={setLayoutRoomId}
+                onChangeTransform={(scanId, transform) => {
+                  setLayoutDrafts((current) => current
+                    ? { ...current, [scanId]: transform }
+                    : current);
+                }}
+                backgroundOnly
+                onViewportChange={setMapViewport}
+              />
+            </div>
+          ) : null}
+          {visibleManifest && !loadingScene ? (
+            <div className="absolute inset-0 z-10">
+              <RoomSceneCanvas
+                manifest={canvasManifest ?? visibleManifest}
+                linkedManifests={canvasLinkedManifests}
+                selectedResourceId={selectedResourceId}
+                previewObjectSuggestionId={previewAnalysisSuggestionId}
+                onSelectResource={selectResource}
+                layoutEditing={layoutDrafts ? {
+                  selectedScanId: layoutRoomId,
+                  transforms: layoutDrafts,
+                  onSelectRoom: setLayoutRoomId,
+                  onChangeTransform: (scanId, transform) => {
+                    setLayoutDrafts((current) => current
+                      ? { ...current, [scanId]: transform }
+                      : current);
+                  },
+                } : null}
+                mapBackground={mapBackgroundEnabled && hasLayoutMapAnchor}
+                mapViewport={mapViewport}
+              />
+            </div>
           ) : (
             <div
-              className="absolute inset-0 grid place-items-center text-muted"
+              className="absolute inset-0 z-20 grid place-items-center text-muted"
               role="status"
               aria-label={t("rooms.loading")}
             >
@@ -863,10 +985,10 @@ export function RoomSceneBrowser() {
                   type="button"
                   onClick={resetAutomaticLayout}
                   className="grid size-8 shrink-0 place-items-center rounded-lg border border-border text-muted hover:text-brand"
-                  title={t(layoutMapEnabled
+                  title={t(mapBackgroundEnabled
                     ? "rooms.layout.mapAutomatic"
                     : "rooms.layout.automatic")}
-                  aria-label={t(layoutMapEnabled
+                  aria-label={t(mapBackgroundEnabled
                     ? "rooms.layout.mapAutomatic"
                     : "rooms.layout.automatic")}
                 >
@@ -885,25 +1007,6 @@ export function RoomSceneBrowser() {
                   </option>
                 ))}
               </select>
-              <label className="mt-3 flex items-start gap-2.5 rounded-xl border border-border bg-surface-subtle p-2.5 text-left">
-                <input
-                  type="checkbox"
-                  checked={layoutMapEnabled}
-                  onChange={(event) => setMapLayoutEnabled(event.target.checked)}
-                  disabled={!hasLayoutMapAnchor}
-                  className="mt-0.5 size-4 shrink-0 accent-brand-solid disabled:opacity-50"
-                />
-                <span>
-                  <span className="block text-[11px] font-semibold text-foreground">
-                    {t("rooms.layout.mapBackground")}
-                  </span>
-                  <span className="mt-0.5 block text-[9px] leading-4 text-muted">
-                    {hasLayoutMapAnchor
-                      ? t("rooms.layout.mapHint")
-                      : t("rooms.layout.mapUnavailable")}
-                  </span>
-                </span>
-              </label>
               <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <button
                   type="button"
@@ -963,7 +1066,7 @@ export function RoomSceneBrowser() {
                 </button>
               </div>
               <p className="mt-2 text-center text-[9px] text-muted">
-                {layoutMapEnabled
+                {mapBackgroundEnabled
                   ? t("rooms.layout.mapStep")
                   : t("rooms.layout.step")}
               </p>
@@ -1178,10 +1281,29 @@ export function RoomSceneBrowser() {
                   <div className="mt-1.5 space-y-1.5">
                     {visibleSuggestions.map((suggestion) => {
                       const updating = updatingAnalysisItemId === suggestion.id;
+                      const evidenceFrames = suggestion.evidenceKeyframeIds.flatMap(
+                        (id) => {
+                          const frame = analysisKeyframesById.get(id);
+                          return frame ? [frame] : [];
+                        },
+                      );
                       return (
                         <article
                           key={suggestion.id}
-                          className="rounded-lg border border-border bg-surface/85 p-2"
+                          onMouseEnter={() => setPreviewAnalysisSuggestionId(suggestion.id)}
+                          onMouseLeave={() => setPreviewAnalysisSuggestionId((current) =>
+                            current === suggestion.id ? null : current
+                          )}
+                          onFocusCapture={() => setPreviewAnalysisSuggestionId(suggestion.id)}
+                          onBlurCapture={(event) => {
+                            const nextTarget = event.relatedTarget as Node | null;
+                            if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
+                              setPreviewAnalysisSuggestionId((current) =>
+                                current === suggestion.id ? null : current
+                              );
+                            }
+                          }}
+                          className="rounded-lg border border-border bg-surface/85 p-2 transition hover:border-brand-border hover:bg-brand-soft/30"
                         >
                           <div className="flex items-start gap-2">
                             {suggestion.colorHex ? (
@@ -1215,8 +1337,30 @@ export function RoomSceneBrowser() {
                                   })}
                                 </p>
                               ) : null}
+                              {suggestion.roomObjectId ? (
+                                <p className="mt-0.5 text-[9px] text-brand">
+                                  {t("rooms.ai.hoverPreview")}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
+                          {evidenceFrames.length ? (
+                            <div className="mt-2 flex flex-wrap items-end gap-1.5 overflow-visible">
+                              <span className="mr-0.5 self-center text-[8px] font-semibold uppercase tracking-[0.1em] text-muted">
+                                {t("rooms.ai.photos")}
+                              </span>
+                              {evidenceFrames.map((frame, frameIndex) => (
+                                <EvidencePhoto
+                                  key={frame.id}
+                                  frame={frame}
+                                  alt={t("rooms.ai.evidencePhoto", {
+                                    name: suggestion.name,
+                                    value: integer.format(frameIndex + 1),
+                                  })}
+                                />
+                              ))}
+                            </div>
+                          ) : null}
                           <div className="mt-2 flex gap-1.5">
                             {suggestion.status === "pending" ? (
                               <button
@@ -1344,11 +1488,11 @@ function SelectedPlacementCard({ placement }: { placement: ClientRoomPlacement }
       <div className="flex items-center gap-3">
         <div className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-warning-soft text-warning">
           {placement.resource.cover ? (
-            // Same-origin media URLs carry the active session cookie.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={placement.resource.cover.url}
+            <ResponsiveMediaImage
+              media={placement.resource.cover}
               alt={placement.resource.cover.altText || placement.resource.name}
+              widths={[96, 192]}
+              sizes="44px"
               className="size-full object-cover"
             />
           ) : (

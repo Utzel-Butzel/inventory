@@ -1,4 +1,8 @@
-import { auth0Enabled } from "@/auth";
+import {
+  auth0Enabled,
+  externalAuthProviders,
+  passwordAuthEnabled,
+} from "@/auth";
 import { users } from "@/db/schema";
 import { getRequestIdentity } from "@/lib/api-auth";
 import { db } from "@/lib/db";
@@ -33,14 +37,17 @@ export async function GET(request: Request) {
       imageProvider: defaultImageModel?.provider ?? "openai",
     },
     auth: {
-      password: Boolean(
-        localUser ||
-          process.env.BOOTSTRAP_ADMIN_PASSWORD_HASH ||
-          process.env.BOOTSTRAP_ADMIN_PASSWORD ||
-          process.env.SIMPLE_AUTH_PASSWORD_HASH ||
-          process.env.SIMPLE_AUTH_PASSWORD,
-      ),
+      password:
+        passwordAuthEnabled &&
+        Boolean(
+          localUser ||
+            process.env.BOOTSTRAP_ADMIN_PASSWORD_HASH ||
+            process.env.BOOTSTRAP_ADMIN_PASSWORD ||
+            process.env.SIMPLE_AUTH_PASSWORD_HASH ||
+            process.env.SIMPLE_AUTH_PASSWORD,
+        ),
       auth0: auth0Enabled,
+      providers: externalAuthProviders,
     },
     user: {
       role: identity.role,

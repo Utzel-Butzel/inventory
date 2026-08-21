@@ -59,6 +59,12 @@ public struct RuntimeAIStatus: Codable, Equatable, Sendable {
 public struct RuntimeAuthenticationStatus: Codable, Equatable, Sendable {
     public let password: Bool
     public let auth0: Bool
+    public let providers: [RuntimeExternalAuthenticationProvider]?
+}
+
+public struct RuntimeExternalAuthenticationProvider: Codable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public let name: String
 }
 
 public struct RuntimeUserStatus: Codable, Equatable, Sendable {

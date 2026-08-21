@@ -14,7 +14,10 @@ import {
   requireResourcePermission,
 } from "@/lib/api-auth";
 import { buildRoomAiAnalysis } from "@/lib/room-ai-analysis";
-import { roomAiReviewPatchSchema } from "@/lib/room-ai-analysis-contract";
+import {
+  maximumRoomAnalysisKeyframes,
+  roomAiReviewPatchSchema,
+} from "@/lib/room-ai-analysis-contract";
 import { sampleRoomKeyframes } from "@/lib/room-scene-visualization";
 import {
   findRoomScan,
@@ -121,7 +124,10 @@ export async function POST(request: Request, context: Context) {
     authorization.identity.organizationId,
     id,
   );
-  const selectedFrames = sampleRoomKeyframes(frames, 8);
+  const selectedFrames = sampleRoomKeyframes(
+    frames,
+    maximumRoomAnalysisKeyframes,
+  );
   if (!selectedFrames.length) {
     return Response.json(
       { error: "This room scan has no reference photos to analyze." },

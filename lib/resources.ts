@@ -150,6 +150,7 @@ export async function listResources(options: {
   status?: string;
   page?: number;
   pageSize?: number;
+  mediaMode?: "all" | "cover";
 }) {
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.min(
@@ -215,9 +216,24 @@ export async function listResources(options: {
     db.select({ value: count() }).from(resources).where(where),
   ]);
 
-  const [mediaRows, slugRows] = rows.length
-    ? await Promise.all([
-        db
+  const mediaRowsPromise =
+    options.mediaMode === "cover"
+      ? db
+          .selectDistinctOn([media.resourceId])
+          .from(media)
+          .where(
+            and(
+              eq(media.organizationId, options.organizationId),
+              inArray(media.resourceId, rows.map((row) => row.id)),
+              eq(media.kind, "image"),
+            ),
+          )
+          .orderBy(
+            asc(media.resourceId),
+            asc(media.position),
+            asc(media.createdAt),
+          )
+      : db
           .select()
           .from(media)
           .where(
@@ -226,7 +242,11 @@ export async function listResources(options: {
               inArray(media.resourceId, rows.map((row) => row.id)),
             ),
           )
-          .orderBy(asc(media.position)),
+          .orderBy(asc(media.position));
+
+  const [mediaRows, slugRows] = rows.length
+    ? await Promise.all([
+        mediaRowsPromise,
         listResourceSlugRows(
           options.organizationId,
           rows.map((row) => row.id),
@@ -436,9 +456,12 @@ export async function getResourceCovers(
 
   const rows = await db
     .select({
+      id: media.id,
       resourceId: media.resourceId,
       url: media.url,
       altText: media.altText,
+      width: media.width,
+      height: media.height,
     })
     .from(media)
     .where(

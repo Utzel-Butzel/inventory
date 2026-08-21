@@ -53,6 +53,7 @@ export async function GET(request: Request) {
     pageSize: Number.isFinite(pageSize)
       ? pageSize
       : DEFAULT_INVENTORY_PAGE_SIZE,
+    mediaMode: url.searchParams.get("media") === "cover" ? "cover" : "all",
   });
   try {
     const localized = await localizeResourceList(

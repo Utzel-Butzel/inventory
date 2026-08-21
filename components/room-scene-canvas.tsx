@@ -1,17 +1,24 @@
 "use client";
 
 import {
+  Aperture,
   ArrowDown,
+  ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  ArrowUpFromLine,
   Camera,
   Cuboid,
   Footprints,
   Image as ImageIcon,
   LoaderCircle,
   Maximize2,
+  Move3d,
+  Rotate3d,
   ScanSearch,
+  Sparkles,
+  Sun,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -21,22 +28,24 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 
 import type { ClientRoomSceneManifest } from "@/lib/client-types";
-import type {
-  RoomMaterial,
-  RoomSurfaceAppearance,
-} from "@/lib/room-ai-analysis-contract";
+import type { RoomMapViewport } from "@/components/room-layout-map-canvas";
 import {
   createAiPrimitiveObjectModel,
   createRoomObjectModel,
 } from "@/components/room-object-models";
+import { applyDetectedRoomFinish } from "@/components/room-scene-materials";
 import { cn } from "@/components/ui";
+import type { RoomObjectSuggestion } from "@/lib/room-ai-analysis-contract";
+import type { SpatialMatrix4 } from "@/lib/room-scene-contract";
 import {
   hasPlyHeader,
   maximumGaussianSplatBytes,
@@ -55,6 +64,32 @@ import {
 type CameraCommand = "reset" | "top";
 type SceneMode = "roomplan" | RoomPhotorealAssetKind;
 type NavigationMode = "orbit" | "walk";
+type WalkAction =
+  | "forward"
+  | "backward"
+  | "left"
+  | "right"
+  | "jump"
+  | "crouch";
+type LayoutTool = "translate" | "rotate";
+type RoomSceneLayoutEditing = {
+  selectedScanId: string | null;
+  transforms: Record<string, SpatialMatrix4>;
+  onSelectRoom: (scanId: string) => void;
+  onChangeTransform: (scanId: string, transform: SpatialMatrix4) => void;
+};
+type LightingMode = "live" | "realistic" | "rendering";
+type LightingStatus = "idle" | "generating" | "ready";
+type GpuPathTracer = import("three-gpu-pathtracer").WebGLPathTracer;
+type CameraSnapshot = {
+  scanId: string;
+  navigationMode: NavigationMode;
+  mapBackground: boolean;
+  position: [number, number, number];
+  quaternion: [number, number, number, number];
+  up: [number, number, number];
+  target: [number, number, number];
+};
 type AssetLoadState =
   | "idle"
   | "loading"
@@ -65,6 +100,8 @@ type AssetLoadState =
 
 type RoomSurface =
   ClientRoomSceneManifest["scan"]["scene"]["surfaces"][number];
+
+const emptyLinkedManifests: ClientRoomSceneManifest[] = [];
 
 type SurfaceRect = {
   left: number;
@@ -96,12 +133,6 @@ const objectColors: Record<string, number> = {
   fireplace: 0x9c7d68,
   television: 0x555c65,
   stairs: 0x9f9788,
-};
-
-const materialMetalness = (material: RoomMaterial) => {
-  if (material === "metal") return 0.72;
-  if (material === "glass") return 0.08;
-  return 0.01;
 };
 
 const sceneThemePalettes = {
@@ -551,14 +582,22 @@ function wallApertures(surfaces: RoomSurface[]) {
 
 export function RoomSceneCanvas({
   manifest,
-  linkedManifests = [],
+  linkedManifests = emptyLinkedManifests,
   selectedResourceId,
+  previewObjectSuggestionId = null,
   onSelectResource,
+  layoutEditing = null,
+  mapBackground = false,
+  mapViewport = null,
 }: {
   manifest: ClientRoomSceneManifest;
   linkedManifests?: ClientRoomSceneManifest[];
   selectedResourceId: string | null;
+  previewObjectSuggestionId?: string | null;
   onSelectResource: (resourceId: string) => void;
+  layoutEditing?: RoomSceneLayoutEditing | null;
+  mapBackground?: boolean;
+  mapViewport?: RoomMapViewport | null;
 }) {
   const { t, i18n } = useT("spatial");
   const locale = i18n.resolvedLanguage ?? i18n.language;
@@ -568,22 +607,49 @@ export function RoomSceneCanvas({
   const selectionCommandRef = useRef<(resourceId: string | null) => void>(
     () => undefined,
   );
+  const suggestionPreviewCommandRef = useRef<
+    (suggestionId: string | null) => void
+  >(() => undefined);
   const keyframeCommandRef = useRef<
     (visible: boolean, selectedId: string | null) => void
   >(() => undefined);
   const walkCommandRef = useRef<
-    (direction: "forward" | "backward" | "left" | "right", active: boolean) => void
+    (action: WalkAction, active: boolean) => void
+  >(() => undefined);
+  const walkThroughWallsRef = useRef(false);
+  const layoutSelectionCommandRef = useRef<(scanId: string | null) => void>(
+    () => undefined,
+  );
+  const layoutToolCommandRef = useRef<(tool: LayoutTool) => void>(
+    () => undefined,
+  );
+  const layoutTransformsCommandRef = useRef<
+    (transforms: Record<string, SpatialMatrix4>) => void
   >(() => undefined);
   const selectedResourceRef = useRef(selectedResourceId);
+  const layoutToolRef = useRef<LayoutTool>("translate");
+  const previewSuggestionRef = useRef(previewObjectSuggestionId);
+  const cameraSnapshotRef = useRef<CameraSnapshot | null>(null);
   const keyframesVisibleRef = useRef(false);
   const selectedKeyframeRef = useRef<string | null>(null);
   const onSelectRef = useRef(onSelectResource);
+  const selectedLayoutScanRef = useRef(layoutEditing?.selectedScanId ?? null);
+  const layoutTransformsRef = useRef(layoutEditing?.transforms ?? null);
+  const onSelectLayoutRoomRef = useRef(layoutEditing?.onSelectRoom);
+  const onChangeLayoutTransformRef = useRef(layoutEditing?.onChangeTransform);
   const [rendererError, setRendererError] = useState<string | null>(null);
   const [sceneMode, setSceneMode] = useState<SceneMode>("roomplan");
+  const [lightingMode, setLightingMode] = useState<LightingMode>("live");
+  const [lightingStatus, setLightingStatus] = useState<LightingStatus>("idle");
+  const [lightingProgress, setLightingProgress] = useState(0);
   const [navigationMode, setNavigationMode] = useState<NavigationMode>("orbit");
+  const [walkThroughWalls, setWalkThroughWalls] = useState(false);
+  const [layoutTool, setLayoutTool] = useState<LayoutTool>("translate");
   const [assetLoadState, setAssetLoadState] = useState<AssetLoadState>("idle");
   const [showKeyframes, setShowKeyframes] = useState(false);
   const [selectedKeyframeId, setSelectedKeyframeId] = useState<string | null>(null);
+  const isLayoutEditing = Boolean(layoutEditing);
+  const layoutEditTransforms = layoutEditing?.transforms ?? null;
   const visibleManifests = useMemo(
     () => [manifest, ...linkedManifests],
     [linkedManifests, manifest],
@@ -609,15 +675,69 @@ export function RoomSceneCanvas({
     }),
     [visibleManifests],
   );
+  const selectLightingMode = (mode: LightingMode) => {
+    if (mode === lightingMode) return;
+    if (mode !== "live") setSceneMode("roomplan");
+    setLightingProgress(0);
+    setLightingStatus(mode === "live" ? "idle" : "generating");
+    setLightingMode(mode);
+  };
 
   useEffect(() => {
     onSelectRef.current = onSelectResource;
   }, [onSelectResource]);
 
   useEffect(() => {
+    walkThroughWallsRef.current = walkThroughWalls;
+  }, [walkThroughWalls]);
+
+  useEffect(() => {
     selectedResourceRef.current = selectedResourceId;
     selectionCommandRef.current(selectedResourceId);
   }, [selectedResourceId]);
+
+  useEffect(() => {
+    previewSuggestionRef.current = previewObjectSuggestionId;
+    suggestionPreviewCommandRef.current(previewObjectSuggestionId);
+  }, [previewObjectSuggestionId]);
+
+  useEffect(() => {
+    selectedLayoutScanRef.current = layoutEditing?.selectedScanId ?? null;
+    layoutTransformsRef.current = layoutEditTransforms;
+    onSelectLayoutRoomRef.current = layoutEditing?.onSelectRoom;
+    onChangeLayoutTransformRef.current = layoutEditing?.onChangeTransform;
+    layoutSelectionCommandRef.current(layoutEditing?.selectedScanId ?? null);
+    if (layoutEditTransforms) {
+      layoutTransformsCommandRef.current(layoutEditTransforms);
+    }
+  }, [
+    layoutEditing?.onChangeTransform,
+    layoutEditing?.onSelectRoom,
+    layoutEditing?.selectedScanId,
+    layoutEditTransforms,
+  ]);
+
+  useEffect(() => {
+    layoutToolRef.current = layoutTool;
+    layoutToolCommandRef.current(layoutTool);
+  }, [layoutTool]);
+
+  useEffect(() => {
+    if (!isLayoutEditing) return;
+    setNavigationMode("orbit");
+    setSceneMode("roomplan");
+    setLightingMode("live");
+    setLightingStatus("idle");
+    setLightingProgress(0);
+  }, [isLayoutEditing]);
+
+  useEffect(() => {
+    if (!mapBackground) return;
+    setNavigationMode("orbit");
+    setLightingMode("live");
+    setLightingStatus("idle");
+    setLightingProgress(0);
+  }, [mapBackground]);
 
   useEffect(() => {
     if (sceneMode !== "roomplan" && !availableModes[sceneMode]) {
@@ -642,10 +762,11 @@ export function RoomSceneCanvas({
     const host = hostRef.current;
     if (!host) return;
     setRendererError(null);
+    const rayTracedLighting = lightingMode !== "live";
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: mapBackground });
     } catch {
       setRendererError(t("canvas.unsupported"));
       return;
@@ -663,10 +784,10 @@ export function RoomSceneCanvas({
     ];
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setClearColor(initialScenePalette.background, 1);
+    renderer.setClearColor(initialScenePalette.background, mapBackground ? 0 : 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.9;
+    renderer.toneMappingExposure = rayTracedLighting ? 1.08 : 0.93;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.VSMShadowMap;
     ensureRectAreaLightUniforms();
@@ -685,8 +806,11 @@ export function RoomSceneCanvas({
     host.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
+    if (rayTracedLighting) {
+      scene.background = new THREE.Color(initialScenePalette.background);
+    }
     const sceneFog = new THREE.Fog(initialScenePalette.background, 18, 55);
-    scene.fog = sceneFog;
+    scene.fog = mapBackground ? null : sceneFog;
     const roomEnvironment = new RoomEnvironment();
     const environmentGenerator = new THREE.PMREMGenerator(renderer);
     const environmentTarget = environmentGenerator.fromScene(roomEnvironment, 0.035);
@@ -777,16 +901,6 @@ export function RoomSceneCanvas({
       metalness: 0.01,
       envMapIntensity: 0.42,
     });
-    const doorDetailMaterial = new THREE.MeshStandardMaterial({
-      color: 0xc08d5d,
-      map: doorColorMap,
-      normalMap: doorNormalMap,
-      normalScale: new THREE.Vector2(0.45, 0.45),
-      roughnessMap: doorRoughnessMap,
-      roughness: 1,
-      metalness: 0,
-      envMapIntensity: 0.32,
-    });
     const trimMaterial = new THREE.MeshStandardMaterial({
       color: 0xf0ece4,
       map: wallColorMap,
@@ -811,6 +925,8 @@ export function RoomSceneCanvas({
     });
     const windowMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x82b4c8,
+      emissive: 0x6fa6be,
+      emissiveIntensity: 0.34,
       roughness: 0.12,
       metalness: 0,
       transmission: 0.58,
@@ -850,38 +966,22 @@ export function RoomSceneCanvas({
       return material;
     };
     const aiMaterials = new Map<string, THREE.MeshStandardMaterial>();
-    const applyDetectedFinish = (
-      material: THREE.MeshStandardMaterial,
-      appearance: Pick<
-        RoomSurfaceAppearance,
-        "colorHex" | "material" | "roughness"
-      >,
-    ) => {
-      material.color.set(appearance.colorHex);
-      material.roughness = appearance.roughness;
-      material.metalness = materialMetalness(appearance.material);
-      if (appearance.material === "carpet" || appearance.material === "fabric") {
-        material.map = objectColorMap;
-        material.normalMap = objectNormalMap;
-        material.normalScale.set(0.72, 0.72);
-        material.roughnessMap = objectRoughnessMap;
-      } else if (appearance.material === "wood" || appearance.material === "laminate") {
-        material.map = doorColorMap;
-        material.normalMap = doorNormalMap;
-        material.normalScale.set(0.58, 0.58);
-        material.roughnessMap = doorRoughnessMap;
-      } else if (
-        appearance.material === "tile" ||
-        appearance.material === "stone" ||
-        appearance.material === "metal" ||
-        appearance.material === "glass"
-      ) {
-        material.map = null;
-        material.normalMap = null;
-        material.roughnessMap = null;
-      }
-      material.needsUpdate = true;
-      return material;
+    const detectedFinishTextures = {
+      paint: {
+        normalMap: wallNormalMap,
+        roughnessMap: wallRoughnessMap,
+        normalScale: 0.42,
+      },
+      wood: {
+        normalMap: doorNormalMap,
+        roughnessMap: doorRoughnessMap,
+        normalScale: 0.58,
+      },
+      fabric: {
+        normalMap: objectNormalMap,
+        roughnessMap: objectRoughnessMap,
+        normalScale: 0.72,
+      },
     };
     const finishForSurface = (
       roomManifest: ClientRoomSceneManifest,
@@ -897,7 +997,11 @@ export function RoomSceneCanvas({
       const key = `${roomManifest.scan.id}:surface:${category}`;
       const cached = aiMaterials.get(key);
       if (cached) return cached;
-      const material = applyDetectedFinish(fallback.clone(), appearance);
+      const material = applyDetectedRoomFinish(
+        fallback.clone(),
+        appearance,
+        detectedFinishTextures,
+      );
       aiMaterials.set(key, material);
       return material;
     };
@@ -915,12 +1019,38 @@ export function RoomSceneCanvas({
       const key = `${roomManifest.scan.id}:object:${objectId}`;
       const cached = aiMaterials.get(key);
       if (cached) return cached;
-      const material = applyDetectedFinish(fallback.clone(), {
-        colorHex:
-          suggestion.colorHex ?? `#${fallback.color.getHexString().toUpperCase()}`,
-        material: suggestion.material,
-        roughness: suggestion.material === "metal" ? 0.32 : 0.7,
-      });
+      const material = applyDetectedRoomFinish(
+        fallback.clone(),
+        {
+          colorHex:
+            suggestion.colorHex ?? `#${fallback.color.getHexString().toUpperCase()}`,
+          material: suggestion.material,
+          roughness: suggestion.material === "metal" ? 0.32 : 0.7,
+        },
+        detectedFinishTextures,
+      );
+      aiMaterials.set(key, material);
+      return material;
+    };
+    const finishForSuggestion = (
+      roomManifest: ClientRoomSceneManifest,
+      suggestion: RoomObjectSuggestion,
+      category: string,
+    ) => {
+      const fallback = objectMaterial(category);
+      const key = `${roomManifest.scan.id}:suggestion:${suggestion.id}`;
+      const cached = aiMaterials.get(key);
+      if (cached) return cached;
+      const material = applyDetectedRoomFinish(
+        fallback.clone(),
+        {
+          colorHex:
+            suggestion.colorHex ?? `#${fallback.color.getHexString().toUpperCase()}`,
+          material: suggestion.material,
+          roughness: suggestion.material === "metal" ? 0.32 : 0.7,
+        },
+        detectedFinishTextures,
+      );
       aiMaterials.set(key, material);
       return material;
     };
@@ -995,11 +1125,41 @@ export function RoomSceneCanvas({
       metalness: 0,
       envMapIntensity: 0.35,
     });
-    const camera = new THREE.PerspectiveCamera(48, 1, 0.02, 250);
+    const createSuggestionModel = (
+      roomManifest: ClientRoomSceneManifest,
+      suggestion: RoomObjectSuggestion,
+      category: string,
+      dimensions: readonly [number, number, number],
+    ) => suggestion.primitiveModel
+      ? createAiPrimitiveObjectModel({
+          dimensions,
+          model: suggestion.primitiveModel,
+        })
+      : createRoomObjectModel({
+          category,
+          dimensions,
+          materials: {
+            primary: finishForSuggestion(roomManifest, suggestion, category),
+            light: objectLightMaterial,
+            dark: objectDarkMaterial,
+            metal: objectMetalMaterial,
+            glass: objectGlassMaterial,
+            ceramic: objectCeramicMaterial,
+            water: objectWaterMaterial,
+            warm: objectWarmMaterial,
+          },
+        });
+    const camera = new THREE.PerspectiveCamera(
+      navigationMode === "walk" ? 56 : 48,
+      1,
+      0.02,
+      250,
+    );
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enabled = navigationMode === "orbit";
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.075;
+    // Keep orbit movement locked to the pointer. Damping intentionally trails
+    // user input over multiple frames, which makes the camera feel delayed.
+    controls.enableDamping = false;
     controls.minDistance = 0.35;
     controls.maxDistance = 80;
     controls.maxPolarAngle = Math.PI * 0.495;
@@ -1019,9 +1179,22 @@ export function RoomSceneCanvas({
     const roomPlanRoots = new Map<string, THREE.Object3D>();
     const roomWorldRoots = new Map<string, THREE.Group>();
     const roomWorldDeltas = new Map<string, THREE.Matrix4>();
+    const capturedRoomTransforms = new Map<string, THREE.Matrix4>();
+    const suggestionPreviews = new Map<
+      string,
+      { current: THREE.Object3D; preview: THREE.Object3D }
+    >();
     const wallColliderMeshes: THREE.Mesh[] = [];
     const splatMaterials = new Set<THREE.ShaderMaterial>();
     let disposed = false;
+    let pathTracer: GpuPathTracer | null = null;
+    let pathTraceDenoiseQuad: FullScreenQuad | null = null;
+    let restartPathTracingForTheme: () => void = () => undefined;
+    const layoutTransformForManifest = (
+      roomManifest: ClientRoomSceneManifest,
+    ) => layoutTransformsRef.current?.[roomManifest.scan.id]
+      ?? roomManifest.scan.layoutTransform
+      ?? roomManifest.scan.scene.worldFromModel;
 
     const addBox = ({
       parent,
@@ -1156,7 +1329,7 @@ export function RoomSceneCanvas({
                 y - frameWidth / 2,
                 zDirection * (panelDepth / 2 + detailDepth / 2),
               ],
-              material: doorDetailMaterial,
+              material: panelMaterial,
               castShadow: true,
             });
           }
@@ -1312,20 +1485,30 @@ export function RoomSceneCanvas({
         roomManifest.scan.scene.worldFromModel,
       );
       const layoutModelTransform = new THREE.Matrix4().fromArray(
-        roomManifest.scan.layoutTransform ??
-          roomManifest.scan.scene.worldFromModel,
+        layoutTransformForManifest(roomManifest),
       );
       const worldDelta = layoutModelTransform
         .clone()
         .multiply(capturedModelTransform.clone().invert());
       const roomWorldRoot = new THREE.Group();
+      roomWorldRoot.userData.roomScanId = roomManifest.scan.id;
       setMatrix(roomWorldRoot, worldDelta.toArray());
+      if (isLayoutEditing) {
+        roomWorldRoot.matrix.decompose(
+          roomWorldRoot.position,
+          roomWorldRoot.quaternion,
+          roomWorldRoot.scale,
+        );
+        roomWorldRoot.matrixAutoUpdate = true;
+      }
       webRoot.add(roomWorldRoot);
       roomWorldRoots.set(roomManifest.scan.id, roomWorldRoot);
       roomWorldDeltas.set(roomManifest.scan.id, worldDelta);
+      capturedRoomTransforms.set(roomManifest.scan.id, capturedModelTransform);
 
       const modelRoot = new THREE.Group();
       setMatrix(modelRoot, roomManifest.scan.scene.worldFromModel);
+      modelRoot.userData.roomScanId = roomManifest.scan.id;
       roomWorldRoot.add(modelRoot);
       roomPlanRoots.set(roomManifest.scan.id, modelRoot);
 
@@ -1372,11 +1555,13 @@ export function RoomSceneCanvas({
           roomManifest,
           item.id,
         );
-        const objectModel = acceptedSuggestion?.primitiveModel
-          ? createAiPrimitiveObjectModel({
+        const objectModel = acceptedSuggestion
+          ? createSuggestionModel(
+              roomManifest,
+              acceptedSuggestion,
+              item.category,
               dimensions,
-              model: acceptedSuggestion.primitiveModel,
-            })
+            )
           : createRoomObjectModel({
               category: item.category,
               dimensions,
@@ -1393,8 +1578,47 @@ export function RoomSceneCanvas({
             });
         setMatrix(objectModel, item.transform);
         modelRoot.add(objectModel);
+
+        const previewSuggestion = roomManifest.scan.aiAnalysis?.objectSuggestions.find(
+          (candidate) =>
+            candidate.status === "pending" && candidate.roomObjectId === item.id,
+        );
+        if (previewSuggestion) {
+          const previewModel = createSuggestionModel(
+            roomManifest,
+            previewSuggestion,
+            item.category,
+            dimensions,
+          );
+          previewModel.visible = false;
+          setMatrix(previewModel, item.transform);
+          modelRoot.add(previewModel);
+          suggestionPreviews.set(previewSuggestion.id, {
+            current: objectModel,
+            preview: previewModel,
+          });
+        }
       }
     }
+
+    let activeSuggestionPreview: string | null = null;
+    const applySuggestionPreview = (suggestionId: string | null) => {
+      if (activeSuggestionPreview) {
+        const previous = suggestionPreviews.get(activeSuggestionPreview);
+        if (previous) {
+          previous.current.visible = true;
+          previous.preview.visible = false;
+        }
+      }
+      activeSuggestionPreview = suggestionId;
+      if (!suggestionId) return;
+      const next = suggestionPreviews.get(suggestionId);
+      if (!next) return;
+      next.current.visible = false;
+      next.preview.visible = true;
+    };
+    suggestionPreviewCommandRef.current = applySuggestionPreview;
+    applySuggestionPreview(previewSuggestionRef.current);
 
     const loadPhotorealAsset = async (
       roomManifest: ClientRoomSceneManifest,
@@ -1761,6 +1985,101 @@ export function RoomSceneCanvas({
       }
     }
 
+    const transformControls = isLayoutEditing
+      ? new TransformControls(camera, renderer.domElement)
+      : null;
+    const transformHelper = transformControls?.getHelper() ?? null;
+    if (transformControls && transformHelper) {
+      transformControls.setSpace("world");
+      transformControls.setSize(0.82);
+      transformControls.setColors(0xe34b4b, 0x4fbf72, 0x3979e8, 0xffa33b);
+      scene.add(transformHelper);
+
+      const configureLayoutTool = (tool: LayoutTool) => {
+        transformControls.setMode(tool);
+        const translating = tool === "translate";
+        transformControls.showX = translating;
+        transformControls.showY = !translating;
+        transformControls.showZ = translating;
+        transformControls.showXY = false;
+        transformControls.showYZ = false;
+        transformControls.showXZ = translating;
+        transformControls.showE = false;
+        transformControls.showXYZE = false;
+      };
+      const attachLayoutRoom = (scanId: string | null) => {
+        const roomRoot = scanId ? roomWorldRoots.get(scanId) : null;
+        if (!roomRoot) {
+          transformControls.detach();
+          return;
+        }
+        roomRoot.updateMatrixWorld(true);
+        transformControls.attach(roomRoot);
+      };
+      const applyLayoutTransforms = (
+        transforms: Record<string, SpatialMatrix4>,
+      ) => {
+        layoutTransformsRef.current = transforms;
+        for (const roomManifest of visibleManifests) {
+          const scanId = roomManifest.scan.id;
+          const roomRoot = roomWorldRoots.get(scanId);
+          const capturedTransform = capturedRoomTransforms.get(scanId);
+          if (!roomRoot || !capturedTransform) continue;
+          const layoutTransform = transforms[scanId]
+            ?? roomManifest.scan.layoutTransform
+            ?? roomManifest.scan.scene.worldFromModel;
+          const worldDelta = new THREE.Matrix4()
+            .fromArray(layoutTransform)
+            .multiply(capturedTransform.clone().invert());
+          roomRoot.matrix.copy(worldDelta);
+          roomRoot.matrix.decompose(
+            roomRoot.position,
+            roomRoot.quaternion,
+            roomRoot.scale,
+          );
+          roomRoot.matrixAutoUpdate = true;
+          roomRoot.updateMatrix();
+          roomRoot.updateMatrixWorld(true);
+          roomWorldDeltas.set(scanId, worldDelta);
+        }
+        renderer.shadowMap.needsUpdate = true;
+      };
+      const commitLayoutTransform = () => {
+        const roomRoot = transformControls.object;
+        const scanId = roomRoot?.userData.roomScanId;
+        const capturedTransform = typeof scanId === "string"
+          ? capturedRoomTransforms.get(scanId)
+          : null;
+        if (!roomRoot || typeof scanId !== "string" || !capturedTransform) return;
+        roomRoot.updateMatrix();
+        const layoutTransform = new THREE.Matrix4()
+          .copy(roomRoot.matrix)
+          .multiply(capturedTransform)
+          .toArray() as SpatialMatrix4;
+        if (layoutTransform.every(Number.isFinite)) {
+          onChangeLayoutTransformRef.current?.(scanId, layoutTransform);
+        }
+      };
+      const onTransformDraggingChanged = (event: { value: unknown }) => {
+        controls.enabled =
+          !mapBackground && navigationMode === "orbit" && !Boolean(event.value);
+      };
+      const onTransformObjectChange = () => {
+        renderer.shadowMap.needsUpdate = true;
+      };
+      transformControls.addEventListener(
+        "dragging-changed",
+        onTransformDraggingChanged,
+      );
+      transformControls.addEventListener("objectChange", onTransformObjectChange);
+      transformControls.addEventListener("mouseUp", commitLayoutTransform);
+      layoutSelectionCommandRef.current = attachLayoutRoom;
+      layoutToolCommandRef.current = configureLayoutTool;
+      layoutTransformsCommandRef.current = applyLayoutTransforms;
+      configureLayoutTool(layoutToolRef.current);
+      attachLayoutRoom(selectedLayoutScanRef.current);
+    }
+
     const applySelection = (resourceId: string | null) => {
       for (const [id, style] of markerStyles) {
         const selected = id === resourceId;
@@ -1784,8 +2103,7 @@ export function RoomSceneCanvas({
       const modelToWeb = new THREE.Matrix4()
         .fromArray(manifest.scan.scene.webFromWorld)
         .multiply(new THREE.Matrix4().fromArray(
-          roomManifest.scan.layoutTransform ??
-            roomManifest.scan.scene.worldFromModel,
+          layoutTransformForManifest(roomManifest),
         ));
       return modelBox.applyMatrix4(modelToWeb);
     };
@@ -1803,6 +2121,7 @@ export function RoomSceneCanvas({
       right: THREE.Vector3;
       up: THREE.Vector3;
       roomCenter: THREE.Vector3;
+      roomBounds: THREE.Box3;
       width: number;
       height: number;
       area: number;
@@ -1812,13 +2131,11 @@ export function RoomSceneCanvas({
     );
     const daylightPortals: DaylightPortal[] = [];
     for (const roomManifest of visibleManifests) {
-      const roomCenter = boundsForManifest(roomManifest).getCenter(
-        new THREE.Vector3(),
-      );
+      const roomBounds = boundsForManifest(roomManifest);
+      const roomCenter = roomBounds.getCenter(new THREE.Vector3());
       const modelToWeb = webFromWorld.clone().multiply(
         new THREE.Matrix4().fromArray(
-          roomManifest.scan.layoutTransform ??
-            roomManifest.scan.scene.worldFromModel,
+          layoutTransformForManifest(roomManifest),
         ),
       );
       for (const surface of roomManifest.scan.scene.surfaces) {
@@ -1847,6 +2164,7 @@ export function RoomSceneCanvas({
           ),
           up: new THREE.Vector3(0, 1, 0).transformDirection(portalTransform),
           roomCenter,
+          roomBounds,
           width,
           height,
           area: width * height,
@@ -1861,6 +2179,7 @@ export function RoomSceneCanvas({
       right: new THREE.Vector3(1, 0, 0),
       up: new THREE.Vector3(0, 0, 1),
       roomCenter: center.clone(),
+      roomBounds: box.clone(),
       width: Math.max(1.2, size.x * 0.65),
       height: Math.max(1.2, size.z * 0.65),
       area: Math.max(1.44, size.x * size.z * 0.42),
@@ -1872,110 +2191,196 @@ export function RoomSceneCanvas({
       (total, portal) => total + portal.area,
       0,
     );
+    const daylightShadowLights: THREE.SpotLight[] = [];
 
-    // Rectangular emitters reproduce the broad, reflection-friendly window
-    // highlight found in offline interior renders. They do not cast shadows in
-    // WebGL, so a four-sample directional rig below supplies the visibility
-    // term from the same physical opening.
+    // The aperture itself is the dominant emitter: a cool, broad source just
+    // outside the glass. Its geometric falloff makes the window side brighter
+    // than the back of the room. The ray-traced modes use this geometry
+    // directly; Live adds a multi-sample raster visibility rig below.
     for (const portal of activePortals) {
       const areaLight = new THREE.RectAreaLight(
-        hasWindowDaylight ? 0xfff3df : 0xffe4c2,
-        hasWindowDaylight ? 2.15 : 1.45,
+        hasWindowDaylight ? 0xe9f4ff : 0xffe8c7,
+        hasWindowDaylight
+          ? rayTracedLighting ? 15 : 1.8
+          : rayTracedLighting ? 10 : 1.6,
         portal.width,
         portal.height,
       );
       areaLight.position
         .copy(portal.position)
-        .addScaledVector(portal.outward, -0.04);
+        .addScaledVector(
+          portal.outward,
+          hasWindowDaylight ? rayTracedLighting ? -0.035 : 0.025 : -0.04,
+        );
       if (hasWindowDaylight) areaLight.lookAt(portal.roomCenter);
       else areaLight.rotation.x = -Math.PI / 2;
       scene.add(areaLight);
+
+      // Path tracing computes this reflected light from the real surfaces.
+      // The live renderer keeps its inexpensive fill emitters below.
+      if (rayTracedLighting || !hasWindowDaylight) continue;
+
+      const portalWeight = portal.area / totalPortalArea;
+      const roomSize = portal.roomBounds.getSize(new THREE.Vector3());
+      const inward = portal.outward.clone().negate();
+      const floorBouncePosition = portal.position
+        .clone()
+        .lerp(portal.roomCenter, 0.46);
+      floorBouncePosition.y = portal.roomBounds.min.y + 0.045;
+
+      // A broad warm emitter just above the floor approximates the strongest
+      // first bounce. It deliberately casts no shadow: it is reflected light,
+      // not a second sun, and therefore only softens/fills occluded faces.
+      const floorBounce = new THREE.RectAreaLight(
+        0xffb978,
+        0.48 * Math.sqrt(portalWeight),
+        THREE.MathUtils.clamp(
+          portal.width * 1.75,
+          1.1,
+          Math.max(roomSize.x, roomSize.z) * 0.78,
+        ),
+        THREE.MathUtils.clamp(
+          portal.position.distanceTo(portal.roomCenter) * 1.3,
+          1.1,
+          Math.max(roomSize.x, roomSize.z) * 0.78,
+        ),
+      );
+      floorBounce.position.copy(floorBouncePosition);
+      floorBounce.lookAt(
+        floorBouncePosition.clone().add(new THREE.Vector3(0, 1, 0)),
+      );
+      scene.add(floorBounce);
+
+      // A much weaker neutral-warm return from the wall opposite the window
+      // prevents the rear faces of objects from dropping into flat grey. The
+      // ray finds that wall in the individual room, rather than the union box.
+      const farWallPosition = new THREE.Ray(
+        portal.position.clone().addScaledVector(inward, 0.05),
+        inward,
+      ).intersectBox(portal.roomBounds, new THREE.Vector3());
+      if (farWallPosition) {
+        farWallPosition.addScaledVector(portal.outward, 0.06);
+        farWallPosition.y = THREE.MathUtils.clamp(
+          portal.roomCenter.y,
+          portal.roomBounds.min.y + 0.35,
+          portal.roomBounds.max.y - 0.35,
+        );
+        const wallBounce = new THREE.RectAreaLight(
+          0xffddba,
+          0.12 * Math.sqrt(portalWeight),
+          THREE.MathUtils.clamp(
+            portal.width * 1.45,
+            1,
+            Math.max(roomSize.x, roomSize.z) * 0.72,
+          ),
+          THREE.MathUtils.clamp(
+            portal.height * 1.25,
+            1,
+            roomSize.y * 0.72,
+          ),
+        );
+        wallBounce.position.copy(farWallPosition);
+        wallBounce.lookAt(portal.roomCenter);
+        scene.add(wallBounce);
+      }
     }
 
-    const configureDaylightShadow = (light: THREE.DirectionalLight) => {
+    const configureDaylightShadow = (light: THREE.SpotLight) => {
       light.castShadow = true;
-      light.shadow.mapSize.set(1024, 1024);
+      const shadowMapResolution = 768;
+      light.shadow.mapSize.set(shadowMapResolution, shadowMapResolution);
       light.shadow.bias = -0.00006;
-      light.shadow.blurSamples = 8;
-      light.shadow.intensity = 0.82;
+      light.shadow.blurSamples = 12;
+      light.shadow.intensity = hasWindowDaylight ? 0.96 : 0.86;
       scene.add(light, light.target);
       light.updateMatrixWorld(true);
       light.target.updateMatrixWorld(true);
 
       const shadowCamera = light.shadow.camera;
-      shadowCamera.position.copy(light.position);
-      shadowCamera.lookAt(light.target.position);
-      shadowCamera.updateMatrixWorld(true);
-      const lightSpaceBounds = new THREE.Box3().makeEmpty();
+      const lightDirection = light.target.position
+        .clone()
+        .sub(light.position)
+        .normalize();
+      let maximumAngle = 0;
+      let maximumDistance = 0;
       for (const x of [box.min.x, box.max.x]) {
         for (const y of [box.min.y, box.max.y]) {
           for (const z of [box.min.z, box.max.z]) {
-            lightSpaceBounds.expandByPoint(
-              new THREE.Vector3(x, y, z).applyMatrix4(
-                shadowCamera.matrixWorldInverse,
+            const toCorner = new THREE.Vector3(x, y, z).sub(light.position);
+            maximumDistance = Math.max(maximumDistance, toCorner.length());
+            maximumAngle = Math.max(
+              maximumAngle,
+              Math.acos(
+                THREE.MathUtils.clamp(
+                  toCorner.normalize().dot(lightDirection),
+                  -1,
+                  1,
+                ),
               ),
             );
           }
         }
       }
-      const margin = THREE.MathUtils.clamp(radius * 0.08, 0.3, 1.25);
-      shadowCamera.left = lightSpaceBounds.min.x - margin;
-      shadowCamera.right = lightSpaceBounds.max.x + margin;
-      shadowCamera.bottom = lightSpaceBounds.min.y - margin;
-      shadowCamera.top = lightSpaceBounds.max.y + margin;
-      shadowCamera.near = Math.max(0.1, -lightSpaceBounds.max.z - margin);
-      shadowCamera.far = Math.max(
-        shadowCamera.near + 1,
-        -lightSpaceBounds.min.z + margin,
+      light.angle = THREE.MathUtils.clamp(
+        maximumAngle + 0.16,
+        Math.PI * 0.42,
+        Math.PI * 0.495,
       );
+      light.penumbra = 0.12;
+      light.decay = 2;
+      light.distance = 0;
+      shadowCamera.near = 0.08;
+      shadowCamera.far = Math.max(10, maximumDistance + radius * 0.2);
       shadowCamera.updateProjectionMatrix();
-
-      const worldSize = Math.max(
-        shadowCamera.right - shadowCamera.left,
-        shadowCamera.top - shadowCamera.bottom,
-      );
-      const worldUnitsPerTexel = worldSize / light.shadow.mapSize.x;
-      light.shadow.radius = THREE.MathUtils.clamp(
-        0.075 / worldUnitsPerTexel,
-        2.5,
-        6,
-      );
+      light.shadow.radius = 3.5;
       light.shadow.normalBias = THREE.MathUtils.clamp(
-        worldUnitsPerTexel * 0.8,
+        maximumDistance / light.shadow.mapSize.x,
         0.003,
-        0.02,
+        0.012,
       );
     };
 
-    const totalShadowIntensity = hasWindowDaylight ? 1.65 : 1.2;
-    for (const portal of activePortals) {
-      const samples = activePortals.length === 1
-        ? [
-            [-0.34, -0.28],
-            [0.34, -0.28],
-            [-0.34, 0.28],
-            [0.34, 0.28],
-          ] as const
-        : [
-            [-0.32, 0],
-            [0.32, 0],
-          ] as const;
-      const portalWeight = portal.area / totalPortalArea;
-      for (const [horizontal, vertical] of samples) {
-        const light = new THREE.DirectionalLight(
-          hasWindowDaylight ? 0xfff1dd : 0xffdfb6,
-          (totalShadowIntensity * portalWeight) / samples.length,
-        );
-        light.position
-          .copy(portal.position)
-          .addScaledVector(
-            portal.outward,
-            THREE.MathUtils.clamp(radius * 0.1, 0.3, 0.8),
-          )
-          .addScaledVector(portal.right, portal.width * horizontal)
-          .addScaledVector(portal.up, portal.height * vertical);
-        light.target.position.copy(portal.roomCenter);
-        configureDaylightShadow(light);
+    const totalShadowIntensity = hasWindowDaylight ? 18 : 12;
+    if (!rayTracedLighting) {
+      for (const portal of activePortals) {
+        const samples = activePortals.length === 1
+          ? [
+              [-0.36, -0.3],
+              [0, -0.3],
+              [0.36, -0.3],
+              [-0.36, 0],
+              [0, 0],
+              [0.36, 0],
+              [-0.36, 0.3],
+              [0, 0.3],
+              [0.36, 0.3],
+            ] as const
+          : [
+              [-0.32, -0.24],
+              [0.32, -0.24],
+              [-0.32, 0.24],
+              [0.32, 0.24],
+            ] as const;
+        const portalWeight = portal.area / totalPortalArea;
+        for (const [horizontal, vertical] of samples) {
+          const light = new THREE.SpotLight(
+            hasWindowDaylight ? 0xfff7ed : 0xffdfb6,
+            (totalShadowIntensity * portalWeight) / samples.length,
+          );
+          const outwardDistance = THREE.MathUtils.clamp(
+            radius * 0.14,
+            0.55,
+            1.1,
+          );
+          light.position
+            .copy(portal.position)
+            .addScaledVector(portal.outward, outwardDistance)
+            .addScaledVector(portal.right, portal.width * horizontal)
+            .addScaledVector(portal.up, portal.height * vertical);
+          light.target.position.copy(portal.roomCenter);
+          configureDaylightShadow(light);
+          daylightShadowLights.push(light);
+        }
       }
     }
 
@@ -1986,10 +2391,15 @@ export function RoomSceneCanvas({
     // warmer than walls facing the open sky, with no per-frame cubemap cost.
     let bounceProbe: THREE.LightProbe | null = null;
     const bakeDiffuseBounce = () => {
-      const probeResolution = 32;
+      const probeResolution = lightingMode === "realistic" ? 64 : 32;
+      const useHdrBounceTarget =
+        renderer.capabilities.isWebGL2 &&
+        renderer.extensions.has("EXT_color_buffer_float");
       const bounceTarget = new THREE.WebGLCubeRenderTarget(probeResolution, {
         format: THREE.RGBAFormat,
-        type: THREE.UnsignedByteType,
+        type: useHdrBounceTarget
+          ? THREE.HalfFloatType
+          : THREE.UnsignedByteType,
         generateMipmaps: false,
         minFilter: THREE.LinearFilter,
       });
@@ -2042,7 +2452,9 @@ export function RoomSceneCanvas({
         // Three.js's LightProbeGenerator for WebGL cube render targets.
         const sh = new THREE.SphericalHarmonics3();
         const coefficients = sh.coefficients;
-        const pixels = new Uint8Array(probeResolution * probeResolution * 4);
+        const pixels = useHdrBounceTarget
+          ? new Uint16Array(probeResolution * probeResolution * 4)
+          : new Uint8Array(probeResolution * probeResolution * 4);
         const direction = new THREE.Vector3();
         const coordinate = new THREE.Vector3();
         const basis = new Array<number>(9).fill(0);
@@ -2063,9 +2475,15 @@ export function RoomSceneCanvas({
             face,
           );
           for (let index = 0; index < pixels.length; index += 4) {
-            const red = (pixels[index] ?? 0) / 255;
-            const green = (pixels[index + 1] ?? 0) / 255;
-            const blue = (pixels[index + 2] ?? 0) / 255;
+            const red = useHdrBounceTarget
+              ? THREE.DataUtils.fromHalfFloat(pixels[index] ?? 0)
+              : (pixels[index] ?? 0) / 255;
+            const green = useHdrBounceTarget
+              ? THREE.DataUtils.fromHalfFloat(pixels[index + 1] ?? 0)
+              : (pixels[index + 1] ?? 0) / 255;
+            const blue = useHdrBounceTarget
+              ? THREE.DataUtils.fromHalfFloat(pixels[index + 2] ?? 0)
+              : (pixels[index + 2] ?? 0) / 255;
             capturedEnergy += red + green + blue;
 
             const pixelIndex = index / 4;
@@ -2124,15 +2542,20 @@ export function RoomSceneCanvas({
         coefficients.forEach((coefficient) => {
           coefficient.multiplyScalar(normalization);
         });
-        const generatedProbe = new THREE.LightProbe(sh, 0.52);
+        const generatedProbe = new THREE.LightProbe(
+          sh,
+          useHdrBounceTarget
+            ? lightingMode === "realistic" ? 0.27 : 0.24
+            : lightingMode === "realistic" ? 0.5 : 0.46,
+        );
 
-        // The capture already contains all four window samples. Reduce the
+        // The capture already contains every sampled window light. Reduce the
         // generic sky after the bake, then use this room-coloured probe only as
         // the indirect bounce layer beneath the spatially correct direct light.
         bounceProbe = generatedProbe;
         scene.add(generatedProbe);
-        skyLight.intensity = 0.14;
-        scene.environmentIntensity = 0.28;
+        skyLight.intensity = 0.08;
+        scene.environmentIntensity = 0.3;
       } catch {
         // Retain the window/ceiling rig and base sky if cubemap readback is
         // unavailable on a particular GPU.
@@ -2140,7 +2563,16 @@ export function RoomSceneCanvas({
         bounceTarget.dispose();
       }
     };
-    bakeDiffuseBounce();
+    if (!rayTracedLighting) {
+      bakeDiffuseBounce();
+    } else {
+      // WebGLPathTracer cannot consume the raster PMREM cube-UV texture as a
+      // physically meaningful sky. The window area light is the sole source;
+      // its energy reaches the room through traced multi-bounce paths.
+      skyLight.intensity = 0;
+      scene.environment = null;
+      scene.environmentIntensity = 0;
+    }
 
     const gridSize = Math.max(10, Math.ceil(Math.max(size.x, size.z) * 1.8));
     const createGrid = (darkMode: boolean) => {
@@ -2162,19 +2594,33 @@ export function RoomSceneCanvas({
       gridMaterials.forEach((material) => material.dispose());
     };
     let grid = createGrid(sceneUsesDarkMode);
+    grid.visible = !mapBackground;
     scene.add(grid);
+    if (rayTracedLighting) {
+      grid.visible = false;
+      keyframeRoot.visible = false;
+      markerMeshes.forEach((marker) => {
+        marker.visible = false;
+      });
+    }
 
     const applySceneTheme = () => {
       const darkMode = usesDarkMode();
       const palette = sceneThemePalettes[darkMode ? "dark" : "light"];
-      renderer.setClearColor(palette.background, 1);
+      renderer.setClearColor(palette.background, mapBackground ? 0 : 1);
       sceneFog.color.setHex(palette.background);
+      if (scene.background instanceof THREE.Color) {
+        scene.background.setHex(palette.background);
+        pathTracer?.updateEnvironment();
+        restartPathTracingForTheme();
+      }
       if (darkMode === sceneUsesDarkMode) return;
 
       sceneUsesDarkMode = darkMode;
       scene.remove(grid);
       disposeGrid(grid);
       grid = createGrid(darkMode);
+      grid.visible = !mapBackground && !rayTracedLighting;
       scene.add(grid);
     };
     const themeObserver = new MutationObserver(applySceneTheme);
@@ -2186,7 +2632,10 @@ export function RoomSceneCanvas({
 
     webRoot.updateMatrixWorld(true);
     const playerRadius = 0.2;
-    const eyeHeight = 1.62;
+    const standingEyeHeight = 1.62;
+    const crouchingEyeHeight = 1.02;
+    const jumpVelocity = 3.25;
+    const gravity = 9.81;
     const collisionBoxes = wallColliderMeshes.map((mesh) =>
       new THREE.Box3().setFromObject(mesh).expandByScalar(playerRadius),
     );
@@ -2195,6 +2644,10 @@ export function RoomSceneCanvas({
     const virtualKeys = new Set<string>();
     let walkYaw = 0;
     let walkPitch = 0;
+    let currentEyeHeight = standingEyeHeight;
+    let verticalOffset = 0;
+    let verticalVelocity = 0;
+    let jumpRequested = false;
 
     const applyWalkRotation = () => {
       camera.rotation.order = "YXZ";
@@ -2206,7 +2659,15 @@ export function RoomSceneCanvas({
       controls.enabled = false;
       camera.up.set(0, 1, 0);
       const walkStart = primaryBox.getCenter(new THREE.Vector3());
-      camera.position.set(walkStart.x, walkFloorY + eyeHeight, walkStart.z);
+      currentEyeHeight = standingEyeHeight;
+      verticalOffset = 0;
+      verticalVelocity = 0;
+      jumpRequested = false;
+      camera.position.set(
+        walkStart.x,
+        walkFloorY + standingEyeHeight,
+        walkStart.z,
+      );
       walkYaw = 0;
       walkPitch = 0;
       applyWalkRotation();
@@ -2215,7 +2676,40 @@ export function RoomSceneCanvas({
       camera.updateProjectionMatrix();
     };
 
+    const applyMapCamera = () => {
+      if (!mapBackground || !mapViewport) return false;
+      const mapCenter = new THREE.Vector3(...mapViewport.center)
+        .applyMatrix4(webFromWorld);
+      mapCenter.y = box.min.y;
+      const heading = THREE.MathUtils.degToRad(mapViewport.headingDegrees);
+      const north = new THREE.Vector3(
+        -Math.sin(heading),
+        0,
+        -Math.cos(heading),
+      ).transformDirection(webFromWorld);
+      north.y = 0;
+      if (north.lengthSq() < 1e-8) north.set(0, 0, -1);
+      else north.normalize();
+      const viewportHeight = Math.max(1, host.clientHeight);
+      const distance = Math.max(
+        size.y + 0.5,
+        (mapViewport.metersPerPixel * viewportHeight) /
+          (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))),
+      );
+      controls.target.copy(mapCenter);
+      camera.up.copy(north);
+      camera.position.set(mapCenter.x, mapCenter.y + distance, mapCenter.z);
+      camera.near = Math.max(0.01, distance / 2_000);
+      camera.far = Math.max(100, distance + radius * 30);
+      camera.lookAt(mapCenter);
+      camera.updateProjectionMatrix();
+      controls.enabled = false;
+      controls.update();
+      return true;
+    };
+
     const resetCamera = () => {
+      if (applyMapCamera()) return;
       if (navigationMode === "walk") {
         resetWalkCamera();
         return;
@@ -2232,7 +2726,9 @@ export function RoomSceneCanvas({
       controls.update();
     };
     commandRef.current = (command) => {
-      if (command === "top" && navigationMode === "orbit") {
+      if (mapBackground) {
+        applyMapCamera();
+      } else if (command === "top" && navigationMode === "orbit") {
         controls.target.copy(center);
         camera.up.set(0, 0, -1);
         camera.position.set(center.x, center.y + radius * 2.2, center.z + 0.001);
@@ -2242,17 +2738,48 @@ export function RoomSceneCanvas({
         resetCamera();
       }
     };
-    resetCamera();
+    const previousCamera = cameraSnapshotRef.current;
+    if (
+      previousCamera?.scanId === manifest.scan.id &&
+      previousCamera.navigationMode === navigationMode &&
+      previousCamera.mapBackground === mapBackground
+    ) {
+      camera.position.fromArray(previousCamera.position);
+      camera.quaternion.fromArray(previousCamera.quaternion);
+      camera.up.fromArray(previousCamera.up);
+      camera.near = Math.max(0.02, radius / 500);
+      camera.far = Math.max(100, radius * 30);
+      camera.updateProjectionMatrix();
+      if (navigationMode === "walk") {
+        controls.enabled = false;
+        const rotation = new THREE.Euler().setFromQuaternion(
+          camera.quaternion,
+          "YXZ",
+        );
+        walkYaw = rotation.y;
+        walkPitch = rotation.x;
+      } else {
+        controls.enabled = true;
+        controls.target.fromArray(previousCamera.target);
+        controls.update();
+      }
+    } else {
+      resetCamera();
+    }
+    if (lightingMode === "rendering") controls.enabled = false;
 
     // Keep screen-space occlusion confined to short-range grounding. The broad
     // shadow and colour separation comes from the window-area rig and bounce
     // bake above, avoiding the generic grey halo of a large AO radius.
     const composer = new EffectComposer(renderer);
-    composer.setPixelRatio(Math.min(renderer.getPixelRatio(), 1.5));
+    composer.setPixelRatio(Math.min(
+      renderer.getPixelRatio(),
+      lightingMode === "live" ? 1.5 : 2,
+    ));
     composer.addPass(new RenderPass(scene, camera));
     const ambientOcclusionPass = new GTAOPass(scene, camera, 1, 1);
     ambientOcclusionPass.output = GTAOPass.OUTPUT.Default;
-    ambientOcclusionPass.blendIntensity = 0.44;
+    ambientOcclusionPass.blendIntensity = lightingMode === "live" ? 0.44 : 0.5;
     ambientOcclusionPass.setSceneClipBox(
       box.clone().expandByScalar(THREE.MathUtils.clamp(radius * 0.05, 0.2, 0.8)),
     );
@@ -2262,7 +2789,7 @@ export function RoomSceneCanvas({
       thickness: 0.82,
       distanceFallOff: 1,
       scale: 1,
-      samples: 24,
+      samples: lightingMode === "live" ? 24 : 32,
       screenSpaceRadius: false,
     });
     ambientOcclusionPass.updatePdMaterial({
@@ -2272,33 +2799,140 @@ export function RoomSceneCanvas({
       radius: 4,
       radiusExponent: 2,
       rings: 2,
-      samples: 12,
+      samples: lightingMode === "live" ? 12 : 16,
     });
     composer.addPass(ambientOcclusionPass);
     const outputPass = new OutputPass();
     composer.addPass(outputPass);
 
-    const movementKey = (key: string) =>
-      ["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(
-        key.toLowerCase(),
-      );
+    let pathTracingReady = false;
+    let pathTracingFailed = false;
+    let pathTracingFinished = false;
+    let pathTracingStartedAt: number | null = null;
+    let pathTracingLastStatusAt = 0;
+    const pathTracingDuration = lightingMode === "rendering" ? 10_000 : 5_000;
+    const pathTracingSampleTarget = lightingMode === "rendering" ? 2_048 : 512;
+    const restartPathTracing = () => {
+      if (!pathTracer || !pathTracingReady) return;
+      pathTracer.updateCamera();
+      pathTracingStartedAt = null;
+      pathTracingFinished = false;
+      setLightingProgress(14);
+      setLightingStatus("generating");
+    };
+    restartPathTracingForTheme = restartPathTracing;
+    const onControlsChange = () => {
+      if (lightingMode === "realistic") restartPathTracing();
+    };
+    controls.addEventListener("change", onControlsChange);
+
+    const initializePathTracer = async () => {
+      if (!rayTracedLighting) return;
+      setLightingProgress(2);
+      try {
+        const { DenoiseMaterial, WebGLPathTracer } = await import(
+          "three-gpu-pathtracer"
+        );
+        if (disposed) return;
+
+        const tracer = new WebGLPathTracer(renderer);
+        pathTracer = tracer;
+        tracer.bounces = lightingMode === "rendering" ? 10 : 8;
+        tracer.transmissiveBounces = 4;
+        tracer.filterGlossyFactor = 0.85;
+        tracer.multipleImportanceSampling = true;
+        tracer.tiles.set(2, 2);
+        tracer.renderScale = lightingMode === "rendering" ? 0.65 : 0.5;
+        tracer.renderDelay = 0;
+        tracer.minSamples = 1;
+        tracer.fadeDuration = 180;
+        tracer.dynamicLowRes = true;
+        tracer.lowResScale = 0.2;
+        tracer.rasterizeScene = false;
+        tracer.textureSize.set(1024, 1024);
+        pathTraceDenoiseQuad = new FullScreenQuad(new DenoiseMaterial({
+          sigma: 3,
+          kSigma: 2,
+          threshold: 0.22,
+        }));
+
+        scene.fog = null;
+        tracer.setScene(scene, camera, {
+          onProgress: (progress) => {
+            if (!disposed) {
+              setLightingProgress(Math.max(2, Math.round(progress * 12)));
+            }
+          },
+        });
+        if (disposed) {
+          tracer.dispose();
+          return;
+        }
+
+        renderer.shadowMap.enabled = false;
+        pathTracingReady = true;
+        pathTracingStartedAt = performance.now();
+        setLightingProgress(14);
+      } catch (error) {
+        pathTracingFailed = true;
+        setLightingProgress(100);
+        setLightingStatus("ready");
+        console.warn("Ray-traced room rendering is unavailable; using the raster fallback.", error);
+      }
+    };
+
+    const inputKey = (event: KeyboardEvent) =>
+      event.code === "Space" ? "space" : event.key.toLowerCase();
+    const walkKey = (key: string) =>
+      [
+        "w",
+        "a",
+        "s",
+        "d",
+        "arrowup",
+        "arrowdown",
+        "arrowleft",
+        "arrowright",
+        "space",
+        "shift",
+        "control",
+        "c",
+      ].includes(key);
+    const interactiveTarget = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      Boolean(target.closest("button, input, select, textarea, [contenteditable='true']"));
     const onKeyDown = (event: KeyboardEvent) => {
-      if (navigationMode !== "walk" || !movementKey(event.key)) return;
+      const key = inputKey(event);
+      if (navigationMode !== "walk" || !walkKey(key)) return;
+      if (
+        interactiveTarget(event.target) &&
+        document.pointerLockElement !== renderer.domElement
+      ) return;
       event.preventDefault();
-      pressedKeys.add(event.key.toLowerCase());
+      if (key === "space" && !event.repeat) jumpRequested = true;
+      pressedKeys.add(key);
     };
     const onKeyUp = (event: KeyboardEvent) => {
-      pressedKeys.delete(event.key.toLowerCase());
+      pressedKeys.delete(inputKey(event));
     };
     const virtualKey = {
       forward: "w",
       backward: "s",
       left: "a",
       right: "d",
+      crouch: "c",
     } as const;
-    walkCommandRef.current = (direction, active) => {
-      if (active) virtualKeys.add(virtualKey[direction]);
-      else virtualKeys.delete(virtualKey[direction]);
+    walkCommandRef.current = (action, active) => {
+      if (action === "jump") {
+        if (active) jumpRequested = true;
+        return;
+      }
+      if (active) virtualKeys.add(virtualKey[action]);
+      else virtualKeys.delete(virtualKey[action]);
+    };
+    const onWindowBlur = () => {
+      pressedKeys.clear();
+      virtualKeys.clear();
     };
     const onMouseMove = (event: MouseEvent) => {
       if (
@@ -2315,6 +2949,7 @@ export function RoomSceneCanvas({
     };
     window.addEventListener("keydown", onKeyDown, { passive: false });
     window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onWindowBlur);
     document.addEventListener("mousemove", onMouseMove);
 
     const raycaster = new THREE.Raycaster();
@@ -2363,6 +2998,23 @@ export function RoomSceneCanvas({
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
+      if (isLayoutEditing) {
+        const roomHit = raycaster.intersectObjects(
+          [...roomPlanRoots.values()],
+          true,
+        )[0];
+        let roomCandidate: THREE.Object3D | null = roomHit?.object ?? null;
+        while (roomCandidate && !roomCandidate.userData.roomScanId) {
+          roomCandidate = roomCandidate.parent;
+        }
+        if (typeof roomCandidate?.userData.roomScanId === "string") {
+          const scanId = roomCandidate.userData.roomScanId;
+          selectedLayoutScanRef.current = scanId;
+          layoutSelectionCommandRef.current(scanId);
+          onSelectLayoutRoomRef.current?.(scanId);
+        }
+        return;
+      }
       const hit = raycaster.intersectObjects(markerMeshes, true).find((intersection) => {
         let candidate: THREE.Object3D | null = intersection.object;
         while (candidate && !candidate.userData.resourceId) candidate = candidate.parent;
@@ -2409,21 +3061,44 @@ export function RoomSceneCanvas({
       });
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      applyMapCamera();
+      if (pathTracingReady) restartPathTracing();
     };
     const observer = new ResizeObserver(resize);
     observer.observe(host);
     resize();
+    void initializePathTracer();
 
     let animationFrame = 0;
     let shadowMapSettled = false;
     const timer = new THREE.Timer();
     timer.connect(document);
     const draw = (timestamp?: number) => {
-      animationFrame = requestAnimationFrame(draw);
-      timer.update(timestamp);
+      const frameTimestamp = timestamp ?? performance.now();
+      timer.update(frameTimestamp);
       const delta = Math.min(timer.getDelta(), 0.05);
       if (navigationMode === "walk") {
         const active = (key: string) => pressedKeys.has(key) || virtualKeys.has(key);
+        const crouching = active("shift") || active("control") || active("c");
+        currentEyeHeight = THREE.MathUtils.damp(
+          currentEyeHeight,
+          crouching ? crouchingEyeHeight : standingEyeHeight,
+          14,
+          delta,
+        );
+        if (jumpRequested) {
+          if (verticalOffset <= 0.001) verticalVelocity = jumpVelocity;
+          jumpRequested = false;
+        }
+        if (verticalOffset > 0 || verticalVelocity > 0) {
+          verticalVelocity -= gravity * delta;
+          verticalOffset += verticalVelocity * delta;
+          if (verticalOffset <= 0) {
+            verticalOffset = 0;
+            verticalVelocity = 0;
+          }
+        }
+        const cameraHeight = walkFloorY + currentEyeHeight + verticalOffset;
         const forwardAmount = Number(active("w") || active("arrowup")) -
           Number(active("s") || active("arrowdown"));
         const sideAmount = Number(active("d") || active("arrowright")) -
@@ -2437,35 +3112,86 @@ export function RoomSceneCanvas({
             .normalize()
             .multiplyScalar(delta * 2.1);
           const blocked = (position: THREE.Vector3) =>
+            !walkThroughWallsRef.current &&
             collisionBoxes.some((bounds) => bounds.containsPoint(position));
           const candidate = camera.position.clone().add(movement);
-          candidate.y = walkFloorY + eyeHeight;
+          candidate.y = cameraHeight;
           if (!blocked(candidate)) {
             camera.position.copy(candidate);
           } else {
             const xOnly = camera.position.clone();
             xOnly.x += movement.x;
+            xOnly.y = cameraHeight;
             if (!blocked(xOnly)) camera.position.x = xOnly.x;
             const zOnly = camera.position.clone();
             zOnly.z += movement.z;
+            zOnly.y = cameraHeight;
             if (!blocked(zOnly)) camera.position.z = zOnly.z;
           }
         }
-        camera.position.y = walkFloorY + eyeHeight;
-      } else {
+        camera.position.y = cameraHeight;
+      } else if (lightingMode !== "rendering") {
         controls.update();
       }
-      composer.render(delta);
-      if (!shadowMapSettled) {
-        // Room geometry and the four area-light samples are static. Keep their
-        // VSM maps cached after the first render; selections request a refresh.
+
+      if (rayTracedLighting && pathTracingReady && pathTracer) {
+        if (!pathTracingFinished) {
+          pathTracingStartedAt ??= frameTimestamp;
+          pathTracer.renderSample();
+          const elapsed = frameTimestamp - pathTracingStartedAt;
+          const tracingProgress = Math.min(
+            100,
+            14 + Math.max(
+              elapsed / pathTracingDuration,
+              pathTracer.samples / pathTracingSampleTarget,
+            ) * 86,
+          );
+          const finished =
+            elapsed >= pathTracingDuration ||
+            pathTracer.samples >= pathTracingSampleTarget;
+          if (finished || frameTimestamp - pathTracingLastStatusAt >= 200) {
+            pathTracingLastStatusAt = frameTimestamp;
+            setLightingProgress(finished ? 100 : Math.round(tracingProgress));
+          }
+          if (finished) {
+            pathTracingFinished = true;
+            if (pathTraceDenoiseQuad) {
+              const denoiseMaterial = pathTraceDenoiseQuad.material as
+                THREE.ShaderMaterial & { map: THREE.Texture | null };
+              denoiseMaterial.map = pathTracer.target.texture;
+              renderer.setRenderTarget(null);
+              pathTraceDenoiseQuad.render(renderer);
+            }
+            setLightingStatus("ready");
+            if (lightingMode === "rendering") return;
+          }
+        }
+      } else {
+        composer.render(delta);
+      }
+
+      if (!rayTracedLighting && !shadowMapSettled) {
+        // Room geometry and the sampled window are static. Keep their VSM maps
+        // cached after the first render; selections request a refresh.
         renderer.shadowMap.autoUpdate = false;
         shadowMapSettled = true;
+      } else if (pathTracingFailed && lightingMode === "rendering") {
+        return;
       }
+      animationFrame = requestAnimationFrame(draw);
     };
     draw();
 
     return () => {
+      cameraSnapshotRef.current = {
+        scanId: manifest.scan.id,
+        navigationMode,
+        mapBackground,
+        position: camera.position.toArray(),
+        quaternion: camera.quaternion.toArray(),
+        up: camera.up.toArray(),
+        target: controls.target.toArray(),
+      };
       disposed = true;
       assetAbortController.abort();
       photoRequestController?.abort();
@@ -2479,14 +3205,27 @@ export function RoomSceneCanvas({
       renderer.domElement.removeEventListener("pointercancel", onPointerUp);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onWindowBlur);
       document.removeEventListener("mousemove", onMouseMove);
       if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+      if (transformControls && transformHelper) {
+        transformControls.detach();
+        scene.remove(transformHelper);
+        transformControls.dispose();
+      }
+      controls.removeEventListener("change", onControlsChange);
       controls.dispose();
+      pathTracer?.dispose();
+      pathTracer = null;
+      if (pathTraceDenoiseQuad) {
+        pathTraceDenoiseQuad.material.dispose();
+        pathTraceDenoiseQuad.dispose();
+        pathTraceDenoiseQuad = null;
+      }
       const materials = new Set<THREE.Material>([
         wallMaterial,
         floorMaterial,
         doorMaterial,
-        doorDetailMaterial,
         trimMaterial,
         windowFrameMaterial,
         hardwareMaterial,
@@ -2531,23 +3270,54 @@ export function RoomSceneCanvas({
       ambientOcclusionPass.blendMaterial.dispose();
       outputPass.dispose();
       composer.dispose();
+      daylightShadowLights.forEach((light) => light.shadow.dispose());
       renderer.dispose();
+      renderer.forceContextLoss();
       renderer.domElement.remove();
       commandRef.current = () => undefined;
       selectionCommandRef.current = () => undefined;
+      suggestionPreviewCommandRef.current = () => undefined;
       keyframeCommandRef.current = () => undefined;
       walkCommandRef.current = () => undefined;
+      layoutSelectionCommandRef.current = () => undefined;
+      layoutToolCommandRef.current = () => undefined;
+      layoutTransformsCommandRef.current = () => undefined;
     };
-  }, [integer, manifest, navigationMode, sceneMode, t, visibleKeyframes, visibleManifests]);
+  }, [
+    integer,
+    isLayoutEditing,
+    lightingMode,
+    manifest,
+    mapBackground,
+    mapViewport,
+    navigationMode,
+    sceneMode,
+    t,
+    visibleKeyframes,
+    visibleManifests,
+  ]);
 
   return (
-    <div ref={hostRef} className="relative size-full overflow-hidden bg-surface-muted">
+    <div
+      ref={hostRef}
+      className={cn(
+        "relative size-full overflow-hidden",
+        mapBackground ? "bg-transparent" : "bg-surface-muted",
+      )}
+    >
       {rendererError ? (
         <div className="absolute inset-0 z-10 grid place-items-center p-8 text-center text-sm text-muted">
           {rendererError}
         </div>
       ) : null}
-      <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%_-_7rem)] flex-col items-start gap-2">
+      <div
+        className={cn(
+          "pointer-events-none absolute left-3 top-3 z-10 flex flex-col items-start gap-2",
+          navigationMode === "walk"
+            ? "max-w-[calc(100%_-_11rem)]"
+            : "max-w-[calc(100%_-_7rem)]",
+        )}
+      >
         <div
           className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-surface/92 p-1 shadow-sm backdrop-blur"
           role="group"
@@ -2567,7 +3337,7 @@ export function RoomSceneCanvas({
             <Cuboid className="size-3.5" aria-hidden="true" />
             {t("canvas.modes.roomplan")}
           </button>
-          {availableModes.textured_mesh ? (
+          {!isLayoutEditing && availableModes.textured_mesh ? (
             <button
               type="button"
               onClick={() => setSceneMode("textured_mesh")}
@@ -2583,7 +3353,7 @@ export function RoomSceneCanvas({
               {t("canvas.modes.textured")}
             </button>
           ) : null}
-          {availableModes.gaussian_splat ? (
+          {!isLayoutEditing && availableModes.gaussian_splat ? (
             <button
               type="button"
               onClick={() => setSceneMode("gaussian_splat")}
@@ -2600,6 +3370,103 @@ export function RoomSceneCanvas({
             </button>
           ) : null}
         </div>
+
+        {!isLayoutEditing && !mapBackground ? (
+          <div
+            className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-surface/92 p-1 shadow-sm backdrop-blur"
+            role="group"
+            aria-label={t("canvas.lighting.label")}
+          >
+          <button
+            type="button"
+            onClick={() => selectLightingMode("live")}
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+              lightingMode === "live"
+                ? "bg-brand-solid text-on-brand"
+                : "text-muted hover:bg-surface-hover hover:text-foreground",
+            )}
+            title={t("canvas.lighting.liveDescription")}
+            aria-pressed={lightingMode === "live"}
+          >
+            <Sun className="size-3.5" aria-hidden="true" />
+            {t("canvas.lighting.live")}
+          </button>
+          <button
+            type="button"
+            onClick={() => selectLightingMode("realistic")}
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+              lightingMode === "realistic"
+                ? "bg-brand-solid text-on-brand"
+                : "text-muted hover:bg-surface-hover hover:text-foreground",
+            )}
+            title={t("canvas.lighting.realisticDescription")}
+            aria-pressed={lightingMode === "realistic"}
+          >
+            <Sparkles className="size-3.5" aria-hidden="true" />
+            {t("canvas.lighting.realistic")}
+          </button>
+          <button
+            type="button"
+            onClick={() => selectLightingMode("rendering")}
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+              lightingMode === "rendering"
+                ? "bg-brand-solid text-on-brand"
+                : "text-muted hover:bg-surface-hover hover:text-foreground",
+            )}
+            title={t("canvas.lighting.renderingDescription")}
+            aria-pressed={lightingMode === "rendering"}
+          >
+            <Aperture className="size-3.5" aria-hidden="true" />
+            {t("canvas.lighting.rendering")}
+          </button>
+          </div>
+        ) : null}
+
+        {!isLayoutEditing && !mapBackground && lightingMode !== "live" ? (
+          <div
+            className="pointer-events-none min-w-48 rounded-lg border border-border bg-surface/92 px-2.5 py-2 text-[10px] font-medium text-muted shadow-sm backdrop-blur"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-center gap-1.5">
+              {lightingStatus === "generating" ? (
+                <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+              ) : (
+                <Sparkles className="size-3 text-brand" aria-hidden="true" />
+              )}
+              <span>
+                {lightingMode === "realistic"
+                  ? lightingStatus === "generating"
+                    ? t("canvas.lighting.baking", {
+                        progress: lightingProgress,
+                      })
+                    : t("canvas.lighting.baked")
+                  : lightingStatus === "generating"
+                    ? t("canvas.lighting.renderingProgress", {
+                        progress: lightingProgress,
+                      })
+                    : t("canvas.lighting.rendered")}
+              </span>
+            </div>
+            {lightingStatus === "generating" ? (
+              <div
+                className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-muted"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={lightingProgress}
+              >
+                <div
+                  className="h-full rounded-full bg-brand-solid transition-[width]"
+                  style={{ width: `${lightingProgress}%` }}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {sceneMode !== "roomplan" && assetLoadState !== "ready" ? (
           <div
@@ -2626,7 +3493,7 @@ export function RoomSceneCanvas({
           </div>
         ) : null}
 
-        {visibleKeyframes.length ? (
+        {!isLayoutEditing && visibleKeyframes.length ? (
           <div className="pointer-events-auto flex max-w-full items-center gap-1 rounded-xl border border-border bg-surface/92 p-1 shadow-sm backdrop-blur">
             <button
               type="button"
@@ -2666,100 +3533,194 @@ export function RoomSceneCanvas({
           </div>
         ) : null}
       </div>
-      <div className="pointer-events-none absolute right-3 top-3 z-10 flex gap-2">
-        <button
-          type="button"
-          onClick={() => setNavigationMode((current) =>
-            current === "walk" ? "orbit" : "walk")}
-          className={cn(
-            "pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-[10px] font-semibold shadow-sm backdrop-blur transition",
-            navigationMode === "walk"
-              ? "border-brand-border bg-brand-solid text-on-brand"
-              : "border-border bg-surface/90 text-muted hover:text-brand",
-          )}
-          title={t("canvas.walk.toggle")}
-          aria-label={t("canvas.walk.toggle")}
-          aria-pressed={navigationMode === "walk"}
-        >
-          <Footprints className="size-3.5" aria-hidden="true" />
-          {navigationMode === "walk"
-            ? t("canvas.walk.exit")
-            : t("canvas.walk.enter")}
-        </button>
-        {navigationMode === "orbit" ? (
+      <div className="pointer-events-none absolute right-3 top-3 z-10 flex flex-col items-end gap-2">
+        <div className="flex gap-2">
+          {!isLayoutEditing && !mapBackground ? (
+            <button
+              type="button"
+              onClick={() => setNavigationMode((current) =>
+                current === "walk" ? "orbit" : "walk")}
+              disabled={lightingMode === "rendering"}
+              className={cn(
+                "pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-[10px] font-semibold shadow-sm backdrop-blur transition disabled:cursor-not-allowed disabled:opacity-50",
+                navigationMode === "walk"
+                  ? "border-brand-border bg-brand-solid text-on-brand"
+                  : "border-border bg-surface/90 text-muted hover:text-brand",
+              )}
+              title={t("canvas.walk.toggle")}
+              aria-label={t("canvas.walk.toggle")}
+              aria-pressed={navigationMode === "walk"}
+            >
+              <Footprints className="size-3.5" aria-hidden="true" />
+              {navigationMode === "walk"
+                ? t("canvas.walk.exit")
+                : t("canvas.walk.enter")}
+            </button>
+          ) : null}
+          {navigationMode === "orbit" ? (
+            <button
+              type="button"
+              onClick={() => commandRef.current("top")}
+              disabled={lightingMode === "rendering"}
+              className="pointer-events-auto grid size-9 place-items-center rounded-xl border border-border bg-surface/90 text-muted shadow-sm backdrop-blur transition hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
+              title={t("canvas.topView")}
+              aria-label={t("canvas.topView")}
+            >
+              <ScanSearch className="size-4" aria-hidden="true" />
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={() => commandRef.current("top")}
-            className="pointer-events-auto grid size-9 place-items-center rounded-xl border border-border bg-surface/90 text-muted shadow-sm backdrop-blur transition hover:text-brand"
-            title={t("canvas.topView")}
-            aria-label={t("canvas.topView")}
+            onClick={() => commandRef.current("reset")}
+            disabled={lightingMode === "rendering"}
+            className="pointer-events-auto grid size-9 place-items-center rounded-xl border border-border bg-surface/90 text-muted shadow-sm backdrop-blur transition hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
+            title={t("canvas.resetView")}
+            aria-label={t("canvas.resetView")}
           >
-            <ScanSearch className="size-4" aria-hidden="true" />
+            <Maximize2 className="size-4" aria-hidden="true" />
           </button>
+        </div>
+        {!mapBackground && navigationMode === "walk" ? (
+          <label className="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface/90 px-3 text-[10px] font-semibold text-muted shadow-sm backdrop-blur">
+            <input
+              type="checkbox"
+              checked={walkThroughWalls}
+              onChange={(event) => setWalkThroughWalls(event.target.checked)}
+              className="size-3.5 accent-brand-solid"
+            />
+            {t("canvas.walk.throughWalls")}
+          </label>
         ) : null}
-        <button
-          type="button"
-          onClick={() => commandRef.current("reset")}
-          className="pointer-events-auto grid size-9 place-items-center rounded-xl border border-border bg-surface/90 text-muted shadow-sm backdrop-blur transition hover:text-brand"
-          title={t("canvas.resetView")}
-          aria-label={t("canvas.resetView")}
-        >
-          <Maximize2 className="size-4" aria-hidden="true" />
-        </button>
       </div>
-      <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-surface/78 px-2.5 py-1.5 text-[10px] font-medium text-muted shadow-sm backdrop-blur">
-        {navigationMode === "walk"
+      {isLayoutEditing ? (
+        <div
+          className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-xl border border-border bg-surface/92 p-1 shadow-lg backdrop-blur"
+          role="group"
+          aria-label={t("rooms.layout.gizmoLabel")}
+        >
+          <button
+            type="button"
+            onClick={() => setLayoutTool("translate")}
+            className={cn(
+              "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[10px] font-semibold transition",
+              layoutTool === "translate"
+                ? "bg-brand-solid text-on-brand"
+                : "text-muted hover:bg-surface-hover hover:text-foreground",
+            )}
+            title={t("rooms.layout.moveTool")}
+            aria-label={t("rooms.layout.moveTool")}
+            aria-pressed={layoutTool === "translate"}
+          >
+            <Move3d className="size-3.5" aria-hidden="true" />
+            {t("rooms.layout.move")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLayoutTool("rotate")}
+            className={cn(
+              "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[10px] font-semibold transition",
+              layoutTool === "rotate"
+                ? "bg-brand-solid text-on-brand"
+                : "text-muted hover:bg-surface-hover hover:text-foreground",
+            )}
+            title={t("rooms.layout.rotateTool")}
+            aria-label={t("rooms.layout.rotateTool")}
+            aria-pressed={layoutTool === "rotate"}
+          >
+            <Rotate3d className="size-3.5" aria-hidden="true" />
+            {t("rooms.layout.rotate")}
+          </button>
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-surface/78 px-2.5 py-1.5 text-[10px] font-medium text-muted shadow-sm backdrop-blur",
+          navigationMode === "walk" && "max-w-[calc(100%_-_13rem)]",
+        )}
+      >
+        {mapBackground
+          ? t("canvas.mapBackgroundHint")
+          : isLayoutEditing
+          ? t("rooms.layout.gizmoHint")
+          : navigationMode === "walk"
           ? t("canvas.walk.hint")
           : t("canvas.controlsHint")}
       </div>
-      {navigationMode === "walk" ? (
-        <div className="absolute bottom-3 right-3 z-10 grid grid-cols-3 gap-1 sm:hidden">
-          <span />
-          <button
-            type="button"
-            onPointerDown={() => walkCommandRef.current("forward", true)}
-            onPointerUp={() => walkCommandRef.current("forward", false)}
-            onPointerCancel={() => walkCommandRef.current("forward", false)}
-            onPointerLeave={() => walkCommandRef.current("forward", false)}
-            className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
-            aria-label={t("canvas.walk.forward")}
-          >
-            <ArrowUp className="size-4" aria-hidden="true" />
-          </button>
-          <span />
-          <button
-            type="button"
-            onPointerDown={() => walkCommandRef.current("left", true)}
-            onPointerUp={() => walkCommandRef.current("left", false)}
-            onPointerCancel={() => walkCommandRef.current("left", false)}
-            onPointerLeave={() => walkCommandRef.current("left", false)}
-            className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
-            aria-label={t("canvas.walk.left")}
-          >
-            <ArrowLeft className="size-4" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onPointerDown={() => walkCommandRef.current("backward", true)}
-            onPointerUp={() => walkCommandRef.current("backward", false)}
-            onPointerCancel={() => walkCommandRef.current("backward", false)}
-            onPointerLeave={() => walkCommandRef.current("backward", false)}
-            className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
-            aria-label={t("canvas.walk.backward")}
-          >
-            <ArrowDown className="size-4" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onPointerDown={() => walkCommandRef.current("right", true)}
-            onPointerUp={() => walkCommandRef.current("right", false)}
-            onPointerCancel={() => walkCommandRef.current("right", false)}
-            onPointerLeave={() => walkCommandRef.current("right", false)}
-            className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
-            aria-label={t("canvas.walk.right")}
-          >
-            <ArrowRight className="size-4" aria-hidden="true" />
-          </button>
+      {!mapBackground && navigationMode === "walk" ? (
+        <div className="absolute bottom-3 right-3 z-10 flex items-end gap-2 sm:hidden">
+          <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              onPointerDown={() => walkCommandRef.current("jump", true)}
+              onPointerUp={() => walkCommandRef.current("jump", false)}
+              onPointerCancel={() => walkCommandRef.current("jump", false)}
+              className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
+              aria-label={t("canvas.walk.jump")}
+              title={t("canvas.walk.jump")}
+            >
+              <ArrowUpFromLine className="size-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onPointerDown={() => walkCommandRef.current("crouch", true)}
+              onPointerUp={() => walkCommandRef.current("crouch", false)}
+              onPointerCancel={() => walkCommandRef.current("crouch", false)}
+              onPointerLeave={() => walkCommandRef.current("crouch", false)}
+              className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
+              aria-label={t("canvas.walk.crouch")}
+              title={t("canvas.walk.crouch")}
+            >
+              <ArrowDownToLine className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            <span />
+            <button
+              type="button"
+              onPointerDown={() => walkCommandRef.current("forward", true)}
+              onPointerUp={() => walkCommandRef.current("forward", false)}
+              onPointerCancel={() => walkCommandRef.current("forward", false)}
+              onPointerLeave={() => walkCommandRef.current("forward", false)}
+              className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
+              aria-label={t("canvas.walk.forward")}
+            >
+              <ArrowUp className="size-4" aria-hidden="true" />
+            </button>
+            <span />
+            <button
+              type="button"
+              onPointerDown={() => walkCommandRef.current("left", true)}
+              onPointerUp={() => walkCommandRef.current("left", false)}
+              onPointerCancel={() => walkCommandRef.current("left", false)}
+              onPointerLeave={() => walkCommandRef.current("left", false)}
+              className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
+              aria-label={t("canvas.walk.left")}
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onPointerDown={() => walkCommandRef.current("backward", true)}
+              onPointerUp={() => walkCommandRef.current("backward", false)}
+              onPointerCancel={() => walkCommandRef.current("backward", false)}
+              onPointerLeave={() => walkCommandRef.current("backward", false)}
+              className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
+              aria-label={t("canvas.walk.backward")}
+            >
+              <ArrowDown className="size-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onPointerDown={() => walkCommandRef.current("right", true)}
+              onPointerUp={() => walkCommandRef.current("right", false)}
+              onPointerCancel={() => walkCommandRef.current("right", false)}
+              onPointerLeave={() => walkCommandRef.current("right", false)}
+              className="grid size-11 touch-none place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-lg backdrop-blur"
+              aria-label={t("canvas.walk.right")}
+            >
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       ) : null}
       {showKeyframes && selectedKeyframe ? (

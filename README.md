@@ -165,7 +165,7 @@ until configured in `.env`.
 
 | Area | Main settings |
 | --- | --- |
-| Authentication | Local accounts by default; optional `AUTH0_*` settings |
+| Authentication | Local accounts by default; optional `AUTH0_*` and `AUTH_OIDC_*` providers |
 | Storage | Persistent local files or `OPENINARY_*` |
 | Maps | Token-free defaults or `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` |
 | AI | `OPENAI_API_KEY` for inventory and room-photo analysis; optional `REPLICATE_API_TOKEN` or `GOOGLE_AI_API_KEY` |
@@ -173,6 +173,51 @@ until configured in `.env`.
 | Integrations | Scoped API tokens and HMAC-signed outgoing webhooks |
 
 See [`.env.example`](.env.example) for the complete, commented reference.
+
+### Authentication providers
+
+Open Inventory uses Auth.js for browser sign-in and its own organization roles
+for authorization. Local password login is enabled by default. Auth0 and one
+standards-based OpenID Connect provider can be enabled independently or at the
+same time through container environment variables.
+
+Auth0 uses its built-in Auth.js integration:
+
+```dotenv
+AUTH0_CLIENT_ID=your-client-id
+AUTH0_CLIENT_SECRET=your-client-secret
+AUTH0_DOMAIN=your-tenant.eu.auth0.com
+```
+
+Register `https://inventory.example.com/api/auth/callback/auth0` as the Auth0
+callback URL.
+
+Supabase Auth, Keycloak, Zitadel, and other OIDC-compatible services use the
+generic provider slot. For a Supabase project whose OAuth server is enabled:
+
+```dotenv
+AUTH_OIDC_PROVIDER_ID=supabase
+AUTH_OIDC_PROVIDER_NAME=Supabase
+AUTH_OIDC_ISSUER=https://your-project.supabase.co/auth/v1
+AUTH_OIDC_CLIENT_ID=your-oauth-client-id
+AUTH_OIDC_CLIENT_SECRET=your-oauth-client-secret
+AUTH_OIDC_SCOPES=openid email profile
+```
+
+Register `https://inventory.example.com/api/auth/callback/supabase` with the
+provider. `AUTH_OIDC_PROVIDER_ID` becomes the final callback-path segment and
+must contain only lowercase letters, numbers, and hyphens.
+
+External sign-in never creates an organization membership. An administrator
+must first create an Open Inventory user with the same lowercase email address,
+and the provider must return `email_verified: true`. Open Inventory then loads
+the user's live organization membership and role from its own database on every
+request.
+
+Set `AUTH_PASSWORD_ENABLED=false` only after an external provider works. This
+also disables the native password login endpoint used by the iOS app. The
+production container rejects incomplete provider configuration and refuses to
+start when password, Auth0, OIDC, and demo login are all disabled.
 
 ## Local development
 

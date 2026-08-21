@@ -42,9 +42,18 @@ import {
 type RoomLayoutMapCanvasProps = {
   manifests: ClientRoomSceneManifest[];
   fallbackGeoreference?: SpatialGeoreference | null;
+  viewGeoreference?: SpatialGeoreference | null;
   selectedScanId: string | null;
   onSelectRoom: (scanId: string) => void;
   onChangeTransform: (scanId: string, transform: SpatialMatrix4) => void;
+  backgroundOnly?: boolean;
+  onViewportChange?: (viewport: RoomMapViewport) => void;
+};
+
+export type RoomMapViewport = {
+  center: SpatialVector3;
+  headingDegrees: number;
+  metersPerPixel: number;
 };
 
 type RoomFeatureProperties = {
@@ -355,6 +364,7 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
       center: [13.7373, 51.0504],
       zoom: 18,
       maxZoom: 22,
+      interactive: !props.backgroundOnly,
       attributionControl: { compact: true },
       locale: {
         "AttributionControl.ToggleAttribution": t("map.controls.toggleAttribution"),
@@ -365,7 +375,40 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
       },
     });
     mapRef.current = map;
-    map.addControl(new NavigationControl({ visualizePitch: false }), "bottom-right");
+    if (!props.backgroundOnly) {
+      map.addControl(new NavigationControl({ visualizePitch: false }), "bottom-right");
+    }
+
+    const emitViewport = () => {
+      const anchor = latestRef.current.viewGeoreference;
+      if (!isSpatialGeoreference(anchor)) return;
+      const center = map.getCenter();
+      const localReference = anchor.localReferencePosition ?? [0, 0, 0];
+      const heading = anchor.headingDegrees * Math.PI / 180;
+      const oneMeterEast = localArkitToGeographic([
+        localReference[0] + Math.cos(heading),
+        localReference[1],
+        localReference[2] - Math.sin(heading),
+      ], anchor);
+      const anchorPixel = map.project([anchor.longitude, anchor.latitude]);
+      const eastPixel = map.project([
+        oneMeterEast.longitude,
+        oneMeterEast.latitude,
+      ]);
+      const pixelsPerMeter = Math.hypot(
+        eastPixel.x - anchorPixel.x,
+        eastPixel.y - anchorPixel.y,
+      );
+      if (!Number.isFinite(pixelsPerMeter) || pixelsPerMeter <= 0) return;
+      latestRef.current.onViewportChange?.({
+        center: geographicToLocalArkit(
+          { longitude: center.lng, latitude: center.lat },
+          anchor,
+        ),
+        headingDegrees: anchor.headingDegrees,
+        metersPerPixel: 1 / pixelsPerMeter,
+      });
+    };
 
     const fitRooms = (data: FeatureCollection) => {
       const coordinates = collectionCoordinates(data);
@@ -380,13 +423,17 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
 
     map.on("load", () => {
       const data = mapCollection(latestRef.current);
-      installLayers(map, data);
+      if (!latestRef.current.backgroundOnly) installLayers(map, data);
       fitRooms(data);
+      emitViewport();
       fittedRoomsRef.current = latestRef.current.manifests
         .map((manifest) => manifest.scan.id)
         .sort()
         .join("|");
     });
+
+    map.on("moveend", emitViewport);
+    map.on("resize", emitViewport);
 
     const manifestForScan = (scanId: string) =>
       latestRef.current.manifests.find((manifest) => manifest.scan.id === scanId);
@@ -400,51 +447,53 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
       map.getCanvas().style.cursor = "grabbing";
     };
 
-    map.on("mousedown", layerIds.fill, (event: MapLayerMouseEvent) => {
-      const scanId = scanIdFromEvent(event);
-      const manifest = scanId ? manifestForScan(scanId) : null;
-      const anchor = manifest
-        ? manifestAnchor(manifest, latestRef.current.fallbackGeoreference)
-        : null;
-      if (!scanId || !manifest || !anchor) return;
-      disableMapGesture(event);
-      latestRef.current.onSelectRoom(scanId);
-      interactionRef.current = {
-        kind: "move",
-        scanId,
-        anchor,
-        start: geographicToLocalArkit(
-          { longitude: event.lngLat.lng, latitude: event.lngLat.lat },
+    if (!props.backgroundOnly) {
+      map.on("mousedown", layerIds.fill, (event: MapLayerMouseEvent) => {
+        const scanId = scanIdFromEvent(event);
+        const manifest = scanId ? manifestForScan(scanId) : null;
+        const anchor = manifest
+          ? manifestAnchor(manifest, latestRef.current.fallbackGeoreference)
+          : null;
+        if (!scanId || !manifest || !anchor) return;
+        disableMapGesture(event);
+        latestRef.current.onSelectRoom(scanId);
+        interactionRef.current = {
+          kind: "move",
+          scanId,
           anchor,
-        ),
-        transform: [...layoutTransform(manifest)] as SpatialMatrix4,
-      };
-    });
+          start: geographicToLocalArkit(
+            { longitude: event.lngLat.lng, latitude: event.lngLat.lat },
+            anchor,
+          ),
+          transform: [...layoutTransform(manifest)] as SpatialMatrix4,
+        };
+      });
 
-    map.on("mousedown", layerIds.rotation, (event: MapLayerMouseEvent) => {
-      const scanId = scanIdFromEvent(event);
-      const manifest = scanId ? manifestForScan(scanId) : null;
-      const geometry = manifest
-        ? roomMapGeometry(manifest, latestRef.current.fallbackGeoreference)
-        : null;
-      if (!scanId || !manifest || !geometry) return;
-      disableMapGesture(event);
-      const pointer = geographicToLocalArkit(
-        { longitude: event.lngLat.lng, latitude: event.lngLat.lat },
-        geometry.anchor,
-      );
-      interactionRef.current = {
-        kind: "rotate",
-        scanId,
-        anchor: geometry.anchor,
-        center: geometry.center,
-        startAngle: Math.atan2(
-          -(pointer[2] - geometry.center[2]),
-          pointer[0] - geometry.center[0],
-        ),
-        transform: [...layoutTransform(manifest)] as SpatialMatrix4,
-      };
-    });
+      map.on("mousedown", layerIds.rotation, (event: MapLayerMouseEvent) => {
+        const scanId = scanIdFromEvent(event);
+        const manifest = scanId ? manifestForScan(scanId) : null;
+        const geometry = manifest
+          ? roomMapGeometry(manifest, latestRef.current.fallbackGeoreference)
+          : null;
+        if (!scanId || !manifest || !geometry) return;
+        disableMapGesture(event);
+        const pointer = geographicToLocalArkit(
+          { longitude: event.lngLat.lng, latitude: event.lngLat.lat },
+          geometry.anchor,
+        );
+        interactionRef.current = {
+          kind: "rotate",
+          scanId,
+          anchor: geometry.anchor,
+          center: geometry.center,
+          startAngle: Math.atan2(
+            -(pointer[2] - geometry.center[2]),
+            pointer[0] - geometry.center[0],
+          ),
+          transform: [...layoutTransform(manifest)] as SpatialMatrix4,
+        };
+      });
+    }
 
     const onMove = (event: MapMouseEvent) => {
       const interaction = interactionRef.current;
@@ -486,15 +535,17 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
     map.on("mouseup", endInteraction);
     window.addEventListener("mouseup", endInteraction);
 
-    for (const layer of [layerIds.fill, layerIds.rotation]) {
-      map.on("mouseenter", layer, () => {
-        if (!interactionRef.current) {
-          map.getCanvas().style.cursor = layer === layerIds.rotation ? "grab" : "move";
-        }
-      });
-      map.on("mouseleave", layer, () => {
-        if (!interactionRef.current) map.getCanvas().style.cursor = "";
-      });
+    if (!props.backgroundOnly) {
+      for (const layer of [layerIds.fill, layerIds.rotation]) {
+        map.on("mouseenter", layer, () => {
+          if (!interactionRef.current) {
+            map.getCanvas().style.cursor = layer === layerIds.rotation ? "grab" : "move";
+          }
+        });
+        map.on("mouseleave", layer, () => {
+          if (!interactionRef.current) map.getCanvas().style.cursor = "";
+        });
+      }
     }
 
     return () => {
@@ -502,7 +553,7 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
       map.remove();
       mapRef.current = null;
     };
-  }, [language, t]);
+  }, [language, props.backgroundOnly, t]);
 
   useEffect(() => {
     const map = mapRef.current;

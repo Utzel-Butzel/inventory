@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { auth0Enabled, demoAccessEnabled } from "@/auth";
+import {
+  demoAccessEnabled,
+  externalAuthProviders,
+  passwordAuthEnabled,
+} from "@/auth";
 import { BrandMark } from "@/components/brand-mark";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { LoginForm } from "@/components/login-form";
@@ -106,7 +110,8 @@ export default async function LoginPage({
 
               <div className="mt-8 animate-fade-up animation-delay-1">
                 <LoginForm
-                  auth0Enabled={auth0Enabled}
+                  passwordEnabled={passwordAuthEnabled}
+                  externalProviders={externalAuthProviders}
                   demoEnabled={demoAccessEnabled}
                   demoHighlighted={demoHighlighted}
                   callbackUrl={callbackUrl}

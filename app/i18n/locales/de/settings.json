@@ -499,7 +499,7 @@
       "imageModelDescription": "Wird für Cover verwendet, die in diesem Browser erstellt werden.",
       "authentication": "Authentifizierung",
       "password": "Passwort",
-      "bothAuth": "Passwort und Auth0 aktiviert",
+      "bothAuth": "Mehrere Anmeldeanbieter aktiviert",
       "authDescription": "Anmeldeanbieter des Arbeitsbereichs",
       "ready": "Bereit",
       "notConfigured": "Nicht konfiguriert"
@@ -684,7 +684,7 @@
     "resetPassword": "Passwort zurücksetzen",
     "disable": "Deaktivieren",
     "enable": "Aktivieren",
-    "auth0Note": "Auth0-Identitäten werden in Auth0 verwaltet. Deine Arbeitsbereichsrolle stammt aus dem konfigurierten Rollen-Claim oder der Auth0-Standardrolle der Bereitstellung.",
+    "externalAuthNote": "Externe Identitäten werden beim konfigurierten Identitätsanbieter verwaltet. Mitgliedschaften und Rollen in Open Inventory bleiben unter der Kontrolle lokaler Administratoren.",
     "resetDescription": "Lege ein neues Passwort für {{name}} fest. Bestehende Sitzungen werden abgemeldet.",
     "newPassword": "Neues Passwort",
     "cancel": "Abbrechen",

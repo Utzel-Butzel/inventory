@@ -60,6 +60,11 @@ if (demoAccessEnabled && !["true", "false"].includes(demoAccessEnabled)) {
   errors.push("DEMO_ACCESS_ENABLED must be either true or false when set.");
 }
 
+const passwordAuthEnabled = value("AUTH_PASSWORD_ENABLED").toLowerCase();
+if (passwordAuthEnabled && !["true", "false"].includes(passwordAuthEnabled)) {
+  errors.push("AUTH_PASSWORD_ENABLED must be either true or false when set.");
+}
+
 for (const variableName of [
   "SIMPLE_AUTH_PASSWORD_HASH",
   "BOOTSTRAP_ADMIN_PASSWORD_HASH",
@@ -78,6 +83,71 @@ const hasAnyAuth0Setting = Boolean(
 );
 if (hasAnyAuth0Setting && !(auth0ClientId && auth0ClientSecret && auth0Issuer)) {
   errors.push("Auth0 configuration is incomplete; set client ID, client secret, and domain or issuer.");
+}
+
+const oidcIssuer = value("AUTH_OIDC_ISSUER");
+const oidcClientId = value("AUTH_OIDC_CLIENT_ID");
+const oidcClientSecret = value("AUTH_OIDC_CLIENT_SECRET");
+const oidcProviderId = value("AUTH_OIDC_PROVIDER_ID") || "oidc";
+const oidcProviderName = value("AUTH_OIDC_PROVIDER_NAME");
+const oidcScopes = value("AUTH_OIDC_SCOPES") || "openid email profile";
+const hasAnyOidcSetting = Boolean(
+  oidcIssuer || oidcClientId || oidcClientSecret,
+);
+const oidcConfigured = Boolean(
+  oidcIssuer && oidcClientId && oidcClientSecret,
+);
+if (hasAnyOidcSetting && !oidcConfigured) {
+  errors.push(
+    "OIDC configuration is incomplete; set AUTH_OIDC_ISSUER, AUTH_OIDC_CLIENT_ID, and AUTH_OIDC_CLIENT_SECRET.",
+  );
+}
+if (hasAnyOidcSetting && !/^[a-z][a-z0-9-]{0,31}$/.test(oidcProviderId)) {
+  errors.push(
+    "AUTH_OIDC_PROVIDER_ID must start with a lowercase letter and contain at most 32 lowercase letters, numbers, or hyphens.",
+  );
+}
+if (
+  hasAnyOidcSetting &&
+  ["auth0", "credentials", "demo", "local"].includes(oidcProviderId)
+) {
+  errors.push(
+    "AUTH_OIDC_PROVIDER_ID is reserved; choose an ID other than auth0, credentials, demo, or local.",
+  );
+}
+if (oidcProviderName.length > 64) {
+  errors.push("AUTH_OIDC_PROVIDER_NAME must contain at most 64 characters.");
+}
+const oidcScopeList = oidcScopes.split(/\s+/).filter(Boolean);
+if (
+  hasAnyOidcSetting &&
+  (!oidcScopeList.includes("openid") || !oidcScopeList.includes("email"))
+) {
+  errors.push("AUTH_OIDC_SCOPES must include both openid and email.");
+}
+if (oidcIssuer) {
+  try {
+    const parsed = new URL(oidcIssuer);
+    const localHost = ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+    if (parsed.protocol !== "https:" && !localHost) {
+      errors.push("AUTH_OIDC_ISSUER must use HTTPS unless it points to localhost.");
+    }
+    if (parsed.search || parsed.hash) {
+      errors.push("AUTH_OIDC_ISSUER must not include a query string or fragment.");
+    }
+  } catch {
+    errors.push("AUTH_OIDC_ISSUER must be a valid absolute URL.");
+  }
+}
+if (
+  passwordAuthEnabled === "false" &&
+  demoAccessEnabled !== "true" &&
+  !hasAnyAuth0Setting &&
+  !oidcConfigured
+) {
+  errors.push(
+    "At least one authentication provider must be enabled. Enable password login, Auth0, OIDC, or demo access.",
+  );
 }
 
 const storageProvider = value("STORAGE_PROVIDER").toLowerCase() || "local";

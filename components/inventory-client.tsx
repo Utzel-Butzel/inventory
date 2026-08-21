@@ -1,6 +1,7 @@
 "use client";
 
 import { OrganizationLink as Link } from "@/components/organization-routing";
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import { useT } from "next-i18next/client";
 import {
   ArrowRight,
@@ -99,15 +100,28 @@ const formatValue = (cents: number | null, currency: string, locale: string) =>
         maximumFractionDigits: 0,
       }).format(cents / 100);
 
-function ResourceVisual({ resource }: { resource: ClientResource }) {
+function ResourceVisual({
+  resource,
+  compact = false,
+  eager = false,
+}: {
+  resource: ClientResource;
+  compact?: boolean;
+  eager?: boolean;
+}) {
   const Icon = typeIcons[resource.type as keyof typeof typeIcons] ?? Box;
   if (resource.cover?.url) {
     return (
-      // Stored images use an authenticated same-origin route and cannot use next/image.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={resource.cover.url}
+      <ResponsiveMediaImage
+        media={resource.cover}
         alt={resource.cover.altText || resource.name}
+        widths={compact ? [96, 192] : [384, 640, 960]}
+        sizes={
+          compact
+            ? "48px"
+            : "(max-width: 639px) calc(100vw - 32px), (max-width: 1279px) calc(50vw - 32px), (max-width: 1535px) 33vw, 25vw"
+        }
+        eager={eager}
         className="h-full w-full object-cover"
       />
     );
@@ -194,6 +208,7 @@ export function InventoryClient({
       pageSize: String(pageSize),
       type,
       status,
+      media: "cover",
     });
     if (debouncedQuery) search.set("q", debouncedQuery);
     try {
@@ -240,6 +255,7 @@ export function InventoryClient({
     t(`statuses.${value}`, { defaultValue: value.replaceAll("-", " ") });
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const pageIds = useMemo(() => resources.map((resource) => resource.id), [resources]);
+  const eagerCoverId = resources.find((resource) => resource.cover?.url)?.id;
   const pageIsSelected =
     pageIds.length > 0 && pageIds.every((resourceId) => selectedSet.has(resourceId));
 
@@ -737,7 +753,10 @@ export function InventoryClient({
             const content = (
               <>
                 <div className="relative aspect-square overflow-hidden bg-surface-muted">
-                  <ResourceVisual resource={resource} />
+                  <ResourceVisual
+                    resource={resource}
+                    eager={resource.id === eagerCoverId}
+                  />
                   <span
                     className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}
                   >
@@ -855,7 +874,11 @@ export function InventoryClient({
                       </span>
                     ) : null}
                     <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
-                      <ResourceVisual resource={resource} />
+                      <ResourceVisual
+                        resource={resource}
+                        compact
+                        eager={resource.id === eagerCoverId}
+                      />
                     </div>
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-foreground">{resource.name}</div>

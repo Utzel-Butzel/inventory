@@ -44,6 +44,7 @@ type RuntimeStatus = {
   auth: {
     password: boolean;
     auth0: boolean;
+    providers?: Array<{ id: string; name: string }>;
   };
 };
 
@@ -301,6 +302,14 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
+  const authenticationProviderNames = runtime
+    ? [
+        ...(runtime.auth.password ? [t("api.runtime.password")] : []),
+        ...(runtime.auth.providers?.map((provider) => provider.name) ??
+          (runtime.auth.auth0 ? ["Auth0"] : [])),
+      ]
+    : [];
+
   return (
     <div className="space-y-8">
       <section aria-labelledby="runtime-heading">
@@ -403,15 +412,19 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                   <ShieldCheck className="size-5" />
                 </span>
                 <StatusPill
-                  ready={runtime.auth.password || runtime.auth.auth0}
-                  label={runtime.auth.auth0 ? "Auth0" : runtime.auth.password ? t("api.runtime.password") : undefined}
+                  ready={authenticationProviderNames.length > 0}
+                  label={
+                    authenticationProviderNames.length === 1
+                      ? authenticationProviderNames[0]
+                      : undefined
+                  }
                   readyLabel={t("api.runtime.ready")}
                   notConfiguredLabel={t("api.runtime.notConfigured")}
                 />
               </div>
               <p className="mt-5 text-sm font-semibold text-foreground">{t("api.runtime.authentication")}</p>
               <p className="mt-1 text-sm text-muted">
-                {runtime.auth.password && runtime.auth.auth0
+                {authenticationProviderNames.length > 1
                   ? t("api.runtime.bothAuth")
                   : t("api.runtime.authDescription")}
               </p>

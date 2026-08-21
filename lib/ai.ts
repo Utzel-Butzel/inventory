@@ -367,6 +367,8 @@ For surfaceAppearances:
 
 For objectSuggestions:
 - suggest only clearly visible, physical, inventory-worthy objects; do not suggest people or architectural surfaces
+- inspect every supplied photo and return as many distinct supported objects as possible; aim for 12 to 36 suggestions when the room contains that many visible items instead of stopping after the most prominent furniture
+- include useful smaller objects such as lamps, monitors, tools, bins, appliances, and freestanding accessories when they are clearly visible and distinguishable
 - merge duplicates seen in multiple photos
 - use the most specific useful name and explain the visible evidence briefly
 - roomPlanCategory must exactly copy a supplied RoomPlan category only when the suggestion clearly corresponds to it; otherwise return null

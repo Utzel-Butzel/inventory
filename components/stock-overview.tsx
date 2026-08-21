@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "next-i18next/client";
 
 import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import { StockSectionNav } from "@/components/stock-section-nav";
 
 type StockFilter = "all" | "low" | "out" | "healthy" | "incoming";
@@ -29,8 +30,11 @@ type StockItem = {
   name: string;
   type: string;
   cover: {
+    id?: string;
     url: string;
     altText: string;
+    width?: number | null;
+    height?: number | null;
   } | null;
   quantity: number;
   onOrder: number;
@@ -142,13 +146,11 @@ function StockItemVisual({ item, state }: { item: StockItem; state: StockState }
   if (imageUrl && imageUrl !== failedUrl) {
     return (
       <span className="block size-12 shrink-0 overflow-hidden rounded-xl bg-surface-muted ring-1 ring-inset ring-border">
-        {/* Stored images use an authenticated same-origin route and cannot use next/image. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imageUrl}
+        <ResponsiveMediaImage
+          media={item.cover!}
           alt={item.cover?.altText || item.name}
-          loading="lazy"
-          decoding="async"
+          widths={[96, 192]}
+          sizes="48px"
           onError={() => setFailedUrl(imageUrl)}
           className="size-full object-cover"
         />

@@ -140,7 +140,7 @@ test("identity resolution enforces header membership and standalone token pinnin
   );
   assert.match(routes, /identity\.organizations\.find/);
   assert.match(routes, /cookieStore\.set\(ORGANIZATION_COOKIE/);
-  assert.match(auth, /session\.user\.auth0EmailVerified/);
+  assert.match(auth, /session\.user\.externalEmailVerified/);
   assert.doesNotMatch(auth, /Pre-organization Auth0 identities/);
   assert.match(nextAuth, /delete token\.userId/);
   assert.match(capabilities, /principal: hashRequestIdentity\(identity\)/);

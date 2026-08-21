@@ -13,6 +13,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import { Badge, Button, Card, EmptyState, Skeleton } from "@/components/ui";
 
 type DashboardStats = {
@@ -33,7 +34,14 @@ type Resource = {
   quantity: number;
   location: string | null;
   updatedAt: string;
-  cover: { url: string; altText?: string; name?: string } | null;
+  cover: {
+    id?: string;
+    url: string;
+    altText?: string;
+    name?: string;
+    width?: number | null;
+    height?: number | null;
+  } | null;
 };
 
 type ResourcesResponse = {
@@ -101,7 +109,7 @@ export function DashboardClient() {
     try {
       const [statsResponse, resourcesResponse] = await Promise.all([
         fetch("/api/v1/stats", { signal, cache: "no-store" }),
-        fetch("/api/v1/resources?page=1&pageSize=6", {
+        fetch("/api/v1/resources?page=1&pageSize=6&media=cover", {
           signal,
           cache: "no-store",
         }),
@@ -308,16 +316,21 @@ export function DashboardClient() {
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <div
-                          className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-surface-muted bg-cover bg-center text-muted"
-                          style={
-                            resource.cover?.url
-                              ? { backgroundImage: `url(${JSON.stringify(resource.cover.url)})` }
-                              : undefined
-                          }
+                          className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-surface-muted text-muted"
                           role={resource.cover?.url ? "img" : undefined}
                           aria-label={resource.cover?.url ? resource.cover.altText || resource.name : undefined}
                         >
-                          {!resource.cover?.url ? <BoxIcon className="size-[18px]" aria-hidden="true" /> : null}
+                          {resource.cover?.url ? (
+                            <ResponsiveMediaImage
+                              media={resource.cover}
+                              alt=""
+                              widths={[96, 192]}
+                              sizes="44px"
+                              className="size-full object-cover"
+                            />
+                          ) : (
+                            <BoxIcon className="size-[18px]" aria-hidden="true" />
+                          )}
                         </div>
                         <div className="min-w-0">
                           <p className="truncate text-[13px] font-semibold text-foreground transition group-hover:text-brand">

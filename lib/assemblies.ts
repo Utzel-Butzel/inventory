@@ -664,9 +664,12 @@ async function getBomWithExecutor(
   const coverRows = visibleChoiceIds.length
     ? await executor
         .select({
+          id: media.id,
           resourceId: media.resourceId,
           url: media.url,
           altText: media.altText,
+          width: media.width,
+          height: media.height,
         })
         .from(media)
         .where(
@@ -680,13 +683,22 @@ async function getBomWithExecutor(
     : [];
   const coverByResource = new Map<
     string,
-    { url: string; altText: string }
+    {
+      id: string;
+      url: string;
+      altText: string;
+      width: number | null;
+      height: number | null;
+    }
   >();
   for (const cover of coverRows) {
     if (!coverByResource.has(cover.resourceId)) {
       coverByResource.set(cover.resourceId, {
+        id: cover.id,
         url: cover.url,
         altText: cover.altText,
+        width: cover.width,
+        height: cover.height,
       });
     }
   }

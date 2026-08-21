@@ -14,6 +14,7 @@ import {
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { LocalizedThemeToggle } from "@/components/theme-toggle";
 import { MarkdownContent } from "@/components/markdown-content";
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import { UsdzModelViewer } from "@/components/usdz-model-viewer";
 import type {
   PublicCustomFieldDefinition,
@@ -68,14 +69,28 @@ function PublicHeader({
   );
 }
 
-function ResourceImage({ resource }: { resource: PublicResource }) {
+function ResourceImage({
+  resource,
+  eager = false,
+  detail = false,
+}: {
+  resource: PublicResource;
+  eager?: boolean;
+  detail?: boolean;
+}) {
   if (resource.cover) {
     return (
-      // The URL is a share-scoped endpoint that revalidates access.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={resource.cover.url}
+      <ResponsiveMediaImage
+        media={resource.cover}
+        delivery="public"
         alt={resource.cover.altText || resource.name}
+        widths={detail ? [640, 960, 1280] : [384, 640, 960]}
+        sizes={
+          detail
+            ? "(max-width: 1023px) calc(100vw - 32px), 700px"
+            : "(max-width: 639px) calc(100vw - 32px), (max-width: 1023px) calc(50vw - 32px), (max-width: 1279px) 33vw, 25vw"
+        }
+        eager={eager}
         className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
       />
     );
@@ -110,6 +125,7 @@ export async function PublicInventoryView({
     const suffix = parameters.toString();
     return `/share/${shareId}${suffix ? `?${suffix}` : ""}`;
   };
+  const eagerCoverId = resources.find((resource) => resource.cover)?.id;
 
   return (
     <div className="min-h-dvh bg-background">
@@ -154,7 +170,10 @@ export async function PublicInventoryView({
                 className="group overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md"
               >
                 <div className="relative aspect-square overflow-hidden bg-surface-muted">
-                  <ResourceImage resource={resource} />
+                  <ResourceImage
+                    resource={resource}
+                    eager={resource.id === eagerCoverId}
+                  />
                   <span className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
                     {t(`statuses.${resource.status}`, {
                       defaultValue: humanize(resource.status),
@@ -287,7 +306,7 @@ export async function PublicResourceView({
           <div className="space-y-6">
             <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
               <div className="aspect-[16/9] overflow-hidden bg-surface-muted">
-                <ResourceImage resource={resource} />
+                <ResourceImage resource={resource} detail eager />
               </div>
               <div className="p-5 sm:p-6">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground"><FileText className="size-4 text-brand" /> {t("resource.overview")}</h2>
@@ -324,8 +343,14 @@ export async function PublicResourceView({
                       item.mimeType.startsWith("image/") &&
                       item.mimeType !== "image/svg+xml" ? (
                       <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="aspect-square overflow-hidden rounded-xl border border-border bg-surface-muted">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={item.url} alt={item.altText || item.name} className="h-full w-full object-cover" />
+                        <ResponsiveMediaImage
+                          media={item}
+                          delivery="public"
+                          alt={item.altText || item.name}
+                          widths={[192, 384, 640]}
+                          sizes="(max-width: 639px) calc(100vw - 64px), (max-width: 1023px) 50vw, 220px"
+                          className="h-full w-full object-cover"
+                        />
                       </a>
                     ) : (
                       <a key={item.id} href={item.url} className="flex min-h-24 items-center gap-3 rounded-xl border border-border p-4 text-sm font-semibold text-foreground">

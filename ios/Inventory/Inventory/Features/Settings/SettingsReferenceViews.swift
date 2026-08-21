@@ -44,6 +44,14 @@ struct RuntimeSettingsView: View {
                         systemImage: "person.badge.shield.checkmark.fill",
                         available: status.auth.auth0
                     )
+                    ForEach((status.auth.providers ?? []).filter { $0.id != "auth0" }) { provider in
+                        SettingsStatusRow(
+                            title: provider.name,
+                            detail: "Externer Identitätsanbieter",
+                            systemImage: "person.badge.shield.checkmark.fill",
+                            available: true
+                        )
+                    }
                 }
             } else if loading {
                 SettingsLoadingRow(text: "Systemstatus wird geladen …")

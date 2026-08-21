@@ -1,14 +1,14 @@
 import "next-auth";
 
 type InventoryUserRole = string;
-type InventoryAuthProvider = "local" | "auth0" | "demo";
+type InventoryAuthProvider = string;
 
 declare module "next-auth" {
   interface User {
     role?: InventoryUserRole;
     authProvider?: InventoryAuthProvider;
     sessionVersion?: number;
-    auth0EmailVerified?: boolean;
+    externalEmailVerified?: boolean;
   }
 
   interface Session {
@@ -17,7 +17,7 @@ declare module "next-auth" {
       role: InventoryUserRole;
       authProvider: InventoryAuthProvider;
       sessionVersion: number;
-      auth0EmailVerified: boolean;
+      externalEmailVerified: boolean;
       name?: string | null;
       email?: string | null;
       image?: string | null;
@@ -31,6 +31,8 @@ declare module "next-auth/jwt" {
     role?: InventoryUserRole;
     authProvider?: InventoryAuthProvider;
     sessionVersion?: number;
+    externalEmailVerified?: boolean;
+    /** Compatibility with sessions issued before external providers were generalized. */
     auth0EmailVerified?: boolean;
   }
 }

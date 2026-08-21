@@ -39,6 +39,7 @@ import {
 } from "react";
 
 import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 
 type TrackingMode = "bulk" | "serialized";
@@ -51,8 +52,11 @@ type AvailableUnit = {
 };
 
 type ResourceCover = {
+  id?: string;
   url: string;
   altText: string;
+  width?: number | null;
+  height?: number | null;
 };
 
 type BomResource = {
@@ -241,13 +245,11 @@ function ResourceThumbnail({
       )}
     >
       {cover?.url && cover.url !== failedUrl ? (
-        // Stored covers use an authenticated same-origin route.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={cover.url}
+        <ResponsiveMediaImage
+          media={cover}
           alt=""
-          loading="lazy"
-          decoding="async"
+          widths={[96, 192]}
+          sizes="36px"
           onError={() => setFailedUrl(cover.url)}
           className="size-full object-cover"
         />
@@ -418,6 +420,7 @@ export function AssemblyManager({
           q: cleanQuery,
           page: "1",
           pageSize: "8",
+          media: "cover",
         });
         const payload = await fetchJson<{ resources: ClientResource[] }>(
           `/api/v1/resources?${search}`,
@@ -576,8 +579,11 @@ export function AssemblyManager({
         trackingMode: "bulk",
         cover: resource.cover
           ? {
+              id: resource.cover.id,
               url: resource.cover.url,
               altText: resource.cover.altText,
+              width: resource.cover.width,
+              height: resource.cover.height,
             }
           : null,
         availableUnits: [],
@@ -590,8 +596,11 @@ export function AssemblyManager({
             trackingMode: "bulk",
             cover: resource.cover
               ? {
+                  id: resource.cover.id,
                   url: resource.cover.url,
                   altText: resource.cover.altText,
+                  width: resource.cover.width,
+                  height: resource.cover.height,
                 }
               : null,
             availableUnits: [],

@@ -10,6 +10,7 @@ import {
   users,
   type UserRecord,
 } from "@/db/schema";
+import { getAuthProviderConfiguration } from "@/lib/auth-provider-config";
 import { normalizeUserRole } from "@/lib/auth-roles";
 import { db } from "@/lib/db";
 import { authenticateLocalUser } from "@/lib/local-auth";
@@ -18,16 +19,14 @@ import {
   PUBLIC_DEMO_USER_ID,
 } from "@/lib/organization-read-only";
 
-const auth0Issuer =
-  process.env.AUTH0_ISSUER_BASE_URL?.trim() ||
-  (process.env.AUTH0_DOMAIN?.trim()
-    ? `https://${process.env.AUTH0_DOMAIN.trim().replace(/^https?:\/\//, "")}`
-    : "");
+const providerConfiguration = getAuthProviderConfiguration();
 
-export const auth0Enabled = Boolean(
-  process.env.AUTH0_CLIENT_ID &&
-    process.env.AUTH0_CLIENT_SECRET &&
-    auth0Issuer,
+export const passwordAuthEnabled = providerConfiguration.passwordEnabled;
+export const auth0Enabled = Boolean(providerConfiguration.auth0);
+export const externalAuthProviders = providerConfiguration.externalProviders;
+
+const externalProviderIds = new Set(
+  externalAuthProviders.map((provider) => provider.id),
 );
 
 export const demoAccessEnabled =
@@ -124,22 +123,26 @@ async function authorizeDemoUser() {
   }
 }
 
-const providers: NextAuthConfig["providers"] = [
-  Credentials({
-    name: "Password",
-    credentials: {
-      email: { label: "Email", type: "email" },
-      password: { label: "Password", type: "password" },
-    },
-    authorize: async (credentials) => {
-      const email = String(credentials?.email ?? "").trim().toLowerCase();
-      const password = String(credentials?.password ?? "");
-      if (!email || !password) return null;
-      const user = await authenticateLocalUser(email, password);
-      return user ? localAuthUser(user) : null;
-    },
-  }),
-];
+const providers: NextAuthConfig["providers"] = [];
+
+if (passwordAuthEnabled) {
+  providers.push(
+    Credentials({
+      name: "Password",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      authorize: async (credentials) => {
+        const email = String(credentials?.email ?? "").trim().toLowerCase();
+        const password = String(credentials?.password ?? "");
+        if (!email || !password) return null;
+        const user = await authenticateLocalUser(email, password);
+        return user ? localAuthUser(user) : null;
+      },
+    }),
+  );
+}
 
 if (demoAccessEnabled) {
   providers.push(
@@ -152,14 +155,29 @@ if (demoAccessEnabled) {
   );
 }
 
-if (auth0Enabled) {
+if (providerConfiguration.auth0) {
   providers.push(
     Auth0({
-      clientId: process.env.AUTH0_CLIENT_ID!,
-      clientSecret: process.env.AUTH0_CLIENT_SECRET!,
-      issuer: auth0Issuer,
+      clientId: providerConfiguration.auth0.clientId,
+      clientSecret: providerConfiguration.auth0.clientSecret,
+      issuer: providerConfiguration.auth0.issuer,
     }),
   );
+}
+
+if (providerConfiguration.oidc) {
+  providers.push({
+    id: providerConfiguration.oidc.id,
+    name: providerConfiguration.oidc.name,
+    type: "oidc",
+    issuer: providerConfiguration.oidc.issuer,
+    clientId: providerConfiguration.oidc.clientId,
+    clientSecret: providerConfiguration.oidc.clientSecret,
+    authorization: {
+      params: { scope: providerConfiguration.oidc.scopes },
+    },
+    checks: ["pkce", "state", "nonce"],
+  });
 }
 
 export const authConfig = {
@@ -179,21 +197,24 @@ export const authConfig = {
         token.authProvider = "demo";
         token.role = "viewer";
         token.sessionVersion = user.sessionVersion ?? 1;
-        token.auth0EmailVerified = true;
+        token.externalEmailVerified = true;
       } else if (account?.provider === "credentials" && user) {
         token.userId = user.id;
         token.authProvider = "local";
         token.role = normalizeUserRole(user.role, "viewer");
         token.sessionVersion = user.sessionVersion ?? 1;
-        token.auth0EmailVerified = true;
-      } else if (account?.provider === "auth0") {
-        // Auth0 subject identifiers are not local user UUIDs. The API links a
-        // verified Auth0 email to an explicitly provisioned local membership.
+        token.externalEmailVerified = true;
+      } else if (
+        account?.provider &&
+        externalProviderIds.has(account.provider)
+      ) {
+        // External subject identifiers are not local user UUIDs. The API links
+        // a verified provider email to an explicitly provisioned local user.
         delete token.userId;
-        token.authProvider = "auth0";
+        token.authProvider = account.provider;
         token.role = "viewer";
         token.sessionVersion = 1;
-        token.auth0EmailVerified =
+        token.externalEmailVerified =
           (profile as Record<string, unknown> | undefined)?.email_verified ===
           true;
       }
@@ -204,13 +225,14 @@ export const authConfig = {
         session.user.id = String(token.userId ?? token.sub ?? "");
         session.user.role = normalizeUserRole(token.role, "viewer");
         session.user.authProvider =
-          token.authProvider === "demo"
-            ? "demo"
-            : token.authProvider === "local"
-              ? "local"
-              : "auth0";
+          typeof token.authProvider === "string"
+            ? token.authProvider
+            : "local";
         session.user.sessionVersion = Number(token.sessionVersion ?? 1);
-        session.user.auth0EmailVerified = token.auth0EmailVerified === true;
+        session.user.externalEmailVerified =
+          token.externalEmailVerified === true ||
+          // Preserve existing Auth0 sessions across this field rename.
+          token.auth0EmailVerified === true;
       }
       return session;
     },

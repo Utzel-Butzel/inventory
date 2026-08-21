@@ -1,13 +1,13 @@
 /* global clients */
 
 const OFFLINE_CACHE_PREFIX = "open-inventory-offline";
-const OFFLINE_CACHE_VERSION = "v1";
+const OFFLINE_CACHE_VERSION = "v2";
 const ASSET_CACHE = `${OFFLINE_CACHE_PREFIX}-assets-${OFFLINE_CACHE_VERSION}`;
 const PAGE_CACHE = `${OFFLINE_CACHE_PREFIX}-pages-${OFFLINE_CACHE_VERSION}`;
 const STATE_CACHE = `${OFFLINE_CACHE_PREFIX}-state`;
 const STATE_URL = new URL("/__open-inventory-offline-state__", self.location.origin).href;
 const OFFLINE_FALLBACK_URL = "/offline.html";
-const MAX_ASSET_ENTRIES = 120;
+const MAX_ASSET_ENTRIES = 240;
 const MAX_PAGE_ENTRIES = 30;
 
 let statePromise;
@@ -257,7 +257,10 @@ self.addEventListener("message", (event) => {
       }
 
       if (previous.ownerKey && previous.ownerKey !== ownerKey) {
-        await caches.delete(PAGE_CACHE);
+        await Promise.all([
+          caches.delete(PAGE_CACHE),
+          caches.delete(ASSET_CACHE),
+        ]);
       }
       await writeOfflineState({ enabled: true, ownerKey });
       if (self.registration.navigationPreload) {
@@ -280,7 +283,15 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || isExcludedPath(url.pathname)) return;
+  const isOfflineMediaVariant =
+    url.pathname.startsWith("/api/v1/media/") &&
+    url.pathname.includes("/thumbnail/");
+  if (
+    url.origin !== self.location.origin ||
+    (isExcludedPath(url.pathname) && !isOfflineMediaVariant)
+  ) {
+    return;
+  }
   if (request.headers.get("RSC") === "1" || url.searchParams.has("_rsc")) return;
 
   const isNavigation = request.mode === "navigate";
@@ -288,6 +299,7 @@ self.addEventListener("fetch", (event) => {
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/barcodes/");
   const isRuntimeAsset =
+    isOfflineMediaVariant ||
     url.pathname.startsWith("/_next/image") ||
     ["font", "image", "script", "style", "worker"].includes(request.destination);
 

@@ -2,6 +2,9 @@ import { z } from "zod";
 
 import { roomSurfaceCategorySchema } from "@/lib/room-scene-contract";
 
+export const maximumRoomAnalysisKeyframes = 16;
+export const maximumRoomObjectSuggestions = 48;
+
 export const roomMaterialSchema = z.enum([
   "paint",
   "plaster",
@@ -99,7 +102,9 @@ export const roomAiDetectionSchema = z
   .object({
     summary: z.string().trim().min(1).max(1_000),
     surfaceAppearances: z.array(detectedRoomSurfaceAppearanceSchema).max(5),
-    objectSuggestions: z.array(detectedRoomObjectSuggestionSchema).max(24),
+    objectSuggestions: z
+      .array(detectedRoomObjectSuggestionSchema)
+      .max(maximumRoomObjectSuggestions),
   })
   .strict();
 
@@ -119,9 +124,14 @@ export const roomAiAnalysisSchema = z
     analyzedAt: z.iso.datetime({ offset: true }),
     model: z.string().trim().min(1).max(160),
     summary: z.string().trim().min(1).max(1_000),
-    analyzedKeyframeIds: z.array(z.uuid()).min(1).max(8),
+    analyzedKeyframeIds: z
+      .array(z.uuid())
+      .min(1)
+      .max(maximumRoomAnalysisKeyframes),
     surfaceAppearances: z.array(roomSurfaceAppearanceSchema).max(5),
-    objectSuggestions: z.array(roomObjectSuggestionSchema).max(24),
+    objectSuggestions: z
+      .array(roomObjectSuggestionSchema)
+      .max(maximumRoomObjectSuggestions),
   })
   .strict();
 

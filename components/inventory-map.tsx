@@ -32,6 +32,7 @@ import type {
   ResourceMapCoordinate,
   ResourceMapFeature,
 } from "@/db/schema";
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import {
   fetchJson,
   type ClientResource,
@@ -119,11 +120,15 @@ function legacyFeatures(resource: ClientResource): ResourceMapFeature[] {
 }
 
 async function loadEveryResource() {
-  const first = await fetchJson<ResourceListResponse>("/api/v1/resources?pageSize=100&page=1");
+  const first = await fetchJson<ResourceListResponse>(
+    "/api/v1/resources?pageSize=100&page=1&media=cover",
+  );
   if (first.pagination.pages <= 1) return first.resources;
   const remaining = await Promise.all(
     Array.from({ length: first.pagination.pages - 1 }, (_, index) =>
-      fetchJson<ResourceListResponse>(`/api/v1/resources?pageSize=100&page=${index + 2}`),
+      fetchJson<ResourceListResponse>(
+        `/api/v1/resources?pageSize=100&page=${index + 2}&media=cover`,
+      ),
     ),
   );
   return [first, ...remaining].flatMap((result) => result.resources);
@@ -650,8 +655,13 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                   {isEditing ? <span className={`grid size-5 shrink-0 place-items-center rounded-md border ${selected ? "border-brand-solid bg-brand-solid text-on-brand" : "border-border-strong bg-surface text-transparent"}`}><Check size={12} /></span> : null}
                   <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-muted text-muted">
                     {resource.cover?.url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={resource.cover.url} alt="" className="h-full w-full object-cover" />
+                      <ResponsiveMediaImage
+                        media={resource.cover}
+                        alt=""
+                        widths={[96, 192]}
+                        sizes="36px"
+                        className="h-full w-full object-cover"
+                      />
                     ) : <Box size={15} />}
                   </span>
                   <span className="min-w-0 flex-1">

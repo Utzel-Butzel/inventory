@@ -175,6 +175,8 @@ export function MarkdownEditor({
                 <img
                   src={image.thumbnailUrl ?? image.url}
                   alt={image.label}
+                  loading="lazy"
+                  decoding="async"
                   className="h-28 w-full object-cover"
                 />
                 <span className="block truncate px-3 py-2 text-xs font-medium text-foreground">

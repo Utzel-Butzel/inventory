@@ -66,6 +66,7 @@ import {
   useImageModelPreference,
 } from "@/components/image-model-selector";
 import { MarkdownEditor } from "@/components/markdown-editor";
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import {
   isCustomFieldDefinitionApplicable,
   type CustomFieldDefinition,
@@ -235,10 +236,11 @@ function CoverReferencePicker({
                 className="sr-only"
               />
               <span className="block aspect-square overflow-hidden bg-surface-muted">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={option.url}
+                <ResponsiveMediaImage
+                  media={option}
                   alt=""
+                  widths={[96, 192, 384]}
+                  sizes="120px"
                   className="size-full object-cover"
                 />
               </span>
@@ -1655,8 +1657,13 @@ export function ResourceEditor({
                     <div key={item.id} className="group relative overflow-hidden rounded-2xl border border-border bg-surface-subtle">
                       <div className="aspect-square overflow-hidden">
                         {item.kind === "image" ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.url} alt={item.altText || item.name} className="h-full w-full object-cover" />
+                          <ResponsiveMediaImage
+                            media={item}
+                            alt={item.altText || item.name}
+                            widths={[192, 384, 640]}
+                            sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 25vw"
+                            className="h-full w-full object-cover"
+                          />
                         ) : item.kind === "video" ? (
                           <video src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
                         ) : (

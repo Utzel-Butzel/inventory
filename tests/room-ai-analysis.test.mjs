@@ -4,8 +4,11 @@ import { zodTextFormat } from "openai/helpers/zod";
 import * as THREE from "three";
 
 import { createAiPrimitiveObjectModel } from "../components/room-object-models.ts";
+import { applyDetectedRoomFinish } from "../components/room-scene-materials.ts";
 import { buildRoomAiAnalysis } from "../lib/room-ai-analysis.ts";
 import {
+  maximumRoomAnalysisKeyframes,
+  maximumRoomObjectSuggestions,
   roomAiAnalysisSchema,
   roomAiDetectionSchema,
   roomPrimitiveModelSchema,
@@ -196,6 +199,8 @@ test("rejects unsafe or oversized AI primitive model recipes", () => {
 });
 
 test("builds an OpenAI strict response format for room analysis", () => {
+  assert.equal(maximumRoomAnalysisKeyframes, 16);
+  assert.equal(maximumRoomObjectSuggestions, 48);
   assert.doesNotThrow(() =>
     zodTextFormat(roomAiDetectionSchema, "room_ai_analysis"),
   );
@@ -268,4 +273,46 @@ test("keeps stored room analyses from before primitive models readable", () => {
   });
 
   assert.equal(legacy.objectSuggestions[0].primitiveModel, null);
+});
+
+test("keeps an accepted light-gray door finish free of the brown base texture", () => {
+  const brownBaseMap = new THREE.Texture();
+  const originalNormalMap = new THREE.Texture();
+  const originalRoughnessMap = new THREE.Texture();
+  const paintNormalMap = new THREE.Texture();
+  const paintRoughnessMap = new THREE.Texture();
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: brownBaseMap,
+    normalMap: originalNormalMap,
+    roughnessMap: originalRoughnessMap,
+  });
+
+  applyDetectedRoomFinish(
+    material,
+    { colorHex: "#D3D3D3", material: "paint", roughness: 0.84 },
+    {
+      paint: {
+        normalMap: paintNormalMap,
+        roughnessMap: paintRoughnessMap,
+        normalScale: 0.42,
+      },
+      wood: {
+        normalMap: new THREE.Texture(),
+        roughnessMap: new THREE.Texture(),
+        normalScale: 0.58,
+      },
+      fabric: {
+        normalMap: new THREE.Texture(),
+        roughnessMap: new THREE.Texture(),
+        normalScale: 0.72,
+      },
+    },
+  );
+
+  assert.equal(material.map, null);
+  assert.equal(material.normalMap, paintNormalMap);
+  assert.equal(material.roughnessMap, paintRoughnessMap);
+  assert.equal(material.color.getHexString().toUpperCase(), "D3D3D3");
+  assert.equal(material.roughness, 0.84);
 });

@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
 
 import { OrganizationLink as Link } from "@/components/organization-routing";
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import { Badge, Button, cn } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
 import type {
@@ -51,8 +52,11 @@ type EditorAction =
 type CandidateResource = ConnectionDiagramResource & {
   sku?: string | null;
   cover?: {
+    id?: string;
     url: string;
     altText?: string | null;
+    width?: number | null;
+    height?: number | null;
   } | null;
 };
 
@@ -255,6 +259,7 @@ export function ResourceConnectionEditorPanel({
         const search = new URLSearchParams({
           page: "1",
           pageSize: "20",
+          media: "cover",
         });
         if (candidateQuery.trim()) search.set("q", candidateQuery.trim());
         const response = await fetchJson<{ resources: CandidateResource[] }>(
@@ -862,12 +867,11 @@ export function ResourceConnectionEditorPanel({
                     >
                       <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-muted text-muted">
                         {candidate.cover?.url ? (
-                          // Stored covers use an authenticated same-origin route.
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={candidate.cover.url}
+                          <ResponsiveMediaImage
+                            media={candidate.cover}
                             alt=""
-                            loading="lazy"
+                            widths={[96, 192]}
+                            sizes="40px"
                             className="h-full w-full object-cover"
                           />
                         ) : (

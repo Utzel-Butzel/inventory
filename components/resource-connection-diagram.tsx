@@ -21,6 +21,7 @@ import { useT } from "next-i18next/client";
 
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import { ResourceFamilyManager } from "@/components/resource-family-manager";
+import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import {
   ResourceConnectionEditorPanel,
   type ConnectionEditorChangeKind,
@@ -50,9 +51,12 @@ type PayloadResult = {
 };
 
 type ConnectionDiagramCover = {
+  id: string;
   resourceId: string;
   url: string;
   altText: string;
+  width: number | null;
+  height: number | null;
 };
 
 type ConnectionStockStatus = "out" | "low" | "healthy";
@@ -1697,11 +1701,11 @@ function PositionedGraphNode({
           }
         >
           {cover ? (
-            // Stored covers use an authenticated same-origin route.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={cover.url}
+            <ResponsiveMediaImage
+              media={cover}
               alt=""
+              widths={[96, 192]}
+              sizes="64px"
               className="h-full w-full object-cover"
             />
           ) : isRoot ? (

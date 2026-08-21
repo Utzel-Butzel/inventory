@@ -132,6 +132,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
     const search = new URLSearchParams({
       page: String(page),
       pageSize: "100",
+      media: "cover",
     });
     if (debouncedQuery) search.set("q", debouncedQuery);
 

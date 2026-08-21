@@ -480,7 +480,7 @@ export function UserManager() {
 
       <div className="border-t border-border bg-surface-subtle/60 px-5 py-4 sm:px-6">
         <p className="text-xs leading-5 text-muted">
-          {t("users.auth0Note")}
+          {t("users.externalAuthNote")}
         </p>
       </div>
 

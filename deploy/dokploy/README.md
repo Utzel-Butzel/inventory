@@ -16,6 +16,11 @@ The template pulls `ghcr.io/utzel-butzel/inventory:latest`. That package must be
 publicly readable; release maintainers publish it with the repository's
 container-image workflow and make the GHCR package public once after creation.
 
+The Compose service forwards the optional `AUTH0_*`, `AUTH_OIDC_*`, and
+`AUTH_PASSWORD_ENABLED` variables. Add them under **Environment** and redeploy
+as described in the root
+[authentication provider guide](../../README.md#authentication-providers).
+
 To add the bundled public product demo to an existing deployment, set
 `DEMO_ACCESS_ENABLED=true` on the `inventory` service and redeploy. The startup
 process reconciles the fixed, read-only `Werkstatt Nord · Demo` organization

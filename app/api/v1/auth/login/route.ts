@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { apiTokens } from "@/db/schema";
 import { getEffectiveRole } from "@/lib/access-control";
 import { hashApiToken } from "@/lib/api-auth";
+import { getAuthProviderConfiguration } from "@/lib/auth-provider-config";
 import { db } from "@/lib/db";
 import { authenticateLocalUser } from "@/lib/local-auth";
 import {
@@ -37,6 +38,13 @@ function clientAddress(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!getAuthProviderConfiguration().passwordEnabled) {
+    return Response.json(
+      { error: "Password login is disabled for this deployment." },
+      { status: 403, headers: noStoreHeaders },
+    );
+  }
+
   let payload: unknown;
   try {
     payload = await request.json();
