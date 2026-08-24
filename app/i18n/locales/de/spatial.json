@@ -328,6 +328,18 @@
       "label": "Beleuchtungsqualität",
       "live": "Live",
       "liveDescription": "Interaktive Beleuchtung mit der bisherigen Raumbeleuchtung.",
+      "progressive": "Progressiv",
+      "progressiveDescription": "Eine Lightmap im Texturraum aus leicht versetzten Softlight-Samples aufbauen, während der Raum interaktiv bleibt.",
+      "progressiveBaking": "Progressive Lightmap wird aufgebaut… {{progress}} %",
+      "progressiveReady": "Progressive Lightmap ist bereit",
+      "progressiveQuality": "Progressive Qualität",
+      "progressiveQualityDescription": "Höhere Stufen verwenden größere Licht- und Schattenkarten sowie mehr akkumulierte Licht-Samples.",
+      "progressiveQualityLevels": {
+        "fast": "Schnell",
+        "balanced": "Ausgewogen",
+        "high": "Hoch",
+        "ultra": "Ultra"
+      },
       "realistic": "Realistisch",
       "realisticDescription": "Eine Raytracing-Ansicht mit physikalisch berechneten Fensterschatten und indirektem Licht backen.",
       "rendering": "Rendering",

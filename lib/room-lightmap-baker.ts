@@ -32,11 +32,23 @@ type UnwrappedReceiver = {
 
 export type RoomLightMapBake = {
   readonly cached: boolean;
+  /** True once added samples stop changing the atlas beyond the noise floor. */
+  readonly converged: boolean;
   readonly samples: number;
   dispose: () => void;
   finish: () => THREE.Texture;
   renderSample: () => void;
 };
+
+/**
+ * Texels of empty atlas kept between charts. The UV inset reserves it and the
+ * dilation pass fills it, so bilinear taps at a chart edge can never reach a
+ * neighbouring island or the cleared background.
+ */
+const lightMapChartPaddingTexels = 4;
+
+/** Two-texel dilation steps run after filtering, covering the gutter above. */
+const lightMapDilationPasses = 3;
 
 const lightMapCache = new Map<string, BakeCacheEntry>();
 const maximumCachedLightMaps = 2;
@@ -48,7 +60,7 @@ export function createRoomLightMapCacheKey(value: unknown) {
     hash ^= source.charCodeAt(index);
     hash = Math.imul(hash, 16_777_619);
   }
-  return `room-lightmap-v17-${(hash >>> 0).toString(36)}`;
+  return `room-lightmap-v18-${(hash >>> 0).toString(36)}`;
 }
 
 function cacheLightMap(key: string, entry: BakeCacheEntry) {
@@ -243,7 +255,77 @@ function addLightMapChartIds(
   return nextChartId;
 }
 
-async function unwrapReceiverGeometry(receivers: ReceiverMesh[]) {
+/**
+ * Shrinks every chart toward its own centre so neighbouring islands keep a
+ * measurable gutter.
+ *
+ * The wasm build of xatlas exposes no `PackOptions`, so its charts can be
+ * packed edge to edge. Bilinear sampling and the dilation pass both reach
+ * across those edges, which is how a lightmap grows the bright rims and dark
+ * seams this renderer has to avoid. Insetting the UVs after packing gives the
+ * gutter back without touching the packer.
+ */
+function insetChartUvs(
+  geometry: THREE.BufferGeometry,
+  resolution: number,
+  paddingTexels: number,
+) {
+  const uv = geometry.getAttribute("uv1");
+  const chart = geometry.getAttribute("lightMapChart");
+  if (!uv || !chart) return;
+
+  type ChartBounds = {
+    maxU: number;
+    maxV: number;
+    minU: number;
+    minV: number;
+  };
+  const bounds = new Map<number, ChartBounds>();
+  for (let vertex = 0; vertex < uv.count; vertex += 1) {
+    const id = chart.getX(vertex);
+    const u = uv.getX(vertex);
+    const v = uv.getY(vertex);
+    const existing = bounds.get(id);
+    if (!existing) {
+      bounds.set(id, { maxU: u, maxV: v, minU: u, minV: v });
+      continue;
+    }
+    existing.minU = Math.min(existing.minU, u);
+    existing.maxU = Math.max(existing.maxU, u);
+    existing.minV = Math.min(existing.minV, v);
+    existing.maxV = Math.max(existing.maxV, v);
+  }
+
+  const padding = paddingTexels / resolution;
+  for (let vertex = 0; vertex < uv.count; vertex += 1) {
+    const box = bounds.get(chart.getX(vertex));
+    if (!box) continue;
+    const width = box.maxU - box.minU;
+    const height = box.maxV - box.minV;
+    if (width <= 0 || height <= 0) continue;
+    // One uniform scale keeps texel density isotropic. A chart thinner than the
+    // gutter keeps half its size rather than collapsing to a line.
+    const scale = Math.max(
+      Math.min((width - 2 * padding) / width, (height - 2 * padding) / height),
+      0.5,
+    );
+    if (scale >= 1) continue;
+    const centerU = (box.minU + box.maxU) / 2;
+    const centerV = (box.minV + box.maxV) / 2;
+    uv.setXY(
+      vertex,
+      centerU + (uv.getX(vertex) - centerU) * scale,
+      centerV + (uv.getY(vertex) - centerV) * scale,
+    );
+  }
+  uv.needsUpdate = true;
+}
+
+async function unwrapReceiverGeometry(
+  receivers: ReceiverMesh[],
+  resolution: number,
+  paddingTexels: number,
+) {
   const { default: createXAtlas } = await import("xatlas-web");
   const atlas = createXAtlas({
     locateFile: (path) =>
@@ -356,6 +438,7 @@ async function unwrapReceiverGeometry(receivers: ReceiverMesh[]) {
       output.setAttribute("uv1", new THREE.Float32BufferAttribute(atlasUvs, 2));
       output.setIndex(new THREE.Uint32BufferAttribute(atlasIndices, 1));
       nextChartId = addLightMapChartIds(output, nextChartId);
+      insetChartUvs(output, resolution, paddingTexels);
       for (const group of input.geometry.groups) {
         output.addGroup(group.start, group.count, group.materialIndex);
       }
@@ -446,6 +529,14 @@ function createGeometryBuffers(
     const clone = new THREE.Mesh(mesh.geometry, mesh.material);
     clone.matrixAutoUpdate = false;
     clone.matrix.copy(mesh.matrixWorld);
+    // These shaders place vertices by their atlas UV, but frustum culling still
+    // tests the mesh's world-space bounding sphere against the camera. With a
+    // default camera that frustum is the unit cube at the world origin, so
+    // every receiver more than a metre or so away from it was being culled out
+    // of the G-buffer: its texels kept alpha 0, the bake read them as unwritten
+    // and returned black. Furniture standing against a wall is exactly the case
+    // that hits this.
+    clone.frustumCulled = false;
     bakeScene.add(clone);
   }
   const bakeCamera = new THREE.Camera();
@@ -694,9 +785,14 @@ function createDenoiseMaterial() {
               max(centerLuminance, sampleLuminance),
               0.08
             );
+            // Monte Carlo neighbours differ *because* of noise, so a tight
+            // luminance edge-stop preserves exactly what this filter exists to
+            // remove. Keep it loose enough to average the noise and leave the
+            // chart, normal and position terms to hold real edges — they are
+            // what stops light leaking between surfaces.
             float luminanceWeight = exp(
               -abs(centerLuminance - sampleLuminance) /
-              luminanceScale * 4.0
+              luminanceScale * 1.25
             );
             float weight =
               normalWeight * positionWeight * spatialWeight * luminanceWeight;
@@ -856,6 +952,118 @@ function createLightMapTarget(resolution: number) {
   return target;
 }
 
+/**
+ * Watches the accumulating atlas and reports when extra samples stop changing
+ * it.
+ *
+ * A fixed sample count either wastes GPU time on an already-clean bake or stops
+ * a noisy one too early, and wall-clock budgets misfire whenever the tab is
+ * throttled. Averaging the atlas into a small probe and comparing successive
+ * readbacks measures the thing we actually care about, costs a few kilobytes
+ * per check, and behaves the same at any frame rate.
+ */
+function createConvergenceProbe(
+  renderer: THREE.WebGLRenderer,
+  tolerance: number,
+) {
+  const size = 32;
+  const taps = 8;
+  const target = new THREE.WebGLRenderTarget(size, size, {
+    type: THREE.FloatType,
+    format: THREE.RGBAFormat,
+    magFilter: THREE.NearestFilter,
+    minFilter: THREE.NearestFilter,
+    depthBuffer: false,
+    stencilBuffer: false,
+    generateMipmaps: false,
+  });
+  const material = new THREE.ShaderMaterial({
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.NoBlending,
+    uniforms: {
+      map: { value: null as THREE.Texture | null },
+      texelSize: { value: new THREE.Vector2() },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = vec4(position.xy, 0.0, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D map;
+      uniform vec2 texelSize;
+      varying vec2 vUv;
+
+      void main() {
+        vec3 total = vec3(0.0);
+        float weight = 0.0;
+        for (int y = 0; y < ${taps}; y++) {
+          for (int x = 0; x < ${taps}; x++) {
+            vec2 offset = (vec2(float(x), float(y)) + 0.5) / float(${taps});
+            vec4 sampled = texture2D(map, vUv + (offset - 0.5) * texelSize);
+            // Skip the empty gutter so it cannot dominate the average.
+            if (sampled.a < 0.5) continue;
+            total += sampled.rgb;
+            weight += 1.0;
+          }
+        }
+        gl_FragColor = vec4(total / max(weight, 1.0), weight);
+      }
+    `,
+  });
+  const quad = new FullScreenQuad(material);
+  const pixels = new Float32Array(size * size * 4);
+  let previous: Float32Array | null = null;
+  let stableChecks = 0;
+
+  return {
+    dispose: () => {
+      quad.dispose();
+      material.dispose();
+      target.dispose();
+    },
+    /** Returns true once two consecutive checks stayed inside the tolerance. */
+    check: (texture: THREE.Texture, sourceResolution: number) => {
+      material.uniforms.map!.value = texture;
+      (material.uniforms.texelSize!.value as THREE.Vector2).setScalar(
+        1 / (sourceResolution / size),
+      );
+      const previousTarget = renderer.getRenderTarget();
+      const previousToneMapping = renderer.toneMapping;
+      renderer.toneMapping = THREE.NoToneMapping;
+      renderer.setRenderTarget(target);
+      quad.render(renderer);
+      renderer.readRenderTargetPixels(target, 0, 0, size, size, pixels);
+      renderer.setRenderTarget(previousTarget);
+      renderer.toneMapping = previousToneMapping;
+
+      const current = pixels.slice();
+      if (!previous) {
+        previous = current;
+        return false;
+      }
+      let change = 0;
+      let total = 0;
+      for (let index = 0; index < current.length; index += 4) {
+        if ((current[index + 3] ?? 0) <= 0) continue;
+        for (let channel = 0; channel < 3; channel += 1) {
+          const now = current[index + channel] ?? 0;
+          const before = previous[index + channel] ?? 0;
+          change += Math.abs(now - before);
+          total += now;
+        }
+      }
+      previous = current;
+      if (total <= 0) return false;
+      stableChecks = change / total <= tolerance ? stableChecks + 1 : 0;
+      return stableChecks >= 2;
+    },
+  };
+}
+
 function collectDirectionalBakeLights(scene: THREE.Scene) {
   const lights: Array<{
     position: THREE.Vector3;
@@ -863,24 +1071,35 @@ function collectDirectionalBakeLights(scene: THREE.Scene) {
   }> = [];
   scene.updateMatrixWorld(true);
   scene.traverse((object) => {
-    if (
-      !(object instanceof THREE.RectAreaLight) ||
-      !isEffectivelyVisible(object) ||
-      object.intensity <= 0
-    ) {
+    if (!isEffectivelyVisible(object)) return;
+    const light = object as THREE.Light;
+    if (!light.isLight || light.intensity <= 0) return;
+    const luminance =
+      light.color.r * 0.2126 +
+      light.color.g * 0.7152 +
+      light.color.b * 0.0722;
+    if (object instanceof THREE.RectAreaLight) {
+      lights.push({
+        position: object.getWorldPosition(new THREE.Vector3()),
+        power: Math.max(
+          object.intensity * object.width * object.height * luminance,
+          0,
+        ),
+      });
       return;
     }
-    const luminance =
-      object.color.r * 0.2126 +
-      object.color.g * 0.7152 +
-      object.color.b * 0.0722;
-    lights.push({
-      position: object.getWorldPosition(new THREE.Vector3()),
-      power: Math.max(
-        object.intensity * object.width * object.height * luminance,
-        0,
-      ),
-    });
+    if (object instanceof THREE.DirectionalLight) {
+      // The key defines the normal-mapped response more than the fill does, so
+      // stand it far enough away that the shader's point-light form reduces to
+      // a parallel one across the room.
+      const origin = object.getWorldPosition(new THREE.Vector3());
+      const target = object.target.getWorldPosition(new THREE.Vector3());
+      const direction = origin.sub(target).normalize();
+      lights.push({
+        position: target.addScaledVector(direction, 1_000),
+        power: Math.max(object.intensity * luminance, 0) * 1e6,
+      });
+    }
   });
   return lights
     .sort((left, right) => right.power - left.power)
@@ -958,7 +1177,7 @@ function createDirectionalLightMap(
         // the converged HDR atlas remains authoritative for total energy.
         gl_FragColor = vec4(
           dominantDirection * 0.5 + 0.5,
-          min(coherence * 0.55, 0.55)
+          min(coherence * 0.3, 0.3)
         );
       }
     `,
@@ -1017,6 +1236,13 @@ function configureLightMappedMaterial(
         1,
       ),
     };
+    shader.uniforms.roomLightMapEnvironmentDiffuse = {
+      value: THREE.MathUtils.clamp(
+        Number(material.userData.roomLightMapEnvironmentDiffuse ?? 0),
+        0,
+        1,
+      ),
+    };
     const mainAnchor = "void main() {";
     if (!shader.fragmentShader.includes(mainAnchor)) {
       throw new Error("The lightmapped material shader has no main function.");
@@ -1025,6 +1251,7 @@ function configureLightMappedMaterial(
       mainAnchor,
       `uniform sampler2D roomDirectionalLightMap;
       uniform float roomDirectionalLightMapStrength;
+      uniform float roomLightMapEnvironmentDiffuse;
       ${mainAnchor}`,
     );
     // onBeforeCompile runs before Three expands ShaderChunk includes. Patch
@@ -1033,10 +1260,13 @@ function configureLightMappedMaterial(
     // also works for the physical material's transmission pre-pass.
     const lightMapInclude = "#include <lights_fragment_maps>";
     const bakedIrradianceAnchor = "irradiance += lightMapIrradiance;";
+    const environmentIrradianceAnchor =
+      "iblIrradiance += getIBLIrradiance( geometryNormal );";
     const installedLightMapChunk = THREE.ShaderChunk.lights_fragment_maps;
     if (
       !shader.fragmentShader.includes(lightMapInclude) ||
-      !installedLightMapChunk.includes(bakedIrradianceAnchor)
+      !installedLightMapChunk.includes(bakedIrradianceAnchor) ||
+      !installedLightMapChunk.includes(environmentIrradianceAnchor)
     ) {
       throw new Error("The lightmapped material shader has no irradiance anchor.");
     }
@@ -1063,8 +1293,8 @@ function configureLightMappedMaterial(
           );
           float roomDirectionalRatio = clamp(
             roomShadingResponse / roomGeometryResponse,
-            0.35,
-            1.65
+            0.62,
+            1.34
           );
           lightMapIrradiance *= mix(
             1.0,
@@ -1073,6 +1303,15 @@ function configureLightMappedMaterial(
           );
         }
         ${bakedIrradianceAnchor}`,
+    ).replace(
+      environmentIrradianceAnchor,
+      // The atlas already carries every diffuse bounce in the room. Letting the
+      // environment add its own irradiance on top counts that light twice and
+      // is what washes a baked interior out into flat, ambient-looking grey.
+      // The environment keeps its specular term below, which is the reflection
+      // it is actually here to provide.
+      `iblIrradiance += getIBLIrradiance( geometryNormal ) *
+          roomLightMapEnvironmentDiffuse;`,
     );
     shader.fragmentShader = shader.fragmentShader.replace(
       lightMapInclude,
@@ -1080,7 +1319,7 @@ function configureLightMappedMaterial(
     );
   };
   material.customProgramCacheKey = () =>
-    `${previousProgramCacheKey()}|room-directional-lightmap-v3`;
+    `${previousProgramCacheKey()}|room-directional-lightmap-v4`;
 }
 
 function applyLightMap(
@@ -1134,9 +1373,11 @@ function cachedTexture(
 }
 
 export async function createRoomLightMapBake({
+  bakeHiddenObjects = [],
   bakeOnlyObjects = [],
   bounces = 8,
   cacheKey,
+  convergenceTolerance = 0.01,
   denoisePasses = 1,
   onProgress,
   renderer,
@@ -1145,9 +1386,23 @@ export async function createRoomLightMapBake({
   scene,
   transmissiveBounces = 4,
 }: {
+  /**
+   * Objects made visible only while the tracer snapshots the scene. The room
+   * shell that closes the ceiling and the bake's own lights arrive this way, so
+   * they light and occlude the atlas without ever reaching the raster pass.
+   */
   bakeOnlyObjects?: Iterable<THREE.Object3D>;
+  /**
+   * Objects hidden only while the tracer snapshots the scene. Clear glazing
+   * belongs here: it transmits nearly everything, but as geometry it costs a
+   * transmissive traversal per face on every shadow ray and adds noise the bake
+   * has to average away.
+   */
+  bakeHiddenObjects?: Iterable<THREE.Object3D>;
   bounces?: number;
   cacheKey: string;
+  /** Relative frame-to-frame change below which the bake counts as converged. */
+  convergenceTolerance?: number;
   denoisePasses?: number;
   onProgress?: (progress: number) => void;
   renderer: THREE.WebGLRenderer;
@@ -1159,7 +1414,11 @@ export async function createRoomLightMapBake({
   onProgress?.(2);
   scene.updateMatrixWorld(true);
   const receivers = collectReceivers(roots);
-  const unwrapped = await unwrapReceiverGeometry(receivers);
+  const unwrapped = await unwrapReceiverGeometry(
+    receivers,
+    resolution,
+    lightMapChartPaddingTexels,
+  );
   for (const receiver of unwrapped) receiver.mesh.geometry = receiver.geometry;
   scene.updateMatrixWorld(true);
   onProgress?.(8);
@@ -1182,6 +1441,7 @@ export async function createRoomLightMapBake({
     onProgress?.(100);
     return {
       cached: true,
+      converged: true,
       samples: Number.POSITIVE_INFINITY,
       dispose: () => {
         directionalTexture.dispose();
@@ -1197,6 +1457,17 @@ export async function createRoomLightMapBake({
     unwrapped,
     resolution,
   );
+  // The bake rig and the shell that closes the room are hidden from the raster
+  // pass, so reveal them for the whole setup: the dominant-direction map reads
+  // the same lights the tracer will.
+  const bakeOnly = [...bakeOnlyObjects];
+  const bakeOnlyVisibility = bakeOnly.map((object) => object.visible);
+  bakeOnly.forEach((object) => {
+    object.visible = true;
+  });
+  const bakeHidden = [...bakeHiddenObjects];
+  const bakeHiddenVisibility = bakeHidden.map((object) => object.visible);
+  scene.updateMatrixWorld(true);
   const directionalTarget = createDirectionalLightMap(
     renderer,
     scene,
@@ -1229,14 +1500,12 @@ export async function createRoomLightMapBake({
   const previousBackground = scene.background;
   const previousEnvironment = scene.environment;
   const previousEnvironmentIntensity = scene.environmentIntensity;
-  const bakeOnly = [...bakeOnlyObjects];
-  const bakeOnlyVisibility = bakeOnly.map((object) => object.visible);
   try {
     scene.background = null;
     scene.environment = null;
     scene.environmentIntensity = 0;
-    bakeOnly.forEach((object) => {
-      object.visible = true;
+    bakeHidden.forEach((object) => {
+      object.visible = false;
     });
     scene.updateMatrixWorld(true);
     tracer.setScene(scene, new THREE.PerspectiveCamera(), {
@@ -1248,6 +1517,9 @@ export async function createRoomLightMapBake({
     scene.environmentIntensity = previousEnvironmentIntensity;
     bakeOnly.forEach((object, index) => {
       object.visible = bakeOnlyVisibility[index] ?? false;
+    });
+    bakeHidden.forEach((object, index) => {
+      object.visible = bakeHiddenVisibility[index] ?? true;
     });
     scene.updateMatrixWorld(true);
   }
@@ -1265,6 +1537,15 @@ export async function createRoomLightMapBake({
   let retainedTarget: THREE.WebGLRenderTarget | null = null;
   let finished = false;
   let disposed = false;
+  let converged = false;
+  const convergenceProbe = createConvergenceProbe(renderer, convergenceTolerance);
+  // Sampling every frame would spend more time on readback stalls than on the
+  // bake itself, and the first samples are always noisy.
+  const convergenceCheckInterval = 8;
+  // The probe averages blocks of texels, so it settles well before per-texel
+  // noise does. This floor keeps a visibly grainy atlas from being called done.
+  const convergenceSampleFloor = 48;
+  let lastConvergenceCheck = 0;
 
   const finish = () => {
     if (appliedTexture) return appliedTexture;
@@ -1305,9 +1586,10 @@ export async function createRoomLightMapBake({
     const dilationMaterial = createDilationMaterial();
     const dilationQuad = new FullScreenQuad(dilationMaterial);
     let writeTarget = readTarget === denoiseTarget ? workTarget : denoiseTarget;
-    // Six two-texel dilations give the 1024px atlas a twelve-pixel gutter so
-    // bilinear filtering cannot pull black or a neighboring chart into seams.
-    for (let pass = 0; pass < 6; pass += 1) {
+    // Each pass grows the charts by two texels. Together they fill exactly the
+    // gutter the UV inset reserved, so a bilinear tap at a chart edge lands on
+    // dilated colour instead of cleared background or a neighbouring island.
+    for (let pass = 0; pass < lightMapDilationPasses; pass += 1) {
       dilationMaterial.uniforms.map!.value = readTarget.texture;
       renderer.setRenderTarget(writeTarget);
       dilationQuad.render(renderer);
@@ -1356,6 +1638,7 @@ export async function createRoomLightMapBake({
     positionTarget.dispose();
     normalTarget.dispose();
     chartTarget.dispose();
+    convergenceProbe.dispose();
     finished = true;
     onProgress?.(100);
     return appliedTexture;
@@ -1363,6 +1646,9 @@ export async function createRoomLightMapBake({
 
   return {
     cached: false,
+    get converged() {
+      return converged;
+    },
     get samples() {
       return tracer.samples;
     },
@@ -1374,6 +1660,7 @@ export async function createRoomLightMapBake({
         positionTarget.dispose();
         normalTarget.dispose();
         chartTarget.dispose();
+        convergenceProbe.dispose();
       }
       directionalTarget.dispose();
       retainedTarget?.dispose();
@@ -1381,7 +1668,16 @@ export async function createRoomLightMapBake({
     },
     finish,
     renderSample: () => {
-      if (!finished && !disposed) tracer.renderSample();
+      if (finished || disposed || converged) return;
+      tracer.renderSample();
+      const samples = tracer.samples;
+      if (
+        samples >= convergenceSampleFloor &&
+        samples - lastConvergenceCheck >= convergenceCheckInterval
+      ) {
+        lastConvergenceCheck = samples;
+        converged = convergenceProbe.check(tracer.target.texture, resolution);
+      }
     },
   };
 }

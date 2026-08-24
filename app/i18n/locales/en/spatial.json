@@ -328,6 +328,18 @@
       "label": "Lighting quality",
       "live": "Live",
       "liveDescription": "Interactive lighting with the previous room-light setup.",
+      "progressive": "Progressive",
+      "progressiveDescription": "Accumulate a texture-space light map from jittered soft-light samples while the room remains interactive.",
+      "progressiveBaking": "Accumulating progressive light map… {{progress}}%",
+      "progressiveReady": "Progressive light map ready",
+      "progressiveQuality": "Progressive quality",
+      "progressiveQualityDescription": "Higher settings use larger light and shadow maps with more accumulated lighting samples.",
+      "progressiveQualityLevels": {
+        "fast": "Fast",
+        "balanced": "Balanced",
+        "high": "High",
+        "ultra": "Ultra"
+      },
       "realistic": "Realistic",
       "realisticDescription": "Bake a ray-traced view with physically traced window shadows and indirect light.",
       "rendering": "Rendering",
