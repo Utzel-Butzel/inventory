@@ -23,6 +23,10 @@ import {
 } from "lucide-react";
 
 import { NotificationBell } from "@/components/notification-bell";
+import {
+  InventoryBreadcrumbProvider,
+  type InventoryBreadcrumbItem,
+} from "@/components/inventory-breadcrumb-context";
 import { OfflineSupportProvider } from "@/components/offline-support";
 import {
   OrganizationLink as Link,
@@ -503,6 +507,8 @@ export function AppShell({
   const scopedPathname = stripOrganizationPathname(pathname);
   const { t } = useT("shell");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [inventoryItemBreadcrumb, setInventoryItemBreadcrumb] =
+    useState<InventoryBreadcrumbItem | null>(null);
   const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileCloseButtonRef = useRef<HTMLButtonElement>(null);
   const pathSegments = scopedPathname.split("/").filter(Boolean);
@@ -529,6 +535,17 @@ export function AppShell({
       : undefined;
   const nestedPageName =
     settingsPageName ?? inventoryNestedPageName ?? requestNestedPageName;
+  const isInventoryStockPage =
+    section === "inventory" &&
+    pathSegments.length === 3 &&
+    pathSegments[2] === "stock";
+  const stockItemHref = isInventoryStockPage
+    ? `/inventory/${pathSegments[1]}`
+    : null;
+  const stockItemBreadcrumb =
+    stockItemHref && inventoryItemBreadcrumb?.href === stockItemHref
+      ? inventoryItemBreadcrumb
+      : null;
   const showGlobalSearch = scopedPathname !== "/inventory";
 
   const closeMobileNavigation = () => {
@@ -570,7 +587,8 @@ export function AppShell({
   }, [mobileOpen]);
 
   return (
-    <OfflineSupportProvider ownerKey={offlineOwnerKey}>
+    <InventoryBreadcrumbProvider setItem={setInventoryItemBreadcrumb}>
+      <OfflineSupportProvider ownerKey={offlineOwnerKey}>
       <OrganizationRoutingProvider
         organizationSlug={organization.slug}
         isReadOnly={organization.isReadOnly}
@@ -690,6 +708,22 @@ export function AppShell({
                   </span>
                 )}
               </li>
+              {stockItemBreadcrumb ? (
+                <li aria-hidden="true">
+                  <ChevronRight className="size-3.5 shrink-0 text-muted" />
+                </li>
+              ) : null}
+              {stockItemBreadcrumb ? (
+                <li className="min-w-0 shrink">
+                  <Link
+                    href={stockItemBreadcrumb.href}
+                    title={stockItemBreadcrumb.name}
+                    className="block max-w-28 truncate font-medium text-muted transition hover:text-brand sm:max-w-56"
+                  >
+                    {stockItemBreadcrumb.name}
+                  </Link>
+                </li>
+              ) : null}
               {nestedPageName ? (
                 <li aria-hidden="true">
                   <ChevronRight className="size-3.5 shrink-0 text-muted" />
@@ -786,6 +820,7 @@ export function AppShell({
       </div>
       </div>
       </OrganizationRoutingProvider>
-    </OfflineSupportProvider>
+      </OfflineSupportProvider>
+    </InventoryBreadcrumbProvider>
   );
 }

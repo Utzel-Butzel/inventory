@@ -114,6 +114,9 @@ type BuildComponent = {
   quantity?: number;
   quantityConsumed?: number;
   unitCodes?: string[];
+  costs?: Record<string, number>;
+  unpricedQuantity?: number;
+  costEstimated?: boolean;
 };
 
 type AssemblyBuild = {
@@ -125,6 +128,9 @@ type AssemblyBuild = {
   createdBy: string | null;
   components?: BuildComponent[];
   outputUnits?: Array<{ id?: string; code: string }>;
+  materialCosts?: Record<string, number>;
+  unpricedComponentQuantity?: number;
+  costEstimated?: boolean;
 };
 
 type BomEnvelope = BomData & {
@@ -171,6 +177,21 @@ function formatDate(value: string, includeTime = false, locale?: string) {
     year: "numeric",
     ...(includeTime ? { hour: "2-digit", minute: "2-digit" } : {}),
   }).format(date);
+}
+
+function formatMoney(cents: number, currency: string, locale?: string) {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+  }).format(cents / 100);
+}
+
+function formatCosts(costs: Record<string, number> | undefined, locale?: string) {
+  const entries = Object.entries(costs ?? {});
+  if (!entries.length) return "—";
+  return entries
+    .map(([currency, cents]) => formatMoney(cents, currency, locale))
+    .join(" + ");
 }
 
 function normalizeBom(payload: BomEnvelope, t: TFunction<"assembly">): BomData {
@@ -1476,6 +1497,20 @@ export function AssemblyManager({
                           <span>{build.createdBy || t("assembly:labels.system")}</span>
                         </div>
                         {build.note ? <p className="mt-2 text-[11px] leading-5 text-muted">{build.note}</p> : null}
+                        <p className="mt-2 text-[11px] font-semibold text-brand">
+                          {t("assembly:history.materialCost")}: {" "}
+                          {formatCosts(build.materialCosts, locale)}
+                          {build.costEstimated
+                            ? ` · ${t("assembly:history.estimated")}`
+                            : ""}
+                        </p>
+                        {(build.unpricedComponentQuantity ?? 0) > 0 ? (
+                          <p className="mt-1 text-[10px] font-medium text-warning">
+                            {t("assembly:history.unpricedComponents", {
+                              count: build.unpricedComponentQuantity,
+                            })}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     <span className="shrink-0 font-mono text-[9px] text-muted">{build.id.slice(0, 8)}</span>
@@ -1483,7 +1518,7 @@ export function AssemblyManager({
                   {build.components?.length ? (
                     <div className="mt-3 flex flex-wrap gap-1.5 pl-[52px]">
                       {build.components.map((component, index) => (
-                        <span key={component.resourceId ?? `${build.id}-${index}`} className="rounded-lg bg-surface-muted px-2.5 py-1 text-[10px] text-muted">{component.quantityConsumed ?? component.quantity ?? 0} × {component.name ?? component.resourceName ?? component.resourceId?.slice(0, 8) ?? t("assembly:labels.deletedComponent")}</span>
+                        <span key={component.resourceId ?? `${build.id}-${index}`} className="rounded-lg bg-surface-muted px-2.5 py-1 text-[10px] text-muted">{component.quantityConsumed ?? component.quantity ?? 0} × {component.name ?? component.resourceName ?? component.resourceId?.slice(0, 8) ?? t("assembly:labels.deletedComponent")} · {formatCosts(component.costs, locale)}{component.costEstimated ? ` (${t("assembly:history.estimated")})` : ""}</span>
                       ))}
                     </div>
                   ) : null}

@@ -2971,7 +2971,7 @@ paths:
       - { $ref: "#/components/parameters/ResourceId" }
     get:
       tags: [Stock]
-      summary: List the immutable dated stock ledger
+      summary: List the dated stock ledger
       parameters:
         - name: limit
           in: query
@@ -3005,6 +3005,50 @@ paths:
         "201": { description: Movement booked and balance updated }
         "409": { description: "Insufficient stock, serialized mode, or conflicting idempotency key" }
         "422": { description: "Invalid quantity, movement direction, or structured location transfer" }
+  /resources/{id}/stock/movements/{movementId}:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - { $ref: "#/components/parameters/ResourceId" }
+      - name: movementId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Stock]
+      summary: Correct a manual bulk stock movement
+      description: System-linked movements and inbound movements whose cost layer has already been consumed cannot be changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StockMovementInput" }
+      responses:
+        "200":
+          description: Movement and current balance updated atomically
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resource, movement]
+                properties:
+                  resource:
+                    type: object
+                    required: [id, quantity]
+                    properties:
+                      id: { type: string, format: uuid }
+                      quantity: { type: integer }
+                  movement: { $ref: "#/components/schemas/StockMovement" }
+        "404": { description: Movement not found }
+        "409": { description: Movement is system-linked or cannot be corrected safely }
+        "422": { description: Invalid movement correction }
+    delete:
+      tags: [Stock]
+      summary: Delete a manual bulk stock movement
+      description: Corrects the current quantity and subsequent ledger balances atomically. System-linked movements cannot be deleted.
+      responses:
+        "204": { description: Movement deleted and stock corrected }
+        "404": { description: Movement not found }
+        "409": { description: Movement is system-linked or cannot be deleted safely }
   /resources/{id}/stock/units:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -5107,19 +5151,30 @@ components:
         occurredAt: { type: string, format: date-time }
         location: { type: [string, "null"] }
         note: { type: string }
+        materialCosts:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+          description: Actual consumed material costs in cents, grouped by ISO currency.
+        unpricedComponentQuantity: { type: integer, minimum: 0 }
+        costEstimated: { type: boolean }
         createdBy: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
         components:
           type: array
           items:
             type: object
-            required: [resourceId, name, sku, quantityPerAssembly, quantityConsumed, componentUnits, stockMovementIds, outputUnitIds]
+            required: [resourceId, name, sku, quantityPerAssembly, quantityConsumed, componentUnits, stockMovementIds, outputUnitIds, costs, unpricedQuantity, costEstimated]
             properties:
               resourceId: { type: [string, "null"], format: uuid }
               name: { type: string }
               sku: { type: [string, "null"] }
               quantityPerAssembly: { type: integer, minimum: 1 }
               quantityConsumed: { type: integer, minimum: 1 }
+              costs:
+                type: object
+                additionalProperties: { type: integer, minimum: 0 }
+              unpricedQuantity: { type: integer, minimum: 0 }
+              costEstimated: { type: boolean }
               componentUnits:
                 type: array
                 items:
@@ -5149,6 +5204,8 @@ components:
         orderedQuantity: { type: integer, minimum: 1 }
         expectedAt: { type: [string, "null"], format: date-time }
         note: { type: string, maxLength: 20000 }
+        unitPriceCents: { type: [integer, "null"], minimum: 0, maximum: 2000000000 }
+        priceCurrency: { type: [string, "null"], minLength: 3, maxLength: 3 }
     PurchaseOrderInput:
       type: object
       required: [lines]
@@ -5169,14 +5226,16 @@ components:
       allOf:
         - { $ref: "#/components/schemas/PurchaseOrderLineInput" }
         - type: object
-          required: [id, resourceName, receivedQuantity, openQuantity, trackingMode]
+          required: [id, resourceName, resourceCurrency, receivedQuantity, openQuantity, trackingMode, totalPriceCents]
           properties:
             id: { type: string, format: uuid }
             resourceName: { type: string }
             resourceSku: { type: [string, "null"] }
+            resourceCurrency: { type: string, minLength: 3, maxLength: 3 }
             receivedQuantity: { type: integer, minimum: 0 }
             openQuantity: { type: integer, minimum: 0 }
             trackingMode: { type: string, enum: [bulk, serialized] }
+            totalPriceCents: { type: [integer, "null"], minimum: 0 }
     PurchaseOrder:
       type: object
       required: [id, supplier, status, orderedAt, lines, totalOrdered, totalReceived, totalOpen]
@@ -5918,6 +5977,8 @@ components:
         fromLocationResourceId: { type: [string, "null"], format: uuid, description: Structured source location for an issue or transfer. }
         toLocationResourceId: { type: [string, "null"], format: uuid, description: Structured destination location for a receipt or transfer. }
         occurredAt: { type: string, format: date-time }
+        totalPriceCents: { type: [integer, "null"], minimum: -2000000000, maximum: 2000000000, description: Signed transaction value; negative values can represent outbound revenue. Inbound prices must be nonnegative. }
+        priceCurrency: { type: [string, "null"], minLength: 3, maxLength: 3 }
     StockMovement:
       type: object
       required: [id, resourceId, delta, quantity, balanceAfter, fromLocationBalanceAfter, toLocationBalanceAfter, type, note, location, fromLocationResourceId, toLocationResourceId, occurredAt, createdAt, createdBy]
@@ -5929,6 +5990,11 @@ components:
         purchaseReceiptId: { type: [string, "null"], format: uuid }
         delta: { type: integer }
         quantity: { type: integer, minimum: 0 }
+        totalPriceCents: { type: [integer, "null"], minimum: -2000000000 }
+        priceCurrency: { type: [string, "null"] }
+        costCents: { type: [integer, "null"], minimum: 0 }
+        costCurrency: { type: [string, "null"] }
+        costEstimated: { type: boolean }
         balanceAfter: { type: integer }
         fromLocationBalanceAfter: { type: [integer, "null"] }
         toLocationBalanceAfter: { type: [integer, "null"] }
@@ -5954,6 +6020,8 @@ components:
         metadata: { type: object, additionalProperties: true }
         customFields: { $ref: "#/components/schemas/CustomFieldValues" }
         acquiredAt: { type: string, format: date-time }
+        totalPriceCents: { type: [integer, "null"], minimum: 0, maximum: 2000000000 }
+        priceCurrency: { type: [string, "null"], minLength: 3, maxLength: 3 }
     StockUnitPatch:
       type: object
       properties:
@@ -5965,6 +6033,8 @@ components:
         occurredAt: { type: string, format: date-time }
         reason: { type: [string, "null"], maxLength: 240 }
         note: { type: string, maxLength: 20000 }
+        totalPriceCents: { type: [integer, "null"], minimum: -2000000000, maximum: 2000000000, description: Signed transaction value; negative values can represent outbound revenue. Inbound prices must be nonnegative. }
+        priceCurrency: { type: [string, "null"], minLength: 3, maxLength: 3 }
     StockUnit:
       allOf:
         - { $ref: "#/components/schemas/StockUnitPatch" }
@@ -5974,6 +6044,8 @@ components:
             id: { type: string, format: uuid }
             resourceId: { type: string, format: uuid }
             code: { type: string }
+            acquisitionCostCents: { type: [integer, "null"], minimum: 0 }
+            costCurrency: { type: [string, "null"] }
             acquiredAt: { type: string, format: date-time }
             lastMovedAt: { type: string, format: date-time }
             createdAt: { type: string, format: date-time }

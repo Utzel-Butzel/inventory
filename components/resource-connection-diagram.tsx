@@ -67,6 +67,23 @@ type ConnectionStockSummary = {
   minimumStock: number;
   unitName: string;
   status: ConnectionStockStatus;
+  priceFlow: ConnectionPriceFlow;
+};
+
+type ConnectionPriceFlowDirection = {
+  quantity: number;
+  amountCents: number;
+  movementCount: number;
+  pricedMovementCount: number;
+};
+
+type ConnectionPriceFlow = {
+  currency: string;
+  inbound: ConnectionPriceFlowDirection;
+  outbound: ConnectionPriceFlowDirection;
+  neutral: ConnectionPriceFlowDirection;
+  unpricedMovementCount: number;
+  estimated: boolean;
 };
 
 type DisplayRowItem =
@@ -363,6 +380,7 @@ export function ResourceConnectionDiagram({
   const [editorNotice, setEditorNotice] = useState<string | null>(null);
   const [listRemoveError, setListRemoveError] = useState<string | null>(null);
   const [showStock, setShowStock] = useState(false);
+  const [showPriceFlow, setShowPriceFlow] = useState(false);
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState<string | null>(null);
 
@@ -511,7 +529,11 @@ export function ResourceConnectionDiagram({
   );
 
   useEffect(() => {
-    if (!showStock || !canViewStock || !stockResourceKey) {
+    if (
+      (!showStock && !showPriceFlow) ||
+      !canViewStock ||
+      !stockResourceKey
+    ) {
       setStockLoading(false);
       setStockError(null);
       return;
@@ -532,14 +554,18 @@ export function ResourceConnectionDiagram({
         setStockError(
           stockLoadError instanceof Error
             ? stockLoadError.message
-            : t("connectionDiagram.stock.errors.load"),
+            : t(
+                showPriceFlow && !showStock
+                  ? "connectionDiagram.priceFlow.errors.load"
+                  : "connectionDiagram.stock.errors.load",
+              ),
         );
       })
       .finally(() => {
         if (!controller.signal.aborted) setStockLoading(false);
       });
     return () => controller.abort();
-  }, [canViewStock, showStock, stockResourceKey, t]);
+  }, [canViewStock, showPriceFlow, showStock, stockResourceKey, t]);
 
   const rows = useMemo(() => {
     const result = new Map<number, DisplayRowItem[]>();
@@ -740,21 +766,40 @@ export function ResourceConnectionDiagram({
                 {view === "graph" ? (
                   <>
                     {canViewStock ? (
-                      <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
-                        <input
-                          type="checkbox"
-                          checked={showStock}
-                          onChange={(event) => setShowStock(event.target.checked)}
-                          className="size-3.5 rounded border-border-strong accent-brand-solid"
-                        />
-                        <span>{t("connectionDiagram.stock.show")}</span>
-                        {showStock && stockLoading ? (
-                          <LoaderCircle
-                            className="size-3 animate-spin text-muted"
-                            aria-label={t("connectionDiagram.stock.loading")}
+                      <>
+                        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
+                          <input
+                            type="checkbox"
+                            checked={showStock}
+                            onChange={(event) => setShowStock(event.target.checked)}
+                            className="size-3.5 rounded border-border-strong accent-brand-solid"
                           />
-                        ) : null}
-                      </label>
+                          <span>{t("connectionDiagram.stock.show")}</span>
+                          {showStock && stockLoading ? (
+                            <LoaderCircle
+                              className="size-3 animate-spin text-muted"
+                              aria-label={t("connectionDiagram.stock.loading")}
+                            />
+                          ) : null}
+                        </label>
+                        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
+                          <input
+                            type="checkbox"
+                            checked={showPriceFlow}
+                            onChange={(event) =>
+                              setShowPriceFlow(event.target.checked)
+                            }
+                            className="size-3.5 rounded border-border-strong accent-brand-solid"
+                          />
+                          <span>{t("connectionDiagram.priceFlow.show")}</span>
+                          {showPriceFlow && stockLoading ? (
+                            <LoaderCircle
+                              className="size-3 animate-spin text-muted"
+                              aria-label={t("connectionDiagram.priceFlow.loading")}
+                            />
+                          ) : null}
+                        </label>
+                      </>
                     ) : null}
                     <label className="flex h-8 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
                       <span>{t("connectionDiagram.depth.label")}</span>
@@ -949,6 +994,13 @@ export function ResourceConnectionDiagram({
                                     ) ?? null)
                                   : null
                               }
+                              priceFlow={
+                                showPriceFlow && item.type === "resource"
+                                  ? (stockSnapshot.get(
+                                      item.node.resource.id,
+                                    )?.priceFlow ?? null)
+                                  : null
+                              }
                               buildableQuantity={
                                 showStock &&
                                 item.type === "resource" &&
@@ -963,6 +1015,7 @@ export function ResourceConnectionDiagram({
                               x={xs[index] ?? 0}
                               y={y}
                               number={number}
+                              locale={locale}
                               editing={editing}
                               selectedResourceId={
                                 editorSelection?.type === "node"
@@ -1628,11 +1681,13 @@ function PositionedGraphNode({
   item,
   cover,
   stock,
+  priceFlow,
   buildableQuantity,
   rootResourceId,
   x,
   y,
   number,
+  locale,
   editing,
   selectedResourceId,
   onSelect,
@@ -1640,11 +1695,13 @@ function PositionedGraphNode({
   item: DisplayRowItem;
   cover: ConnectionDiagramCover | null;
   stock: ConnectionStockSummary | null;
+  priceFlow: ConnectionPriceFlow | null;
   buildableQuantity: number | null;
   rootResourceId: string;
   x: number;
   y: number;
   number: Intl.NumberFormat;
+  locale: string;
   editing: boolean;
   selectedResourceId: string | null;
   onSelect: (resource: ConnectionDiagramResource) => void;
@@ -1688,7 +1745,10 @@ function PositionedGraphNode({
         )}
       >
         <span
-          className="grid size-20 place-items-center overflow-hidden rounded-xl bg-surface-muted"
+          className={cn(
+            "grid place-items-center overflow-hidden rounded-xl bg-surface-muted",
+            priceFlow ? "size-16" : "size-20",
+          )}
           style={
             cover
               ? undefined
@@ -1736,6 +1796,13 @@ function PositionedGraphNode({
           {subtitle}
         </span>
       </span>
+      {priceFlow ? (
+        <PriceFlowIndicator
+          flow={priceFlow}
+          number={number}
+          locale={locale}
+        />
+      ) : null}
     </>
   );
   const selected = item.node.resource.id === selectedResourceId;
@@ -1745,7 +1812,9 @@ function PositionedGraphNode({
       : "border border-border shadow-[var(--shadow-sm)] hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-md)]"
   } ${selected ? "ring-4 ring-focus/15" : ""}`;
   const contentClassName =
-    "flex h-full w-full flex-col items-center justify-center gap-2 rounded-[inherit] px-3 py-2 text-center";
+    `flex h-full w-full flex-col items-center justify-center rounded-[inherit] px-3 py-2 text-center ${
+      priceFlow ? "gap-1.5" : "gap-2"
+    }`;
   const style = { left: x, top: y, width: NODE_WIDTH, height: NODE_HEIGHT };
   if (editing) {
     return (
@@ -1788,6 +1857,118 @@ function PositionedGraphNode({
     >
       <span className={contentClassName}>{content}</span>
     </Link>
+  );
+}
+
+function PriceFlowIndicator({
+  flow,
+  number,
+  locale,
+}: {
+  flow: ConnectionPriceFlow;
+  number: Intl.NumberFormat;
+  locale: string;
+}) {
+  const { t } = useT("resource");
+  const money = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: flow.currency,
+  });
+  const directions = [
+    {
+      key: "inbound",
+      sign: "+",
+      value: flow.inbound,
+      quantityClassName: "text-success",
+    },
+    {
+      key: "outbound",
+      sign: "−",
+      value: flow.outbound,
+      quantityClassName: "text-danger",
+    },
+    ...(flow.neutral.movementCount > 0
+      ? [
+          {
+            key: "neutral",
+            sign: "↔",
+            value: flow.neutral,
+            quantityClassName: "text-info",
+          },
+        ]
+      : []),
+  ] as const;
+  const incompleteLabel =
+    flow.unpricedMovementCount > 0
+      ? t("connectionDiagram.priceFlow.unpriced", {
+          count: flow.unpricedMovementCount,
+          value: number.format(flow.unpricedMovementCount),
+        })
+      : null;
+  const estimatedLabel = flow.estimated
+    ? t("connectionDiagram.priceFlow.estimated")
+    : null;
+
+  return (
+    <span
+      className={cn(
+        "grid w-full overflow-hidden rounded-md border bg-surface-subtle",
+        directions.length === 3 ? "grid-cols-3" : "grid-cols-2",
+        incompleteLabel ? "border-warning-border" : "border-border",
+      )}
+      title={[incompleteLabel, estimatedLabel].filter(Boolean).join(" · ")}
+    >
+      {directions.map((direction, index) => {
+        const hasPrice = direction.value.pricedMovementCount > 0;
+        const amount = hasPrice
+          ? money.format(direction.value.amountCents / 100)
+          : t("connectionDiagram.priceFlow.noPrice");
+        const directionLabel = t(
+          `connectionDiagram.priceFlow.${direction.key}`,
+          {
+            quantity: number.format(direction.value.quantity),
+            amount,
+          },
+        );
+        return (
+          <span
+            key={direction.key}
+            className={cn(
+              "min-w-0 px-1 py-0.5 tabular-nums",
+              index < directions.length - 1 && "border-r border-border",
+            )}
+            title={directionLabel}
+          >
+            <span
+              className={cn(
+                "block truncate text-[8px] font-bold leading-3",
+                direction.quantityClassName,
+              )}
+            >
+              {direction.sign}
+              {number.format(direction.value.quantity)}
+            </span>
+            <span
+              className={cn(
+                "block truncate text-[8px] font-semibold leading-3",
+                !hasPrice
+                  ? "text-muted"
+                  : direction.value.amountCents < 0
+                    ? "text-success"
+                    : direction.value.amountCents > 0
+                      ? "text-warning"
+                      : "text-muted-strong",
+              )}
+            >
+              {flow.estimated && hasPrice ? "≈" : ""}
+              {amount}
+              {incompleteLabel && !hasPrice ? "*" : ""}
+            </span>
+            <span className="sr-only">{directionLabel}</span>
+          </span>
+        );
+      })}
+    </span>
   );
 }
 

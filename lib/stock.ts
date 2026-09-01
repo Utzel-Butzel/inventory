@@ -6,6 +6,7 @@ import {
   desc,
   eq,
   gte,
+  gt,
   inArray,
   isNull,
   lt,
@@ -27,6 +28,8 @@ import {
   resources,
   stockMovementRequests,
   stockMovements,
+  stockCostAllocations,
+  stockCostLayers,
   stockLocationBalances,
   stockSettings,
   stockUnits,
@@ -48,6 +51,11 @@ import {
   assertVariantAllocationFits,
 } from "@/lib/variant-stock-invariant";
 import { violatesNegativeStockPolicy } from "@/lib/negative-stock-policy";
+import {
+  addInboundStockCost,
+  consumeStockCost,
+  splitCents,
+} from "@/lib/stock-costing";
 
 const FORECAST_WINDOW_DAYS = 30;
 const MAX_SERIALIZATION_UNITS = 5_000;
@@ -79,7 +87,14 @@ export type StockMovementInput = {
   fromLocationResourceId?: string | null;
   toLocationResourceId?: string | null;
   occurredAt?: Date;
+  totalPriceCents?: number | null;
+  priceCurrency?: string | null;
 };
+
+export type StockMovementUpdateInput = Omit<
+  StockMovementInput,
+  "fromLocationResourceId" | "toLocationResourceId"
+>;
 
 export type StockUnitCreateInput = {
   count?: number;
@@ -90,6 +105,8 @@ export type StockUnitCreateInput = {
   metadata?: Record<string, unknown>;
   customFields?: CustomFieldValues;
   acquiredAt?: Date;
+  totalPriceCents?: number | null;
+  priceCurrency?: string | null;
 };
 
 export type StockUnitPatchInput = {
@@ -101,6 +118,8 @@ export type StockUnitPatchInput = {
   occurredAt?: Date;
   reason?: string | null;
   note?: string;
+  totalPriceCents?: number | null;
+  priceCurrency?: string | null;
 };
 
 export class StockOperationError extends Error {
@@ -154,6 +173,11 @@ const movementDto = (row: StockMovementRecord) => ({
   resourceId: row.resourceId,
   delta: row.delta,
   quantity: row.quantity,
+  totalPriceCents: row.totalPriceCents,
+  priceCurrency: row.priceCurrency,
+  costCents: row.costCents,
+  costCurrency: row.costCurrency,
+  costEstimated: row.costEstimated,
   balanceAfter: row.balanceAfter,
   fromLocationBalanceAfter: row.fromLocationBalanceAfter,
   toLocationBalanceAfter: row.toLocationBalanceAfter,
@@ -187,6 +211,8 @@ const unitDto = (row: StockUnitRecord) => ({
   locationResourceId: row.locationResourceId,
   metadata: row.metadata,
   customFields: row.customFields,
+  acquisitionCostCents: row.acquisitionCostCents,
+  costCurrency: row.costCurrency,
   acquiredAt: row.acquiredAt.toISOString(),
   lastMovedAt: row.lastMovedAt.toISOString(),
   createdAt: row.createdAt.toISOString(),
@@ -372,6 +398,8 @@ export async function getStockDetail(
       id: resources.id,
       name: resources.name,
       quantity: resources.quantity,
+      valueCents: resources.valueCents,
+      currency: resources.currency,
       type: resources.type,
       categories: resources.categories,
     })
@@ -794,6 +822,493 @@ export async function listStockMovements(
   return rows.map(movementDto);
 }
 
+const editableMovementTypes = new Set([
+  "receipt",
+  "issue",
+  "adjustment",
+  "return",
+  "waste",
+]);
+
+function assertManualMovementEditable(movement: StockMovementRecord) {
+  if (
+    !editableMovementTypes.has(movement.type) ||
+    movement.variantId ||
+    movement.unitId ||
+    movement.assemblyBuildId ||
+    movement.purchaseReceiptId ||
+    movement.fromLocationResourceId ||
+    movement.toLocationResourceId
+  ) {
+    throw new StockOperationError(
+      "This system-linked stock movement cannot be edited or deleted here.",
+      409,
+    );
+  }
+}
+
+type StockTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function undoStockMovementCost(
+  transaction: StockTransaction,
+  movement: StockMovementRecord,
+) {
+  if (movement.delta > 0) {
+    const layers = await transaction
+      .select()
+      .from(stockCostLayers)
+      .where(
+        and(
+          eq(stockCostLayers.organizationId, movement.organizationId),
+          eq(stockCostLayers.sourceMovementId, movement.id),
+        ),
+      )
+      .for("update");
+    if (!layers.length) {
+      return false;
+    }
+    if (
+      layers.some(
+        (layer) =>
+          layer.remainingQuantity !== layer.initialQuantity ||
+          layer.remainingCostCents !== layer.initialCostCents,
+      )
+    ) {
+      throw new StockOperationError(
+        "This inbound movement has already supplied later stock consumption and can no longer be changed or deleted.",
+        409,
+      );
+    }
+    await transaction
+      .delete(stockCostLayers)
+      .where(
+        and(
+          eq(stockCostLayers.organizationId, movement.organizationId),
+          eq(stockCostLayers.sourceMovementId, movement.id),
+        ),
+      );
+    return true;
+  }
+  if (movement.delta >= 0) return false;
+
+  const allocations = await transaction
+    .select()
+    .from(stockCostAllocations)
+    .where(
+      and(
+        eq(stockCostAllocations.organizationId, movement.organizationId),
+        eq(stockCostAllocations.movementId, movement.id),
+      ),
+    );
+  if (!allocations.length) return false;
+  for (const allocation of allocations) {
+    const [layer] = await transaction
+      .select()
+      .from(stockCostLayers)
+      .where(
+        and(
+          eq(stockCostLayers.organizationId, movement.organizationId),
+          eq(stockCostLayers.id, allocation.layerId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!layer) {
+      throw new StockOperationError(
+        "The inventory valuation for this movement is incomplete.",
+        409,
+      );
+    }
+    const remainingQuantity = layer.remainingQuantity + allocation.quantity;
+    const remainingCostCents =
+      layer.initialCostCents === null
+        ? null
+        : (layer.remainingCostCents ?? 0) + (allocation.costCents ?? 0);
+    if (
+      remainingQuantity > layer.initialQuantity ||
+      (remainingCostCents !== null &&
+        layer.initialCostCents !== null &&
+        remainingCostCents > layer.initialCostCents)
+    ) {
+      throw new StockOperationError(
+        "The inventory valuation for this movement cannot be restored safely.",
+        409,
+      );
+    }
+    await transaction
+      .update(stockCostLayers)
+      .set({ remainingQuantity, remainingCostCents })
+      .where(eq(stockCostLayers.id, layer.id));
+  }
+  await transaction
+    .delete(stockCostAllocations)
+    .where(
+      and(
+        eq(stockCostAllocations.organizationId, movement.organizationId),
+        eq(stockCostAllocations.movementId, movement.id),
+      ),
+    );
+  return true;
+}
+
+async function applyStockMovementCost(
+  transaction: StockTransaction,
+  movement: StockMovementRecord,
+  resource: {
+    quantityBefore: number;
+    valueCents: number | null;
+    currency: string;
+  },
+) {
+  if (movement.delta > 0) {
+    await addInboundStockCost(transaction, {
+      organizationId: movement.organizationId,
+      resourceId: movement.resourceId,
+      movementId: movement.id,
+      quantity: movement.quantity,
+      totalPriceCents: movement.totalPriceCents,
+      fallbackUnitCostCents: resource.valueCents,
+      currency: resource.currency,
+      occurredAt: movement.occurredAt,
+    });
+  } else if (movement.delta < 0) {
+    await consumeStockCost(transaction, {
+      organizationId: movement.organizationId,
+      resourceId: movement.resourceId,
+      movementId: movement.id,
+      quantity: movement.quantity,
+      quantityBefore: resource.quantityBefore,
+      fallbackUnitCostCents: resource.valueCents,
+      currency: resource.currency,
+      occurredAt: movement.occurredAt,
+    });
+  }
+}
+
+async function validateCorrectedStockQuantity(
+  transaction: StockTransaction,
+  input: {
+    resourceId: string;
+    allowNegativeStock: boolean;
+    quantityBefore: number;
+    quantityAfter: number;
+  },
+) {
+  if (
+    violatesNegativeStockPolicy({
+      allowNegativeStock: input.allowNegativeStock,
+      quantityBefore: input.quantityBefore,
+      quantityAfter: input.quantityAfter,
+    })
+  ) {
+    throw new StockOperationError(
+      `This correction would make stock negative. Current stock is ${input.quantityBefore}.`,
+      409,
+    );
+  }
+  if (Math.abs(input.quantityAfter) > MAX_STOCK_QUANTITY) {
+    throw new StockOperationError(
+      `This correction exceeds the supported stock range of -${MAX_STOCK_QUANTITY} to ${MAX_STOCK_QUANTITY}.`,
+      409,
+    );
+  }
+  if (!input.allowNegativeStock && input.quantityAfter >= 0) {
+    const variantAllocation = await allocatedVariantQuantity(
+      transaction,
+      input.resourceId,
+    );
+    assertVariantAllocationFits(
+      input.quantityAfter,
+      variantAllocation,
+      (message) => new StockOperationError(message, 409),
+    );
+  }
+}
+
+export async function updateStockMovement(
+  organizationId: string,
+  resourceId: string,
+  movementId: string,
+  input: StockMovementUpdateInput,
+) {
+  return db.transaction(async (transaction) => {
+    const [resource] = await transaction
+      .select({
+        id: resources.id,
+        quantity: resources.quantity,
+        valueCents: resources.valueCents,
+        currency: resources.currency,
+        allowNegativeStock: organizations.allowNegativeStock,
+      })
+      .from(resources)
+      .innerJoin(
+        organizations,
+        eq(organizations.id, resources.organizationId),
+      )
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resourceId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!resource) throw new StockOperationError("Not found", 404);
+
+    const [movement] = await transaction
+      .select()
+      .from(stockMovements)
+      .where(
+        and(
+          eq(stockMovements.organizationId, organizationId),
+          eq(stockMovements.resourceId, resourceId),
+          eq(stockMovements.id, movementId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!movement) throw new StockOperationError("Movement not found", 404);
+    assertManualMovementEditable(movement);
+
+    const [settings] = await transaction
+      .select({ trackingMode: stockSettings.trackingMode })
+      .from(stockSettings)
+      .where(
+        and(
+          eq(stockSettings.organizationId, organizationId),
+          eq(stockSettings.resourceId, resourceId),
+        ),
+      )
+      .limit(1);
+    if ((settings?.trackingMode ?? "bulk") !== "bulk") {
+      throw new StockOperationError(
+        "Manual movement corrections are only available for bulk stock.",
+        409,
+      );
+    }
+
+    const quantity = input.quantity ?? Math.abs(input.delta);
+    if (quantity !== Math.abs(input.delta)) {
+      throw new StockOperationError(
+        "Movement quantity must match the absolute stock change.",
+        422,
+      );
+    }
+    if (input.type === "transfer") {
+      throw new StockOperationError(
+        "Location transfers cannot be changed from the movement history.",
+        409,
+      );
+    }
+    const totalPriceCents = input.totalPriceCents ?? null;
+    const priceCurrency = input.priceCurrency?.toUpperCase() ?? null;
+    if (
+      totalPriceCents !== null &&
+      priceCurrency !== resource.currency
+    ) {
+      throw new StockOperationError(
+        `Movement prices for this item must use ${resource.currency}.`,
+        422,
+      );
+    }
+    if (input.delta > 0 && totalPriceCents !== null && totalPriceCents < 0) {
+      throw new StockOperationError(
+        "Inbound stock prices cannot be negative.",
+        422,
+      );
+    }
+
+    const deltaDifference = input.delta - movement.delta;
+    const quantityAfter = resource.quantity + deltaDifference;
+    await validateCorrectedStockQuantity(transaction, {
+      resourceId,
+      allowNegativeStock: resource.allowNegativeStock,
+      quantityBefore: resource.quantity,
+      quantityAfter,
+    });
+
+    const occurredAt = input.occurredAt ?? movement.occurredAt;
+    const costChanged =
+      input.delta !== movement.delta ||
+      totalPriceCents !== movement.totalPriceCents ||
+      occurredAt.getTime() !== movement.occurredAt.getTime();
+    const costWasTracked = costChanged
+      ? await undoStockMovementCost(transaction, movement)
+      : false;
+
+    const now = new Date();
+    if (deltaDifference !== 0) {
+      await transaction
+        .update(resources)
+        .set({ quantity: quantityAfter, updatedAt: now })
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, resourceId),
+          ),
+        );
+      await transaction
+        .update(stockMovements)
+        .set({
+          balanceAfter: sql`${stockMovements.balanceAfter} + ${deltaDifference}`,
+        })
+        .where(
+          and(
+            eq(stockMovements.organizationId, organizationId),
+            eq(stockMovements.resourceId, resourceId),
+            gt(stockMovements.createdAt, movement.createdAt),
+          ),
+        );
+    }
+
+    const [updated] = await transaction
+      .update(stockMovements)
+      .set({
+        delta: input.delta,
+        quantity,
+        totalPriceCents,
+        priceCurrency: totalPriceCents === null ? null : resource.currency,
+        costCents: costChanged ? null : movement.costCents,
+        costCurrency: costChanged ? null : movement.costCurrency,
+        costEstimated: costChanged ? false : movement.costEstimated,
+        balanceAfter: movement.balanceAfter + deltaDifference,
+        type: input.type,
+        reason: input.reason ?? null,
+        note: input.note ?? "",
+        location: input.location ?? null,
+        occurredAt,
+      })
+      .where(
+        and(
+          eq(stockMovements.organizationId, organizationId),
+          eq(stockMovements.resourceId, resourceId),
+          eq(stockMovements.id, movementId),
+        ),
+      )
+      .returning();
+    if (!updated) throw new StockOperationError("Movement not found", 404);
+    if (costChanged && (costWasTracked || movement.delta === 0)) {
+      await applyStockMovementCost(transaction, updated, {
+        quantityBefore: resource.quantity - movement.delta,
+        valueCents: resource.valueCents,
+        currency: resource.currency,
+      });
+    }
+    const [costed] = await transaction
+      .select()
+      .from(stockMovements)
+      .where(eq(stockMovements.id, movementId))
+      .limit(1);
+    return {
+      resource: { id: resource.id, quantity: quantityAfter },
+      movement: movementDto(costed ?? updated),
+    };
+  });
+}
+
+export async function deleteStockMovement(
+  organizationId: string,
+  resourceId: string,
+  movementId: string,
+) {
+  return db.transaction(async (transaction) => {
+    const [resource] = await transaction
+      .select({
+        id: resources.id,
+        quantity: resources.quantity,
+        allowNegativeStock: organizations.allowNegativeStock,
+      })
+      .from(resources)
+      .innerJoin(
+        organizations,
+        eq(organizations.id, resources.organizationId),
+      )
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resourceId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!resource) throw new StockOperationError("Not found", 404);
+
+    const [movement] = await transaction
+      .select()
+      .from(stockMovements)
+      .where(
+        and(
+          eq(stockMovements.organizationId, organizationId),
+          eq(stockMovements.resourceId, resourceId),
+          eq(stockMovements.id, movementId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!movement) throw new StockOperationError("Movement not found", 404);
+    assertManualMovementEditable(movement);
+
+    const [settings] = await transaction
+      .select({ trackingMode: stockSettings.trackingMode })
+      .from(stockSettings)
+      .where(
+        and(
+          eq(stockSettings.organizationId, organizationId),
+          eq(stockSettings.resourceId, resourceId),
+        ),
+      )
+      .limit(1);
+    if ((settings?.trackingMode ?? "bulk") !== "bulk") {
+      throw new StockOperationError(
+        "Manual movement corrections are only available for bulk stock.",
+        409,
+      );
+    }
+
+    const quantityAfter = resource.quantity - movement.delta;
+    await validateCorrectedStockQuantity(transaction, {
+      resourceId,
+      allowNegativeStock: resource.allowNegativeStock,
+      quantityBefore: resource.quantity,
+      quantityAfter,
+    });
+    await undoStockMovementCost(transaction, movement);
+
+    const now = new Date();
+    await transaction
+      .update(resources)
+      .set({ quantity: quantityAfter, updatedAt: now })
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resourceId),
+        ),
+      );
+    await transaction
+      .update(stockMovements)
+      .set({
+        balanceAfter: sql`${stockMovements.balanceAfter} - ${movement.delta}`,
+      })
+      .where(
+        and(
+          eq(stockMovements.organizationId, organizationId),
+          eq(stockMovements.resourceId, resourceId),
+          gt(stockMovements.createdAt, movement.createdAt),
+        ),
+      );
+    await transaction
+      .delete(stockMovements)
+      .where(
+        and(
+          eq(stockMovements.organizationId, organizationId),
+          eq(stockMovements.resourceId, resourceId),
+          eq(stockMovements.id, movementId),
+        ),
+      );
+    return { resource: { id: resource.id, quantity: quantityAfter } };
+  });
+}
+
 export async function listStockUnits(
   organizationId: string,
   resourceId: string,
@@ -1048,6 +1563,9 @@ export async function bookStockMovement(
           name: resources.name,
           quantity: resources.quantity,
           allowNegativeStock: organizations.allowNegativeStock,
+          valueCents: resources.valueCents,
+          currency: resources.currency,
+          createdAt: resources.createdAt,
         })
         .from(resources)
         .innerJoin(
@@ -1063,6 +1581,28 @@ export async function bookStockMovement(
         .limit(1)
         .for("update");
       if (!resource) throw new StockOperationError("Not found", 404);
+
+      if (
+        input.totalPriceCents !== null &&
+        input.totalPriceCents !== undefined &&
+        input.priceCurrency?.toUpperCase() !== resource.currency
+      ) {
+        throw new StockOperationError(
+          `Movement prices for this item must use ${resource.currency}.`,
+          422,
+        );
+      }
+      if (
+        input.delta > 0 &&
+        input.totalPriceCents !== null &&
+        input.totalPriceCents !== undefined &&
+        input.totalPriceCents < 0
+      ) {
+        throw new StockOperationError(
+          "Inbound stock prices cannot be negative.",
+          422,
+        );
+      }
 
       // A same-resource concurrent request may have waited for the row lock.
       // Recheck after acquiring it before changing quantity or appending a ledger row.
@@ -1279,6 +1819,11 @@ export async function bookStockMovement(
           resourceId,
           delta: input.delta,
           quantity: movementQuantity,
+          totalPriceCents: input.totalPriceCents ?? null,
+          priceCurrency:
+            input.totalPriceCents === null || input.totalPriceCents === undefined
+              ? null
+              : resource.currency,
           balanceAfter,
           fromLocationBalanceAfter,
           toLocationBalanceAfter,
@@ -1292,7 +1837,35 @@ export async function bookStockMovement(
           createdBy: actor,
         })
         .returning();
-      const movementPayload = movementDto(movement);
+      if (input.delta > 0) {
+        await addInboundStockCost(transaction, {
+          organizationId,
+          resourceId,
+          movementId: movement.id,
+          quantity: movementQuantity,
+          totalPriceCents: input.totalPriceCents,
+          fallbackUnitCostCents: resource.valueCents,
+          currency: resource.currency,
+          occurredAt: movement.occurredAt,
+        });
+      } else if (input.delta < 0) {
+        await consumeStockCost(transaction, {
+          organizationId,
+          resourceId,
+          movementId: movement.id,
+          quantity: movementQuantity,
+          quantityBefore: resource.quantity,
+          fallbackUnitCostCents: resource.valueCents,
+          currency: resource.currency,
+          occurredAt: movement.occurredAt,
+        });
+      }
+      const [costedMovement] = await transaction
+        .select()
+        .from(stockMovements)
+        .where(eq(stockMovements.id, movement.id))
+        .limit(1);
+      const movementPayload = movementDto(costedMovement ?? movement);
       await enqueueStockMovementWebhookEvents(transaction, [movement]);
       const response = {
         resource: { ...resource, quantity: balanceAfter },
@@ -1357,6 +1930,8 @@ export async function createStockUnits(
           quantity: resources.quantity,
           type: resources.type,
           categories: resources.categories,
+          valueCents: resources.valueCents,
+          currency: resources.currency,
         })
         .from(resources)
         .where(
@@ -1410,10 +1985,21 @@ export async function createStockUnits(
       );
 
       const occurredAt = input.acquiredAt ?? new Date();
+      if (
+        input.totalPriceCents !== null &&
+        input.totalPriceCents !== undefined &&
+        input.priceCurrency?.toUpperCase() !== resource.currency
+      ) {
+        throw new StockOperationError(
+          `Unit prices for this item must use ${resource.currency}.`,
+          422,
+        );
+      }
+      const unitCosts = splitCents(input.totalPriceCents ?? null, codes.length);
       const createdUnits = await transaction
         .insert(stockUnits)
         .values(
-          codes.map((code) => ({
+          codes.map((code, index) => ({
             organizationId,
             resourceId,
             code,
@@ -1422,6 +2008,12 @@ export async function createStockUnits(
             locationResourceId: input.locationResourceId ?? null,
             metadata: input.metadata ?? {},
             customFields,
+            acquisitionCostCents:
+              unitCosts[index] ?? resource.valueCents ?? null,
+            costCurrency:
+              unitCosts[index] !== null || resource.valueCents !== null
+                ? resource.currency
+                : null,
             acquiredAt: occurredAt,
             lastMovedAt: occurredAt,
           })),
@@ -1453,6 +2045,8 @@ export async function createStockUnits(
             unitId: unit.id,
             delta: 1,
             quantity: 1,
+            totalPriceCents: unitCosts[index],
+            priceCurrency: unitCosts[index] === null ? null : resource.currency,
             balanceAfter: resource.quantity + index + 1,
             type: "unit-created",
             reason: "Serialized unit created",
@@ -1464,11 +2058,31 @@ export async function createStockUnits(
           })),
         )
         .returning();
+      for (const [index, movement] of createdMovements.entries()) {
+        await addInboundStockCost(transaction, {
+          organizationId,
+          resourceId,
+          movementId: movement.id,
+          unitId: movement.unitId,
+          quantity: 1,
+          totalPriceCents: unitCosts[index],
+          fallbackUnitCostCents: resource.valueCents,
+          currency: resource.currency,
+          occurredAt,
+        });
+      }
+      const costedMovements = await transaction
+        .select()
+        .from(stockMovements)
+        .where(inArray(stockMovements.id, createdMovements.map((row) => row.id)));
+      const costedMovementById = new Map(costedMovements.map((row) => [row.id, row]));
       await enqueueStockMovementWebhookEvents(transaction, createdMovements);
       return {
         resource: { ...resource, quantity: balanceAfter },
         units: createdUnits.map(unitDto),
-        movements: createdMovements.map(movementDto),
+        movements: createdMovements.map((movement) =>
+          movementDto(costedMovementById.get(movement.id) ?? movement),
+        ),
       };
     });
   } catch (error) {
@@ -1502,6 +2116,8 @@ export async function updateStockUnit(
         quantity: resources.quantity,
         type: resources.type,
         categories: resources.categories,
+        valueCents: resources.valueCents,
+        currency: resources.currency,
       })
       .from(resources)
       .where(
@@ -1607,6 +2223,28 @@ export async function updateStockUnit(
     const wasAvailable = unit.status === "available";
     const isAvailable = nextStatus === "available";
     const delta = wasAvailable === isAvailable ? 0 : isAvailable ? 1 : -1;
+    if (
+      input.totalPriceCents !== null &&
+      input.totalPriceCents !== undefined &&
+      input.priceCurrency?.toUpperCase() !== resource.currency
+    ) {
+      throw new StockOperationError(
+        `The transaction price must use ${resource.currency}.`,
+        422,
+      );
+    }
+    if (delta > 0 && input.totalPriceCents != null && input.totalPriceCents < 0) {
+      throw new StockOperationError(
+        "Inbound stock prices cannot be negative.",
+        422,
+      );
+    }
+    if (delta === 0 && input.totalPriceCents != null) {
+      throw new StockOperationError(
+        "A transaction price can only be recorded when the unit enters or leaves available stock.",
+        422,
+      );
+    }
     const balanceAfter = resource.quantity + delta;
     if (balanceAfter < 0) {
       throw new StockOperationError(
@@ -1633,6 +2271,14 @@ export async function updateStockUnit(
         locationResourceId: nextLocationResourceId,
         metadata: input.metadata ?? unit.metadata,
         customFields,
+        acquisitionCostCents:
+          delta > 0 && input.totalPriceCents != null
+            ? input.totalPriceCents
+            : unit.acquisitionCostCents,
+        costCurrency:
+          delta > 0 && input.totalPriceCents != null
+            ? resource.currency
+            : unit.costCurrency,
         lastMovedAt: occurredAt,
         updatedAt: now,
       })
@@ -1663,6 +2309,11 @@ export async function updateStockUnit(
         unitId: unit.id,
         delta,
         quantity: Math.max(Math.abs(delta), structuredLocationChanged ? 1 : 0),
+        totalPriceCents: input.totalPriceCents ?? null,
+        priceCurrency:
+          input.totalPriceCents === null || input.totalPriceCents === undefined
+            ? null
+            : resource.currency,
         balanceAfter,
         type: statusChanged ? "unit-status" : "unit-update",
         reason:
@@ -1680,11 +2331,43 @@ export async function updateStockUnit(
         createdBy: actor,
       })
       .returning();
-    await enqueueStockMovementWebhookEvents(transaction, [movement]);
+    if (delta > 0) {
+      await addInboundStockCost(transaction, {
+        organizationId,
+        resourceId,
+        movementId: movement.id,
+        unitId: unit.id,
+        quantity: 1,
+        totalPriceCents: input.totalPriceCents,
+        fallbackUnitCostCents:
+          input.totalPriceCents ?? unit.acquisitionCostCents ?? resource.valueCents,
+        currency: resource.currency,
+        occurredAt,
+      });
+    } else if (delta < 0) {
+      await consumeStockCost(transaction, {
+        organizationId,
+        resourceId,
+        movementId: movement.id,
+        unitId: unit.id,
+        quantity: 1,
+        quantityBefore: resource.quantity,
+        fallbackUnitCostCents:
+          unit.acquisitionCostCents ?? resource.valueCents,
+        currency: resource.currency,
+        occurredAt,
+      });
+    }
+    const [costedMovement] = await transaction
+      .select()
+      .from(stockMovements)
+      .where(eq(stockMovements.id, movement.id))
+      .limit(1);
+    await enqueueStockMovementWebhookEvents(transaction, [costedMovement ?? movement]);
     return {
       resource: { ...resource, quantity: balanceAfter },
       unit: unitDto(savedUnit),
-      movement: movementDto(movement),
+      movement: movementDto(costedMovement ?? movement),
     };
   });
 }

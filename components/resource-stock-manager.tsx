@@ -24,11 +24,13 @@ import {
   PackageCheck,
   PackageMinus,
   PackagePlus,
+  Pencil,
   Plus,
   RefreshCw,
   Save,
   Settings2,
   SlidersHorizontal,
+  Trash2,
   X,
 } from "lucide-react";
 import {
@@ -108,6 +110,13 @@ type StockMovement = {
   variantBalanceAfter?: number | null;
   assemblyBuildId?: string | null;
   purchaseReceiptId?: string | null;
+  fromLocationResourceId?: string | null;
+  toLocationResourceId?: string | null;
+  totalPriceCents?: number | null;
+  priceCurrency?: string | null;
+  costCents?: number | null;
+  costCurrency?: string | null;
+  costEstimated?: boolean;
 };
 
 type StockUnit = {
@@ -122,6 +131,8 @@ type StockUnit = {
   lastMovedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  acquisitionCostCents?: number | null;
+  costCurrency?: string | null;
   installation?: {
     buildId: string;
     assemblyResourceId: string;
@@ -139,6 +150,8 @@ type StockData = {
     quantity: number;
     type: string;
     categories: Array<{ name: string; color?: string }>;
+    valueCents: number | null;
+    currency: string;
   };
   config: StockConfig;
   forecast: StockForecast;
@@ -173,6 +186,7 @@ type MovementForm = {
   note: string;
   location: string;
   occurredAt: string;
+  totalPrice: string;
 };
 
 type UnitCreateForm = {
@@ -184,6 +198,7 @@ type UnitCreateForm = {
   customFields: CustomFieldValues;
   metadata: string;
   acquiredAt: string;
+  totalPrice: string;
 };
 
 type UnitEditForm = {
@@ -195,16 +210,40 @@ type UnitEditForm = {
   occurredAt: string;
   reason: string;
   note: string;
+  totalPrice: string;
 };
 
 type MovementPayload = {
   delta: number;
+  quantity?: number;
   type: MovementType;
   reason?: string;
   note?: string;
   location?: string;
   occurredAt?: string;
+  totalPriceCents?: number;
+  priceCurrency?: string;
 };
+
+const editableMovementTypes = new Set<MovementType>([
+  "receipt",
+  "issue",
+  "adjustment",
+  "return",
+  "waste",
+]);
+
+function isManualMovement(movement: StockMovement) {
+  return (
+    editableMovementTypes.has(movement.type as MovementType) &&
+    !movement.unitId &&
+    !movement.variantId &&
+    !movement.assemblyBuildId &&
+    !movement.purchaseReceiptId &&
+    !movement.fromLocationResourceId &&
+    !movement.toLocationResourceId
+  );
+}
 
 type CustomFieldsApiResponse = { definitions: CustomFieldDefinition[] };
 type StockLocationOption = {
@@ -267,6 +306,7 @@ const defaultMovementForm = (direction: "in" | "out"): MovementForm => ({
   note: "",
   location: "",
   occurredAt: localDateTime(),
+  totalPrice: "",
 });
 
 const defaultUnitCreateForm = (): UnitCreateForm => ({
@@ -278,6 +318,7 @@ const defaultUnitCreateForm = (): UnitCreateForm => ({
   customFields: {},
   metadata: "{}",
   acquiredAt: localDateTime(),
+  totalPrice: "",
 });
 
 function parseMetadata(value: string, t: TFunction) {
@@ -305,6 +346,22 @@ function toIso(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
   return date.toISOString();
+}
+
+function moneyToCents(value: string, allowNegative = false) {
+  if (!value.trim()) return null;
+  const amount = Number(value.replace(",", "."));
+  if (!Number.isFinite(amount) || (!allowNegative && amount < 0)) {
+    return Number.NaN;
+  }
+  return Math.round(amount * 100);
+}
+
+function formatMoney(cents: number, currency: string, locale: string) {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+  }).format(cents / 100);
 }
 
 function formatDate(
@@ -354,6 +411,8 @@ function normalizeStock(payload: StockApiResponse, t: TFunction): StockData {
       ...source.resource,
       type: source.resource.type ?? "other",
       categories: source.resource.categories ?? [],
+      valueCents: source.resource.valueCents ?? null,
+      currency: source.resource.currency ?? "EUR",
     },
     config: source.config ?? {
       trackingMode: "bulk",
@@ -431,7 +490,6 @@ export function ResourceStockManager({
   const [customFieldError, setCustomFieldError] = useState<string | null>(null);
   const [availableLocations, setAvailableLocations] = useState<StockLocationOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -441,6 +499,19 @@ export function ResourceStockManager({
   );
   const [pendingMovement, setPendingMovement] = useState<MovementPayload | null>(null);
   const [postingMovement, setPostingMovement] = useState(false);
+  const [editingMovementId, setEditingMovementId] = useState<string | null>(
+    null,
+  );
+  const [movementEditDirection, setMovementEditDirection] = useState<
+    "in" | "out"
+  >("in");
+  const [movementEditForm, setMovementEditForm] = useState<MovementForm | null>(
+    null,
+  );
+  const [savingMovementId, setSavingMovementId] = useState<string | null>(null);
+  const [deletingMovementId, setDeletingMovementId] = useState<string | null>(
+    null,
+  );
   const [historyFilter, setHistoryFilter] = useState<"all" | "in" | "out" | "audit">(
     "all",
   );
@@ -455,8 +526,7 @@ export function ResourceStockManager({
 
   const loadStock = useCallback(
     async (quiet = false) => {
-      if (quiet) setRefreshing(true);
-      else setLoading(true);
+      if (!quiet) setLoading(true);
       setError(null);
       setCustomFieldError(null);
       try {
@@ -500,7 +570,6 @@ export function ResourceStockManager({
         );
       } finally {
         setLoading(false);
-        setRefreshing(false);
       }
     },
     [customFieldsEndpoint, endpoint, resourceId, t],
@@ -582,6 +651,13 @@ export function ResourceStockManager({
     if (movementForm.occurredAt && !occurredAt) {
       throw new Error(t("resource.errors.validBookingDate"));
     }
+    const totalPriceCents = moneyToCents(
+      movementForm.totalPrice,
+      direction === "out",
+    );
+    if (Number.isNaN(totalPriceCents)) {
+      throw new Error(t("resource.errors.validPrice"));
+    }
     return {
       delta: direction === "in" ? quantity : -quantity,
       type: movementForm.type,
@@ -589,6 +665,9 @@ export function ResourceStockManager({
       note: movementForm.note.trim() || undefined,
       location: movementForm.location.trim() || undefined,
       occurredAt,
+      ...(totalPriceCents === null
+        ? {}
+        : { totalPriceCents, priceCurrency: stock?.resource.currency ?? "EUR" }),
     } satisfies MovementPayload;
   }
 
@@ -656,6 +735,157 @@ export function ResourceStockManager({
     }
   }
 
+  function startEditingMovement(movement: StockMovement) {
+    const nextDirection = movement.delta >= 0 ? "in" : "out";
+    setEditingMovementId(movement.id);
+    setMovementEditDirection(nextDirection);
+    setMovementEditForm({
+      quantity: String(Math.abs(movement.delta)),
+      type: movement.type as MovementType,
+      reason: movement.reason ?? "",
+      note: movement.note ?? "",
+      location: movement.location ?? "",
+      occurredAt: localDateTime(movement.occurredAt),
+      totalPrice:
+        movement.totalPriceCents === null ||
+        movement.totalPriceCents === undefined
+          ? ""
+          : (movement.totalPriceCents / 100).toFixed(2),
+    });
+    setError(null);
+  }
+
+  function closeMovementEditor() {
+    setEditingMovementId(null);
+    setMovementEditForm(null);
+  }
+
+  function selectMovementEditDirection(next: "in" | "out") {
+    setMovementEditDirection(next);
+    setMovementEditForm((current) =>
+      current
+        ? {
+            ...current,
+            type: next === "in" ? "receipt" : "issue",
+          }
+        : current,
+    );
+  }
+
+  function updateMovementEdit<K extends keyof MovementForm>(
+    key: K,
+    value: MovementForm[K],
+  ) {
+    setMovementEditForm((current) =>
+      current ? { ...current, [key]: value } : current,
+    );
+  }
+
+  function buildMovementEditPayload(movement: StockMovement) {
+    if (!movementEditForm) throw new Error(t("resource.errors.checkBooking"));
+    const quantity = Number(movementEditForm.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw new Error(t("resource.errors.validQuantity"));
+    }
+    const delta = movementEditDirection === "in" ? quantity : -quantity;
+    const correctedQuantity = currentQuantity - movement.delta + delta;
+    if (!allowNegativeStock && correctedQuantity < 0) {
+      throw new Error(
+        t("resource.errors.onlyAvailable", {
+          quantity: quantityLabel(
+            currentQuantity - movement.delta,
+            unitName,
+            numberFormat,
+            t,
+          ),
+        }),
+      );
+    }
+    const occurredAt = toIso(movementEditForm.occurredAt);
+    if (movementEditForm.occurredAt && !occurredAt) {
+      throw new Error(t("resource.errors.validBookingDate"));
+    }
+    const totalPriceCents = moneyToCents(
+      movementEditForm.totalPrice,
+      movementEditDirection === "out",
+    );
+    if (Number.isNaN(totalPriceCents)) {
+      throw new Error(t("resource.errors.validPrice"));
+    }
+    return {
+      delta,
+      quantity,
+      type: movementEditForm.type,
+      reason: movementEditForm.reason.trim() || undefined,
+      note: movementEditForm.note.trim() || undefined,
+      location: movementEditForm.location.trim() || undefined,
+      occurredAt,
+      ...(totalPriceCents === null
+        ? {}
+        : {
+            totalPriceCents,
+            priceCurrency: stock?.resource.currency ?? "EUR",
+          }),
+    } satisfies MovementPayload;
+  }
+
+  async function saveMovementEdit(
+    event: FormEvent,
+    movement: StockMovement,
+  ) {
+    event.preventDefault();
+    setError(null);
+    setNotice(null);
+    try {
+      const payload = buildMovementEditPayload(movement);
+      setSavingMovementId(movement.id);
+      await fetchJson(`${endpoint}/movements/${movement.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      closeMovementEditor();
+      await loadStock(true);
+      setNotice(t("resource.notices.movementUpdated"));
+    } catch (movementError) {
+      setError(
+        movementError instanceof Error
+          ? movementError.message
+          : t("resource.errors.updateMovement"),
+      );
+    } finally {
+      setSavingMovementId(null);
+    }
+  }
+
+  async function deleteMovement(movement: StockMovement) {
+    if (
+      deletingMovementId ||
+      !window.confirm(t("resource.confirm.deleteMovement"))
+    ) {
+      return;
+    }
+    setDeletingMovementId(movement.id);
+    setError(null);
+    setNotice(null);
+    try {
+      await fetchJson(`${endpoint}/movements/${movement.id}`, {
+        method: "DELETE",
+      });
+      if (editingMovementId === movement.id) closeMovementEditor();
+      await loadStock(true);
+      setNotice(t("resource.notices.movementDeleted"));
+    } catch (movementError) {
+      setError(
+        movementError instanceof Error
+          ? movementError.message
+          : t("resource.errors.deleteMovement"),
+      );
+    } finally {
+      setDeletingMovementId(null);
+    }
+  }
+
   async function createUnits(event: FormEvent) {
     event.preventDefault();
     setError(null);
@@ -666,6 +896,10 @@ export function ResourceStockManager({
       const acquiredAt = toIso(unitCreateForm.acquiredAt);
       if (unitCreateForm.acquiredAt && !acquiredAt) {
         throw new Error(t("resource.errors.validAcquisitionDate"));
+      }
+      const totalPriceCents = moneyToCents(unitCreateForm.totalPrice);
+      if (Number.isNaN(totalPriceCents)) {
+        throw new Error(t("resource.errors.validPrice"));
       }
 
       let identifierPayload: { count: number } | { code: string } | { codes: string[] };
@@ -706,6 +940,9 @@ export function ResourceStockManager({
           customFields: unitCreateForm.customFields,
           metadata,
           acquiredAt,
+          ...(totalPriceCents === null
+            ? {}
+            : { totalPriceCents, priceCurrency: stock?.resource.currency ?? "EUR" }),
         }),
       });
       setUnitCreateForm(defaultUnitCreateForm());
@@ -739,11 +976,18 @@ export function ResourceStockManager({
         throw new Error(t("resource.errors.validMovementDate"));
       }
       const unit = stock.units.find((candidate) => candidate.id === editingUnitId);
+      const leavingAvailable =
+        unit?.status === "available" && unitEditForm.status !== "available";
+      const totalPriceCents = moneyToCents(
+        unitEditForm.totalPrice,
+        leavingAvailable,
+      );
+      if (Number.isNaN(totalPriceCents)) {
+        throw new Error(t("resource.errors.validPrice"));
+      }
       const customFieldsChanged = unit
         ? !customFieldValuesEqual(unit.customFields, unitEditForm.customFields)
         : true;
-      const leavingAvailable =
-        unit?.status === "available" && unitEditForm.status !== "available";
       if (
         leavingAvailable &&
         !window.confirm(
@@ -772,6 +1016,9 @@ export function ResourceStockManager({
           occurredAt,
           reason: unitEditForm.reason.trim() || undefined,
           note: unitEditForm.note.trim() || undefined,
+          ...(totalPriceCents === null
+            ? {}
+            : { totalPriceCents, priceCurrency: stock.resource.currency }),
         }),
       });
       setEditingUnitId(null);
@@ -856,31 +1103,16 @@ export function ResourceStockManager({
             </span>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {canEdit ? (
-            <Link
-              href={`/inventory/${resourceId}/stock/settings`}
-              className="grid size-10 place-items-center rounded-xl border border-border bg-surface text-muted transition hover:bg-surface-hover"
-              aria-label={t("resource.settings.title")}
-              title={t("resource.settings.title")}
-            >
-              <Settings2 className="size-4" aria-hidden="true" />
-            </Link>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => void loadStock(true)}
-            disabled={refreshing}
-            className="grid size-10 place-items-center rounded-xl border border-border bg-surface text-muted transition hover:bg-surface-hover disabled:opacity-50"
-            aria-label={t("resource.actions.refresh")}
-            title={t("resource.actions.refresh")}
+        {canEdit ? (
+          <Link
+            href={`/inventory/${resourceId}/edit#stock-settings`}
+            className="grid size-10 place-items-center rounded-xl border border-border bg-surface text-muted transition hover:bg-surface-hover"
+            aria-label={t("resource.settings.title")}
+            title={t("resource.settings.title")}
           >
-            <RefreshCw
-              className={`size-4 ${refreshing ? "animate-spin" : ""}`}
-              aria-hidden="true"
-            />
-          </button>
-        </div>
+            <Settings2 className="size-4" aria-hidden="true" />
+          </Link>
+        ) : null}
       </header>
 
       {error ? (
@@ -904,62 +1136,6 @@ export function ResourceStockManager({
           </button>
         </div>
       ) : null}
-
-      <section className="mb-5 overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
-        <div className="grid gap-5 p-5 sm:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(120px,0.6fr))] sm:items-center sm:p-6">
-          <div className="flex items-center gap-4">
-            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-brand-soft text-brand">
-              <Boxes className="size-5" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-xs font-medium text-muted">{t("resource.metrics.available")}</p>
-              <p className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-foreground">
-                {quantityLabel(currentQuantity, unitName, numberFormat, t)}
-              </p>
-            </div>
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
-              {t("resource.metrics.minimum")}
-            </p>
-            <p className={`mt-1 text-lg font-semibold ${forecast.isBelowMinimum ? "text-danger" : "text-foreground"}`}>
-              {quantityLabel(minimum, unitName, numberFormat, t)}
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
-              {t("resource.metrics.incoming")}
-            </p>
-            <p className="mt-1 text-lg font-semibold text-foreground">
-              {quantityLabel(onOrder, unitName, numberFormat, t)}
-            </p>
-          </div>
-        </div>
-        {forecast.isBelowMinimum ? (
-          <div className="flex items-center gap-2 border-t border-warning-border bg-warning-soft px-5 py-3 text-xs font-medium text-warning sm:px-6">
-            <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
-            {t("resource.forecast.belowThreshold")}
-          </div>
-        ) : null}
-      </section>
-
-      <section className="mb-5">
-        <StockLocationsManager
-          resourceId={resourceId}
-          canEdit={canEdit}
-          unitName={unitName}
-          onStockChanged={() => void loadStock(true)}
-        />
-      </section>
-
-      <section className="mb-5">
-        <AssemblyManager
-          resourceId={resourceId}
-          mode="build"
-          hideWhenEmpty
-          onStockChanged={() => void loadStock(true)}
-        />
-      </section>
 
       <div>
         <div className="space-y-5">
@@ -1062,6 +1238,33 @@ export function ResourceStockManager({
                     onChange={(event) => updateMovement("occurredAt", event.target.value)}
                     className={inputClass}
                   />
+                </label>
+                <label className={labelClass}>
+                  {direction === "in"
+                    ? t("resource.booking.inboundPrice")
+                    : t("resource.booking.outboundPrice")} {" "}
+                  <span className="font-normal text-muted">
+                    · {t("resource.optional")}
+                  </span>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={direction === "in" ? "0" : "-20000000"}
+                      max="20000000"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={movementForm.totalPrice}
+                      onChange={(event) => updateMovement("totalPrice", event.target.value)}
+                      placeholder="0.00"
+                      className={`${inputClass} pr-14 tabular-nums`}
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-muted">
+                      {stock.resource.currency}
+                    </span>
+                  </div>
+                  <span className="mt-1 block text-[9px] font-normal leading-4 text-muted">
+                    {t("resource.booking.totalPriceHelp")}
+                  </span>
                 </label>
                 <label className={`${labelClass} sm:col-span-2`}>
                   {t("resource.booking.reason")} {" "}
@@ -1168,6 +1371,62 @@ export function ResourceStockManager({
           </section>
 
           <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
+            <div className="grid gap-5 p-5 sm:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(120px,0.6fr))] sm:items-center sm:p-6">
+              <div className="flex items-center gap-4">
+                <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-brand-soft text-brand">
+                  <Boxes className="size-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="text-xs font-medium text-muted">
+                    {t("resource.metrics.available")}
+                  </p>
+                  <p className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-foreground">
+                    {quantityLabel(currentQuantity, unitName, numberFormat, t)}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                  {t("resource.metrics.minimum")}
+                </p>
+                <p
+                  className={`mt-1 text-lg font-semibold ${
+                    forecast.isBelowMinimum ? "text-danger" : "text-foreground"
+                  }`}
+                >
+                  {quantityLabel(minimum, unitName, numberFormat, t)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                  {t("resource.metrics.incoming")}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {quantityLabel(onOrder, unitName, numberFormat, t)}
+                </p>
+              </div>
+            </div>
+            {forecast.isBelowMinimum ? (
+              <div className="flex items-center gap-2 border-t border-warning-border bg-warning-soft px-5 py-3 text-xs font-medium text-warning sm:px-6">
+                <AlertTriangle
+                  className="size-4 shrink-0"
+                  aria-hidden="true"
+                />
+                {t("resource.forecast.belowThreshold")}
+              </div>
+            ) : null}
+          </section>
+
+          <section>
+            <AssemblyManager
+              resourceId={resourceId}
+              mode="build"
+              hideWhenEmpty
+              onStockChanged={() => void loadStock(true)}
+            />
+          </section>
+
+          <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
             <SectionHeading
               icon={<History className="size-4" aria-hidden="true" />}
               title={t("resource.movements.title")}
@@ -1197,22 +1456,28 @@ export function ResourceStockManager({
 
             {filteredMovements.length ? (
               <div>
-                <div className="hidden grid-cols-[90px_minmax(160px,1.25fr)_minmax(130px,1fr)_100px_120px] gap-4 border-b border-border bg-surface-subtle px-6 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted md:grid">
+                <div className="hidden grid-cols-[90px_minmax(160px,1.25fr)_minmax(130px,1fr)_100px_120px_72px] gap-4 border-b border-border bg-surface-subtle px-6 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted md:grid">
                   <span>{t("resource.movements.change")}</span>
                   <span>{t("resource.movements.reason")}</span>
                   <span>{t("resource.movements.locationUnit")}</span>
                   <span>{t("resource.movements.balance")}</span>
                   <span>{t("resource.movements.date")}</span>
+                  <span className="text-right">
+                    {t("resource.movements.actions")}
+                  </span>
                 </div>
                 <div className="divide-y divide-border">
                   {filteredMovements.map((movement) => {
                     const positive = movement.delta > 0;
                     const audit = movement.delta === 0;
+                    const editable = canEdit && isManualMovement(movement);
+                    const editing =
+                      editable &&
+                      editingMovementId === movement.id &&
+                      movementEditForm;
                     return (
-                      <div
-                        key={movement.id}
-                        className="grid gap-3 px-5 py-4 transition hover:bg-surface-hover md:grid-cols-[90px_minmax(160px,1.25fr)_minmax(130px,1fr)_100px_120px] md:items-center md:gap-4 md:px-6"
-                      >
+                      <div key={movement.id}>
+                        <div className="grid gap-3 px-5 py-4 transition hover:bg-surface-hover md:grid-cols-[90px_minmax(160px,1.25fr)_minmax(130px,1fr)_100px_120px_72px] md:items-center md:gap-4 md:px-6">
                         <div className="flex items-center justify-between md:block">
                           <span
                             className={`inline-flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-bold tabular-nums ${
@@ -1258,6 +1523,33 @@ export function ResourceStockManager({
                             )}
                             {movement.note ? ` · ${movement.note}` : ""}
                           </p>
+                          {movement.totalPriceCents !== null &&
+                          movement.totalPriceCents !== undefined &&
+                          movement.priceCurrency ? (
+                            <p className="mt-1 text-[10px] font-semibold text-brand">
+                              {t("resource.movements.transactionPrice")}: {" "}
+                              {formatMoney(
+                                movement.totalPriceCents,
+                                movement.priceCurrency,
+                                locale,
+                              )}
+                            </p>
+                          ) : null}
+                          {movement.costCents !== null &&
+                          movement.costCents !== undefined &&
+                          movement.costCurrency ? (
+                            <p className="mt-0.5 text-[9px] text-muted">
+                              {t("resource.movements.inventoryCost")}: {" "}
+                              {formatMoney(
+                                movement.costCents,
+                                movement.costCurrency,
+                                locale,
+                              )}
+                              {movement.costEstimated
+                                ? ` · ${t("resource.movements.estimated")}`
+                                : ""}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
                           {movement.location ? (
@@ -1288,6 +1580,224 @@ export function ResourceStockManager({
                             {movement.createdBy || t("resource.system")}
                           </p>
                         </div>
+                        <div className="flex items-center justify-end gap-1">
+                          {editable ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => startEditingMovement(movement)}
+                                disabled={Boolean(savingMovementId || deletingMovementId)}
+                                className="grid size-8 place-items-center rounded-lg text-muted transition hover:bg-surface-muted hover:text-foreground disabled:opacity-40"
+                                aria-label={t("resource.movements.edit")}
+                                title={t("resource.movements.edit")}
+                              >
+                                <Pencil className="size-3.5" aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void deleteMovement(movement)}
+                                disabled={Boolean(savingMovementId || deletingMovementId)}
+                                className="grid size-8 place-items-center rounded-lg text-muted transition hover:bg-danger-soft hover:text-danger disabled:opacity-40"
+                                aria-label={t("resource.movements.delete")}
+                                title={t("resource.movements.delete")}
+                              >
+                                {deletingMovementId === movement.id ? (
+                                  <LoaderCircle
+                                    className="size-3.5 animate-spin"
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <Trash2 className="size-3.5" aria-hidden="true" />
+                                )}
+                              </button>
+                            </>
+                          ) : null}
+                        </div>
+                        </div>
+                        {editing ? (
+                          <form
+                            onSubmit={(event) =>
+                              void saveMovementEdit(event, movement)
+                            }
+                            className="border-t border-border bg-surface-subtle px-5 py-5 sm:px-6"
+                          >
+                            <div className="mb-4 grid grid-cols-2 rounded-xl bg-surface-muted p-1 sm:max-w-xs">
+                              <button
+                                type="button"
+                                onClick={() => selectMovementEditDirection("in")}
+                                className={`flex h-9 items-center justify-center gap-2 rounded-lg text-xs font-semibold transition ${
+                                  movementEditDirection === "in"
+                                    ? "bg-surface text-success shadow-sm"
+                                    : "text-muted hover:text-foreground"
+                                }`}
+                              >
+                                <Plus className="size-3.5" aria-hidden="true" />
+                                {t("resource.booking.stockIn")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => selectMovementEditDirection("out")}
+                                className={`flex h-9 items-center justify-center gap-2 rounded-lg text-xs font-semibold transition ${
+                                  movementEditDirection === "out"
+                                    ? "bg-surface text-danger shadow-sm"
+                                    : "text-muted hover:text-foreground"
+                                }`}
+                              >
+                                <Minus className="size-3.5" aria-hidden="true" />
+                                {t("resource.booking.stockOut")}
+                              </button>
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                              <label className={labelClass}>
+                                {t("resource.booking.quantity")}
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  required
+                                  value={movementEditForm.quantity}
+                                  onChange={(event) =>
+                                    updateMovementEdit(
+                                      "quantity",
+                                      event.target.value,
+                                    )
+                                  }
+                                  className={inputClass}
+                                />
+                              </label>
+                              <label className={labelClass}>
+                                {t("resource.booking.movementType")}
+                                <select
+                                  value={movementEditForm.type}
+                                  onChange={(event) =>
+                                    updateMovementEdit(
+                                      "type",
+                                      event.target.value as MovementType,
+                                    )
+                                  }
+                                  className={inputClass}
+                                >
+                                  {(movementEditDirection === "in"
+                                    ? incomingTypes
+                                    : outgoingTypes
+                                  )
+                                    .filter((type) => type !== "transfer")
+                                    .map((type) => (
+                                      <option key={type} value={type}>
+                                        {t(movementLabelKeys[type])}
+                                      </option>
+                                    ))}
+                                </select>
+                              </label>
+                              <label className={labelClass}>
+                                {t("resource.booking.date")}
+                                <input
+                                  type="datetime-local"
+                                  required
+                                  value={movementEditForm.occurredAt}
+                                  onChange={(event) =>
+                                    updateMovementEdit(
+                                      "occurredAt",
+                                      event.target.value,
+                                    )
+                                  }
+                                  className={inputClass}
+                                />
+                              </label>
+                              <label className={labelClass}>
+                                {movementEditDirection === "in"
+                                  ? t("resource.booking.inboundPrice")
+                                  : t("resource.booking.outboundPrice")}
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min={
+                                      movementEditDirection === "in"
+                                        ? "0"
+                                        : undefined
+                                    }
+                                    step="0.01"
+                                    inputMode="decimal"
+                                    value={movementEditForm.totalPrice}
+                                    onChange={(event) =>
+                                      updateMovementEdit(
+                                        "totalPrice",
+                                        event.target.value,
+                                      )
+                                    }
+                                    className={`${inputClass} pr-14 tabular-nums`}
+                                  />
+                                  <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-muted">
+                                    {stock.resource.currency}
+                                  </span>
+                                </div>
+                              </label>
+                              <label className={`${labelClass} sm:col-span-2`}>
+                                {t("resource.booking.reason")}
+                                <input
+                                  value={movementEditForm.reason}
+                                  maxLength={240}
+                                  onChange={(event) =>
+                                    updateMovementEdit("reason", event.target.value)
+                                  }
+                                  className={inputClass}
+                                />
+                              </label>
+                              <label className={`${labelClass} sm:col-span-2`}>
+                                {t("resource.booking.location")}
+                                <input
+                                  value={movementEditForm.location}
+                                  maxLength={240}
+                                  onChange={(event) =>
+                                    updateMovementEdit(
+                                      "location",
+                                      event.target.value,
+                                    )
+                                  }
+                                  className={inputClass}
+                                />
+                              </label>
+                              <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>
+                                {t("resource.booking.note")}
+                                <textarea
+                                  rows={2}
+                                  value={movementEditForm.note}
+                                  maxLength={20_000}
+                                  onChange={(event) =>
+                                    updateMovementEdit("note", event.target.value)
+                                  }
+                                  className={`${inputClass} h-auto resize-y py-3`}
+                                />
+                              </label>
+                            </div>
+                            <div className="mt-4 flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={closeMovementEditor}
+                                disabled={savingMovementId === movement.id}
+                                className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
+                              >
+                                <X className="size-3.5" aria-hidden="true" />
+                                {t("resource.actions.cancel")}
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={savingMovementId === movement.id}
+                                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-solid px-3 text-xs font-semibold text-on-brand transition hover:bg-brand-hover disabled:opacity-50"
+                              >
+                                {savingMovementId === movement.id ? (
+                                  <LoaderCircle
+                                    className="size-3.5 animate-spin"
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <Save className="size-3.5" aria-hidden="true" />
+                                )}
+                                {t("resource.actions.saveMovement")}
+                              </button>
+                            </div>
+                          </form>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -1484,6 +1994,36 @@ export function ResourceStockManager({
                     className={inputClass}
                   />
                 </label>
+                <label className={labelClass}>
+                  {t("resource.units.acquisitionPrice")} {" "}
+                  <span className="font-normal text-muted">
+                    · {t("resource.optional")}
+                  </span>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="20000000"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={unitCreateForm.totalPrice}
+                      onChange={(event) =>
+                        setUnitCreateForm((current) => ({
+                          ...current,
+                          totalPrice: event.target.value,
+                        }))
+                      }
+                      placeholder="0.00"
+                      className={`${inputClass} pr-14 tabular-nums`}
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-muted">
+                      {stock.resource.currency}
+                    </span>
+                  </div>
+                  <span className="mt-1 block text-[9px] font-normal leading-4 text-muted">
+                    {t("resource.units.acquisitionPriceHelp")}
+                  </span>
+                </label>
                 {applicableCustomFields.length ? (
                   <div className="rounded-xl border border-brand-border bg-surface p-3.5">
                     <div className="mb-3">
@@ -1587,6 +2127,17 @@ export function ResourceStockManager({
                                     date: formatDate(unit.lastMovedAt, locale, true),
                                   })}
                                 </span>
+                                {unit.acquisitionCostCents !== null &&
+                                unit.acquisitionCostCents !== undefined &&
+                                unit.costCurrency ? (
+                                  <span className="font-semibold text-brand">
+                                    {formatMoney(
+                                      unit.acquisitionCostCents,
+                                      unit.costCurrency,
+                                      locale,
+                                    )}
+                                  </span>
+                                ) : null}
                               </div>
                               {unit.installation ? (
                                 <Link
@@ -1625,6 +2176,37 @@ export function ResourceStockManager({
                             </div>
                           </div>
                           <div className="flex shrink-0 items-center gap-2 pl-[52px] sm:pl-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (editing) {
+                                  setEditingUnitId(null);
+                                  setUnitEditForm(null);
+                                  return;
+                                }
+                                setEditingUnitId(unit.id);
+                                setUnitEditForm({
+                                  status: unit.status,
+                                  location: unit.location ?? "",
+                                  locationResourceId: unit.locationResourceId ?? "",
+                                  customFields: unit.customFields ?? {},
+                                  metadata: JSON.stringify(unit.metadata ?? {}, null, 2),
+                                  occurredAt: localDateTime(),
+                                  reason: "",
+                                  note: "",
+                                  totalPrice: "",
+                                });
+                              }}
+                              className="grid size-8 place-items-center rounded-lg border border-border bg-surface text-muted transition hover:bg-surface-hover hover:text-muted-strong"
+                              aria-label={t("resource.actions.update")}
+                              title={t("resource.actions.update")}
+                            >
+                              {editing ? (
+                                <X className="size-3.5" aria-hidden="true" />
+                              ) : (
+                                <Settings2 className="size-3.5" aria-hidden="true" />
+                              )}
+                            </button>
                             <button
                               type="button"
                               onClick={() => void navigator.clipboard.writeText(unit.code)}
@@ -1721,6 +2303,42 @@ export function ResourceStockManager({
                                   }
                                   className={inputClass}
                                 />
+                              </label>
+                              <label className={labelClass}>
+                                {t("resource.units.transactionPrice")} {" "}
+                                <span className="font-normal text-muted">
+                                  · {t("resource.optional")}
+                                </span>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min={
+                                      unit.status === "available" &&
+                                      unitEditForm.status !== "available"
+                                        ? "-20000000"
+                                        : "0"
+                                    }
+                                    max="20000000"
+                                    step="0.01"
+                                    inputMode="decimal"
+                                    value={unitEditForm.totalPrice}
+                                    onChange={(event) =>
+                                      setUnitEditForm((current) =>
+                                        current
+                                          ? { ...current, totalPrice: event.target.value }
+                                          : current,
+                                      )
+                                    }
+                                    placeholder="0.00"
+                                    className={`${inputClass} pr-14 tabular-nums`}
+                                  />
+                                  <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-muted">
+                                    {stock.resource.currency}
+                                  </span>
+                                </div>
+                                <span className="mt-1 block text-[9px] font-normal leading-4 text-muted">
+                                  {t("resource.units.transactionPriceHelp")}
+                                </span>
                               </label>
                               <label className={`${labelClass} sm:col-span-2`}>
                                 {t("resource.units.reason")} {" "}
@@ -1828,6 +2446,15 @@ export function ResourceStockManager({
             </div>
           </div>
         ) : null}
+      </section>
+
+      <section className="mt-5">
+        <StockLocationsManager
+          resourceId={resourceId}
+          canEdit={canEdit}
+          unitName={unitName}
+          onStockChanged={() => void loadStock(true)}
+        />
       </section>
 
       {pendingMovement ? (

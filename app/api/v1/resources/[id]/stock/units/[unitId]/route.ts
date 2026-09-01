@@ -23,16 +23,28 @@ const unitPatchSchema = z
     occurredAt: z.string().datetime().optional(),
     reason: z.string().trim().max(240).nullable().optional(),
     note: z.string().trim().max(20_000).optional(),
+    totalPriceCents: z.number().int().min(-2_000_000_000).max(2_000_000_000).nullable().optional(),
+    priceCurrency: z.string().trim().length(3).toUpperCase().nullable().optional(),
   })
   .strict()
+  .superRefine((value, context) => {
+    if ((value.totalPriceCents == null) !== (value.priceCurrency == null)) {
+      context.addIssue({
+        code: "custom",
+        path: [value.totalPriceCents == null ? "totalPriceCents" : "priceCurrency"],
+        message: "totalPriceCents and priceCurrency must be supplied together.",
+      });
+    }
+  })
   .refine(
     (value) =>
       value.status !== undefined ||
       value.location !== undefined ||
       value.locationResourceId !== undefined ||
       value.metadata !== undefined ||
-      value.customFields !== undefined,
-    { message: "Update status, location, metadata, or custom fields." },
+      value.customFields !== undefined ||
+      value.totalPriceCents !== undefined,
+    { message: "Update status, location, metadata, custom fields, or transaction price." },
   );
 
 export const dynamic = "force-dynamic";

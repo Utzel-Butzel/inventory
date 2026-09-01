@@ -46,9 +46,13 @@ import {
   createRoomObjectModel,
   isRecognizableAiPrimitiveModel,
 } from "@/components/room-object-models";
-import { applyDetectedRoomFinish } from "@/components/room-scene-materials";
+import {
+  applyDetectedRoomFinish,
+  applyRoomMaterialClass,
+} from "@/components/room-scene-materials";
 import { cn } from "@/components/ui";
 import type {
+  RoomMaterial,
   RoomObjectSuggestion,
   RoomWindowDetails,
 } from "@/lib/room-ai-analysis-contract";
@@ -65,6 +69,11 @@ import {
   resolveRoomKeyAzimuth,
 } from "@/lib/room-lighting-rig";
 import type { SpatialMatrix4 } from "@/lib/room-scene-contract";
+import {
+  applyMetricSurfaceUvs,
+  floorTextureTilesPerMetre,
+  wallTextureTilesPerMetre,
+} from "@/lib/room-surface-uvs";
 import { resolveRoomWindowPaneGrid } from "@/lib/room-window-details";
 import {
   hasPlyHeader,
@@ -183,6 +192,34 @@ const objectColors: Record<string, number> = {
   fireplace: 0x9c7d68,
   television: 0x555c65,
   stairs: 0x9f9788,
+};
+
+/**
+ * What each detected object is most likely made of.
+ *
+ * RoomPlan gives us a category but no material, and category is a good enough
+ * proxy: seating is upholstered, casework is timber, white goods are steel,
+ * sanitaryware is glazed. This drives roughness, metalness and the clearcoat or
+ * sheen lobe, which is what separates these props from each other far more than
+ * their base colour does.
+ */
+const objectMaterialClasses: Record<string, RoomMaterial> = {
+  storage: "wood",
+  table: "wood",
+  chair: "wood",
+  stairs: "wood",
+  sofa: "fabric",
+  bed: "fabric",
+  refrigerator: "metal",
+  stove: "metal",
+  oven: "metal",
+  dishwasher: "metal",
+  "washer-dryer": "metal",
+  sink: "metal",
+  toilet: "tile",
+  bathtub: "tile",
+  fireplace: "stone",
+  television: "plastic",
 };
 
 const sceneThemePalettes = {
@@ -1211,16 +1248,20 @@ export function RoomSceneCanvas({
     const objectMaterial = (category: string) => {
       const cached = objectMaterials.get(category);
       if (cached) return cached;
-      const material = new THREE.MeshStandardMaterial({
+      const material = new THREE.MeshPhysicalMaterial({
         color: objectColors[category] ?? 0xb09b84,
         map: objectColorMap,
         normalMap: objectNormalMap,
         normalScale: new THREE.Vector2(0.22, 0.22),
         roughnessMap: objectRoughnessMap,
-        roughness: 0.78,
-        metalness: 0,
-        envMapIntensity: 0.45,
+        // Every opaque prop takes its diffuse light from the atlas and has the
+        // environment's irradiance term suppressed, so this controls the
+        // specular response alone. Leaving it near unity lets Fresnel and
+        // roughness decide how reflective each class looks instead of a
+        // hand-picked number, which is what kept props reading as flat paper.
+        envMapIntensity: 0.9,
       });
+      applyRoomMaterialClass(material, objectMaterialClasses[category] ?? "wood");
       objectMaterials.set(category, material);
       return material;
     };
@@ -1325,27 +1366,35 @@ export function RoomSceneCanvas({
       (candidate) =>
         candidate.status === "accepted" && candidate.roomObjectId === objectId,
     );
-    const objectLightMaterial = new THREE.MeshStandardMaterial({
+    const objectLightMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xe8e1d6,
       map: objectColorMap,
       normalMap: objectNormalMap,
       normalScale: new THREE.Vector2(0.2, 0.2),
       roughnessMap: objectRoughnessMap,
-      roughness: 0.82,
+      roughness: 0.72,
       metalness: 0,
-      envMapIntensity: 0.42,
+      // Painted panel: a faint coat, not a gloss.
+      clearcoat: 0.16,
+      clearcoatRoughness: 0.42,
+      envMapIntensity: 0.85,
     });
-    const objectDarkMaterial = new THREE.MeshStandardMaterial({
+    const objectDarkMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x30363d,
-      roughness: 0.52,
+      roughness: 0.46,
       metalness: 0,
-      envMapIntensity: 0.7,
+      clearcoat: 0.28,
+      clearcoatRoughness: 0.26,
+      envMapIntensity: 1,
     });
-    const objectMetalMaterial = new THREE.MeshStandardMaterial({
+    const objectMetalMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xaeb7bd,
-      roughness: 0.3,
+      // Brushed appliance steel, not chrome: the anisotropy of a real brushed
+      // finish is beyond a single roughness value, so keep the lobe broad
+      // enough that it reads as satin rather than a mirror.
+      roughness: 0.38,
       metalness: 1,
-      envMapIntensity: 1.4,
+      envMapIntensity: 1.15,
     });
     const objectGlassMaterial = new THREE.MeshPhysicalMaterial({
       color: 0x263947,
@@ -1377,15 +1426,17 @@ export function RoomSceneCanvas({
       thickness: 0.018,
       envMapIntensity: 1.15,
     });
-    const objectWarmMaterial = new THREE.MeshStandardMaterial({
+    const objectWarmMaterial = new THREE.MeshPhysicalMaterial({
       color: 0xc87543,
       map: objectColorMap,
       normalMap: objectNormalMap,
       normalScale: new THREE.Vector2(0.22, 0.22),
       roughnessMap: objectRoughnessMap,
-      roughness: 0.8,
+      roughness: 0.62,
       metalness: 0,
-      envMapIntensity: 0.35,
+      clearcoat: 0.2,
+      clearcoatRoughness: 0.38,
+      envMapIntensity: 0.85,
     });
     const createSuggestionModel = (
       roomManifest: ClientRoomSceneManifest,
@@ -1560,6 +1611,13 @@ export function RoomSceneCanvas({
     }) => {
       const geometry = new THREE.PlaneGeometry(width, height);
       if (normalSign < 0) geometry.rotateY(Math.PI);
+      // Project after the flip so positions and normals are final, and offset
+      // into wall space so neighbouring pieces share one continuous pattern.
+      applyMetricSurfaceUvs(geometry, {
+        offset: position,
+        textureRepeat: wallColorMap.repeat,
+        tilesPerMetre: wallTextureTilesPerMetre,
+      });
       const mesh = new THREE.Mesh(
         geometry,
         baked ? material : unbakedWallMaterial(material),
@@ -1678,6 +1736,10 @@ export function RoomSceneCanvas({
         });
         geometry.translate(0, 0, -depth / 2);
         geometry.computeVertexNormals();
+        applyMetricSurfaceUvs(geometry, {
+          textureRepeat: wallColorMap.repeat,
+          tilesPerMetre: wallTextureTilesPerMetre,
+        });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -1717,6 +1779,11 @@ export function RoomSceneCanvas({
           if (piece.top >= height / 2 - boundaryInset) {
             const capGeometry = new THREE.PlaneGeometry(pieceWidth, depth);
             capGeometry.rotateX(-Math.PI / 2);
+            applyMetricSurfaceUvs(capGeometry, {
+              offset: [pieceCenterX, piece.top, 0],
+              textureRepeat: wallColorMap.repeat,
+              tilesPerMetre: wallTextureTilesPerMetre,
+            });
             const cap = new THREE.Mesh(
               capGeometry,
               unbakedWallMaterial(material),
@@ -1972,20 +2039,28 @@ export function RoomSceneCanvas({
         0.06,
       );
       const trimDepth = Math.max(measuredDepth, 0.075);
-      for (const x of [-width / 2 + trimWidth / 2, width / 2 - trimWidth / 2]) {
-        addBox({
-          parent: opening,
-          size: [trimWidth, height, trimDepth],
-          position: [x, 0, 0],
-          material,
+      // An opening's reveal is plaster continuing round the corner from the
+      // wall, so it has to tile at the wall's density rather than fitting a
+      // whole texture into a strip a few centimetres wide.
+      const addOpeningTrim = (
+        size: readonly [number, number, number],
+        position: readonly [number, number, number],
+      ) => {
+        const mesh = addBox({ parent: opening, size, position, material });
+        applyMetricSurfaceUvs(mesh.geometry, {
+          offset: position,
+          textureRepeat: wallColorMap.repeat,
+          tilesPerMetre: wallTextureTilesPerMetre,
         });
+        return mesh;
+      };
+      for (const x of [-width / 2 + trimWidth / 2, width / 2 - trimWidth / 2]) {
+        addOpeningTrim([trimWidth, height, trimDepth], [x, 0, 0]);
       }
-      addBox({
-        parent: opening,
-        size: [width - trimWidth * 2, trimWidth, trimDepth],
-        position: [0, height / 2 - trimWidth / 2, 0],
-        material,
-      });
+      addOpeningTrim(
+        [width - trimWidth * 2, trimWidth, trimDepth],
+        [0, height / 2 - trimWidth / 2, 0],
+      );
       return opening;
     };
 
@@ -2102,6 +2177,10 @@ export function RoomSceneCanvas({
         } else {
           const dimensions = normalizedDimensions(surface.category, surface.dimensions);
           const geometry = new THREE.BoxGeometry(...dimensions);
+          applyMetricSurfaceUvs(geometry, {
+            textureRepeat: floorColorMap.repeat,
+            tilesPerMetre: floorTextureTilesPerMetre,
+          });
           const material = finishForSurface(
             roomManifest,
             "floor",
@@ -3779,6 +3858,13 @@ export function RoomSceneCanvas({
     let lightMapActiveElapsed = 0;
     let lightMapLastFrameAt: number | null = null;
     let roomReflectionTarget: THREE.WebGLRenderTarget | null = null;
+    // Realistic has no planar mirror on the floor — Live gets one from a
+    // Reflector — so its sealed linoleum has to read as reflective from the
+    // probe alone. Tightening both lobes only here keeps Live's floor, which
+    // already composites a real reflection, from doubling up.
+    const floorGloss = lightingMode === "realistic"
+      ? { clearcoat: 0.6, clearcoatRoughness: 0.12, envMapIntensity: 1.15, roughness: 0.34 }
+      : { clearcoat: 0.38, clearcoatRoughness: 0.22, envMapIntensity: 1, roughness: 0.5 };
     const enableStableFloorSheen = (environmentMap: THREE.Texture) => {
       for (const mesh of reflectiveFloorMeshes) {
         const materials = Array.isArray(mesh.material)
@@ -3789,15 +3875,24 @@ export function RoomSceneCanvas({
           // An explicit room probe makes the reflection visible together with
           // the baked diffuse atlas without applying an environment to walls.
           material.envMap = environmentMap;
-          material.roughness = Math.min(material.roughness, 0.5);
-          material.normalScale.setScalar(Math.min(material.normalScale.x, 0.08));
-          material.envMapIntensity = 1;
+          material.roughness = Math.min(material.roughness, floorGloss.roughness);
+          // A broken-up normal scatters the reflection into noise, which is
+          // what stops a floor reading as a reflective surface at all.
+          material.normalScale.setScalar(Math.min(material.normalScale.x, 0.06));
+          material.envMapIntensity = floorGloss.envMapIntensity;
+          if (material instanceof THREE.MeshPhysicalMaterial) {
+            material.clearcoat = floorGloss.clearcoat;
+            material.clearcoatRoughness = floorGloss.clearcoatRoughness;
+          }
           material.needsUpdate = true;
         }
       }
     };
     const captureLocalReflectionProbe = () => {
-      const cubeTarget = new THREE.WebGLCubeRenderTarget(128, {
+      // 128 px per face could not resolve the window or a wall corner, so the
+      // floor mirrored an indistinct smear. This is captured once, so the extra
+      // resolution costs nothing at steady state.
+      const cubeTarget = new THREE.WebGLCubeRenderTarget(256, {
         colorSpace: THREE.LinearSRGBColorSpace,
         generateMipmaps: true,
         magFilter: THREE.LinearFilter,

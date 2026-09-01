@@ -47,6 +47,12 @@ import {
   enqueueStockMovementWebhookEvents,
   enqueueWebhookEvent,
 } from "@/lib/webhooks";
+import {
+  addInboundStockCost,
+  consumeStockCost,
+  splitCents,
+  type StockCostResult,
+} from "@/lib/stock-costing";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 
@@ -114,6 +120,8 @@ const unitDto = (row: StockUnitRecord) => ({
   location: row.location,
   metadata: row.metadata,
   customFields: row.customFields,
+  acquisitionCostCents: row.acquisitionCostCents,
+  costCurrency: row.costCurrency,
   acquiredAt: row.acquiredAt.toISOString(),
   lastMovedAt: row.lastMovedAt.toISOString(),
   createdAt: row.createdAt.toISOString(),
@@ -127,6 +135,12 @@ const movementDto = (row: StockMovementRecord) => ({
   assemblyBuildId: row.assemblyBuildId,
   purchaseReceiptId: row.purchaseReceiptId,
   delta: row.delta,
+  quantity: row.quantity,
+  totalPriceCents: row.totalPriceCents,
+  priceCurrency: row.priceCurrency,
+  costCents: row.costCents,
+  costCurrency: row.costCurrency,
+  costEstimated: row.costEstimated,
   balanceAfter: row.balanceAfter,
   type: row.type,
   reason: row.reason,
@@ -1524,6 +1538,9 @@ type BuildComponentDto = {
   }>;
   stockMovementIds: string[];
   outputUnitIds: string[];
+  costs: Record<string, number>;
+  unpricedQuantity: number;
+  costEstimated: boolean;
 };
 
 function buildComponentsDto(
@@ -1542,8 +1559,18 @@ function buildComponentsDto(
       componentUnits: [],
       stockMovementIds: [],
       outputUnitIds: [],
+      costs: {},
+      unpricedQuantity: 0,
+      costEstimated: false,
     };
     current.quantityConsumed += row.quantityConsumed;
+    if (row.costCents === null || row.costCurrency === null) {
+      current.unpricedQuantity += row.quantityConsumed;
+    } else {
+      current.costs[row.costCurrency] =
+        (current.costs[row.costCurrency] ?? 0) + row.costCents;
+    }
+    current.costEstimated ||= row.costEstimated;
     if (row.stockMovementId && !current.stockMovementIds.includes(row.stockMovementId)) {
       current.stockMovementIds.push(row.stockMovementId);
     }
@@ -1586,6 +1613,9 @@ const buildDto = (
     occurredAt: build.occurredAt.toISOString(),
     location: build.location,
     note: build.note,
+    materialCosts: build.materialCosts,
+    unpricedComponentQuantity: build.unpricedComponentQuantity,
+    costEstimated: componentRows.some((component) => component.costEstimated),
     createdBy: build.createdBy,
     createdAt: build.createdAt.toISOString(),
     components: buildComponentsDto(componentRows, unitsById),
@@ -2014,6 +2044,18 @@ export async function buildAssembly(
 
       const allMovements: StockMovementRecord[] = [];
       const allocationValues: Array<typeof assemblyBuildComponents.$inferInsert> = [];
+      const materialCosts: Record<string, number> = {};
+      let unpricedComponentQuantity = 0;
+      let materialCostEstimated = false;
+      const addMaterialCost = (cost: StockCostResult) => {
+        materialCostEstimated ||= cost.estimated;
+        if (cost.costCents === null) {
+          unpricedComponentQuantity += cost.unpricedQuantity;
+        } else {
+          materialCosts[cost.currency] =
+            (materialCosts[cost.currency] ?? 0) + cost.costCents;
+        }
+      };
       const componentBalances: Array<{
         resourceId: string;
         name: string;
@@ -2140,7 +2182,27 @@ export async function buildAssembly(
           const movementByUnit = new Map(
             movements.map((movement) => [movement.unitId, movement]),
           );
+          const costByUnit = new Map<string, StockCostResult>();
+          for (const unit of selectedUnits) {
+            const movement = movementByUnit.get(unit.id);
+            if (!movement) continue;
+            const cost = await consumeStockCost(transaction, {
+              organizationId,
+              resourceId: line.componentResourceId,
+              movementId: movement.id,
+              unitId: unit.id,
+              quantity: 1,
+              quantityBefore: component.quantity,
+              fallbackUnitCostCents:
+                unit.acquisitionCostCents ?? component.valueCents,
+              currency: component.currency,
+              occurredAt,
+            });
+            costByUnit.set(unit.id, cost);
+            addMaterialCost(cost);
+          }
           selectedUnits.forEach((unit, index) => {
+            const cost = costByUnit.get(unit.id);
             allocationValues.push({
               organizationId,
               buildId: build.id,
@@ -2149,6 +2211,9 @@ export async function buildAssembly(
               componentSku: line.sku,
               quantityPerAssembly: line.quantityPerAssembly,
               quantityConsumed: 1,
+              costCents: cost?.costCents ?? null,
+              costCurrency: cost?.costCents == null ? null : cost.currency,
+              costEstimated: cost?.estimated ?? true,
               componentUnitId: unit.id,
               outputUnitId:
                 outputUnits[Math.floor(index / line.quantityPerAssembly)]?.id ?? null,
@@ -2183,8 +2248,20 @@ export async function buildAssembly(
             })
             .returning();
           allMovements.push(movement);
+          const cost = await consumeStockCost(transaction, {
+            organizationId,
+            resourceId: line.componentResourceId,
+            movementId: movement.id,
+            quantity: required,
+            quantityBefore: component.quantity,
+            fallbackUnitCostCents: component.valueCents,
+            currency: component.currency,
+            occurredAt,
+          });
+          addMaterialCost(cost);
           if (outputUnits.length) {
-            outputUnits.forEach((unit) => {
+            const costsByOutput = splitCents(cost.costCents, outputUnits.length);
+            outputUnits.forEach((unit, index) => {
               allocationValues.push({
                 organizationId,
                 buildId: build.id,
@@ -2193,6 +2270,10 @@ export async function buildAssembly(
                 componentSku: line.sku,
                 quantityPerAssembly: line.quantityPerAssembly,
                 quantityConsumed: line.quantityPerAssembly,
+                costCents: costsByOutput[index],
+                costCurrency:
+                  costsByOutput[index] === null ? null : cost.currency,
+                costEstimated: cost.estimated,
                 outputUnitId: unit.id,
                 stockMovementId: movement.id,
               });
@@ -2206,6 +2287,9 @@ export async function buildAssembly(
               componentSku: line.sku,
               quantityPerAssembly: line.quantityPerAssembly,
               quantityConsumed: required,
+              costCents: cost.costCents,
+              costCurrency: cost.costCents === null ? null : cost.currency,
+              costEstimated: cost.estimated,
               stockMovementId: movement.id,
             });
           }
@@ -2218,6 +2302,31 @@ export async function buildAssembly(
       }
 
       const assemblyBalanceAfter = assembly.quantity + input.quantity;
+      const outputCostCents =
+        unpricedComponentQuantity === 0 &&
+        Object.keys(materialCosts).length === 1 &&
+        materialCosts[assembly.currency] !== undefined
+          ? materialCosts[assembly.currency]!
+          : null;
+      const outputCosts = splitCents(outputCostCents, input.quantity);
+      if (outputUnits.length) {
+        for (const [index, unit] of outputUnits.entries()) {
+          const [savedUnit] = await transaction
+            .update(stockUnits)
+            .set({
+              acquisitionCostCents:
+                outputCosts[index] ?? assembly.valueCents ?? null,
+              costCurrency:
+                outputCosts[index] !== null || assembly.valueCents !== null
+                  ? assembly.currency
+                  : null,
+              updatedAt: now,
+            })
+            .where(eq(stockUnits.id, unit.id))
+            .returning();
+          if (savedUnit) outputUnits[index] = savedUnit;
+        }
+      }
       await transaction
         .update(resources)
         .set({ quantity: assemblyBalanceAfter, updatedAt: now })
@@ -2249,6 +2358,21 @@ export async function buildAssembly(
           )
           .returning();
         allMovements.push(...movements);
+        for (const [index, movement] of movements.entries()) {
+          await addInboundStockCost(transaction, {
+            organizationId,
+            resourceId: assemblyResourceId,
+            movementId: movement.id,
+            unitId: movement.unitId,
+            quantity: 1,
+            totalPriceCents: outputCosts[index],
+            fallbackUnitCostCents: assembly.valueCents,
+            currency: assembly.currency,
+            occurredAt,
+            estimated:
+              outputCosts[index] === null ? undefined : materialCostEstimated,
+          });
+        }
       } else {
         const [movement] = await transaction
           .insert(stockMovements)
@@ -2268,6 +2392,18 @@ export async function buildAssembly(
           })
           .returning();
         allMovements.push(movement);
+        await addInboundStockCost(transaction, {
+          organizationId,
+          resourceId: assemblyResourceId,
+          movementId: movement.id,
+          quantity: input.quantity,
+          totalPriceCents: outputCostCents,
+          fallbackUnitCostCents: assembly.valueCents,
+          currency: assembly.currency,
+          occurredAt,
+          estimated:
+            outputCostCents === null ? undefined : materialCostEstimated,
+        });
       }
 
       const savedAllocations = allocationValues.length
@@ -2276,7 +2412,17 @@ export async function buildAssembly(
             .values(allocationValues)
             .returning()
         : [];
-      await enqueueStockMovementWebhookEvents(transaction, allMovements);
+      const [savedBuild] = await transaction
+        .update(assemblyBuilds)
+        .set({ materialCosts, unpricedComponentQuantity })
+        .where(eq(assemblyBuilds.id, build.id))
+        .returning();
+      const costedMovements = await transaction
+        .select()
+        .from(stockMovements)
+        .where(inArray(stockMovements.id, allMovements.map((row) => row.id)));
+      const costedMovementById = new Map(costedMovements.map((row) => [row.id, row]));
+      await enqueueStockMovementWebhookEvents(transaction, costedMovements);
       const unitsById = new Map<string, StockUnitRecord>();
       for (const unit of outputUnits) unitsById.set(unit.id, unit);
       const componentUnitIds = savedAllocations
@@ -2295,7 +2441,7 @@ export async function buildAssembly(
         for (const unit of installedRows) unitsById.set(unit.id, unit);
       }
       const response = {
-        build: buildDto(build, savedAllocations, unitsById),
+        build: buildDto(savedBuild ?? build, savedAllocations, unitsById),
         resource: {
           id: assembly.id,
           name: assembly.name,
@@ -2304,7 +2450,9 @@ export async function buildAssembly(
         },
         outputUnits: outputUnits.map(unitDto),
         componentBalances,
-        movements: allMovements.map(movementDto),
+        movements: allMovements.map((movement) =>
+          movementDto(costedMovementById.get(movement.id) ?? movement),
+        ),
       };
       const storedResponse = jsonRecord(response);
       await transaction

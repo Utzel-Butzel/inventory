@@ -19,8 +19,14 @@ const lineSchema = z
     orderedQuantity: z.number().int().min(1).max(2_000_000_000),
     expectedAt: z.string().datetime().nullable().optional(),
     note: z.string().trim().max(20_000).optional(),
+    unitPriceCents: z.number().int().min(0).max(2_000_000_000).nullable().optional(),
+    priceCurrency: z.string().trim().length(3).toUpperCase().nullable().optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => (value.unitPriceCents == null) === (value.priceCurrency == null),
+    { message: "unitPriceCents and priceCurrency must be supplied together." },
+  );
 
 const orderCreateSchema = z
   .object({

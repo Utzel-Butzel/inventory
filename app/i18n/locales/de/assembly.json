@@ -123,6 +123,10 @@
     "shown_other": "{{count}} angezeigt",
     "built_one": "{{count}} × {{name}} gefertigt",
     "built_other": "{{count}} × {{name}} gefertigt",
+    "materialCost": "Materialkosten",
+    "estimated": "geschätzt",
+    "unpricedComponents_one": "{{count}} verbrauchte Komponente ist noch nicht bewertet.",
+    "unpricedComponents_other": "{{count}} verbrauchte Komponenten sind noch nicht bewertet.",
     "emptyTitle": "Keine Fertigungen erfasst",
     "emptyDescription": "Abgeschlossene Fertigungen erscheinen hier mit ihrem Komponentenprotokoll.",
     "openStock": "Bestandshistorie öffnen"

@@ -330,6 +330,20 @@
         "load": "Unable to load stock for the connection flow."
       }
     },
+    "priceFlow": {
+      "show": "Show price flow",
+      "loading": "Loading price flow…",
+      "inbound": "Stock in: +{{quantity}} · {{amount}}",
+      "outbound": "Stock out: −{{quantity}} · {{amount}}",
+      "neutral": "No stock change: {{quantity}} moved · {{amount}}",
+      "noPrice": "—",
+      "estimated": "Includes estimated inventory costs",
+      "unpriced_one": "{{value}} movement does not have a price yet",
+      "unpriced_other": "{{value}} movements do not have a price yet",
+      "errors": {
+        "load": "Unable to load price flow for the connection flow."
+      }
+    },
     "legend": {
       "family": "Variant family",
       "bom": "Bill of materials",

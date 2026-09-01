@@ -1,8 +1,13 @@
 "use client";
 
-import { OrganizationLink as Link } from "@/components/organization-routing";
 import { fetchJson } from "@/lib/client-types";
-import { AlertTriangle, ArrowLeft, Check, LoaderCircle, Save } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  LoaderCircle,
+  Save,
+  Settings2,
+} from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
 
@@ -166,117 +171,179 @@ export function ResourceStockSettings({ resourceId }: { resourceId: string }) {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="grid min-h-[calc(100dvh-68px)] place-items-center">
-        <LoaderCircle className="size-5 animate-spin text-brand" aria-hidden="true" />
-      </div>
-    );
-  }
-
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 lg:py-8">
-      <Link
-        href={`/inventory/${resourceId}/stock`}
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" aria-hidden="true" />
-        {t("resource.stock")}
-      </Link>
-
-      <header className="mb-6 mt-4">
-        <h1 className="text-2xl font-semibold tracking-[-0.035em] text-foreground sm:text-3xl">
-          {t("resource.settings.title")}
-        </h1>
-        {stock ? <p className="mt-1.5 text-sm text-muted">{stock.resource.name}</p> : null}
-      </header>
-
-      {error ? (
-        <div className="mb-4 flex items-start gap-2 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          {error}
-        </div>
-      ) : null}
-      {notice ? (
-        <div className="mb-4 flex items-center gap-2 rounded-xl border border-success-border bg-success-soft px-4 py-3 text-sm text-success">
-          <Check className="size-4 shrink-0" aria-hidden="true" />
-          {notice}
-        </div>
-      ) : null}
-
-      {stock && form ? (
-        <form
-          onSubmit={save}
-          className="space-y-5 rounded-2xl border border-border bg-surface p-5 shadow-[var(--shadow-sm)] sm:p-6"
-        >
+    <section
+      id="stock-settings"
+      className="mx-auto w-full max-w-[1450px] scroll-mt-24 px-4 pb-8 sm:px-6 lg:px-8"
+    >
+      <div className="rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
+        <header className="flex items-center gap-3 border-b border-border px-5 py-4 sm:px-6">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted">
+            <Settings2 className="size-4" aria-hidden="true" />
+          </span>
           <div>
-            <span className={labelClass}>{t("resource.settings.trackingMode")}</span>
-            <div className="mt-1.5 grid grid-cols-2 rounded-xl bg-surface-muted p-1">
-              {(["bulk", "serialized"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  disabled={
-                    mode === "bulk" &&
-                    stock.config.trackingMode === "serialized" &&
-                    stock.units.length > 0
-                  }
-                  onClick={() => setForm((current) => current ? { ...current, trackingMode: mode } : current)}
-                  className={`h-9 rounded-lg text-xs font-semibold transition ${
-                    form.trackingMode === mode
-                      ? "bg-surface text-brand shadow-sm"
-                      : "text-muted hover:text-foreground"
-                  } disabled:cursor-not-allowed disabled:opacity-35`}
-                  title={
-                    mode === "bulk" &&
-                    stock.config.trackingMode === "serialized" &&
-                    stock.units.length > 0
-                      ? t("resource.settings.cannotReturnBulk")
-                      : undefined
-                  }
-                >
-                  {t(`resource.tracking.${mode}`)}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-xs leading-5 text-muted">
-              {form.trackingMode === "bulk"
-                ? t("resource.settings.bulkHelp")
-                : t("resource.settings.serializedHelp")}
+            <h2 className="text-sm font-semibold text-foreground">
+              {t("resource.settings.title")}
+            </h2>
+            <p className="mt-0.5 text-xs text-muted">
+              {t("resource.settings.description")}
             </p>
           </div>
+        </header>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className={labelClass}>
-              {t("resource.settings.minimumStock")}
-              <input type="number" min="0" max="1000000" step="1" required value={form.minimumStock} onChange={(event) => setForm({ ...form, minimumStock: event.target.value })} className={inputClass} />
-            </label>
-            <label className={labelClass}>
-              {t("resource.settings.reorderQuantity")}
-              <input type="number" min="0" max="1000000" step="1" required value={form.reorderQuantity} onChange={(event) => setForm({ ...form, reorderQuantity: event.target.value })} className={inputClass} />
-            </label>
-            <label className={labelClass}>
-              {t("resource.settings.leadTime")}
-              <input type="number" min="0" max="3650" step="1" required value={form.leadTimeDays} onChange={(event) => setForm({ ...form, leadTimeDays: event.target.value })} className={inputClass} />
-            </label>
-            <label className={labelClass}>
-              {t("resource.settings.unitName")}
-              <input required maxLength={60} value={form.unitName} onChange={(event) => setForm({ ...form, unitName: event.target.value })} placeholder={t("resource.settings.unitNamePlaceholder")} className={inputClass} />
-            </label>
-          </div>
+        <div className="p-5 sm:p-6">
+          {error ? (
+            <div className="mb-4 flex items-start gap-2 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
+              <AlertTriangle
+                className="mt-0.5 size-4 shrink-0"
+                aria-hidden="true"
+              />
+              {error}
+            </div>
+          ) : null}
+          {notice ? (
+            <div className="mb-4 flex items-center gap-2 rounded-xl border border-success-border bg-success-soft px-4 py-3 text-sm text-success">
+              <Check className="size-4 shrink-0" aria-hidden="true" />
+              {notice}
+            </div>
+          ) : null}
 
-          <div className="flex justify-end border-t border-border pt-5">
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-strong px-4 text-xs font-semibold text-on-strong transition hover:opacity-90 disabled:opacity-50"
-            >
-              {saving ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Save className="size-4" aria-hidden="true" />}
-              {t("resource.actions.saveSettings")}
-            </button>
-          </div>
-        </form>
-      ) : null}
-    </div>
+          {loading ? (
+            <div className="grid min-h-32 place-items-center">
+              <LoaderCircle
+                className="size-5 animate-spin text-brand"
+                aria-hidden="true"
+              />
+            </div>
+          ) : stock && form ? (
+            <form onSubmit={save} className="space-y-5">
+              <div>
+                <span className={labelClass}>
+                  {t("resource.settings.trackingMode")}
+                </span>
+                <div className="mt-1.5 grid grid-cols-2 rounded-xl bg-surface-muted p-1">
+                  {(["bulk", "serialized"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      disabled={
+                        mode === "bulk" &&
+                        stock.config.trackingMode === "serialized" &&
+                        stock.units.length > 0
+                      }
+                      onClick={() =>
+                        setForm((current) =>
+                          current
+                            ? { ...current, trackingMode: mode }
+                            : current,
+                        )
+                      }
+                      className={`h-9 rounded-lg text-xs font-semibold transition ${
+                        form.trackingMode === mode
+                          ? "bg-surface text-brand shadow-sm"
+                          : "text-muted hover:text-foreground"
+                      } disabled:cursor-not-allowed disabled:opacity-35`}
+                      title={
+                        mode === "bulk" &&
+                        stock.config.trackingMode === "serialized" &&
+                        stock.units.length > 0
+                          ? t("resource.settings.cannotReturnBulk")
+                          : undefined
+                      }
+                    >
+                      {t(`resource.tracking.${mode}`)}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  {form.trackingMode === "bulk"
+                    ? t("resource.settings.bulkHelp")
+                    : t("resource.settings.serializedHelp")}
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className={labelClass}>
+                  {t("resource.settings.minimumStock")}
+                  <input
+                    type="number"
+                    min="0"
+                    max="1000000"
+                    step="1"
+                    required
+                    value={form.minimumStock}
+                    onChange={(event) =>
+                      setForm({ ...form, minimumStock: event.target.value })
+                    }
+                    className={inputClass}
+                  />
+                </label>
+                <label className={labelClass}>
+                  {t("resource.settings.reorderQuantity")}
+                  <input
+                    type="number"
+                    min="0"
+                    max="1000000"
+                    step="1"
+                    required
+                    value={form.reorderQuantity}
+                    onChange={(event) =>
+                      setForm({ ...form, reorderQuantity: event.target.value })
+                    }
+                    className={inputClass}
+                  />
+                </label>
+                <label className={labelClass}>
+                  {t("resource.settings.leadTime")}
+                  <input
+                    type="number"
+                    min="0"
+                    max="3650"
+                    step="1"
+                    required
+                    value={form.leadTimeDays}
+                    onChange={(event) =>
+                      setForm({ ...form, leadTimeDays: event.target.value })
+                    }
+                    className={inputClass}
+                  />
+                </label>
+                <label className={labelClass}>
+                  {t("resource.settings.unitName")}
+                  <input
+                    required
+                    maxLength={60}
+                    value={form.unitName}
+                    onChange={(event) =>
+                      setForm({ ...form, unitName: event.target.value })
+                    }
+                    placeholder={t("resource.settings.unitNamePlaceholder")}
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              <div className="flex justify-end border-t border-border pt-5">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-strong px-4 text-xs font-semibold text-on-strong transition hover:opacity-90 disabled:opacity-50"
+                >
+                  {saving ? (
+                    <LoaderCircle
+                      className="size-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Save className="size-4" aria-hidden="true" />
+                  )}
+                  {t("resource.actions.saveSettings")}
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </div>
+      </div>
+    </section>
   );
 }

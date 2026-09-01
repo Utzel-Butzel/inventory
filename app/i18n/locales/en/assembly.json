@@ -123,6 +123,10 @@
     "shown_other": "{{count}} shown",
     "built_one": "Built {{count}} {{name}}",
     "built_other": "Built {{count}} {{name}}",
+    "materialCost": "Material cost",
+    "estimated": "estimated",
+    "unpricedComponents_one": "{{count}} consumed component is still unpriced.",
+    "unpricedComponents_other": "{{count}} consumed components are still unpriced.",
     "emptyTitle": "No builds recorded",
     "emptyDescription": "Completed assembly builds will appear here with their component audit trail.",
     "openStock": "Open stock history"

@@ -33,10 +33,17 @@ export default async function EditInventoryItemPage({ params }: Props) {
     );
   }
 
-  const [canDelete, canUseAi, canManageSpatial, rawVariantContext] = await Promise.all([
+  const [
+    canDelete,
+    canUseAi,
+    canManageSpatial,
+    canManageStock,
+    rawVariantContext,
+  ] = await Promise.all([
     canAccessResource(identity, "inventory.delete", resource),
     canAccessResource(identity, "ai.use", resource),
     canAccessResource(identity, "spatial.manage", resource),
+    canAccessResource(identity, "stock.manage", resource),
     getResourceVariantContext(identity.organizationId, resource.id),
   ]);
   const variantContext =
@@ -60,6 +67,7 @@ export default async function EditInventoryItemPage({ params }: Props) {
       canViewStock={identity.permissions.includes("stock.read")}
       canUseAi={canUseAi}
       canManageSpatial={canManageSpatial}
+      canManageStock={canManageStock}
       variantContext={variantContext}
     />
   );

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { InventoryBreadcrumb } from "@/components/inventory-breadcrumb-context";
 import { ResourceStockManager } from "@/components/resource-stock-manager";
 import { canAccessResource, getSessionIdentity } from "@/lib/api-auth";
 import { getResourceRecordByReference } from "@/lib/access-control";
@@ -39,10 +40,19 @@ export default async function ResourceStockPage({ params }: Props) {
     identity && resource
       ? await canAccessResource(identity, "stock.manage", resource)
       : false;
+  const resourceReference = resource ? primaryResourceReference(resource) : id;
   return (
-    <ResourceStockManager
-      resourceId={resource?.id ?? id}
-      canEdit={canManageStock}
-    />
+    <>
+      {resource ? (
+        <InventoryBreadcrumb
+          href={`/inventory/${resourceReference}`}
+          name={resource.name}
+        />
+      ) : null}
+      <ResourceStockManager
+        resourceId={resource?.id ?? id}
+        canEdit={canManageStock}
+      />
+    </>
   );
 }

@@ -330,6 +330,20 @@
         "load": "Der Bestand für den Verbindungsfluss konnte nicht geladen werden."
       }
     },
+    "priceFlow": {
+      "show": "Preisfluss anzeigen",
+      "loading": "Preisfluss wird geladen…",
+      "inbound": "Zugang: +{{quantity}} Bestand · {{amount}}",
+      "outbound": "Abgang: −{{quantity}} Bestand · {{amount}}",
+      "neutral": "Ohne Bestandsänderung: {{quantity}} bewegt · {{amount}}",
+      "noPrice": "—",
+      "estimated": "Enthält geschätzte Bestandskosten",
+      "unpriced_one": "{{value}} Bewegung hat noch keinen Preis",
+      "unpriced_other": "{{value}} Bewegungen haben noch keinen Preis",
+      "errors": {
+        "load": "Der Preisfluss für den Verbindungsfluss konnte nicht geladen werden."
+      }
+    },
     "legend": {
       "family": "Variantenfamilie",
       "bom": "Stückliste",

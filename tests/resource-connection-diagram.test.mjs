@@ -576,7 +576,7 @@ test("the detail-page connection flow opens by default and owns every connection
   assert.match(component, /NODE_HEIGHT = 152/);
   assert.match(component, /NODE_MEDIA_CENTER_Y = 55/);
   assert.match(component, /ROW_STEP = 244/);
-  assert.match(component, /className="grid size-20 place-items-center/);
+  assert.match(component, /priceFlow \? "size-16" : "size-20"/);
   assert.match(component, /const middleY = \(startY \+ endY\) \/ 2/);
   assert.match(component, /flex h-full w-full flex-col items-center/);
   assert.match(component, /MAX_GRAPH_NODES = 45/);
@@ -585,7 +585,7 @@ test("the detail-page connection flow opens by default and owns every connection
   assert.match(component, /className="relative mx-auto"/);
   assert.match(component, /new ResizeObserver\(centerRoot\)/);
   assert.match(component, /\/api\/v1\/resources\/covers/);
-  assert.match(component, /src=\{cover\.url\}/);
+  assert.match(component, /media=\{cover\}/);
   assert.match(component, /coverSnapshot\.get/);
   assert.doesNotMatch(component, /iconX|iconY/);
 });
@@ -640,6 +640,45 @@ test("loads and displays permission-controlled stock summaries for visible nodes
   assert.match(diagram, /<StockIndicator/);
 });
 
+test("adds signed per-movement price flow to visible connection nodes", async () => {
+  const [stock, diagram, movementContract, stockService, schema, migration] =
+    await Promise.all([
+      readFile(new URL("../lib/connection-stock.ts", import.meta.url), "utf8"),
+      readFile(
+        new URL("../components/resource-connection-diagram.tsx", import.meta.url),
+        "utf8",
+      ),
+      readFile(new URL("../lib/stock-movement-contract.ts", import.meta.url), "utf8"),
+      readFile(new URL("../lib/stock.ts", import.meta.url), "utf8"),
+      readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+      readFile(
+        new URL("../db/migrations/0043_stock_cost_tracking.sql", import.meta.url),
+        "utf8",
+      ),
+    ]);
+
+  assert.match(stock, /stockMovements\.totalPriceCents/);
+  assert.match(stock, /stockMovements\.costCents/);
+  assert.match(
+    stock,
+    /coalesce\(\$\{stockMovements\.totalPriceCents\}, \$\{stockMovements\.costCents\}, 0\)/,
+  );
+  assert.match(stock, /inboundAmountCents/);
+  assert.match(stock, /outboundAmountCents/);
+  assert.match(stock, /unpricedMovementCount/);
+  assert.match(diagram, /connectionDiagram\.priceFlow\.show/);
+  assert.match(diagram, /showPriceFlow/);
+  assert.match(diagram, /<PriceFlowIndicator/);
+  assert.match(diagram, /direction\.value\.amountCents < 0/);
+  assert.match(
+    movementContract,
+    /totalPriceCents:[\s\S]*\.min\(-2_000_000_000\)/,
+  );
+  assert.match(stockService, /Inbound stock prices cannot be negative/);
+  assert.doesNotMatch(schema, /stock_movements_total_price_nonnegative/);
+  assert.doesNotMatch(migration, /stock_movements_total_price_nonnegative/);
+});
+
 test("the diagram edits typed connections without bypassing existing APIs", async () => {
   const [page, diagram, editor, assembly, relations] = await Promise.all([
     readFile(
@@ -679,7 +718,7 @@ test("the diagram edits typed connections without bypassing existing APIs", asyn
   assert.match(editor, /method: "DELETE"/);
   assert.match(editor, /bomWritePayload/);
   assert.match(editor, /max-h-80/);
-  assert.match(editor, /src=\{candidate\.cover\.url\}/);
+  assert.match(editor, /media=\{candidate\.cover\}/);
   assert.match(assembly, /resource-bom-changed/);
   assert.match(relations, /resource-relations-changed/);
 });

@@ -19,6 +19,8 @@ const receiptSchema = z
     receivedAt: z.string().datetime().optional(),
     location: z.string().trim().max(240).nullable().optional(),
     note: z.string().trim().max(20_000).optional(),
+    totalPriceCents: z.number().int().min(0).max(2_000_000_000).nullable().optional(),
+    priceCurrency: z.string().trim().length(3).toUpperCase().nullable().optional(),
     unitCodes: z
       .array(z.string().trim().min(1).max(180))
       .min(1)
@@ -27,6 +29,12 @@ const receiptSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if ((value.totalPriceCents == null) !== (value.priceCurrency == null)) {
+      context.addIssue({
+        code: "custom",
+        message: "totalPriceCents and priceCurrency must be supplied together.",
+      });
+    }
     if (value.unitCodes && value.unitCodes.length !== value.quantity) {
       context.addIssue({
         code: "custom",

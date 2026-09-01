@@ -2060,6 +2060,13 @@ export const assemblyBuilds = pgTable(
       .defaultNow(),
     location: varchar("location", { length: 240 }),
     note: text("note").notNull().default(""),
+    materialCosts: jsonb("material_costs")
+      .$type<Record<string, number>>()
+      .notNull()
+      .default({}),
+    unpricedComponentQuantity: integer("unpriced_component_quantity")
+      .notNull()
+      .default(0),
     idempotencyKey: uuid("idempotency_key").notNull(),
     requestHash: varchar("request_hash", { length: 64 }).notNull(),
     response: jsonb("response")
@@ -2084,6 +2091,14 @@ export const assemblyBuilds = pgTable(
       table.occurredAt,
     ),
     check("assembly_builds_quantity_positive", sql`${table.quantity} > 0`),
+    check(
+      "assembly_builds_unpriced_component_quantity_nonnegative",
+      sql`${table.unpricedComponentQuantity} >= 0`,
+    ),
+    check(
+      "assembly_builds_material_costs_object",
+      sql`jsonb_typeof(${table.materialCosts}) = 'object'`,
+    ),
   ],
 );
 
@@ -2144,6 +2159,8 @@ export const purchaseOrderLines = pgTable(
       .references(() => resources.id, { onDelete: "restrict" }),
     orderedQuantity: integer("ordered_quantity").notNull(),
     receivedQuantity: integer("received_quantity").notNull().default(0),
+    unitPriceCents: integer("unit_price_cents"),
+    priceCurrency: varchar("price_currency", { length: 3 }),
     expectedAt: timestamp("expected_at", { withTimezone: true }),
     note: text("note").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -2174,6 +2191,14 @@ export const purchaseOrderLines = pgTable(
       "purchase_order_lines_received_not_above_ordered",
       sql`${table.receivedQuantity} <= ${table.orderedQuantity}`,
     ),
+    check(
+      "purchase_order_lines_unit_price_nonnegative",
+      sql`${table.unitPriceCents} is null or ${table.unitPriceCents} >= 0`,
+    ),
+    check(
+      "purchase_order_lines_price_fields_together",
+      sql`(${table.unitPriceCents} is null and ${table.priceCurrency} is null) or (${table.unitPriceCents} is not null and ${table.priceCurrency} ~ '^[A-Z]{3}$')`,
+    ),
   ],
 );
 
@@ -2186,6 +2211,8 @@ export const purchaseReceipts = pgTable(
       .notNull()
       .references(() => purchaseOrderLines.id, { onDelete: "restrict" }),
     quantity: integer("quantity").notNull(),
+    totalPriceCents: integer("total_price_cents"),
+    priceCurrency: varchar("price_currency", { length: 3 }),
     occurredAt: timestamp("occurred_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -2215,6 +2242,14 @@ export const purchaseReceipts = pgTable(
       table.occurredAt,
     ),
     check("purchase_receipts_quantity_positive", sql`${table.quantity} > 0`),
+    check(
+      "purchase_receipts_total_price_nonnegative",
+      sql`${table.totalPriceCents} is null or ${table.totalPriceCents} >= 0`,
+    ),
+    check(
+      "purchase_receipts_price_fields_together",
+      sql`(${table.totalPriceCents} is null and ${table.priceCurrency} is null) or (${table.totalPriceCents} is not null and ${table.priceCurrency} ~ '^[A-Z]{3}$')`,
+    ),
   ],
 );
 
@@ -2364,6 +2399,8 @@ export const stockUnits = pgTable(
       .$type<CustomFieldValues>()
       .notNull()
       .default({}),
+    acquisitionCostCents: integer("acquisition_cost_cents"),
+    costCurrency: varchar("cost_currency", { length: 3 }),
     acquiredAt: timestamp("acquired_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -2406,6 +2443,14 @@ export const stockUnits = pgTable(
       "stock_units_custom_fields_object",
       sql`jsonb_typeof(${table.customFields}) = 'object'`,
     ),
+    check(
+      "stock_units_acquisition_cost_nonnegative",
+      sql`${table.acquisitionCostCents} is null or ${table.acquisitionCostCents} >= 0`,
+    ),
+    check(
+      "stock_units_cost_fields_together",
+      sql`(${table.acquisitionCostCents} is null and ${table.costCurrency} is null) or (${table.acquisitionCostCents} is not null and ${table.costCurrency} ~ '^[A-Z]{3}$')`,
+    ),
   ],
 );
 
@@ -2433,6 +2478,11 @@ export const stockMovements = pgTable(
     ),
     delta: integer("delta").notNull(),
     quantity: integer("quantity").notNull().default(0),
+    totalPriceCents: integer("total_price_cents"),
+    priceCurrency: varchar("price_currency", { length: 3 }),
+    costCents: integer("cost_cents"),
+    costCurrency: varchar("cost_currency", { length: 3 }),
+    costEstimated: boolean("cost_estimated").notNull().default(false),
     balanceAfter: integer("balance_after").notNull(),
     fromLocationBalanceAfter: integer("from_location_balance_after"),
     toLocationBalanceAfter: integer("to_location_balance_after"),
@@ -2485,9 +2535,115 @@ export const stockMovements = pgTable(
       sql`${table.quantity} >= 0`,
     ),
     check(
+      "stock_movements_cost_nonnegative",
+      sql`${table.costCents} is null or ${table.costCents} >= 0`,
+    ),
+    check(
+      "stock_movements_price_fields_together",
+      sql`(${table.totalPriceCents} is null and ${table.priceCurrency} is null) or (${table.totalPriceCents} is not null and ${table.priceCurrency} ~ '^[A-Z]{3}$')`,
+    ),
+    check(
+      "stock_movements_cost_fields_together",
+      sql`(${table.costCents} is null and ${table.costCurrency} is null) or (${table.costCents} is not null and ${table.costCurrency} ~ '^[A-Z]{3}$')`,
+    ),
+    check(
       "stock_movements_variant_fields_consistent",
       sql`(${table.variantId} is null and ${table.variantDelta} is null and ${table.variantBalanceAfter} is null) or (${table.variantId} is not null and ${table.variantDelta} is not null and ${table.variantBalanceAfter} is not null)`,
     ),
+  ],
+);
+
+export const stockCostLayers = pgTable(
+  "stock_cost_layers",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    resourceId: uuid("resource_id")
+      .notNull()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    sourceMovementId: uuid("source_movement_id").references(
+      () => stockMovements.id,
+      { onDelete: "set null" },
+    ),
+    unitId: uuid("unit_id").references(() => stockUnits.id, {
+      onDelete: "set null",
+    }),
+    initialQuantity: integer("initial_quantity").notNull(),
+    remainingQuantity: integer("remaining_quantity").notNull(),
+    initialCostCents: integer("initial_cost_cents"),
+    remainingCostCents: integer("remaining_cost_cents"),
+    currency: varchar("currency", { length: 3 }).notNull(),
+    estimated: boolean("estimated").notNull().default(false),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "stock_cost_layers_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    index("stock_cost_layers_fifo_idx").on(
+      table.organizationId,
+      table.resourceId,
+      table.occurredAt,
+      table.createdAt,
+    ),
+    index("stock_cost_layers_source_movement_idx").on(table.sourceMovementId),
+    index("stock_cost_layers_unit_idx").on(table.unitId),
+    check("stock_cost_layers_initial_quantity_positive", sql`${table.initialQuantity} > 0`),
+    check(
+      "stock_cost_layers_remaining_quantity_range",
+      sql`${table.remainingQuantity} between 0 and ${table.initialQuantity}`,
+    ),
+    check(
+      "stock_cost_layers_initial_cost_nonnegative",
+      sql`${table.initialCostCents} is null or ${table.initialCostCents} >= 0`,
+    ),
+    check(
+      "stock_cost_layers_remaining_cost_valid",
+      sql`(${table.initialCostCents} is null and ${table.remainingCostCents} is null) or (${table.initialCostCents} is not null and ${table.remainingCostCents} between 0 and ${table.initialCostCents})`,
+    ),
+    check("stock_cost_layers_currency_check", sql`${table.currency} ~ '^[A-Z]{3}$'`),
+  ],
+);
+
+export const stockCostAllocations = pgTable(
+  "stock_cost_allocations",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    movementId: uuid("movement_id")
+      .notNull()
+      .references(() => stockMovements.id, { onDelete: "cascade" }),
+    layerId: uuid("layer_id")
+      .notNull()
+      .references(() => stockCostLayers.id, { onDelete: "restrict" }),
+    quantity: integer("quantity").notNull(),
+    costCents: integer("cost_cents"),
+    currency: varchar("currency", { length: 3 }).notNull(),
+    estimated: boolean("estimated").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("stock_cost_allocations_movement_layer_unique").on(
+      table.movementId,
+      table.layerId,
+    ),
+    index("stock_cost_allocations_movement_idx").on(table.movementId),
+    index("stock_cost_allocations_layer_idx").on(table.layerId),
+    check("stock_cost_allocations_quantity_positive", sql`${table.quantity} > 0`),
+    check(
+      "stock_cost_allocations_cost_nonnegative",
+      sql`${table.costCents} is null or ${table.costCents} >= 0`,
+    ),
+    check("stock_cost_allocations_currency_check", sql`${table.currency} ~ '^[A-Z]{3}$'`),
   ],
 );
 
@@ -2656,6 +2812,9 @@ export const assemblyBuildComponents = pgTable(
     componentSku: varchar("component_sku", { length: 80 }),
     quantityPerAssembly: integer("quantity_per_assembly").notNull(),
     quantityConsumed: integer("quantity_consumed").notNull(),
+    costCents: integer("cost_cents"),
+    costCurrency: varchar("cost_currency", { length: 3 }),
+    costEstimated: boolean("cost_estimated").notNull().default(false),
     componentUnitId: uuid("component_unit_id").references(
       () => stockUnits.id,
       { onDelete: "restrict" },
@@ -2692,6 +2851,14 @@ export const assemblyBuildComponents = pgTable(
     check(
       "assembly_build_components_quantity_consumed_positive",
       sql`${table.quantityConsumed} > 0`,
+    ),
+    check(
+      "assembly_build_components_cost_nonnegative",
+      sql`${table.costCents} is null or ${table.costCents} >= 0`,
+    ),
+    check(
+      "assembly_build_components_cost_fields_together",
+      sql`(${table.costCents} is null and ${table.costCurrency} is null) or (${table.costCents} is not null and ${table.costCurrency} ~ '^[A-Z]{3}$')`,
     ),
   ],
 );
@@ -3536,6 +3703,8 @@ export type WebhookEventRecord = typeof webhookEvents.$inferSelect;
 export type WebhookDeliveryRecord = typeof webhookDeliveries.$inferSelect;
 export type StockSettingsRecord = typeof stockSettings.$inferSelect;
 export type StockMovementRecord = typeof stockMovements.$inferSelect;
+export type StockCostLayerRecord = typeof stockCostLayers.$inferSelect;
+export type StockCostAllocationRecord = typeof stockCostAllocations.$inferSelect;
 export type StockUnitRecord = typeof stockUnits.$inferSelect;
 export type InventoryTypeDefinitionRecord =
   typeof inventoryTypeDefinitions.$inferSelect;

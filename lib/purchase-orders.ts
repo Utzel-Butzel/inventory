@@ -27,6 +27,7 @@ import {
 } from "@/db/schema";
 import { db } from "@/lib/db";
 import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
+import { addInboundStockCost, splitCents } from "@/lib/stock-costing";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 
@@ -35,6 +36,8 @@ export type PurchaseOrderLineInput = {
   orderedQuantity: number;
   expectedAt?: Date | null;
   note?: string;
+  unitPriceCents?: number | null;
+  priceCurrency?: string | null;
 };
 
 export type PurchaseOrderCreateInput = {
@@ -62,6 +65,8 @@ export type PurchaseReceiptInput = {
   location?: string | null;
   note?: string;
   unitCodes?: string[];
+  totalPriceCents?: number | null;
+  priceCurrency?: string | null;
 };
 
 type IdempotencyInput = { key: string; requestHash: string };
@@ -119,6 +124,8 @@ const unitDto = (row: StockUnitRecord) => ({
   location: row.location,
   metadata: row.metadata,
   customFields: row.customFields,
+  acquisitionCostCents: row.acquisitionCostCents,
+  costCurrency: row.costCurrency,
   acquiredAt: row.acquiredAt.toISOString(),
   lastMovedAt: row.lastMovedAt.toISOString(),
   createdAt: row.createdAt.toISOString(),
@@ -132,6 +139,12 @@ const movementDto = (row: StockMovementRecord) => ({
   assemblyBuildId: row.assemblyBuildId,
   purchaseReceiptId: row.purchaseReceiptId,
   delta: row.delta,
+  quantity: row.quantity,
+  totalPriceCents: row.totalPriceCents,
+  priceCurrency: row.priceCurrency,
+  costCents: row.costCents,
+  costCurrency: row.costCurrency,
+  costEstimated: row.costEstimated,
   balanceAfter: row.balanceAfter,
   type: row.type,
   reason: row.reason,
@@ -146,6 +159,8 @@ const receiptDto = (row: PurchaseReceiptRecord) => ({
   id: row.id,
   purchaseOrderLineId: row.purchaseOrderLineId,
   quantity: row.quantity,
+  totalPriceCents: row.totalPriceCents,
+  priceCurrency: row.priceCurrency,
   occurredAt: row.occurredAt.toISOString(),
   location: row.location,
   note: row.note,
@@ -159,8 +174,11 @@ type OrderLineDtoInput = {
   resourceId: string;
   resourceName: string;
   resourceSku: string | null;
+  resourceCurrency: string;
   orderedQuantity: number;
   receivedQuantity: number;
+  unitPriceCents: number | null;
+  priceCurrency: string | null;
   expectedAt: Date | null;
   note: string;
   trackingMode: StockTrackingMode | null;
@@ -174,8 +192,15 @@ const lineDto = (line: OrderLineDtoInput) => ({
   resourceId: line.resourceId,
   resourceName: line.resourceName,
   resourceSku: line.resourceSku,
+  resourceCurrency: line.resourceCurrency,
   orderedQuantity: line.orderedQuantity,
   receivedQuantity: line.receivedQuantity,
+  unitPriceCents: line.unitPriceCents,
+  priceCurrency: line.priceCurrency,
+  totalPriceCents:
+    line.unitPriceCents === null
+      ? null
+      : line.unitPriceCents * line.orderedQuantity,
   openQuantity: Math.max(0, line.orderedQuantity - line.receivedQuantity),
   expectedAt: line.expectedAt?.toISOString() ?? null,
   note: line.note,
@@ -236,8 +261,11 @@ async function loadOrderLines(
       resourceId: purchaseOrderLines.resourceId,
       resourceName: resources.name,
       resourceSku: resources.sku,
+      resourceCurrency: resources.currency,
       orderedQuantity: purchaseOrderLines.orderedQuantity,
       receivedQuantity: purchaseOrderLines.receivedQuantity,
+      unitPriceCents: purchaseOrderLines.unitPriceCents,
+      priceCurrency: purchaseOrderLines.priceCurrency,
       expectedAt: sql<Date | null>`coalesce(${purchaseOrderLines.expectedAt}, ${purchaseOrders.expectedAt})`,
       note: purchaseOrderLines.note,
       trackingMode: stockSettings.trackingMode,
@@ -391,7 +419,12 @@ export async function createPurchaseOrder(
   try {
     return await db.transaction(async (transaction) => {
       const existingResources = await transaction
-        .select({ id: resources.id, name: resources.name, sku: resources.sku })
+        .select({
+          id: resources.id,
+          name: resources.name,
+          sku: resources.sku,
+          currency: resources.currency,
+        })
         .from(resources)
         .where(
           and(
@@ -483,6 +516,19 @@ export async function createPurchaseOrder(
       const resourceById = new Map(
         existingResources.map((resource) => [resource.id, resource]),
       );
+      for (const line of input.lines) {
+        const resource = resourceById.get(line.resourceId);
+        if (
+          line.unitPriceCents !== null &&
+          line.unitPriceCents !== undefined &&
+          line.priceCurrency?.toUpperCase() !== resource?.currency
+        ) {
+          throw new PurchaseOrderOperationError(
+            `The price for ${resource?.name ?? "this item"} must use ${resource?.currency ?? "its item currency"}.`,
+            422,
+          );
+        }
+      }
 
       const [order] = await transaction
         .insert(purchaseOrders)
@@ -508,6 +554,11 @@ export async function createPurchaseOrder(
             purchaseOrderId: order.id,
             resourceId: line.resourceId,
             orderedQuantity: line.orderedQuantity,
+            unitPriceCents: line.unitPriceCents ?? null,
+            priceCurrency:
+              line.unitPriceCents === null || line.unitPriceCents === undefined
+                ? null
+                : (line.priceCurrency ?? resourceById.get(line.resourceId)?.currency)?.toUpperCase(),
             // NULL means "inherit the order header date". Copying the current
             // header value here would make later delivery-date changes invisible.
             expectedAt: line.expectedAt ?? null,
@@ -527,6 +578,7 @@ export async function createPurchaseOrder(
           ...line,
           resourceName: resource.name,
           resourceSku: resource.sku,
+          resourceCurrency: resource.currency,
           expectedAt: line.expectedAt ?? order.expectedAt,
           trackingMode: trackingByResource.get(line.resourceId) ?? "bulk",
         };
@@ -809,12 +861,29 @@ export async function receivePurchaseOrderLine(
       const occurredAt = input.occurredAt ?? new Date();
       const now = new Date();
       const location = input.location ?? resource.location;
+      const totalPriceCents =
+        input.totalPriceCents ??
+        (line.unitPriceCents === null
+          ? null
+          : line.unitPriceCents * input.quantity);
+      const priceCurrency =
+        totalPriceCents === null
+          ? null
+          : (input.priceCurrency ?? line.priceCurrency ?? resource.currency).toUpperCase();
+      if (priceCurrency !== null && priceCurrency !== resource.currency) {
+        throw new PurchaseOrderOperationError(
+          `Receipt prices for this item must use ${resource.currency}.`,
+          422,
+        );
+      }
       const [receipt] = await transaction
         .insert(purchaseReceipts)
         .values({
           organizationId,
           purchaseOrderLineId: line.id,
           quantity: input.quantity,
+          totalPriceCents,
+          priceCurrency,
           occurredAt,
           location,
           note: input.note ?? "",
@@ -826,6 +895,7 @@ export async function receivePurchaseOrderLine(
         .returning();
 
       let units: StockUnitRecord[] = [];
+      const serializedCosts = splitCents(totalPriceCents, input.quantity);
       if (mode === "serialized") {
         const codes =
           input.unitCodes ??
@@ -835,13 +905,19 @@ export async function receivePurchaseOrderLine(
         units = await transaction
           .insert(stockUnits)
           .values(
-            codes.map((code) => ({
+            codes.map((code, index) => ({
               organizationId,
               resourceId: resource.id,
               code,
               status: "available" as const,
               location,
               metadata: { purchaseReceiptId: receipt.id },
+              acquisitionCostCents:
+                serializedCosts[index] ?? resource.valueCents ?? null,
+              costCurrency:
+                serializedCosts[index] !== null || resource.valueCents !== null
+                  ? resource.currency
+                  : null,
               acquiredAt: occurredAt,
               lastMovedAt: occurredAt,
             })),
@@ -871,6 +947,9 @@ export async function receivePurchaseOrderLine(
               purchaseReceiptId: receipt.id,
               delta: 1,
               quantity: 1,
+              totalPriceCents: serializedCosts[index],
+              priceCurrency:
+                serializedCosts[index] === null ? null : resource.currency,
               balanceAfter: resource.quantity + index + 1,
               type: "purchase-receipt",
               reason: order.reference
@@ -892,6 +971,8 @@ export async function receivePurchaseOrderLine(
             purchaseReceiptId: receipt.id,
             delta: input.quantity,
             quantity: input.quantity,
+            totalPriceCents,
+            priceCurrency,
             balanceAfter,
             type: "purchase-receipt",
             reason: order.reference
@@ -905,6 +986,25 @@ export async function receivePurchaseOrderLine(
           .returning();
         movements = [movement];
       }
+      for (const [index, movement] of movements.entries()) {
+        await addInboundStockCost(transaction, {
+          organizationId,
+          resourceId: resource.id,
+          movementId: movement.id,
+          unitId: movement.unitId,
+          quantity: movement.quantity,
+          totalPriceCents:
+            units.length > 0 ? serializedCosts[index] : totalPriceCents,
+          fallbackUnitCostCents: resource.valueCents,
+          currency: resource.currency,
+          occurredAt,
+        });
+      }
+      const costedMovements = await transaction
+        .select()
+        .from(stockMovements)
+        .where(inArray(stockMovements.id, movements.map((row) => row.id)));
+      const costedMovementById = new Map(costedMovements.map((row) => [row.id, row]));
       await enqueueStockMovementWebhookEvents(transaction, movements);
 
       const receivedQuantity = line.receivedQuantity + input.quantity;
@@ -925,8 +1025,11 @@ export async function receivePurchaseOrderLine(
           resourceId: purchaseOrderLines.resourceId,
           resourceName: resources.name,
           resourceSku: resources.sku,
+          resourceCurrency: resources.currency,
           orderedQuantity: purchaseOrderLines.orderedQuantity,
           receivedQuantity: purchaseOrderLines.receivedQuantity,
+          unitPriceCents: purchaseOrderLines.unitPriceCents,
+          priceCurrency: purchaseOrderLines.priceCurrency,
           expectedAt: purchaseOrderLines.expectedAt,
           note: purchaseOrderLines.note,
           trackingMode: stockSettings.trackingMode,
@@ -987,7 +1090,9 @@ export async function receivePurchaseOrderLine(
           trackingMode: mode,
         },
         units: units.map(unitDto),
-        movements: movements.map(movementDto),
+        movements: movements.map((movement) =>
+          movementDto(costedMovementById.get(movement.id) ?? movement),
+        ),
       };
       const storedResponse = jsonRecord(response);
       await transaction

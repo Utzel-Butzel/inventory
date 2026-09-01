@@ -61,6 +61,7 @@ import { ImageUploadEditor } from "@/components/image-upload-editor";
 import { AssemblyManager } from "@/components/assembly-manager";
 import { CustomFieldInputs } from "@/components/custom-field-inputs";
 import { ResourceTranslations } from "@/components/resource-translations";
+import { ResourceStockSettings } from "@/components/resource-stock-settings";
 import {
   ImageModelSelector,
   useImageModelPreference,
@@ -453,6 +454,7 @@ export function ResourceEditor({
   canViewStock = false,
   canUseAi = false,
   canManageSpatial = false,
+  canManageStock = false,
   variantContext = null,
 }: {
   resourceId?: string;
@@ -460,6 +462,7 @@ export function ResourceEditor({
   canViewStock?: boolean;
   canUseAi?: boolean;
   canManageSpatial?: boolean;
+  canManageStock?: boolean;
   variantContext?: {
     primaryResourceId: string;
     primaryName: string;
@@ -2208,6 +2211,9 @@ export function ResourceEditor({
           </>
         )}
       </AiActionModal>
+    ) : null}
+    {!isNew && resourceId && canManageStock ? (
+      <ResourceStockSettings resourceId={resourceId} />
     ) : null}
     {resourceId ? (
       <section className="mx-auto w-full max-w-[1450px] px-4 pb-8 sm:px-6 lg:px-8">

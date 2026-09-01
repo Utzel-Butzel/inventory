@@ -22,9 +22,18 @@ const unitCreateSchema = z
     metadata: metadataSchema.optional(),
     customFields: customFieldValuesInputSchema.optional(),
     acquiredAt: z.string().datetime().optional(),
+    totalPriceCents: z.number().int().min(0).max(2_000_000_000).nullable().optional(),
+    priceCurrency: z.string().trim().length(3).toUpperCase().nullable().optional(),
   })
   .strict()
   .superRefine((value, context) => {
+    if ((value.totalPriceCents == null) !== (value.priceCurrency == null)) {
+      context.addIssue({
+        code: "custom",
+        path: [value.totalPriceCents == null ? "totalPriceCents" : "priceCurrency"],
+        message: "totalPriceCents and priceCurrency must be supplied together.",
+      });
+    }
     if (value.code && value.codes) {
       context.addIssue({
         code: "custom",
