@@ -6,6 +6,7 @@ import {
   defaultTransparentCoverPrompt,
   generateCoverImage,
 } from "@/lib/ai";
+import { aiUsageEstimate } from "@/lib/ai-billing";
 import {
   aiOperationResponseValues,
   claimAiOperation,
@@ -14,6 +15,11 @@ import {
   respondToAiOperationClaim,
   respondToFinishedAiOperation,
 } from "@/lib/ai-idempotency";
+import {
+  AiMonthlyBudgetExceededError,
+  aiBudgetErrorBody,
+  trackAiUsage,
+} from "@/lib/ai-usage";
 import {
   consumePaidAiRateLimit,
   paidAiRateLimitHeaders,
@@ -38,7 +44,7 @@ export const maxDuration = 300;
 
 export async function POST(request: Request, context: Context) {
   const { id } = await context.params;
-  const authorization = await requireResourcePermission(request, "ai.use", id);
+  const authorization = await requireResourcePermission(request, "ai.images", id);
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
@@ -189,18 +195,39 @@ export async function POST(request: Request, context: Context) {
 
   try {
     const transparentBackground = parsed.data.transparentBackground ?? false;
-    const generated = await generateCoverImage({
-      source: sourceBytes,
-      sourceMimeType: source.mimeType,
-      prompt:
-        parsed.data.prompt ||
-        (transparentBackground
-          ? defaultTransparentCoverPrompt(resource.name)
-          : defaultCoverPrompt(resource.name)),
-      imageModel,
-      maximumImageSize: parsed.data.maximumImageSize,
-      transparentBackground,
-      transparencyMethod: parsed.data.transparencyMethod,
+    const generated = await trackAiUsage({
+      organizationId: authorization.identity.organizationId,
+      estimate: aiUsageEstimate({
+        action: "image_generation",
+        provider: imageModel.provider,
+        model: imageModel.model,
+        maximumImageSize: parsed.data.maximumImageSize,
+        quantity:
+          transparentBackground &&
+          (parsed.data.transparencyMethod ?? "difference-matting") ===
+            "difference-matting"
+            ? 2
+            : 1,
+      }),
+      actor: authorization.identity,
+      resourceId: id,
+      metadata: {
+        kind: "cover_edit",
+        transparentBackground,
+      },
+      run: () => generateCoverImage({
+        source: sourceBytes,
+        sourceMimeType: source.mimeType,
+        prompt:
+          parsed.data.prompt ||
+          (transparentBackground
+            ? defaultTransparentCoverPrompt(resource.name)
+            : defaultCoverPrompt(resource.name)),
+        imageModel,
+        maximumImageSize: parsed.data.maximumImageSize,
+        transparentBackground,
+        transparencyMethod: parsed.data.transparencyMethod,
+      }),
     });
     const fileExtension = generated.mimeType === "image/png" ? "png" : "jpg";
     const stored = await storeMedia({
@@ -319,6 +346,13 @@ export async function POST(request: Request, context: Context) {
       idempotencyKey: idempotency.key,
     });
   } catch (error) {
+    if (error instanceof AiMonthlyBudgetExceededError) {
+      return finishTransient(
+        aiBudgetErrorBody(error),
+        429,
+        paidAiRateLimitHeaders(limit),
+      );
+    }
     return finish(
       {
         error:

@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
+import {
+  PublicShareLogin,
+  PublicStockCatalog,
+} from "@/components/public-stock-tool";
 import {
   PublicInventoryView,
   PublicResourceView,
@@ -8,8 +13,13 @@ import {
 import {
   getActivePublicShare,
   getPublicSharedResource,
+  listPublicShareFilterOptions,
   listPublicShareResources,
 } from "@/lib/public-shares";
+import {
+  publicShareSessionCookieName,
+  publicShareSessionIsValid,
+} from "@/lib/public-share-session";
 import { getT } from "@/lib/ui-i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +52,26 @@ export default async function PublicSharePage({ params, searchParams }: Props) {
   ]);
   const share = await getActivePublicShare(shareId);
   if (!share) notFound();
+
+  if (share.accessMode === "stock") {
+    const token = (await cookies()).get(
+      publicShareSessionCookieName(share.id),
+    )?.value;
+    if (!publicShareSessionIsValid(share, token)) {
+      return <PublicShareLogin shareId={share.id} title={share.name} />;
+    }
+    const [result, filters] = await Promise.all([
+      listPublicShareResources({ share, page: 1 }),
+      listPublicShareFilterOptions(share),
+    ]);
+    return (
+      <PublicStockCatalog
+        shareId={share.id}
+        title={share.name}
+        initialResult={{ ...result, filters }}
+      />
+    );
+  }
 
   if (share.scope === "item") {
     const result = await getPublicSharedResource(share);

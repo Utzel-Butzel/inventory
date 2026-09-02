@@ -519,7 +519,8 @@ export function ResourceConnectionEditorPanel({
       if (connection.kind === "bom") {
         const value = Number(
           edgeQuantities[connection.canonicalId] ||
-            (connection.descriptor.type === "component"
+            (connection.descriptor.type === "component" ||
+            connection.descriptor.type === "assembly"
               ? connection.descriptor.quantity
               : 1),
         );
@@ -650,7 +651,8 @@ export function ResourceConnectionEditorPanel({
                 </div>
 
                 {connection.kind === "bom" &&
-                descriptor.type === "component" ? (
+                (descriptor.type === "component" ||
+                  descriptor.type === "assembly") ? (
                   <div className="mt-3 flex items-end gap-2">
                     <label className={`${labelClass} min-w-0 flex-1`}>
                       {t("connectionDiagram.editor.fields.quantity")}
@@ -1084,7 +1086,10 @@ function edgeConnectionLabel(
   if (connection.descriptor.type === "relationship") {
     return connection.descriptor.label;
   }
-  if (connection.descriptor.type === "component") {
+  if (
+    connection.descriptor.type === "component" ||
+    connection.descriptor.type === "assembly"
+  ) {
     return t("connectionDiagram.editor.edge.bom");
   }
   return t(`connectionDiagram.kinds.${connection.descriptor.type}`);

@@ -15,7 +15,21 @@ import {
   type StockUnitRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
-import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
+import { buildAssembly } from "@/lib/assemblies";
+import {
+  listCustomFieldDefinitions,
+  validateCustomFieldValues,
+} from "@/lib/custom-fields";
+import type {
+  CustomFieldValue,
+  CustomFieldValues,
+} from "@/lib/custom-field-contract";
+import { isCustomFieldDefinitionApplicable } from "@/lib/custom-field-contract";
+import { bookStockMovement } from "@/lib/stock";
+import {
+  enqueueStockMovementWebhookEvents,
+  enqueueWebhookEvent,
+} from "@/lib/webhooks";
 import {
   scanWorkflowCreateSchema,
   scanWorkflowLimits,
@@ -25,6 +39,8 @@ import {
   type ScanWorkflowPatchInput,
   type StockScanExecuteInput,
 } from "@/lib/scan-workflow-contract";
+import type { ScanCodeType } from "@/lib/scan-code-types";
+import { extractScanRegexValue } from "@/lib/scan-regex";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 
@@ -48,6 +64,18 @@ export function scanWorkflowHttpError(error: unknown, fallback: string) {
     };
   }
   const message = error instanceof Error ? error.message : "";
+  const status =
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    ([403, 404, 409, 422] as const).includes(
+      (error as { status: 403 | 404 | 409 | 422 }).status,
+    )
+      ? (error as { status: 403 | 404 | 409 | 422 }).status
+      : null;
+  if (status) {
+    return { status, message: message || fallback, details: undefined };
+  }
   if (message.includes("stock_units_resource_code_unique")) {
     return {
       status: 409 as const,
@@ -68,13 +96,19 @@ const workflowDto = (row: StockScanWorkflowRecord): ScanWorkflowDto => ({
   description: row.description,
   enabled: row.enabled,
   resourceId: row.resourceId,
+  codeTypes: row.codeTypes,
   revision: row.revision,
   extraction: row.extraction,
   identifierPropertyKey: row.identifierPropertyKey,
+  identifierStorage: row.identifierStorage,
+  extractedFields: row.extractedFields,
+  operation: row.operation,
   createMissingUnit: row.createMissingUnit,
   unitStatus: row.unitStatus,
   fixedProperties: row.fixedProperties,
   inputFields: row.inputFields,
+  triggerWebhook: row.triggerWebhook,
+  webhookEventName: row.webhookEventName,
   createdBy: row.createdBy,
   updatedBy: row.updatedBy,
   createdAt: row.createdAt.toISOString(),
@@ -133,12 +167,18 @@ const assertWorkflowConfiguration = (workflow: StockScanWorkflowRecord) => {
     description: workflow.description,
     enabled: workflow.enabled,
     resourceId: workflow.resourceId,
+    codeTypes: workflow.codeTypes,
     extraction: workflow.extraction,
     identifierPropertyKey: workflow.identifierPropertyKey,
+    identifierStorage: workflow.identifierStorage,
+    extractedFields: workflow.extractedFields,
+    operation: workflow.operation,
     createMissingUnit: workflow.createMissingUnit,
     unitStatus: workflow.unitStatus,
     fixedProperties: workflow.fixedProperties,
     inputFields: workflow.inputFields,
+    triggerWebhook: workflow.triggerWebhook,
+    webhookEventName: workflow.webhookEventName,
   });
   if (!parsed.success) {
     throw new ScanWorkflowError(
@@ -146,7 +186,73 @@ const assertWorkflowConfiguration = (workflow: StockScanWorkflowRecord) => {
       409,
     );
   }
+  return parsed.data;
 };
+
+const workflowStoredUnitKeys = (input: ScanWorkflowCreateInput) => [
+  ...(input.identifierStorage === "custom-field"
+    ? [input.identifierPropertyKey]
+    : []),
+  ...input.extractedFields
+    .filter((field) => field.storage === "custom-field")
+    .map((field) => field.key),
+  ...input.fixedProperties
+    .filter((field) => field.storage === "custom-field")
+    .map((field) => field.key),
+  ...input.inputFields
+    .filter((field) => field.storage === "custom-field")
+    .map((field) => field.key),
+];
+
+const workflowUsesUnitStorage = (input: ScanWorkflowCreateInput) =>
+  input.identifierStorage !== "execution" ||
+  input.extractedFields.some((field) => field.storage !== "execution") ||
+  input.fixedProperties.some((field) => field.storage !== "execution") ||
+  input.inputFields.some((field) => field.storage !== "execution");
+
+async function assertWorkflowStorageConfiguration(
+  organizationId: string,
+  input: ScanWorkflowCreateInput,
+  resource: {
+    trackingMode: "bulk" | "serialized" | null;
+    type: string;
+    categories: Array<string | { name: string }>;
+  },
+) {
+  const producesUnit =
+    input.operation.type === "unit" ||
+    (input.operation.type === "assembly-build" &&
+      resource.trackingMode === "serialized");
+  if (!producesUnit && workflowUsesUnitStorage(input)) {
+    throw new ScanWorkflowError(
+      "This action does not create or update a serialized unit. Store scanned and entered values with the flow execution instead.",
+      422,
+    );
+  }
+
+  const customFieldKeys = workflowStoredUnitKeys(input);
+  if (!customFieldKeys.length) return;
+  const definitions = (
+    await listCustomFieldDefinitions({
+      organizationId,
+      entityType: "stock_unit",
+    })
+  ).filter((definition) =>
+    isCustomFieldDefinitionApplicable(definition, {
+      type: resource.type,
+      categories: resource.categories,
+    }),
+  );
+  const configuredKeys = new Set(definitions.map((definition) => definition.key));
+  const missingKeys = customFieldKeys.filter((key) => !configuredKeys.has(key));
+  if (missingKeys.length) {
+    throw new ScanWorkflowError(
+      `Configure these stock-unit custom fields before saving the action flow: ${missingKeys.join(", ")}.`,
+      422,
+      { fields: missingKeys },
+    );
+  }
+}
 
 export async function listScanWorkflows(organizationId: string) {
   const rows = await db
@@ -177,7 +283,12 @@ export async function createScanWorkflow(
   actor: string,
 ) {
   const [resource] = await db
-    .select({ id: resources.id, trackingMode: stockSettings.trackingMode })
+    .select({
+      id: resources.id,
+      type: resources.type,
+      categories: resources.categories,
+      trackingMode: stockSettings.trackingMode,
+    })
     .from(resources)
     .leftJoin(
       stockSettings,
@@ -196,12 +307,22 @@ export async function createScanWorkflow(
   if (!resource) {
     throw new ScanWorkflowError("The selected inventory item does not exist.", 422);
   }
-  if (resource.trackingMode !== "serialized") {
+  if (input.operation.type === "unit" && resource.trackingMode !== "serialized") {
     throw new ScanWorkflowError(
       "Configure the selected inventory item for serialized stock tracking first.",
       409,
     );
   }
+  if (
+    input.operation.type === "stock-adjustment" &&
+    resource.trackingMode === "serialized"
+  ) {
+    throw new ScanWorkflowError(
+      "Quantity adjustments require a bulk-tracked inventory item.",
+      409,
+    );
+  }
+  await assertWorkflowStorageConfiguration(organizationId, input, resource);
 
   const [created] = await db
     .insert(stockScanWorkflows)
@@ -241,12 +362,18 @@ export async function updateScanWorkflow(
     description: current.description,
     enabled: current.enabled,
     resourceId: current.resourceId,
+    codeTypes: current.codeTypes,
     extraction: current.extraction,
     identifierPropertyKey: current.identifierPropertyKey,
+    identifierStorage: current.identifierStorage,
+    extractedFields: current.extractedFields,
+    operation: current.operation,
     createMissingUnit: current.createMissingUnit,
     unitStatus: current.unitStatus,
     fixedProperties: current.fixedProperties,
     inputFields: current.inputFields,
+    triggerWebhook: current.triggerWebhook,
+    webhookEventName: current.webhookEventName,
     ...changes,
   });
   if (!merged.success) {
@@ -255,9 +382,14 @@ export async function updateScanWorkflow(
     });
   }
 
-  if (changes.resourceId || changes.enabled === true) {
+  {
     const [resource] = await db
-      .select({ id: resources.id, trackingMode: stockSettings.trackingMode })
+      .select({
+        id: resources.id,
+        type: resources.type,
+        categories: resources.categories,
+        trackingMode: stockSettings.trackingMode,
+      })
       .from(resources)
       .leftJoin(
         stockSettings,
@@ -279,12 +411,29 @@ export async function updateScanWorkflow(
         422,
       );
     }
-    if (resource.trackingMode !== "serialized") {
+    if (
+      merged.data.operation.type === "unit" &&
+      resource.trackingMode !== "serialized"
+    ) {
       throw new ScanWorkflowError(
         "Configure the selected inventory item for serialized stock tracking first.",
         409,
       );
     }
+    if (
+      merged.data.operation.type === "stock-adjustment" &&
+      resource.trackingMode === "serialized"
+    ) {
+      throw new ScanWorkflowError(
+        "Quantity adjustments require a bulk-tracked inventory item.",
+        409,
+      );
+    }
+    await assertWorkflowStorageConfiguration(
+      organizationId,
+      merged.data,
+      resource,
+    );
   }
 
   const now = new Date();
@@ -376,6 +525,12 @@ export function extractScanIdentifier(
       );
     }
     identifier = scannedValue.slice(extraction.prefix.length).trim();
+  } else if (extraction.mode === "regex") {
+    const extracted = extractScanRegexValue(scannedValue, extraction);
+    if (extracted.value === null) {
+      throw new ScanWorkflowError(extracted.error, 422);
+    }
+    identifier = extracted.value;
   } else {
     let scannedUrl: URL;
     try {
@@ -426,21 +581,123 @@ export function extractScanIdentifier(
   return identifier;
 }
 
-const configuredMetadataChanges = (
-  workflow: StockScanWorkflowRecord,
-  identifier: string,
-) => ({
-  [workflow.identifierPropertyKey]: identifier,
-  ...Object.fromEntries(
-    workflow.fixedProperties.map((property) => [property.key, property.value]),
-  ),
-});
-
-const resolveMetadataChanges = (
-  workflow: StockScanWorkflowRecord,
-  identifier: string,
-  inputs: Record<string, string>,
+const assertScannedCodeType = (
+  workflow: Pick<StockScanWorkflowRecord, "codeTypes">,
+  codeType: ScanCodeType | null,
 ) => {
+  // Manual entry and legacy clients do not know the scanner symbology. When a
+  // scanner does report it, enforce the workflow allowlist server-side.
+  if (codeType && !workflow.codeTypes.includes(codeType)) {
+    throw new ScanWorkflowError(
+      `This action flow does not accept ${codeType.replaceAll("_", " ")} codes.`,
+      422,
+      { codeType, allowedCodeTypes: workflow.codeTypes },
+    );
+  }
+};
+
+type WorkflowValues = {
+  metadata: Record<string, unknown>;
+  customFields: CustomFieldValues;
+  execution: Record<string, unknown>;
+};
+
+const assignWorkflowValue = (
+  values: WorkflowValues,
+  storage: "custom-field" | "metadata" | "execution",
+  key: string,
+  value: unknown,
+) => {
+  if (storage === "custom-field") {
+    values.customFields[key] = value as CustomFieldValue;
+  } else {
+    values[storage][key] = value;
+  }
+};
+
+const isEmptyInput = (value: unknown) =>
+  value === undefined || value === null || value === "" ||
+  (Array.isArray(value) && value.length === 0);
+
+const normalizeInputValue = (
+  field: StockScanWorkflowRecord["inputFields"][number],
+  value: unknown,
+) => {
+  const type = field.type ?? "select";
+  if (type === "select" || type === "radio") {
+    if (
+      typeof value !== "string" ||
+      !field.options.some((option) => option.value === value)
+    ) {
+      throw new ScanWorkflowError(
+        `Input ${field.label} must use one of its configured options.`,
+        422,
+      );
+    }
+    return value;
+  }
+  if (type === "number") {
+    const number = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(number)) {
+      throw new ScanWorkflowError(`Input ${field.label} must be a number.`, 422);
+    }
+    return number;
+  }
+  if (type === "checkbox") {
+    if (typeof value !== "boolean") {
+      throw new ScanWorkflowError(`Input ${field.label} must be true or false.`, 422);
+    }
+    return value;
+  }
+  if (type === "media" || type === "file") {
+    if (
+      !Array.isArray(value) ||
+      value.some((entry) => typeof entry !== "string")
+    ) {
+      throw new ScanWorkflowError(
+        `Input ${field.label} must contain uploaded media identifiers.`,
+        422,
+      );
+    }
+    return value;
+  }
+  if (typeof value !== "string") {
+    throw new ScanWorkflowError(`Input ${field.label} must be text.`, 422);
+  }
+  return value;
+};
+
+const resolveWorkflowValues = (
+  workflow: StockScanWorkflowRecord,
+  identifier: string,
+  scannedValue: string,
+  inputs: StockScanExecuteInput["inputs"] = {},
+  options: { validateRequired?: boolean } = {},
+) => {
+  const values: WorkflowValues = { metadata: {}, customFields: {}, execution: {} };
+  assignWorkflowValue(
+    values,
+    workflow.identifierStorage,
+    workflow.identifierPropertyKey,
+    identifier,
+  );
+  for (const field of workflow.extractedFields) {
+    assignWorkflowValue(
+      values,
+      field.storage,
+      field.key,
+      extractScanIdentifier(scannedValue, field.extraction),
+    );
+  }
+  for (const property of workflow.fixedProperties) {
+    assignWorkflowValue(
+      values,
+      property.storage ?? "metadata",
+      property.key,
+      property.value,
+    );
+  }
+
   const fieldsByKey = new Map(
     workflow.inputFields.map((field) => [field.key, field]),
   );
@@ -450,25 +707,22 @@ const resolveMetadataChanges = (
     }
   }
 
-  const selectedInputs: Record<string, string> = {};
   for (const field of workflow.inputFields) {
     const selected = inputs[field.key];
-    if (selected === undefined || selected === "") {
-      if (field.required) {
+    if (isEmptyInput(selected)) {
+      if (field.required && options.validateRequired !== false) {
         throw new ScanWorkflowError(`Input ${field.label} is required.`, 422);
       }
       continue;
     }
-    if (!field.options.some((option) => option.value === selected)) {
-      throw new ScanWorkflowError(
-        `Input ${field.label} must use one of its configured options.`,
-        422,
-      );
-    }
-    selectedInputs[field.key] = selected;
+    assignWorkflowValue(
+      values,
+      field.storage ?? "metadata",
+      field.key,
+      normalizeInputValue(field, selected),
+    );
   }
-
-  return { ...configuredMetadataChanges(workflow, identifier), ...selectedInputs };
+  return values;
 };
 
 const resourcePreview = (
@@ -549,6 +803,7 @@ export async function resolveStockScan(
   organizationId: string,
   workflowId: string,
   scannedValue: string,
+  codeType: ScanCodeType | null = null,
 ) {
   const [workflow] = await db
     .select()
@@ -564,7 +819,8 @@ export async function resolveStockScan(
   if (!workflow.enabled) {
     throw new ScanWorkflowError("This scan workflow is disabled.", 409);
   }
-  assertWorkflowConfiguration(workflow);
+  const configuration = assertWorkflowConfiguration(workflow);
+  assertScannedCodeType(workflow, codeType);
 
   const identifier = extractScanIdentifier(scannedValue, workflow.extraction);
   const [resource] = await db
@@ -593,51 +849,103 @@ export async function resolveStockScan(
   if (!resource) {
     throw new ScanWorkflowError("The workflow inventory item no longer exists.", 409);
   }
-  if (resource.trackingMode !== "serialized") {
+  if (
+    configuration.operation.type === "unit" &&
+    resource.trackingMode !== "serialized"
+  ) {
     throw new ScanWorkflowError(
       "The workflow inventory item must use serialized stock tracking.",
       409,
     );
   }
+  if (
+    configuration.operation.type === "stock-adjustment" &&
+    resource.trackingMode === "serialized"
+  ) {
+    throw new ScanWorkflowError(
+      "The workflow inventory item must use bulk stock tracking.",
+      409,
+    );
+  }
 
-  const [unit] = await db
-    .select()
-    .from(stockUnits)
-    .where(
-      and(
-        eq(stockUnits.organizationId, organizationId),
-        eq(stockUnits.resourceId, workflow.resourceId),
-        eq(stockUnits.code, identifier),
-      ),
-    )
-    .limit(1);
+  const [unit] =
+    configuration.operation.type === "unit"
+      ? await db
+          .select()
+          .from(stockUnits)
+          .where(
+            and(
+              eq(stockUnits.organizationId, organizationId),
+              eq(stockUnits.resourceId, workflow.resourceId),
+              eq(stockUnits.code, identifier),
+            ),
+          )
+          .limit(1)
+      : [undefined];
   const existingMetadata = unit ? validatedUnitMetadata(unit) : null;
-  const metadataChanges = configuredMetadataChanges(workflow, identifier);
-  const transition = calculateScanTransition(
-    resource.quantity,
-    unit?.status ?? null,
-    workflow.unitStatus,
+  const configuredValues = resolveWorkflowValues(
+    workflow,
+    identifier,
+    scannedValue,
+    {},
+    { validateRequired: false },
   );
+  const transition =
+    configuration.operation.type === "unit"
+      ? calculateScanTransition(
+          resource.quantity,
+          unit?.status ?? null,
+          workflow.unitStatus,
+        )
+      : {
+          statusBefore: null,
+          statusAfter: null,
+          quantityBefore: resource.quantity,
+          quantityAfter:
+            resource.quantity +
+            (configuration.operation.type === "stock-adjustment"
+              ? configuration.operation.delta
+              : configuration.operation.quantity),
+          delta:
+            configuration.operation.type === "stock-adjustment"
+              ? configuration.operation.delta
+              : configuration.operation.quantity,
+        };
+  if (
+    transition.quantityAfter > MAX_STOCK_QUANTITY ||
+    transition.quantityAfter < -MAX_STOCK_QUANTITY
+  ) {
+    throw new ScanWorkflowError(
+      "This action exceeds the supported stock quantity range.",
+      409,
+    );
+  }
 
   return {
     workflow: workflowDto(workflow),
-    resource: resourcePreview(
-      resource,
-      resource.trackingMode,
-    ),
+    resource: resourcePreview(resource, resource.trackingMode ?? "bulk"),
     identifier,
+    operation: configuration.operation,
     unit: unit ? unitDto(unit) : null,
     expectedResourceUpdatedAt: resource.updatedAt.toISOString(),
     expectedUnitId: unit?.id ?? null,
     expectedUnitUpdatedAt: unit?.updatedAt.toISOString() ?? null,
     ...transition,
-    willCreate: !unit && workflow.createMissingUnit,
+    willCreate:
+      configuration.operation.type === "unit"
+        ? !unit && workflow.createMissingUnit
+        : configuration.operation.type === "assembly-build",
     fields: workflow.inputFields,
     fixedProperties: workflow.fixedProperties,
     metadataPreview: {
       ...(existingMetadata ?? {}),
-      ...metadataChanges,
+      ...configuredValues.metadata,
     },
+    customFieldsPreview: {
+      ...(unit?.customFields ?? {}),
+      ...configuredValues.customFields,
+    },
+    executionPreview: configuredValues.execution,
   };
 }
 
@@ -649,12 +957,278 @@ type ExecutionIdempotency = {
   requestHash: string;
 };
 
+async function executeNonUnitScan(
+  organizationId: string,
+  input: StockScanExecuteInput,
+  actor: string,
+  idempotency: ExecutionIdempotency,
+) {
+  const [existing] = await db
+    .select({
+      requestHash: stockScanExecutions.requestHash,
+      response: stockScanExecutions.response,
+    })
+    .from(stockScanExecutions)
+    .where(
+      and(
+        eq(stockScanExecutions.organizationId, organizationId),
+        eq(stockScanExecutions.idempotencyKey, idempotency.key),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    if (existing.requestHash !== idempotency.requestHash) {
+      throw new ScanWorkflowError(
+        "That Idempotency-Key was already used for a different payload.",
+        409,
+      );
+    }
+    return { response: existing.response, replayed: true } as const;
+  }
+
+  const [workflow] = await db
+    .select()
+    .from(stockScanWorkflows)
+    .where(
+      and(
+        eq(stockScanWorkflows.organizationId, organizationId),
+        eq(stockScanWorkflows.id, input.workflowId),
+      ),
+    )
+    .limit(1);
+  if (!workflow) throw new ScanWorkflowError("Workflow not found.", 404);
+  const configuration = assertWorkflowConfiguration(workflow);
+  if (configuration.operation.type === "unit") {
+    throw new ScanWorkflowError("This flow requires a serialized unit action.", 409);
+  }
+  if (!workflow.enabled) {
+    throw new ScanWorkflowError("This scan workflow is disabled.", 409);
+  }
+  assertScannedCodeType(workflow, input.codeType);
+  if (workflow.revision !== input.revision) {
+    throw new ScanWorkflowError(
+      "The workflow has changed. Resolve the scan again before executing it.",
+      409,
+      { currentRevision: workflow.revision },
+    );
+  }
+  const [resource] = await db
+    .select({
+      id: resources.id,
+      name: resources.name,
+      quantity: resources.quantity,
+      updatedAt: resources.updatedAt,
+      trackingMode: stockSettings.trackingMode,
+    })
+    .from(resources)
+    .leftJoin(
+      stockSettings,
+      and(
+        eq(stockSettings.organizationId, organizationId),
+        eq(stockSettings.resourceId, resources.id),
+      ),
+    )
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, workflow.resourceId),
+      ),
+    )
+    .limit(1);
+  if (!resource) {
+    throw new ScanWorkflowError("The workflow inventory item no longer exists.", 409);
+  }
+  if (resource.updatedAt.toISOString() !== input.expectedResourceUpdatedAt) {
+    throw new ScanWorkflowError(
+      "The inventory quantity changed after this action was reviewed. Scan the code again.",
+      409,
+    );
+  }
+
+  const identifier = extractScanIdentifier(input.code, workflow.extraction);
+  const values = resolveWorkflowValues(
+    workflow,
+    identifier,
+    input.code,
+    input.inputs,
+    { validateRequired: true },
+  );
+
+  let operationResult: Record<string, unknown>;
+  let unitId: string | null = null;
+  let movement: Record<string, unknown> | null = null;
+  let resourceResult: Record<string, unknown>;
+  if (configuration.operation.type === "stock-adjustment") {
+    if (resource.trackingMode === "serialized") {
+      throw new ScanWorkflowError(
+        "Quantity adjustments require a bulk-tracked inventory item.",
+        409,
+      );
+    }
+    const result = await bookStockMovement(
+      organizationId,
+      resource.id,
+      {
+        delta: configuration.operation.delta,
+        quantity: Math.abs(configuration.operation.delta),
+        type: "scan-adjustment",
+        reason: `Action flow: ${workflow.name}`,
+        note: `Scanned identifier: ${identifier}`,
+      },
+      actor,
+      {
+        ...idempotency,
+        expectedResourceUpdatedAt: input.expectedResourceUpdatedAt,
+      },
+    );
+    operationResult = jsonRecord(result.response);
+    resourceResult = jsonRecord(result.response.resource);
+    movement = jsonRecord(result.response.movement);
+  } else {
+    const outputCodes =
+      resource.trackingMode === "serialized"
+        ? configuration.operation.quantity === 1
+          ? [identifier]
+          : Array.from(
+              { length: configuration.operation.quantity },
+              (_, index) => `${identifier}-${index + 1}`,
+            )
+        : undefined;
+    const result = await buildAssembly(
+      organizationId,
+      resource.id,
+      {
+        quantity: configuration.operation.quantity,
+        outputUnitCodes: outputCodes,
+        outputUnitMetadata: values.metadata,
+        outputUnitCustomFields: values.customFields,
+        note: `Action flow: ${workflow.name}`,
+      },
+      actor,
+      {
+        ...idempotency,
+        expectedResourceUpdatedAt: input.expectedResourceUpdatedAt,
+      },
+      () => true,
+    );
+    operationResult = jsonRecord(result.response);
+    resourceResult = jsonRecord(result.response.resource);
+    const outputUnits = Array.isArray(result.response.outputUnits)
+      ? result.response.outputUnits
+      : [];
+    const firstUnit = outputUnits[0];
+    unitId =
+      firstUnit && typeof firstUnit === "object" && "id" in firstUnit
+        ? String(firstUnit.id)
+        : null;
+    const movements = Array.isArray(result.response.movements)
+      ? result.response.movements
+      : [];
+    movement = movements.length
+      ? jsonRecord(movements[movements.length - 1])
+      : null;
+  }
+
+  const recordedValues = {
+    ...values.metadata,
+    ...values.customFields,
+    ...values.execution,
+  };
+  const response = jsonRecord({
+    workflowId: workflow.id,
+    revision: workflow.revision,
+    operation: configuration.operation,
+    resource: resourceResult,
+    unit:
+      configuration.operation.type === "assembly-build" &&
+      Array.isArray(operationResult.outputUnits)
+        ? operationResult.outputUnits[0] ?? null
+        : null,
+    movement,
+    created: configuration.operation.type === "assembly-build",
+    metadataBefore: null,
+    metadataAfter: recordedValues,
+    actionResult: operationResult,
+  });
+
+  try {
+    await db.transaction(async (transaction) => {
+      await transaction.insert(stockScanExecutions).values({
+        organizationId,
+        idempotencyKey: idempotency.key,
+        workflowId: workflow.id,
+        workflowRevision: workflow.revision,
+        resourceId: resource.id,
+        unitId,
+        requestHash: idempotency.requestHash,
+        codeHash: hashCode(input.code),
+        codeType: input.codeType,
+        actor,
+        createdUnit: configuration.operation.type === "assembly-build" && Boolean(unitId),
+        beforeMetadata: null,
+        afterMetadata: recordedValues,
+        response,
+      });
+      if (workflow.triggerWebhook) {
+        await enqueueWebhookEvent(transaction, {
+          organizationId,
+          type: "inventory.action.executed",
+          aggregateType: "action_flow",
+          aggregateId: workflow.id,
+          actor,
+          data: {
+            eventName: workflow.webhookEventName,
+            workflow: { id: workflow.id, name: workflow.name, revision: workflow.revision },
+            identifier,
+            codeType: input.codeType,
+            values: recordedValues,
+            result: response,
+          },
+        });
+      }
+    });
+    return { response, replayed: false } as const;
+  } catch (error) {
+    const [winner] = await db
+      .select({
+        requestHash: stockScanExecutions.requestHash,
+        response: stockScanExecutions.response,
+      })
+      .from(stockScanExecutions)
+      .where(
+        and(
+          eq(stockScanExecutions.organizationId, organizationId),
+          eq(stockScanExecutions.idempotencyKey, idempotency.key),
+        ),
+      )
+      .limit(1);
+    if (winner?.requestHash === idempotency.requestHash) {
+      return { response: winner.response, replayed: true } as const;
+    }
+    throw error;
+  }
+}
+
 export async function executeStockScan(
   organizationId: string,
   input: StockScanExecuteInput,
   actor: string,
   idempotency: ExecutionIdempotency,
 ) {
+  const [operationWorkflow] = await db
+    .select({ operation: stockScanWorkflows.operation })
+    .from(stockScanWorkflows)
+    .where(
+      and(
+        eq(stockScanWorkflows.organizationId, organizationId),
+        eq(stockScanWorkflows.id, input.workflowId),
+      ),
+    )
+    .limit(1);
+  if (operationWorkflow?.operation.type !== "unit") {
+    return executeNonUnitScan(organizationId, input, actor, idempotency);
+  }
+
   const validateReplay = (existing: {
     requestHash: string;
     response: Record<string, unknown>;
@@ -705,6 +1279,8 @@ export async function executeStockScan(
           name: resources.name,
           quantity: resources.quantity,
           location: resources.location,
+          type: resources.type,
+          categories: resources.categories,
           updatedAt: resources.updatedAt,
         })
         .from(resources)
@@ -771,7 +1347,8 @@ export async function executeStockScan(
           { currentRevision: workflow.revision },
         );
       }
-      assertWorkflowConfiguration(workflow);
+      const configuration = assertWorkflowConfiguration(workflow);
+      assertScannedCodeType(workflow, input.codeType);
       if (resource.updatedAt.toISOString() !== input.expectedResourceUpdatedAt) {
         throw new ScanWorkflowError(
           "The inventory quantity changed after this scan was resolved. Resolve the scan again before executing it.",
@@ -798,10 +1375,12 @@ export async function executeStockScan(
       }
 
       const identifier = extractScanIdentifier(input.code, workflow.extraction);
-      const metadataChanges = resolveMetadataChanges(
+      const workflowValues = resolveWorkflowValues(
         workflow,
         identifier,
+        input.code,
         input.inputs,
+        { validateRequired: true },
       );
 
       // Unit is locked only after its resource lock has been acquired.
@@ -850,8 +1429,21 @@ export async function executeStockScan(
         : null;
       const afterMetadata = {
         ...(beforeMetadata ?? {}),
-        ...metadataChanges,
+        ...workflowValues.metadata,
       };
+      const beforeCustomFields = existingUnit?.customFields ?? null;
+      const afterCustomFields = await validateCustomFieldValues({
+        organizationId,
+        entityType: "stock_unit",
+        target: { type: resource.type, categories: resource.categories },
+        values: {
+          ...(beforeCustomFields ?? {}),
+          ...workflowValues.customFields,
+        },
+        currentValues: beforeCustomFields ?? undefined,
+        enforceRequired: true,
+        executor: transaction,
+      });
       const transition = calculateScanTransition(
         resource.quantity,
         existingUnit?.status ?? null,
@@ -868,6 +1460,7 @@ export async function executeStockScan(
           .set({
             status: nextStatus,
             metadata: afterMetadata,
+            customFields: afterCustomFields,
             lastMovedAt: now,
             updatedAt: now,
           })
@@ -888,6 +1481,7 @@ export async function executeStockScan(
             status: nextStatus,
             location: resource.location,
             metadata: afterMetadata,
+            customFields: afterCustomFields,
             acquiredAt: now,
             lastMovedAt: now,
           })
@@ -943,8 +1537,15 @@ export async function executeStockScan(
         unit: unitDto(savedUnit),
         movement: movementDto(movement),
         created: !existingUnit,
+        operation: configuration.operation,
         metadataBefore: beforeMetadata,
-        metadataAfter: afterMetadata,
+        metadataAfter: {
+          ...afterMetadata,
+          ...afterCustomFields,
+          ...workflowValues.execution,
+        },
+        customFieldsBefore: beforeCustomFields,
+        customFieldsAfter: afterCustomFields,
       };
       const storedResponse = jsonRecord(response);
       await transaction.insert(stockScanExecutions).values({
@@ -956,12 +1557,34 @@ export async function executeStockScan(
         unitId: savedUnit.id,
         requestHash: idempotency.requestHash,
         codeHash: hashCode(input.code),
+        codeType: input.codeType,
         actor,
         createdUnit: !existingUnit,
         beforeMetadata,
-        afterMetadata,
+        afterMetadata: {
+          ...afterMetadata,
+          ...afterCustomFields,
+          ...workflowValues.execution,
+        },
         response: storedResponse,
       });
+      if (workflow.triggerWebhook) {
+        await enqueueWebhookEvent(transaction, {
+          organizationId,
+          type: "inventory.action.executed",
+          aggregateType: "action_flow",
+          aggregateId: workflow.id,
+          actor,
+          data: {
+            eventName: workflow.webhookEventName,
+            workflow: { id: workflow.id, name: workflow.name, revision: workflow.revision },
+            identifier,
+            codeType: input.codeType,
+            values: storedResponse.metadataAfter as Record<string, unknown>,
+            result: storedResponse,
+          },
+        });
+      }
       return { response: storedResponse, replayed: false } as const;
     });
   } catch (error) {

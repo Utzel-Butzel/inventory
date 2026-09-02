@@ -16,6 +16,11 @@ import { LocalizedThemeToggle } from "@/components/theme-toggle";
 import { MarkdownContent } from "@/components/markdown-content";
 import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import { UsdzModelViewer } from "@/components/usdz-model-viewer";
+import {
+  PublicStockBookingPanel,
+  PublicStockScannerButton,
+  type PublicStockSummary,
+} from "@/components/public-stock-tool";
 import type {
   PublicCustomFieldDefinition,
   PublicResource,
@@ -38,10 +43,12 @@ function PublicHeader({
   title,
   eyebrow,
   viewOnly,
+  stockToolShareId,
 }: {
   title: string;
   eyebrow: string;
   viewOnly: string;
+  stockToolShareId?: string;
 }) {
   return (
     <header className="border-b border-border bg-surface/95">
@@ -58,6 +65,9 @@ function PublicHeader({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {stockToolShareId ? (
+            <PublicStockScannerButton shareId={stockToolShareId} />
+          ) : null}
           <span className="hidden rounded-full bg-brand-soft px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-brand sm:inline-flex">
             {viewOnly}
           </span>
@@ -269,12 +279,14 @@ export async function PublicResourceView({
   showBack,
   resource,
   definitions,
+  stockTool = null,
 }: {
   shareId: string;
   shareTitle: string;
   showBack: boolean;
   resource: PublicResource;
   definitions: PublicCustomFieldDefinition[];
+  stockTool?: PublicStockSummary | null;
 }) {
   const { t, lng: locale } = await getT("share");
   const customFields = Object.entries(resource.customFields);
@@ -283,7 +295,8 @@ export async function PublicResourceView({
       <PublicHeader
         title={shareTitle}
         eyebrow={t("header.sharedInventory")}
-        viewOnly={t("header.viewOnly")}
+        viewOnly={t(stockTool ? "tool.header.badge" : "header.viewOnly")}
+        stockToolShareId={stockTool ? shareId : undefined}
       />
       <main className="mx-auto w-full max-w-[1120px] px-4 py-7 sm:px-6 lg:py-10">
         {showBack ? (
@@ -364,6 +377,14 @@ export async function PublicResourceView({
           </div>
 
           <aside className="space-y-5">
+            {stockTool ? (
+              <PublicStockBookingPanel
+                shareId={shareId}
+                resourceId={resource.id}
+                initialQuantity={resource.quantity}
+                summary={stockTool}
+              />
+            ) : null}
             <section className="rounded-2xl border border-border bg-surface p-5">
               <h2 className="text-sm font-semibold text-foreground">{t("resource.details")}</h2>
               <dl className="mt-4 divide-y divide-border text-sm">

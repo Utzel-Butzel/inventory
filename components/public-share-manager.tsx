@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Globe2,
   Link2,
+  LockKeyhole,
   LoaderCircle,
   PackageOpen,
   Search,
@@ -41,6 +42,8 @@ type PublicShareSummary = {
   resourceId: string | null;
   resourceName: string | null;
   filter: PublicShareFilter | null;
+  accessMode: "view" | "stock";
+  passwordProtected: boolean;
   createdBy: string | null;
   createdAt: string;
 };
@@ -77,6 +80,8 @@ export function PublicShareManager() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [scope, setScope] = useState<ShareScope>("inventory");
+  const [accessMode, setAccessMode] = useState<"view" | "stock">("view");
+  const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [filterFieldKey, setFilterFieldKey] = useState("");
   const [filterValues, setFilterValues] = useState<CustomFieldValues>({});
@@ -165,6 +170,8 @@ export function PublicShareManager() {
 
   function resetForm() {
     setName("");
+    setAccessMode("view");
+    setPassword("");
     setFilterFieldKey("");
     setFilterValues({});
     setResourceQuery("");
@@ -187,6 +194,8 @@ export function PublicShareManager() {
           scope: "inventory";
           name: string;
           filter: PublicShareFilter | null;
+          accessMode: "view" | "stock";
+          password?: string;
         }
       | { scope: "item"; name: string; resourceId: string };
 
@@ -201,6 +210,10 @@ export function PublicShareManager() {
         resourceId: selectedResource.id,
       };
     } else {
+      if (accessMode === "stock" && password.length < 8) {
+        setFormError(t("settings:sharing.errors.passwordRequired"));
+        return;
+      }
       const filterValue = filterFieldKey
         ? filterValues[filterFieldKey]
         : undefined;
@@ -211,6 +224,8 @@ export function PublicShareManager() {
       payload = {
         scope: "inventory",
         name: trimmedName,
+        accessMode,
+        ...(accessMode === "stock" ? { password } : {}),
         filter:
           filterFieldKey && filterValue !== undefined
             ? { fieldKey: filterFieldKey, value: filterValue }
@@ -356,6 +371,10 @@ export function PublicShareManager() {
                         checked={active}
                         onChange={() => {
                           setScope(value);
+                          if (value === "item") {
+                            setAccessMode("view");
+                            setPassword("");
+                          }
                           setFormError(null);
                         }}
                         className="sr-only"
@@ -383,6 +402,68 @@ export function PublicShareManager() {
 
             {scope === "inventory" ? (
               <div className="space-y-4">
+                <fieldset>
+                  <legend className={labelClass}>
+                    {t("settings:sharing.create.accessMode")}
+                  </legend>
+                  <div className="mt-1.5 grid grid-cols-2 gap-2">
+                    {(["view", "stock"] as const).map((value) => (
+                      <label
+                        key={value}
+                        className={cn(
+                          "flex min-h-14 cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-3 transition",
+                          accessMode === value
+                            ? "border-brand-border bg-brand-soft text-brand"
+                            : "border-border bg-surface text-muted-strong hover:border-border-strong",
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="share-access-mode"
+                          value={value}
+                          checked={accessMode === value}
+                          onChange={() => {
+                            setAccessMode(value);
+                            if (value === "view") setPassword("");
+                            setFormError(null);
+                          }}
+                          className="sr-only"
+                        />
+                        {value === "stock" ? (
+                          <LockKeyhole className="size-4 shrink-0" aria-hidden="true" />
+                        ) : (
+                          <Globe2 className="size-4 shrink-0" aria-hidden="true" />
+                        )}
+                        <span>
+                          <span className="block text-xs font-semibold">
+                            {t(`settings:sharing.create.accessModes.${value}.label`)}
+                          </span>
+                          <span className="mt-0.5 block text-[10px] font-normal leading-4 text-muted">
+                            {t(`settings:sharing.create.accessModes.${value}.description`)}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                {accessMode === "stock" ? (
+                  <label className={labelClass}>
+                    {t("settings:sharing.create.password")}
+                    <input
+                      type="password"
+                      value={password}
+                      minLength={8}
+                      maxLength={128}
+                      autoComplete="new-password"
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder={t("settings:sharing.create.passwordPlaceholder")}
+                      className={inputClass}
+                    />
+                    <span className="mt-1.5 block text-[10px] font-normal leading-4 text-muted">
+                      {t("settings:sharing.create.passwordHint")}
+                    </span>
+                  </label>
+                ) : null}
                 <label className={labelClass}>
                   {t("settings:sharing.create.filter")}
                   <span className="ml-1 font-normal text-muted">
@@ -620,6 +701,12 @@ export function PublicShareManager() {
                         <Badge tone={share.scope === "inventory" ? "brand" : "neutral"}>
                           {t(`settings:sharing.list.scopes.${share.scope}`)}
                         </Badge>
+                        {share.accessMode === "stock" ? (
+                          <Badge tone="warning">
+                            <LockKeyhole className="mr-1 size-3" aria-hidden="true" />
+                            {t("settings:sharing.list.stockTool")}
+                          </Badge>
+                        ) : null}
                       </div>
                       <p className="mt-1 truncate text-[11px] text-muted-strong">
                         {share.scope === "item"

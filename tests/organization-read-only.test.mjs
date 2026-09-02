@@ -35,7 +35,7 @@ test("read-only organizations retain only read scopes and permissions", () => {
         "inventory.read",
         "inventory.export",
         "inventory.update",
-        "ai.use",
+        "ai.analyze",
         "users.manage",
       ],
       true,
@@ -44,7 +44,7 @@ test("read-only organizations retain only read scopes and permissions", () => {
   );
   assert.equal(organizationAllowsPermission(true, "inventory.read"), true);
   assert.equal(organizationAllowsPermission(true, "inventory.update"), false);
-  assert.equal(organizationAllowsPermission(true, "ai.use"), false);
+  assert.equal(organizationAllowsPermission(true, "ai.analyze"), false);
 });
 
 test("writable organizations keep their configured policy unchanged", () => {
@@ -54,10 +54,10 @@ test("writable organizations keep their configured policy unchanged", () => {
   );
   assert.deepEqual(
     restrictOrganizationPermissions(
-      ["inventory.update", "users.manage", "ai.use"],
+      ["inventory.update", "users.manage", "ai.images"],
       false,
     ),
-    ["inventory.update", "users.manage", "ai.use"],
+    ["inventory.update", "users.manage", "ai.images"],
   );
 });
 

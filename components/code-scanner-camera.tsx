@@ -25,15 +25,24 @@ import {
 
 import { Button, cn } from "@/components/ui";
 import { detectBarcodes } from "@/lib/barcode-scanner";
+import type { ScanCodeType } from "@/lib/scan-code-types";
 
 type CameraStatus = "idle" | "requesting" | "active" | "paused" | "error";
 
 export type ScannerSource = "camera" | "photo" | "manual";
 
 type CodeScannerCameraProps = {
-  onDetected: (code: string, source: ScannerSource) => void;
+  onDetected: (
+    code: string,
+    source: ScannerSource,
+    codeType: ScanCodeType | null,
+  ) => void;
   disabled?: boolean;
+  allowedFormats?: readonly ScanCodeType[];
+  autoFocusManual?: boolean;
 };
+
+type DecodedCode = { value: string; format: ScanCodeType };
 
 type CameraDevice = {
   id: string;
@@ -63,9 +72,15 @@ function cameraErrorKey(error: unknown) {
   return "camera.errors.generic";
 }
 
-function decodePixels(data: Uint8ClampedArray, width: number, height: number) {
+function decodePixels(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+): DecodedCode | null {
   const original = jsQR(data, width, height, { inversionAttempts: "attemptBoth" });
-  if (original?.data.trim()) return original.data.trim();
+  if (original?.data.trim()) {
+    return { value: original.data.trim(), format: "qr_code" };
+  }
 
   for (const threshold of PHOTO_THRESHOLDS) {
     const blackAndWhite = new Uint8ClampedArray(data.length);
@@ -83,7 +98,9 @@ function decodePixels(data: Uint8ClampedArray, width: number, height: number) {
     const decoded = jsQR(blackAndWhite, width, height, {
       inversionAttempts: "attemptBoth",
     });
-    if (decoded?.data.trim()) return decoded.data.trim();
+    if (decoded?.data.trim()) {
+      return { value: decoded.data.trim(), format: "qr_code" };
+    }
   }
 
   return null;
@@ -93,27 +110,31 @@ async function decodeCanvas(
   canvas: HTMLCanvasElement,
   imageData: ImageData,
   usePhotoEnhancements = false,
+  allowedFormats?: readonly ScanCodeType[],
 ) {
+  const allowed = allowedFormats ? new Set(allowedFormats) : null;
   try {
-    const [barcode] = await detectBarcodes(canvas);
-    if (barcode) return barcode.value;
+    const barcode = (await detectBarcodes(canvas)).find(
+      (candidate) => !allowed || allowed.has(candidate.format),
+    );
+    if (barcode) return barcode;
   } catch {
     // Keep the original QR decoder as a lightweight offline fallback if the
     // multi-format WebAssembly decoder cannot be initialized.
   }
 
+  if (allowed && !allowed.has("qr_code")) return null;
   if (usePhotoEnhancements) {
     return decodePixels(imageData.data, imageData.width, imageData.height);
   }
 
-  return (
-    jsQR(imageData.data, imageData.width, imageData.height, {
-      inversionAttempts: "attemptBoth",
-    })?.data.trim() || null
-  );
+  const value = jsQR(imageData.data, imageData.width, imageData.height, {
+    inversionAttempts: "attemptBoth",
+  })?.data.trim();
+  return value ? ({ value, format: "qr_code" } satisfies DecodedCode) : null;
 }
 
-async function decodePhoto(file: File) {
+async function decodePhoto(file: File, allowedFormats?: readonly ScanCodeType[]) {
   const objectUrl = URL.createObjectURL(file);
   try {
     const image = new Image();
@@ -142,6 +163,7 @@ async function decodePhoto(file: File) {
       canvas,
       context.getImageData(0, 0, width, height),
       true,
+      allowedFormats,
     );
   } finally {
     URL.revokeObjectURL(objectUrl);
@@ -151,6 +173,8 @@ async function decodePhoto(file: File) {
 export function CodeScannerCamera({
   onDetected,
   disabled = false,
+  allowedFormats,
+  autoFocusManual = false,
 }: CodeScannerCameraProps) {
   const { t, i18n } = useT("scanner");
   const locale = i18n.resolvedLanguage ?? i18n.language;
@@ -310,13 +334,17 @@ export function CodeScannerCamera({
           context.drawImage(video, 0, 0, width, height);
           const frame = context.getImageData(0, 0, width, height);
           decodingFrameRef.current = true;
-          void decodeCanvas(canvas, frame)
-            .then((code) => {
-              if (!code || generation !== cameraGenerationRef.current) return;
-              setLastDetectedCode(code);
+          void decodeCanvas(canvas, frame, false, allowedFormats)
+            .then((detected) => {
+              if (!detected || generation !== cameraGenerationRef.current) return;
+              setLastDetectedCode(detected.value);
               setCameraStatus("paused");
               stopCamera();
-              onDetectedRef.current(code, "camera");
+              onDetectedRef.current(
+                detected.value,
+                "camera",
+                detected.format,
+              );
             })
             .finally(() => {
               decodingFrameRef.current = false;
@@ -331,7 +359,7 @@ export function CodeScannerCamera({
         setCameraError(t(cameraErrorKey(error)));
       }
     },
-    [integer, invalidatePhoto, stopCamera, t],
+    [allowedFormats, integer, invalidatePhoto, stopCamera, t],
   );
 
   const handleDeviceChange = (deviceId: string) => {
@@ -349,17 +377,17 @@ export function CodeScannerCamera({
     setPhotoError(null);
     setLastDetectedCode(null);
     try {
-      const code = await decodePhoto(file);
+      const detected = await decodePhoto(file, allowedFormats);
       if (generation !== photoGenerationRef.current) return;
-      if (!code) {
+      if (!detected) {
         setPhotoError(
           t("camera.errors.noQr"),
         );
         return;
       }
-      setLastDetectedCode(code);
+      setLastDetectedCode(detected.value);
       setCameraStatus("paused");
-      onDetectedRef.current(code, "photo");
+      onDetectedRef.current(detected.value, "photo", detected.format);
     } catch {
       if (generation !== photoGenerationRef.current) return;
       setPhotoError(
@@ -370,8 +398,7 @@ export function CodeScannerCamera({
     }
   };
 
-  const submitManualCode = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitManualCodeValue = () => {
     if (disabled || photoBusy) return;
     const code = manualCode.trim();
     if (!code) {
@@ -384,7 +411,12 @@ export function CodeScannerCamera({
     setCameraStatus("paused");
     setLastDetectedCode(code);
     setManualError(null);
-    onDetectedRef.current(code, "manual");
+    onDetectedRef.current(code, "manual", null);
+  };
+
+  const submitManualCode = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    submitManualCodeValue();
   };
 
   const isCameraActive = cameraStatus === "active";
@@ -587,6 +619,7 @@ export function CodeScannerCamera({
             <div className="flex flex-col gap-2 sm:flex-row md:flex-col lg:flex-row">
               <input
                 id={`${uploadInputId}-manual`}
+                autoFocus={autoFocusManual}
                 value={manualCode}
                 disabled={disabled || photoBusy}
                 autoComplete="off"
@@ -595,6 +628,11 @@ export function CodeScannerCamera({
                 onChange={(event) => {
                   setManualCode(event.target.value);
                   if (manualError) setManualError(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  submitManualCodeValue();
                 }}
                 className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 font-mono text-xs text-foreground shadow-sm placeholder:font-sans placeholder:text-muted"
               />

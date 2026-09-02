@@ -6,6 +6,7 @@ import {
   prepareInventoryCountImage,
   prepareInventoryRecognitionReferenceImage,
 } from "@/lib/ai";
+import { aiUsageEstimate } from "@/lib/ai-billing";
 import {
   claimAiOperation,
   finishAiOperation,
@@ -13,6 +14,11 @@ import {
   respondToAiOperationClaim,
   respondToFinishedAiOperation,
 } from "@/lib/ai-idempotency";
+import {
+  AiMonthlyBudgetExceededError,
+  aiBudgetErrorBody,
+  trackAiUsage,
+} from "@/lib/ai-usage";
 import {
   consumePaidAiRateLimit,
   paidAiRateLimitHeaders,
@@ -103,6 +109,26 @@ export async function POST(request: Request) {
   ) {
     return json(
       { error: "Object recognition also requires inventory read access." },
+      { status: 403 },
+    );
+  }
+  const directRecognitionAccess =
+    authorization.identity.permissions.includes("ai.recognize");
+  const recognitionRules =
+    !directRecognitionAccess && authorization.identity.role
+      ? await listRulesForRole(
+          authorization.identity.role,
+          authorization.identity.organizationId,
+        )
+      : [];
+  if (
+    !directRecognitionAccess &&
+    !recognitionRules.some(
+      (rule) => rule.enabled && rule.permissions.includes("ai.recognize"),
+    )
+  ) {
+    return json(
+      { error: "You do not have permission to perform this action." },
       { status: 403 },
     );
   }
@@ -312,10 +338,21 @@ export async function POST(request: Request) {
 
   let described;
   try {
-    described = await describeInventoryRecognitionImage(
-      preparedImage.dataUrl,
-    );
+    described = await trackAiUsage({
+      organizationId: authorization.identity.organizationId,
+      estimate: aiUsageEstimate({ action: "inventory_recognition" }),
+      actor: authorization.identity,
+      metadata: { providerCallsReserved: 2 },
+      run: () => describeInventoryRecognitionImage(preparedImage.dataUrl),
+    });
   } catch (error) {
+    if (error instanceof AiMonthlyBudgetExceededError) {
+      return releaseAndRespond(
+        aiBudgetErrorBody(error),
+        429,
+        paidAiRateLimitHeaders(limit),
+      );
+    }
     console.error("Unable to describe the inventory object.", error);
     return finish(
       {
@@ -343,19 +380,15 @@ export async function POST(request: Request) {
       ].filter((term): term is string => Boolean(term)),
       configuredCatalogLimit(),
     );
-    if (authorization.identity.permissions.includes("ai.use")) {
+    if (directRecognitionAccess) {
       visibleResources = catalog.resources;
     } else if (authorization.identity.role) {
-      const rules = await listRulesForRole(
-        authorization.identity.role,
-        authorization.identity.organizationId,
-      );
       visibleResources = catalog.resources.filter((resource) =>
         ruleGrantsResourcePermission({
           roleKey: authorization.identity.role!,
-          permission: "ai.use",
+          permission: "ai.recognize",
           resource,
-          rules,
+          rules: recognitionRules,
         }),
       );
     } else {

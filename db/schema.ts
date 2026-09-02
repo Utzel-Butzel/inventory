@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   doublePrecision,
@@ -18,10 +19,17 @@ import {
 
 import type {
   ScanWorkflowExtraction,
+  ScanWorkflowExtractedField,
   ScanWorkflowFixedProperty,
   ScanWorkflowInputField,
+  ScanWorkflowOperation,
 } from "@/lib/scan-workflow-contract";
+import { scanCodeTypes, type ScanCodeType } from "@/lib/scan-code-types";
 import type { PaidAiOperation } from "@/lib/ai-rate-limit-policy";
+import type {
+  AiBillableAction,
+  AiUsageProvider,
+} from "@/lib/ai-billing";
 import {
   customFieldResourceTypes,
   type CustomFieldEntityType,
@@ -44,6 +52,7 @@ import type {
   ResourceRulePermission,
 } from "@/lib/access-control-contract";
 import type {
+  PublicShareAccessMode,
   PublicShareFilter,
   PublicShareScope,
 } from "@/lib/public-share-contract";
@@ -83,6 +92,9 @@ export const organizations = pgTable(
     slug: varchar("slug", { length: 80 }).notNull(),
     isReadOnly: boolean("is_read_only").notNull().default(false),
     allowNegativeStock: boolean("allow_negative_stock").notNull().default(false),
+    aiMonthlyBudgetMicros: bigint("ai_monthly_budget_micros", {
+      mode: "number",
+    }),
     createdBy: varchar("created_by", { length: 320 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -96,6 +108,10 @@ export const organizations = pgTable(
     check(
       "organizations_slug_check",
       sql`${table.slug} ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'`,
+    ),
+    check(
+      "organizations_ai_monthly_budget_nonnegative",
+      sql`${table.aiMonthlyBudgetMicros} is null or ${table.aiMonthlyBudgetMicros} >= 0`,
     ),
   ],
 );
@@ -2896,6 +2912,11 @@ export const stockScanWorkflows = pgTable(
     resourceId: uuid("resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "cascade" }),
+    codeTypes: text("code_types")
+      .array()
+      .$type<ScanCodeType[]>()
+      .notNull()
+      .default([...scanCodeTypes]),
     revision: integer("revision").notNull().default(1),
     extraction: jsonb("extraction")
       .$type<ScanWorkflowExtraction>()
@@ -2903,6 +2924,18 @@ export const stockScanWorkflows = pgTable(
     identifierPropertyKey: varchar("identifier_property_key", {
       length: 80,
     }).notNull(),
+    identifierStorage: varchar("identifier_storage", { length: 24 })
+      .$type<"custom-field" | "metadata" | "execution">()
+      .notNull()
+      .default("custom-field"),
+    extractedFields: jsonb("extracted_fields")
+      .$type<ScanWorkflowExtractedField[]>()
+      .notNull()
+      .default([]),
+    operation: jsonb("operation")
+      .$type<ScanWorkflowOperation>()
+      .notNull()
+      .default({ type: "unit" }),
     createMissingUnit: boolean("create_missing_unit").notNull().default(false),
     unitStatus: varchar("unit_status", { length: 32 }).$type<StockUnitStatus>(),
     fixedProperties: jsonb("fixed_properties")
@@ -2913,6 +2946,10 @@ export const stockScanWorkflows = pgTable(
       .$type<ScanWorkflowInputField[]>()
       .notNull()
       .default([]),
+    triggerWebhook: boolean("trigger_webhook").notNull().default(false),
+    webhookEventName: varchar("webhook_event_name", { length: 120 })
+      .notNull()
+      .default("inventory.action.executed"),
     createdBy: varchar("created_by", { length: 320 }),
     updatedBy: varchar("updated_by", { length: 320 }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -2927,12 +2964,32 @@ export const stockScanWorkflows = pgTable(
     index("stock_scan_workflows_enabled_idx").on(table.enabled),
     check("stock_scan_workflows_revision_positive", sql`${table.revision} > 0`),
     check(
+      "stock_scan_workflows_code_types_nonempty",
+      sql`cardinality(${table.codeTypes}) > 0`,
+    ),
+    check(
+      "stock_scan_workflows_code_types_check",
+      sql`${table.codeTypes} <@ array['qr_code', 'data_matrix', 'aztec', 'pdf417', 'code_128', 'code_93', 'code_39', 'codabar', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf']::text[]`,
+    ),
+    check(
       "stock_scan_workflows_unit_status_check",
       sql`${table.unitStatus} is null or ${table.unitStatus} in ('available', 'reserved', 'in-use', 'maintenance', 'consumed', 'lost', 'retired')`,
     ),
     check(
       "stock_scan_workflows_extraction_object",
       sql`jsonb_typeof(${table.extraction}) = 'object'`,
+    ),
+    check(
+      "stock_scan_workflows_identifier_storage_check",
+      sql`${table.identifierStorage} in ('custom-field', 'metadata', 'execution')`,
+    ),
+    check(
+      "stock_scan_workflows_extracted_fields_array",
+      sql`jsonb_typeof(${table.extractedFields}) = 'array'`,
+    ),
+    check(
+      "stock_scan_workflows_operation_object",
+      sql`jsonb_typeof(${table.operation}) = 'object'`,
     ),
     check(
       "stock_scan_workflows_fixed_properties_array",
@@ -2963,6 +3020,7 @@ export const stockScanExecutions = pgTable(
     }),
     requestHash: varchar("request_hash", { length: 64 }).notNull(),
     codeHash: varchar("code_hash", { length: 64 }).notNull(),
+    codeType: varchar("code_type", { length: 32 }).$type<ScanCodeType>(),
     actor: varchar("actor", { length: 320 }).notNull(),
     createdUnit: boolean("created_unit").notNull().default(false),
     beforeMetadata: jsonb("before_metadata").$type<Record<string, unknown>>(),
@@ -2985,6 +3043,10 @@ export const stockScanExecutions = pgTable(
     check(
       "stock_scan_executions_workflow_revision_positive",
       sql`${table.workflowRevision} > 0`,
+    ),
+    check(
+      "stock_scan_executions_code_type_check",
+      sql`${table.codeType} is null or ${table.codeType} in ('qr_code', 'data_matrix', 'aztec', 'pdf417', 'code_128', 'code_93', 'code_39', 'codabar', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf')`,
     ),
     check(
       "stock_scan_executions_before_metadata_object",
@@ -3045,6 +3107,11 @@ export const publicShares = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 120 }).notNull(),
     scope: varchar("scope", { length: 16 }).$type<PublicShareScope>().notNull(),
+    accessMode: varchar("access_mode", { length: 16 })
+      .$type<PublicShareAccessMode>()
+      .notNull()
+      .default("view"),
+    passwordHash: varchar("password_hash", { length: 255 }),
     resourceId: uuid("resource_id").references(() => resources.id, {
       onDelete: "cascade",
     }),
@@ -3064,6 +3131,21 @@ export const publicShares = pgTable(
     check(
       "public_shares_scope_check",
       sql`${table.scope} in ('inventory', 'item')`,
+    ),
+    check(
+      "public_shares_access_mode_check",
+      sql`${table.accessMode} in ('view', 'stock')`,
+    ),
+    check(
+      "public_shares_stock_tool_check",
+      sql`(
+        ${table.accessMode} = 'view'
+        and ${table.passwordHash} is null
+      ) or (
+        ${table.accessMode} = 'stock'
+        and ${table.scope} = 'inventory'
+        and ${table.passwordHash} is not null
+      )`,
     ),
     check(
       "public_shares_scope_target_check",
@@ -3209,6 +3291,60 @@ export const aiRateLimitBuckets = pgTable(
       "ai_rate_limit_buckets_subject_hash_check",
       sql`${table.subjectHash} ~ '^[0-9a-f]{64}$'`,
     ),
+  ],
+);
+
+export const aiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    action: varchar("action", { length: 40 }).$type<AiBillableAction>().notNull(),
+    provider: varchar("provider", { length: 24 }).$type<AiUsageProvider>().notNull(),
+    model: varchar("model", { length: 240 }).notNull(),
+    status: varchar("status", { length: 16 })
+      .$type<"running" | "succeeded" | "failed">()
+      .notNull()
+      .default("running"),
+    costMicros: bigint("cost_micros", { mode: "number" }).notNull(),
+    costEstimated: boolean("cost_estimated").notNull().default(true),
+    actor: varchar("actor", { length: 320 }).notNull(),
+    actorName: varchar("actor_name", { length: 160 }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    tokenId: uuid("token_id"),
+    resourceId: uuid("resource_id"),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("ai_usage_events_org_created_idx").on(
+      table.organizationId,
+      table.createdAt,
+    ),
+    index("ai_usage_events_org_action_created_idx").on(
+      table.organizationId,
+      table.action,
+      table.createdAt,
+    ),
+    check(
+      "ai_usage_events_action_check",
+      sql`${table.action} in ('inventory_analysis', 'inventory_research', 'image_search', 'inventory_recognition', 'photo_count', 'image_generation', 'translation', 'room_analysis', 'workflow_extraction')`,
+    ),
+    check(
+      "ai_usage_events_provider_check",
+      sql`${table.provider} in ('openai', 'google', 'replicate')`,
+    ),
+    check(
+      "ai_usage_events_status_check",
+      sql`${table.status} in ('running', 'succeeded', 'failed')`,
+    ),
+    check("ai_usage_events_cost_nonnegative", sql`${table.costMicros} >= 0`),
   ],
 );
 
@@ -3516,7 +3652,7 @@ export const webhookEndpoints = pgTable(
     ),
     check(
       "webhook_endpoints_event_types_check",
-      sql`${table.eventTypes} <@ array['inventory.resource.created', 'inventory.resource.updated', 'inventory.resource.deleted', 'inventory.resource.merged', 'inventory.stock.movement.created']::text[]`,
+      sql`${table.eventTypes} <@ array['inventory.resource.created', 'inventory.resource.updated', 'inventory.resource.deleted', 'inventory.resource.merged', 'inventory.stock.movement.created', 'inventory.action.executed']::text[]`,
     ),
     check(
       "webhook_endpoints_failure_count_nonnegative",
@@ -3558,7 +3694,7 @@ export const webhookEvents = pgTable(
     check("webhook_events_api_version_check", sql`${table.apiVersion} = '1'`),
     check(
       "webhook_events_type_check",
-      sql`${table.type} in ('inventory.resource.created', 'inventory.resource.updated', 'inventory.resource.deleted', 'inventory.resource.merged', 'inventory.stock.movement.created', 'inventory.webhook.test')`,
+      sql`${table.type} in ('inventory.resource.created', 'inventory.resource.updated', 'inventory.resource.deleted', 'inventory.resource.merged', 'inventory.stock.movement.created', 'inventory.action.executed', 'inventory.webhook.test')`,
     ),
     check(
       "webhook_events_payload_object",
@@ -3739,6 +3875,7 @@ export type StockScanWorkflowRecord = typeof stockScanWorkflows.$inferSelect;
 export type StockScanExecutionRecord = typeof stockScanExecutions.$inferSelect;
 export type UserRecord = typeof users.$inferSelect;
 export type AccessRoleRecord = typeof accessRoles.$inferSelect;
+export type AiUsageEventRecord = typeof aiUsageEvents.$inferSelect;
 export type InventoryAccessRuleRecord =
   typeof inventoryAccessRules.$inferSelect;
 export type RoomScanRecord = typeof roomScans.$inferSelect;

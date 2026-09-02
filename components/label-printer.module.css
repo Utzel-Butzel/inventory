@@ -125,10 +125,13 @@
 }
 
 .designedText {
+  box-sizing: content-box;
   display: flex;
   align-items: center;
+  padding-block: 0.14em;
   line-height: 1.08;
   overflow-wrap: anywhere;
+  transform: translateY(-0.14em);
 }
 
 .designedName {

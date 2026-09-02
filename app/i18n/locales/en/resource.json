@@ -356,6 +356,8 @@
       "sibling": "Same family",
       "component_one": "{{value}} per finished item",
       "component_other": "{{value}} per finished item",
+      "assembly_one": "Uses {{value}} of this item",
+      "assembly_other": "Uses {{value}} of this item",
       "located-in": "Container",
       "contains": "Contained item"
     },
@@ -462,6 +464,9 @@
       "contains": "Contains",
       "containsEmpty": "Does not contain any items",
       "bom": "Bill of materials",
+      "usedIn": "Used in",
+      "usedInQuantity_one": "×{{count}} per finished item",
+      "usedInQuantity_other": "×{{count}} per finished item",
       "family": "Variant family",
       "otherRelations_one": "{{count}} other relationship",
       "otherRelations_other": "{{count}} other relationships",

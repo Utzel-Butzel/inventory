@@ -1,3 +1,4 @@
+import { InventoryBreadcrumb } from "@/components/inventory-breadcrumb-context";
 import { ResourceEditor } from "@/components/resource-editor";
 import { canAccessResource, getSessionIdentity } from "@/lib/api-auth";
 import { getResourceRecordByReference } from "@/lib/access-control";
@@ -35,13 +36,17 @@ export default async function EditInventoryItemPage({ params }: Props) {
 
   const [
     canDelete,
-    canUseAi,
+    canAnalyzeAi,
+    canResearchAi,
+    canGenerateImagesAi,
     canManageSpatial,
     canManageStock,
     rawVariantContext,
   ] = await Promise.all([
     canAccessResource(identity, "inventory.delete", resource),
-    canAccessResource(identity, "ai.use", resource),
+    canAccessResource(identity, "ai.analyze", resource),
+    canAccessResource(identity, "ai.research", resource),
+    canAccessResource(identity, "ai.images", resource),
     canAccessResource(identity, "spatial.manage", resource),
     canAccessResource(identity, "stock.manage", resource),
     getResourceVariantContext(identity.organizationId, resource.id),
@@ -61,14 +66,23 @@ export default async function EditInventoryItemPage({ params }: Props) {
       : null;
 
   return (
-    <ResourceEditor
-      resourceId={resource.id}
-      canDelete={canDelete}
-      canViewStock={identity.permissions.includes("stock.read")}
-      canUseAi={canUseAi}
-      canManageSpatial={canManageSpatial}
-      canManageStock={canManageStock}
-      variantContext={variantContext}
-    />
+    <>
+      <InventoryBreadcrumb
+        href={`/inventory/${primaryReference}`}
+        name={resource.name}
+      />
+      <ResourceEditor
+        resourceId={resource.id}
+        canDelete={canDelete}
+        canViewStock={identity.permissions.includes("stock.read")}
+        canUseAi={canAnalyzeAi || canResearchAi || canGenerateImagesAi}
+        canAnalyzeAi={canAnalyzeAi}
+        canResearchAi={canResearchAi}
+        canGenerateImagesAi={canGenerateImagesAi}
+        canManageSpatial={canManageSpatial}
+        canManageStock={canManageStock}
+        variantContext={variantContext}
+      />
+    </>
   );
 }

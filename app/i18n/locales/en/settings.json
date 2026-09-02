@@ -11,7 +11,12 @@
     "organization": {
       "title": "Organization",
       "metaDescription": "Manage the organizations available to your account.",
-      "description": "Review your organizations, update their names, or create a separate workspace for another team or inventory."
+      "description": "Review the organizations available to your account and update the workspaces you manage."
+    },
+    "systemOrganizations": {
+      "title": "All organizations",
+      "metaDescription": "Manage every organization in this Open Inventory deployment.",
+      "description": "Review, create, and update organizations across this deployment. This page is only available to configured superadmins."
     },
     "access": {
       "title": "Roles & access",
@@ -162,6 +167,100 @@
       "load": "Could not load organizations.",
       "create": "Could not create the organization.",
       "update": "Could not update the organization."
+    }
+  },
+  "superadminOrganizations": {
+    "list": {
+      "title": "All organizations",
+      "description": "Every isolated workspace in this Open Inventory deployment.",
+      "count_one": "{{count}} organization",
+      "count_other": "{{count}} organizations",
+      "readOnly": "Read only",
+      "emptyTitle": "No organizations available",
+      "emptyDescription": "Create the first organization for this deployment."
+    },
+    "create": {
+      "title": "Create an organization",
+      "description": "Create another isolated workspace in this deployment.",
+      "hint": "You will receive an administrator membership in the new organization."
+    },
+    "actions": {
+      "refresh": "Refresh organizations",
+      "retry": "Try again"
+    },
+    "notices": {
+      "created": "Organization “{{name}}” created.",
+      "updated": "Organization “{{name}}” updated."
+    },
+    "errors": {
+      "loadTitle": "Organizations could not be loaded",
+      "load": "Could not load all organizations.",
+      "create": "Could not create the organization.",
+      "update": "Could not update the organization."
+    }
+  },
+  "storageUsage": {
+    "title": "Storage usage",
+    "description": "File storage used by this organization. Inventory media, room-scan files, and keyframes are included; derived thumbnail caches are excluded.",
+    "summary": {
+      "total": "Total used",
+      "inventoryMedia": "Inventory media",
+      "roomScans": "Room scans"
+    },
+    "files_one": "{{count}} file",
+    "files_other": "{{count}} files"
+  },
+  "aiUsage": {
+    "title": "AI usage & cost limit",
+    "description": "Estimated cost of every paid AI call in this organization. The monthly limit is checked before each provider call; running and failed attempts remain included because providers may bill them.",
+    "estimated": "Estimated",
+    "refresh": "Refresh report",
+    "unlimited": "Unlimited",
+    "summary": {
+      "spent": "Reserved this month",
+      "remaining": "Available",
+      "actions": "AI actions",
+      "statusHint": "{{running}} running · {{failed}} failed"
+    },
+    "budget": {
+      "label": "Monthly AI limit in USD",
+      "unlimitedPlaceholder": "Blank = unlimited",
+      "hint": "0 disables paid AI completely. Leaving the field blank removes the monetary limit; technical rate limits still apply.",
+      "save": "Save limit",
+      "saving": "Saving…",
+      "progress": "{{percent}}% of {{budget}} reserved for the UTC calendar month"
+    },
+    "byAction": {
+      "title": "Cost by action",
+      "count_one": "{{count}} call",
+      "count_other": "{{count}} calls"
+    },
+    "recent": {
+      "title": "Recent AI calls",
+      "description": "Provider, model, actor, status, and reserved maximum for each action.",
+      "empty": "No paid AI calls have been recorded yet."
+    },
+    "actions": {
+      "inventory_analysis": "Analyze inventory photos",
+      "inventory_research": "Research inventory",
+      "image_search": "Search for a web image",
+      "inventory_recognition": "Recognize an object",
+      "photo_count": "Count objects in a photo",
+      "image_generation": "Generate or edit an image",
+      "translation": "Translate content",
+      "room_analysis": "Analyze a room",
+      "workflow_extraction": "Generate scan extraction"
+    },
+    "status": {
+      "running": "Running",
+      "succeeded": "Completed",
+      "failed": "Failed"
+    },
+    "notices": { "saved": "The monthly AI limit was saved." },
+    "errors": {
+      "load": "The AI usage report could not be loaded.",
+      "save": "The AI limit could not be saved.",
+      "budget": "Enter a valid amount of 0 or more, or leave the field blank."
     }
   },
   "notifications": {
@@ -319,6 +418,12 @@
             }
           }
         },
+        "action": {
+          "executed": {
+            "label": "Scan action executed",
+            "description": "A configured action flow was executed from a QR code or barcode."
+          }
+        },
         "webhook": {
           "test": {
             "label": "Webhook test",
@@ -429,13 +534,28 @@
       "scope": "What should be shared?",
       "scopes": {
         "inventory": "Inventory",
-        "item": "Single item"
+      "item": "Single item"
+    },
+    "accessMode": "Access mode",
+    "accessModes": {
+      "view": {
+        "label": "View only",
+        "description": "Public catalogue without write access"
       },
+      "stock": {
+        "label": "Stock tool",
+        "description": "Password-protected stock check-in and check-out"
+      }
+    },
+    "password": "Stock-tool password",
+    "passwordPlaceholder": "At least 8 characters",
+    "passwordHint": "The password is stored only as a hash and protects the catalogue, media, scanner, and bookings.",
       "name": "Link name",
       "namePlaceholder": "Workshop samples",
       "filter": "Custom-field filter",
       "optional": "· optional",
-      "allInventory": "All inventory · no filter",
+    "allInventory": "All inventory · no filter",
+    "stockTool": "Stock tool",
       "filterHint": "Only items whose {{field}} value exactly matches the value below will be visible.",
       "item": "Inventory item",
       "itemPlaceholder": "Search by name, SKU, location, or custom field…",
@@ -478,7 +598,8 @@
       "loadItems": "Could not load inventory items.",
       "nameRequired": "Give this link a name so it is easy to identify later.",
       "itemRequired": "Select the inventory item this link should share.",
-      "filterValueRequired": "Choose a value for the selected custom-field filter.",
+    "filterValueRequired": "Choose a value for the selected custom-field filter.",
+    "passwordRequired": "Set a stock-tool password with at least 8 characters.",
       "create": "Could not create the public link.",
       "clipboard": "Clipboard access was blocked. Open the link and copy it from the browser instead.",
       "revoke": "Could not revoke the public link."
@@ -813,6 +934,10 @@
         "label": "Operations",
         "description": "Stock, custody, counting, space, and purchasing workflows."
       },
+      "ai": {
+        "label": "AI actions",
+        "description": "Paid AI capabilities can be enabled separately for each role."
+      },
       "administration": {
         "label": "Administration",
         "description": "Workspace structure, identities, and credentials."
@@ -842,7 +967,13 @@
       "workflows_manage": { "label": "Manage scan workflows", "description": "Create, edit, and run stock scanning workflows." },
       "labels_read": { "label": "View labels", "description": "View label layouts and print labels." },
       "labels_manage": { "label": "Manage labels", "description": "Create and change reusable label layouts." },
-      "ai_use": { "label": "Use AI", "description": "Run analysis, counting, translation, and image generation." },
+      "ai_analyze": { "label": "Analyze item photos", "description": "Fill inventory fields from saved item photos." },
+      "ai_research": { "label": "Research items and images", "description": "Fill missing details or find a reusable web image." },
+      "ai_recognize": { "label": "Recognize items", "description": "Match a camera photo to existing inventory." },
+      "ai_count": { "label": "Count from photos", "description": "Count visible items with a selectable vision model." },
+      "ai_images": { "label": "Generate images", "description": "Create or edit catalogue and cover images." },
+      "ai_translate": { "label": "Translate content", "description": "Generate inventory translations with AI." },
+      "ai_rooms": { "label": "Analyze rooms", "description": "Detect finishes and objects from room scan photos." },
       "settings_inventory_types_manage": { "label": "Manage inventory types", "description": "Create and change inventory and relation types." },
       "settings_custom_fields_manage": { "label": "Manage custom fields", "description": "Create and change custom field definitions." },
       "settings_languages_manage": { "label": "Manage languages", "description": "Configure content languages and regenerate translations." },

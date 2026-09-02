@@ -2,8 +2,8 @@
   "metadata": {
     "scanTitle": "Scan stock | Inventory",
     "scanDescription": "Scan QR codes and barcodes and apply configured properties to stock units.",
-    "workflowsTitle": "Scan workflows | Inventory",
-    "workflowsDescription": "Visually configure code-driven stock workflows."
+    "workflowsTitle": "Action flows | Inventory",
+    "workflowsDescription": "Visually configure QR- and barcode-driven stock actions."
   },
   "statuses": {
     "available": "Available",
@@ -193,6 +193,7 @@
     "validation": {
       "name": "Give this workflow a name.",
       "resource": "Choose a serialized inventory item.",
+      "codeType": "Choose at least one accepted code type.",
       "identifier": "Set an identifier property key.",
       "propertyKey": "Property keys may only contain letters, numbers, underscore, dash, and dot.",
       "queryParameter": "Set the URL query parameter to extract.",
@@ -200,6 +201,7 @@
       "sourceOriginInvalid": "Source origin must be a valid URL origin.",
       "sourcePath": "Source path must begin with / and cannot contain a query or fragment.",
       "prefix": "Set the prefix that should be removed from scans.",
+      "regexGroup": "Set a valid numbered or named capture group.",
       "fixedProperty": "Every fixed property needs a key, label, and value.",
       "uniqueKeys": "Identifier, fixed property, and scan input keys must all be unique.",
       "input": "Every scan input needs a key and label.",
@@ -237,10 +239,25 @@
       "paused": "Workflow paused.",
       "deleted": "Workflow deleted."
     },
+    "regexStudio": {
+      "title": "Interactive extraction",
+      "description": "Select the desired value in the sample code, then create a validated regex directly or with AI.",
+      "manual": "Manual input",
+      "sample": "Sample code",
+      "instructionPlaceholder": "Optional: e.g. extract serial number after SN=",
+      "useSelection": "Turn selection into regex",
+      "useSelectionForField": "Use selection for this field",
+      "generate": "Generate with AI",
+      "selected": "Selected sample value",
+      "selectValue": "First select the value to extract in the sample code.",
+      "selectOrDescribe": "Select a sample value or describe the desired extraction.",
+      "selectionApplied": "The selection was applied as a regex rule.",
+      "aiError": "The AI rule could not be generated."
+    },
     "header": {
-      "eyebrow": "Scan automation",
-      "title": "Build scan workflows visually.",
-      "description": "Turn a scanned code into an identified stock unit with guided inputs and consistent properties—without programming.",
+      "eyebrow": "Action editor",
+      "title": "Build action flows visually.",
+      "description": "Connect QR codes and barcodes to data fields, assembly, stock movements, files, and webhooks—without programming.",
       "readOnly": "Read only",
       "refresh": "Refresh",
       "newTemplate": "New from template"
@@ -289,7 +306,11 @@
         "description": "This workflow starts when a camera or handheld scanner reads a code.",
         "event": "Code scanned",
         "eventDescription": "Pass the decoded text into this workflow",
-        "badge": "Scan trigger"
+        "badge": "Scan trigger",
+        "codeTypes": "Accepted code types",
+        "codeTypesDescription": "The camera and handheld scanners accept only the enabled symbologies.",
+        "scanExample": "Scan a sample code",
+        "closeExampleScanner": "Close scanner"
       },
       "extract": {
         "title": "Extract the EPD number",
@@ -297,7 +318,8 @@
         "modes": {
           "full": "Full value",
           "url-query": "URL parameter",
-          "prefix": "Remove prefix"
+          "prefix": "Remove prefix",
+          "regex": "Regex"
         },
       "queryParameter": "Query parameter",
       "queryParameterPlaceholder": "d",
@@ -308,7 +330,10 @@
       "identifierKey": "Identifier property key",
       "identifierKeyPlaceholder": "epdNumber",
       "prefix": "Prefix to remove",
-      "prefixPlaceholder": "EPD-"
+      "prefixPlaceholder": "EPD-",
+      "regexPattern": "Regular expression",
+      "regexFlags": "Flags",
+      "regexGroup": "Capture group"
       },
       "target": {
         "title": "Choose the target inventory item",

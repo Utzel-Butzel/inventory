@@ -10,6 +10,7 @@ import {
 import { requireSessionPermission } from "@/lib/api-auth";
 import { listAccessRolesWithCounts } from "@/lib/access-control";
 import { db } from "@/lib/db";
+import { isSuperAdminEmail } from "@/lib/deployment-access";
 import { userCreateInputSchema } from "@/lib/validators";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,15 @@ export async function POST(request: Request) {
     return Response.json(
       { error: "Invalid user settings.", details: parsed.error.flatten() },
       { status: 422 },
+    );
+  }
+  if (
+    isSuperAdminEmail(parsed.data.email) &&
+    !authorization.identity.isSuperAdmin
+  ) {
+    return Response.json(
+      { error: "Only a superadmin can provision another superadmin account." },
+      { status: 403 },
     );
   }
 

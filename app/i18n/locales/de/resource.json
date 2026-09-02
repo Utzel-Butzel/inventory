@@ -356,6 +356,8 @@
       "sibling": "Gleiche Familie",
       "component_one": "{{value}} pro fertigem Eintrag",
       "component_other": "{{value}} pro fertigem Eintrag",
+      "assembly_one": "Verwendet {{value}} dieses Eintrags",
+      "assembly_other": "Verwendet {{value}} dieses Eintrags",
       "located-in": "Behälter",
       "contains": "Enthaltener Eintrag"
     },
@@ -462,6 +464,9 @@
       "contains": "Enthält",
       "containsEmpty": "Enthält keine weiteren Einträge",
       "bom": "Stückliste",
+      "usedIn": "Verwendet in",
+      "usedInQuantity_one": "×{{count}} pro fertigem Eintrag",
+      "usedInQuantity_other": "×{{count}} pro fertigem Eintrag",
       "family": "Variantenfamilie",
       "otherRelations_one": "{{count}} weitere Beziehung",
       "otherRelations_other": "{{count}} weitere Beziehungen",

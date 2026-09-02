@@ -4,7 +4,7 @@ import { getImageGenerationModelCatalog } from "@/lib/image-generation-models";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const authorization = await requirePermission(request, "ai.use");
+  const authorization = await requirePermission(request, "ai.images");
   if (authorization.response) return authorization.response;
 
   return Response.json(getImageGenerationModelCatalog(), {

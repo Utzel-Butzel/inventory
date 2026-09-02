@@ -43,6 +43,8 @@ umask 077
   printf 'BOOTSTRAP_ADMIN_NAME=%s\n' "$admin_name"
   printf 'BOOTSTRAP_ADMIN_PASSWORD=%s\n' "$admin_password"
   printf 'BOOTSTRAP_ADMIN_PASSWORD_ONCE=true\n'
+  printf 'SUPERADMIN_EMAILS=%s\n' "$admin_email"
+  printf 'USERS_CAN_CREATE_ORGANIZATIONS=false\n'
   printf 'STORAGE_PROVIDER=local\n'
 } > .env
 

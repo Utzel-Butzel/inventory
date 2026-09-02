@@ -35,6 +35,7 @@ import {
   getConnectionFamilyGroups,
   orderConnectionRows,
   type ConnectionDiagramBomComponent,
+  type ConnectionDiagramBomParent,
   type ConnectionDiagramConnection,
   type ConnectionDiagramFamily,
   type ConnectionDiagramGraphEdge,
@@ -297,6 +298,10 @@ async function loadDirectPayload(resourceId: string): Promise<PayloadResult> {
       `/api/v1/resources/${resourceId}/bom`,
       { cache: "no-store" },
     ),
+    fetchJson<{ parents: ConnectionDiagramBomParent[] }>(
+      `/api/v1/resources/${resourceId}/bom-parents`,
+      { cache: "no-store" },
+    ),
   ] as const);
   if (results.every((result) => result.status === "rejected")) {
     const failure = results.find(
@@ -306,7 +311,7 @@ async function loadDirectPayload(resourceId: string): Promise<PayloadResult> {
       ? failure.reason
       : new Error("Unable to load connections.");
   }
-  const [relations, family, bom] = results;
+  const [relations, family, bom, bomParents] = results;
   return {
     partial: results.some((result) => result.status === "rejected"),
     payload: {
@@ -314,6 +319,8 @@ async function loadDirectPayload(resourceId: string): Promise<PayloadResult> {
         relations.status === "fulfilled" ? relations.value.relations : [],
       family: family.status === "fulfilled" ? family.value : null,
       bomComponents: bom.status === "fulfilled" ? bom.value.components : [],
+      bomParents:
+        bomParents.status === "fulfilled" ? bomParents.value.parents : [],
       bomBuildableQuantity:
         bom.status === "fulfilled" ? bom.value.buildableQuantity : null,
     },
@@ -1097,6 +1104,7 @@ function ConnectionListView({
   const relations = payload?.relations ?? [];
   const family = payload?.family ?? null;
   const bomComponents = payload?.bomComponents ?? [];
+  const bomParents = payload?.bomParents ?? [];
 
   const parents = relations.filter(
     (r) =>
@@ -1190,6 +1198,27 @@ function ConnectionListView({
                 name={component.name}
                 subtitle={t("connectionDiagram.list.quantity", {
                   count: component.quantityPerAssembly,
+                })}
+                icon={<Package className="size-3.5" />}
+                iconTone="text-warning"
+              />
+            ))}
+          </ListSection>
+        ) : null}
+
+        {bomParents.length > 0 ? (
+          <ListSection
+            icon={<Package className="size-4" aria-hidden="true" />}
+            tone="warning"
+            label={t("connectionDiagram.list.usedIn")}
+          >
+            {bomParents.map((parent) => (
+              <ListItem
+                key={parent.resourceId}
+                href={`/inventory/${parent.resourceId}`}
+                name={parent.name}
+                subtitle={t("connectionDiagram.list.usedInQuantity", {
+                  count: parent.quantityPerAssembly,
                 })}
                 icon={<Package className="size-3.5" />}
                 iconTone="text-warning"
@@ -2031,8 +2060,8 @@ function connectionDescription(
 ) {
   const descriptor = connection.descriptor;
   if (descriptor.type === "relationship") return descriptor.label;
-  if (descriptor.type === "component") {
-    return t("connectionDiagram.kinds.component", {
+  if (descriptor.type === "component" || descriptor.type === "assembly") {
+    return t(`connectionDiagram.kinds.${descriptor.type}`, {
       count: descriptor.quantity,
       value: number.format(descriptor.quantity),
     });

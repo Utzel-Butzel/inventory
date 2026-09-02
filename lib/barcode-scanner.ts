@@ -4,25 +4,13 @@ import type {
   DetectedBarcode,
 } from "barcode-detector/ponyfill";
 
-export const SUPPORTED_BARCODE_FORMATS = [
-  "qr_code",
-  "data_matrix",
-  "aztec",
-  "pdf417",
-  "code_128",
-  "code_93",
-  "code_39",
-  "codabar",
-  "ean_13",
-  "ean_8",
-  "upc_a",
-  "upc_e",
-  "itf",
-] as const satisfies readonly BarcodeFormat[];
+import { scanCodeTypes, type ScanCodeType } from "@/lib/scan-code-types";
+
+export const SUPPORTED_BARCODE_FORMATS = scanCodeTypes satisfies readonly BarcodeFormat[];
 
 export type ScannedBarcode = {
   value: string;
-  format: string;
+  format: ScanCodeType;
 };
 
 type DetectableImage = Parameters<BarcodeDetector["detect"]>[0];
@@ -55,7 +43,7 @@ function normalizeBarcodes(barcodes: DetectedBarcode[]): ScannedBarcode[] {
     const value = barcode.rawValue.trim();
     if (!value || seen.has(value)) continue;
     seen.add(value);
-    normalized.push({ value, format: barcode.format });
+    normalized.push({ value, format: barcode.format as ScanCodeType });
   }
 
   return normalized;

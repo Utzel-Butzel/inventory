@@ -87,7 +87,14 @@ export async function GET(request: Request, context: Context) {
         "spatial.manage",
         resource,
       ),
-      ai: await canAccessResource(authorization.identity, "ai.use", resource),
+      ai: (
+        await Promise.all([
+          canAccessResource(authorization.identity, "ai.analyze", resource),
+          canAccessResource(authorization.identity, "ai.research", resource),
+          canAccessResource(authorization.identity, "ai.images", resource),
+          canAccessResource(authorization.identity, "ai.translate", resource),
+        ])
+      ).some(Boolean),
     };
     return Response.json({ ...localized, access }, {
       headers: { "Content-Language": localized.localization.languageCode },

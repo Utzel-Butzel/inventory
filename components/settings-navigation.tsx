@@ -17,6 +17,7 @@ import {
   Languages,
   Share2,
   ShieldCheck,
+  ShieldPlus,
   UserRound,
   Users,
   Webhook,
@@ -33,6 +34,7 @@ type SettingsNavigationItem = {
   activeHrefs?: string[];
   icon: LucideIcon;
   requiredPermission?: AppPermission;
+  superadminOnly?: boolean;
 };
 
 const navigationGroups: Array<{
@@ -53,6 +55,13 @@ const navigationGroups: Array<{
         descriptionKey: "settings.items.organization.description",
         href: "/settings/organization",
         icon: Building2,
+      },
+      {
+        labelKey: "settings.items.systemOrganizations.label",
+        descriptionKey: "settings.items.systemOrganizations.description",
+        href: "/settings/system-organizations",
+        icon: ShieldPlus,
+        superadminOnly: true,
       },
       {
         labelKey: "settings.items.notifications.label",
@@ -148,8 +157,10 @@ function isActive(pathname: string, item: SettingsNavigationItem) {
 }
 
 export function SettingsNavigation({
+  isSuperAdmin,
   permissions,
 }: {
+  isSuperAdmin: boolean;
   permissions: AppPermission[];
 }) {
   const pathname = useOrganizationPathname();
@@ -160,7 +171,8 @@ export function SettingsNavigation({
       ...group,
       items: group.items.filter(
         (item) =>
-          !item.requiredPermission || permissions.includes(item.requiredPermission),
+          (!item.superadminOnly || isSuperAdmin) &&
+          (!item.requiredPermission || permissions.includes(item.requiredPermission)),
       ),
     }))
     .filter((group) => group.items.length > 0);

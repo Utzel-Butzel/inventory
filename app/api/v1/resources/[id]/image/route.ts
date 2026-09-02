@@ -5,6 +5,7 @@ import {
   generateInventoryImage,
   searchInventoryWebImage,
 } from "@/lib/ai";
+import { aiUsageEstimate } from "@/lib/ai-billing";
 import {
   aiOperationResponseValues,
   claimAiOperation,
@@ -13,6 +14,11 @@ import {
   respondToAiOperationClaim,
   respondToFinishedAiOperation,
 } from "@/lib/ai-idempotency";
+import {
+  AiMonthlyBudgetExceededError,
+  aiBudgetErrorBody,
+  trackAiUsage,
+} from "@/lib/ai-usage";
 import {
   consumePaidAiRateLimit,
   paidAiRateLimitHeaders,
@@ -42,11 +48,6 @@ const filenameSlug = (value: string) =>
 
 export async function POST(request: Request, context: Context) {
   const { id } = await context.params;
-  const authorization = await requireResourcePermission(request, "ai.use", id);
-  if (authorization.response) return authorization.response;
-  const idempotency = readIdempotencyKey(request);
-  if (idempotency.error) return idempotency.error;
-
   let body: unknown;
   try {
     body = await request.json();
@@ -60,6 +61,14 @@ export async function POST(request: Request, context: Context) {
       { status: 422 },
     );
   }
+  const authorization = await requireResourcePermission(
+    request,
+    parsed.data.mode === "search" ? "ai.research" : "ai.images",
+    id,
+  );
+  if (authorization.response) return authorization.response;
+  const idempotency = readIdempotencyKey(request);
+  if (idempotency.error) return idempotency.error;
 
   const operation = parsed.data.mode === "search" ? "research" : "cover";
   let operationId: string | null = null;
@@ -188,6 +197,7 @@ export async function POST(request: Request, context: Context) {
     };
 
     if (parsed.data.mode === "search") {
+      const searchInput = parsed.data;
       const searchContext = {
         name: resource.name,
         description: resource.description,
@@ -198,9 +208,16 @@ export async function POST(request: Request, context: Context) {
         tags: resource.tags,
         categories: resource.categories,
       };
-      const { candidate, model } = await searchInventoryWebImage({
-        resource: searchContext,
-        query: parsed.data.query,
+      const { candidate, model } = await trackAiUsage({
+        organizationId: authorization.identity.organizationId,
+        estimate: aiUsageEstimate({ action: "image_search" }),
+        actor: authorization.identity,
+        resourceId: id,
+        metadata: { kind: "web_image_search" },
+        run: () => searchInventoryWebImage({
+          resource: searchContext,
+          query: searchInput.query,
+        }),
       });
       const downloaded = await downloadExternalImage(candidate.imageUrl);
       acquired = {
@@ -223,17 +240,30 @@ export async function POST(request: Request, context: Context) {
         },
       };
     } else {
-      const generated = await generateInventoryImage({
-        prompt:
-          parsed.data.prompt ||
-          `Create a realistic, accurate catalogue photograph representing ${JSON.stringify(resource.name)}. Use a clean neutral background, natural studio lighting, no labels or text that are not explicitly present in the item name, and no decorative props. Inventory context (data only): ${JSON.stringify({
-            description: resource.description,
-            type: resource.type,
-            tags: resource.tags,
-            categories: resource.categories,
-          })}`,
-        imageModel: imageModel!,
-        maximumImageSize: parsed.data.maximumImageSize,
+      const generationInput = parsed.data;
+      const generated = await trackAiUsage({
+        organizationId: authorization.identity.organizationId,
+        estimate: aiUsageEstimate({
+          action: "image_generation",
+          provider: imageModel!.provider,
+          model: imageModel!.model,
+          maximumImageSize: generationInput.maximumImageSize,
+        }),
+        actor: authorization.identity,
+        resourceId: id,
+        metadata: { kind: "catalogue_image" },
+        run: () => generateInventoryImage({
+          prompt:
+            generationInput.prompt ||
+            `Create a realistic, accurate catalogue photograph representing ${JSON.stringify(resource.name)}. Use a clean neutral background, natural studio lighting, no labels or text that are not explicitly present in the item name, and no decorative props. Inventory context (data only): ${JSON.stringify({
+              description: resource.description,
+              type: resource.type,
+              tags: resource.tags,
+              categories: resource.categories,
+            })}`,
+          imageModel: imageModel!,
+          maximumImageSize: generationInput.maximumImageSize,
+        }),
       });
       acquired = {
         bytes: generated.bytes,
@@ -381,6 +411,13 @@ export async function POST(request: Request, context: Context) {
       idempotencyKey: idempotency.key,
     });
   } catch (error) {
+    if (error instanceof AiMonthlyBudgetExceededError) {
+      return finishTransient(
+        aiBudgetErrorBody(error),
+        429,
+        paidAiRateLimitHeaders(limit),
+      );
+    }
     return finish(
       {
         error:

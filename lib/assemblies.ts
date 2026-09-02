@@ -6,6 +6,7 @@ import {
   desc,
   eq,
   inArray,
+  or,
   sql,
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -53,6 +54,8 @@ import {
   splitCents,
   type StockCostResult,
 } from "@/lib/stock-costing";
+import { validateCustomFieldValues } from "@/lib/custom-fields";
+import type { CustomFieldValues } from "@/lib/custom-field-contract";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 
@@ -72,9 +75,15 @@ export type AssemblyBuildInput = {
   componentResourceSelections?: Record<string, string>;
   componentUnitIds?: Record<string, string[]>;
   outputUnitCodes?: string[];
+  outputUnitMetadata?: Record<string, unknown>;
+  outputUnitCustomFields?: CustomFieldValues;
 };
 
-type IdempotencyInput = { key: string; requestHash: string };
+type IdempotencyInput = {
+  key: string;
+  requestHash: string;
+  expectedResourceUpdatedAt?: string;
+};
 
 export class AssemblyOperationError extends Error {
   constructor(
@@ -185,6 +194,19 @@ type NormalizedBomComponent = {
 
 type ReadExecutor = Pick<typeof db, "select">;
 type AssemblyTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export type BomParent = {
+  id: string;
+  slotKey: string;
+  resourceId: string;
+  name: string;
+  type: ResourceRecord["type"];
+  status: string;
+  quantityPerAssembly: number;
+  position: number;
+  note: string;
+  origin: BomOrigin;
+};
 
 const sortBomLines = <T extends { position: number; slotKey: string }>(
   rows: T[],
@@ -813,6 +835,243 @@ export async function getBom(
   return db.transaction(
     (transaction) =>
       getBomWithExecutor(transaction, organizationId, resourceId, options),
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+}
+
+type BomParentReference = Omit<
+  BomParent,
+  "name" | "type" | "status"
+>;
+
+async function listBomParentsWithExecutor(
+  executor: ReadExecutor,
+  organizationId: string,
+  componentResourceId: string,
+  options: {
+    authorizeParent?: (resource: ResourceRecord) => boolean | Promise<boolean>;
+  } = {},
+): Promise<BomParent[]> {
+  const [baseRows, matchingOverrideRows] = await Promise.all([
+    executor
+      .select({
+        id: bomLines.id,
+        slotKey: bomLines.slotKey,
+        assemblyResourceId: bomLines.assemblyResourceId,
+        quantityPerAssembly: bomLines.quantityPerAssembly,
+        position: bomLines.position,
+        note: bomLines.note,
+      })
+      .from(bomLines)
+      .where(
+        and(
+          eq(bomLines.organizationId, organizationId),
+          eq(bomLines.componentResourceId, componentResourceId),
+        ),
+      ),
+    executor
+      .select({
+        id: variantBomOverrides.id,
+        slotKey: variantBomOverrides.slotKey,
+        variantResourceId: variantBomOverrides.variantResourceId,
+        quantityPerAssembly: variantBomOverrides.quantityPerAssembly,
+        position: variantBomOverrides.position,
+        note: variantBomOverrides.note,
+      })
+      .from(variantBomOverrides)
+      .where(
+        and(
+          eq(variantBomOverrides.organizationId, organizationId),
+          eq(variantBomOverrides.componentResourceId, componentResourceId),
+          eq(variantBomOverrides.removed, false),
+        ),
+      ),
+  ]);
+  const baseAssemblyIds = Array.from(
+    new Set(baseRows.map((row) => row.assemblyResourceId)),
+  );
+  const matchingOverrideVariantIds = Array.from(
+    new Set(matchingOverrideRows.map((row) => row.variantResourceId)),
+  );
+  const membershipResourceIds = Array.from(
+    new Set([...baseAssemblyIds, ...matchingOverrideVariantIds]),
+  );
+  const variantLinks = membershipResourceIds.length
+    ? await executor
+        .select({
+          variantResourceId: resourceRelations.sourceResourceId,
+          primaryResourceId: resourceRelations.targetResourceId,
+        })
+        .from(resourceRelations)
+        .where(
+          and(
+            eq(resourceRelations.organizationId, organizationId),
+            eq(resourceRelations.relationTypeKey, "variant_of"),
+            or(
+              inArray(resourceRelations.sourceResourceId, membershipResourceIds),
+              inArray(resourceRelations.targetResourceId, baseAssemblyIds),
+            ),
+          ),
+        )
+    : [];
+  const primaryByVariant = new Map(
+    variantLinks.map((link) => [
+      link.variantResourceId,
+      link.primaryResourceId,
+    ]),
+  );
+  const variantsByPrimary = new Map<string, string[]>();
+  for (const link of variantLinks) {
+    const variants = variantsByPrimary.get(link.primaryResourceId) ?? [];
+    variants.push(link.variantResourceId);
+    variantsByPrimary.set(link.primaryResourceId, variants);
+  }
+  const inheritedVariantIds = Array.from(
+    new Set(
+      baseAssemblyIds.flatMap(
+        (assemblyResourceId) => variantsByPrimary.get(assemblyResourceId) ?? [],
+      ),
+    ),
+  );
+  const inheritedOverrides = inheritedVariantIds.length
+    ? await executor
+        .select({
+          id: variantBomOverrides.id,
+          variantResourceId: variantBomOverrides.variantResourceId,
+          slotKey: variantBomOverrides.slotKey,
+          componentResourceId: variantBomOverrides.componentResourceId,
+          quantityPerAssembly: variantBomOverrides.quantityPerAssembly,
+          position: variantBomOverrides.position,
+          note: variantBomOverrides.note,
+          removed: variantBomOverrides.removed,
+        })
+        .from(variantBomOverrides)
+        .where(
+          and(
+            eq(variantBomOverrides.organizationId, organizationId),
+            inArray(variantBomOverrides.variantResourceId, inheritedVariantIds),
+          ),
+        )
+    : [];
+  const overrideByVariantSlot = new Map(
+    inheritedOverrides.map((row) => [
+      `${row.variantResourceId}:${row.slotKey}`,
+      row,
+    ]),
+  );
+  const references = new Map<string, BomParentReference>();
+
+  for (const row of baseRows) {
+    if (primaryByVariant.has(row.assemblyResourceId)) continue;
+    references.set(row.assemblyResourceId, {
+      id: row.id,
+      slotKey: row.slotKey,
+      resourceId: row.assemblyResourceId,
+      quantityPerAssembly: row.quantityPerAssembly,
+      position: row.position,
+      note: row.note,
+      origin: "local",
+    });
+    for (const variantResourceId of
+      variantsByPrimary.get(row.assemblyResourceId) ?? []) {
+      const override = overrideByVariantSlot.get(
+        `${variantResourceId}:${row.slotKey}`,
+      );
+      if (override) {
+        if (
+          override.removed ||
+          override.componentResourceId !== componentResourceId ||
+          override.quantityPerAssembly === null ||
+          override.position === null
+        ) {
+          continue;
+        }
+        references.set(variantResourceId, {
+          id: override.id,
+          slotKey: override.slotKey,
+          resourceId: variantResourceId,
+          quantityPerAssembly: override.quantityPerAssembly,
+          position: override.position,
+          note: override.note,
+          origin: "override",
+        });
+        continue;
+      }
+      references.set(variantResourceId, {
+        id: `inherited:${variantResourceId}:${row.slotKey}`,
+        slotKey: row.slotKey,
+        resourceId: variantResourceId,
+        quantityPerAssembly: row.quantityPerAssembly,
+        position: row.position,
+        note: row.note,
+        origin: "inherited",
+      });
+    }
+  }
+
+  for (const row of matchingOverrideRows) {
+    if (row.quantityPerAssembly === null || row.position === null) continue;
+    references.set(row.variantResourceId, {
+      id: row.id,
+      slotKey: row.slotKey,
+      resourceId: row.variantResourceId,
+      quantityPerAssembly: row.quantityPerAssembly,
+      position: row.position,
+      note: row.note,
+      origin: "override",
+    });
+  }
+
+  const parentIds = Array.from(references.keys());
+  if (!parentIds.length) return [];
+  const parentResources = await executor
+    .select()
+    .from(resources)
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        inArray(resources.id, parentIds),
+      ),
+    )
+    .orderBy(asc(resources.name), asc(resources.id));
+  const access = await Promise.all(
+    parentResources.map(async (resource) => ({
+      resource,
+      allowed:
+        !options.authorizeParent ||
+        (await options.authorizeParent(resource)),
+    })),
+  );
+  return access.flatMap(({ resource, allowed }) => {
+    const reference = references.get(resource.id);
+    return allowed && reference
+      ? [
+          {
+            ...reference,
+            name: resource.name,
+            type: resource.type,
+            status: resource.status,
+          },
+        ]
+      : [];
+  });
+}
+
+export async function listBomParents(
+  organizationId: string,
+  componentResourceId: string,
+  options: {
+    authorizeParent?: (resource: ResourceRecord) => boolean | Promise<boolean>;
+  } = {},
+) {
+  return db.transaction(
+    (transaction) =>
+      listBomParentsWithExecutor(
+        transaction,
+        organizationId,
+        componentResourceId,
+        options,
+      ),
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
 }
@@ -1919,6 +2178,15 @@ export async function buildAssembly(
       );
       const assembly = resourceById.get(assemblyResourceId);
       if (!assembly) throw new AssemblyOperationError("Not found", 404);
+      if (
+        idempotency.expectedResourceUpdatedAt &&
+        assembly.updatedAt.toISOString() !== idempotency.expectedResourceUpdatedAt
+      ) {
+        throw new AssemblyOperationError(
+          "The assembly stock changed after the action was reviewed. Scan the code again.",
+          409,
+        );
+      }
       const assemblyMode = modeByResource.get(assemblyResourceId) ?? "bulk";
       if (assembly.quantity + input.quantity > MAX_STOCK_QUANTITY) {
         throw new AssemblyOperationError(
@@ -2011,6 +2279,14 @@ export async function buildAssembly(
 
       let outputUnits: StockUnitRecord[] = [];
       if (assemblyMode === "serialized") {
+        const outputUnitCustomFields = await validateCustomFieldValues({
+          organizationId,
+          entityType: "stock_unit",
+          target: { type: assembly.type, categories: assembly.categories },
+          values: input.outputUnitCustomFields ?? {},
+          enforceRequired: input.outputUnitCustomFields !== undefined,
+          executor: transaction,
+        });
         const outputCodes =
           input.outputUnitCodes ??
           Array.from({ length: input.quantity }, () =>
@@ -2034,7 +2310,11 @@ export async function buildAssembly(
               code,
               status: "available" as const,
               location: input.location ?? assembly.location,
-              metadata: { assemblyBuildId: build.id },
+              metadata: {
+                ...input.outputUnitMetadata,
+                assemblyBuildId: build.id,
+              },
+              customFields: outputUnitCustomFields,
               acquiredAt: occurredAt,
               lastMovedAt: occurredAt,
             })),

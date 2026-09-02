@@ -22,6 +22,7 @@ import {
   type AppPermission,
 } from "@/lib/access-control-contract";
 import { db } from "@/lib/db";
+import { isSuperAdminEmail } from "@/lib/deployment-access";
 import {
   DEFAULT_INVENTORY_PAGE_SIZE,
   normalizeInventoryPageSize,
@@ -68,6 +69,7 @@ export type RequestIdentity = {
   organizations: IdentityOrganization[];
   inventoryPageSize: InventoryPageSize;
   developerMode: boolean;
+  isSuperAdmin: boolean;
   userId?: string;
   tokenId?: string;
 };
@@ -201,6 +203,7 @@ async function identityForUser(options: {
     organizations: memberships.map(identityOrganization),
     inventoryPageSize: normalizeInventoryPageSize(options.user.inventoryPageSize),
     developerMode: options.user.developerMode,
+    isSuperAdmin: isSuperAdminEmail(options.user.email),
     userId: options.user.id,
     ...(options.tokenId ? { tokenId: options.tokenId } : {}),
   } satisfies RequestIdentity;
@@ -304,6 +307,7 @@ export async function getRequestIdentity(
       organizations: [organization],
       inventoryPageSize: DEFAULT_INVENTORY_PAGE_SIZE,
       developerMode: false,
+      isSuperAdmin: false,
       tokenId: token.id,
     } satisfies RequestIdentity;
     if (!organization.isReadOnly) {
@@ -451,6 +455,26 @@ export async function requireSessionRole(request: Request, roles: UserRole[]) {
 
 export const requireAdminSession = (request: Request) =>
   requireSessionPermission(request, "users.manage");
+
+export async function requireSuperAdminSession(request: Request) {
+  const identity = await getRequestIdentity(request);
+  if (!identity) {
+    return {
+      identity: null,
+      response: Response.json({ error: "Unauthorized" }, { status: 401 }),
+    } as const;
+  }
+  if (identity.kind !== "session" || !identity.isSuperAdmin) {
+    return {
+      identity: null,
+      response: Response.json(
+        { error: "This action requires a superadmin account." },
+        { status: 403 },
+      ),
+    } as const;
+  }
+  return { identity, response: null } as const;
+}
 
 export async function requirePermission(
   request: Request,

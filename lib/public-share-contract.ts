@@ -8,6 +8,8 @@ import type {
 
 export const publicShareScopes = ["inventory", "item"] as const;
 export type PublicShareScope = (typeof publicShareScopes)[number];
+export const publicShareAccessModes = ["view", "stock"] as const;
+export type PublicShareAccessMode = (typeof publicShareAccessModes)[number];
 export const publicShareIdSchema = z.string().uuid();
 
 export type PublicShareFilter = {
@@ -42,6 +44,8 @@ export const publicShareCreateSchema = z.discriminatedUnion("scope", [
       scope: z.literal("inventory"),
       name: z.string().trim().min(1).max(120),
       filter: publicShareFilterSchema.optional().nullable(),
+      accessMode: z.enum(publicShareAccessModes).optional().default("view"),
+      password: z.string().min(8).max(128).optional(),
     })
     .strict(),
   z
@@ -51,9 +55,35 @@ export const publicShareCreateSchema = z.discriminatedUnion("scope", [
       resourceId: z.string().uuid(),
     })
     .strict(),
-]);
+]).superRefine((value, context) => {
+  if (value.scope !== "inventory") return;
+  if (value.accessMode === "stock" && !value.password) {
+    context.addIssue({
+      code: "custom",
+      path: ["password"],
+      message: "A stock-tool share requires a password.",
+    });
+  }
+  if (value.accessMode === "view" && value.password !== undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["password"],
+      message: "Read-only shares do not use a password.",
+    });
+  }
+});
 
 export type PublicShareCreateInput = z.infer<typeof publicShareCreateSchema>;
+
+export const publicStockBookingSchema = z
+  .object({
+    action: z.enum(["in", "out"]),
+    quantity: z.number().int().min(1).max(1_000_000),
+    note: z.string().trim().max(2_000).optional().default(""),
+  })
+  .strict();
+
+export type PublicStockBookingInput = z.infer<typeof publicStockBookingSchema>;
 
 export function matchesPublicShareFilter(
   customFields: CustomFieldValues,

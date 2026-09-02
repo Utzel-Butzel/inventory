@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import { requireSessionPermission } from "@/lib/api-auth";
 import { db } from "@/lib/db";
+import { isSuperAdminEmail } from "@/lib/deployment-access";
 import { userUpdateInputSchema } from "@/lib/validators";
 
 type Context = { params: Promise<{ id: string }> };
@@ -105,6 +106,15 @@ export async function PATCH(request: Request, context: Context) {
         .limit(1)
         .for("update");
       if (!existing) throw new UserUpdateError("User not found.", 404);
+      if (
+        isSuperAdminEmail(existing.user.email) &&
+        !authorization.identity.isSuperAdmin
+      ) {
+        throw new UserUpdateError(
+          "Only a superadmin can manage another superadmin account.",
+          403,
+        );
+      }
 
       const existingRoleGrant = await loadRoleGrant(existing.membership.roleKey);
       if (

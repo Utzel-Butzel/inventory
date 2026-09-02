@@ -6,6 +6,7 @@ import {
   type NewResource,
 } from "@/db/schema";
 import { analyzeInventoryImages } from "@/lib/ai";
+import { aiUsageEstimate } from "@/lib/ai-billing";
 import {
   aiOperationResponseValues,
   claimAiOperation,
@@ -18,6 +19,11 @@ import {
   consumePaidAiRateLimit,
   paidAiRateLimitHeaders,
 } from "@/lib/ai-rate-limit";
+import {
+  AiMonthlyBudgetExceededError,
+  aiBudgetErrorBody,
+  trackAiUsage,
+} from "@/lib/ai-usage";
 import {
   canAccessResource,
   requireResourcePermission,
@@ -39,7 +45,7 @@ export const maxDuration = 120;
 
 export async function POST(request: Request, context: Context) {
   const { id } = await context.params;
-  const authorization = await requireResourcePermission(request, "ai.use", id);
+  const authorization = await requireResourcePermission(request, "ai.analyze", id);
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
@@ -189,7 +195,14 @@ export async function POST(request: Request, context: Context) {
   }
 
   try {
-    const { result, model } = await analyzeInventoryImages(dataUrls, prompt);
+    const { result, model } = await trackAiUsage({
+      organizationId: authorization.identity.organizationId,
+      estimate: aiUsageEstimate({ action: "inventory_analysis" }),
+      actor: authorization.identity,
+      resourceId: id,
+      metadata: { imageCount: dataUrls.length },
+      run: () => analyzeInventoryImages(dataUrls, prompt),
+    });
     const generatedFields: string[] = [];
     const values: Partial<NewResource> = {
       aiMetadata: {
@@ -216,7 +229,7 @@ export async function POST(request: Request, context: Context) {
       generatedFields.push("type");
     }
     if (
-      !(await canAccessResource(authorization.identity, "ai.use", {
+      !(await canAccessResource(authorization.identity, "ai.analyze", {
         ...resource,
         ...values,
       }))
@@ -239,12 +252,12 @@ export async function POST(request: Request, context: Context) {
       authorize: async (current, proposed) =>
         (await canAccessResource(
           authorization.identity,
-          "ai.use",
+          "ai.analyze",
           current,
         )) &&
         (await canAccessResource(
           authorization.identity,
-          "ai.use",
+          "ai.analyze",
           proposed,
         )),
     });
@@ -315,6 +328,13 @@ export async function POST(request: Request, context: Context) {
       idempotencyKey: idempotency.key,
     });
   } catch (error) {
+    if (error instanceof AiMonthlyBudgetExceededError) {
+      return finishTransient(
+        aiBudgetErrorBody(error),
+        429,
+        paidAiRateLimitHeaders(limit),
+      );
+    }
     return finish(
       {
         error:

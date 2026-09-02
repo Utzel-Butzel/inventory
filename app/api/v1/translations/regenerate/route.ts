@@ -21,6 +21,12 @@ export async function POST(request: Request) {
     "settings.languages.manage",
   );
   if (authorization.response) return authorization.response;
+  if (!authorization.identity.permissions.includes("ai.translate")) {
+    return Response.json(
+      { error: "You do not have permission to generate AI translations." },
+      { status: 403 },
+    );
+  }
   let payload: unknown = {};
   try {
     const text = await request.text();

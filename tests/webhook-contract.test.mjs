@@ -19,6 +19,7 @@ const expectedEventTypes = [
   "inventory.resource.deleted",
   "inventory.resource.merged",
   "inventory.stock.movement.created",
+  "inventory.action.executed",
 ];
 
 test("durable webhook worker joins and mutations preserve tenant consistency", async () => {
@@ -48,6 +49,7 @@ test("endpoint create and patch payloads accept supported fields", () => {
     eventTypes: [
       "inventory.resource.created",
       "inventory.stock.movement.created",
+      "inventory.action.executed",
     ],
     enabled: true,
   });

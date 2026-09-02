@@ -40,6 +40,8 @@ export type ConnectionDiagramBomComponent = {
   origin?: "local" | "base" | "inherited" | "override" | "variant";
 };
 
+export type ConnectionDiagramBomParent = ConnectionDiagramBomComponent;
+
 export type ConnectionDiagramKind =
   | "family"
   | "bom"
@@ -56,6 +58,7 @@ export type ConnectionDiagramDescriptor =
   | { type: "variant" }
   | { type: "sibling" }
   | { type: "component"; quantity: number }
+  | { type: "assembly"; quantity: number }
   | { type: "located-in" }
   | { type: "contains" }
   | { type: "relationship"; label: string };
@@ -84,6 +87,7 @@ export type ConnectionDiagramPayload = {
   relations: ConnectionDiagramRelation[];
   family: ConnectionDiagramFamily | null;
   bomComponents: ConnectionDiagramBomComponent[];
+  bomParents?: ConnectionDiagramBomParent[];
   bomBuildableQuantity?: number | null;
 };
 
@@ -120,6 +124,7 @@ type Input = {
   currentResourceId: string;
   family?: ConnectionDiagramFamily | null;
   bomComponents?: ConnectionDiagramBomComponent[];
+  bomParents?: ConnectionDiagramBomParent[];
   relations?: ConnectionDiagramRelation[];
 };
 
@@ -286,6 +291,28 @@ export function buildResourceConnectionDiagram(
     );
   }
 
+  for (const parent of input.bomParents ?? []) {
+    add(
+      "left",
+      {
+        id: parent.resourceId,
+        name: parent.name,
+        type: parent.type,
+        status: parent.status,
+      },
+      {
+        id: `bom:${parent.resourceId}:${input.currentResourceId}`,
+        kind: "bom",
+        // The selected component stock flows into its parent assembly.
+        direction: "away-from-current",
+        descriptor: {
+          type: "assembly",
+          quantity: parent.quantityPerAssembly,
+        },
+      },
+    );
+  }
+
   for (const relation of input.relations ?? []) {
     if (relation.relationTypeKey === "variant_of") continue;
     const outgoing = relation.sourceResourceId === input.currentResourceId;
@@ -358,7 +385,9 @@ const canonicalConnectionId = (
 ) => {
   if (connection.id.startsWith("relation:")) return connection.id;
   const pair = [currentResourceId, relatedResourceId].sort().join(":");
-  if (connection.kind === "family") return `family:${pair}`;
+  if (connection.kind === "family" || connection.kind === "bom") {
+    return `${connection.kind}:${pair}`;
+  }
   return `${connection.kind}:${currentResourceId}:${relatedResourceId}:${connection.id}`;
 };
 

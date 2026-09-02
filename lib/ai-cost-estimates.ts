@@ -5,6 +5,7 @@ export const aiCostOperationIds = [
   "inventoryRecognition",
   "translation",
   "roomAnalysis",
+  "workflowExtraction",
 ] as const;
 
 export type AiCostOperationId = (typeof aiCostOperationIds)[number];
@@ -173,6 +174,8 @@ export const getAiCostEstimateCatalog = (
   const roomModel =
     environment.OPENAI_ROOM_VISION_MODEL?.trim() ||
     "gpt-5.6-terra";
+  const workflowExtractionModel =
+    environment.OPENAI_SCAN_EXTRACTION_MODEL?.trim() || "gpt-5.6-luna";
 
   const operations: AiCostEstimateCatalog["operations"] = {};
   const add = (
@@ -230,6 +233,14 @@ export const getAiCostEstimateCatalog = (
       // Focused visual passes, optional low-recall audits, and consolidation.
       minimum: { input: 12_000, output: 10_000 },
       maximum: { input: 240_000, output: 96_000 },
+    }),
+  );
+  add(
+    "workflowExtraction",
+    openAiOperationEstimate({
+      model: workflowExtractionModel,
+      minimum: { input: 600, output: 120 },
+      maximum: { input: 2_500, output: 600 },
     }),
   );
 

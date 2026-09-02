@@ -248,7 +248,17 @@ test("built-in roles have the intended default permission boundaries", () => {
   assert.deepEqual(builtinRolePermissions.admin, appPermissions);
 
   assert.equal(builtinRolePermissions.editor.includes("inventory.update"), true);
-  assert.equal(builtinRolePermissions.editor.includes("ai.use"), true);
+  for (const permission of [
+    "ai.analyze",
+    "ai.research",
+    "ai.recognize",
+    "ai.count",
+    "ai.images",
+    "ai.translate",
+    "ai.rooms",
+  ]) {
+    assert.equal(builtinRolePermissions.editor.includes(permission), true);
+  }
   for (const permission of [
     "settings.inventory-types.manage",
     "settings.custom-fields.manage",
@@ -281,7 +291,7 @@ test("permissions map to deterministic API scopes", () => {
   assert.equal(permissionScope("inventory.export"), "read");
   assert.equal(permissionScope("inventory.update"), "write");
   assert.equal(permissionScope("users.manage"), "write");
-  assert.equal(permissionScope("ai.use"), "ai");
+  assert.equal(permissionScope("ai.images"), "ai");
 
   assert.deepEqual(scopesForPermissions(builtinRolePermissions.admin), [
     "read",
@@ -299,5 +309,13 @@ test("permissions map to deterministic API scopes", () => {
   assert.equal(permissionsForScopes(["read"]).includes("inventory.export"), true);
   assert.equal(permissionsForScopes(["read"]).includes("inventory.update"), false);
   assert.equal(permissionsForScopes(["write"]).includes("webhooks.manage"), false);
-  assert.deepEqual(permissionsForScopes(["ai"]), ["ai.use"]);
+  assert.deepEqual(permissionsForScopes(["ai"]), [
+    "ai.analyze",
+    "ai.research",
+    "ai.recognize",
+    "ai.count",
+    "ai.images",
+    "ai.translate",
+    "ai.rooms",
+  ]);
 });

@@ -453,6 +453,9 @@ export function ResourceEditor({
   canDelete = false,
   canViewStock = false,
   canUseAi = false,
+  canAnalyzeAi = canUseAi,
+  canResearchAi = canUseAi,
+  canGenerateImagesAi = canUseAi,
   canManageSpatial = false,
   canManageStock = false,
   variantContext = null,
@@ -461,6 +464,9 @@ export function ResourceEditor({
   canDelete?: boolean;
   canViewStock?: boolean;
   canUseAi?: boolean;
+  canAnalyzeAi?: boolean;
+  canResearchAi?: boolean;
+  canGenerateImagesAi?: boolean;
   canManageSpatial?: boolean;
   canManageStock?: boolean;
   variantContext?: {
@@ -508,7 +514,7 @@ export function ResourceEditor({
   >("search");
   const [imageSearchQuery, setImageSearchQuery] = useState("");
   const [imageGenerationPrompt, setImageGenerationPrompt] = useState("");
-  const [autoAnalyze, setAutoAnalyze] = useState(canUseAi);
+  const [autoAnalyze, setAutoAnalyze] = useState(canAnalyzeAi);
   const [autoCover, setAutoCover] = useState(false);
   const [coverPrompt, setCoverPrompt] = useState("");
   const [coverPromptCustomized, setCoverPromptCustomized] = useState(false);
@@ -698,7 +704,7 @@ export function ResourceEditor({
   useEffect(() => {
     if (
       !isNew ||
-      !canUseAi ||
+      (!canAnalyzeAi && !canGenerateImagesAi) ||
       objectCaptureUploadState !== "bundle" ||
       objectCaptureDefaultsApplied.current
     ) {
@@ -706,8 +712,8 @@ export function ResourceEditor({
     }
 
     objectCaptureDefaultsApplied.current = true;
-    if (!aiPreferencesTouched.current.analyze) setAutoAnalyze(true);
-    if (!aiPreferencesTouched.current.cover) setAutoCover(true);
+    if (canAnalyzeAi && !aiPreferencesTouched.current.analyze) setAutoAnalyze(true);
+    if (canGenerateImagesAi && !aiPreferencesTouched.current.cover) setAutoCover(true);
     if (!aiPreferencesTouched.current.transparency) {
       setTransparentCover(true);
       if (!coverPromptCustomized) {
@@ -715,7 +721,8 @@ export function ResourceEditor({
       }
     }
   }, [
-    canUseAi,
+    canAnalyzeAi,
+    canGenerateImagesAi,
     coverPromptCustomized,
     form.name,
     isNew,
@@ -1065,14 +1072,14 @@ export function ResourceEditor({
           selectedUpload?.kind === "image" ? selectedUpload.id : undefined;
         let latest = created.resource;
         if (
-          canUseAi &&
+          canAnalyzeAi &&
           autoAnalyze &&
           files.some((file) => file.type.startsWith("image/"))
         ) {
           latest = (await runAnalysis(created.resource.id, true)) ?? latest;
         }
         if (
-          canUseAi &&
+          canGenerateImagesAi &&
           autoCover &&
           files.some((file) => file.type.startsWith("image/"))
         ) {
@@ -1233,23 +1240,20 @@ export function ResourceEditor({
     <form onSubmit={onSubmit} className="mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <header className="mb-6 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted">
-            <Link href="/inventory" className="inline-flex items-center gap-1 hover:text-muted-strong">
-              <ArrowLeft size={13} /> {t("header.inventory")}
-            </Link>
-            <ChevronRight size={13} />
-            {isNew ? (
-              <span className="truncate text-muted">{t("header.newItem")}</span>
-            ) : (
-              <>
-                <Link href={`/inventory/${primaryReference}`} className="truncate hover:text-muted-strong">
-                  {resource?.name}
-                </Link>
-                <ChevronRight size={13} />
-                <span className="text-muted">{t("header.edit")}</span>
-              </>
-            )}
-          </div>
+          {isNew ? (
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted">
+              <Link
+                href="/inventory"
+                className="inline-flex items-center gap-1 hover:text-muted-strong"
+              >
+                <ArrowLeft size={13} /> {t("header.inventory")}
+              </Link>
+              <ChevronRight size={13} />
+              <span className="truncate text-muted">
+                {t("header.newItem")}
+              </span>
+            </div>
+          ) : null}
           <h1 className="truncate text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
             {isNew ? t("header.addItem") : resource?.name}
           </h1>
@@ -1811,9 +1815,9 @@ export function ResourceEditor({
             <div className="mb-4 flex items-center gap-3 border-b border-border pb-4"><div className="grid h-9 w-9 place-items-center rounded-xl bg-surface-muted text-muted-strong"><ImageIcon size={17} /></div><div><h2 className="text-sm font-semibold text-foreground">{t("ai.title")}</h2><p className="text-xs text-muted">{t("ai.description")}</p></div></div>
             {isNew ? (
               <div className="space-y-3">
-                <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => { aiPreferencesTouched.current.analyze = true; setAutoAnalyze(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.analyzeDescription")}</span><EstimatedAiCost estimate={aiCostEstimates?.inventoryAnalysis} className="mt-1" /></span></label>
-                <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoCover} onChange={(event) => { aiPreferencesTouched.current.cover = true; setAutoCover(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.coverDescription")}</span><EstimatedAiCost estimate={coverCostEstimate} className="mt-1" /></span></label>
-                {autoCover ? (
+                {canAnalyzeAi ? <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => { aiPreferencesTouched.current.analyze = true; setAutoAnalyze(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.analyzeDescription")}</span><EstimatedAiCost estimate={aiCostEstimates?.inventoryAnalysis} className="mt-1" /></span></label> : null}
+                {canGenerateImagesAi ? <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoCover} onChange={(event) => { aiPreferencesTouched.current.cover = true; setAutoCover(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[11px] leading-4 text-muted">{t("ai.coverDescription")}</span><EstimatedAiCost estimate={coverCostEstimate} className="mt-1" /></span></label> : null}
+                {canGenerateImagesAi && autoCover ? (
                   <div className="rounded-xl border border-border bg-surface-subtle p-3">
                     <CoverReferencePicker
                       name="new-cover-reference"
@@ -1863,7 +1867,7 @@ export function ResourceEditor({
             ) : (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
-                  <button
+                  {canAnalyzeAi ? <button
                     type="button"
                     disabled={!hasImage || Boolean(aiAction)}
                     onClick={() => setAiDialog("analyze")}
@@ -1871,8 +1875,8 @@ export function ResourceEditor({
                   >
                     <ImageIcon size={16} className="shrink-0" />
                     <span>{t("ai.rewrite")}</span>
-                  </button>
-                  <button
+                  </button> : null}
+                  {canResearchAi ? <button
                     type="button"
                     disabled={Boolean(aiAction)}
                     onClick={() => setAiDialog("research")}
@@ -1880,8 +1884,8 @@ export function ResourceEditor({
                   >
                     <Sparkles size={16} className="shrink-0" />
                     <span>{t("ai.research")}</span>
-                  </button>
-                  <button
+                  </button> : null}
+                  {canGenerateImagesAi ? <button
                     type="button"
                     disabled={!hasImage || Boolean(aiAction)}
                     onClick={() => setAiDialog("cover")}
@@ -1889,16 +1893,19 @@ export function ResourceEditor({
                   >
                     <ImageIcon size={16} className="shrink-0" />
                     <span>{t("ai.generateNewCover")}</span>
-                  </button>
-                  <button
+                  </button> : null}
+                  {canResearchAi || canGenerateImagesAi ? <button
                     type="button"
                     disabled={Boolean(aiAction)}
-                    onClick={() => setAiDialog("image")}
+                    onClick={() => {
+                      setImageAcquisitionMode(canResearchAi ? "search" : "generate");
+                      setAiDialog("image");
+                    }}
                     className="flex min-h-16 min-w-0 flex-col items-start justify-center gap-1.5 rounded-xl border border-border bg-surface-subtle px-3 py-2.5 text-left text-xs font-semibold leading-4 text-muted-strong transition hover:border-brand-border hover:bg-brand-soft hover:text-brand disabled:text-muted disabled:opacity-50"
                   >
                     <Globe2 size={16} className="shrink-0" />
                     <span>{t("ai.findOrCreateImage")}</span>
-                  </button>
+                  </button> : null}
                 </div>
                 {!hasImage ? <p className="text-[11px] text-warning">{t("ai.imageRequired")}</p> : null}
                 <p className="text-[11px] leading-4 text-muted">{t("ai.modalHint")}</p>
@@ -2133,7 +2140,11 @@ export function ResourceEditor({
             {t("ai.imageSource")}
           </legend>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            {(["search", "generate"] as const).map((mode) => {
+            {(["search", "generate"] as const)
+              .filter((mode) =>
+                mode === "search" ? canResearchAi : canGenerateImagesAi,
+              )
+              .map((mode) => {
               const selected = imageAcquisitionMode === mode;
               return (
                 <label

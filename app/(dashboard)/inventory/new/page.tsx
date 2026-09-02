@@ -12,7 +12,10 @@ export default async function NewInventoryItemPage() {
 
   return (
     <ResourceEditor
-      canUseAi={identity.scopes.includes("ai")}
+      canUseAi={identity.permissions.some((permission) => permission.startsWith("ai."))}
+      canAnalyzeAi={identity.permissions.includes("ai.analyze")}
+      canResearchAi={identity.permissions.includes("ai.research")}
+      canGenerateImagesAi={identity.permissions.includes("ai.images")}
       canManageSpatial={identity.permissions.includes("spatial.manage")}
     />
   );

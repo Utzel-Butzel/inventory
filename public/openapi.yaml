@@ -813,7 +813,7 @@ paths:
                 required: [organization]
                 properties:
                   organization: { $ref: "#/components/schemas/OrganizationMembership" }
-        "403": { description: A browser session is required }
+        "403": { description: A browser session is required, and regular-user organization creation must be enabled unless the user is a superadmin }
         "409": { description: Requested organization slug is already in use }
         "422": { description: Invalid organization name or slug }
   /organizations/select:
@@ -886,6 +886,101 @@ paths:
         "403": { description: Browser user lacks organization administration permission }
         "409": { description: Requested organization slug is already in use }
         "404": { description: Organization not found or not available to this user }
+        "422": { description: Invalid organization name or slug }
+  /admin/organizations:
+    get:
+      tags: [Organizations]
+      summary: List every organization in the deployment
+      description: Requires a browser session whose email is configured in `SUPERADMIN_EMAILS`.
+      security: [{ superadminSession: [] }]
+      responses:
+        "200":
+          description: Every organization in the deployment
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organizations]
+                properties:
+                  organizations:
+                    type: array
+                    items: { $ref: "#/components/schemas/OrganizationSummary" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: The browser user is not a configured superadmin }
+    post:
+      tags: [Organizations]
+      summary: Create an organization as a deployment superadmin
+      description: Creates an administrator membership for the superadmin who creates the organization.
+      security: [{ superadminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                slug:
+                  type: string
+                  minLength: 1
+                  maxLength: 48
+                  pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      responses:
+        "201":
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organization]
+                properties:
+                  organization: { $ref: "#/components/schemas/OrganizationSummary" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: The browser user is not a configured superadmin }
+        "409": { description: Requested organization slug is already in use }
+        "422": { description: Invalid organization name or slug }
+  /admin/organizations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Organizations]
+      summary: Update any organization as a deployment superadmin
+      security: [{ superadminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 160 }
+                slug:
+                  type: string
+                  minLength: 1
+                  maxLength: 48
+                  pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+                allowNegativeStock: { type: boolean }
+      responses:
+        "200":
+          description: Organization updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organization]
+                properties:
+                  organization: { $ref: "#/components/schemas/OrganizationSummary" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: The browser user is not a configured superadmin }
+        "404": { description: Organization not found }
+        "409": { description: Requested organization slug is already in use }
         "422": { description: Invalid organization name or slug }
   /api/access/roles:
     parameters:
@@ -2489,6 +2584,37 @@ paths:
         "404": { description: Workflow not found }
         "409": { description: Workflow revision changed; reload before deleting }
         "422": { description: The workflow id or required single positive revision is invalid }
+  /stock/scan-workflows/extraction-suggestions:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    post:
+      tags: [Scan workflows]
+      summary: Generate a validated regex extractor from a sample code with AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sampleCode]
+              additionalProperties: false
+              properties:
+                sampleCode: { type: string, minLength: 1, maxLength: 2048 }
+                codeType:
+                  oneOf:
+                    - { $ref: "#/components/schemas/ScanCodeType" }
+                    - { type: "null" }
+                desiredValue: { type: string, maxLength: 180 }
+                instruction: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Validated extraction suggestion
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScanExtractionSuggestion" }
+        "402": { description: Organization AI budget exceeded }
+        "422": { description: Invalid sample or extraction goal }
+        "429": { description: AI request limit reached }
   /stock/scans/resolve:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -2506,6 +2632,10 @@ paths:
               properties:
                 workflowId: { type: string, format: uuid }
                 code: { type: string, minLength: 1, maxLength: 2048 }
+                codeType:
+                  oneOf:
+                    - { $ref: "#/components/schemas/ScanCodeType" }
+                    - { type: "null" }
       responses:
         "200":
           description: Reviewed scan target and required operator inputs
@@ -3512,6 +3642,11 @@ components:
       in: cookie
       name: authjs.session-token
       description: Auth.js browser session cookie; each operation declares its required administrative permission. HTTPS deployments use the secure-prefixed cookie variant.
+    superadminSession:
+      type: apiKey
+      in: cookie
+      name: authjs.session-token
+      description: Auth.js browser session cookie for an account whose email is listed in the deployment's `SUPERADMIN_EMAILS` environment variable. HTTPS deployments use the secure-prefixed cookie variant.
     cronSecret:
       type: http
       scheme: bearer
@@ -3577,6 +3712,20 @@ components:
     NotFound:
       description: Resource not found
   schemas:
+    OrganizationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, slug, isReadOnly, allowNegativeStock]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        isReadOnly: { type: boolean }
+        allowNegativeStock: { type: boolean }
     OrganizationMembership:
       type: object
       additionalProperties: false
@@ -5368,6 +5517,30 @@ components:
           properties:
             mode: { type: string, const: prefix }
             prefix: { type: string, minLength: 1, maxLength: 160 }
+        - type: object
+          required: [mode, pattern, group]
+          additionalProperties: false
+          properties:
+            mode: { type: string, const: regex }
+            pattern: { type: string, minLength: 1, maxLength: 500 }
+            flags: { type: string, maxLength: 4, default: "" }
+            group: { type: string, minLength: 1, maxLength: 64 }
+    ScanCodeType:
+      type: string
+      enum: [qr_code, data_matrix, aztec, pdf417, code_128, code_93, code_39, codabar, ean_13, ean_8, upc_a, upc_e, itf]
+    ScanExtractionSuggestion:
+      type: object
+      required: [suggestion, model]
+      properties:
+        suggestion:
+          type: object
+          required: [pattern, flags, group, explanation]
+          properties:
+            pattern: { type: string }
+            flags: { type: string }
+            group: { type: string }
+            explanation: { type: string }
+        model: { type: string }
     ScanWorkflowFixedProperty:
       type: object
       required: [key, label, value]
@@ -5376,6 +5549,35 @@ components:
         key: { type: string, minLength: 1, maxLength: 80, pattern: "^[A-Za-z0-9_.-]+$" }
         label: { type: string, minLength: 1, maxLength: 120 }
         value: { type: string, maxLength: 240 }
+        storage: { type: string, enum: [custom-field, metadata, execution], default: metadata }
+    ScanWorkflowExtractedField:
+      type: object
+      required: [key, label, extraction]
+      additionalProperties: false
+      properties:
+        key: { type: string, minLength: 1, maxLength: 80, pattern: "^[A-Za-z0-9_.-]+$" }
+        label: { type: string, minLength: 1, maxLength: 120 }
+        extraction: { $ref: "#/components/schemas/ScanWorkflowExtraction" }
+        storage: { type: string, enum: [custom-field, metadata, execution], default: custom-field }
+    ScanWorkflowOperation:
+      oneOf:
+        - type: object
+          required: [type]
+          additionalProperties: false
+          properties:
+            type: { type: string, const: unit }
+        - type: object
+          required: [type, delta]
+          additionalProperties: false
+          properties:
+            type: { type: string, const: stock-adjustment }
+            delta: { type: integer, minimum: -1000000, maximum: 1000000, not: { const: 0 } }
+        - type: object
+          required: [type, quantity]
+          additionalProperties: false
+          properties:
+            type: { type: string, const: assembly-build }
+            quantity: { type: integer, minimum: 1, maximum: 1000 }
     ScanWorkflowOption:
       type: object
       required: [value, label]
@@ -5386,16 +5588,22 @@ components:
         color: { type: string, minLength: 1, maxLength: 32 }
     ScanWorkflowInputField:
       type: object
-      required: [key, label, required, options]
+      required: [key, label, required]
       additionalProperties: false
       properties:
         key: { type: string, minLength: 1, maxLength: 80, pattern: "^[A-Za-z0-9_.-]+$" }
         label: { type: string, minLength: 1, maxLength: 120 }
         required: { type: boolean }
+        type:
+          type: string
+          enum: [text, textarea, number, checkbox, select, radio, media, file]
+          default: select
+        storage: { type: string, enum: [custom-field, metadata, execution], default: metadata }
+        placeholder: { type: string, maxLength: 240, default: "" }
         options:
           type: array
-          minItems: 1
           maxItems: 40
+          default: []
           items: { $ref: "#/components/schemas/ScanWorkflowOption" }
     ScanWorkflowInput:
       type: object
@@ -5405,8 +5613,24 @@ components:
         description: { type: string, maxLength: 5000, default: "" }
         enabled: { type: boolean, default: true }
         resourceId: { type: string, format: uuid }
+        codeTypes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          default: [qr_code, data_matrix, aztec, pdf417, code_128, code_93, code_39, codabar, ean_13, ean_8, upc_a, upc_e, itf]
+          items: { $ref: "#/components/schemas/ScanCodeType" }
         extraction: { $ref: "#/components/schemas/ScanWorkflowExtraction" }
         identifierPropertyKey: { type: string, minLength: 1, maxLength: 80, pattern: "^[A-Za-z0-9_.-]+$" }
+        identifierStorage: { type: string, enum: [custom-field, metadata, execution], default: metadata }
+        extractedFields:
+          type: array
+          maxItems: 24
+          default: []
+          items: { $ref: "#/components/schemas/ScanWorkflowExtractedField" }
+        operation:
+          allOf:
+            - { $ref: "#/components/schemas/ScanWorkflowOperation" }
+          default: { type: unit }
         createMissingUnit: { type: boolean, default: false }
         unitStatus:
           oneOf:
@@ -5418,8 +5642,10 @@ components:
           items: { $ref: "#/components/schemas/ScanWorkflowFixedProperty" }
         inputFields:
           type: array
-          maxItems: 12
+          maxItems: 24
           items: { $ref: "#/components/schemas/ScanWorkflowInputField" }
+        triggerWebhook: { type: boolean, default: false }
+        webhookEventName: { type: string, minLength: 1, maxLength: 120, default: inventory.action.executed }
     ScanWorkflowPatch:
       type: object
       required: [revision]
@@ -5432,8 +5658,19 @@ components:
         description: { type: string, maxLength: 5000 }
         enabled: { type: boolean }
         resourceId: { type: string, format: uuid }
+        codeTypes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/ScanCodeType" }
         extraction: { $ref: "#/components/schemas/ScanWorkflowExtraction" }
         identifierPropertyKey: { type: string, minLength: 1, maxLength: 80, pattern: "^[A-Za-z0-9_.-]+$" }
+        identifierStorage: { type: string, enum: [custom-field, metadata, execution] }
+        extractedFields:
+          type: array
+          maxItems: 24
+          items: { $ref: "#/components/schemas/ScanWorkflowExtractedField" }
+        operation: { $ref: "#/components/schemas/ScanWorkflowOperation" }
         createMissingUnit: { type: boolean }
         unitStatus:
           oneOf:
@@ -5445,13 +5682,15 @@ components:
           items: { $ref: "#/components/schemas/ScanWorkflowFixedProperty" }
         inputFields:
           type: array
-          maxItems: 12
+          maxItems: 24
           items: { $ref: "#/components/schemas/ScanWorkflowInputField" }
+        triggerWebhook: { type: boolean }
+        webhookEventName: { type: string, minLength: 1, maxLength: 120 }
     ScanWorkflow:
       allOf:
         - { $ref: "#/components/schemas/ScanWorkflowInput" }
         - type: object
-          required: [id, name, description, enabled, resourceId, revision, extraction, identifierPropertyKey, createMissingUnit, unitStatus, fixedProperties, inputFields, createdBy, updatedBy, createdAt, updatedAt]
+          required: [id, name, description, enabled, resourceId, codeTypes, revision, extraction, identifierPropertyKey, identifierStorage, extractedFields, operation, createMissingUnit, unitStatus, fixedProperties, inputFields, triggerWebhook, webhookEventName, createdBy, updatedBy, createdAt, updatedAt]
           properties:
             id: { type: string, format: uuid }
             revision: { type: integer, minimum: 1 }
@@ -5461,7 +5700,7 @@ components:
             updatedAt: { type: string, format: date-time }
     StockScanResolution:
       type: object
-      required: [workflow, resource, identifier, unit, willCreate, fields, fixedProperties, metadataPreview, statusBefore, statusAfter, quantityBefore, quantityAfter, delta, expectedResourceUpdatedAt, expectedUnitId, expectedUnitUpdatedAt]
+      required: [workflow, resource, identifier, operation, unit, willCreate, fields, fixedProperties, metadataPreview, customFieldsPreview, executionPreview, statusBefore, statusAfter, quantityBefore, quantityAfter, delta, expectedResourceUpdatedAt, expectedUnitId, expectedUnitUpdatedAt]
       additionalProperties: false
       properties:
         workflow: { $ref: "#/components/schemas/ScanWorkflow" }
@@ -5471,9 +5710,10 @@ components:
           properties:
             id: { type: string, format: uuid }
             name: { type: string }
-            quantity: { type: integer, minimum: 0 }
-            trackingMode: { type: string, const: serialized }
+            quantity: { type: integer }
+            trackingMode: { type: string, enum: [bulk, serialized] }
         identifier: { type: string, minLength: 1, maxLength: 180 }
+        operation: { $ref: "#/components/schemas/ScanWorkflowOperation" }
         unit:
           oneOf:
             - { $ref: "#/components/schemas/StockUnit" }
@@ -5483,10 +5723,13 @@ components:
           oneOf:
             - { type: string, enum: [available, reserved, in-use, maintenance, consumed, lost, retired] }
             - { type: "null" }
-        statusAfter: { type: string, enum: [available, reserved, in-use, maintenance, consumed, lost, retired] }
-        quantityBefore: { type: integer, minimum: 0 }
-        quantityAfter: { type: integer, minimum: 0 }
-        delta: { type: integer, minimum: -1, maximum: 1 }
+        statusAfter:
+          oneOf:
+            - { type: string, enum: [available, reserved, in-use, maintenance, consumed, lost, retired] }
+            - { type: "null" }
+        quantityBefore: { type: integer }
+        quantityAfter: { type: integer }
+        delta: { type: integer }
         expectedResourceUpdatedAt:
           type: string
           format: date-time
@@ -5503,13 +5746,15 @@ components:
             - { type: "null" }
         fields:
           type: array
-          maxItems: 12
+          maxItems: 24
           items: { $ref: "#/components/schemas/ScanWorkflowInputField" }
         fixedProperties:
           type: array
           maxItems: 24
           items: { $ref: "#/components/schemas/ScanWorkflowFixedProperty" }
         metadataPreview: { type: object, additionalProperties: true }
+        customFieldsPreview: { type: object, additionalProperties: true }
+        executionPreview: { type: object, additionalProperties: true }
     StockScanExecutionInput:
       type: object
       required: [workflowId, revision, code, expectedResourceUpdatedAt, expectedUnitId, expectedUnitUpdatedAt]
@@ -5518,6 +5763,10 @@ components:
         workflowId: { type: string, format: uuid }
         revision: { type: integer, minimum: 1 }
         code: { type: string, minLength: 1, maxLength: 2048 }
+        codeType:
+          oneOf:
+            - { $ref: "#/components/schemas/ScanCodeType" }
+            - { type: "null" }
         expectedResourceUpdatedAt:
           type: string
           format: date-time
@@ -5536,13 +5785,20 @@ components:
           type: object
           default: {}
           description: Operator-provided workflow fields. May be omitted when the workflow has no input fields.
-          maxProperties: 12
+          maxProperties: 24
           propertyNames: { minLength: 1, maxLength: 80 }
-          additionalProperties: { type: string, maxLength: 240 }
+          additionalProperties:
+            oneOf:
+              - { type: string, maxLength: 20000 }
+              - { type: number }
+              - { type: boolean }
+              - type: array
+                maxItems: 12
+                items: { type: string, maxLength: 2048 }
     StockScanExecution:
       type: object
-      required: [workflowId, revision, resource, unit, movement, created, metadataBefore, metadataAfter]
-      additionalProperties: false
+      required: [workflowId, revision, operation, resource, unit, movement, created, metadataBefore, metadataAfter]
+      additionalProperties: true
       properties:
         workflowId: { type: string, format: uuid }
         revision: { type: integer, minimum: 1 }
@@ -5552,9 +5808,16 @@ components:
           properties:
             id: { type: string, format: uuid }
             name: { type: string }
-            quantity: { type: integer, minimum: 0 }
-        unit: { $ref: "#/components/schemas/StockUnit" }
-        movement: { $ref: "#/components/schemas/StockMovement" }
+            quantity: { type: integer }
+        operation: { $ref: "#/components/schemas/ScanWorkflowOperation" }
+        unit:
+          oneOf:
+            - { $ref: "#/components/schemas/StockUnit" }
+            - { type: "null" }
+        movement:
+          oneOf:
+            - { $ref: "#/components/schemas/StockMovement" }
+            - { type: "null" }
         created: { type: boolean }
         metadataBefore:
           oneOf:

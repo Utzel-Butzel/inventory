@@ -387,6 +387,161 @@ public struct ResourceLookupResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct ScanActionWorkflowListResponse: Codable, Equatable, Sendable {
+    public let workflows: [ScanActionWorkflow]
+}
+
+public struct ScanActionWorkflow: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let description: String
+    public let enabled: Bool
+    public let resourceId: UUID
+    public let codeTypes: [String]
+    public let revision: Int
+    public let operation: ScanActionOperation
+    public let inputFields: [ScanActionInputField]
+}
+
+public struct ScanActionOperation: Codable, Equatable, Sendable {
+    public let type: String
+    public let delta: Int?
+    public let quantity: Int?
+
+    public var summary: String {
+        switch type {
+        case "assembly-build":
+            return "\(quantity ?? 1) × Baugruppe fertigstellen"
+        case "stock-adjustment":
+            let amount = delta ?? 0
+            return "\(amount > 0 ? "+" : "")\(amount) Bestand"
+        default:
+            return "Inventareinheit aktualisieren"
+        }
+    }
+}
+
+public struct ScanActionOption: Codable, Equatable, Identifiable, Sendable {
+    public let value: String
+    public let label: String
+
+    public var id: String { value }
+}
+
+public struct ScanActionInputField: Codable, Equatable, Identifiable, Sendable {
+    public let key: String
+    public let label: String
+    public let type: String?
+    public let storage: String?
+    public let required: Bool
+    public let placeholder: String?
+    public let options: [ScanActionOption]?
+
+    public var id: String { key }
+    public var resolvedType: String { type ?? "select" }
+}
+
+public struct ScanActionResourcePreview: Codable, Equatable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let quantity: Int
+    public let trackingMode: String?
+}
+
+public struct ScanActionResolution: Codable, Equatable, Sendable {
+    public let workflow: ScanActionWorkflow
+    public let resource: ScanActionResourcePreview
+    public let identifier: String
+    public let operation: ScanActionOperation
+    public let expectedResourceUpdatedAt: String
+    public let expectedUnitId: UUID?
+    public let expectedUnitUpdatedAt: String?
+    public let statusBefore: String?
+    public let statusAfter: String?
+    public let quantityBefore: Int
+    public let quantityAfter: Int
+    public let delta: Int
+    public let willCreate: Bool
+    public let fields: [ScanActionInputField]
+}
+
+public struct ScanActionResolveRequest: Codable, Equatable, Sendable {
+    public let workflowId: UUID
+    public let code: String
+    public let codeType: String?
+}
+
+public enum ScanActionInputValue: Encodable, Equatable, Sendable {
+    case text(String)
+    case number(Double)
+    case boolean(Bool)
+    case identifiers([String])
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .text(let value):
+            try container.encode(value)
+        case .number(let value):
+            try container.encode(value)
+        case .boolean(let value):
+            try container.encode(value)
+        case .identifiers(let value):
+            try container.encode(value)
+        }
+    }
+}
+
+public struct ScanActionExecuteRequest: Encodable, Equatable, Sendable {
+    public let workflowId: UUID
+    public let revision: Int
+    public let code: String
+    public let codeType: String?
+    public let expectedResourceUpdatedAt: String
+    public let expectedUnitId: UUID?
+    public let expectedUnitUpdatedAt: String?
+    public let inputs: [String: ScanActionInputValue]
+
+    private enum CodingKeys: String, CodingKey {
+        case workflowId
+        case revision
+        case code
+        case codeType
+        case expectedResourceUpdatedAt
+        case expectedUnitId
+        case expectedUnitUpdatedAt
+        case inputs
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(workflowId, forKey: .workflowId)
+        try container.encode(revision, forKey: .revision)
+        try container.encode(code, forKey: .code)
+        try container.encodeIfPresent(codeType, forKey: .codeType)
+        try container.encode(expectedResourceUpdatedAt, forKey: .expectedResourceUpdatedAt)
+        if let expectedUnitId {
+            try container.encode(expectedUnitId, forKey: .expectedUnitId)
+        } else {
+            try container.encodeNil(forKey: .expectedUnitId)
+        }
+        if let expectedUnitUpdatedAt {
+            try container.encode(expectedUnitUpdatedAt, forKey: .expectedUnitUpdatedAt)
+        } else {
+            try container.encodeNil(forKey: .expectedUnitUpdatedAt)
+        }
+        try container.encode(inputs, forKey: .inputs)
+    }
+}
+
+public struct ScanActionExecutionResponse: Codable, Equatable, Sendable {
+    public let workflowId: UUID
+    public let revision: Int
+    public let resource: ScanActionResourcePreview
+    public let created: Bool
+    public let operation: ScanActionOperation
+}
+
 public struct MediaUploadFile: Equatable, Sendable {
     public let fileURL: URL
     public let filename: String

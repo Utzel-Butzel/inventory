@@ -4,7 +4,7 @@
     "overview": "Übersicht",
     "orders": "Bestellungen",
     "scan": "Scannen",
-    "workflows": "Workflows"
+    "workflows": "Action Flows"
   },
   "overview": {
     "metadata": {
@@ -16,7 +16,7 @@
     "description": "Überwache Bestände, erwartete Lieferungen und die geschätzte Reichweite aller erfassten Einträge.",
     "actions": {
       "scanCode": "Code scannen",
-      "scanWorkflows": "Scan-Workflows",
+      "scanWorkflows": "Action Flows",
       "refresh": "Aktualisieren",
       "refreshing": "Wird aktualisiert…",
       "refreshingLabel": "Bestand wird aktualisiert",

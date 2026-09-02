@@ -155,6 +155,7 @@ function isPathActive(pathname: string, href: string) {
 const settingsPageNames: Record<string, string> = {
   user: "settings.items.user.label",
   organization: "settings.items.organization.label",
+  "system-organizations": "settings.items.systemOrganizations.label",
   data: "settings.items.data.label",
   languages: "settings.items.languages.label",
   "inventory-types": "settings.items.inventoryTypes.label",
@@ -519,31 +520,31 @@ export function AppShell({
       ? settingsPageNames[pathSegments[1]]
       : undefined;
   const settingsPageName = settingsPageKey ? t(settingsPageKey) : undefined;
-  const inventoryNestedPageName =
-    section === "inventory" &&
-    pathSegments.length === 2 &&
-    pathSegments[1] !== "new"
-      ? t("breadcrumb.details")
-      : section === "inventory" &&
-          pathSegments.length === 3 &&
-          pathSegments[2] === "stock"
-        ? t("navigation.stock")
-        : undefined;
+  const inventoryNestedPageName = (() => {
+    if (section !== "inventory") return undefined;
+    if (pathSegments.length === 2 && pathSegments[1] !== "new") {
+      return t("breadcrumb.details");
+    }
+    if (pathSegments.length !== 3) return undefined;
+    if (pathSegments[2] === "stock") return t("navigation.stock");
+    if (pathSegments[2] === "edit") return t("breadcrumb.edit");
+    return undefined;
+  })();
   const requestNestedPageName =
     section === "requests" && pathSegments[1] === "calendar"
       ? t("navigation.reservationCalendar")
       : undefined;
   const nestedPageName =
     settingsPageName ?? inventoryNestedPageName ?? requestNestedPageName;
-  const isInventoryStockPage =
+  const isInventoryResourceSubpage =
     section === "inventory" &&
     pathSegments.length === 3 &&
-    pathSegments[2] === "stock";
-  const stockItemHref = isInventoryStockPage
+    (pathSegments[2] === "stock" || pathSegments[2] === "edit");
+  const inventoryItemHref = isInventoryResourceSubpage
     ? `/inventory/${pathSegments[1]}`
     : null;
-  const stockItemBreadcrumb =
-    stockItemHref && inventoryItemBreadcrumb?.href === stockItemHref
+  const resourceItemBreadcrumb =
+    inventoryItemHref && inventoryItemBreadcrumb?.href === inventoryItemHref
       ? inventoryItemBreadcrumb
       : null;
   const showGlobalSearch = scopedPathname !== "/inventory";
@@ -708,19 +709,19 @@ export function AppShell({
                   </span>
                 )}
               </li>
-              {stockItemBreadcrumb ? (
+              {resourceItemBreadcrumb ? (
                 <li aria-hidden="true">
                   <ChevronRight className="size-3.5 shrink-0 text-muted" />
                 </li>
               ) : null}
-              {stockItemBreadcrumb ? (
+              {resourceItemBreadcrumb ? (
                 <li className="min-w-0 shrink">
                   <Link
-                    href={stockItemBreadcrumb.href}
-                    title={stockItemBreadcrumb.name}
+                    href={resourceItemBreadcrumb.href}
+                    title={resourceItemBreadcrumb.name}
                     className="block max-w-28 truncate font-medium text-muted transition hover:text-brand sm:max-w-56"
                   >
-                    {stockItemBreadcrumb.name}
+                    {resourceItemBreadcrumb.name}
                   </Link>
                 </li>
               ) : null}

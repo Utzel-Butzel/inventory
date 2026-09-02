@@ -239,6 +239,14 @@ export async function listOrganizationsForUser(
   }));
 }
 
+export async function listOrganizations() {
+  const rows = await db
+    .select()
+    .from(organizations)
+    .orderBy(asc(organizations.name), asc(organizations.id));
+  return rows.map(organizationSummary);
+}
+
 export function selectOrganization(
   memberships: readonly OrganizationMembershipSummary[],
   requestedReference?: string | null,

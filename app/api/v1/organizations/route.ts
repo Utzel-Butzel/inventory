@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 
 import { getRequestIdentity } from "@/lib/api-auth";
+import { usersCanCreateOrganizations } from "@/lib/deployment-access";
 import {
   createOrganization,
   ORGANIZATION_COOKIE,
@@ -67,6 +68,12 @@ export async function POST(request: Request) {
   if (identity.kind !== "session" || !identity.userId) {
     return Response.json(
       { error: "Creating an organization requires a browser session." },
+      { status: 403, headers: noStoreHeaders },
+    );
+  }
+  if (!identity.isSuperAdmin && !usersCanCreateOrganizations()) {
+    return Response.json(
+      { error: "Users are not allowed to create organizations." },
       { status: 403, headers: noStoreHeaders },
     );
   }

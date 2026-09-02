@@ -4,7 +4,7 @@
     "overview": "Overview",
     "orders": "Orders",
     "scan": "Scan",
-    "workflows": "Workflows"
+    "workflows": "Action flows"
   },
   "overview": {
     "metadata": {
@@ -16,7 +16,7 @@
     "description": "Monitor inventory levels, incoming stock, and estimated runway across all tracked items.",
     "actions": {
       "scanCode": "Scan code",
-      "scanWorkflows": "Scan workflows",
+      "scanWorkflows": "Action flows",
       "refresh": "Refresh",
       "refreshing": "Refreshing…",
       "refreshingLabel": "Refreshing stock",

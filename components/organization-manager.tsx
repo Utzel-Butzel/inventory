@@ -63,7 +63,11 @@ function roleFallback(role: string) {
     .join(" ");
 }
 
-export function OrganizationManager() {
+export function OrganizationManager({
+  canCreateOrganizations,
+}: {
+  canCreateOrganizations: boolean;
+}) {
   const { t } = useT("settings");
   const organizationHref = useOrganizationHref();
   const isReadOnly = useOrganizationReadOnly();
@@ -238,6 +242,7 @@ export function OrganizationManager() {
       className={cn(
         "grid gap-6",
         !isReadOnly &&
+          canCreateOrganizations &&
           "xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]",
       )}
     >
@@ -444,7 +449,7 @@ export function OrganizationManager() {
         </div>
       </Card>
 
-      {!isReadOnly ? <Card className="h-fit overflow-hidden">
+      {!isReadOnly && canCreateOrganizations ? <Card className="h-fit overflow-hidden">
         <div className="border-b border-border px-5 py-5 sm:px-6">
           <div className="flex items-center justify-between gap-3">
             <div>

@@ -27,7 +27,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const authorization = await requirePermission(request, "ai.use");
+  const authorization = await requirePermission(request, "ai.count");
   if (authorization.response) return authorization.response;
 
   const contentLengthValue = request.headers.get("content-length");

@@ -50,6 +50,12 @@ API and iOS clients select a membership with `X-Organization-ID`; standalone
 API tokens remain pinned to the organization that issued them. Manage and
 switch organizations under **Settings → Organization**.
 
+Deployment superadmins configured with the comma-separated `SUPERADMIN_EMAILS`
+environment variable can review and edit every workspace under **Settings →
+All organizations**. Organization creation by regular signed-in users is off by
+default; set `USERS_CAN_CREATE_ORGANIZATIONS=true` to enable it. Superadmins can
+always create organizations from the deployment-wide page.
+
 ## Quick start
 
 You need Git, Docker with Compose v2, OpenSSL, and `curl`.

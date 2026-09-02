@@ -22,7 +22,13 @@ export const appPermissions = [
   "workflows.manage",
   "labels.read",
   "labels.manage",
-  "ai.use",
+  "ai.analyze",
+  "ai.research",
+  "ai.recognize",
+  "ai.count",
+  "ai.images",
+  "ai.translate",
+  "ai.rooms",
   "settings.inventory-types.manage",
   "settings.custom-fields.manage",
   "settings.languages.manage",
@@ -44,7 +50,13 @@ export const resourceRulePermissions = [
   "assignments.manage",
   "counts.manage",
   "spatial.manage",
-  "ai.use",
+  "ai.analyze",
+  "ai.research",
+  "ai.recognize",
+  "ai.count",
+  "ai.images",
+  "ai.translate",
+  "ai.rooms",
 ] as const satisfies readonly AppPermission[];
 
 export type ResourceRulePermission = (typeof resourceRulePermissions)[number];
@@ -147,7 +159,20 @@ export const permissionGroups: Array<{
       { key: "workflows.manage", label: "Manage scan workflows", description: "Create, edit, and run stock scanning workflows." },
       { key: "labels.read", label: "View labels", description: "View label layouts and print labels." },
       { key: "labels.manage", label: "Manage labels", description: "Create and change reusable label layouts." },
-      { key: "ai.use", label: "Use AI", description: "Run analysis, counting, translation, and image generation." },
+    ],
+  },
+  {
+    key: "ai",
+    label: "AI actions",
+    description: "Paid AI capabilities can be enabled separately for each role.",
+    permissions: [
+      { key: "ai.analyze", label: "Analyze item photos", description: "Fill inventory fields from saved item photos." },
+      { key: "ai.research", label: "Research items and images", description: "Use web research to fill item details or find a reusable image." },
+      { key: "ai.recognize", label: "Recognize items", description: "Match a camera photo to existing inventory." },
+      { key: "ai.count", label: "Count from photos", description: "Count visible items with a selectable vision model." },
+      { key: "ai.images", label: "Generate images", description: "Create or edit catalogue and cover images." },
+      { key: "ai.translate", label: "Translate content", description: "Generate inventory translations with AI." },
+      { key: "ai.rooms", label: "Analyze rooms", description: "Detect room finishes and objects from scan photos." },
     ],
   },
   {
@@ -217,7 +242,7 @@ export function isResourceRulePermission(
 }
 
 export function permissionScope(permission: AppPermission): ApiScope {
-  if (permission === "ai.use") return "ai";
+  if (permission.startsWith("ai.")) return "ai";
   if (
     permission.endsWith(".read") ||
     permission === "inventory.export" ||

@@ -68,6 +68,7 @@
   "breadcrumb": {
     "label": "Breadcrumb",
     "details": "Details",
+    "edit": "Edit",
     "workspace": "Workspace"
   },
   "search": {
@@ -94,6 +95,10 @@
       "organization": {
         "label": "Organization",
         "description": "Manage organizations and names"
+      },
+      "systemOrganizations": {
+        "label": "All organizations",
+        "description": "Manage every workspace"
       },
       "data": {
         "label": "Data transfer",

@@ -12,7 +12,10 @@ export default async function NotificationsLayout({
   if (!identity) redirect("/login");
 
   return (
-    <SettingsSectionLayout permissions={identity.permissions}>
+    <SettingsSectionLayout
+      isSuperAdmin={identity.isSuperAdmin}
+      permissions={identity.permissions}
+    >
       {children}
     </SettingsSectionLayout>
   );

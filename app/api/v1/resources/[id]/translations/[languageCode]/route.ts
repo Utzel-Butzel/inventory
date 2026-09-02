@@ -66,7 +66,7 @@ export async function PATCH(request: Request, context: Context) {
     );
   }
   if (parsed.data.operations.some((operation) => operation.action === "use_ai")) {
-    const aiAuthorization = await requireResourcePermission(request, "ai.use", id);
+    const aiAuthorization = await requireResourcePermission(request, "ai.translate", id);
     if (aiAuthorization.response) return aiAuthorization.response;
   }
   try {

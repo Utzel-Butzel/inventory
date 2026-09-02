@@ -1,5 +1,6 @@
 import type { NewResource } from "@/db/schema";
 import { researchInventoryDetails } from "@/lib/ai";
+import { aiUsageEstimate } from "@/lib/ai-billing";
 import {
   claimAiOperation,
   finishAiOperation,
@@ -11,6 +12,11 @@ import {
   consumePaidAiRateLimit,
   paidAiRateLimitHeaders,
 } from "@/lib/ai-rate-limit";
+import {
+  AiMonthlyBudgetExceededError,
+  aiBudgetErrorBody,
+  trackAiUsage,
+} from "@/lib/ai-usage";
 import {
   canAccessResource,
   requireResourcePermission,
@@ -35,7 +41,7 @@ export const maxDuration = 120;
 
 export async function POST(request: Request, context: Context) {
   const { id } = await context.params;
-  const authorization = await requireResourcePermission(request, "ai.use", id);
+  const authorization = await requireResourcePermission(request, "ai.research", id);
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
@@ -176,9 +182,16 @@ export async function POST(request: Request, context: Context) {
         .filter((item) => item.kind === "image" && item.altText)
         .map((item) => item.altText),
     };
-    const { result, model, sources } = await researchInventoryDetails({
-      resource: researchContext,
-      imageDataUrls,
+    const { result, model, sources } = await trackAiUsage({
+      organizationId: authorization.identity.organizationId,
+      estimate: aiUsageEstimate({ action: "inventory_research" }),
+      actor: authorization.identity,
+      resourceId: id,
+      metadata: { imageCount: imageDataUrls.length },
+      run: () => researchInventoryDetails({
+        resource: researchContext,
+        imageDataUrls,
+      }),
     });
     const researchPatch = buildInventoryResearchValues(resource, result);
     const values: Partial<NewResource> = { ...researchPatch.values };
@@ -217,8 +230,8 @@ export async function POST(request: Request, context: Context) {
       customFieldsProvided: false,
       actor: authorization.identity.subject,
       authorize: async (current, proposed) =>
-        (await canAccessResource(authorization.identity, "ai.use", current)) &&
-        (await canAccessResource(authorization.identity, "ai.use", proposed)),
+        (await canAccessResource(authorization.identity, "ai.research", current)) &&
+        (await canAccessResource(authorization.identity, "ai.research", proposed)),
     });
     if (!updatedResource) {
       throw new Error("Resource disappeared during AI web research.");
@@ -244,6 +257,13 @@ export async function POST(request: Request, context: Context) {
       200,
     );
   } catch (error) {
+    if (error instanceof AiMonthlyBudgetExceededError) {
+      return finishTransient(
+        aiBudgetErrorBody(error),
+        429,
+        paidAiRateLimitHeaders(limit),
+      );
+    }
     if (
       error instanceof Error &&
       error.message.includes("RESOURCE_PERMISSION_DENIED")

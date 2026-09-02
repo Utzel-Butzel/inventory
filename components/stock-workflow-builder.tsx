@@ -22,7 +22,9 @@ import {
   ScanLine,
   Settings2,
   ShieldCheck,
+  Sparkles,
   Trash2,
+  Webhook,
   Workflow,
   X,
 } from "lucide-react";
@@ -35,9 +37,20 @@ import {
 } from "react";
 
 import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
+import { CodeScannerCamera } from "@/components/code-scanner-camera";
 import { fetchJson } from "@/lib/client-types";
+import {
+  scanCodeTypeLabels,
+  scanCodeTypes,
+  type ScanCodeType,
+} from "@/lib/scan-code-types";
+import {
+  extractScanRegexValue,
+  scanRegexFromSelection,
+  scanRegexValidationError,
+} from "@/lib/scan-regex";
 
-type ExtractionMode = "full" | "url-query" | "prefix";
+type ExtractionMode = "full" | "url-query" | "prefix" | "regex";
 type UnitStatus =
   | "available"
   | "reserved"
@@ -55,12 +68,36 @@ type Extraction =
       sourceOrigin?: string;
       sourcePath?: string;
     }
-  | { mode: "prefix"; prefix: string };
+  | { mode: "prefix"; prefix: string }
+  | { mode: "regex"; pattern: string; flags: string; group: string };
+
+type StorageTarget = "custom-field" | "metadata" | "execution";
+type InputType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "checkbox"
+  | "select"
+  | "radio"
+  | "media"
+  | "file";
+type Operation =
+  | { type: "unit" }
+  | { type: "stock-adjustment"; delta: number }
+  | { type: "assembly-build"; quantity: number };
 
 type FixedProperty = {
   key: string;
   label: string;
   value: string;
+  storage: StorageTarget;
+};
+
+type ExtractedField = {
+  key: string;
+  label: string;
+  extraction: Extraction;
+  storage: StorageTarget;
 };
 
 type InputOption = {
@@ -73,6 +110,9 @@ type InputField = {
   key: string;
   label: string;
   required: boolean;
+  type: InputType;
+  storage: StorageTarget;
+  placeholder: string;
   options: InputOption[];
 };
 
@@ -81,12 +121,18 @@ type WorkflowPayload = {
   description: string;
   enabled: boolean;
   resourceId: string;
+  codeTypes: ScanCodeType[];
   extraction: Extraction;
   identifierPropertyKey: string;
+  identifierStorage: StorageTarget;
+  extractedFields: ExtractedField[];
+  operation: Operation;
   createMissingUnit: boolean;
   unitStatus: UnitStatus | null;
   fixedProperties: FixedProperty[];
   inputFields: InputField[];
+  triggerWebhook: boolean;
+  webhookEventName: string;
   revision?: number;
 };
 
@@ -106,12 +152,32 @@ type StockItem = {
   unitName?: string;
 };
 
+type StockUnitCustomField = {
+  key: string;
+  label: string;
+  fieldType: string;
+};
+
 type DraftOption = InputOption & { uid: string };
 type DraftInput = Omit<InputField, "options"> & {
   uid: string;
   options: DraftOption[];
 };
 type DraftFixedProperty = FixedProperty & { uid: string };
+type DraftExtraction = {
+  mode: ExtractionMode;
+  parameter: string;
+  prefix: string;
+  sourceOrigin: string;
+  sourcePath: string;
+  pattern: string;
+  flags: string;
+  group: string;
+};
+type DraftExtractedField = Omit<ExtractedField, "extraction"> & {
+  uid: string;
+  extraction: DraftExtraction;
+};
 
 type WorkflowDraft = {
   id: string | null;
@@ -120,18 +186,18 @@ type WorkflowDraft = {
   description: string;
   enabled: boolean;
   resourceId: string;
-  extraction: {
-    mode: ExtractionMode;
-    parameter: string;
-    prefix: string;
-    sourceOrigin: string;
-    sourcePath: string;
-  };
+  codeTypes: ScanCodeType[];
+  extraction: DraftExtraction;
   identifierPropertyKey: string;
+  identifierStorage: StorageTarget;
+  extractedFields: DraftExtractedField[];
+  operation: Operation;
   createMissingUnit: boolean;
   unitStatus: UnitStatus | null;
   fixedProperties: DraftFixedProperty[];
   inputFields: DraftInput[];
+  triggerWebhook: boolean;
+  webhookEventName: string;
 };
 
 type Notice = { tone: "success" | "error" | "info"; message: string };
@@ -165,14 +231,21 @@ function templateDraft(t: TFunction, resourceId = ""): WorkflowDraft {
     description: t("workflows.template.description"),
     enabled: true,
     resourceId,
+    codeTypes: ["qr_code"],
     extraction: {
       mode: "url-query",
       parameter: "d",
       prefix: "EPD-",
       sourceOrigin: "https://paperlesspaper.de",
       sourcePath: "/b",
+      pattern: "^.*[?&]d=(?<value>[^&]+).*$",
+      flags: "",
+      group: "value",
     },
     identifierPropertyKey: "epdNumber",
+    identifierStorage: "custom-field",
+    extractedFields: [],
+    operation: { type: "assembly-build", quantity: 1 },
     createMissingUnit: true,
     unitStatus: null,
     fixedProperties: [
@@ -181,6 +254,7 @@ function templateDraft(t: TFunction, resourceId = ""): WorkflowDraft {
         key: "assemblyStatus",
         label: t("workflows.template.assemblyStatus"),
         value: "finished-assembled",
+        storage: "metadata",
       },
     ],
     inputFields: [
@@ -189,6 +263,9 @@ function templateDraft(t: TFunction, resourceId = ""): WorkflowDraft {
         key: "color",
         label: t("workflows.template.color"),
         required: true,
+        type: "radio",
+        storage: "custom-field",
+        placeholder: "",
         options: [
           { uid: "template-color-wood", value: "wood", label: t("workflows.template.colors.wood"), color: "#b9875e" },
           { uid: "template-color-black", value: "black", label: t("workflows.template.colors.black"), color: "#202124" },
@@ -199,6 +276,48 @@ function templateDraft(t: TFunction, resourceId = ""): WorkflowDraft {
         ],
       },
     ],
+    triggerWebhook: false,
+    webhookEventName: "inventory.action.executed",
+  };
+}
+
+function extractionToDraft(extraction: Extraction): DraftExtraction {
+  return {
+    mode: extraction.mode,
+    parameter: extraction.mode === "url-query" ? extraction.parameter : "d",
+    prefix: extraction.mode === "prefix" ? extraction.prefix : "EPD-",
+    sourceOrigin:
+      extraction.mode === "url-query" ? extraction.sourceOrigin ?? "" : "",
+    sourcePath:
+      extraction.mode === "url-query" ? extraction.sourcePath ?? "" : "",
+    pattern: extraction.mode === "regex" ? extraction.pattern : "(?<value>.+)",
+    flags: extraction.mode === "regex" ? extraction.flags : "",
+    group: extraction.mode === "regex" ? extraction.group : "value",
+  };
+}
+
+function extractionFromDraft(extraction: DraftExtraction): Extraction {
+  if (extraction.mode === "full") return { mode: "full" };
+  if (extraction.mode === "prefix") {
+    return { mode: "prefix", prefix: extraction.prefix.trim() };
+  }
+  if (extraction.mode === "regex") {
+    return {
+      mode: "regex",
+      pattern: extraction.pattern,
+      flags: extraction.flags,
+      group: extraction.group,
+    };
+  }
+  return {
+    mode: "url-query",
+    parameter: extraction.parameter.trim(),
+    ...(extraction.sourceOrigin.trim()
+      ? { sourceOrigin: extraction.sourceOrigin.trim() }
+      : {}),
+    ...(extraction.sourcePath.trim()
+      ? { sourcePath: extraction.sourcePath.trim() }
+      : {}),
   };
 }
 
@@ -207,72 +326,82 @@ function workflowToDraft(workflow: WorkflowRecord): WorkflowDraft {
   return {
     ...workflow,
     id: workflow.id,
-    extraction: {
-      mode: extraction.mode,
-      parameter: extraction.mode === "url-query" ? extraction.parameter : "d",
-      prefix: extraction.mode === "prefix" ? extraction.prefix : "EPD-",
-      sourceOrigin:
-        extraction.mode === "url-query" ? extraction.sourceOrigin ?? "" : "",
-      sourcePath: extraction.mode === "url-query" ? extraction.sourcePath ?? "" : "",
-    },
+    extraction: extractionToDraft(extraction),
+    codeTypes: workflow.codeTypes?.length
+      ? workflow.codeTypes
+      : [...scanCodeTypes],
+    identifierStorage: workflow.identifierStorage ?? "metadata",
+    operation: workflow.operation ?? { type: "unit" },
+    extractedFields: (workflow.extractedFields ?? []).map((field, index) => ({
+      ...field,
+      uid: `extracted-${index}-${field.key}`,
+      storage: field.storage ?? "custom-field",
+      extraction: extractionToDraft(field.extraction),
+    })),
     fixedProperties: workflow.fixedProperties.map((property, index) => ({
       ...property,
+      storage: property.storage ?? "metadata",
       uid: `fixed-${index}-${property.key}`,
     })),
     inputFields: workflow.inputFields.map((field, fieldIndex) => ({
       ...field,
+      type: field.type ?? "select",
+      storage: field.storage ?? "metadata",
+      placeholder: field.placeholder ?? "",
       uid: `input-${fieldIndex}-${field.key}`,
       options: field.options.map((option, optionIndex) => ({
         ...option,
         uid: `option-${fieldIndex}-${optionIndex}-${option.value}`,
       })),
     })),
+    triggerWebhook: workflow.triggerWebhook ?? false,
+    webhookEventName:
+      workflow.webhookEventName ?? "inventory.action.executed",
   };
 }
 
 function draftToPayload(draft: WorkflowDraft): WorkflowPayload {
-  let extraction: Extraction;
-  if (draft.extraction.mode === "full") {
-    extraction = { mode: "full" };
-  } else if (draft.extraction.mode === "prefix") {
-    extraction = { mode: "prefix", prefix: draft.extraction.prefix.trim() };
-  } else {
-    extraction = {
-      mode: "url-query",
-      parameter: draft.extraction.parameter.trim(),
-      ...(draft.extraction.sourceOrigin.trim()
-        ? { sourceOrigin: draft.extraction.sourceOrigin.trim() }
-        : {}),
-      ...(draft.extraction.sourcePath.trim()
-        ? { sourcePath: draft.extraction.sourcePath.trim() }
-        : {}),
-    };
-  }
+  const extraction = extractionFromDraft(draft.extraction);
 
   return {
     name: draft.name.trim(),
     description: draft.description.trim(),
     enabled: draft.enabled,
     resourceId: draft.resourceId,
+    codeTypes: draft.codeTypes,
     extraction,
     identifierPropertyKey: draft.identifierPropertyKey.trim(),
+    identifierStorage: draft.identifierStorage,
+    extractedFields: draft.extractedFields.map((field) => ({
+      key: field.key.trim(),
+      label: field.label.trim(),
+      storage: field.storage,
+      extraction: extractionFromDraft(field.extraction),
+    })),
+    operation: draft.operation,
     createMissingUnit: draft.createMissingUnit,
     unitStatus: draft.unitStatus,
-    fixedProperties: draft.fixedProperties.map(({ key, label, value }) => ({
+    fixedProperties: draft.fixedProperties.map(({ key, label, value, storage }) => ({
       key: key.trim(),
       label: label.trim(),
       value: value.trim(),
+      storage,
     })),
-    inputFields: draft.inputFields.map(({ key, label, required, options }) => ({
+    inputFields: draft.inputFields.map(({ key, label, required, type, storage, placeholder, options }) => ({
       key: key.trim(),
       label: label.trim(),
       required,
+      type,
+      storage,
+      placeholder: placeholder.trim(),
       options: options.map(({ value, label: optionLabel, color }) => ({
         value: value.trim(),
         label: optionLabel.trim(),
         ...(color ? { color } : {}),
       })),
     })),
+    triggerWebhook: draft.triggerWebhook,
+    webhookEventName: draft.webhookEventName.trim(),
     ...(draft.revision !== undefined ? { revision: draft.revision } : {}),
   };
 }
@@ -321,7 +450,23 @@ function stockItemsFromResponse(payload: unknown): StockItem[] {
           typeof item === "object" &&
           typeof (item as StockItem).resourceId === "string" &&
           typeof (item as StockItem).name === "string" &&
-          (item as StockItem).trackingMode === "serialized",
+          typeof (item as StockItem).trackingMode === "string",
+      ),
+  );
+}
+
+function stockUnitCustomFieldsFromResponse(payload: unknown): StockUnitCustomField[] {
+  if (!payload || typeof payload !== "object") return [];
+  const definitions = (payload as { definitions?: unknown }).definitions;
+  if (!Array.isArray(definitions)) return [];
+  return definitions.filter(
+    (definition): definition is StockUnitCustomField =>
+      Boolean(
+        definition &&
+          typeof definition === "object" &&
+          typeof (definition as StockUnitCustomField).key === "string" &&
+          typeof (definition as StockUnitCustomField).label === "string" &&
+          typeof (definition as StockUnitCustomField).fieldType === "string",
       ),
   );
 }
@@ -329,6 +474,7 @@ function stockItemsFromResponse(payload: unknown): StockItem[] {
 function validateDraft(draft: WorkflowDraft, t: TFunction) {
   if (!draft.name.trim()) return t("workflows.validation.name");
   if (!draft.resourceId) return t("workflows.validation.resource");
+  if (!draft.codeTypes.length) return t("workflows.validation.codeType");
   if (!draft.identifierPropertyKey.trim()) return t("workflows.validation.identifier");
   const validPropertyKey = /^[A-Za-z0-9_.-]+$/;
   if (!validPropertyKey.test(draft.identifierPropertyKey.trim())) {
@@ -359,9 +505,39 @@ function validateDraft(draft: WorkflowDraft, t: TFunction) {
   if (draft.extraction.mode === "prefix" && !draft.extraction.prefix) {
     return t("workflows.validation.prefix");
   }
+  if (draft.extraction.mode === "regex") {
+    const regexError = scanRegexValidationError(
+      draft.extraction.pattern,
+      draft.extraction.flags,
+    );
+    if (regexError || !draft.extraction.group.trim()) {
+      return regexError ?? t("workflows.validation.regexGroup");
+    }
+  }
 
   const propertyKeys = new Set<string>();
   propertyKeys.add(draft.identifierPropertyKey.trim());
+  for (const field of draft.extractedFields) {
+    if (!field.key.trim() || !field.label.trim()) {
+      return t("workflows.validation.input");
+    }
+    if (
+      !validPropertyKey.test(field.key.trim()) ||
+      propertyKeys.has(field.key.trim())
+    ) {
+      return t("workflows.validation.uniqueKeys");
+    }
+    propertyKeys.add(field.key.trim());
+    if (field.extraction.mode === "regex") {
+      const regexError = scanRegexValidationError(
+        field.extraction.pattern,
+        field.extraction.flags,
+      );
+      if (regexError || !field.extraction.group.trim()) {
+        return regexError ?? t("workflows.validation.regexGroup");
+      }
+    }
+  }
   for (const property of draft.fixedProperties) {
     if (!property.key.trim() || !property.label.trim() || !property.value.trim()) {
       return t("workflows.validation.fixedProperty");
@@ -387,7 +563,10 @@ function validateDraft(draft: WorkflowDraft, t: TFunction) {
       return t("workflows.validation.uniqueKeys");
     }
     inputKeys.add(field.key.trim());
-    if (field.options.length === 0) return t("workflows.validation.optionRequired", {
+    if (
+      (field.type === "select" || field.type === "radio") &&
+      field.options.length === 0
+    ) return t("workflows.validation.optionRequired", {
       field: field.label || t("workflows.validation.eachInput"),
     });
     const optionValues = new Set<string>();
@@ -405,6 +584,7 @@ function validateDraft(draft: WorkflowDraft, t: TFunction) {
       optionValues.add(option.value.trim());
     }
   }
+  if (!draft.webhookEventName.trim()) return t("workflows.validation.input");
   return null;
 }
 
@@ -425,6 +605,12 @@ function extractIdentifier(
     return value
       ? { value, error: null }
       : { value: null, error: t("workflows.extractionErrors.prefixEmpty") };
+  }
+  if (extraction.mode === "regex") {
+    const extracted = extractScanRegexValue(raw, extraction);
+    return extracted.error
+      ? { value: null, error: extracted.error }
+      : { value: extracted.value, error: null };
   }
 
   let url: URL;
@@ -573,6 +759,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
   const firstDraft = useMemo(() => templateDraft(t), [t]);
   const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
   const [resources, setResources] = useState<StockItem[]>([]);
+  const [stockUnitCustomFields, setStockUnitCustomFields] = useState<StockUnitCustomField[]>([]);
   const [draft, setDraft] = useState<WorkflowDraft>(firstDraft);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [baseSignature, setBaseSignature] = useState(() => payloadSignature(firstDraft));
@@ -584,6 +771,15 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
   const [sampleScan, setSampleScan] = useState(
     "https://paperlesspaper.de/b?d=epd13-9c139ed7b44c&w=99",
   );
+  const [sampleCodeType, setSampleCodeType] = useState<ScanCodeType | null>(
+    "qr_code",
+  );
+  const [sampleSelection, setSampleSelection] = useState({ start: 0, end: 0 });
+  const [showExampleScanner, setShowExampleScanner] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [previewInputs, setPreviewInputs] = useState<Record<string, string>>({});
 
   const applyWorkflow = useCallback((workflow: WorkflowRecord) => {
@@ -599,14 +795,20 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
       setLoading(true);
       setNotice(null);
       try {
-        const [workflowPayload, stockPayload] = await Promise.all([
+        const [workflowPayload, stockPayload, customFieldPayload] = await Promise.all([
           fetchJson<unknown>("/api/v1/stock/scan-workflows", { cache: "no-store" }),
           fetchJson<unknown>("/api/v1/stock", { cache: "no-store" }),
+          fetchJson<unknown>("/api/v1/custom-fields?entityType=stock_unit", {
+            cache: "no-store",
+          }).catch(() => ({ definitions: [] })),
         ]);
         const nextWorkflows = workflowsFromResponse(workflowPayload);
         const nextResources = stockItemsFromResponse(stockPayload);
         setWorkflows(nextWorkflows);
         setResources(nextResources);
+        setStockUnitCustomFields(
+          stockUnitCustomFieldsFromResponse(customFieldPayload),
+        );
 
         const nextSelection = nextWorkflows[0];
         if (nextSelection) {
@@ -657,6 +859,111 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
     () => extractIdentifier(sampleScan, draft.extraction, t),
     [draft.extraction, sampleScan, t],
   );
+  const selectedSampleValue = sampleScan.slice(
+    sampleSelection.start,
+    sampleSelection.end,
+  );
+
+  const toggleCodeType = (codeType: ScanCodeType) => {
+    setDraft((current) => ({
+      ...current,
+      codeTypes: current.codeTypes.includes(codeType)
+        ? current.codeTypes.filter((candidate) => candidate !== codeType)
+        : scanCodeTypes.filter(
+            (candidate) =>
+              candidate === codeType || current.codeTypes.includes(candidate),
+          ),
+    }));
+  };
+
+  const applySelectionRegex = (fieldUid?: string) => {
+    const generated = scanRegexFromSelection(
+      sampleScan,
+      sampleSelection.start,
+      sampleSelection.end,
+    );
+    if (!generated) {
+      setAiError(t("workflows.regexStudio.selectValue"));
+      return;
+    }
+    setDraft((current) =>
+      fieldUid
+        ? {
+            ...current,
+            extractedFields: current.extractedFields.map((field) =>
+              field.uid === fieldUid
+                ? {
+                    ...field,
+                    extraction: {
+                      ...field.extraction,
+                      mode: "regex",
+                      ...generated,
+                    },
+                  }
+                : field,
+            ),
+          }
+        : {
+            ...current,
+            extraction: {
+              ...current.extraction,
+              mode: "regex",
+              ...generated,
+            },
+          },
+    );
+    setAiError(null);
+    setAiExplanation(t("workflows.regexStudio.selectionApplied"));
+  };
+
+  const generateRegexWithAi = async () => {
+    const instruction = aiInstruction.trim();
+    if (!selectedSampleValue && !instruction) {
+      setAiError(t("workflows.regexStudio.selectOrDescribe"));
+      return;
+    }
+    setAiGenerating(true);
+    setAiError(null);
+    setAiExplanation(null);
+    try {
+      const result = await fetchJson<{
+        suggestion: {
+          pattern: string;
+          flags: string;
+          group: string;
+          explanation: string;
+        };
+      }>("/api/v1/stock/scan-workflows/extraction-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sampleCode: sampleScan,
+          codeType: sampleCodeType,
+          ...(selectedSampleValue ? { desiredValue: selectedSampleValue } : {}),
+          ...(instruction ? { instruction } : {}),
+        }),
+      });
+      setDraft((current) => ({
+        ...current,
+        extraction: {
+          ...current.extraction,
+          mode: "regex",
+          pattern: result.suggestion.pattern,
+          flags: result.suggestion.flags,
+          group: result.suggestion.group,
+        },
+      }));
+      setAiExplanation(result.suggestion.explanation);
+    } catch (error) {
+      setAiError(
+        error instanceof Error
+          ? error.message
+          : t("workflows.regexStudio.aiError"),
+      );
+    } finally {
+      setAiGenerating(false);
+    }
+  };
 
   const confirmDraftDiscard = () =>
     !dirty ||
@@ -718,10 +1025,11 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
       applyWorkflow(saved);
       setNotice({ tone: "success", message });
       return saved;
-    } catch {
+    } catch (error) {
       setNotice({
         tone: "error",
-        message: t("workflows.errors.save"),
+        message:
+          error instanceof Error ? error.message : t("workflows.errors.save"),
       });
       return null;
     } finally {
@@ -771,10 +1079,11 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
         tone: "success",
         message: t(saved.enabled ? "workflows.notices.enabled" : "workflows.notices.paused"),
       });
-    } catch {
+    } catch (error) {
       setNotice({
         tone: "error",
-        message: t("workflows.errors.update"),
+        message:
+          error instanceof Error ? error.message : t("workflows.errors.update"),
       });
     } finally {
       setSaving(false);
@@ -802,10 +1111,11 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
         setConfirmDelete(false);
       }
       setNotice({ tone: "success", message: t("workflows.notices.deleted") });
-    } catch {
+    } catch (error) {
       setNotice({
         tone: "error",
-        message: t("workflows.errors.delete"),
+        message:
+          error instanceof Error ? error.message : t("workflows.errors.delete"),
       });
     } finally {
       setDeleting(false);
@@ -814,7 +1124,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
 
   const updateFixedProperty = (
     uid: string,
-    key: keyof Pick<DraftFixedProperty, "key" | "label" | "value">,
+    key: keyof Pick<DraftFixedProperty, "key" | "label" | "value" | "storage">,
     value: string,
   ) => {
     setDraft((current) => ({
@@ -827,7 +1137,9 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
 
   const updateInput = (
     uid: string,
-    patch: Partial<Pick<DraftInput, "key" | "label" | "required">>,
+    patch: Partial<
+      Pick<DraftInput, "key" | "label" | "required" | "type" | "storage" | "placeholder">
+    >,
   ) => {
     setDraft((current) => ({
       ...current,
@@ -879,6 +1191,13 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
 
   return (
     <div>
+      <datalist id="stock-unit-custom-field-keys">
+        {stockUnitCustomFields.map((field) => (
+          <option key={field.key} value={field.key}>
+            {field.label} · {field.fieldType}
+          </option>
+        ))}
+      </datalist>
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
@@ -1159,6 +1478,93 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                 </div>
                 <Badge tone="brand">{t("workflows.steps.trigger.badge")}</Badge>
               </div>
+              <div className="mt-4">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold text-muted-strong">
+                      {t("workflows.steps.trigger.codeTypes")}
+                    </p>
+                    <p className="mt-1 text-[10px] leading-4 text-muted">
+                      {t("workflows.steps.trigger.codeTypesDescription")}
+                    </p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!editable}
+                    onClick={() => setShowExampleScanner((current) => !current)}
+                  >
+                    <ScanLine className="size-3.5" aria-hidden="true" />
+                    {t(
+                      showExampleScanner
+                        ? "workflows.steps.trigger.closeExampleScanner"
+                        : "workflows.steps.trigger.scanExample",
+                    )}
+                  </Button>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                  {scanCodeTypes.map((codeType) => {
+                    const selected = draft.codeTypes.includes(codeType);
+                    return (
+                      <button
+                        key={codeType}
+                        type="button"
+                        aria-pressed={selected}
+                        disabled={!editable}
+                        onClick={() => toggleCodeType(codeType)}
+                        className={cn(
+                          "flex min-h-10 items-center gap-2 rounded-xl border px-3 text-left text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
+                          selected
+                            ? "border-brand-border bg-brand-soft text-brand-strong"
+                            : "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "grid size-4 shrink-0 place-items-center rounded border",
+                            selected
+                              ? "border-brand-solid bg-brand-solid text-on-brand"
+                              : "border-border-strong",
+                          )}
+                        >
+                          {selected ? <Check className="size-3" aria-hidden="true" /> : null}
+                        </span>
+                        {scanCodeTypeLabels[codeType]}
+                      </button>
+                    );
+                  })}
+                </div>
+                {!draft.codeTypes.length ? (
+                  <p className="mt-2 text-[11px] text-danger">
+                    {t("workflows.validation.codeType")}
+                  </p>
+                ) : null}
+              </div>
+              {showExampleScanner ? (
+                <div className="mt-4 rounded-2xl border border-brand-border bg-surface p-3 sm:p-4">
+                  <CodeScannerCamera
+                    disabled={!editable}
+                    onDetected={(code, _source, codeType) => {
+                      setSampleScan(code);
+                      setSampleCodeType(codeType);
+                      setSampleSelection({ start: 0, end: 0 });
+                      if (codeType) {
+                        setDraft((current) => ({
+                          ...current,
+                          codeTypes: current.codeTypes.includes(codeType)
+                            ? current.codeTypes
+                            : scanCodeTypes.filter(
+                                (candidate) =>
+                                  candidate === codeType ||
+                                  current.codeTypes.includes(candidate),
+                              ),
+                        }));
+                      }
+                      setShowExampleScanner(false);
+                    }}
+                  />
+                </div>
+              ) : null}
             </FlowStep>
 
             <FlowStep
@@ -1167,8 +1573,96 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
               title={t("workflows.steps.extract.title")}
               description={t("workflows.steps.extract.description")}
             >
-              <div className="grid grid-cols-1 gap-1 rounded-xl bg-surface-muted p-1 sm:grid-cols-3">
-                {(["full", "url-query", "prefix"] as const).map((mode) => (
+              <div className="mb-4 rounded-2xl border border-brand-border bg-[linear-gradient(135deg,var(--color-brand-soft),var(--color-surface))] p-3.5 sm:p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
+                      <Sparkles className="size-4 text-brand" aria-hidden="true" />
+                      {t("workflows.regexStudio.title")}
+                    </p>
+                    <p className="mt-1 text-[10px] leading-4 text-muted">
+                      {t("workflows.regexStudio.description")}
+                    </p>
+                  </div>
+                  {sampleCodeType ? (
+                    <Badge tone="brand">{scanCodeTypeLabels[sampleCodeType]}</Badge>
+                  ) : (
+                    <Badge tone="neutral">{t("workflows.regexStudio.manual")}</Badge>
+                  )}
+                </div>
+                <label className={cn(labelClass, "mt-3 block")}>
+                  {t("workflows.regexStudio.sample")}
+                  <textarea
+                    value={sampleScan}
+                    onChange={(event) => {
+                      setSampleScan(event.target.value);
+                      setSampleSelection({ start: 0, end: 0 });
+                    }}
+                    onSelect={(event) =>
+                      setSampleSelection({
+                        start: event.currentTarget.selectionStart,
+                        end: event.currentTarget.selectionEnd,
+                      })
+                    }
+                    className={cn(textAreaClass, "min-h-24 font-mono text-[12px]")}
+                    disabled={interactionBusy}
+                  />
+                </label>
+                <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                  <input
+                    value={aiInstruction}
+                    onChange={(event) => setAiInstruction(event.target.value)}
+                    className={cn(inputClass, "mt-0")}
+                    placeholder={t("workflows.regexStudio.instructionPlaceholder")}
+                    disabled={!editable || aiGenerating}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!editable || !selectedSampleValue || aiGenerating}
+                    onClick={() => applySelectionRegex()}
+                  >
+                    {t("workflows.regexStudio.useSelection")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={
+                      !editable ||
+                      aiGenerating ||
+                      (!selectedSampleValue && !aiInstruction.trim())
+                    }
+                    onClick={() => void generateRegexWithAi()}
+                  >
+                    {aiGenerating ? (
+                      <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Sparkles className="size-3.5" aria-hidden="true" />
+                    )}
+                    {t("workflows.regexStudio.generate")}
+                  </Button>
+                </div>
+                {selectedSampleValue ? (
+                  <p className="mt-2 break-all text-[10px] text-muted">
+                    {t("workflows.regexStudio.selected")}: {" "}
+                    <code className="rounded bg-surface px-1.5 py-0.5 text-foreground">
+                      {selectedSampleValue}
+                    </code>
+                  </p>
+                ) : null}
+                {aiExplanation ? (
+                  <p className="mt-2 text-[11px] leading-5 text-success">
+                    {aiExplanation}
+                  </p>
+                ) : null}
+                {aiError ? (
+                  <p role="alert" className="mt-2 text-[11px] leading-5 text-danger">
+                    {aiError}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-muted p-1 sm:grid-cols-4">
+                {(["full", "url-query", "prefix", "regex"] as const).map((mode) => (
                   <button
                     key={mode}
                     type="button"
@@ -1243,6 +1737,11 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     {t("workflows.steps.extract.identifierKey")}
                     <input
                       value={draft.identifierPropertyKey}
+                      list={
+                        draft.identifierStorage === "custom-field"
+                          ? "stock-unit-custom-field-keys"
+                          : undefined
+                      }
                       onChange={(event) => setDraft((current) => ({ ...current, identifierPropertyKey: event.target.value }))}
                       className={inputClass}
                       placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
@@ -1271,7 +1770,89 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     {t("workflows.steps.extract.identifierKey")}
                     <input
                       value={draft.identifierPropertyKey}
+                      list={
+                        draft.identifierStorage === "custom-field"
+                          ? "stock-unit-custom-field-keys"
+                          : undefined
+                      }
                       onChange={(event) => setDraft((current) => ({ ...current, identifierPropertyKey: event.target.value }))}
+                      className={inputClass}
+                      placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
+                      disabled={!editable}
+                    />
+                  </label>
+                </div>
+              ) : draft.extraction.mode === "regex" ? (
+                <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_100px_140px]">
+                  <label className={labelClass}>
+                    {t("workflows.steps.extract.regexPattern")}
+                    <input
+                      value={draft.extraction.pattern}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          extraction: {
+                            ...current.extraction,
+                            pattern: event.target.value,
+                          },
+                        }))
+                      }
+                      className={cn(inputClass, "font-mono")}
+                      placeholder="^(?<value>.+)$"
+                      disabled={!editable}
+                    />
+                  </label>
+                  <label className={labelClass}>
+                    {t("workflows.steps.extract.regexFlags")}
+                    <input
+                      value={draft.extraction.flags}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          extraction: {
+                            ...current.extraction,
+                            flags: event.target.value,
+                          },
+                        }))
+                      }
+                      className={cn(inputClass, "font-mono")}
+                      placeholder="iu"
+                      disabled={!editable}
+                    />
+                  </label>
+                  <label className={labelClass}>
+                    {t("workflows.steps.extract.regexGroup")}
+                    <input
+                      value={draft.extraction.group}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          extraction: {
+                            ...current.extraction,
+                            group: event.target.value,
+                          },
+                        }))
+                      }
+                      className={cn(inputClass, "font-mono")}
+                      placeholder="value"
+                      disabled={!editable}
+                    />
+                  </label>
+                  <label className={cn(labelClass, "sm:col-span-3 sm:max-w-md")}>
+                    {t("workflows.steps.extract.identifierKey")}
+                    <input
+                      value={draft.identifierPropertyKey}
+                      list={
+                        draft.identifierStorage === "custom-field"
+                          ? "stock-unit-custom-field-keys"
+                          : undefined
+                      }
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          identifierPropertyKey: event.target.value,
+                        }))
+                      }
                       className={inputClass}
                       placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
                       disabled={!editable}
@@ -1283,6 +1864,11 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                   {t("workflows.steps.extract.identifierKey")}
                   <input
                     value={draft.identifierPropertyKey}
+                    list={
+                      draft.identifierStorage === "custom-field"
+                        ? "stock-unit-custom-field-keys"
+                        : undefined
+                    }
                     onChange={(event) => setDraft((current) => ({ ...current, identifierPropertyKey: event.target.value }))}
                     className={inputClass}
                     placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
@@ -1290,6 +1876,273 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                   />
                 </label>
               )}
+              <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
+                <label className={labelClass}>
+                  Speicherziel der Kennung
+                  <select
+                    value={draft.identifierStorage}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        identifierStorage: event.target.value as StorageTarget,
+                      }))
+                    }
+                    className={inputClass}
+                    disabled={!editable}
+                  >
+                    <option value="custom-field">Custom Field der Einheit</option>
+                    <option value="metadata">Metadaten der Einheit</option>
+                    <option value="execution">Nur Flow-Ausführung</option>
+                  </select>
+                </label>
+                <div className="flex items-end">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!editable}
+                    onClick={() =>
+                      setDraft((current) => ({
+                        ...current,
+                        extractedFields: [
+                          ...current.extractedFields,
+                          {
+                            uid: localId("extracted"),
+                            key: `codeField${current.extractedFields.length + 1}`,
+                            label: `QR-Feld ${current.extractedFields.length + 1}`,
+                            storage: "custom-field",
+                            extraction: {
+                              ...current.extraction,
+                              mode: "url-query",
+                              parameter: `field${current.extractedFields.length + 1}`,
+                            },
+                          },
+                        ],
+                      }))
+                    }
+                  >
+                    <Plus className="size-3.5" aria-hidden="true" /> Weiteres QR-Feld
+                  </Button>
+                </div>
+                {draft.identifierStorage === "custom-field" ? (
+                  <p className="text-[11px] leading-5 text-muted sm:col-span-2">
+                    Wähle einen vorhandenen Schlüssel aus der Liste. Neue Felder legst du unter{" "}
+                    <Link href="/settings/custom-fields" className="font-semibold text-brand hover:underline">
+                      Einstellungen → Custom Fields
+                    </Link>{" "}
+                    für Bestandseinheiten an.
+                  </p>
+                ) : null}
+              </div>
+              {draft.extractedFields.length ? (
+                <div className="mt-3 space-y-2">
+                  {draft.extractedFields.map((field) => (
+                    <div key={field.uid} className="grid gap-2 rounded-xl border border-border bg-surface-subtle p-3 sm:grid-cols-2 lg:grid-cols-5">
+                      <label className={labelClass}>
+                        Schlüssel
+                        <input
+                          value={field.key}
+                          list={
+                            field.storage === "custom-field"
+                              ? "stock-unit-custom-field-keys"
+                              : undefined
+                          }
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              extractedFields: current.extractedFields.map((item) =>
+                                item.uid === field.uid ? { ...item, key: event.target.value } : item,
+                              ),
+                            }))
+                          }
+                          className={inputClass}
+                          disabled={!editable}
+                        />
+                      </label>
+                      <label className={labelClass}>
+                        Bezeichnung
+                        <input
+                          value={field.label}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              extractedFields: current.extractedFields.map((item) =>
+                                item.uid === field.uid ? { ...item, label: event.target.value } : item,
+                              ),
+                            }))
+                          }
+                          className={inputClass}
+                          disabled={!editable}
+                        />
+                      </label>
+                      <label className={labelClass}>
+                        Extraktion
+                        <select
+                          value={field.extraction.mode}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              extractedFields: current.extractedFields.map((item) =>
+                                item.uid === field.uid
+                                  ? {
+                                      ...item,
+                                      extraction: {
+                                        ...item.extraction,
+                                        mode: event.target.value as ExtractionMode,
+                                      },
+                                    }
+                                  : item,
+                              ),
+                            }))
+                          }
+                          className={inputClass}
+                          disabled={!editable}
+                        >
+                          <option value="url-query">URL-Parameter</option>
+                          <option value="regex">Regulärer Ausdruck</option>
+                          <option value="prefix">Präfix entfernen</option>
+                          <option value="full">Vollständiger Wert</option>
+                        </select>
+                      </label>
+                      <label className={labelClass}>
+                        {field.extraction.mode === "prefix"
+                          ? "Präfix"
+                          : field.extraction.mode === "regex"
+                            ? "Regex"
+                            : "Parameter"}
+                        <input
+                          value={
+                            field.extraction.mode === "prefix"
+                              ? field.extraction.prefix
+                              : field.extraction.mode === "regex"
+                                ? field.extraction.pattern
+                                : field.extraction.parameter
+                          }
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              extractedFields: current.extractedFields.map((item) =>
+                                item.uid === field.uid
+                                  ? {
+                                      ...item,
+                                      extraction: {
+                                        ...item.extraction,
+                                        [item.extraction.mode === "prefix"
+                                          ? "prefix"
+                                          : item.extraction.mode === "regex"
+                                            ? "pattern"
+                                            : "parameter"]: event.target.value,
+                                      },
+                                    }
+                                  : item,
+                              ),
+                            }))
+                          }
+                          className={inputClass}
+                          disabled={!editable || field.extraction.mode === "full"}
+                        />
+                      </label>
+                      <div className="flex items-end gap-2">
+                        <select
+                          aria-label="Speicherziel"
+                          value={field.storage}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              extractedFields: current.extractedFields.map((item) =>
+                                item.uid === field.uid
+                                  ? { ...item, storage: event.target.value as StorageTarget }
+                                  : item,
+                              ),
+                            }))
+                          }
+                          className={inputClass}
+                          disabled={!editable}
+                        >
+                          <option value="custom-field">Custom Field</option>
+                          <option value="metadata">Metadaten</option>
+                          <option value="execution">Ausführung</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="mb-0.5 grid size-9 shrink-0 place-items-center rounded-lg text-danger hover:bg-danger-soft"
+                          disabled={!editable}
+                          onClick={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              extractedFields: current.extractedFields.filter((item) => item.uid !== field.uid),
+                            }))
+                          }
+                          aria-label="QR-Feld entfernen"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                      {field.extraction.mode === "regex" ? (
+                        <div className="grid gap-2 sm:col-span-2 sm:grid-cols-[100px_140px_auto] lg:col-span-5">
+                          <label className={labelClass}>
+                            Flags
+                            <input
+                              value={field.extraction.flags}
+                              onChange={(event) =>
+                                setDraft((current) => ({
+                                  ...current,
+                                  extractedFields: current.extractedFields.map((item) =>
+                                    item.uid === field.uid
+                                      ? {
+                                          ...item,
+                                          extraction: {
+                                            ...item.extraction,
+                                            flags: event.target.value,
+                                          },
+                                        }
+                                      : item,
+                                  ),
+                                }))
+                              }
+                              className={cn(inputClass, "font-mono")}
+                              disabled={!editable}
+                            />
+                          </label>
+                          <label className={labelClass}>
+                            Capture Group
+                            <input
+                              value={field.extraction.group}
+                              onChange={(event) =>
+                                setDraft((current) => ({
+                                  ...current,
+                                  extractedFields: current.extractedFields.map((item) =>
+                                    item.uid === field.uid
+                                      ? {
+                                          ...item,
+                                          extraction: {
+                                            ...item.extraction,
+                                            group: event.target.value,
+                                          },
+                                        }
+                                      : item,
+                                  ),
+                                }))
+                              }
+                              className={cn(inputClass, "font-mono")}
+                              disabled={!editable}
+                            />
+                          </label>
+                          <div className="flex items-end">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={!editable || !selectedSampleValue}
+                              onClick={() => applySelectionRegex(field.uid)}
+                            >
+                              {t("workflows.regexStudio.useSelectionForField")}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </FlowStep>
 
             <FlowStep
@@ -1384,6 +2237,11 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                         {t("workflows.steps.inputs.propertyKey")}
                         <input
                           value={field.key}
+                          list={
+                            field.storage === "custom-field"
+                              ? "stock-unit-custom-field-keys"
+                              : undefined
+                          }
                           onChange={(event) => updateInput(field.uid, { key: event.target.value })}
                           className={inputClass}
                           placeholder={t("workflows.steps.inputs.propertyKeyPlaceholder")}
@@ -1401,6 +2259,64 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                         />
                       </label>
                     </div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                      <label className={labelClass}>
+                        Eingabetyp
+                        <select
+                          value={field.type}
+                          onChange={(event) => {
+                            const type = event.target.value as InputType;
+                            updateInput(field.uid, {
+                              type,
+                              ...(type === "media" || type === "file"
+                                ? { storage: "execution" }
+                                : {}),
+                            });
+                          }}
+                          className={inputClass}
+                          disabled={!editable}
+                        >
+                          <option value="text">Text</option>
+                          <option value="textarea">Mehrzeiliger Text</option>
+                          <option value="number">Zahl</option>
+                          <option value="checkbox">Checkbox</option>
+                          <option value="select">Select</option>
+                          <option value="radio">Radio</option>
+                          <option value="media">Foto / Video</option>
+                          <option value="file">Datei / PDF</option>
+                        </select>
+                      </label>
+                      <label className={labelClass}>
+                        Speicherziel
+                        <select
+                          value={field.storage}
+                          onChange={(event) =>
+                            updateInput(field.uid, {
+                              storage: event.target.value as StorageTarget,
+                            })
+                          }
+                          className={inputClass}
+                          disabled={
+                            !editable || field.type === "media" || field.type === "file"
+                          }
+                        >
+                          <option value="custom-field">Custom Field</option>
+                          <option value="metadata">Metadaten</option>
+                          <option value="execution">Nur Ausführung</option>
+                        </select>
+                      </label>
+                      <label className={labelClass}>
+                        Platzhalter
+                        <input
+                          value={field.placeholder}
+                          onChange={(event) =>
+                            updateInput(field.uid, { placeholder: event.target.value })
+                          }
+                          className={inputClass}
+                          disabled={!editable}
+                        />
+                      </label>
+                    </div>
                     <label className="mt-3 flex items-center gap-2 text-[11px] font-medium text-muted-strong">
                       <input
                         type="checkbox"
@@ -1412,6 +2328,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                       {t("workflows.steps.inputs.required")}
                     </label>
 
+                    {field.type === "select" || field.type === "radio" ? (
                     <div className="mt-4 border-t border-border pt-3">
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">{t("workflows.steps.inputs.options")}</p>
@@ -1506,6 +2423,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                         ))}
                       </div>
                     </div>
+                    ) : null}
                   </div>
                 ))}
 
@@ -1531,6 +2449,9 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                               value: integer.format(current.inputFields.length + 1),
                             }),
                             required: false,
+                            type: "text",
+                            storage: "custom-field",
+                            placeholder: "",
                             options: [
                               {
                                 uid: localId("option"),
@@ -1561,40 +2482,133 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
               last
             >
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-border bg-surface-subtle p-3.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-semibold text-muted-strong">{t("workflows.steps.actions.createMissing")}</p>
-                      <p className="mt-1 text-[10px] leading-4 text-muted">{t("workflows.steps.actions.createMissingDescription")}</p>
-                    </div>
-                    <Toggle
-                      checked={draft.createMissingUnit}
-                      onChange={(createMissingUnit) => setDraft((current) => ({ ...current, createMissingUnit }))}
-                      disabled={!editable}
-                      label={t("workflows.steps.actions.createMissingAria")}
-                    />
-                  </div>
-                </div>
                 <label className={labelClass}>
-                  {t("workflows.steps.actions.status")}
+                  Hauptaktion
                   <select
-                    value={draft.unitStatus ?? ""}
-                    onChange={(event) =>
+                    value={draft.operation.type}
+                    onChange={(event) => {
+                      const type = event.target.value as Operation["type"];
                       setDraft((current) => ({
                         ...current,
-                        unitStatus: (event.target.value || null) as UnitStatus | null,
-                      }))
-                    }
+                        ...(type === "stock-adjustment"
+                          ? {
+                              identifierStorage: "execution" as const,
+                              extractedFields: current.extractedFields.map((field) => ({
+                                ...field,
+                                storage: "execution" as const,
+                              })),
+                              fixedProperties: current.fixedProperties.map((property) => ({
+                                ...property,
+                                storage: "execution" as const,
+                              })),
+                              inputFields: current.inputFields.map((field) => ({
+                                ...field,
+                                storage: "execution" as const,
+                              })),
+                            }
+                          : {}),
+                        operation:
+                          type === "stock-adjustment"
+                            ? { type, delta: 5 }
+                            : type === "assembly-build"
+                              ? { type, quantity: 1 }
+                              : { type: "unit" },
+                      }));
+                    }}
                     className={inputClass}
                     disabled={!editable}
                   >
-                    <option value="">{t("workflows.steps.actions.keepStatus")}</option>
-                    {unitStatuses.map((status) => (
-                      <option key={status} value={status}>{t(`statuses.${status}`)}</option>
-                    ))}
+                    <option value="assembly-build">Baugruppe fertigstellen</option>
+                    <option value="stock-adjustment">Bestand ein-/ausbuchen</option>
+                    <option value="unit">Einheit anlegen/aktualisieren</option>
                   </select>
                 </label>
+                {draft.operation.type === "stock-adjustment" ? (
+                  <label className={labelClass}>
+                    Bestandsänderung
+                    <input
+                      type="number"
+                      value={draft.operation.delta}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          operation: {
+                            type: "stock-adjustment",
+                            delta: Number(event.target.value),
+                          },
+                        }))
+                      }
+                      className={inputClass}
+                      disabled={!editable}
+                    />
+                    <span className="mt-1 block text-[10px] text-muted">
+                      Positiv zum Einbuchen, negativ zum Ausbuchen – z. B. +5.
+                    </span>
+                  </label>
+                ) : draft.operation.type === "assembly-build" ? (
+                  <label className={labelClass}>
+                    Fertige Menge
+                    <input
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={draft.operation.quantity}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          operation: {
+                            type: "assembly-build",
+                            quantity: Number(event.target.value),
+                          },
+                        }))
+                      }
+                      className={inputClass}
+                      disabled={!editable}
+                    />
+                    <span className="mt-1 block text-[10px] text-muted">
+                      Die Stückliste wird automatisch verbraucht.
+                    </span>
+                  </label>
+                ) : null}
               </div>
+
+              {draft.operation.type === "unit" ? (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-border bg-surface-subtle p-3.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold text-muted-strong">{t("workflows.steps.actions.createMissing")}</p>
+                        <p className="mt-1 text-[10px] leading-4 text-muted">{t("workflows.steps.actions.createMissingDescription")}</p>
+                      </div>
+                      <Toggle
+                        checked={draft.createMissingUnit}
+                        onChange={(createMissingUnit) => setDraft((current) => ({ ...current, createMissingUnit }))}
+                        disabled={!editable}
+                        label={t("workflows.steps.actions.createMissingAria")}
+                      />
+                    </div>
+                  </div>
+                  <label className={labelClass}>
+                    {t("workflows.steps.actions.status")}
+                    <select
+                      value={draft.unitStatus ?? ""}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          unitStatus: (event.target.value || null) as UnitStatus | null,
+                        }))
+                      }
+                      className={inputClass}
+                      disabled={!editable}
+                    >
+                      <option value="">{t("workflows.steps.actions.keepStatus")}</option>
+                      {unitStatuses.map((status) => (
+                        <option key={status} value={status}>{t(`statuses.${status}`)}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : null}
 
               <div className="mt-4 border-t border-border pt-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
@@ -1618,6 +2632,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                                 value: integer.format(current.fixedProperties.length + 1),
                               }),
                               value: t("workflows.steps.actions.defaultValue"),
+                              storage: "metadata",
                             },
                           ],
                         }))
@@ -1632,11 +2647,16 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                 <div className="space-y-2">
                   {draft.fixedProperties.map((property) => (
                     <div key={property.uid} className="rounded-xl border border-border bg-surface-subtle p-3">
-                      <div className="grid gap-2 sm:grid-cols-3">
+                      <div className="grid gap-2 sm:grid-cols-4">
                         <label className={labelClass}>
                           {t("workflows.steps.actions.key")}
                           <input
                             value={property.key}
+                            list={
+                              property.storage === "custom-field"
+                                ? "stock-unit-custom-field-keys"
+                                : undefined
+                            }
                             onChange={(event) => updateFixedProperty(property.uid, "key", event.target.value)}
                             className={inputClass}
                             placeholder={t("workflows.steps.actions.keyPlaceholder")}
@@ -1662,6 +2682,25 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                             placeholder={t("workflows.steps.actions.storedValuePlaceholder")}
                             disabled={!editable}
                           />
+                        </label>
+                        <label className={labelClass}>
+                          Speicherziel
+                          <select
+                            value={property.storage}
+                            onChange={(event) =>
+                              updateFixedProperty(
+                                property.uid,
+                                "storage",
+                                event.target.value,
+                              )
+                            }
+                            className={inputClass}
+                            disabled={!editable}
+                          >
+                            <option value="custom-field">Custom Field</option>
+                            <option value="metadata">Metadaten</option>
+                            <option value="execution">Ausführung</option>
+                          </select>
                         </label>
                       </div>
                       <div className="mt-2.5 flex items-center justify-between gap-3">
@@ -1692,6 +2731,39 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-[11px] text-muted">{t("workflows.steps.actions.none")}</p>
                   ) : null}
                 </div>
+              </div>
+              <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border bg-surface-subtle p-3.5 sm:flex-row sm:items-center">
+                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
+                  <Webhook className="size-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold text-muted-strong">
+                    Webhook nach erfolgreicher Ausführung
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted">
+                    Sendet ein signiertes Ereignis an abonnierte Integrations-Webhooks.
+                  </p>
+                </div>
+                <input
+                  aria-label="Webhook-Ereignisname"
+                  value={draft.webhookEventName}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      webhookEventName: event.target.value,
+                    }))
+                  }
+                  className={cn(inputClass, "mt-0 sm:w-64")}
+                  disabled={!editable || !draft.triggerWebhook}
+                />
+                <Toggle
+                  checked={draft.triggerWebhook}
+                  onChange={(triggerWebhook) =>
+                    setDraft((current) => ({ ...current, triggerWebhook }))
+                  }
+                  disabled={!editable}
+                  label="Webhook auslösen"
+                />
               </div>
             </FlowStep>
           </div>
@@ -1726,16 +2798,49 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     {draft.inputFields.map((field) => (
                       <label key={field.uid} className={labelClass}>
                         {field.label || field.key || t("workflows.preview.inputFallback")}{field.required ? " *" : ""}
-                        <select
-                          value={previewInputs[field.uid] ?? ""}
-                          onChange={(event) => setPreviewInputs((current) => ({ ...current, [field.uid]: event.target.value }))}
-                          className={inputClass}
-                          disabled={interactionBusy}
-                        >
-                          {field.options.map((option) => (
-                            <option key={option.uid} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
+                        {field.type === "select" || field.type === "radio" ? (
+                          <select
+                            value={previewInputs[field.uid] ?? ""}
+                            onChange={(event) => setPreviewInputs((current) => ({ ...current, [field.uid]: event.target.value }))}
+                            className={inputClass}
+                            disabled={interactionBusy}
+                          >
+                            <option value="">—</option>
+                            {field.options.map((option) => (
+                              <option key={option.uid} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        ) : field.type === "checkbox" ? (
+                          <input
+                            type="checkbox"
+                            checked={previewInputs[field.uid] === "true"}
+                            onChange={(event) =>
+                              setPreviewInputs((current) => ({
+                                ...current,
+                                [field.uid]: String(event.target.checked),
+                              }))
+                            }
+                            className="mt-3 size-4 accent-brand-solid"
+                            disabled={interactionBusy}
+                          />
+                        ) : field.type === "media" || field.type === "file" ? (
+                          <input
+                            type="file"
+                            multiple
+                            accept={field.type === "media" ? "image/*,video/*" : "application/pdf,image/*"}
+                            className={cn(inputClass, "py-2")}
+                            disabled={interactionBusy}
+                          />
+                        ) : (
+                          <input
+                            type={field.type === "number" ? "number" : "text"}
+                            value={previewInputs[field.uid] ?? ""}
+                            placeholder={field.placeholder}
+                            onChange={(event) => setPreviewInputs((current) => ({ ...current, [field.uid]: event.target.value }))}
+                            className={inputClass}
+                            disabled={interactionBusy}
+                          />
+                        )}
                       </label>
                     ))}
                   </div>
@@ -1765,9 +2870,13 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                     <strong className="text-right font-semibold text-muted-strong">{selectedResource?.name ?? t("workflows.preview.notSelected")}</strong>
                   </div>
                   <div className="flex items-start justify-between gap-3">
-                    <span className="text-muted">{t("workflows.preview.unit")}</span>
+                    <span className="text-muted">Aktion</span>
                     <strong className="text-right font-semibold text-muted-strong">
-                      {t(draft.createMissingUnit ? "workflows.preview.findOrCreate" : "workflows.preview.findExisting")}
+                      {draft.operation.type === "stock-adjustment"
+                        ? `${draft.operation.delta > 0 ? "+" : ""}${draft.operation.delta} Bestand`
+                        : draft.operation.type === "assembly-build"
+                          ? `${draft.operation.quantity} × Baugruppe fertigstellen`
+                          : t(draft.createMissingUnit ? "workflows.preview.findOrCreate" : "workflows.preview.findExisting")}
                     </strong>
                   </div>
                   {draft.fixedProperties.map((property) => (
@@ -1783,7 +2892,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                         <span className="text-muted">{field.label || field.key}</span>
                         <strong className="inline-flex items-center gap-1.5 text-right font-semibold text-muted-strong">
                           {option?.color ? <span className="size-2.5 rounded-full border border-border-strong" style={{ backgroundColor: option.color }} /> : null}
-                          {option?.label ?? t("workflows.preview.notSelected")}
+                          {option?.label ?? previewInputs[field.uid] ?? t("workflows.preview.notSelected")}
                         </strong>
                       </div>
                     );

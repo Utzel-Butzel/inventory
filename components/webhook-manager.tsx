@@ -30,7 +30,8 @@ type WebhookEventType =
   | "inventory.resource.updated"
   | "inventory.resource.deleted"
   | "inventory.resource.merged"
-  | "inventory.stock.movement.created";
+  | "inventory.stock.movement.created"
+  | "inventory.action.executed";
 
 type WebhookEndpoint = {
   id: string;
@@ -83,6 +84,7 @@ const eventTypes: WebhookEventType[] = [
   "inventory.resource.deleted",
   "inventory.resource.merged",
   "inventory.stock.movement.created",
+  "inventory.action.executed",
 ];
 
 const emptyDraft: WebhookDraft = {

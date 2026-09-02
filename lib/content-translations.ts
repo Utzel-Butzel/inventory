@@ -26,10 +26,12 @@ import {
   type TranslationLanguageRecord,
 } from "@/db/schema";
 import { translateInventoryContent } from "@/lib/ai";
+import { aiUsageEstimate } from "@/lib/ai-billing";
 import {
   consumePaidAiRateLimit,
   type PaidAiRateLimitResult,
 } from "@/lib/ai-rate-limit";
+import { trackAiUsage } from "@/lib/ai-usage";
 import { listCustomFieldDefinitions } from "@/lib/custom-fields";
 import { db } from "@/lib/db";
 import { organizationAllowsWorkerSideEffects } from "@/lib/organization-read-only";
@@ -1295,17 +1297,28 @@ async function processTranslationJob(job: ResourceTranslationJobRecord) {
       if (!(await translationOrganizationAllowsWork(job.organizationId))) {
         return "read-only" as const;
       }
-      const result = await translateInventoryContent({
-        sourceLanguageCode: sourceLanguage.code,
-        sourceLanguageLabel: sourceLanguage.label,
-        context: safeInventoryTranslationContext(resource, definitions),
-        target: {
+      const result = await trackAiUsage({
+        organizationId: job.organizationId,
+        estimate: aiUsageEstimate({ action: "translation" }),
+        actor: { subject: job.requestedBy, name: job.requestedBy },
+        resourceId: job.resourceId,
+        metadata: {
           languageCode: language.code,
-          languageLabel: language.label,
-          instructions: language.instructions,
-          fields: aiFields,
+          fieldCount: Object.keys(aiFields).length,
+          mode: job.mode,
         },
-        idempotencyKey: job.requestId,
+        run: () => translateInventoryContent({
+          sourceLanguageCode: sourceLanguage.code,
+          sourceLanguageLabel: sourceLanguage.label,
+          context: safeInventoryTranslationContext(resource, definitions),
+          target: {
+            languageCode: language.code,
+            languageLabel: language.label,
+            instructions: language.instructions,
+            fields: aiFields,
+          },
+          idempotencyKey: job.requestId,
+        }),
       });
       Object.assign(output, result.translations);
       model = result.model;

@@ -159,6 +159,95 @@ test("merges repeated resources on the same side while retaining each connection
   assert.equal(model.connectionCount, 2);
 });
 
+test("expands BOM parents from a component without duplicating the same BOM edge", () => {
+  const component = item("component", "Display");
+  const displayModule = item("module", "Display module");
+  const product = item("product", "OpenPaper 7");
+  const graph = buildResourceConnectionGraph({
+    root: component,
+    depth: 2,
+    payloads: new Map([
+      [
+        component.id,
+        {
+          family: null,
+          bomComponents: [],
+          bomParents: [
+            {
+              resourceId: displayModule.id,
+              name: displayModule.name,
+              type: displayModule.type,
+              status: displayModule.status,
+              quantityPerAssembly: 1,
+            },
+          ],
+          relations: [],
+        },
+      ],
+      [
+        displayModule.id,
+        {
+          family: null,
+          bomComponents: [
+            {
+              resourceId: component.id,
+              name: component.name,
+              type: component.type,
+              status: component.status,
+              quantityPerAssembly: 1,
+            },
+          ],
+          bomParents: [
+            {
+              resourceId: product.id,
+              name: product.name,
+              type: product.type,
+              status: product.status,
+              quantityPerAssembly: 1,
+            },
+          ],
+          relations: [],
+        },
+      ],
+      [
+        product.id,
+        {
+          family: null,
+          bomComponents: [
+            {
+              resourceId: displayModule.id,
+              name: displayModule.name,
+              type: displayModule.type,
+              status: displayModule.status,
+              quantityPerAssembly: 1,
+            },
+          ],
+          bomParents: [],
+          relations: [],
+        },
+      ],
+    ]),
+  });
+
+  assert.deepEqual(
+    graph.nodes.map((node) => node.resource.id),
+    [product.id, displayModule.id, component.id],
+  );
+  assert.equal(graph.connectionCount, 2);
+  assert.equal(graph.edges.length, 2);
+  const moduleEdge = graph.edges.find((edge) =>
+    [edge.firstResourceId, edge.secondResourceId].includes(displayModule.id),
+  );
+  assert.ok(moduleEdge);
+  assert.equal(moduleEdge.connections.length, 1);
+  assert.equal(moduleEdge.connections[0].fromResourceId, component.id);
+  assert.equal(moduleEdge.connections[0].toResourceId, displayModule.id);
+  assert.deepEqual(moduleEdge.connections[0].descriptor, {
+    type: "assembly",
+    quantity: 1,
+  });
+});
+
 test("adds a visual dashed rail between adjacent primary-item variants", () => {
   const primary = item("primary", "Primary");
   const first = item("first", "Blue variant");
@@ -556,6 +645,7 @@ test("the detail-page connection flow opens by default and owns every connection
   assert.match(component, /\/relations`/);
   assert.match(component, /\/family`/);
   assert.match(component, /\/bom`/);
+  assert.match(component, /\/bom-parents`/);
   assert.match(component, /Promise\.allSettled/);
   assert.match(component, /OrganizationLink as Link/);
   assert.match(component, /DEPTH_OPTIONS = \[1, 2, 3, 4, 5, 6, 7\]/);
@@ -588,6 +678,35 @@ test("the detail-page connection flow opens by default and owns every connection
   assert.match(component, /media=\{cover\}/);
   assert.match(component, /coverSnapshot\.get/);
   assert.doesNotMatch(component, /iconX|iconY/);
+});
+
+test("loads reverse BOM parents with resource-level access control", async () => {
+  const [route, assemblies] = await Promise.all([
+    readFile(
+      new URL(
+        "../app/api/v1/resources/[id]/bom-parents/route.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(new URL("../lib/assemblies.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(route, /requireResourcePermission[\s\S]*"inventory\.read"/);
+  assert.match(route, /listBomParents/);
+  assert.match(route, /authorizeParent:[\s\S]*canAccessResource/);
+  assert.match(
+    assemblies,
+    /export async function listBomParents[\s\S]*accessMode: "read only"/,
+  );
+  assert.match(
+    assemblies,
+    /eq\(bomLines\.componentResourceId, componentResourceId\)/,
+  );
+  assert.match(
+    assemblies,
+    /matchingOverrideRows[\s\S]*variantsByPrimary[\s\S]*origin: "inherited"/,
+  );
 });
 
 test("loads visible item covers in one access-controlled request", async () => {

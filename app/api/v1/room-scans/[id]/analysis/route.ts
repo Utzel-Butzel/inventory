@@ -4,6 +4,12 @@ import sharp from "sharp";
 import { z } from "zod";
 
 import { analyzeRoomImages } from "@/lib/ai";
+import { aiUsageEstimate } from "@/lib/ai-billing";
+import {
+  AiMonthlyBudgetExceededError,
+  aiBudgetErrorBody,
+  trackAiUsage,
+} from "@/lib/ai-usage";
 import {
   consumePaidAiRateLimit,
   paidAiRateLimitHeaders,
@@ -93,7 +99,7 @@ async function authorizeRoomScan(
   }
   const permission = await requireResourcePermission(
     request,
-    options.requireAi ? "ai.use" : "spatial.manage",
+    options.requireAi ? "ai.rooms" : "spatial.manage",
     scan.roomResourceId,
   );
   if (permission.response) return { response: permission.response } as const;
@@ -195,10 +201,17 @@ export async function POST(request: Request, context: Context) {
       model,
       analyzedKeyframeIds,
       calibratedKeyframeIds,
-    } = await analyzeRoomImages({
-      roomName: authorization.resource.name,
-      images,
-      scene: authorization.scan.scene,
+    } = await trackAiUsage({
+      organizationId: authorization.identity.organizationId,
+      estimate: aiUsageEstimate({ action: "room_analysis" }),
+      actor: authorization.identity,
+      resourceId: authorization.resource.id,
+      metadata: { scanId: id, imageCount: images.length },
+      run: () => analyzeRoomImages({
+        roomName: authorization.resource.name,
+        images,
+        scene: authorization.scan.scene,
+      }),
     });
     const analysis = buildRoomAiAnalysis({
       detection: result,
@@ -224,6 +237,12 @@ export async function POST(request: Request, context: Context) {
       { headers: paidAiRateLimitHeaders(limit) },
     );
   } catch (error) {
+    if (error instanceof AiMonthlyBudgetExceededError) {
+      return Response.json(aiBudgetErrorBody(error), {
+        status: 429,
+        headers: paidAiRateLimitHeaders(limit),
+      });
+    }
     console.error("Room AI analysis failed.", error);
     return Response.json(
       {

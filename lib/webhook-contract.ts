@@ -9,6 +9,7 @@ export const WEBHOOK_EVENT_TYPES = [
   "inventory.resource.deleted",
   "inventory.resource.merged",
   "inventory.stock.movement.created",
+  "inventory.action.executed",
 ] as const;
 
 export type WebhookSubscriptionEventType = (typeof WEBHOOK_EVENT_TYPES)[number];

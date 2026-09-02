@@ -1,4 +1,8 @@
-import { getPublicSharedMedia } from "@/lib/public-shares";
+import { getActivePublicShare, getPublicSharedMedia } from "@/lib/public-shares";
+import {
+  publicShareSessionIsValid,
+  publicShareSessionTokenFromRequest,
+} from "@/lib/public-share-session";
 import { getOrCreateImageVariant } from "@/lib/image-variants";
 import { parseMediaImageVariant } from "@/lib/media-image";
 import { isInlinePublicMediaType } from "@/lib/resource-media-contract";
@@ -26,6 +30,17 @@ const unavailable = () =>
 
 export async function GET(request: Request, context: Context) {
   const { shareId, mediaId } = await context.params;
+  const share = await getActivePublicShare(shareId);
+  if (
+    !share ||
+    (share.accessMode === "stock" &&
+      !publicShareSessionIsValid(
+        share,
+        publicShareSessionTokenFromRequest(request, shareId),
+      ))
+  ) {
+    return unavailable();
+  }
   const item = await getPublicSharedMedia(shareId, mediaId);
   if (!item) return unavailable();
   try {

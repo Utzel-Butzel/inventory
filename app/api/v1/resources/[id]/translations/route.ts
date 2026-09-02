@@ -36,7 +36,7 @@ export async function GET(request: Request, context: Context) {
 
 export async function POST(request: Request, context: Context) {
   const { id } = await context.params;
-  const authorization = await requireResourcePermission(request, "ai.use", id);
+  const authorization = await requireResourcePermission(request, "ai.translate", id);
   if (authorization.response) return authorization.response;
   let payload: unknown = {};
   try {

@@ -27,6 +27,36 @@ test("accepts an unfiltered or filtered inventory share", () => {
   );
 });
 
+test("stock-tool shares require a password and remain inventory-scoped", () => {
+  assert.equal(
+    publicShareCreateSchema.safeParse({
+      scope: "inventory",
+      name: "Workshop stock terminal",
+      accessMode: "stock",
+      password: "correct-horse-battery-staple",
+    }).success,
+    true,
+  );
+  assert.equal(
+    publicShareCreateSchema.safeParse({
+      scope: "inventory",
+      name: "Unprotected terminal",
+      accessMode: "stock",
+    }).success,
+    false,
+  );
+  assert.equal(
+    publicShareCreateSchema.safeParse({
+      scope: "item",
+      name: "Writable item",
+      resourceId: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+      accessMode: "stock",
+      password: "correct-horse-battery-staple",
+    }).success,
+    false,
+  );
+});
+
 test("accepts item shares and rejects cross-scope properties", () => {
   const resourceId = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
   assert.equal(

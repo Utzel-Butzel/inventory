@@ -2,8 +2,8 @@
   "metadata": {
     "scanTitle": "Bestand scannen | Inventory",
     "scanDescription": "QR-Codes und Barcodes scannen und konfigurierte Eigenschaften auf Bestandseinheiten anwenden.",
-    "workflowsTitle": "Scan-Workflows | Inventory",
-    "workflowsDescription": "Code-gesteuerte Bestands-Workflows konfigurieren."
+    "workflowsTitle": "Action Flows | Inventory",
+    "workflowsDescription": "QR- und Barcode-gesteuerte Bestandsaktionen visuell konfigurieren."
   },
   "statuses": {
     "available": "Verfügbar",
@@ -193,6 +193,7 @@
     "validation": {
       "name": "Gib diesem Workflow einen Namen.",
       "resource": "Wähle einen serialisierten Eintrag aus.",
+      "codeType": "Wähle mindestens eine zulässige Code-Art aus.",
       "identifier": "Lege einen Eigenschaftsschlüssel für die Kennung fest.",
       "propertyKey": "Eigenschaftsschlüssel dürfen nur Buchstaben, Zahlen, Unterstriche, Bindestriche und Punkte enthalten.",
       "queryParameter": "Lege den zu extrahierenden URL-Abfrageparameter fest.",
@@ -200,6 +201,7 @@
       "sourceOriginInvalid": "Der Quellursprung muss ein gültiger URL-Ursprung sein.",
       "sourcePath": "Der Quellpfad muss mit / beginnen und darf weder Abfrage noch Fragment enthalten.",
       "prefix": "Lege das Präfix fest, das aus Scans entfernt werden soll.",
+      "regexGroup": "Lege eine gültige nummerierte oder benannte Capture Group fest.",
       "fixedProperty": "Jede feste Eigenschaft benötigt Schlüssel, Bezeichnung und Wert.",
       "uniqueKeys": "Kennung, feste Eigenschaften und Scan-Eingaben müssen jeweils eindeutige Schlüssel besitzen.",
       "input": "Jede Scan-Eingabe benötigt einen Schlüssel und eine Bezeichnung.",
@@ -237,10 +239,25 @@
       "paused": "Workflow pausiert.",
       "deleted": "Workflow gelöscht."
     },
+    "regexStudio": {
+      "title": "Interaktive Extraktion",
+      "description": "Markiere den gewünschten Wert im Beispielcode. Daraus kann direkt oder mit KI eine geprüfte Regex-Regel entstehen.",
+      "manual": "Manuelle Eingabe",
+      "sample": "Beispielcode",
+      "instructionPlaceholder": "Optional: z. B. Seriennummer nach SN= extrahieren",
+      "useSelection": "Auswahl als Regex",
+      "useSelectionForField": "Auswahl für dieses Feld",
+      "generate": "Mit KI generieren",
+      "selected": "Markierter Beispielwert",
+      "selectValue": "Markiere zuerst den zu extrahierenden Wert im Beispielcode.",
+      "selectOrDescribe": "Markiere einen Beispielwert oder beschreibe die gewünschte Extraktion.",
+      "selectionApplied": "Die Auswahl wurde als Regex-Regel übernommen.",
+      "aiError": "Die KI-Regel konnte nicht erstellt werden."
+    },
     "header": {
-      "eyebrow": "Scan-Workflows",
-      "title": "Scan-Workflow erstellen",
-      "description": "Lege fest, wie ein gescannter Code ausgewertet und auf eine Bestandseinheit angewendet wird.",
+      "eyebrow": "Action-Editor",
+      "title": "Action Flows erstellen",
+      "description": "Verbinde QR-Codes und Barcodes mit Datenfeldern, Montage, Bestandsbuchungen, Dateien und Webhooks.",
       "readOnly": "Schreibgeschützt",
       "refresh": "Aktualisieren",
       "newTemplate": "Neu aus Vorlage"
@@ -289,7 +306,11 @@
         "description": "Dieser Workflow startet, wenn eine Kamera oder ein Handscanner einen Code liest.",
         "event": "Code gescannt",
         "eventDescription": "Dekodierten Text an diesen Workflow übergeben",
-        "badge": "Scan-Auslöser"
+        "badge": "Scan-Auslöser",
+        "codeTypes": "Zulässige Code-Arten",
+        "codeTypesDescription": "Kamera und Handscanner akzeptieren nur die hier aktivierten Symbologien.",
+        "scanExample": "Beispielcode scannen",
+        "closeExampleScanner": "Scanner schließen"
       },
       "extract": {
         "title": "EPD-Nummer extrahieren",
@@ -297,7 +318,8 @@
         "modes": {
           "full": "Vollständiger Wert",
           "url-query": "URL-Parameter",
-          "prefix": "Präfix entfernen"
+          "prefix": "Präfix entfernen",
+          "regex": "Regex"
         },
       "queryParameter": "Abfrageparameter",
       "queryParameterPlaceholder": "d",
@@ -308,7 +330,10 @@
       "identifierKey": "Eigenschaftsschlüssel der Kennung",
       "identifierKeyPlaceholder": "epdNumber",
       "prefix": "Zu entfernendes Präfix",
-      "prefixPlaceholder": "EPD-"
+      "prefixPlaceholder": "EPD-",
+      "regexPattern": "Regulärer Ausdruck",
+      "regexFlags": "Flags",
+      "regexGroup": "Capture Group"
       },
       "target": {
         "title": "Zieleintrag auswählen",

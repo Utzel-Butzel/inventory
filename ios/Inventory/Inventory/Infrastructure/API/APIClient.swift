@@ -533,6 +533,41 @@ public final class APIClient: Sendable {
         return try await execute(request)
     }
 
+    public func scanActionWorkflows() async throws -> ScanActionWorkflowListResponse {
+        let url = try makeAPIURL(path: ["stock", "scan-workflows"])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func resolveScanAction(
+        workflowID: UUID,
+        code: String,
+        codeType: String? = nil
+    ) async throws -> ScanActionResolution {
+        let normalizedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedCode.isEmpty else {
+            throw APIClientError.invalidRequest("Der gescannte Code ist leer.")
+        }
+        let url = try makeAPIURL(path: ["stock", "scans", "resolve"])
+        let body = ScanActionResolveRequest(
+            workflowId: workflowID,
+            code: normalizedCode,
+            codeType: codeType
+        )
+        let request = try await jsonRequest(url: url, method: "POST", body: body)
+        return try await execute(request)
+    }
+
+    public func executeScanAction(
+        _ body: ScanActionExecuteRequest,
+        idempotencyKey: UUID
+    ) async throws -> ScanActionExecutionResponse {
+        let url = try makeAPIURL(path: ["stock", "scans", "execute"])
+        var request = try await jsonRequest(url: url, method: "POST", body: body)
+        setIdempotencyKey(idempotencyKey, on: &request)
+        return try await execute(request)
+    }
+
     public func uploadMedia(
         resourceID: UUID,
         files: [MediaUploadFile],

@@ -4,6 +4,11 @@ import Foundation
 import ImageIO
 import UIKit
 
+struct DetectedCameraCode: Equatable, Sendable {
+    let value: String
+    let type: String?
+}
+
 final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     static let photoAspectRatio: CGFloat = 3.0 / 4.0
 
@@ -72,6 +77,7 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
     var onCode: ((String) -> Void)?
+    var onDetectedCode: ((DetectedCameraCode) -> Void)?
     var onPhoto: ((Result<Data, PhotoCaptureError>) -> Void)?
 
     private let sessionQueue = DispatchQueue(
@@ -289,7 +295,9 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
                 session.addOutput(metadataOutput)
                 metadataOutput.setMetadataObjectsDelegate(self, queue: metadataQueue)
                 let requested: [AVMetadataObject.ObjectType] = [
-                    .qr, .ean8, .ean13, .upce, .code128, .dataMatrix, .pdf417, .aztec,
+                    .qr, .ean8, .ean13, .upce, .code128, .code93, .code39,
+                    .code39Mod43, .codabar, .interleaved2of5, .itf14,
+                    .dataMatrix, .pdf417, .aztec,
                 ]
                 metadataOutput.metadataObjectTypes = requested.filter {
                     metadataOutput.availableMetadataObjectTypes.contains($0)
@@ -580,6 +588,28 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
 }
 
 extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
+    private static func normalizedCodeType(
+        _ type: AVMetadataObject.ObjectType,
+        value: String
+    ) -> String? {
+        switch type {
+        case .qr: "qr_code"
+        case .dataMatrix: "data_matrix"
+        case .aztec: "aztec"
+        case .pdf417: "pdf417"
+        case .code128: "code_128"
+        case .code93: "code_93"
+        case .code39, .code39Mod43: "code_39"
+        case .codabar: "codabar"
+        // AVFoundation exposes UPC-A as EAN-13 with a leading zero.
+        case .ean13: value.count == 13 && value.hasPrefix("0") ? "upc_a" : "ean_13"
+        case .ean8: "ean_8"
+        case .upce: "upc_e"
+        case .interleaved2of5, .itf14: "itf"
+        default: nil
+        }
+    }
+
     func metadataOutput(
         _ output: AVCaptureMetadataOutput,
         didOutput metadataObjects: [AVMetadataObject],
@@ -597,9 +627,16 @@ extension CameraService: AVCaptureMetadataOutputObjectsDelegate {
             return
         }
         lastScan = (value, now)
+        let codeType = Self.normalizedCodeType(object.type, value: value)
         DispatchQueue.main.async { [weak self] in
             AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
             self?.onCode?(value)
+            self?.onDetectedCode?(
+                DetectedCameraCode(
+                    value: value,
+                    type: codeType
+                )
+            )
         }
     }
 }

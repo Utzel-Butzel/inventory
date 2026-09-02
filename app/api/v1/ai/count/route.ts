@@ -3,7 +3,13 @@ import {
   InventoryCountLocalizationError,
   prepareInventoryCountImage,
 } from "@/lib/ai";
+import { aiUsageEstimate } from "@/lib/ai-billing";
 import { createHash } from "node:crypto";
+import {
+  AiMonthlyBudgetExceededError,
+  aiBudgetErrorBody,
+  trackAiUsage,
+} from "@/lib/ai-usage";
 import {
   consumePaidAiRateLimit,
   paidAiRateLimitHeaders,
@@ -87,7 +93,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 export async function POST(request: Request) {
-  const authorization = await requirePermission(request, "ai.use");
+  const authorization = await requirePermission(request, "ai.count");
   if (authorization.response) return authorization.response;
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
@@ -400,12 +406,23 @@ export async function POST(request: Request) {
   let providerAttempted = false;
   try {
     providerAttempted = true;
-    const outcome = await countInventoryItems({
-      imageDataUrl: preparedImage.dataUrl,
-      imageWidth: preparedImage.width,
-      imageHeight: preparedImage.height,
-      itemHint: parsed.data.itemHint,
-      modelId: countModel.id,
+    const outcome = await trackAiUsage({
+      organizationId: authorization.identity.organizationId,
+      estimate: aiUsageEstimate({
+        action: "photo_count",
+        modelId: countModel.id,
+        model: countModel.model,
+      }),
+      actor: authorization.identity,
+      resourceId: itemId,
+      metadata: { modelId: countModel.id },
+      run: () => countInventoryItems({
+        imageDataUrl: preparedImage.dataUrl,
+        imageWidth: preparedImage.width,
+        imageHeight: preparedImage.height,
+        itemHint: parsed.data.itemHint,
+        modelId: countModel.id,
+      }),
     });
     if (outcome.kind === "processing") {
       const jobToken = createReplicateCountJobToken({
@@ -425,6 +442,18 @@ export async function POST(request: Request) {
     }
     return finish({ ...outcome.result, model: outcome.model }, 200);
   } catch (error) {
+    if (error instanceof AiMonthlyBudgetExceededError) {
+      if (operationId) {
+        await releaseAiOperation(
+          authorization.identity.organizationId,
+          operationId,
+        ).catch(() => undefined);
+      }
+      return json(aiBudgetErrorBody(error), {
+        status: 429,
+        headers: paidAiRateLimitHeaders(limit),
+      });
+    }
     if (error instanceof InventoryCountLocalizationError) {
       if (error.ambiguousProviderCreate) {
         // Do not persist this as a finished response: the provider may already

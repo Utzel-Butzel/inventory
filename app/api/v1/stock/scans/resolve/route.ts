@@ -37,6 +37,7 @@ export async function POST(request: Request) {
         authorization.identity.organizationId,
         parsed.data.workflowId,
         parsed.data.code,
+        parsed.data.codeType,
       ),
     );
   } catch (error) {

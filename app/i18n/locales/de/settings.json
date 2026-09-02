@@ -11,7 +11,12 @@
     "organization": {
       "title": "Organisation",
       "metaDescription": "Die für dein Konto verfügbaren Organisationen verwalten.",
-      "description": "Prüfe deine Organisationen, ändere ihre Namen oder erstelle einen separaten Arbeitsbereich für ein anderes Team oder Inventar."
+      "description": "Prüfe die für dein Konto verfügbaren Organisationen und bearbeite die Arbeitsbereiche, die du verwaltest."
+    },
+    "systemOrganizations": {
+      "title": "Alle Organisationen",
+      "metaDescription": "Alle Organisationen dieser Open-Inventory-Bereitstellung verwalten.",
+      "description": "Prüfe, erstelle und bearbeite Organisationen in dieser Bereitstellung. Diese Seite ist nur für konfigurierte Superadmins verfügbar."
     },
     "access": {
       "title": "Rollen & Zugriff",
@@ -162,6 +167,100 @@
       "load": "Organisationen konnten nicht geladen werden.",
       "create": "Die Organisation konnte nicht erstellt werden.",
       "update": "Die Organisation konnte nicht aktualisiert werden."
+    }
+  },
+  "superadminOrganizations": {
+    "list": {
+      "title": "Alle Organisationen",
+      "description": "Jeder isolierte Arbeitsbereich in dieser Open-Inventory-Bereitstellung.",
+      "count_one": "{{count}} Organisation",
+      "count_other": "{{count}} Organisationen",
+      "readOnly": "Schreibgeschützt",
+      "emptyTitle": "Keine Organisationen verfügbar",
+      "emptyDescription": "Erstelle die erste Organisation für diese Bereitstellung."
+    },
+    "create": {
+      "title": "Organisation erstellen",
+      "description": "Erstelle einen weiteren isolierten Arbeitsbereich in dieser Bereitstellung.",
+      "hint": "Du erhältst eine Administrator-Mitgliedschaft in der neuen Organisation."
+    },
+    "actions": {
+      "refresh": "Organisationen aktualisieren",
+      "retry": "Erneut versuchen"
+    },
+    "notices": {
+      "created": "Organisation „{{name}}“ wurde erstellt.",
+      "updated": "Organisation „{{name}}“ wurde aktualisiert."
+    },
+    "errors": {
+      "loadTitle": "Organisationen konnten nicht geladen werden",
+      "load": "Nicht alle Organisationen konnten geladen werden.",
+      "create": "Die Organisation konnte nicht erstellt werden.",
+      "update": "Die Organisation konnte nicht aktualisiert werden."
+    }
+  },
+  "storageUsage": {
+    "title": "Speichernutzung",
+    "description": "Belegter Dateispeicher dieser Organisation. Enthalten sind Inventarmedien, Raumscan-Dateien und Keyframes; abgeleitete Vorschaubilder werden nicht mitgerechnet.",
+    "summary": {
+      "total": "Gesamt belegt",
+      "inventoryMedia": "Inventarmedien",
+      "roomScans": "Raumscans"
+    },
+    "files_one": "{{count}} Datei",
+    "files_other": "{{count}} Dateien"
+  },
+  "aiUsage": {
+    "title": "KI-Nutzung & Kostenlimit",
+    "description": "Geschätzte Kosten aller bezahlten KI-Aufrufe dieser Organisation. Das Monatslimit wird vor jedem Provider-Aufruf geprüft; laufende und fehlgeschlagene Versuche bleiben berücksichtigt, weil sie berechnet werden können.",
+    "estimated": "Geschätzt",
+    "refresh": "Auswertung aktualisieren",
+    "unlimited": "Unbegrenzt",
+    "summary": {
+      "spent": "Diesen Monat reserviert",
+      "remaining": "Verfügbar",
+      "actions": "KI-Aktionen",
+      "statusHint": "{{running}} laufend · {{failed}} fehlgeschlagen"
+    },
+    "budget": {
+      "label": "Monatliches KI-Limit in USD",
+      "unlimitedPlaceholder": "Leer = unbegrenzt",
+      "hint": "0 deaktiviert bezahlte KI vollständig. Ein leeres Feld hebt das Geldlimit auf; technische Rate-Limits bleiben bestehen.",
+      "save": "Limit speichern",
+      "saving": "Wird gespeichert…",
+      "progress": "{{percent}} % von {{budget}} für den UTC-Kalendermonat reserviert"
+    },
+    "byAction": {
+      "title": "Kosten nach Aktion",
+      "count_one": "{{count}} Aufruf",
+      "count_other": "{{count}} Aufrufe"
+    },
+    "recent": {
+      "title": "Letzte KI-Aufrufe",
+      "description": "Provider, Modell, ausführende Person, Status und reservierter Höchstwert pro Aktion.",
+      "empty": "Noch keine kostenpflichtigen KI-Aufrufe erfasst."
+    },
+    "actions": {
+      "inventory_analysis": "Inventarfotos analysieren",
+      "inventory_research": "Inventar recherchieren",
+      "image_search": "Webbild suchen",
+      "inventory_recognition": "Objekt erkennen",
+      "photo_count": "Objekte im Foto zählen",
+      "image_generation": "Bild erzeugen oder bearbeiten",
+      "translation": "Inhalte übersetzen",
+      "room_analysis": "Raum analysieren",
+      "workflow_extraction": "Scan-Extraktion erzeugen"
+    },
+    "status": {
+      "running": "Läuft",
+      "succeeded": "Abgeschlossen",
+      "failed": "Fehlgeschlagen"
+    },
+    "notices": { "saved": "Das monatliche KI-Limit wurde gespeichert." },
+    "errors": {
+      "load": "Die KI-Auswertung konnte nicht geladen werden.",
+      "save": "Das KI-Limit konnte nicht gespeichert werden.",
+      "budget": "Gib einen gültigen Betrag ab 0 ein oder lasse das Feld leer."
     }
   },
   "notifications": {
@@ -319,6 +418,12 @@
             }
           }
         },
+        "action": {
+          "executed": {
+            "label": "Scan-Aktion ausgeführt",
+            "description": "Ein konfigurierter Action Flow wurde per QR- oder Barcode ausgeführt."
+          }
+        },
         "webhook": {
           "test": {
             "label": "Webhook-Test",
@@ -429,13 +534,28 @@
       "scope": "Was soll freigegeben werden?",
       "scopes": {
         "inventory": "Inventar",
-        "item": "Einzelner Eintrag"
+      "item": "Einzelner Eintrag"
+    },
+    "accessMode": "Zugriffsart",
+    "accessModes": {
+      "view": {
+        "label": "Nur ansehen",
+        "description": "Öffentlicher Katalog ohne Schreibzugriff"
       },
+      "stock": {
+        "label": "Bestandstool",
+        "description": "Passwortgeschütztes Ein- und Ausbuchen"
+      }
+    },
+    "password": "Passwort für das Bestandstool",
+    "passwordPlaceholder": "Mindestens 8 Zeichen",
+    "passwordHint": "Das Passwort wird nur gehasht gespeichert und schützt Katalog, Medien, Scanner und Buchungen.",
       "name": "Linkname",
       "namePlaceholder": "Werkstattmuster",
       "filter": "Filter für benutzerdefiniertes Feld",
       "optional": "· optional",
-      "allInventory": "Gesamtes Inventar · kein Filter",
+    "allInventory": "Gesamtes Inventar · kein Filter",
+    "stockTool": "Bestandstool",
       "filterHint": "Nur Einträge, deren Wert für {{field}} exakt dem folgenden Wert entspricht, sind sichtbar.",
       "item": "Inventareintrag",
       "itemPlaceholder": "Nach Name, SKU, Standort oder benutzerdefiniertem Feld suchen…",
@@ -478,7 +598,8 @@
       "loadItems": "Inventareinträge konnten nicht geladen werden.",
       "nameRequired": "Gib dem Link einen Namen, damit er später leicht zu erkennen ist.",
       "itemRequired": "Wähle den Eintrag aus, den dieser Link freigeben soll.",
-      "filterValueRequired": "Wähle einen Wert für den Filter des benutzerdefinierten Feldes.",
+    "filterValueRequired": "Wähle einen Wert für den Filter des benutzerdefinierten Feldes.",
+    "passwordRequired": "Lege für das Bestandstool ein Passwort mit mindestens 8 Zeichen fest.",
       "create": "Der öffentliche Link konnte nicht erstellt werden.",
       "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Öffne den Link und kopiere ihn stattdessen aus dem Browser.",
       "revoke": "Der öffentliche Link konnte nicht widerrufen werden."
@@ -813,6 +934,10 @@
         "label": "Abläufe",
         "description": "Bestands-, Zuständigkeits-, Zählungs-, Raum- und Einkaufsabläufe."
       },
+      "ai": {
+        "label": "KI-Aktionen",
+        "description": "Kostenpflichtige KI-Funktionen können je Rolle einzeln freigeschaltet werden."
+      },
       "administration": {
         "label": "Verwaltung",
         "description": "Arbeitsbereichsstruktur, Identitäten und Zugangsdaten."
@@ -911,9 +1036,33 @@
         "label": "Etiketten verwalten",
         "description": "Wiederverwendbare Etikettenlayouts erstellen und ändern."
       },
-      "ai_use": {
-        "label": "KI verwenden",
-        "description": "Analyse, Zählung, Übersetzung und Bilderzeugung ausführen."
+      "ai_analyze": {
+        "label": "Inventarfotos analysieren",
+        "description": "Inventarfelder aus gespeicherten Fotos befüllen."
+      },
+      "ai_research": {
+        "label": "Einträge und Bilder recherchieren",
+        "description": "Fehlende Details recherchieren oder ein wiederverwendbares Webbild suchen."
+      },
+      "ai_recognize": {
+        "label": "Objekte erkennen",
+        "description": "Ein Kamerafoto mit vorhandenem Inventar abgleichen."
+      },
+      "ai_count": {
+        "label": "Per Foto zählen",
+        "description": "Sichtbare Objekte mit einem auswählbaren Vision-Modell zählen."
+      },
+      "ai_images": {
+        "label": "Bilder erzeugen",
+        "description": "Katalog- und Titelbilder erstellen oder bearbeiten."
+      },
+      "ai_translate": {
+        "label": "Inhalte übersetzen",
+        "description": "Inventarübersetzungen mit KI erzeugen."
+      },
+      "ai_rooms": {
+        "label": "Räume analysieren",
+        "description": "Oberflächen und Objekte aus Raumscan-Fotos erkennen."
       },
       "settings_inventory_types_manage": {
         "label": "Inventartypen verwalten",

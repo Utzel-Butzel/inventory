@@ -53,6 +53,13 @@ private enum CameraPhotoRequest: Equatable {
     }
 }
 
+private struct PendingActionScan: Identifiable {
+    let id = UUID()
+    let workflow: ScanActionWorkflow
+    let code: String
+    let codeType: String?
+}
+
 struct UnifiedCameraView: View {
     @EnvironmentObject private var state: AppState
     @Environment(\.dismiss) private var dismiss
@@ -80,6 +87,9 @@ struct UnifiedCameraView: View {
     @State private var unmatchedCode: String?
     @State private var showCreateForm = false
     @State private var scannerErrorMessage: String?
+    @State private var scanActionWorkflows: [ScanActionWorkflow] = []
+    @State private var selectedScanActionWorkflowID: UUID?
+    @State private var pendingActionScan: PendingActionScan?
     @State private var lookupTask: Task<Void, Never>?
     @State private var lookupRequestID: UUID?
     @State private var activeCodePurpose: CodePurpose?
@@ -164,6 +174,13 @@ struct UnifiedCameraView: View {
             if let client = state.client {
                 await countModel.loadCountModels(using: client)
                 inventoryTypes = (try? await client.inventoryTypes().types) ?? []
+                scanActionWorkflows = (
+                    try? await client.scanActionWorkflows().workflows.filter(\.enabled)
+                ) ?? []
+                if let selectedScanActionWorkflowID,
+                   !scanActionWorkflows.contains(where: { $0.id == selectedScanActionWorkflowID }) {
+                    self.selectedScanActionWorkflowID = nil
+                }
             }
         }
         .onDisappear(perform: tearDown)
@@ -208,6 +225,14 @@ struct UnifiedCameraView: View {
         }
         .sheet(item: $foundResource, onDismiss: resumeScanningIfNeeded) { resource in
             NavigationStack { ResourceDetailView(resource: resource) }
+        }
+        .sheet(item: $pendingActionScan, onDismiss: resumeScanningIfNeeded) { action in
+            ActionFlowRunView(
+                workflow: action.workflow,
+                code: action.code,
+                codeType: action.codeType
+            )
+                .environmentObject(state)
         }
         .sheet(isPresented: $showCreateForm, onDismiss: resumeScanningIfNeeded) {
             ResourceFormView(
@@ -754,6 +779,27 @@ struct UnifiedCameraView: View {
 
     private var scannerDetails: some View {
         VStack(spacing: 16) {
+            if !scanActionWorkflows.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Scan-Aktion", systemImage: "bolt.fill")
+                        .font(.headline)
+                    Picker("Verhalten beim nächsten Scan", selection: $selectedScanActionWorkflowID) {
+                        Text("Inventarartikel suchen").tag(nil as UUID?)
+                        ForEach(scanActionWorkflows) { workflow in
+                            Text(workflow.name).tag(Optional(workflow.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    if let selectedScanActionWorkflow {
+                        Text(selectedScanActionWorkflow.operation.summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .inventoryCard()
+            }
+
             if let code = unmatchedCode {
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Noch nicht im Inventar", systemImage: "questionmark.app.dashed")
@@ -1690,12 +1736,20 @@ struct UnifiedCameraView: View {
 
     private func configureCamera() {
         camera.onPhoto = { result in handleCapturedPhoto(result) }
-        camera.onCode = { code in
+        camera.onDetectedCode = { detected in
             switch mode {
             case .scan:
-                resolve(code, purpose: .inventoryLookup)
+                resolve(
+                    detected.value,
+                    purpose: .inventoryLookup,
+                    codeType: detected.type
+                )
             case .count where countResource == nil:
-                resolve(code, purpose: .countTarget)
+                resolve(
+                    detected.value,
+                    purpose: .countTarget,
+                    codeType: detected.type
+                )
             case .capture, .recognize, .count:
                 break
             }
@@ -1744,7 +1798,7 @@ struct UnifiedCameraView: View {
         lookupRequestID = nil
         activeCodePurpose = nil
         camera.scanningEnabled = false
-        camera.onCode = nil
+        camera.onDetectedCode = nil
         camera.onPhoto = nil
         if camera.torchEnabled { camera.toggleTorch() }
         camera.stop()
@@ -1828,7 +1882,11 @@ struct UnifiedCameraView: View {
         }
     }
 
-    private func resolve(_ rawCode: String, purpose: CodePurpose) {
+    private func resolve(
+        _ rawCode: String,
+        purpose: CodePurpose,
+        codeType: String? = nil
+    ) {
         let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !code.isEmpty, !isResolvingCode, code != lastCode else { return }
         if purpose == .countTarget, !state.canUseAI {
@@ -1837,6 +1895,21 @@ struct UnifiedCameraView: View {
         }
         guard let client = state.client else {
             scannerErrorMessage = "Keine Serververbindung eingerichtet."
+            return
+        }
+
+        if purpose == .inventoryLookup, let workflow = selectedScanActionWorkflow {
+            lastCode = code
+            manualCode = ""
+            unmatchedCode = nil
+            showCaptureDetails = false
+            camera.scanningEnabled = false
+            camera.stop()
+            pendingActionScan = PendingActionScan(
+                workflow: workflow,
+                code: code,
+                codeType: codeType
+            )
             return
         }
 
@@ -1892,7 +1965,7 @@ struct UnifiedCameraView: View {
     }
 
     private func resumeScanningIfNeeded() {
-        guard foundResource == nil, !showCreateForm else {
+        guard foundResource == nil, pendingActionScan == nil, !showCreateForm else {
             camera.scanningEnabled = false
             camera.stop()
             return
@@ -1901,6 +1974,11 @@ struct UnifiedCameraView: View {
         isResolvingCode = false
         camera.scanningEnabled = shouldScanCodes
         camera.start()
+    }
+
+    private var selectedScanActionWorkflow: ScanActionWorkflow? {
+        guard let selectedScanActionWorkflowID else { return nil }
+        return scanActionWorkflows.first { $0.id == selectedScanActionWorkflowID }
     }
 
     private func openCaptureDetails() {

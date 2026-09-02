@@ -17,15 +17,25 @@ import {
   Warehouse,
 } from "lucide-react";
 import { useT } from "next-i18next/client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CodeScannerCamera } from "@/components/code-scanner-camera";
 import { StockSectionNav } from "@/components/stock-section-nav";
 import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
+import {
+  isScanCodeType,
+  scanCodeTypes,
+  type ScanCodeType,
+} from "@/lib/scan-code-types";
 
 type JsonRecord = Record<string, unknown>;
 type WorkflowRevision = string | number;
 type ScannerPhase = "scan" | "resolving" | "review" | "executing" | "success";
+type ScannerInputValue = string | number | boolean | string[];
+type WorkflowOperation =
+  | { type: "unit" }
+  | { type: "stock-adjustment"; delta: number }
+  | { type: "assembly-build"; quantity: number };
 
 type Workflow = {
   id: string;
@@ -34,6 +44,8 @@ type Workflow = {
   revision: WorkflowRevision;
   enabled: boolean;
   unitStatus: string | null;
+  operation: WorkflowOperation;
+  codeTypes: ScanCodeType[];
 };
 
 type FieldOption = {
@@ -83,7 +95,7 @@ type Resolution = {
   fixedProperties: FixedProperty[];
   metadataPreview: JsonRecord | null;
   statusBefore: string | null;
-  statusAfter: string;
+  statusAfter: string | null;
   quantityBefore: number;
   quantityAfter: number;
   delta: number;
@@ -99,6 +111,7 @@ type ExecuteResult = {
   unit: UnitSummary | null;
   movement: JsonRecord | null;
   created: boolean | null;
+  operation: WorkflowOperation;
   metadataBefore: JsonRecord | null;
   metadataAfter: JsonRecord | null;
 };
@@ -196,6 +209,21 @@ function normalizeWorkflow(value: unknown): Workflow | null {
     revision: readRevision(record.revision),
     enabled: asBoolean(record.enabled),
     unitStatus: normalizeStatus(record.unitStatus),
+    codeTypes: Array.isArray(record.codeTypes)
+      ? record.codeTypes.filter(isScanCodeType)
+      : [...scanCodeTypes],
+    operation:
+      asRecord(record.operation)?.type === "stock-adjustment"
+        ? {
+            type: "stock-adjustment",
+            delta: asFiniteNumber(asRecord(record.operation)?.delta) ?? 0,
+          }
+        : asRecord(record.operation)?.type === "assembly-build"
+          ? {
+              type: "assembly-build",
+              quantity: asFiniteNumber(asRecord(record.operation)?.quantity) ?? 1,
+            }
+          : { type: "unit" },
   };
 }
 
@@ -345,7 +373,6 @@ function normalizeResolution(
     firstString(resolution, ["expectedUnitUpdatedAt"]) || null;
 
   if (
-    !statusAfter ||
     quantityBefore === null ||
     quantityAfter === null ||
     delta === null ||
@@ -363,7 +390,11 @@ function normalizeResolution(
     extractedCode: identifier,
     inputFields: normalizeFields(fields),
     fixedProperties: normalizeFixedProperties(resolution.fixedProperties),
-    metadataPreview: asRecord(resolution.metadataPreview),
+    metadataPreview: {
+      ...(asRecord(resolution.metadataPreview) ?? {}),
+      ...(asRecord(resolution.customFieldsPreview) ?? {}),
+      ...(asRecord(resolution.executionPreview) ?? {}),
+    },
     statusBefore,
     statusAfter,
     quantityBefore,
@@ -394,6 +425,18 @@ function normalizeExecuteResult(payload: unknown, fallback: Resolution): Execute
       result.created === undefined
         ? null
         : asBoolean(result.created),
+    operation:
+      asRecord(result.operation)?.type === "stock-adjustment"
+        ? {
+            type: "stock-adjustment",
+            delta: asFiniteNumber(asRecord(result.operation)?.delta) ?? 0,
+          }
+        : asRecord(result.operation)?.type === "assembly-build"
+          ? {
+              type: "assembly-build",
+              quantity: asFiniteNumber(asRecord(result.operation)?.quantity) ?? 1,
+            }
+          : fallback.workflow.operation,
     metadataBefore: asRecord(result.metadataBefore),
     metadataAfter:
       asRecord(result.metadataAfter ?? result.metadata) ?? unit?.metadata ?? null,
@@ -510,12 +553,15 @@ export function StockScanner({ canExecute }: StockScannerProps) {
   const [workflowsError, setWorkflowsError] = useState<string | null>(null);
   const [phase, setPhase] = useState<ScannerPhase>("scan");
   const [rawCode, setRawCode] = useState("");
+  const [rawCodeType, setRawCodeType] = useState<ScanCodeType | null>(null);
   const [resolution, setResolution] = useState<Resolution | null>(null);
-  const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [inputs, setInputs] = useState<Record<string, ScannerInputValue>>({});
+  const [inputFiles, setInputFiles] = useState<Record<string, File[]>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [requestError, setRequestError] = useState<string | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [result, setResult] = useState<ExecuteResult | null>(null);
+  const uploadIdempotencyKeys = useRef<Record<string, string>>({});
 
   const selectedWorkflow = useMemo(
     () => workflows.find((workflow) => workflow.id === selectedWorkflowId) ?? null,
@@ -558,21 +604,26 @@ export function StockScanner({ canExecute }: StockScannerProps) {
   const resetScan = useCallback(() => {
     setPhase("scan");
     setRawCode("");
+    setRawCodeType(null);
     setResolution(null);
     setInputs({});
+    setInputFiles({});
     setFieldErrors({});
     setRequestError(null);
     setIdempotencyKey("");
     setResult(null);
+    uploadIdempotencyKeys.current = {};
   }, []);
 
   const resolveCode = useCallback(
-    async (code: string) => {
+    async (code: string, codeType: ScanCodeType | null = null) => {
       const normalizedCode = code.trim();
       if (!selectedWorkflow || !normalizedCode || phase === "resolving" || phase === "executing") {
         return;
       }
       setRawCode(normalizedCode);
+      setRawCodeType(codeType);
+      uploadIdempotencyKeys.current = {};
       setResolution(null);
       setResult(null);
       setRequestError(null);
@@ -581,11 +632,15 @@ export function StockScanner({ canExecute }: StockScannerProps) {
         const response = await fetch("/api/v1/stock/scans/resolve", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workflowId: selectedWorkflow.id, code: normalizedCode }),
+          body: JSON.stringify({
+            workflowId: selectedWorkflow.id,
+            code: normalizedCode,
+            codeType,
+          }),
         });
         const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          throw new Error(t("scan.errors.resolve"));
+          throw new Error(firstString(asRecord(payload), ["error"], t("scan.errors.resolve")));
         }
         const nextResolution = normalizeResolution(payload, selectedWorkflow);
         if (!nextResolution) {
@@ -597,6 +652,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
             nextResolution.inputFields.map((field) => [field.key, field.defaultValue]),
           ),
         );
+        setInputFiles({});
         setFieldErrors({});
         setIdempotencyKey(makeIdempotencyKey());
         setPhase("review");
@@ -614,20 +670,29 @@ export function StockScanner({ canExecute }: StockScannerProps) {
     if (
       !canExecute ||
       !resolution ||
-      (!resolution.unit && !resolution.willCreateUnit) ||
+      (resolution.workflow.operation.type === "unit" &&
+        !resolution.unit &&
+        !resolution.willCreateUnit) ||
       !idempotencyKey ||
       phase === "executing"
     ) {
       return;
     }
     const validationErrors: Record<string, string> = {};
-    const cleanedInputs: Record<string, string> = {};
+    const cleanedInputs: Record<string, ScannerInputValue> = {};
     for (const field of resolution.inputFields) {
-      const value = (inputs[field.key] ?? "").trim();
-      if (field.required && !value) {
+      const rawValue = inputs[field.key];
+      const value =
+        typeof rawValue === "string" ? rawValue.trim() : rawValue;
+      const files = inputFiles[field.key] ?? [];
+      const empty =
+        value === undefined || value === "" ||
+        (Array.isArray(value) && value.length === 0);
+      if (field.required && (field.type === "media" || field.type === "file" ? files.length === 0 : empty)) {
         validationErrors[field.key] = t("scan.validation.required", { field: field.label });
-      } else if (value) {
-        cleanedInputs[field.key] = value;
+      } else if (!empty) {
+        cleanedInputs[field.key] =
+          field.type === "number" ? Number(value) : value;
       }
     }
     setFieldErrors(validationErrors);
@@ -636,6 +701,35 @@ export function StockScanner({ canExecute }: StockScannerProps) {
     setRequestError(null);
     setPhase("executing");
     try {
+      for (const field of resolution.inputFields) {
+        if (field.type !== "media" && field.type !== "file") continue;
+        const files = inputFiles[field.key] ?? [];
+        if (!files.length) continue;
+        const body = new FormData();
+        files.forEach((file) => body.append("files", file));
+        const uploadResponse = await fetch(
+          `/api/v1/resources/${resolution.resource.id}/media`,
+          {
+            method: "POST",
+            headers: {
+              "Idempotency-Key":
+                uploadIdempotencyKeys.current[field.key] ??=
+                  makeIdempotencyKey(),
+            },
+            body,
+          },
+        );
+        const uploadPayload = (await uploadResponse.json().catch(() => null)) as {
+          uploaded?: Array<{ id?: string }>;
+          error?: string;
+        } | null;
+        if (!uploadResponse.ok) {
+          throw new Error(uploadPayload?.error ?? t("scan.errors.update"));
+        }
+        cleanedInputs[field.key] = (uploadPayload?.uploaded ?? [])
+          .map((item) => item.id)
+          .filter((id): id is string => Boolean(id));
+      }
       const response = await fetch("/api/v1/stock/scans/execute", {
         method: "POST",
         headers: {
@@ -646,6 +740,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
           workflowId: resolution.workflow.id,
           revision: resolution.workflow.revision,
           code: rawCode,
+          codeType: rawCodeType,
           inputs: cleanedInputs,
           expectedResourceUpdatedAt: resolution.expectedResourceUpdatedAt,
           expectedUnitId: resolution.expectedUnitId,
@@ -654,7 +749,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
       });
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
-        throw new Error(t("scan.errors.update"));
+        throw new Error(firstString(asRecord(payload), ["error"], t("scan.errors.update")));
       }
       const nextResult = normalizeExecuteResult(payload, resolution);
       if (!nextResult) throw new Error(t("scan.errors.updateUnexpected"));
@@ -668,8 +763,18 @@ export function StockScanner({ canExecute }: StockScannerProps) {
     }
   };
 
-  const updateInput = (key: string, value: string) => {
+  const updateInput = (key: string, value: ScannerInputValue) => {
     setInputs((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const updateInputFiles = (key: string, files: File[]) => {
+    setInputFiles((current) => ({ ...current, [key]: files }));
     setFieldErrors((current) => {
       if (!current[key]) return current;
       const next = { ...current };
@@ -777,30 +882,45 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                           {result.resource.name || t("scan.fallbacks.unknownResource")}
                         </h2>
                         <p className="mt-1 text-sm text-success">
-                          {result.created === true
-                            ? t("scan.success.created")
-                            : t("scan.success.updated")}
+                          {result.operation.type === "stock-adjustment"
+                            ? `${result.operation.delta > 0 ? "+" : ""}${result.operation.delta} erfolgreich gebucht.`
+                            : result.operation.type === "assembly-build"
+                              ? "Baugruppe fertiggestellt und Komponenten ausgebucht."
+                              : result.created === true
+                                ? t("scan.success.created")
+                                : t("scan.success.updated")}
                         </p>
                       </div>
                     </div>
                   </div>
                   <div className="space-y-5 p-5 sm:p-6">
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl bg-surface-subtle p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
-                          {t("scan.success.unit")}
-                        </p>
-                        <p className="mt-1 break-all font-mono text-sm font-semibold text-foreground">
-                          {result.unit?.code ?? result.unit?.id ?? t("values.empty")}
-                        </p>
-                        {result.unit?.status ? (
-                          <Badge tone="success" className="mt-2">
-                            {t(`statuses.${result.unit.status}`, {
-                              defaultValue: titleCase(result.unit.status),
-                            })}
-                          </Badge>
-                        ) : null}
-                      </div>
+                      {result.unit ? (
+                        <div className="rounded-xl bg-surface-subtle p-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+                            {t("scan.success.unit")}
+                          </p>
+                          <p className="mt-1 break-all font-mono text-sm font-semibold text-foreground">
+                            {result.unit.code ?? result.unit.id}
+                          </p>
+                          {result.unit.status ? (
+                            <Badge tone="success" className="mt-2">
+                              {t(`statuses.${result.unit.status}`, {
+                                defaultValue: titleCase(result.unit.status),
+                              })}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="rounded-xl bg-surface-subtle p-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+                            Neuer Bestand
+                          </p>
+                          <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+                            {result.resource.quantity ?? t("values.empty")}
+                          </p>
+                        </div>
+                      )}
                       <div className="rounded-xl bg-surface-subtle p-3">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
                           {t("scan.success.resource")}
@@ -828,11 +948,13 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                 <ReviewForm
                   resolution={resolution}
                   inputs={inputs}
+                  inputFiles={inputFiles}
                   errors={fieldErrors}
                   requestError={requestError}
                   canExecute={canExecute}
                   executing={false}
                   onInput={updateInput}
+                  onFiles={updateInputFiles}
                   onCancel={resetScan}
                   onExecute={() => void executeResolution()}
                 />
@@ -840,11 +962,13 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                 <ReviewForm
                   resolution={resolution}
                   inputs={inputs}
+                  inputFiles={inputFiles}
                   errors={fieldErrors}
                   requestError={requestError}
                   canExecute={canExecute}
                   executing
                   onInput={updateInput}
+                  onFiles={updateInputFiles}
                   onCancel={resetScan}
                   onExecute={() => void executeResolution()}
                 />
@@ -853,7 +977,10 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                   <CodeScannerCamera
                     key={selectedWorkflowId}
                     disabled={!selectedWorkflow || phase === "resolving"}
-                    onDetected={(code) => void resolveCode(code)}
+                    allowedFormats={selectedWorkflow?.codeTypes}
+                    onDetected={(code, _source, codeType) =>
+                      void resolveCode(code, codeType)
+                    }
                   />
                   {phase === "resolving" ? (
                     <div
@@ -927,21 +1054,25 @@ export function StockScanner({ canExecute }: StockScannerProps) {
 function ReviewForm({
   resolution,
   inputs,
+  inputFiles,
   errors,
   requestError,
   canExecute,
   executing,
   onInput,
+  onFiles,
   onCancel,
   onExecute,
 }: {
   resolution: Resolution;
-  inputs: Record<string, string>;
+  inputs: Record<string, ScannerInputValue>;
+  inputFiles: Record<string, File[]>;
   errors: Record<string, string>;
   requestError: string | null;
   canExecute: boolean;
   executing: boolean;
-  onInput: (key: string, value: string) => void;
+  onInput: (key: string, value: ScannerInputValue) => void;
+  onFiles: (key: string, files: File[]) => void;
   onCancel: () => void;
   onExecute: () => void;
 }) {
@@ -958,7 +1089,10 @@ function ReviewForm({
     })),
     [t],
   );
-  const unitUnavailable = !resolution.unit && !resolution.willCreateUnit;
+  const unitUnavailable =
+    resolution.workflow.operation.type === "unit" &&
+    !resolution.unit &&
+    !resolution.willCreateUnit;
 
   return (
     <Card className="overflow-hidden">
@@ -973,7 +1107,11 @@ function ReviewForm({
             </h2>
           </div>
           <Badge tone={resolution.unit ? "neutral" : unitUnavailable ? "danger" : "success"}>
-            {resolution.unit
+            {resolution.workflow.operation.type === "stock-adjustment"
+              ? "Bestandsbuchung"
+              : resolution.workflow.operation.type === "assembly-build"
+                ? "Montage abschließen"
+                : resolution.unit
               ? t("scan.review.existingUnit")
               : unitUnavailable
                 ? t("scan.review.unitNotFound")
@@ -997,7 +1135,9 @@ function ReviewForm({
               <Warehouse className="size-3" aria-hidden="true" /> {t("scan.review.targetUnit")}
             </p>
             <p className="mt-2 text-sm font-semibold text-foreground">
-              {resolution.unit?.code ?? resolution.extractedCode}
+              {resolution.workflow.operation.type === "stock-adjustment"
+                ? resolution.resource.name
+                : resolution.unit?.code ?? resolution.extractedCode}
             </p>
             <p className="mt-1 text-xs text-muted">
               {resolution.unit
@@ -1024,6 +1164,7 @@ function ReviewForm({
             {t("scan.review.impactTitle")}
           </h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {resolution.statusAfter ? (
             <div className="rounded-lg bg-surface/80 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
                 {t("scan.review.lifecycleStatus")}
@@ -1042,6 +1183,20 @@ function ReviewForm({
                 })}</span>
               </div>
             </div>
+            ) : (
+              <div className="rounded-lg bg-surface/80 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                  Aktion
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">
+                  {resolution.workflow.operation.type === "assembly-build"
+                    ? `${resolution.workflow.operation.quantity} × Baugruppe fertigstellen`
+                    : resolution.workflow.operation.type === "stock-adjustment"
+                      ? `${resolution.workflow.operation.delta > 0 ? "+" : ""}${resolution.workflow.operation.delta} buchen`
+                      : "Einheit aktualisieren"}
+                </p>
+              </div>
+            )}
             <div className="rounded-lg bg-surface/80 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -1120,7 +1275,45 @@ function ReviewForm({
                       {field.label}
                       {field.required ? <span className="ml-1 text-danger">*</span> : null}
                     </label>
-                    {colorField && options.length ? (
+                    {field.type === "media" || field.type === "file" ? (
+                      <div className="mt-2">
+                        <input
+                          id={`scan-field-${field.key}`}
+                          type="file"
+                          multiple
+                          accept={
+                            field.type === "media"
+                              ? "image/*,video/*"
+                              : "application/pdf,image/*,video/*,.usdz"
+                          }
+                          disabled={executing}
+                          required={field.required}
+                          aria-invalid={Boolean(errors[field.key])}
+                          aria-describedby={errorId}
+                          onChange={(event) =>
+                            onFiles(field.key, Array.from(event.target.files ?? []))
+                          }
+                          className="block w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground shadow-sm"
+                        />
+                        {inputFiles[field.key]?.length ? (
+                          <p className="mt-1.5 text-xs text-muted">
+                            {inputFiles[field.key].map((file) => file.name).join(", ")}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : field.type === "checkbox" ? (
+                      <label className="mt-2 flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-3 text-sm text-foreground shadow-sm">
+                        <input
+                          id={`scan-field-${field.key}`}
+                          type="checkbox"
+                          checked={inputs[field.key] === true}
+                          disabled={executing}
+                          onChange={(event) => onInput(field.key, event.target.checked)}
+                          className="size-4 accent-brand-solid"
+                        />
+                        {field.label}
+                      </label>
+                    ) : colorField && options.length ? (
                       <div
                         role="radiogroup"
                         aria-label={field.label}
@@ -1160,7 +1353,7 @@ function ReviewForm({
                     ) : options.length ? (
                       <select
                         id={`scan-field-${field.key}`}
-                        value={inputs[field.key] ?? ""}
+                        value={String(inputs[field.key] ?? "")}
                         disabled={executing}
                         required={field.required}
                         aria-invalid={Boolean(errors[field.key])}
@@ -1176,17 +1369,30 @@ function ReviewForm({
                         ))}
                       </select>
                     ) : (
-                      <input
-                        id={`scan-field-${field.key}`}
-                        type={field.type === "number" ? "number" : "text"}
-                        value={inputs[field.key] ?? ""}
-                        disabled={executing}
-                        required={field.required}
-                        aria-invalid={Boolean(errors[field.key])}
-                        aria-describedby={errorId}
-                        onChange={(event) => onInput(field.key, event.target.value)}
-                        className="mt-2 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground shadow-sm"
-                      />
+                      field.type === "textarea" ? (
+                        <textarea
+                          id={`scan-field-${field.key}`}
+                          value={String(inputs[field.key] ?? "")}
+                          disabled={executing}
+                          required={field.required}
+                          aria-invalid={Boolean(errors[field.key])}
+                          aria-describedby={errorId}
+                          onChange={(event) => onInput(field.key, event.target.value)}
+                          className="mt-2 min-h-24 w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm text-foreground shadow-sm"
+                        />
+                      ) : (
+                        <input
+                          id={`scan-field-${field.key}`}
+                          type={field.type === "number" ? "number" : "text"}
+                          value={String(inputs[field.key] ?? "")}
+                          disabled={executing}
+                          required={field.required}
+                          aria-invalid={Boolean(errors[field.key])}
+                          aria-describedby={errorId}
+                          onChange={(event) => onInput(field.key, event.target.value)}
+                          className="mt-2 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground shadow-sm"
+                        />
+                      )
                     )}
                     {errors[field.key] ? (
                       <p id={errorId} role="alert" className="mt-1.5 text-xs text-danger">

@@ -13,11 +13,15 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
+import { hash } from "bcryptjs";
 
 import {
   media,
   publicShares,
   resources,
+  stockMovements,
+  stockScanWorkflows,
+  stockSettings,
   type MediaRecord,
   type PublicShareRecord,
   type ResourceRecord,
@@ -49,6 +53,8 @@ export type PublicShareSummary = {
   resourceId: string | null;
   resourceName: string | null;
   filter: PublicShareFilter | null;
+  accessMode: PublicShareRecord["accessMode"];
+  passwordProtected: boolean;
   createdBy: string | null;
   createdAt: string;
 };
@@ -104,6 +110,8 @@ const summaryDto = (
   resourceId: row.resourceId,
   resourceName,
   filter: row.filter,
+  accessMode: row.accessMode,
+  passwordProtected: Boolean(row.passwordHash),
   createdBy: row.createdBy,
   createdAt: row.createdAt.toISOString(),
 });
@@ -287,6 +295,11 @@ export async function createPublicShare(
       scope: input.scope,
       resourceId: input.scope === "item" ? input.resourceId : null,
       filter: input.scope === "inventory" ? input.filter ?? null : null,
+      accessMode: input.scope === "inventory" ? input.accessMode : "view",
+      passwordHash:
+        input.scope === "inventory" && input.accessMode === "stock"
+          ? await hash(input.password!, 12)
+          : null,
       createdBy: actor,
     })
     .returning();
@@ -339,6 +352,10 @@ export async function listPublicShareResources(options: {
   query?: string;
   page?: number;
   pageSize?: number;
+  status?: string;
+  type?: string;
+  stock?: "all" | "in-stock" | "out-of-stock";
+  sort?: "updated" | "name" | "quantity-asc" | "quantity-desc";
 }) {
   const requestedPage = options.page ?? 1;
   const page = Number.isSafeInteger(requestedPage)
@@ -373,13 +390,27 @@ export async function listPublicShareResources(options: {
       )!,
     );
   }
+  const status = options.status?.trim().slice(0, 32);
+  const type = options.type?.trim().slice(0, 64);
+  if (status) conditions.push(eq(resources.status, status));
+  if (type) conditions.push(eq(resources.type, type));
+  if (options.stock === "in-stock") conditions.push(sql`${resources.quantity} > 0`);
+  if (options.stock === "out-of-stock") conditions.push(sql`${resources.quantity} <= 0`);
   const where = and(...conditions);
+  const order =
+    options.sort === "name"
+      ? [asc(resources.name), asc(resources.id)]
+      : options.sort === "quantity-asc"
+        ? [asc(resources.quantity), asc(resources.name)]
+        : options.sort === "quantity-desc"
+          ? [desc(resources.quantity), asc(resources.name)]
+          : [desc(resources.updatedAt), asc(resources.id)];
   const [rows, totalRows] = await Promise.all([
     db
       .select()
       .from(resources)
       .where(where)
-      .orderBy(desc(resources.updatedAt))
+      .orderBy(...order)
       .limit(pageSize)
       .offset((page - 1) * pageSize),
     db.select({ value: count() }).from(resources).where(where),
@@ -413,6 +444,132 @@ export async function listPublicShareResources(options: {
       pages: Math.max(1, Math.ceil(total / pageSize)),
     },
   };
+}
+
+export async function listPublicShareFilterOptions(share: PublicShareRecord) {
+  const shareCondition = shareResourceCondition(share);
+  if (!shareCondition) return { statuses: [], types: [] };
+  const where = and(
+    eq(resources.organizationId, share.organizationId),
+    shareCondition,
+  );
+  const [statusRows, typeRows] = await Promise.all([
+    db
+      .selectDistinct({ value: resources.status })
+      .from(resources)
+      .where(where)
+      .orderBy(asc(resources.status)),
+    db
+      .selectDistinct({ value: resources.type })
+      .from(resources)
+      .where(where)
+      .orderBy(asc(resources.type)),
+  ]);
+  return {
+    statuses: statusRows.map((row) => row.value),
+    types: typeRows.map((row) => row.value),
+  };
+}
+
+export async function publicShareAllowsResource(
+  share: PublicShareRecord,
+  resourceId: string,
+) {
+  if (!publicShareIdSchema.safeParse(resourceId).success) return false;
+  const shareCondition = shareResourceCondition(share);
+  if (!shareCondition) return false;
+  const [row] = await db
+    .select({ id: resources.id })
+    .from(resources)
+    .where(
+      and(
+        eq(resources.organizationId, share.organizationId),
+        eq(resources.id, resourceId),
+        shareCondition,
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+export async function getPublicStockSummary(
+  share: PublicShareRecord,
+  resourceId: string,
+) {
+  if (!(await publicShareAllowsResource(share, resourceId))) return null;
+  const [settings, movementRows] = await Promise.all([
+    db
+      .select({
+        trackingMode: stockSettings.trackingMode,
+        unitName: stockSettings.unitName,
+      })
+      .from(stockSettings)
+      .where(
+        and(
+          eq(stockSettings.organizationId, share.organizationId),
+          eq(stockSettings.resourceId, resourceId),
+        ),
+      )
+      .limit(1),
+    db
+      .select({
+        id: stockMovements.id,
+        delta: stockMovements.delta,
+        balanceAfter: stockMovements.balanceAfter,
+        type: stockMovements.type,
+        reason: stockMovements.reason,
+        note: stockMovements.note,
+        occurredAt: stockMovements.occurredAt,
+      })
+      .from(stockMovements)
+      .where(
+        and(
+          eq(stockMovements.organizationId, share.organizationId),
+          eq(stockMovements.resourceId, resourceId),
+        ),
+      )
+      .orderBy(desc(stockMovements.occurredAt), desc(stockMovements.createdAt))
+      .limit(8),
+  ]);
+  return {
+    trackingMode: settings[0]?.trackingMode ?? "bulk",
+    unitName: settings[0]?.unitName ?? "unit",
+    movements: movementRows.map((movement) => ({
+      ...movement,
+      occurredAt: movement.occurredAt.toISOString(),
+    })),
+  };
+}
+
+export async function listPublicShareWorkflows(share: PublicShareRecord) {
+  const shareCondition = shareResourceCondition(share);
+  if (!shareCondition) return [];
+  const rows = await db
+    .select({
+      id: stockScanWorkflows.id,
+      name: stockScanWorkflows.name,
+      description: stockScanWorkflows.description,
+      revision: stockScanWorkflows.revision,
+      resourceId: stockScanWorkflows.resourceId,
+      operation: stockScanWorkflows.operation,
+    })
+    .from(stockScanWorkflows)
+    .innerJoin(
+      resources,
+      and(
+        eq(resources.organizationId, share.organizationId),
+        eq(resources.id, stockScanWorkflows.resourceId),
+      ),
+    )
+    .where(
+      and(
+        eq(stockScanWorkflows.organizationId, share.organizationId),
+        eq(stockScanWorkflows.enabled, true),
+        shareCondition,
+      ),
+    )
+    .orderBy(asc(stockScanWorkflows.name), asc(stockScanWorkflows.id));
+  return rows;
 }
 
 export async function getPublicSharedResource(

@@ -1520,7 +1520,11 @@ export async function bookStockMovement(
   resourceId: string,
   input: StockMovementInput,
   actor: string,
-  idempotency?: { key: string; requestHash: string },
+  idempotency?: {
+    key: string;
+    requestHash: string;
+    expectedResourceUpdatedAt?: string;
+  },
 ) {
   const validateReplay = (existing: {
     resourceId: string;
@@ -1566,6 +1570,7 @@ export async function bookStockMovement(
           valueCents: resources.valueCents,
           currency: resources.currency,
           createdAt: resources.createdAt,
+          updatedAt: resources.updatedAt,
         })
         .from(resources)
         .innerJoin(
@@ -1581,6 +1586,15 @@ export async function bookStockMovement(
         .limit(1)
         .for("update");
       if (!resource) throw new StockOperationError("Not found", 404);
+      if (
+        idempotency?.expectedResourceUpdatedAt &&
+        resource.updatedAt.toISOString() !== idempotency.expectedResourceUpdatedAt
+      ) {
+        throw new StockOperationError(
+          "The stock changed after the action was reviewed. Scan the code again.",
+          409,
+        );
+      }
 
       if (
         input.totalPriceCents !== null &&
