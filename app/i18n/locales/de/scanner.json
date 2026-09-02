@@ -225,6 +225,8 @@
     },
     "errors": {
       "load": "Die Workflows konnten nicht geladen werden.",
+      "notFoundTitle": "Workflow nicht gefunden",
+      "notFound": "Dieser Workflow existiert nicht oder wurde bereits gelöscht.",
       "unexpected": "Der Workflow-Dienst hat eine unerwartete Antwort zurückgegeben.",
       "save": "Der Workflow konnte nicht gespeichert werden.",
       "update": "Der Workflow konnte nicht aktualisiert werden.",
@@ -268,14 +270,16 @@
       "configured_one": "{{value}} konfiguriert",
       "configured_other": "{{value}} konfiguriert",
       "createAria": "Workflow aus der Vorlage erstellen",
+      "edit": "Bearbeiten",
       "resourceRevision": "{{resource}} · v{{revision}}",
       "emptyTitle": "Keine gespeicherten Workflows",
-      "emptyManager": "Die Paperless-Paper-Vorlage steht im Editor bereit.",
+      "emptyManager": "Erstelle den ersten Action Flow auf einer eigenen Bearbeitungsseite.",
       "emptyViewer": "Ein Manager kann hier den ersten Scan-Workflow erstellen.",
       "safeTitle": "Zulässige Aktionen",
       "safeDescription": "Nach einem Scan werden nur konfigurierte Felder und erlaubte Bestandsaktionen ausgeführt."
     },
     "editor": {
+      "backToList": "Zurück zu Action Flows",
       "newWorkflow": "Neuer Workflow",
       "enabled": "Aktiviert",
       "paused": "Pausiert",

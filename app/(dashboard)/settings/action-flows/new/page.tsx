@@ -14,13 +14,8 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function ActionFlowsSettingsPage() {
-  const identity = await requireSettingsPermission("workflows.read");
+export default async function NewActionFlowSettingsPage() {
+  await requireSettingsPermission("workflows.manage");
 
-  return (
-    <StockWorkflowBuilder
-      canManage={identity.permissions.includes("workflows.manage")}
-      view="list"
-    />
-  );
+  return <StockWorkflowBuilder canManage view="editor" />;
 }

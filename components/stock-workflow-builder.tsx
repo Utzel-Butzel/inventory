@@ -1,10 +1,15 @@
 "use client";
 
 import type { TFunction } from "i18next";
-import { OrganizationLink as Link } from "@/components/organization-routing";
+import {
+  OrganizationLink as Link,
+  useOrganizationHref,
+} from "@/components/organization-routing";
 import { useT } from "next-i18next/client";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
+  ArrowLeft,
   ArrowRight,
   Check,
   CheckCircle2,
@@ -752,8 +757,20 @@ function NoticeBanner({ notice }: { notice: Notice }) {
   );
 }
 
-export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
+type StockWorkflowBuilderProps = {
+  canManage: boolean;
+  view?: "list" | "editor";
+  workflowId?: string | null;
+};
+
+export function StockWorkflowBuilder({
+  canManage,
+  view = "list",
+  workflowId = null,
+}: StockWorkflowBuilderProps) {
   const { t, i18n } = useT("scanner");
+  const router = useRouter();
+  const organizationHref = useOrganizationHref();
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const firstDraft = useMemo(() => templateDraft(t), [t]);
@@ -761,7 +778,6 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
   const [resources, setResources] = useState<StockItem[]>([]);
   const [stockUnitCustomFields, setStockUnitCustomFields] = useState<StockUnitCustomField[]>([]);
   const [draft, setDraft] = useState<WorkflowDraft>(firstDraft);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [baseSignature, setBaseSignature] = useState(() => payloadSignature(firstDraft));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -784,7 +800,6 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
 
   const applyWorkflow = useCallback((workflow: WorkflowRecord) => {
     const nextDraft = workflowToDraft(workflow);
-    setSelectedId(workflow.id);
     setDraft(nextDraft);
     setBaseSignature(payloadSignature(nextDraft));
     setConfirmDelete(false);
@@ -810,12 +825,20 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
           stockUnitCustomFieldsFromResponse(customFieldPayload),
         );
 
-        const nextSelection = nextWorkflows[0];
-        if (nextSelection) {
-          applyWorkflow(nextSelection);
-        } else {
+        if (view === "editor" && workflowId) {
+          const nextSelection = nextWorkflows.find(
+            (workflow) => workflow.id === workflowId,
+          );
+          if (nextSelection) {
+            applyWorkflow(nextSelection);
+          } else {
+            const nextDraft = templateDraft(t, nextResources[0]?.resourceId ?? "");
+            setDraft(nextDraft);
+            setBaseSignature(payloadSignature(nextDraft));
+            setNotice({ tone: "error", message: t("workflows.errors.notFound") });
+          }
+        } else if (view === "editor") {
           const nextDraft = templateDraft(t, nextResources[0]?.resourceId ?? "");
-          setSelectedId(null);
           setDraft(nextDraft);
           setBaseSignature(payloadSignature(nextDraft));
         }
@@ -828,7 +851,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
         setLoading(false);
       }
     },
-    [applyWorkflow, t],
+    [applyWorkflow, t, view, workflowId],
   );
 
   useEffect(() => {
@@ -863,6 +886,15 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
     sampleSelection.start,
     sampleSelection.end,
   );
+
+  useEffect(() => {
+    if (view !== "editor" || !dirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dirty, view]);
 
   const toggleCodeType = (codeType: ScanCodeType) => {
     setDraft((current) => ({
@@ -971,22 +1003,6 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
       t("workflows.confirmDiscard"),
     );
 
-  const chooseTemplate = () => {
-    if (interactionBusy || !confirmDraftDiscard()) return;
-    const nextDraft = templateDraft(t, resources[0]?.resourceId ?? "");
-    setSelectedId(null);
-    setDraft(nextDraft);
-    setBaseSignature(payloadSignature(nextDraft));
-    setConfirmDelete(false);
-    setNotice({ tone: "info", message: t("workflows.notices.templateLoaded") });
-  };
-
-  const selectWorkflow = (workflow: WorkflowRecord) => {
-    if (interactionBusy || selectedId === workflow.id || !confirmDraftDiscard()) return;
-    applyWorkflow(workflow);
-    setNotice(null);
-  };
-
   const persistDraft = async (
     nextDraft: WorkflowDraft,
     message: string,
@@ -1022,8 +1038,14 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
           : [...current, saved];
         return next.sort((left, right) => left.name.localeCompare(right.name, locale));
       });
+      const created = nextDraft.id === null;
       applyWorkflow(saved);
       setNotice({ tone: "success", message });
+      if (created) {
+        router.replace(
+          organizationHref(`/settings/action-flows/${saved.id}`),
+        );
+      }
       return saved;
     } catch (error) {
       setNotice({
@@ -1101,16 +1123,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
       );
       const remaining = workflows.filter((workflow) => workflow.id !== savedWorkflow.id);
       setWorkflows(remaining);
-      if (remaining[0]) {
-        applyWorkflow(remaining[0]);
-      } else {
-        const nextDraft = templateDraft(t, resources[0]?.resourceId ?? "");
-        setSelectedId(null);
-        setDraft(nextDraft);
-        setBaseSignature(payloadSignature(nextDraft));
-        setConfirmDelete(false);
-      }
-      setNotice({ tone: "success", message: t("workflows.notices.deleted") });
+      router.replace(organizationHref("/settings/action-flows"));
     } catch (error) {
       setNotice({
         tone: "error",
@@ -1181,10 +1194,158 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
           </div>
           <Skeleton className="h-10 w-32" />
         </div>
-        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-          <Skeleton className="h-[480px] rounded-2xl" />
-          <Skeleton className="h-[780px] rounded-2xl" />
+        <Skeleton
+          className={cn(
+            "rounded-2xl",
+            view === "list" ? "h-[480px]" : "h-[780px]",
+          )}
+        />
+      </div>
+    );
+  }
+
+  if (view === "list") {
+    return (
+      <div>
+        <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
+              <Workflow className="size-3.5 text-brand" aria-hidden="true" />
+              {t("workflows.header.eyebrow")}
+            </div>
+            <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-foreground sm:text-[32px]">
+              {t("workflows.header.title")}
+            </h1>
+            <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted">
+              {t("workflows.header.description")}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {!canManage ? (
+              <Badge tone="neutral" className="h-9 gap-1.5 px-3">
+                <Lock className="size-3.5" aria-hidden="true" />
+                {t("workflows.header.readOnly")}
+              </Badge>
+            ) : (
+              <Link
+                href="/settings/action-flows/new"
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-transparent bg-brand-solid px-4 text-sm font-semibold text-on-brand shadow-sm transition duration-150 hover:bg-brand-hover active:bg-brand-active"
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                {t("workflows.header.newTemplate")}
+              </Link>
+            )}
+          </div>
         </div>
+
+        {notice ? <NoticeBanner notice={notice} /> : null}
+
+        <Card className="overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-5">
+            <div>
+              <h2 className="text-[14px] font-semibold text-foreground">
+                {t("workflows.sidebar.title")}
+              </h2>
+              <p className="mt-0.5 text-[11px] text-muted">
+                {t("workflows.sidebar.configured", {
+                  count: workflows.length,
+                  value: integer.format(workflows.length),
+                })}
+              </p>
+            </div>
+          </div>
+
+          {workflows.length ? (
+            <div className="divide-y divide-border">
+              {workflows.map((workflow) => {
+                const resource = resources.find(
+                  (item) => item.resourceId === workflow.resourceId,
+                );
+                return (
+                  <Link
+                    key={workflow.id}
+                    href={`/settings/action-flows/${workflow.id}`}
+                    className="group flex items-center gap-3 px-4 py-4 transition hover:bg-surface-hover sm:gap-4 sm:px-5"
+                  >
+                    <span
+                      className={cn(
+                        "grid size-10 shrink-0 place-items-center rounded-xl",
+                        workflow.enabled
+                          ? "bg-success-soft text-success"
+                          : "bg-surface-muted text-muted",
+                      )}
+                    >
+                      <QrCode className="size-[18px]" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-[13px] font-semibold text-foreground sm:text-sm">
+                          {workflow.name}
+                        </span>
+                        <Badge tone={workflow.enabled ? "success" : "neutral"}>
+                          {t(
+                            workflow.enabled
+                              ? "workflows.editor.enabled"
+                              : "workflows.editor.paused",
+                          )}
+                        </Badge>
+                      </span>
+                      {workflow.description ? (
+                        <span className="mt-1 block truncate text-[11px] text-muted">
+                          {workflow.description}
+                        </span>
+                      ) : null}
+                      <span className="mt-1 block truncate text-[10px] text-muted">
+                        {t("workflows.sidebar.resourceRevision", {
+                          resource:
+                            resource?.name ??
+                            t("workflows.fallbacks.resourceUnavailable"),
+                          revision: integer.format(workflow.revision),
+                        })}
+                      </span>
+                    </span>
+                    <span className="inline-flex shrink-0 items-center gap-1.5 text-[12px] font-semibold text-muted-strong transition group-hover:text-brand">
+                      <span className="hidden sm:inline">
+                        {t("workflows.sidebar.edit")}
+                      </span>
+                      <ChevronRight className="size-4" aria-hidden="true" />
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              className="min-h-72 py-10"
+              icon={<Workflow className="size-5" aria-hidden="true" />}
+              title={t("workflows.sidebar.emptyTitle")}
+              description={
+                canManage
+                  ? t("workflows.sidebar.emptyManager")
+                  : t("workflows.sidebar.emptyViewer")
+              }
+              action={
+                canManage ? (
+                  <Link
+                    href="/settings/action-flows/new"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-transparent bg-brand-solid px-3 text-[13px] font-medium text-on-brand shadow-sm transition hover:bg-brand-hover"
+                  >
+                    <Plus className="size-3.5" aria-hidden="true" />
+                    {t("workflows.header.newTemplate")}
+                  </Link>
+                ) : undefined
+              }
+            />
+          )}
+
+          <div className="border-t border-border bg-surface-subtle px-4 py-3 text-[10px] leading-4 text-muted sm:px-5">
+            <span className="inline-flex items-center gap-1.5 font-medium text-muted">
+              <ShieldCheck className="size-3.5 text-brand" aria-hidden="true" />
+              {t("workflows.sidebar.safeTitle")}
+            </span>
+            <p className="mt-1">{t("workflows.sidebar.safeDescription")}</p>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -1198,6 +1359,17 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
           </option>
         ))}
       </datalist>
+      <Link
+        href="/settings/action-flows"
+        onClick={(event) => {
+          if (!confirmDraftDiscard()) event.preventDefault();
+        }}
+        className="mb-5 inline-flex items-center gap-1.5 text-[12px] font-semibold text-muted-strong transition hover:text-brand"
+      >
+        <ArrowLeft className="size-3.5" aria-hidden="true" />
+        {t("workflows.editor.backToList")}
+      </Link>
+
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
@@ -1211,120 +1383,35 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
             {t("workflows.header.description")}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {!canManage ? (
-            <Badge tone="neutral" className="h-9 gap-1.5 px-3">
-              <Lock className="size-3.5" aria-hidden="true" /> {t("workflows.header.readOnly")}
-            </Badge>
-          ) : null}
-          {canManage ? (
-            <Button onClick={chooseTemplate} disabled={interactionBusy}>
-              <Plus className="size-4" aria-hidden="true" />
-              {t("workflows.header.newTemplate")}
-            </Button>
-          ) : null}
-        </div>
+        {!canManage ? (
+          <Badge tone="neutral" className="h-9 gap-1.5 px-3">
+            <Lock className="size-3.5" aria-hidden="true" />
+            {t("workflows.header.readOnly")}
+          </Badge>
+        ) : null}
       </div>
 
       {notice ? <NoticeBanner notice={notice} /> : null}
 
-      <div className="grid items-start gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <Card className="overflow-hidden xl:sticky xl:top-[84px]">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
-            <div>
-              <h2 className="text-[13px] font-semibold text-foreground">{t("workflows.sidebar.title")}</h2>
-              <p className="mt-0.5 text-[10px] text-muted">
-                {t("workflows.sidebar.configured", {
-                  count: workflows.length,
-                  value: integer.format(workflows.length),
-                })}
-              </p>
-            </div>
-            {canManage ? (
-              <button
-                type="button"
-                onClick={chooseTemplate}
-                disabled={interactionBusy}
-                className="grid size-8 place-items-center rounded-lg border border-border text-muted transition hover:border-brand-border hover:bg-brand-soft hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label={t("workflows.sidebar.createAria")}
+      {workflowId && !draft.id ? (
+        <Card>
+          <EmptyState
+            className="min-h-72 py-10"
+            icon={<AlertCircle className="size-5" aria-hidden="true" />}
+            title={t("workflows.errors.notFoundTitle")}
+            description={t("workflows.errors.notFound")}
+            action={
+              <Link
+                href="/settings/action-flows"
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-[13px] font-medium text-foreground shadow-sm transition hover:bg-surface-subtle"
               >
-                <Plus className="size-4" aria-hidden="true" />
-              </button>
-            ) : null}
-          </div>
-
-          {workflows.length ? (
-            <div className="max-h-[540px] space-y-1 overflow-y-auto p-2">
-              {workflows.map((workflow) => {
-                const active = selectedId === workflow.id;
-                const resource = resources.find(
-                  (item) => item.resourceId === workflow.resourceId,
-                );
-                return (
-                  <button
-                    key={workflow.id}
-                    type="button"
-                    onClick={() => selectWorkflow(workflow)}
-                    disabled={interactionBusy}
-                    className={cn(
-                      "group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60",
-                      active ? "bg-brand-soft" : "hover:bg-surface-hover",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "grid size-8 shrink-0 place-items-center rounded-lg",
-                        workflow.enabled
-                          ? "bg-success-soft text-success"
-                          : "bg-border text-muted",
-                      )}
-                    >
-                      <QrCode className="size-4" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12px] font-semibold text-foreground">
-                        {workflow.name}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[10px] text-muted">
-                        {t("workflows.sidebar.resourceRevision", {
-                          resource: resource?.name ?? t("workflows.fallbacks.resourceUnavailable"),
-                          revision: integer.format(workflow.revision),
-                        })}
-                      </span>
-                    </span>
-                    <ChevronRight
-                      className={cn(
-                        "size-3.5 shrink-0 transition",
-                        active ? "text-brand" : "text-muted group-hover:text-muted",
-                      )}
-                      aria-hidden="true"
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <EmptyState
-              className="min-h-56 py-8"
-              icon={<Workflow className="size-5" aria-hidden="true" />}
-              title={t("workflows.sidebar.emptyTitle")}
-              description={
-                canManage
-                  ? t("workflows.sidebar.emptyManager")
-                  : t("workflows.sidebar.emptyViewer")
-              }
-            />
-          )}
-
-          <div className="border-t border-border bg-surface-subtle px-4 py-3 text-[10px] leading-4 text-muted">
-            <span className="inline-flex items-center gap-1.5 font-medium text-muted">
-              <ShieldCheck className="size-3.5 text-brand" aria-hidden="true" />
-              {t("workflows.sidebar.safeTitle")}
-            </span>
-            <p className="mt-1">{t("workflows.sidebar.safeDescription")}</p>
-          </div>
+                <ArrowLeft className="size-3.5" aria-hidden="true" />
+                {t("workflows.editor.backToList")}
+              </Link>
+            }
+          />
         </Card>
-
+      ) : (
         <div className="min-w-0">
           <Card className="mb-4 overflow-hidden">
             <div className="flex flex-col gap-4 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -1372,24 +1459,24 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
                       {t("workflows.editor.delete")}
                     </Button>
                   ) : null}
-                  {!draft.id ? (
-                    <Button
-                      size="sm"
-                      onClick={saveDraft}
-                      disabled={interactionBusy}
-                    >
-                      {saving ? (
-                        <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <Save className="size-3.5" aria-hidden="true" />
-                      )}
-                      {t(
-                        saving
-                          ? "workflows.editor.saving"
+                  <Button
+                    size="sm"
+                    onClick={saveDraft}
+                    disabled={interactionBusy || (Boolean(draft.id) && !dirty)}
+                  >
+                    {saving ? (
+                      <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Save className="size-3.5" aria-hidden="true" />
+                    )}
+                    {t(
+                      saving
+                        ? "workflows.editor.saving"
+                        : draft.id
+                          ? "workflows.editor.update"
                           : "workflows.editor.save",
-                      )}
-                    </Button>
-                  ) : null}
+                    )}
+                  </Button>
                 </div>
               ) : null}
             </div>
@@ -2902,7 +2989,7 @@ export function StockWorkflowBuilder({ canManage }: { canManage: boolean }) {
             </div>
           </Card>
         </div>
-      </div>
+      )}
     </div>
   );
 }

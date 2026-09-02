@@ -225,6 +225,8 @@
     },
     "errors": {
       "load": "Workflows could not be loaded.",
+      "notFoundTitle": "Workflow not found",
+      "notFound": "This workflow does not exist or has already been deleted.",
       "unexpected": "The workflow service returned an unexpected response.",
       "save": "The workflow could not be saved.",
       "update": "The workflow could not be updated.",
@@ -268,14 +270,16 @@
       "configured_one": "{{value}} configured",
       "configured_other": "{{value}} configured",
       "createAria": "Create a workflow from the template",
+      "edit": "Edit",
       "resourceRevision": "{{resource}} · v{{revision}}",
       "emptyTitle": "No saved workflows",
-      "emptyManager": "The Paperless Paper template is ready in the builder.",
+      "emptyManager": "Create the first action flow on its own full-width editor page.",
       "emptyViewer": "A manager can create the first scan workflow here.",
       "safeTitle": "Safe by design",
       "safeDescription": "Only configured fields and allowed stock actions run after a scan."
     },
     "editor": {
+      "backToList": "Back to action flows",
       "newWorkflow": "New workflow",
       "enabled": "Enabled",
       "paused": "Paused",
