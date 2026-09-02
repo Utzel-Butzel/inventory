@@ -1,11 +1,4 @@
 {
-  "nav": {
-    "label": "Stock sections",
-    "overview": "Overview",
-    "orders": "Orders",
-    "scan": "Scan",
-    "workflows": "Action flows"
-  },
   "overview": {
     "metadata": {
       "title": "Stock",
@@ -16,7 +9,6 @@
     "description": "Monitor inventory levels, incoming stock, and estimated runway across all tracked items.",
     "actions": {
       "scanCode": "Scan code",
-      "scanWorkflows": "Action flows",
       "refresh": "Refresh",
       "refreshing": "Refreshing…",
       "refreshingLabel": "Refreshing stock",

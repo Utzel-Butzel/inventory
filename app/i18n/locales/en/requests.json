@@ -6,11 +6,6 @@
   "eyebrow": "Operations",
   "title": "Internal requests",
   "description": "Coordinate future inventory needs without changing on-hand stock until an approved request is fulfilled.",
-  "nav": {
-    "label": "Request views",
-    "requests": "Requests",
-    "calendar": "Calendar"
-  },
   "actions": {
     "close": "Close form",
     "new": "New request",

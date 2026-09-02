@@ -21,6 +21,9 @@
     "inventory": "Inventory",
     "entries": "Items",
     "stock": "Stock",
+    "stockOverview": "Overview",
+    "stockOrders": "Orders",
+    "stockScan": "Scan",
     "locations": "Locations",
     "map": "Map",
     "rooms": "Rooms 3D",
@@ -28,6 +31,7 @@
     "duplicates": "Duplicates",
     "notifications": "Notifications",
     "requests": "Requests",
+    "requestsOverview": "Overview",
     "reservationCalendar": "Reservation calendar",
     "settings": "Settings"
   },
@@ -85,6 +89,7 @@
       "general": "General",
       "inventory": "Inventory",
       "peopleAccess": "People & access",
+      "automations": "Automations",
       "integrationsAdvanced": "Integrations & advanced"
     },
     "items": {
@@ -131,6 +136,10 @@
       "notifications": {
         "label": "Notifications",
         "description": "Configure quiet alerts and digests"
+      },
+      "actionFlows": {
+        "label": "Action flows",
+        "description": "Configure code-driven stock actions"
       },
       "webhooks": {
         "label": "Webhooks",

@@ -1,11 +1,4 @@
 {
-  "nav": {
-    "label": "Bestandsbereiche",
-    "overview": "Übersicht",
-    "orders": "Bestellungen",
-    "scan": "Scannen",
-    "workflows": "Action Flows"
-  },
   "overview": {
     "metadata": {
       "title": "Bestand",
@@ -16,7 +9,6 @@
     "description": "Überwache Bestände, erwartete Lieferungen und die geschätzte Reichweite aller erfassten Einträge.",
     "actions": {
       "scanCode": "Code scannen",
-      "scanWorkflows": "Action Flows",
       "refresh": "Aktualisieren",
       "refreshing": "Wird aktualisiert…",
       "refreshingLabel": "Bestand wird aktualisiert",

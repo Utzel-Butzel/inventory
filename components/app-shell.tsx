@@ -99,12 +99,41 @@ const navigation: Array<{
     href: "/stock",
     icon: Warehouse,
     permission: "stock.read",
+    children: [
+      {
+        labelKey: "navigation.stockOverview",
+        href: "/stock",
+        permission: "stock.read",
+      },
+      {
+        labelKey: "navigation.stockOrders",
+        href: "/stock/orders",
+        permission: "orders.read",
+      },
+      {
+        labelKey: "navigation.stockScan",
+        href: "/stock/scan",
+        permission: "workflows.read",
+      },
+    ],
   },
   {
     labelKey: "navigation.requests",
     href: "/requests",
     icon: ClipboardList,
     permission: "requests.read",
+    children: [
+      {
+        labelKey: "navigation.requestsOverview",
+        href: "/requests",
+        permission: "requests.read",
+      },
+      {
+        labelKey: "navigation.reservationCalendar",
+        href: "/requests/calendar",
+        permission: "requests.read",
+      },
+    ],
   },
   {
     labelKey: "navigation.locations",
@@ -164,6 +193,7 @@ const settingsPageNames: Record<string, string> = {
   access: "settings.items.access.label",
   sharing: "settings.items.sharing.label",
   notifications: "settings.items.notifications.label",
+  "action-flows": "settings.items.actionFlows.label",
   webhooks: "settings.items.webhooks.label",
   api: "settings.items.api.label",
 };
@@ -432,7 +462,13 @@ function SidebarContent({
                   {active && visibleChildren?.length ? (
                     <div className="ml-[18px] mt-1 space-y-0.5 border-l border-border pl-[18px]">
                       {visibleChildren.map((child) => {
-                        const childActive = isPathActive(pathname, child.href);
+                        const childActive =
+                          isPathActive(pathname, child.href) &&
+                          !visibleChildren.some(
+                            (candidate) =>
+                              candidate.href !== child.href &&
+                              isPathActive(pathname, candidate.href),
+                          );
                         return (
                           <Link
                             key={child.href}
@@ -530,12 +566,22 @@ export function AppShell({
     if (pathSegments[2] === "edit") return t("breadcrumb.edit");
     return undefined;
   })();
+  const stockNestedPageName =
+    section === "stock" && pathSegments[1]
+      ? {
+          orders: t("navigation.stockOrders"),
+          scan: t("navigation.stockScan"),
+        }[pathSegments[1]]
+      : undefined;
   const requestNestedPageName =
     section === "requests" && pathSegments[1] === "calendar"
       ? t("navigation.reservationCalendar")
       : undefined;
   const nestedPageName =
-    settingsPageName ?? inventoryNestedPageName ?? requestNestedPageName;
+    settingsPageName ??
+    inventoryNestedPageName ??
+    stockNestedPageName ??
+    requestNestedPageName;
   const isInventoryResourceSubpage =
     section === "inventory" &&
     pathSegments.length === 3 &&

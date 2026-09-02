@@ -6,11 +6,6 @@
   "eyebrow": "Abläufe",
   "title": "Interne Anfragen",
   "description": "Plane zukünftigen Inventarbedarf, ohne den aktuellen Bestand zu verändern, bis eine genehmigte Anfrage erfüllt wird.",
-  "nav": {
-    "label": "Ansichten für Anfragen",
-    "requests": "Anfragen",
-    "calendar": "Kalender"
-  },
   "actions": {
     "close": "Formular schließen",
     "new": "Neue Anfrage",

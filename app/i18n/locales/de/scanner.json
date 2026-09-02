@@ -101,7 +101,8 @@
       "errorTitle": "Scanner-Einrichtung konnte nicht geladen werden",
       "retry": "Erneut versuchen",
       "emptyTitle": "Kein aktivierter Scan-Workflow",
-      "emptyDescription": "Erstelle und aktiviere zuerst einen Workflow. Er legt fest, wie Code-Inhalte einer EPD-Nummer, einem Bestandsstatus und bearbeitbaren Eigenschaften zugeordnet werden.",
+      "emptyDescription": "Erstelle und aktiviere unter Einstellungen → Automatisierungen zuerst einen Action Flow. Er legt fest, wie Code-Inhalte einer EPD-Nummer, einem Bestandsstatus und bearbeitbaren Eigenschaften zugeordnet werden.",
+      "configureWorkflows": "Action Flows konfigurieren",
       "workflowLabel": "Scan-Workflow"
     },
     "success": {
@@ -255,8 +256,8 @@
       "aiError": "Die KI-Regel konnte nicht erstellt werden."
     },
     "header": {
-      "eyebrow": "Action-Editor",
-      "title": "Action Flows erstellen",
+      "eyebrow": "Automatisierungen",
+      "title": "Action Flows",
       "description": "Verbinde QR-Codes und Barcodes mit Datenfeldern, Montage, Bestandsbuchungen, Dateien und Webhooks.",
       "readOnly": "Schreibgeschützt",
       "refresh": "Aktualisieren",

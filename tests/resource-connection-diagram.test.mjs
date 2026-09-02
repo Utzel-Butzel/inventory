@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { resolveBomParentReferences } from "../lib/bom-parents.ts";
 import {
   buildWavyConnectionPath,
   buildResourceConnectionDiagram,
@@ -11,6 +12,101 @@ import {
 } from "../lib/resource-connection-diagram.ts";
 
 const item = (id, name) => ({ id, name, type: "item", status: "available" });
+
+test("resolves direct, inherited, and overridden BOM parents", () => {
+  const references = resolveBomParentReferences({
+    componentResourceId: "display",
+    baseRows: [
+      {
+        id: "base-line",
+        slotKey: "display-slot",
+        assemblyResourceId: "primary",
+        quantityPerAssembly: 1,
+        position: 0,
+        note: "",
+      },
+    ],
+    variantLinks: [
+      { variantResourceId: "inherited", primaryResourceId: "primary" },
+      { variantResourceId: "removed", primaryResourceId: "primary" },
+      { variantResourceId: "replaced", primaryResourceId: "primary" },
+      { variantResourceId: "quantity-override", primaryResourceId: "primary" },
+      { variantResourceId: "variant-only", primaryResourceId: "other-primary" },
+    ],
+    inheritedOverrides: [
+      {
+        id: "removed-override",
+        variantResourceId: "removed",
+        slotKey: "display-slot",
+        componentResourceId: null,
+        quantityPerAssembly: null,
+        position: null,
+        note: "",
+        removed: true,
+      },
+      {
+        id: "replacement-override",
+        variantResourceId: "replaced",
+        slotKey: "display-slot",
+        componentResourceId: "another-display",
+        quantityPerAssembly: 1,
+        position: 0,
+        note: "",
+        removed: false,
+      },
+      {
+        id: "quantity-override",
+        variantResourceId: "quantity-override",
+        slotKey: "display-slot",
+        componentResourceId: "display",
+        quantityPerAssembly: 2,
+        position: 0,
+        note: "Use two",
+        removed: false,
+      },
+    ],
+    matchingOverrideRows: [
+      {
+        id: "quantity-override",
+        variantResourceId: "quantity-override",
+        slotKey: "display-slot",
+        quantityPerAssembly: 2,
+        position: 0,
+        note: "Use two",
+      },
+      {
+        id: "variant-only-override",
+        variantResourceId: "variant-only",
+        slotKey: "extra-display",
+        quantityPerAssembly: 3,
+        position: 1,
+        note: "Variant only",
+      },
+      {
+        id: "orphan-override",
+        variantResourceId: "orphan",
+        slotKey: "extra-display",
+        quantityPerAssembly: 1,
+        position: 0,
+        note: "",
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    references.map((reference) => ({
+      resourceId: reference.resourceId,
+      quantity: reference.quantityPerAssembly,
+      origin: reference.origin,
+    })),
+    [
+      { resourceId: "primary", quantity: 1, origin: "local" },
+      { resourceId: "inherited", quantity: 1, origin: "inherited" },
+      { resourceId: "quantity-override", quantity: 2, origin: "override" },
+      { resourceId: "variant-only", quantity: 3, origin: "override" },
+    ],
+  );
+});
 
 test("builds a tapered wave path for other relationships", () => {
   const path = buildWavyConnectionPath({
@@ -681,7 +777,7 @@ test("the detail-page connection flow opens by default and owns every connection
 });
 
 test("loads reverse BOM parents with resource-level access control", async () => {
-  const [route, assemblies] = await Promise.all([
+  const [route, assemblies, bomParents, openapi] = await Promise.all([
     readFile(
       new URL(
         "../app/api/v1/resources/[id]/bom-parents/route.ts",
@@ -690,6 +786,8 @@ test("loads reverse BOM parents with resource-level access control", async () =>
       "utf8",
     ),
     readFile(new URL("../lib/assemblies.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/bom-parents.ts", import.meta.url), "utf8"),
+    readFile(new URL("../public/openapi.yaml", import.meta.url), "utf8"),
   ]);
 
   assert.match(route, /requireResourcePermission[\s\S]*"inventory\.read"/);
@@ -704,8 +802,12 @@ test("loads reverse BOM parents with resource-level access control", async () =>
     /eq\(bomLines\.componentResourceId, componentResourceId\)/,
   );
   assert.match(
-    assemblies,
+    bomParents,
     /matchingOverrideRows[\s\S]*variantsByPrimary[\s\S]*origin: "inherited"/,
+  );
+  assert.match(
+    openapi,
+    /\/resources\/\{id\}\/bom-parents:[\s\S]*\$ref: "#\/components\/schemas\/BomParent"/,
   );
 });
 

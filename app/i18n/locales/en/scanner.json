@@ -101,7 +101,8 @@
       "errorTitle": "Scanner setup could not be loaded",
       "retry": "Retry",
       "emptyTitle": "No enabled scan workflow",
-      "emptyDescription": "Create and enable a workflow first. It defines how code content maps to an EPD number, stock state, and editable properties.",
+      "emptyDescription": "First create and enable an action flow under Settings → Automations. It defines how code content maps to an EPD number, stock state, and editable properties.",
+      "configureWorkflows": "Configure action flows",
       "workflowLabel": "Scan workflow"
     },
     "success": {
@@ -255,8 +256,8 @@
       "aiError": "The AI rule could not be generated."
     },
     "header": {
-      "eyebrow": "Action editor",
-      "title": "Build action flows visually.",
+      "eyebrow": "Automations",
+      "title": "Action flows",
       "description": "Connect QR codes and barcodes to data fields, assembly, stock movements, files, and webhooks—without programming.",
       "readOnly": "Read only",
       "refresh": "Refresh",

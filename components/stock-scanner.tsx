@@ -20,7 +20,7 @@ import { useT } from "next-i18next/client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CodeScannerCamera } from "@/components/code-scanner-camera";
-import { StockSectionNav } from "@/components/stock-section-nav";
+import { OrganizationLink as Link } from "@/components/organization-routing";
 import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
 import {
   isScanCodeType,
@@ -811,9 +811,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
         </div>
       </div>
 
-      <StockSectionNav />
-
-      <div className="mt-6">
+      <div>
         {workflowsLoading ? (
           <ScannerLoading />
         ) : workflowsError ? (
@@ -835,6 +833,17 @@ export function StockScanner({ canExecute }: StockScannerProps) {
               icon={<Settings2 className="size-5" aria-hidden="true" />}
               title={t("scan.setup.emptyTitle")}
               description={t("scan.setup.emptyDescription")}
+              action={
+                canExecute ? (
+                  <Link
+                    href="/settings/action-flows"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-transparent bg-brand-solid px-4 text-sm font-semibold text-on-brand shadow-sm transition duration-150 hover:bg-brand-hover active:bg-brand-active"
+                  >
+                    <Settings2 className="size-4" aria-hidden="true" />
+                    {t("scan.setup.configureWorkflows")}
+                  </Link>
+                ) : undefined
+              }
             />
           </Card>
         ) : (

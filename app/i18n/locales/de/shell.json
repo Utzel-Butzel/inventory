@@ -21,6 +21,9 @@
     "inventory": "Inventar",
     "entries": "Einträge",
     "stock": "Bestand",
+    "stockOverview": "Übersicht",
+    "stockOrders": "Bestellungen",
+    "stockScan": "Scannen",
     "locations": "Orte",
     "map": "Karte",
     "rooms": "3D-Räume",
@@ -28,6 +31,7 @@
     "duplicates": "Duplikate",
     "notifications": "Benachrichtigungen",
     "requests": "Anfragen",
+    "requestsOverview": "Übersicht",
     "reservationCalendar": "Reservierungskalender",
     "settings": "Einstellungen"
   },
@@ -85,6 +89,7 @@
       "general": "Allgemein",
       "inventory": "Inventar",
       "peopleAccess": "Personen & Zugriff",
+      "automations": "Automatisierungen",
       "integrationsAdvanced": "Integrationen & Erweitert"
     },
     "items": {
@@ -131,6 +136,10 @@
       "notifications": {
         "label": "Benachrichtigungen",
         "description": "Ruhige Hinweise und Übersichten konfigurieren"
+      },
+      "actionFlows": {
+        "label": "Action Flows",
+        "description": "Abläufe für Codes und Bestandsaktionen konfigurieren"
       },
       "webhooks": {
         "label": "Webhooks",

@@ -56,6 +56,10 @@ import {
 } from "@/lib/stock-costing";
 import { validateCustomFieldValues } from "@/lib/custom-fields";
 import type { CustomFieldValues } from "@/lib/custom-field-contract";
+import {
+  resolveBomParentReferences,
+  type BomParent,
+} from "@/lib/bom-parents";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 
@@ -194,19 +198,6 @@ type NormalizedBomComponent = {
 
 type ReadExecutor = Pick<typeof db, "select">;
 type AssemblyTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-export type BomParent = {
-  id: string;
-  slotKey: string;
-  resourceId: string;
-  name: string;
-  type: ResourceRecord["type"];
-  status: string;
-  quantityPerAssembly: number;
-  position: number;
-  note: string;
-  origin: BomOrigin;
-};
 
 const sortBomLines = <T extends { position: number; slotKey: string }>(
   rows: T[],
@@ -839,11 +830,6 @@ export async function getBom(
   );
 }
 
-type BomParentReference = Omit<
-  BomParent,
-  "name" | "type" | "status"
->;
-
 async function listBomParentsWithExecutor(
   executor: ReadExecutor,
   organizationId: string,
@@ -914,12 +900,6 @@ async function listBomParentsWithExecutor(
           ),
         )
     : [];
-  const primaryByVariant = new Map(
-    variantLinks.map((link) => [
-      link.variantResourceId,
-      link.primaryResourceId,
-    ]),
-  );
   const variantsByPrimary = new Map<string, string[]>();
   for (const link of variantLinks) {
     const variants = variantsByPrimary.get(link.primaryResourceId) ?? [];
@@ -953,74 +933,15 @@ async function listBomParentsWithExecutor(
           ),
         )
     : [];
-  const overrideByVariantSlot = new Map(
-    inheritedOverrides.map((row) => [
-      `${row.variantResourceId}:${row.slotKey}`,
-      row,
-    ]),
+  const references = new Map(
+    resolveBomParentReferences({
+      componentResourceId,
+      baseRows,
+      matchingOverrideRows,
+      variantLinks,
+      inheritedOverrides,
+    }).map((reference) => [reference.resourceId, reference]),
   );
-  const references = new Map<string, BomParentReference>();
-
-  for (const row of baseRows) {
-    if (primaryByVariant.has(row.assemblyResourceId)) continue;
-    references.set(row.assemblyResourceId, {
-      id: row.id,
-      slotKey: row.slotKey,
-      resourceId: row.assemblyResourceId,
-      quantityPerAssembly: row.quantityPerAssembly,
-      position: row.position,
-      note: row.note,
-      origin: "local",
-    });
-    for (const variantResourceId of
-      variantsByPrimary.get(row.assemblyResourceId) ?? []) {
-      const override = overrideByVariantSlot.get(
-        `${variantResourceId}:${row.slotKey}`,
-      );
-      if (override) {
-        if (
-          override.removed ||
-          override.componentResourceId !== componentResourceId ||
-          override.quantityPerAssembly === null ||
-          override.position === null
-        ) {
-          continue;
-        }
-        references.set(variantResourceId, {
-          id: override.id,
-          slotKey: override.slotKey,
-          resourceId: variantResourceId,
-          quantityPerAssembly: override.quantityPerAssembly,
-          position: override.position,
-          note: override.note,
-          origin: "override",
-        });
-        continue;
-      }
-      references.set(variantResourceId, {
-        id: `inherited:${variantResourceId}:${row.slotKey}`,
-        slotKey: row.slotKey,
-        resourceId: variantResourceId,
-        quantityPerAssembly: row.quantityPerAssembly,
-        position: row.position,
-        note: row.note,
-        origin: "inherited",
-      });
-    }
-  }
-
-  for (const row of matchingOverrideRows) {
-    if (row.quantityPerAssembly === null || row.position === null) continue;
-    references.set(row.variantResourceId, {
-      id: row.id,
-      slotKey: row.slotKey,
-      resourceId: row.variantResourceId,
-      quantityPerAssembly: row.quantityPerAssembly,
-      position: row.position,
-      note: row.note,
-      origin: "override",
-    });
-  }
 
   const parentIds = Array.from(references.keys());
   if (!parentIds.length) return [];

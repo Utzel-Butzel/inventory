@@ -3058,6 +3058,27 @@ paths:
               schema: { $ref: "#/components/schemas/BomDetail" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Item is not a linked variant }
+  /resources/{id}/bom-parents:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Manufacturing]
+      summary: List assemblies whose effective bill of materials uses this item
+      description: Includes direct primary-item BOM lines, inherited variant BOM lines, and sparse variant overrides. Parent assemblies that the caller cannot read are omitted.
+      responses:
+        "200":
+          description: Readable parent assemblies using this item
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [parents]
+                properties:
+                  parents:
+                    type: array
+                    items: { $ref: "#/components/schemas/BomParent" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /resources/{id}/stock/builds:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -5239,6 +5260,25 @@ components:
                         code: { type: string }
                         location: { type: [string, "null"] }
                   isPrimary: { type: boolean }
+    BomParent:
+      type: object
+      required: [id, slotKey, resourceId, name, type, status, quantityPerAssembly, position, note, origin]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          description: Stored BOM row id or a stable inherited-row identifier.
+        slotKey: { type: string, minLength: 1, maxLength: 80 }
+        resourceId: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        status: { type: string }
+        quantityPerAssembly: { type: integer, minimum: 1 }
+        position: { type: integer, minimum: 0 }
+        note: { type: string }
+        origin:
+          type: string
+          enum: [local, inherited, override, variant]
     BomDetail:
       type: object
       required: [resource, components, buildableQuantity, inheritance]

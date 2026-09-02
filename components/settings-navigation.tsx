@@ -21,6 +21,7 @@ import {
   UserRound,
   Users,
   Webhook,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -127,6 +128,18 @@ const navigationGroups: Array<{
         href: "/settings/sharing",
         icon: Share2,
         requiredPermission: "sharing.manage",
+      },
+    ],
+  },
+  {
+    labelKey: "settings.groups.automations",
+    items: [
+      {
+        labelKey: "settings.items.actionFlows.label",
+        descriptionKey: "settings.items.actionFlows.description",
+        href: "/settings/action-flows",
+        icon: Workflow,
+        requiredPermission: "workflows.read",
       },
     ],
   },

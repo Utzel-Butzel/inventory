@@ -20,7 +20,6 @@ import { useT } from "next-i18next/client";
 
 import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
 import { ResponsiveMediaImage } from "@/components/responsive-media-image";
-import { StockSectionNav } from "@/components/stock-section-nav";
 
 type StockFilter = "all" | "low" | "out" | "healthy" | "incoming";
 type StockState = "low" | "out" | "healthy";
@@ -492,7 +491,6 @@ export function StockOverview() {
 
   return (
     <div className="mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <StockSectionNav />
       <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold text-foreground sm:text-[28px]">
           {t("overview.title")}
