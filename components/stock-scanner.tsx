@@ -46,6 +46,8 @@ type Workflow = {
   unitStatus: string | null;
   operation: WorkflowOperation;
   codeTypes: ScanCodeType[];
+  targetSelectionMode: "all" | "radio" | "checkbox";
+  allowVariantSelection: boolean;
 };
 
 type FieldOption = {
@@ -77,6 +79,21 @@ type ResourceSummary = {
   updatedAt: string | null;
 };
 
+type TargetOption = ResourceSummary;
+
+type TargetGroup = {
+  resourceId: string;
+  name: string;
+  options: TargetOption[];
+};
+
+type ExpectedTarget = {
+  resourceId: string;
+  resourceUpdatedAt: string;
+  unitId: string | null;
+  unitUpdatedAt: string | null;
+};
+
 type UnitSummary = {
   id: string;
   code: string | null;
@@ -102,6 +119,10 @@ type Resolution = {
   expectedResourceUpdatedAt: string;
   expectedUnitId: string | null;
   expectedUnitUpdatedAt: string | null;
+  targetGroups: TargetGroup[];
+  selectedResourceIds: string[];
+  expectedTargets: ExpectedTarget[];
+  resources: ResourceSummary[];
 };
 
 type ExecuteResult = {
@@ -114,6 +135,7 @@ type ExecuteResult = {
   operation: WorkflowOperation;
   metadataBefore: JsonRecord | null;
   metadataAfter: JsonRecord | null;
+  resources: ResourceSummary[];
 };
 
 type StockScannerProps = {
@@ -212,6 +234,12 @@ function normalizeWorkflow(value: unknown): Workflow | null {
     codeTypes: Array.isArray(record.codeTypes)
       ? record.codeTypes.filter(isScanCodeType)
       : [...scanCodeTypes],
+    targetSelectionMode:
+      record.targetSelectionMode === "radio" ||
+      record.targetSelectionMode === "checkbox"
+        ? record.targetSelectionMode
+        : "all",
+    allowVariantSelection: asBoolean(record.allowVariantSelection),
     operation:
       asRecord(record.operation)?.type === "stock-adjustment"
         ? {
@@ -318,6 +346,21 @@ function normalizeResource(value: unknown): ResourceSummary {
   };
 }
 
+function normalizeTargetGroups(value: unknown): TargetGroup[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry): TargetGroup[] => {
+    const group = asRecord(entry);
+    const resourceId = firstString(group, ["resourceId"]);
+    if (!group || !resourceId || !Array.isArray(group.options)) return [];
+    const options = group.options
+      .map(normalizeResource)
+      .filter((option) => Boolean(option.id));
+    return options.length
+      ? [{ resourceId, name: firstString(group, ["name"]), options }]
+      : [];
+  });
+}
+
 function normalizeUnit(value: unknown): UnitSummary | null {
   const unit = asRecord(value);
   if (!unit) return null;
@@ -371,6 +414,36 @@ function normalizeResolution(
   const expectedUnitId = firstString(resolution, ["expectedUnitId"]) || null;
   const expectedUnitUpdatedAt =
     firstString(resolution, ["expectedUnitUpdatedAt"]) || null;
+  const targetGroups = normalizeTargetGroups(resolution.targetGroups);
+  const selectedResourceIds = Array.isArray(resolution.selectedResourceIds)
+    ? resolution.selectedResourceIds.filter(
+        (value): value is string => typeof value === "string",
+      )
+    : resource.id
+      ? [resource.id]
+      : [];
+  const resources = Array.isArray(resolution.resources)
+    ? resolution.resources.map(normalizeResource).filter((item) => Boolean(item.id))
+    : [resource];
+  const expectedTargets = Array.isArray(resolution.expectedTargets)
+    ? resolution.expectedTargets.flatMap((entry): ExpectedTarget[] => {
+        const target = asRecord(entry);
+        const resourceId = firstString(target, ["resourceId"]);
+        const resourceUpdatedAt = firstString(target, ["resourceUpdatedAt"]);
+        if (!resourceId || !resourceUpdatedAt) return [];
+        return [{
+          resourceId,
+          resourceUpdatedAt,
+          unitId: firstString(target, ["unitId"]) || null,
+          unitUpdatedAt: firstString(target, ["unitUpdatedAt"]) || null,
+        }];
+      })
+    : [{
+        resourceId: resource.id,
+        resourceUpdatedAt: expectedResourceUpdatedAt ?? "",
+        unitId: expectedUnitId,
+        unitUpdatedAt: expectedUnitUpdatedAt,
+      }];
 
   if (
     quantityBefore === null ||
@@ -403,6 +476,10 @@ function normalizeResolution(
     expectedResourceUpdatedAt,
     expectedUnitId,
     expectedUnitUpdatedAt,
+    targetGroups,
+    selectedResourceIds,
+    expectedTargets,
+    resources,
   };
 }
 
@@ -410,6 +487,9 @@ function normalizeExecuteResult(payload: unknown, fallback: Resolution): Execute
   const result = nestedPayloadRecord(payload, "result");
   if (!result) return null;
   const resource = normalizeResource(result.resource ?? fallback.resource);
+  const resources = Array.isArray(result.resources)
+    ? result.resources.map(normalizeResource).filter((item) => Boolean(item.id))
+    : [resource];
   const unit = normalizeUnit(result.unit) ?? fallback.unit;
   if (!resource.id && !unit) return null;
   return {
@@ -440,6 +520,7 @@ function normalizeExecuteResult(payload: unknown, fallback: Resolution): Execute
     metadataBefore: asRecord(result.metadataBefore),
     metadataAfter:
       asRecord(result.metadataAfter ?? result.metadata) ?? unit?.metadata ?? null,
+    resources,
   };
 }
 
@@ -616,7 +697,11 @@ export function StockScanner({ canExecute }: StockScannerProps) {
   }, []);
 
   const resolveCode = useCallback(
-    async (code: string, codeType: ScanCodeType | null = null) => {
+    async (
+      code: string,
+      codeType: ScanCodeType | null = null,
+      selectedResourceIds: string[] = [],
+    ) => {
       const normalizedCode = code.trim();
       if (!selectedWorkflow || !normalizedCode || phase === "resolving" || phase === "executing") {
         return;
@@ -636,6 +721,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
             workflowId: selectedWorkflow.id,
             code: normalizedCode,
             codeType,
+            selectedResourceIds,
           }),
         });
         const payload = (await response.json().catch(() => null)) as unknown;
@@ -745,6 +831,8 @@ export function StockScanner({ canExecute }: StockScannerProps) {
           expectedResourceUpdatedAt: resolution.expectedResourceUpdatedAt,
           expectedUnitId: resolution.expectedUnitId,
           expectedUnitUpdatedAt: resolution.expectedUnitUpdatedAt,
+          selectedResourceIds: resolution.selectedResourceIds,
+          expectedTargets: resolution.expectedTargets,
         }),
       });
       const payload = (await response.json().catch(() => null)) as unknown;
@@ -888,7 +976,10 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                           {t("scan.success.eyebrow")}
                         </p>
                         <h2 className="mt-1 text-xl font-semibold text-success">
-                          {result.resource.name || t("scan.fallbacks.unknownResource")}
+                          {result.resources
+                            .map((resource) => resource.name)
+                            .filter(Boolean)
+                            .join(", ") || t("scan.fallbacks.unknownResource")}
                         </h2>
                         <p className="mt-1 text-sm text-success">
                           {result.operation.type === "stock-adjustment"
@@ -925,21 +1016,29 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                           <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
                             Neuer Bestand
                           </p>
-                          <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
-                            {result.resource.quantity ?? t("values.empty")}
-                          </p>
+                          <div className="mt-1 space-y-1 text-sm font-semibold text-foreground">
+                            {result.resources.map((resource) => (
+                              <p key={resource.id} className="flex justify-between gap-3">
+                                <span>{resource.name}</span>
+                                <span className="tabular-nums">
+                                  {resource.quantity ?? t("values.empty")}
+                                </span>
+                              </p>
+                            ))}
+                          </div>
                         </div>
                       )}
                       <div className="rounded-xl bg-surface-subtle p-3">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
                           {t("scan.success.resource")}
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-foreground">
-                          {result.resource.name || t("scan.fallbacks.unknownResource")}
-                        </p>
-                        <p className="mt-1 truncate font-mono text-[11px] text-muted">
-                          {result.resource.id}
-                        </p>
+                        <div className="mt-1 space-y-1">
+                          {result.resources.map((resource) => (
+                            <p key={resource.id} className="text-sm font-semibold text-foreground">
+                              {resource.name || t("scan.fallbacks.unknownResource")}
+                            </p>
+                          ))}
+                        </div>
                       </div>
                     </div>
                     <div>
@@ -966,6 +1065,9 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                   onFiles={updateInputFiles}
                   onCancel={resetScan}
                   onExecute={() => void executeResolution()}
+                  onTargets={(resourceIds) =>
+                    void resolveCode(rawCode, rawCodeType, resourceIds)
+                  }
                 />
               ) : phase === "executing" && resolution ? (
                 <ReviewForm
@@ -980,6 +1082,9 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                   onFiles={updateInputFiles}
                   onCancel={resetScan}
                   onExecute={() => void executeResolution()}
+                  onTargets={(resourceIds) =>
+                    void resolveCode(rawCode, rawCodeType, resourceIds)
+                  }
                 />
               ) : (
                 <Card className="p-4 sm:p-5">
@@ -1072,6 +1177,7 @@ function ReviewForm({
   onFiles,
   onCancel,
   onExecute,
+  onTargets,
 }: {
   resolution: Resolution;
   inputs: Record<string, ScannerInputValue>;
@@ -1084,6 +1190,7 @@ function ReviewForm({
   onFiles: (key: string, files: File[]) => void;
   onCancel: () => void;
   onExecute: () => void;
+  onTargets: (resourceIds: string[]) => void;
 }) {
   const { t, i18n } = useT("scanner");
   const locale = i18n.resolvedLanguage ?? i18n.language;
@@ -1102,6 +1209,38 @@ function ReviewForm({
     resolution.workflow.operation.type === "unit" &&
     !resolution.unit &&
     !resolution.willCreateUnit;
+  const selectedResourceIds = new Set(resolution.selectedResourceIds);
+  const selectedOptionForGroup = (group: TargetGroup) =>
+    group.options.find((option) => selectedResourceIds.has(option.id));
+  const changeTarget = (group: TargetGroup, resourceId?: string) => {
+    const selectedOption = selectedOptionForGroup(group);
+    const withoutGroup = resolution.selectedResourceIds.filter(
+      (selectedId) =>
+        !group.options.some((option) => option.id === selectedId),
+    );
+    if (resourceId) {
+      onTargets(
+        resolution.workflow.targetSelectionMode === "radio"
+          ? [resourceId]
+          : [...withoutGroup, resourceId],
+      );
+      return;
+    }
+    if (resolution.workflow.targetSelectionMode === "radio") {
+      const next = selectedOption?.id ?? group.options[0]?.id;
+      if (next) onTargets([next]);
+      return;
+    }
+    if (resolution.workflow.targetSelectionMode !== "checkbox") return;
+    if (selectedOption && withoutGroup.length === 0) return;
+    onTargets(
+      selectedOption
+        ? withoutGroup
+        : group.options[0]
+          ? [...withoutGroup, group.options[0].id]
+          : withoutGroup,
+    );
+  };
 
   return (
     <Card className="overflow-hidden">
@@ -1130,6 +1269,98 @@ function ReviewForm({
       </div>
 
       <div className="space-y-6 p-5 sm:p-6">
+        {resolution.targetGroups.length > 1 ||
+        resolution.targetGroups.some((group) => group.options.length > 1) ? (
+          <section aria-labelledby="scan-targets-title">
+            <h3
+              id="scan-targets-title"
+              className="text-xs font-semibold uppercase tracking-[0.08em] text-muted"
+            >
+              {t("scan.review.targetsTitle")}
+            </h3>
+            <p className="mt-1 text-xs leading-5 text-muted">
+              {t(
+                `scan.review.targetModes.${resolution.workflow.targetSelectionMode}`,
+              )}
+            </p>
+            <div className="mt-3 space-y-3">
+              {resolution.targetGroups.map((group) => {
+                const selectedOption = selectedOptionForGroup(group);
+                const targetSelected = Boolean(selectedOption);
+                return (
+                  <div
+                    key={group.resourceId}
+                    className={cn(
+                      "rounded-xl border p-3.5",
+                      targetSelected
+                        ? "border-brand-border bg-brand-soft/50"
+                        : "border-border bg-surface-subtle",
+                    )}
+                  >
+                    <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold text-foreground">
+                      {resolution.workflow.targetSelectionMode === "all" ? (
+                        <Check className="size-4 text-brand" aria-hidden="true" />
+                      ) : (
+                        <input
+                          type={
+                            resolution.workflow.targetSelectionMode === "radio"
+                              ? "radio"
+                              : "checkbox"
+                          }
+                          name={
+                            resolution.workflow.targetSelectionMode === "radio"
+                              ? "scan-target"
+                              : `scan-target-${group.resourceId}`
+                          }
+                          checked={targetSelected}
+                          disabled={executing}
+                          onChange={() => changeTarget(group)}
+                          className="size-4 accent-brand-solid"
+                        />
+                      )}
+                      {group.name}
+                    </label>
+                    {group.options.length > 1 && targetSelected ? (
+                      <div
+                        role="radiogroup"
+                        aria-label={t("scan.review.variationFor", {
+                          name: group.name,
+                        })}
+                        className="mt-3 grid gap-2 border-t border-border pt-3 sm:grid-cols-2"
+                      >
+                        {group.options.map((option) => {
+                          const checked = selectedOption?.id === option.id;
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={checked}
+                              disabled={executing}
+                              onClick={() => changeTarget(group, option.id)}
+                              className={cn(
+                                "flex min-h-10 items-center gap-2 rounded-lg border bg-surface px-3 text-left text-xs font-semibold transition",
+                                checked
+                                  ? "border-brand-border text-brand-strong"
+                                  : "border-border text-muted-strong hover:border-border-strong",
+                              )}
+                            >
+                              <span className="flex-1">{option.name}</span>
+                              {checked ? (
+                                <Check className="size-3.5" aria-hidden="true" />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-border p-4">
             <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">

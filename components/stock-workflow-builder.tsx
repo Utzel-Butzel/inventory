@@ -15,14 +15,18 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleDot,
+  Copy,
   Eye,
+  ExternalLink,
   FileKey2,
   Layers3,
+  Link2,
   LoaderCircle,
   Lock,
   PackageCheck,
   Plus,
   QrCode,
+  RefreshCcw,
   Save,
   ScanLine,
   Settings2,
@@ -43,6 +47,10 @@ import {
 
 import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
 import { CodeScannerCamera } from "@/components/code-scanner-camera";
+import {
+  InventorySelect,
+  type InventorySelectItem,
+} from "@/components/inventory-select";
 import { fetchJson } from "@/lib/client-types";
 import {
   scanCodeTypeLabels,
@@ -77,6 +85,7 @@ type Extraction =
   | { mode: "regex"; pattern: string; flags: string; group: string };
 
 type StorageTarget = "custom-field" | "metadata" | "execution";
+type TargetSelectionMode = "all" | "radio" | "checkbox";
 type InputType =
   | "text"
   | "textarea"
@@ -126,7 +135,13 @@ type WorkflowPayload = {
   description: string;
   enabled: boolean;
   resourceId: string;
+  resourceIds: string[];
+  targetSelectionMode: TargetSelectionMode;
+  allowVariantSelection: boolean;
   codeTypes: ScanCodeType[];
+  publicTriggerEnabled: boolean;
+  publicTriggerCode: string | null;
+  quantityInputKey: string | null;
   extraction: Extraction;
   identifierPropertyKey: string;
   identifierStorage: StorageTarget;
@@ -143,6 +158,7 @@ type WorkflowPayload = {
 
 type WorkflowRecord = Omit<WorkflowPayload, "revision"> & {
   id: string;
+  publicTriggerId: string;
   revision: number;
   createdAt?: string;
   updatedAt?: string;
@@ -151,10 +167,13 @@ type WorkflowRecord = Omit<WorkflowPayload, "revision"> & {
 type StockItem = {
   resourceId: string;
   name: string;
+  sku?: string | null;
   type?: string;
   quantity?: number;
   trackingMode: string;
   unitName?: string;
+  variantOfResourceId?: string | null;
+  cover?: InventorySelectItem["cover"];
 };
 
 type StockUnitCustomField = {
@@ -191,7 +210,14 @@ type WorkflowDraft = {
   description: string;
   enabled: boolean;
   resourceId: string;
+  resourceIds: string[];
+  targetSelectionMode: TargetSelectionMode;
+  allowVariantSelection: boolean;
   codeTypes: ScanCodeType[];
+  publicTriggerEnabled: boolean;
+  publicTriggerId: string | null;
+  publicTriggerCode: string;
+  quantityInputKey: string | null;
   extraction: DraftExtraction;
   identifierPropertyKey: string;
   identifierStorage: StorageTarget;
@@ -212,6 +238,54 @@ const inputClass =
 const textAreaClass =
   "mt-1.5 min-h-20 w-full resize-y rounded-xl border border-border bg-surface px-3 py-2.5 text-[13px] leading-5 text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
 const labelClass = "block text-[11px] font-semibold text-muted-strong";
+
+type StockUnitCustomFieldSelectProps = {
+  fields: StockUnitCustomField[];
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+  t: TFunction;
+  className?: string;
+};
+
+function StockUnitCustomFieldSelect({
+  fields,
+  value,
+  onChange,
+  disabled,
+  t,
+  className,
+}: StockUnitCustomFieldSelectProps) {
+  const selectedField = fields.find((field) => field.key === value);
+
+  return (
+    <label className={cn(labelClass, className)}>
+      {t("workflows.storage.customFieldLabel")}
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={inputClass}
+        disabled={disabled}
+      >
+        <option value="" disabled>
+          {fields.length
+            ? t("workflows.storage.customFieldPlaceholder")
+            : t("workflows.storage.noCustomFields")}
+        </option>
+        {value && !selectedField ? (
+          <option value={value}>
+            {t("workflows.storage.missingCustomField", { key: value })}
+          </option>
+        ) : null}
+        {fields.map((field) => (
+          <option key={field.key} value={field.key}>
+            {field.label} ({field.key})
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 const unitStatuses: UnitStatus[] = [
   "available",
@@ -236,7 +310,14 @@ function templateDraft(t: TFunction, resourceId = ""): WorkflowDraft {
     description: t("workflows.template.description"),
     enabled: true,
     resourceId,
+    resourceIds: resourceId ? [resourceId] : [],
+    targetSelectionMode: "all",
+    allowVariantSelection: false,
     codeTypes: ["qr_code"],
+    publicTriggerEnabled: false,
+    publicTriggerId: null,
+    publicTriggerCode: "",
+    quantityInputKey: null,
     extraction: {
       mode: "url-query",
       parameter: "d",
@@ -331,10 +412,19 @@ function workflowToDraft(workflow: WorkflowRecord): WorkflowDraft {
   return {
     ...workflow,
     id: workflow.id,
+    resourceIds: workflow.resourceIds?.length
+      ? workflow.resourceIds
+      : [workflow.resourceId],
+    targetSelectionMode: workflow.targetSelectionMode ?? "all",
+    allowVariantSelection: workflow.allowVariantSelection ?? false,
     extraction: extractionToDraft(extraction),
     codeTypes: workflow.codeTypes?.length
       ? workflow.codeTypes
       : [...scanCodeTypes],
+    publicTriggerEnabled: workflow.publicTriggerEnabled ?? false,
+    publicTriggerId: workflow.publicTriggerId ?? null,
+    publicTriggerCode: workflow.publicTriggerCode ?? "",
+    quantityInputKey: workflow.quantityInputKey ?? null,
     identifierStorage: workflow.identifierStorage ?? "metadata",
     operation: workflow.operation ?? { type: "unit" },
     extractedFields: (workflow.extractedFields ?? []).map((field, index) => ({
@@ -372,8 +462,14 @@ function draftToPayload(draft: WorkflowDraft): WorkflowPayload {
     name: draft.name.trim(),
     description: draft.description.trim(),
     enabled: draft.enabled,
-    resourceId: draft.resourceId,
+    resourceId: draft.resourceIds[0] ?? draft.resourceId,
+    resourceIds: draft.resourceIds,
+    targetSelectionMode: draft.targetSelectionMode,
+    allowVariantSelection: draft.allowVariantSelection,
     codeTypes: draft.codeTypes,
+    publicTriggerEnabled: draft.publicTriggerEnabled,
+    publicTriggerCode: draft.publicTriggerCode.trim() || null,
+    quantityInputKey: draft.quantityInputKey,
     extraction,
     identifierPropertyKey: draft.identifierPropertyKey.trim(),
     identifierStorage: draft.identifierStorage,
@@ -478,7 +574,7 @@ function stockUnitCustomFieldsFromResponse(payload: unknown): StockUnitCustomFie
 
 function validateDraft(draft: WorkflowDraft, t: TFunction) {
   if (!draft.name.trim()) return t("workflows.validation.name");
-  if (!draft.resourceId) return t("workflows.validation.resource");
+  if (!draft.resourceIds.length) return t("workflows.validation.resource");
   if (!draft.codeTypes.length) return t("workflows.validation.codeType");
   if (!draft.identifierPropertyKey.trim()) return t("workflows.validation.identifier");
   const validPropertyKey = /^[A-Za-z0-9_.-]+$/;
@@ -588,6 +684,27 @@ function validateDraft(draft: WorkflowDraft, t: TFunction) {
       }
       optionValues.add(option.value.trim());
     }
+  }
+  if (draft.quantityInputKey) {
+    const quantityField = draft.inputFields.find(
+      (field) => field.key.trim() === draft.quantityInputKey,
+    );
+    if (
+      draft.operation.type === "unit" ||
+      !quantityField ||
+      quantityField.type !== "number" ||
+      !quantityField.required
+    ) {
+      return t("workflows.validation.quantityInput");
+    }
+  }
+  if (draft.publicTriggerEnabled && draft.publicTriggerCode.trim()) {
+    const publicCode = extractIdentifier(
+      draft.publicTriggerCode,
+      draft.extraction,
+      t,
+    );
+    if (publicCode.error) return t("workflows.validation.publicTriggerCode");
   }
   if (!draft.webhookEventName.trim()) return t("workflows.validation.input");
   return null;
@@ -782,6 +899,8 @@ export function StockWorkflowBuilder({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [rotatingPublicUrl, setRotatingPublicUrl] = useState(false);
+  const [copiedPublicUrl, setCopiedPublicUrl] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [sampleScan, setSampleScan] = useState(
@@ -797,6 +916,7 @@ export function StockWorkflowBuilder({
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [previewInputs, setPreviewInputs] = useState<Record<string, string>>({});
+  const [targetQuery, setTargetQuery] = useState("");
 
   const applyWorkflow = useCallback((workflow: WorkflowRecord) => {
     const nextDraft = workflowToDraft(workflow);
@@ -870,13 +990,41 @@ export function StockWorkflowBuilder({
   }, [draft.inputFields]);
 
   const dirty = payloadSignature(draft) !== baseSignature;
-  const interactionBusy = saving || deleting;
+  const interactionBusy = saving || deleting || rotatingPublicUrl;
   const editable = canManage && !interactionBusy;
   const savedWorkflow = draft.id
     ? workflows.find((workflow) => workflow.id === draft.id) ?? null
     : null;
-  const selectedResource = resources.find(
-    (resource) => resource.resourceId === draft.resourceId,
+  const selectedResources = draft.resourceIds.flatMap((resourceId) => {
+    const resource = resources.find((item) => item.resourceId === resourceId);
+    return resource ? [resource] : [];
+  });
+  const selectedResourcesHaveVariants = selectedResources.some((resource) =>
+    resources.some(
+      (candidate) => candidate.variantOfResourceId === resource.resourceId,
+    ),
+  );
+  const targetItems = useMemo(() => {
+    const normalizedQuery = targetQuery.trim().toLocaleLowerCase(locale);
+    return resources
+      .filter(
+        (resource) =>
+          !normalizedQuery ||
+          resource.name.toLocaleLowerCase(locale).includes(normalizedQuery) ||
+          resource.sku?.toLocaleLowerCase(locale).includes(normalizedQuery),
+      )
+      .map((resource) => ({
+        id: resource.resourceId,
+        name: resource.name,
+        sku: resource.sku,
+        type: resource.type,
+        quantity: resource.quantity,
+        trackingMode: resource.trackingMode,
+        cover: resource.cover,
+      }));
+  }, [locale, resources, targetQuery]);
+  const selectedIdentifierCustomField = stockUnitCustomFields.find(
+    (field) => field.key === draft.identifierPropertyKey,
   );
   const extractionResult = useMemo(
     () => extractIdentifier(sampleScan, draft.extraction, t),
@@ -885,6 +1033,13 @@ export function StockWorkflowBuilder({
   const selectedSampleValue = sampleScan.slice(
     sampleSelection.start,
     sampleSelection.end,
+  );
+  const publicTriggerPath = draft.publicTriggerId
+    ? `/share/action/${draft.publicTriggerId}`
+    : null;
+  const publicTriggerLive = Boolean(
+    savedWorkflow?.publicTriggerEnabled &&
+      savedWorkflow.publicTriggerId === draft.publicTriggerId,
   );
 
   useEffect(() => {
@@ -906,6 +1061,38 @@ export function StockWorkflowBuilder({
               candidate === codeType || current.codeTypes.includes(candidate),
           ),
     }));
+  };
+
+  const toggleTargetResource = (selectedItem: InventorySelectItem) => {
+    const resource = resources.find(
+      (candidate) => candidate.resourceId === selectedItem.id,
+    );
+    if (!resource) return;
+    setDraft((current) => {
+      const checked = current.resourceIds.includes(resource.resourceId);
+      const resourceIds = checked
+        ? current.resourceIds.filter(
+            (resourceId) => resourceId !== resource.resourceId,
+          )
+        : [
+            ...current.resourceIds.filter((resourceId) => {
+              if (resource.variantOfResourceId === resourceId) return false;
+              return !resources.some(
+                (candidate) =>
+                  candidate.resourceId === resourceId &&
+                  candidate.variantOfResourceId === resource.resourceId,
+              );
+            }),
+            resource.resourceId,
+          ];
+      return {
+        ...current,
+        resourceIds,
+        resourceId: resourceIds[0] ?? "",
+        targetSelectionMode:
+          resourceIds.length < 2 ? "all" : current.targetSelectionMode,
+      };
+    });
   };
 
   const applySelectionRegex = (fieldUid?: string) => {
@@ -1135,6 +1322,53 @@ export function StockWorkflowBuilder({
     }
   };
 
+  const copyPublicTriggerUrl = async () => {
+    if (!publicTriggerPath) return;
+    try {
+      await navigator.clipboard.writeText(
+        new URL(publicTriggerPath, window.location.origin).toString(),
+      );
+      setCopiedPublicUrl(true);
+      window.setTimeout(() => setCopiedPublicUrl(false), 2_000);
+    } catch {
+      setNotice({ tone: "error", message: t("workflows.publicTrigger.copyError") });
+    }
+  };
+
+  const rotatePublicTriggerUrl = async () => {
+    if (!draft.id || !draft.revision || dirty || interactionBusy) return;
+    if (!window.confirm(t("workflows.publicTrigger.rotateConfirm"))) return;
+    setRotatingPublicUrl(true);
+    setNotice(null);
+    try {
+      const response = await fetchJson<unknown>(
+        `/api/v1/stock/scan-workflows/${draft.id}/public-trigger/rotate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ revision: draft.revision }),
+        },
+      );
+      const saved = workflowFromResponse(response);
+      if (!saved) throw new Error(t("workflows.errors.unexpected"));
+      setWorkflows((current) =>
+        current.map((workflow) => (workflow.id === saved.id ? saved : workflow)),
+      );
+      applyWorkflow(saved);
+      setNotice({ tone: "success", message: t("workflows.publicTrigger.rotated") });
+    } catch (rotateError) {
+      setNotice({
+        tone: "error",
+        message:
+          rotateError instanceof Error
+            ? rotateError.message
+            : t("workflows.publicTrigger.rotateError"),
+      });
+    } finally {
+      setRotatingPublicUrl(false);
+    }
+  };
+
   const updateFixedProperty = (
     uid: string,
     key: keyof Pick<DraftFixedProperty, "key" | "label" | "value" | "storage">,
@@ -1154,12 +1388,22 @@ export function StockWorkflowBuilder({
       Pick<DraftInput, "key" | "label" | "required" | "type" | "storage" | "placeholder">
     >,
   ) => {
-    setDraft((current) => ({
-      ...current,
-      inputFields: current.inputFields.map((field) =>
-        field.uid === uid ? { ...field, ...patch } : field,
-      ),
-    }));
+    setDraft((current) => {
+      const previous = current.inputFields.find((field) => field.uid === uid);
+      const nextQuantityKey =
+        previous && current.quantityInputKey === previous.key
+          ? patch.type && patch.type !== "number"
+            ? null
+            : patch.key ?? current.quantityInputKey
+          : current.quantityInputKey;
+      return {
+        ...current,
+        quantityInputKey: nextQuantityKey,
+        inputFields: current.inputFields.map((field) =>
+          field.uid === uid ? { ...field, ...patch } : field,
+        ),
+      };
+    });
   };
 
   const updateOption = (
@@ -1352,13 +1596,6 @@ export function StockWorkflowBuilder({
 
   return (
     <div>
-      <datalist id="stock-unit-custom-field-keys">
-        {stockUnitCustomFields.map((field) => (
-          <option key={field.key} value={field.key}>
-            {field.label} · {field.fieldType}
-          </option>
-        ))}
-      </datalist>
       <Link
         href="/settings/action-flows"
         onClick={(event) => {
@@ -1652,6 +1889,114 @@ export function StockWorkflowBuilder({
                   />
                 </div>
               ) : null}
+
+              <div className="mt-4 rounded-2xl border border-border bg-surface p-3.5 sm:p-4">
+                <div className="flex items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
+                    <Link2 className="size-4" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-semibold text-foreground">
+                      {t("workflows.publicTrigger.title")}
+                    </p>
+                    <p className="mt-1 text-[10px] leading-4 text-muted">
+                      {t("workflows.publicTrigger.description")}
+                    </p>
+                  </div>
+                  <Toggle
+                    checked={draft.publicTriggerEnabled}
+                    onChange={(publicTriggerEnabled) =>
+                      setDraft((current) => ({ ...current, publicTriggerEnabled }))
+                    }
+                    disabled={!editable}
+                    label={t("workflows.publicTrigger.toggle")}
+                  />
+                </div>
+
+                {draft.publicTriggerEnabled ? (
+                  <div className="mt-4 space-y-3 border-t border-border pt-4">
+                    <label className={labelClass}>
+                      {t("workflows.publicTrigger.fixedCode")}
+                      <textarea
+                        value={draft.publicTriggerCode}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            publicTriggerCode: event.target.value,
+                          }))
+                        }
+                        className={cn(textAreaClass, "min-h-20 font-mono text-[12px]")}
+                        placeholder={t("workflows.publicTrigger.fixedCodePlaceholder")}
+                        disabled={!editable}
+                      />
+                      <span className="mt-1 block text-[10px] leading-4 text-muted">
+                        {t("workflows.publicTrigger.fixedCodeDescription")}
+                      </span>
+                    </label>
+
+                    {publicTriggerPath && publicTriggerLive ? (
+                      <div className="rounded-xl border border-success-border bg-success-soft p-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-success">
+                          {t("workflows.publicTrigger.live")}
+                        </p>
+                        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                          <input
+                            value={publicTriggerPath}
+                            readOnly
+                            aria-label={t("workflows.publicTrigger.url")}
+                            className={cn(inputClass, "mt-0 min-w-0 flex-1 font-mono text-[11px]")}
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => void copyPublicTriggerUrl()}
+                          >
+                            <Copy className="size-3.5" aria-hidden="true" />
+                            {t(
+                              copiedPublicUrl
+                                ? "workflows.publicTrigger.copied"
+                                : "workflows.publicTrigger.copy",
+                            )}
+                          </Button>
+                          <a
+                            href={publicTriggerPath}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-[11px] font-semibold text-muted-strong transition hover:border-border-strong hover:text-foreground"
+                          >
+                            <ExternalLink className="size-3.5" aria-hidden="true" />
+                            {t("workflows.publicTrigger.open")}
+                          </a>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-[10px] leading-4 text-success">
+                            {t("workflows.publicTrigger.security")}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => void rotatePublicTriggerUrl()}
+                            disabled={!editable || dirty}
+                          >
+                            {rotatingPublicUrl ? (
+                              <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <RefreshCcw className="size-3.5" aria-hidden="true" />
+                            )}
+                            {t("workflows.publicTrigger.rotate")}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="rounded-xl border border-dashed border-border px-3.5 py-3 text-[11px] leading-5 text-muted">
+                        {t("workflows.publicTrigger.saveToActivate")}
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </FlowStep>
 
             <FlowStep
@@ -1820,24 +2165,9 @@ export function StockWorkflowBuilder({
                       disabled={!editable}
                     />
                   </label>
-                  <label className={labelClass}>
-                    {t("workflows.steps.extract.identifierKey")}
-                    <input
-                      value={draft.identifierPropertyKey}
-                      list={
-                        draft.identifierStorage === "custom-field"
-                          ? "stock-unit-custom-field-keys"
-                          : undefined
-                      }
-                      onChange={(event) => setDraft((current) => ({ ...current, identifierPropertyKey: event.target.value }))}
-                      className={inputClass}
-                      placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
-                      disabled={!editable}
-                    />
-                  </label>
                 </div>
               ) : draft.extraction.mode === "prefix" ? (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 max-w-md">
                   <label className={labelClass}>
                     {t("workflows.steps.extract.prefix")}
                     <input
@@ -1850,21 +2180,6 @@ export function StockWorkflowBuilder({
                       }
                       className={inputClass}
                       placeholder={t("workflows.steps.extract.prefixPlaceholder")}
-                      disabled={!editable}
-                    />
-                  </label>
-                  <label className={labelClass}>
-                    {t("workflows.steps.extract.identifierKey")}
-                    <input
-                      value={draft.identifierPropertyKey}
-                      list={
-                        draft.identifierStorage === "custom-field"
-                          ? "stock-unit-custom-field-keys"
-                          : undefined
-                      }
-                      onChange={(event) => setDraft((current) => ({ ...current, identifierPropertyKey: event.target.value }))}
-                      className={inputClass}
-                      placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
                       disabled={!editable}
                     />
                   </label>
@@ -1925,64 +2240,122 @@ export function StockWorkflowBuilder({
                       disabled={!editable}
                     />
                   </label>
-                  <label className={cn(labelClass, "sm:col-span-3 sm:max-w-md")}>
-                    {t("workflows.steps.extract.identifierKey")}
-                    <input
-                      value={draft.identifierPropertyKey}
-                      list={
-                        draft.identifierStorage === "custom-field"
-                          ? "stock-unit-custom-field-keys"
-                          : undefined
-                      }
+                </div>
+              ) : null}
+              <div className="mt-5 rounded-2xl border border-border bg-surface-subtle p-3.5 sm:p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-[12px] font-semibold text-foreground">
+                      {t("workflows.storage.identifierTitle")}
+                    </p>
+                    <p className="mt-1 text-[10px] leading-4 text-muted">
+                      {t("workflows.storage.identifierDescription")}
+                    </p>
+                  </div>
+                  <Badge tone="neutral">{t("workflows.storage.stockUnitBadge")}</Badge>
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className={labelClass}>
+                    {t("workflows.storage.destination")}
+                    <select
+                      value={draft.identifierStorage}
                       onChange={(event) =>
                         setDraft((current) => ({
                           ...current,
-                          identifierPropertyKey: event.target.value,
+                          identifierStorage: event.target.value as StorageTarget,
                         }))
                       }
                       className={inputClass}
-                      placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
                       disabled={!editable}
-                    />
+                    >
+                      <option value="custom-field">
+                        {t("workflows.storage.targets.customField")}
+                      </option>
+                      <option value="metadata">
+                        {t("workflows.storage.targets.metadata")}
+                      </option>
+                      <option value="execution">
+                        {t("workflows.storage.targets.execution")}
+                      </option>
+                    </select>
                   </label>
+                  {draft.identifierStorage === "custom-field" ? (
+                    <StockUnitCustomFieldSelect
+                      fields={stockUnitCustomFields}
+                      value={draft.identifierPropertyKey}
+                      onChange={(value) =>
+                        setDraft((current) => ({
+                          ...current,
+                          identifierPropertyKey: value,
+                        }))
+                      }
+                      disabled={!editable}
+                      t={t}
+                    />
+                  ) : (
+                    <label className={labelClass}>
+                      {draft.identifierStorage === "metadata"
+                        ? t("workflows.storage.metadataKey")
+                        : t("workflows.storage.executionKey")}
+                      <input
+                        value={draft.identifierPropertyKey}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            identifierPropertyKey: event.target.value,
+                          }))
+                        }
+                        className={inputClass}
+                        placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
+                        disabled={!editable}
+                      />
+                    </label>
+                  )}
                 </div>
-              ) : (
-                <label className={cn(labelClass, "mt-4 block max-w-md")}>
-                  {t("workflows.steps.extract.identifierKey")}
-                  <input
-                    value={draft.identifierPropertyKey}
-                    list={
-                      draft.identifierStorage === "custom-field"
-                        ? "stock-unit-custom-field-keys"
-                        : undefined
-                    }
-                    onChange={(event) => setDraft((current) => ({ ...current, identifierPropertyKey: event.target.value }))}
-                    className={inputClass}
-                    placeholder={t("workflows.steps.extract.identifierKeyPlaceholder")}
-                    disabled={!editable}
-                  />
-                </label>
-              )}
-              <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
-                <label className={labelClass}>
-                  Speicherziel der Kennung
-                  <select
-                    value={draft.identifierStorage}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        identifierStorage: event.target.value as StorageTarget,
-                      }))
-                    }
-                    className={inputClass}
-                    disabled={!editable}
-                  >
-                    <option value="custom-field">Custom Field der Einheit</option>
-                    <option value="metadata">Metadaten der Einheit</option>
-                    <option value="execution">Nur Flow-Ausführung</option>
-                  </select>
-                </label>
-                <div className="flex items-end">
+                {draft.identifierStorage === "custom-field" ? (
+                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-brand-border bg-brand-soft px-3 py-2.5 text-[11px] leading-5 text-brand-strong">
+                    {selectedIdentifierCustomField ? (
+                      <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                    ) : (
+                      <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                    )}
+                    <p>
+                      {selectedIdentifierCustomField
+                        ? t("workflows.storage.selectedCustomField", {
+                            label: selectedIdentifierCustomField.label,
+                            key: draft.identifierPropertyKey,
+                          })
+                        : t("workflows.storage.selectConfiguredField")}{" "}
+                      <Link
+                        href="/settings/custom-fields"
+                        className="font-semibold underline underline-offset-2"
+                      >
+                        {t("workflows.storage.manageCustomFields")}
+                      </Link>
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-[10px] leading-4 text-muted">
+                    {draft.identifierStorage === "metadata"
+                      ? t("workflows.storage.metadataHint")
+                      : t("workflows.storage.executionHint")}
+                  </p>
+                )}
+                <p className="mt-2 text-[10px] leading-4 text-muted">
+                  {t("workflows.storage.inventoryItemScope")}
+                </p>
+              </div>
+
+              <div className="mt-4 border-t border-border pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold text-muted-strong">
+                      {t("workflows.storage.additionalFieldsTitle")}
+                    </p>
+                    <p className="mt-0.5 text-[10px] leading-4 text-muted">
+                      {t("workflows.storage.additionalFieldsDescription")}
+                    </p>
+                  </div>
                   <Button
                     variant="secondary"
                     size="sm"
@@ -2007,44 +2380,49 @@ export function StockWorkflowBuilder({
                       }))
                     }
                   >
-                    <Plus className="size-3.5" aria-hidden="true" /> Weiteres QR-Feld
+                    <Plus className="size-3.5" aria-hidden="true" />
+                    {t("workflows.storage.addField")}
                   </Button>
                 </div>
-                {draft.identifierStorage === "custom-field" ? (
-                  <p className="text-[11px] leading-5 text-muted sm:col-span-2">
-                    Wähle einen vorhandenen Schlüssel aus der Liste. Neue Felder legst du unter{" "}
-                    <Link href="/settings/custom-fields" className="font-semibold text-brand hover:underline">
-                      Einstellungen → Custom Fields
-                    </Link>{" "}
-                    für Bestandseinheiten an.
-                  </p>
-                ) : null}
-              </div>
               {draft.extractedFields.length ? (
                 <div className="mt-3 space-y-2">
                   {draft.extractedFields.map((field) => (
                     <div key={field.uid} className="grid gap-2 rounded-xl border border-border bg-surface-subtle p-3 sm:grid-cols-2 lg:grid-cols-5">
-                      <label className={labelClass}>
-                        Schlüssel
-                        <input
+                      {field.storage === "custom-field" ? (
+                        <StockUnitCustomFieldSelect
+                          fields={stockUnitCustomFields}
                           value={field.key}
-                          list={
-                            field.storage === "custom-field"
-                              ? "stock-unit-custom-field-keys"
-                              : undefined
-                          }
-                          onChange={(event) =>
+                          onChange={(value) =>
                             setDraft((current) => ({
                               ...current,
                               extractedFields: current.extractedFields.map((item) =>
-                                item.uid === field.uid ? { ...item, key: event.target.value } : item,
+                                item.uid === field.uid ? { ...item, key: value } : item,
                               ),
                             }))
                           }
-                          className={inputClass}
                           disabled={!editable}
+                          t={t}
                         />
-                      </label>
+                      ) : (
+                        <label className={labelClass}>
+                          {t("workflows.storage.propertyKey")}
+                          <input
+                            value={field.key}
+                            onChange={(event) =>
+                              setDraft((current) => ({
+                                ...current,
+                                extractedFields: current.extractedFields.map((item) =>
+                                  item.uid === field.uid
+                                    ? { ...item, key: event.target.value }
+                                    : item,
+                                ),
+                              }))
+                            }
+                            className={inputClass}
+                            disabled={!editable}
+                          />
+                        </label>
+                      )}
                       <label className={labelClass}>
                         Bezeichnung
                         <input
@@ -2129,26 +2507,34 @@ export function StockWorkflowBuilder({
                         />
                       </label>
                       <div className="flex items-end gap-2">
-                        <select
-                          aria-label="Speicherziel"
-                          value={field.storage}
-                          onChange={(event) =>
-                            setDraft((current) => ({
-                              ...current,
-                              extractedFields: current.extractedFields.map((item) =>
-                                item.uid === field.uid
-                                  ? { ...item, storage: event.target.value as StorageTarget }
-                                  : item,
-                              ),
-                            }))
-                          }
-                          className={inputClass}
-                          disabled={!editable}
-                        >
-                          <option value="custom-field">Custom Field</option>
-                          <option value="metadata">Metadaten</option>
-                          <option value="execution">Ausführung</option>
-                        </select>
+                        <label className={cn(labelClass, "min-w-0 flex-1")}>
+                          {t("workflows.storage.destination")}
+                          <select
+                            value={field.storage}
+                            onChange={(event) =>
+                              setDraft((current) => ({
+                                ...current,
+                                extractedFields: current.extractedFields.map((item) =>
+                                  item.uid === field.uid
+                                    ? { ...item, storage: event.target.value as StorageTarget }
+                                    : item,
+                                ),
+                              }))
+                            }
+                            className={inputClass}
+                            disabled={!editable}
+                          >
+                            <option value="custom-field">
+                              {t("workflows.storage.targets.customFieldShort")}
+                            </option>
+                            <option value="metadata">
+                              {t("workflows.storage.targets.metadataShort")}
+                            </option>
+                            <option value="execution">
+                              {t("workflows.storage.targets.executionShort")}
+                            </option>
+                          </select>
+                        </label>
                         <button
                           type="button"
                           className="mb-0.5 grid size-9 shrink-0 place-items-center rounded-lg text-danger hover:bg-danger-soft"
@@ -2230,6 +2616,7 @@ export function StockWorkflowBuilder({
                   ))}
                 </div>
               ) : null}
+              </div>
             </FlowStep>
 
             <FlowStep
@@ -2239,32 +2626,131 @@ export function StockWorkflowBuilder({
               description={t("workflows.steps.target.description")}
             >
               {resources.length ? (
-                <label className={labelClass}>
-                  {t("workflows.steps.target.field")}
-                  <select
-                    value={draft.resourceId}
-                    onChange={(event) => setDraft((current) => ({ ...current, resourceId: event.target.value }))}
-                    className={inputClass}
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] leading-5 text-muted">
+                      {t("workflows.steps.target.searchDescription")}
+                    </p>
+                    <Badge tone="neutral">
+                      {t("workflows.steps.target.selectedCount", {
+                        count: draft.resourceIds.length,
+                      })}
+                    </Badge>
+                  </div>
+                  <InventorySelect
+                    className="mt-2"
+                    items={targetItems}
+                    selectedIds={draft.resourceIds}
+                    onSelect={toggleTargetResource}
+                    query={targetQuery}
+                    onQueryChange={setTargetQuery}
+                    label={t("workflows.steps.target.field")}
+                    placeholder={t("workflows.steps.target.searchPlaceholder")}
+                    emptyText={t("workflows.steps.target.noMatches")}
+                    searchingText={t("workflows.steps.target.searching")}
+                    selectedText={t("workflows.steps.target.selectedShort")}
                     disabled={!editable}
-                  >
-                    <option value="">{t("workflows.steps.target.select")}</option>
-                    {resources.map((resource) => (
-                      <option key={resource.resourceId} value={resource.resourceId}>
-                        {resource.quantity !== undefined
-                          ? t("workflows.steps.target.resourceQuantity", {
-                              name: resource.name,
-                              quantity: integer.format(resource.quantity),
-                              unit:
-                                resource.unitName ??
-                                t("workflows.steps.target.units", {
-                                  count: resource.quantity,
-                                }),
-                            })
-                          : resource.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    itemMeta={(item) => {
+                      const resource = resources.find(
+                        (candidate) => candidate.resourceId === item.id,
+                      );
+                      if (!resource) return item.sku || item.type || "—";
+                      const parent = resource.variantOfResourceId
+                        ? resources.find(
+                            (candidate) =>
+                              candidate.resourceId === resource.variantOfResourceId,
+                          )
+                        : null;
+                      if (parent) {
+                        return t("workflows.steps.target.variantOf", {
+                          name: parent.name,
+                        });
+                      }
+                      const quantity = t(
+                        "workflows.steps.target.resourceQuantity",
+                        {
+                          name: "",
+                          quantity: integer.format(resource.quantity ?? 0),
+                          unit:
+                            resource.unitName ??
+                            t("workflows.steps.target.units", {
+                              count: resource.quantity ?? 0,
+                            }),
+                        },
+                      ).replace(/^\s*·\s*/, "");
+                      return resource.sku ? `${resource.sku} · ${quantity}` : quantity;
+                    }}
+                  />
+
+                  {draft.resourceIds.length > 1 ? (
+                    <fieldset className="mt-4 rounded-xl border border-border bg-surface-subtle p-3.5">
+                      <legend className="px-1 text-[11px] font-semibold text-muted-strong">
+                        {t("workflows.steps.target.executionMode")}
+                      </legend>
+                      <div className="mt-1 grid gap-2 sm:grid-cols-3">
+                        {(["all", "radio", "checkbox"] as const).map((mode) => (
+                          <label
+                            key={mode}
+                            className={cn(
+                              "flex cursor-pointer items-start gap-2 rounded-lg border bg-surface px-3 py-2.5 text-[11px]",
+                              draft.targetSelectionMode === mode
+                                ? "border-brand-border text-brand-strong"
+                                : "border-border text-muted-strong",
+                            )}
+                          >
+                            <input
+                              type="radio"
+                              name="target-selection-mode"
+                              value={mode}
+                              checked={draft.targetSelectionMode === mode}
+                              disabled={!editable}
+                              onChange={() =>
+                                setDraft((current) => ({
+                                  ...current,
+                                  targetSelectionMode: mode,
+                                }))
+                              }
+                              className="mt-0.5 accent-brand-solid"
+                            />
+                            <span>
+                              <strong className="block font-semibold">
+                                {t(`workflows.steps.target.modes.${mode}.label`)}
+                              </strong>
+                              <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                                {t(`workflows.steps.target.modes.${mode}.description`)}
+                              </span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  ) : null}
+
+                  {selectedResourcesHaveVariants ? (
+                    <label className="mt-3 flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3.5">
+                      <input
+                        type="checkbox"
+                        checked={draft.allowVariantSelection}
+                        disabled={!editable}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            allowVariantSelection: event.target.checked,
+                          }))
+                        }
+                        className="mt-0.5 size-4 accent-brand-solid"
+                      />
+                      <span>
+                        <strong className="block text-[11px] font-semibold text-muted-strong">
+                          {t("workflows.steps.target.allowVariants")}
+                        </strong>
+                        <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                          {t("workflows.steps.target.allowVariantsDescription")}
+                        </span>
+                      </span>
+                    </label>
+                  ) : null}
+                </div>
               ) : (
                 <div className="flex flex-col gap-3 rounded-xl border border-warning-border bg-warning-soft p-3.5 text-[12px] leading-5 text-warning sm:flex-row sm:items-center sm:justify-between">
                   <span>{t("workflows.steps.target.none")}</span>
@@ -2273,11 +2759,13 @@ export function StockWorkflowBuilder({
                   </Link>
                 </div>
               )}
-              {selectedResource ? (
+              {selectedResources.length ? (
                 <div className="mt-3 flex items-center gap-3 rounded-xl border border-success-border bg-success-soft p-3">
                   <Check className="size-4 shrink-0 text-success" aria-hidden="true" />
                   <p className="text-[11px] text-success">
-                    {t("workflows.steps.target.selected", { name: selectedResource.name })}
+                    {t("workflows.steps.target.selected", {
+                      name: selectedResources.map((resource) => resource.name).join(", "),
+                    })}
                   </p>
                 </div>
               ) : null}
@@ -2305,6 +2793,10 @@ export function StockWorkflowBuilder({
                           onClick={() =>
                             setDraft((current) => ({
                               ...current,
+                              quantityInputKey:
+                                current.quantityInputKey === field.key
+                                  ? null
+                                  : current.quantityInputKey,
                               inputFields: current.inputFields.filter((item) => item.uid !== field.uid),
                             }))
                           }
@@ -2320,21 +2812,28 @@ export function StockWorkflowBuilder({
                     </div>
 
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <label className={labelClass}>
-                        {t("workflows.steps.inputs.propertyKey")}
-                        <input
+                      {field.storage === "custom-field" ? (
+                        <StockUnitCustomFieldSelect
+                          fields={stockUnitCustomFields}
                           value={field.key}
-                          list={
-                            field.storage === "custom-field"
-                              ? "stock-unit-custom-field-keys"
-                              : undefined
-                          }
-                          onChange={(event) => updateInput(field.uid, { key: event.target.value })}
-                          className={inputClass}
-                          placeholder={t("workflows.steps.inputs.propertyKeyPlaceholder")}
+                          onChange={(value) => updateInput(field.uid, { key: value })}
                           disabled={!editable}
+                          t={t}
                         />
-                      </label>
+                      ) : (
+                        <label className={labelClass}>
+                          {t("workflows.storage.propertyKey")}
+                          <input
+                            value={field.key}
+                            onChange={(event) =>
+                              updateInput(field.uid, { key: event.target.value })
+                            }
+                            className={inputClass}
+                            placeholder={t("workflows.steps.inputs.propertyKeyPlaceholder")}
+                            disabled={!editable}
+                          />
+                        </label>
+                      )}
                       <label className={labelClass}>
                         {t("workflows.steps.inputs.visibleLabel")}
                         <input
@@ -2374,7 +2873,7 @@ export function StockWorkflowBuilder({
                         </select>
                       </label>
                       <label className={labelClass}>
-                        Speicherziel
+                        {t("workflows.storage.destination")}
                         <select
                           value={field.storage}
                           onChange={(event) =>
@@ -2387,9 +2886,15 @@ export function StockWorkflowBuilder({
                             !editable || field.type === "media" || field.type === "file"
                           }
                         >
-                          <option value="custom-field">Custom Field</option>
-                          <option value="metadata">Metadaten</option>
-                          <option value="execution">Nur Ausführung</option>
+                          <option value="custom-field">
+                            {t("workflows.storage.targets.customFieldShort")}
+                          </option>
+                          <option value="metadata">
+                            {t("workflows.storage.targets.metadataShort")}
+                          </option>
+                          <option value="execution">
+                            {t("workflows.storage.targets.executionShort")}
+                          </option>
                         </select>
                       </label>
                       <label className={labelClass}>
@@ -2577,6 +3082,8 @@ export function StockWorkflowBuilder({
                       const type = event.target.value as Operation["type"];
                       setDraft((current) => ({
                         ...current,
+                        quantityInputKey:
+                          type === "unit" ? null : current.quantityInputKey,
                         ...(type === "stock-adjustment"
                           ? {
                               identifierStorage: "execution" as const,
@@ -2659,6 +3166,45 @@ export function StockWorkflowBuilder({
                 ) : null}
               </div>
 
+              {draft.operation.type !== "unit" ? (
+                <div className="mt-3 rounded-xl border border-border bg-surface-subtle p-3.5">
+                  <label className={labelClass}>
+                    {t("workflows.quantityInput.label")}
+                    <select
+                      value={draft.quantityInputKey ?? ""}
+                      onChange={(event) => {
+                        const quantityInputKey = event.target.value || null;
+                        setDraft((current) => ({
+                          ...current,
+                          quantityInputKey,
+                          inputFields: current.inputFields.map((field) =>
+                            field.key === quantityInputKey
+                              ? { ...field, required: true }
+                              : field,
+                          ),
+                        }));
+                      }}
+                      className={inputClass}
+                      disabled={!editable}
+                    >
+                      <option value="">{t("workflows.quantityInput.fixed")}</option>
+                      {draft.inputFields
+                        .filter((field) => field.type === "number")
+                        .map((field) => (
+                          <option key={field.uid} value={field.key}>
+                            {field.label || field.key}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <p className="mt-1.5 text-[10px] leading-4 text-muted">
+                    {draft.inputFields.some((field) => field.type === "number")
+                      ? t("workflows.quantityInput.description")
+                      : t("workflows.quantityInput.noNumberField")}
+                  </p>
+                </div>
+              ) : null}
+
               {draft.operation.type === "unit" ? (
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl border border-border bg-surface-subtle p-3.5">
@@ -2735,21 +3281,34 @@ export function StockWorkflowBuilder({
                   {draft.fixedProperties.map((property) => (
                     <div key={property.uid} className="rounded-xl border border-border bg-surface-subtle p-3">
                       <div className="grid gap-2 sm:grid-cols-4">
-                        <label className={labelClass}>
-                          {t("workflows.steps.actions.key")}
-                          <input
+                        {property.storage === "custom-field" ? (
+                          <StockUnitCustomFieldSelect
+                            fields={stockUnitCustomFields}
                             value={property.key}
-                            list={
-                              property.storage === "custom-field"
-                                ? "stock-unit-custom-field-keys"
-                                : undefined
+                            onChange={(value) =>
+                              updateFixedProperty(property.uid, "key", value)
                             }
-                            onChange={(event) => updateFixedProperty(property.uid, "key", event.target.value)}
-                            className={inputClass}
-                            placeholder={t("workflows.steps.actions.keyPlaceholder")}
                             disabled={!editable}
+                            t={t}
                           />
-                        </label>
+                        ) : (
+                          <label className={labelClass}>
+                            {t("workflows.storage.propertyKey")}
+                            <input
+                              value={property.key}
+                              onChange={(event) =>
+                                updateFixedProperty(
+                                  property.uid,
+                                  "key",
+                                  event.target.value,
+                                )
+                              }
+                              className={inputClass}
+                              placeholder={t("workflows.steps.actions.keyPlaceholder")}
+                              disabled={!editable}
+                            />
+                          </label>
+                        )}
                         <label className={labelClass}>
                           {t("workflows.steps.actions.visibleLabel")}
                           <input
@@ -2771,7 +3330,7 @@ export function StockWorkflowBuilder({
                           />
                         </label>
                         <label className={labelClass}>
-                          Speicherziel
+                          {t("workflows.storage.destination")}
                           <select
                             value={property.storage}
                             onChange={(event) =>
@@ -2784,9 +3343,15 @@ export function StockWorkflowBuilder({
                             className={inputClass}
                             disabled={!editable}
                           >
-                            <option value="custom-field">Custom Field</option>
-                            <option value="metadata">Metadaten</option>
-                            <option value="execution">Ausführung</option>
+                            <option value="custom-field">
+                              {t("workflows.storage.targets.customFieldShort")}
+                            </option>
+                            <option value="metadata">
+                              {t("workflows.storage.targets.metadataShort")}
+                            </option>
+                            <option value="execution">
+                              {t("workflows.storage.targets.executionShort")}
+                            </option>
                           </select>
                         </label>
                       </div>
@@ -2954,7 +3519,11 @@ export function StockWorkflowBuilder({
                 <div className="mt-4 space-y-2.5 text-[11px]">
                   <div className="flex items-start justify-between gap-3">
                     <span className="text-muted">{t("workflows.preview.target")}</span>
-                    <strong className="text-right font-semibold text-muted-strong">{selectedResource?.name ?? t("workflows.preview.notSelected")}</strong>
+                    <strong className="text-right font-semibold text-muted-strong">
+                      {selectedResources.length
+                        ? selectedResources.map((resource) => resource.name).join(", ")
+                        : t("workflows.preview.notSelected")}
+                    </strong>
                   </div>
                   <div className="flex items-start justify-between gap-3">
                     <span className="text-muted">Aktion</span>

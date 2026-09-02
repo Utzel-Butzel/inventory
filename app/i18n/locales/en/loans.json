@@ -1,0 +1,46 @@
+{
+  "metadata": {
+    "title": "Loans",
+    "description": "Manage active, overdue, and reserved inventory loans."
+  },
+  "eyebrow": "Inventory use",
+  "title": "Loans",
+  "description": "Keep active and overdue loans, upcoming reservations, and completed returns in one central view.",
+  "refresh": "Refresh",
+  "loading": "Loading loans",
+  "search": "Search by item, recipient, SKU, or unit…",
+  "filters": {
+    "active": "Active loans",
+    "overdue": "Overdue",
+    "reservations": "Reservations",
+    "history": "History"
+  },
+  "status": {
+    "active": "Active",
+    "reserved": "Reserved",
+    "returned": "Returned",
+    "cancelled": "Cancelled",
+    "overdue": "Overdue"
+  },
+  "quantity_one": "{{count}} unit",
+  "quantity_other": "{{count}} units",
+  "due": "Due {{date}}",
+  "actions": {
+    "return": "Return",
+    "cancel": "Cancel",
+    "open": "Open item",
+    "checkoutAtItem": "Prepare checkout"
+  },
+  "empty": {
+    "title": "No loans found",
+    "filtered": "No loan matches the current search.",
+    "active": "Nothing is currently on loan.",
+    "overdue": "No return is overdue.",
+    "reservations": "There are no upcoming reservations.",
+    "history": "There are no completed loans yet."
+  },
+  "errors": {
+    "load": "Unable to load loans.",
+    "update": "Unable to update the loan."
+  }
+}

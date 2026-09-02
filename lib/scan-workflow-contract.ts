@@ -32,6 +32,12 @@ export const scanWorkflowStorageTargets = [
   "execution",
 ] as const;
 
+export const scanWorkflowTargetSelectionModes = [
+  "all",
+  "radio",
+  "checkbox",
+] as const;
+
 export const scanWorkflowInputTypes = [
   "text",
   "textarea",
@@ -211,6 +217,15 @@ const workflowEditableShape = {
   description: z.string().trim().max(5_000),
   enabled: z.boolean(),
   resourceId: z.string().uuid(),
+  resourceIds: z
+    .array(z.string().uuid())
+    .max(scanWorkflowLimits.inputFields)
+    .refine(
+      (values) => new Set(values).size === values.length,
+      "Target inventory items must be unique.",
+    ),
+  targetSelectionMode: z.enum(scanWorkflowTargetSelectionModes),
+  allowVariantSelection: z.boolean(),
   codeTypes: z
     .array(z.enum(scanCodeTypes))
     .min(1)
@@ -246,7 +261,9 @@ const validateWorkflowPropertyKeys = (
     identifierPropertyKey: string;
     extractedFields: Array<{ key: string }>;
     fixedProperties: Array<{ key: string }>;
-    inputFields: Array<{ key: string }>;
+    inputFields: Array<{ key: string; type?: string; required: boolean }>;
+    operation: ScanWorkflowOperation;
+    quantityInputKey: string | null;
   },
   context: z.RefinementCtx,
 ) => {
@@ -263,6 +280,28 @@ const validateWorkflowPropertyKeys = (
         "The identifier, fixed properties, and input fields must use distinct property keys.",
     });
   }
+  if (value.quantityInputKey) {
+    const quantityField = value.inputFields.find(
+      (field) => field.key === value.quantityInputKey,
+    );
+    if (value.operation.type === "unit") {
+      context.addIssue({
+        code: "custom",
+        path: ["quantityInputKey"],
+        message: "Serialized unit actions cannot use a quantity input.",
+      });
+    } else if (
+      !quantityField ||
+      quantityField.type !== "number" ||
+      !quantityField.required
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["quantityInputKey"],
+        message: "The quantity input must reference a required number field.",
+      });
+    }
+  }
 };
 
 export const scanWorkflowCreateSchema = z
@@ -271,9 +310,29 @@ export const scanWorkflowCreateSchema = z
     description: workflowEditableShape.description.optional().default(""),
     enabled: workflowEditableShape.enabled.optional().default(true),
     resourceId: workflowEditableShape.resourceId,
+    resourceIds: workflowEditableShape.resourceIds.optional().default([]),
+    targetSelectionMode: workflowEditableShape.targetSelectionMode
+      .optional()
+      .default("all"),
+    allowVariantSelection: workflowEditableShape.allowVariantSelection
+      .optional()
+      .default(false),
     codeTypes: workflowEditableShape.codeTypes
       .optional()
       .default([...scanCodeTypes]),
+    publicTriggerEnabled: z.boolean().optional().default(false),
+    publicTriggerCode: z
+      .string()
+      .trim()
+      .min(1)
+      .max(scanWorkflowLimits.scannedValue)
+      .nullable()
+      .optional()
+      .default(null),
+    quantityInputKey: scanWorkflowPropertyKeySchema
+      .nullable()
+      .optional()
+      .default(null),
     extraction: workflowEditableShape.extraction,
     identifierPropertyKey: workflowEditableShape.identifierPropertyKey,
     identifierStorage: workflowEditableShape.identifierStorage,
@@ -299,7 +358,19 @@ export const scanWorkflowPatchSchema = z
     description: workflowEditableShape.description.optional(),
     enabled: workflowEditableShape.enabled.optional(),
     resourceId: workflowEditableShape.resourceId.optional(),
+    resourceIds: workflowEditableShape.resourceIds.optional(),
+    targetSelectionMode: workflowEditableShape.targetSelectionMode.optional(),
+    allowVariantSelection: workflowEditableShape.allowVariantSelection.optional(),
     codeTypes: workflowEditableShape.codeTypes.optional(),
+    publicTriggerEnabled: z.boolean().optional(),
+    publicTriggerCode: z
+      .string()
+      .trim()
+      .min(1)
+      .max(scanWorkflowLimits.scannedValue)
+      .nullable()
+      .optional(),
+    quantityInputKey: scanWorkflowPropertyKeySchema.nullable().optional(),
     extraction: workflowEditableShape.extraction.optional(),
     identifierPropertyKey: workflowEditableShape.identifierPropertyKey.optional(),
     identifierStorage: workflowEditableShape.identifierStorage.optional(),
@@ -323,6 +394,11 @@ export const stockScanResolveSchema = z
     workflowId: z.string().uuid(),
     code: z.string().trim().min(1).max(scanWorkflowLimits.scannedValue),
     codeType: z.enum(scanCodeTypes).nullable().optional().default(null),
+    selectedResourceIds: z
+      .array(z.string().uuid())
+      .max(scanWorkflowLimits.inputFields)
+      .optional()
+      .default([]),
   })
   .strict();
 
@@ -335,6 +411,35 @@ export const stockScanExecuteSchema = z
     expectedResourceUpdatedAt: z.string().datetime(),
     expectedUnitId: z.string().uuid().nullable(),
     expectedUnitUpdatedAt: z.string().datetime().nullable(),
+    selectedResourceIds: z
+      .array(z.string().uuid())
+      .min(1)
+      .max(scanWorkflowLimits.inputFields)
+      .optional()
+      .default([]),
+    expectedTargets: z
+      .array(
+        z
+          .object({
+            resourceId: z.string().uuid(),
+            resourceUpdatedAt: z.string().datetime(),
+            unitId: z.string().uuid().nullable(),
+            unitUpdatedAt: z.string().datetime().nullable(),
+          })
+          .strict()
+          .superRefine((value, context) => {
+            if ((value.unitId === null) !== (value.unitUpdatedAt === null)) {
+              context.addIssue({
+                code: "custom",
+                path: ["unitUpdatedAt"],
+                message: "unitId and unitUpdatedAt must either both be null or both identify a unit.",
+              });
+            }
+          }),
+      )
+      .max(scanWorkflowLimits.inputFields)
+      .optional()
+      .default([]),
     inputs: z
       .record(
         z.string().min(1).max(80),
@@ -377,6 +482,19 @@ export const scanExtractionSuggestionRequestSchema = z
     "Select the desired value or describe what should be extracted.",
   );
 
+export const publicActionFlowExecuteSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .min(1)
+      .max(scanWorkflowLimits.scannedValue)
+      .optional(),
+    inputs: stockScanExecuteSchema.shape.inputs,
+    selectedResourceIds: stockScanExecuteSchema.shape.selectedResourceIds,
+  })
+  .strict();
+
 export type ScanWorkflowExtraction = z.infer<
   typeof scanWorkflowExtractionSchema
 >;
@@ -397,9 +515,13 @@ export type StockScanExecuteInput = z.infer<typeof stockScanExecuteSchema>;
 export type ScanExtractionSuggestionRequest = z.infer<
   typeof scanExtractionSuggestionRequestSchema
 >;
+export type PublicActionFlowExecuteInput = z.infer<
+  typeof publicActionFlowExecuteSchema
+>;
 
 export type ScanWorkflowDto = ScanWorkflowCreateInput & {
   id: string;
+  publicTriggerId: string;
   revision: number;
   createdBy: string | null;
   updatedBy: string | null;

@@ -516,6 +516,7 @@ async function loadCandidates(preference: PreferenceRecord, now: Date) {
           .where(
             and(
               eq(inventoryAssignments.status, "active"),
+              eq(inventoryAssignments.kind, "checkout"),
               eq(
                 inventoryAssignments.organizationId,
                 preference.organizationId,

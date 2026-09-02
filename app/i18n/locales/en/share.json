@@ -153,6 +153,13 @@
       "fileInputUnsupported": "The required field “{{field}}” needs a file. Run this flow in the internal app.",
       "fileInputHint": "Optional file and media fields are skipped in the public stock tool.",
       "chooseValue": "Choose a value",
+      "targets": "Targets for this run",
+      "targetModes": {
+        "all": "The action flow is applied to every target.",
+        "radio": "Choose exactly one target.",
+        "checkbox": "Choose one or more targets."
+      },
+      "variationFor": "Variation for {{name}}",
       "cancel": "Scan again",
       "execute": "Run action flow"
     }

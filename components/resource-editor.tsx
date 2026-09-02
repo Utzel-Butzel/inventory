@@ -58,6 +58,7 @@ import {
 } from "@/lib/client-types";
 import { prepareUpload, readImageGps } from "@/lib/client-media";
 import { ImageUploadEditor } from "@/components/image-upload-editor";
+import { InventoryMediaCapture } from "@/components/inventory-media-capture";
 import { AssemblyManager } from "@/components/assembly-manager";
 import { CustomFieldInputs } from "@/components/custom-field-inputs";
 import { ResourceTranslations } from "@/components/resource-translations";
@@ -1752,6 +1753,17 @@ export function ResourceEditor({
                 ))}
               </div>
             ) : null}
+
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <InventoryMediaCapture
+                disabled={saving}
+                remainingSlots={Math.max(0, 12 - files.length)}
+                onCapture={(capturedFiles) => void acceptFiles(capturedFiles)}
+              />
+              <span className="text-[11px] leading-5 text-muted">
+                {t("media.capture.summary")}
+              </span>
+            </div>
 
             <label
               onDragOver={(event) => { event.preventDefault(); setDragging(true); }}

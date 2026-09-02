@@ -20,6 +20,7 @@ import {
   internalRequestLines,
   internalRequests,
   inventoryAssignments,
+  resourceLendingSettings,
   resources,
   resourceVariants,
   stockLocationBalances,
@@ -337,14 +338,30 @@ export async function createInternalRequest(
     await db.transaction(async (transaction) => {
       const resourceIds = input.lines.map((line) => line.resourceId);
       const resourceRows = await transaction
-        .select({ id: resources.id, status: resources.status })
+        .select({
+          id: resources.id,
+          name: resources.name,
+          status: resources.status,
+          lendingEnabled: resourceLendingSettings.enabled,
+          approvalRequired: resourceLendingSettings.approvalRequired,
+          maxDurationDays: resourceLendingSettings.maxDurationDays,
+        })
         .from(resources)
+        .leftJoin(
+          resourceLendingSettings,
+          and(
+            eq(resourceLendingSettings.organizationId, organizationId),
+            eq(resourceLendingSettings.resourceId, resources.id),
+          ),
+        )
         .where(
           and(
             eq(resources.organizationId, organizationId),
             inArray(resources.id, resourceIds),
           ),
-        );
+        )
+        .orderBy(asc(resources.id))
+        .for("update", { of: resources });
       if (resourceRows.length !== resourceIds.length) {
         throw new InternalRequestError(
           "One or more requested inventory items do not exist.",
@@ -354,6 +371,28 @@ export async function createInternalRequest(
       if (resourceRows.some((resource) => resource.status === "archived")) {
         throw new InternalRequestError(
           "Archived inventory cannot be requested.",
+          422,
+        );
+      }
+      const unavailableForLending = resourceRows.filter(
+        (resource) => resource.lendingEnabled !== true,
+      );
+      if (unavailableForLending.length) {
+        throw new InternalRequestError(
+          `${unavailableForLending.map((resource) => resource.name).join(", ")} cannot be requested because lending is not enabled.`,
+          422,
+        );
+      }
+      const durationDays =
+        (input.dueAt.getTime() - input.startsAt.getTime()) / 86_400_000;
+      const durationConflict = resourceRows.find(
+        (resource) =>
+          resource.maxDurationDays !== null &&
+          durationDays > resource.maxDurationDays,
+      );
+      if (durationConflict) {
+        throw new InternalRequestError(
+          `${durationConflict.name} may be borrowed for at most ${durationConflict.maxDurationDays} days.`,
           422,
         );
       }
@@ -376,12 +415,39 @@ export async function createInternalRequest(
         }
       }
 
+      const autoApprove = resourceRows.every(
+        (resource) => resource.approvalRequired === false,
+      );
+      if (autoApprove) {
+        const availability = await availabilityForWindow(
+          transaction,
+          organizationId,
+          resourceIds,
+          input.startsAt,
+          input.dueAt,
+        );
+        const conflicts = input.lines.flatMap((line) => {
+          const item = availability.get(line.resourceId);
+          return !item || item.available < line.quantity
+            ? [
+                `${item?.resourceName ?? "An item"}: requested ${line.quantity}, available ${item?.available ?? 0}`,
+              ]
+            : [];
+        });
+        if (conflicts.length) {
+          throw new InternalRequestError(
+            `The requested period is not available. ${conflicts.join("; ")}.`,
+            409,
+          );
+        }
+      }
+
       const now = new Date();
       await transaction.insert(internalRequests).values({
         organizationId,
         id,
         reference,
-        status: "submitted",
+        status: autoApprove ? "approved" : "submitted",
         requesterUserId: actor.userId ?? null,
         requesterName: actor.name.trim() || actor.subject,
         requesterEmail: actor.subject.includes("@") ? actor.subject : null,
@@ -389,6 +455,9 @@ export async function createInternalRequest(
         startsAt: input.startsAt,
         dueAt: input.dueAt,
         note: input.note ?? "",
+        decisionNote: autoApprove ? "Automatically approved by lending policy." : "",
+        decidedBy: autoApprove ? actor.subject : null,
+        decidedAt: autoApprove ? now : null,
         idempotencyKey: idempotency.key,
         requestHash: idempotency.requestHash,
         createdBy: actor.subject,
@@ -414,6 +483,16 @@ export async function createInternalRequest(
         note: input.note ?? "",
         occurredAt: now,
       });
+      if (autoApprove) {
+        await transaction.insert(internalRequestEvents).values({
+          organizationId,
+          requestId: id,
+          type: "approved",
+          actor: actor.subject,
+          note: "Automatically approved by lending policy.",
+          occurredAt: now,
+        });
+      }
     });
   } catch (error) {
     const replay = await getReplay();
@@ -475,6 +554,7 @@ async function availabilityForWindow(
             eq(inventoryAssignments.organizationId, organizationId),
             inArray(inventoryAssignments.resourceId, uniqueIds),
             eq(inventoryAssignments.status, "active"),
+            eq(inventoryAssignments.stockApplied, true),
           ),
         )
         .groupBy(inventoryAssignments.resourceId),

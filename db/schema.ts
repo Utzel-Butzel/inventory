@@ -2175,6 +2175,8 @@ export const purchaseOrderLines = pgTable(
       .references(() => resources.id, { onDelete: "restrict" }),
     orderedQuantity: integer("ordered_quantity").notNull(),
     receivedQuantity: integer("received_quantity").notNull().default(0),
+    purchaseUnitName: varchar("purchase_unit_name", { length: 80 }),
+    purchaseUnitFactor: integer("purchase_unit_factor").notNull().default(1),
     unitPriceCents: integer("unit_price_cents"),
     priceCurrency: varchar("price_currency", { length: 3 }),
     expectedAt: timestamp("expected_at", { withTimezone: true }),
@@ -2206,6 +2208,10 @@ export const purchaseOrderLines = pgTable(
     check(
       "purchase_order_lines_received_not_above_ordered",
       sql`${table.receivedQuantity} <= ${table.orderedQuantity}`,
+    ),
+    check(
+      "purchase_order_lines_purchase_unit_valid",
+      sql`(${table.purchaseUnitName} is null and ${table.purchaseUnitFactor} = 1) or (${table.purchaseUnitName} is not null and ${table.purchaseUnitFactor} > 0)`,
     ),
     check(
       "purchase_order_lines_unit_price_nonnegative",
@@ -2284,6 +2290,8 @@ export const stockSettings = pgTable(
     reorderQuantity: integer("reorder_quantity").notNull().default(0),
     leadTimeDays: integer("lead_time_days").notNull().default(0),
     unitName: varchar("unit_name", { length: 80 }).notNull().default("unit"),
+    purchaseUnitName: varchar("purchase_unit_name", { length: 80 }),
+    purchaseUnitFactor: integer("purchase_unit_factor"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -2312,6 +2320,51 @@ export const stockSettings = pgTable(
     check(
       "stock_settings_lead_time_nonnegative",
       sql`${table.leadTimeDays} >= 0`,
+    ),
+    check(
+      "stock_settings_purchase_unit_pair",
+      sql`(${table.purchaseUnitName} is null and ${table.purchaseUnitFactor} is null) or (${table.purchaseUnitName} is not null and ${table.purchaseUnitFactor} > 0)`,
+    ),
+  ],
+);
+
+export const resourceLendingSettings = pgTable(
+  "resource_lending_settings",
+  {
+    organizationId: organizationIdColumn(),
+    resourceId: uuid("resource_id")
+      .primaryKey()
+      .references(() => resources.id, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(false),
+    approvalRequired: boolean("approval_required").notNull().default(true),
+    defaultDurationDays: integer("default_duration_days").notNull().default(7),
+    maxDurationDays: integer("max_duration_days").notNull().default(30),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "resource_lending_settings_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    index("resource_lending_settings_enabled_idx").on(
+      table.organizationId,
+      table.enabled,
+    ),
+    check(
+      "resource_lending_settings_default_duration_check",
+      sql`${table.defaultDurationDays} between 1 and 3650`,
+    ),
+    check(
+      "resource_lending_settings_max_duration_check",
+      sql`${table.maxDurationDays} between ${table.defaultDurationDays} and 3650`,
     ),
   ],
 );
@@ -2738,6 +2791,7 @@ export const inventoryAssignments = pgTable(
       .$type<AssignmentStatus>()
       .notNull()
       .default("active"),
+    stockApplied: boolean("stock_applied").notNull().default(true),
     quantity: integer("quantity").notNull().default(1),
     assigneeUserId: uuid("assignee_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -2912,11 +2966,28 @@ export const stockScanWorkflows = pgTable(
     resourceId: uuid("resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "cascade" }),
+    resourceIds: uuid("target_resource_ids")
+      .array()
+      .notNull()
+      .default([]),
+    targetSelectionMode: varchar("target_selection_mode", { length: 16 })
+      .$type<"all" | "radio" | "checkbox">()
+      .notNull()
+      .default("all"),
+    allowVariantSelection: boolean("allow_variant_selection")
+      .notNull()
+      .default(false),
     codeTypes: text("code_types")
       .array()
       .$type<ScanCodeType[]>()
       .notNull()
       .default([...scanCodeTypes]),
+    publicTriggerEnabled: boolean("public_trigger_enabled")
+      .notNull()
+      .default(false),
+    publicTriggerId: uuid("public_trigger_id").notNull().defaultRandom(),
+    publicTriggerCode: text("public_trigger_code"),
+    quantityInputKey: varchar("quantity_input_key", { length: 80 }),
     revision: integer("revision").notNull().default(1),
     extraction: jsonb("extraction")
       .$type<ScanWorkflowExtraction>()
@@ -2962,10 +3033,21 @@ export const stockScanWorkflows = pgTable(
   (table) => [
     index("stock_scan_workflows_resource_id_idx").on(table.resourceId),
     index("stock_scan_workflows_enabled_idx").on(table.enabled),
+    uniqueIndex("stock_scan_workflows_public_trigger_id_unique").on(
+      table.publicTriggerId,
+    ),
     check("stock_scan_workflows_revision_positive", sql`${table.revision} > 0`),
     check(
       "stock_scan_workflows_code_types_nonempty",
       sql`cardinality(${table.codeTypes}) > 0`,
+    ),
+    check(
+      "stock_scan_workflows_target_resource_ids_nonempty",
+      sql`cardinality(${table.resourceIds}) > 0`,
+    ),
+    check(
+      "stock_scan_workflows_target_selection_mode_check",
+      sql`${table.targetSelectionMode} in ('all', 'radio', 'checkbox')`,
     ),
     check(
       "stock_scan_workflows_code_types_check",
@@ -3838,6 +3920,8 @@ export type WebhookEndpointRecord = typeof webhookEndpoints.$inferSelect;
 export type WebhookEventRecord = typeof webhookEvents.$inferSelect;
 export type WebhookDeliveryRecord = typeof webhookDeliveries.$inferSelect;
 export type StockSettingsRecord = typeof stockSettings.$inferSelect;
+export type ResourceLendingSettingsRecord =
+  typeof resourceLendingSettings.$inferSelect;
 export type StockMovementRecord = typeof stockMovements.$inferSelect;
 export type StockCostLayerRecord = typeof stockCostLayers.$inferSelect;
 export type StockCostAllocationRecord = typeof stockCostAllocations.$inferSelect;

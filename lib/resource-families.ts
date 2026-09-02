@@ -1054,6 +1054,8 @@ export async function createResourceFamilyVariant(options: {
         reorderQuantity: primarySettings?.reorderQuantity ?? 0,
         leadTimeDays: primarySettings?.leadTimeDays ?? 0,
         unitName: primarySettings?.unitName ?? "unit",
+        purchaseUnitName: primarySettings?.purchaseUnitName ?? null,
+        purchaseUnitFactor: primarySettings?.purchaseUnitFactor ?? null,
         updatedAt: now,
       })
       .where(

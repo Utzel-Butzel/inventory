@@ -30,6 +30,8 @@ struct IntakeJob: Identifiable, Codable, Equatable, Sendable {
     let createdAt: Date
     var request: ResourceCreateRequest
     var filenames: [String]
+    var mediaMIMETypes: [String]? = nil
+    var mediaOriginalNames: [String]? = nil
     var sourceFilePaths: [String]?
     var expectedFileCount: Int?
     var serverOrigin: String?
@@ -136,6 +138,8 @@ final class IntakeQueue: ObservableObject {
             createdAt: Date(),
             request: submission.request,
             filenames: [],
+            mediaMIMETypes: submission.photos.map(\.mimeType),
+            mediaOriginalNames: submission.photos.map(\.filename),
             sourceFilePaths: submission.photos.map(\.fileURL.path),
             expectedFileCount: submission.photos.count,
             serverOrigin: client?.serverURL.absoluteString,
@@ -161,7 +165,7 @@ final class IntakeQueue: ObservableObject {
             placementWarning: nil,
             attemptCount: 0,
             nextAttemptAt: nil,
-            message: "Fotos werden für den Upload gesichert."
+            message: "Medien werden für den Upload gesichert."
         )
         jobs.insert(job, at: 0)
         persist()
@@ -189,7 +193,7 @@ final class IntakeQueue: ObservableObject {
                         principalIdentifier: client?.principalIdentifier
                     )
                         ? "Bereit zum Hochladen."
-                        : "Fotos sind gesichert. Wechsle zum zugehörigen Konto, um den Upload fortzusetzen."
+                        : "Medien sind gesichert. Wechsle zum zugehörigen Konto, um den Upload fortzusetzen."
                 }
                 let persisted = replace(job)
                 if persisted {
@@ -198,13 +202,13 @@ final class IntakeQueue: ObservableObject {
                 } else {
                     job.stage = .failed
                     job.progress = 1
-                    job.message = "Fotos sind gesichert, aber der Queue-Status konnte nicht gespeichert werden."
+                    job.message = "Medien sind gesichert, aber der Queue-Status konnte nicht gespeichert werden."
                     replace(job)
                 }
             } catch {
                 job.stage = .failed
                 job.progress = 1
-                job.message = "Fotos konnten nicht gesichert werden: \(error.localizedDescription)"
+                job.message = "Medien konnten nicht gesichert werden: \(error.localizedDescription)"
                 replace(job)
             }
         }
@@ -236,7 +240,7 @@ final class IntakeQueue: ObservableObject {
            Self.sourceFilesExist(for: job) {
             job.stage = .preparing
             job.progress = 0.03
-            job.message = "Lokale Fotos werden erneut sicher übernommen."
+            job.message = "Lokale Medien werden erneut sicher übernommen."
             replace(job)
             Task { await resumePreparingJob(id) }
             return
@@ -244,7 +248,7 @@ final class IntakeQueue: ObservableObject {
         guard job.mediaUploaded || Self.filesExist(for: job, rootURL: rootURL) else {
             job.stage = .failed
             job.progress = 1
-            job.message = "Die lokalen Fotos sind nicht mehr vollständig. Bitte den Auftrag entfernen und neu aufnehmen."
+            job.message = "Die lokalen Medien sind nicht mehr vollständig. Bitte den Auftrag entfernen und neu aufnehmen."
             replace(job)
             return
         }
@@ -397,7 +401,7 @@ final class IntakeQueue: ObservableObject {
                     job.progress = 0.4
                 } catch let error as APIClientError where error.statusCode == 409 {
                     // A room may be rescanned while this durable job is waiting.
-                    // Keep the new item and its photos instead of retrying the
+                    // Keep the new item and its media instead of retrying the
                     // now-invalid coordinate frame forever.
                     job.placementCompleted = true
                     job.placementWarning =
@@ -412,11 +416,15 @@ final class IntakeQueue: ObservableObject {
             if !job.mediaUploaded {
                 job.stage = .uploading
                 job.progress = 0.44
-                job.message = "\(job.filenames.count) Foto(s) werden hochgeladen."
+                job.message = "\(job.filenames.count) Mediendatei(en) werden hochgeladen."
                 replace(job)
 
-                let files = job.filenames.map {
-                    MediaUploadFile(fileURL: directory(for: job.id).appendingPathComponent($0))
+                let files = job.filenames.enumerated().map { index, filename in
+                    MediaUploadFile(
+                        fileURL: directory(for: job.id).appendingPathComponent(filename),
+                        filename: job.mediaOriginalNames?[safe: index] ?? filename,
+                        mimeType: job.mediaMIMETypes?[safe: index] ?? "image/jpeg"
+                    )
                 }
                 _ = try await client.uploadMedia(
                     resourceID: resourceID,
@@ -456,7 +464,7 @@ final class IntakeQueue: ObservableObject {
                     if Self.isRetryable(error) { throw error }
                     job.stage = .warning
                     job.progress = 1
-                    job.message = "Gegenstand und Fotos sind gespeichert, die Analyse schlug jedoch fehl: \(error.localizedDescription)"
+                    job.message = "Gegenstand und Medien sind gespeichert, die Analyse schlug jedoch fehl: \(error.localizedDescription)"
                     replace(job)
                     return
                 }
@@ -499,7 +507,7 @@ final class IntakeQueue: ObservableObject {
             job.attemptCount = 0
             job.nextAttemptAt = nil
             job.message = job.placementWarning.map {
-                "Gegenstand und Fotos sind gespeichert. \($0)"
+                "Gegenstand und Medien sind gespeichert. \($0)"
             } ?? "Fertig."
             if replace(job) {
                 cleanupPhotoFiles(for: job.id)
@@ -611,6 +619,23 @@ final class IntakeQueue: ObservableObject {
         }
     }
 
+    nonisolated private static func uploadExtension(for file: MediaUploadFile) -> String {
+        let candidate = file.fileURL.pathExtension.lowercased()
+        if !candidate.isEmpty,
+           candidate.count <= 10,
+           candidate.unicodeScalars.allSatisfy(CharacterSet.alphanumerics.contains) {
+            return candidate
+        }
+        return switch file.mimeType {
+        case "video/quicktime": "mov"
+        case "video/mp4": "mp4"
+        case "video/webm": "webm"
+        case "application/pdf": "pdf"
+        case "image/png": "png"
+        default: "jpg"
+        }
+    }
+
     private static func importPhotos(
         _ photos: [MediaUploadFile],
         to directory: URL
@@ -623,7 +648,13 @@ final class IntakeQueue: ObservableObject {
             var names: [String] = []
             do {
                 for (index, photo) in photos.enumerated() {
-                    let name = String(format: "%02d-%@.jpg", index + 1, UUID().uuidString)
+                    let fileExtension = uploadExtension(for: photo)
+                    let name = String(
+                        format: "%02d-%@.%@",
+                        index + 1,
+                        UUID().uuidString,
+                        fileExtension
+                    )
                     let destination = directory.appendingPathComponent(name)
                     try FileManager.default.copyItem(at: photo.fileURL, to: destination)
                     names.append(name)
@@ -670,13 +701,13 @@ final class IntakeQueue: ObservableObject {
             if !completeOutbox, sourceFilesExist(for: job) {
                 job.stage = .preparing
                 job.progress = 0.03
-                job.message = "Die sichere Fotoübernahme wird nach dem Neustart fortgesetzt."
+                job.message = "Die sichere Medienübernahme wird nach dem Neustart fortgesetzt."
                 return job
             }
             guard completeOutbox else {
                 job.stage = .failed
                 job.progress = 1
-                job.message = "Die Fotoübernahme wurde unterbrochen. Es wird nichts unvollständig hochgeladen."
+                job.message = "Die Medienübernahme wurde unterbrochen. Es wird nichts unvollständig hochgeladen."
                 return job
             }
             job.filenames = names
@@ -754,8 +785,12 @@ final class IntakeQueue: ObservableObject {
         guard var job = jobs.first(where: { $0.id == id }),
               job.stage == .preparing,
               Self.sourceFilesExist(for: job) else { return }
-        let photos = (job.sourceFilePaths ?? []).map {
-            MediaUploadFile(fileURL: URL(fileURLWithPath: $0))
+        let photos = (job.sourceFilePaths ?? []).enumerated().map { index, path in
+            MediaUploadFile(
+                fileURL: URL(fileURLWithPath: path),
+                filename: job.mediaOriginalNames?[safe: index],
+                mimeType: job.mediaMIMETypes?[safe: index] ?? "image/jpeg"
+            )
         }
         let jobDirectory = directory(for: id)
         do {
@@ -773,21 +808,21 @@ final class IntakeQueue: ObservableObject {
                 organizationID: client?.organizationID,
                 principalIdentifier: client?.principalIdentifier
             )
-                ? "Fotos vollständig wiederhergestellt und bereit."
-                : "Fotos sind wiederhergestellt. Wechsle zum zugehörigen Konto, um den Upload fortzusetzen."
+                ? "Medien vollständig wiederhergestellt und bereit."
+                : "Medien sind wiederhergestellt. Wechsle zum zugehörigen Konto, um den Upload fortzusetzen."
             if replace(job) {
                 Self.cleanupImportedSources(photos)
                 startWorkerIfNeeded()
             } else {
                 job.stage = .failed
                 job.progress = 1
-                job.message = "Fotos sind wiederhergestellt, aber der Queue-Status konnte nicht gespeichert werden."
+                job.message = "Medien sind wiederhergestellt, aber der Queue-Status konnte nicht gespeichert werden."
                 replace(job)
             }
         } catch {
             job.stage = .failed
             job.progress = 1
-            job.message = "Fotos konnten nicht wiederhergestellt werden: \(error.localizedDescription)"
+            job.message = "Medien konnten nicht wiederhergestellt werden: \(error.localizedDescription)"
             replace(job)
         }
     }
@@ -823,5 +858,11 @@ final class IntakeQueue: ObservableObject {
         }
         let base = min(120, pow(2, Double(attempt)))
         return base + Double.random(in: 0 ... min(3, base * 0.2))
+    }
+}
+
+private extension Collection {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

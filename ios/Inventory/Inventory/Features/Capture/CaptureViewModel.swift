@@ -14,6 +14,30 @@ struct CapturedInventoryPhoto: Identifiable, Equatable, Sendable {
     }
 }
 
+struct CapturedInventoryAttachment: Identifiable, Equatable, Sendable {
+    enum Kind: String, Sendable {
+        case video
+        case document
+    }
+
+    let id: UUID
+    let file: MediaUploadFile
+    let byteCount: Int64
+    let kind: Kind
+
+    init(
+        id: UUID = UUID(),
+        file: MediaUploadFile,
+        byteCount: Int64,
+        kind: Kind
+    ) {
+        self.id = id
+        self.file = file
+        self.byteCount = byteCount
+        self.kind = kind
+    }
+}
+
 struct IntakeSubmission: Sendable {
     let id: UUID
     let request: ResourceCreateRequest
@@ -40,6 +64,7 @@ final class CaptureViewModel: ObservableObject {
     @Published var autoAnalyze = true
     @Published var autoCover = true
     @Published private(set) var photos: [CapturedInventoryPhoto] = []
+    @Published private(set) var attachments: [CapturedInventoryAttachment] = []
     @Published private(set) var processingCount = 0
     @Published var errorMessage: String?
     @Published private(set) var spatialPlacement: SpatialPlacementDraft?
@@ -56,10 +81,15 @@ final class CaptureViewModel: ObservableObject {
 
     var canSubmit: Bool {
         !photos.isEmpty ||
+            !attachments.isEmpty ||
             !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
             !sku.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
             !barcode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
             !serialNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var mediaCount: Int {
+        photos.count + attachments.count
     }
 
     func addCapturedData(_ data: Data) {
@@ -76,8 +106,8 @@ final class CaptureViewModel: ObservableObject {
     }
 
     private func addEncodedData(_ data: Data, cropAspectRatio: CGFloat?) {
-        guard photos.count + processingCount < Self.maximumPhotos else {
-            errorMessage = "Pro Gegenstand sind höchstens zwölf Fotos möglich."
+        guard mediaCount + processingCount < Self.maximumPhotos else {
+            errorMessage = "Pro Gegenstand sind höchstens zwölf Mediendateien möglich."
             return
         }
         processingCount += 1
@@ -105,9 +135,9 @@ final class CaptureViewModel: ObservableObject {
     }
 
     func addPickerItems(_ items: [PhotosPickerItem]) {
-        let openSlots = Self.maximumPhotos - photos.count - processingCount
+        let openSlots = Self.maximumPhotos - mediaCount - processingCount
         guard openSlots > 0 else {
-            errorMessage = "Pro Gegenstand sind höchstens zwölf Fotos möglich."
+            errorMessage = "Pro Gegenstand sind höchstens zwölf Mediendateien möglich."
             return
         }
         for item in items.prefix(openSlots) {
@@ -144,6 +174,39 @@ final class CaptureViewModel: ObservableObject {
     func removePhoto(_ photo: CapturedInventoryPhoto) {
         photos.removeAll { $0.id == photo.id }
         try? FileManager.default.removeItem(at: photo.fileURL)
+    }
+
+    func addAttachment(_ file: MediaUploadFile, kind: CapturedInventoryAttachment.Kind) {
+        guard mediaCount + processingCount < Self.maximumPhotos else {
+            errorMessage = "Pro Gegenstand sind höchstens zwölf Mediendateien möglich."
+            try? FileManager.default.removeItem(at: file.fileURL)
+            return
+        }
+        do {
+            let values = try file.fileURL.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .fileSizeKey,
+            ])
+            guard values.isRegularFile == true, let size = values.fileSize, size > 0 else {
+                throw CocoaError(.fileReadNoSuchFile)
+            }
+            attachments.append(
+                CapturedInventoryAttachment(
+                    file: file,
+                    byteCount: Int64(size),
+                    kind: kind
+                )
+            )
+            errorMessage = nil
+        } catch {
+            errorMessage = "Die Mediendatei konnte nicht hinzugefügt werden: \(error.localizedDescription)"
+            try? FileManager.default.removeItem(at: file.fileURL)
+        }
+    }
+
+    func removeAttachment(_ attachment: CapturedInventoryAttachment) {
+        attachments.removeAll { $0.id == attachment.id }
+        try? FileManager.default.removeItem(at: attachment.file.fileURL)
     }
 
     func applyScannedCode(_ rawCode: String) {
@@ -192,7 +255,7 @@ final class CaptureViewModel: ObservableObject {
             request: request,
             photos: photos.map {
                 MediaUploadFile(fileURL: $0.fileURL, filename: $0.fileURL.lastPathComponent)
-            },
+            } + attachments.map(\.file),
             analyze: autoAnalyze && !photos.isEmpty,
             generateCover: autoAnalyze && autoCover && !photos.isEmpty,
             imageModelID: imageModelID,
@@ -210,6 +273,7 @@ final class CaptureViewModel: ObservableObject {
         barcode = ""
         serialNumber = ""
         photos = []
+        attachments = []
         spatialPlacement = nil
         errorMessage = nil
     }

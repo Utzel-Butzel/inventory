@@ -16,13 +16,25 @@ import {
 const lineSchema = z
   .object({
     resourceId: z.string().uuid(),
-    orderedQuantity: z.number().int().min(1).max(2_000_000_000),
+    orderedQuantity: z.number().int().min(1).max(2_000_000_000).optional(),
+    purchaseQuantity: z.number().int().min(1).max(2_000_000_000).optional(),
     expectedAt: z.string().datetime().nullable().optional(),
     note: z.string().trim().max(20_000).optional(),
     unitPriceCents: z.number().int().min(0).max(2_000_000_000).nullable().optional(),
     priceCurrency: z.string().trim().length(3).toUpperCase().nullable().optional(),
   })
   .strict()
+  .superRefine((value, context) => {
+    if (
+      (value.orderedQuantity === undefined) ===
+      (value.purchaseQuantity === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Provide either orderedQuantity or purchaseQuantity.",
+      });
+    }
+  })
   .refine(
     (value) => (value.unitPriceCents == null) === (value.priceCurrency == null),
     { message: "unitPriceCents and priceCurrency must be supplied together." },

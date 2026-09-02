@@ -157,6 +157,13 @@
       "availableHelp": "Zum verfügbaren Bestand zählen nur Einheiten mit dem Lebenszyklusstatus „Verfügbar“. Ein Wechsel von „Verfügbar“ zu einem anderen Status reduziert daher diese Menge.",
       "fixedProperties": "Durch Workflow festgelegt",
       "completeProperties": "Scan-Eigenschaften vervollständigen",
+      "targetsTitle": "Ziele dieser Ausführung",
+      "targetModes": {
+        "all": "Die Aktion wird auf alle Ziele angewendet.",
+        "radio": "Wähle genau ein Ziel aus.",
+        "checkbox": "Wähle ein oder mehrere Ziele aus."
+      },
+      "variationFor": "Variation für {{name}}",
       "selectField": "{{field}} auswählen",
       "metadataPreview": "Metadatenvorschau",
       "updateErrorTitle": "Aktualisierung wurde nicht abgeschlossen",
@@ -167,6 +174,44 @@
       "updating": "Bestand wird aktualisiert…",
       "cannotUpdate": "Einheit kann nicht aktualisiert werden",
       "confirm": "Bestätigen und Bestand aktualisieren"
+    }
+  },
+  "publicAction": {
+    "eyebrow": "Öffentliche Bestandsaktion",
+    "code": "Code / Kennung ({{key}})",
+    "codePlaceholder": "Code oder Kennung eingeben",
+    "confirm": "Aktion bestätigen",
+    "submitting": "Aktion wird ausgeführt…",
+    "security": "Diese nicht gelistete URL berechtigt zum Ausführen der Aktion. Gib sie nicht an Personen weiter, die den Bestand nicht ändern dürfen.",
+    "fileUnsupported": "Dateien und Medien müssen derzeit im angemeldeten Scanner ergänzt werden.",
+    "targets": {
+      "title": "Ziel auswählen",
+      "modes": {
+        "all": "Die Aktion wird für alle aufgeführten Ziele ausgeführt.",
+        "radio": "Wähle genau ein Ziel aus.",
+        "checkbox": "Wähle ein oder mehrere Ziele aus."
+      },
+      "variationFor": "Variation für {{name}}"
+    },
+    "operation": {
+      "unit": "Einheit anlegen oder aktualisieren",
+      "assembly_one": "{{count}} Baugruppe fertigstellen",
+      "assembly_other": "{{count}} Baugruppen fertigstellen",
+      "stockIn": "{{count}} in den Bestand einbuchen",
+      "stockOut": "{{count}} aus dem Bestand ausbuchen"
+    },
+    "errors": {
+      "codeRequired": "Gib einen Code oder eine Kennung ein.",
+      "required": "{{field}} ist erforderlich.",
+      "targetRequired": "Wähle mindestens ein Ziel aus.",
+      "allTargetsRequired": "Wähle für jedes Ziel eine Variation aus.",
+      "fileUnsupported": "Ein erforderliches Dateifeld kann auf dieser öffentlichen Seite nicht ausgefüllt werden.",
+      "execute": "Die Aktion konnte nicht abgeschlossen werden."
+    },
+    "success": {
+      "title": "Aktion abgeschlossen",
+      "description": "„{{action}}“ wurde erfolgreich ausgeführt.",
+      "again": "Weitere Aktion ausführen"
     }
   },
   "workflows": {
@@ -210,7 +255,9 @@
       "optionValues": "Jede Option in {{field}} benötigt einen Wert und eine Bezeichnung.",
       "optionUnique": "Optionswerte in {{field}} müssen eindeutig sein.",
       "eachInput": "Jede Scan-Eingabe",
-      "anInput": "einer Scan-Eingabe"
+      "anInput": "einer Scan-Eingabe",
+      "quantityInput": "Wähle für die dynamische Menge ein erforderliches Zahlenfeld.",
+      "publicTriggerCode": "Der feste Code des öffentlichen Triggers passt nicht zur konfigurierten Extraktionsregel."
     },
     "extractionErrors": {
       "empty": "Füge einen Wert ein oder scanne ihn, um die Extraktion zu testen.",
@@ -305,6 +352,36 @@
       "descriptionPlaceholder": "Erkläre, wann dieser Workflow verwendet werden soll.",
       "viewerDescription": "Du kannst diesen Workflow ansehen und lokal als Vorschau testen. Zum Bearbeiten, Aktivieren und Löschen ist Editorzugriff erforderlich."
     },
+    "storage": {
+      "identifierTitle": "Speicherziel der Erkennung",
+      "identifierDescription": "Lege fest, wo der erkannte Wert gespeichert wird, und wähle das konkrete Zielfeld.",
+      "stockUnitBadge": "Serialisierte Bestandseinheit",
+      "destination": "Speichern in",
+      "targets": {
+        "customField": "Benutzerdefiniertes Feld der Bestandseinheit",
+        "metadata": "Metadaten der Bestandseinheit",
+        "execution": "Nur in der Flow-Ausführung",
+        "customFieldShort": "Benutzerdefiniertes Feld",
+        "metadataShort": "Metadaten",
+        "executionShort": "Nur Flow-Ausführung"
+      },
+      "customFieldLabel": "Konkretes benutzerdefiniertes Feld",
+      "customFieldPlaceholder": "Feld auswählen…",
+      "noCustomFields": "Keine Felder für Bestandseinheiten vorhanden",
+      "missingCustomField": "Nicht konfiguriert: {{key}}",
+      "selectedCustomField": "Der erkannte Wert wird in „{{label}}“ ({{key}}) auf der serialisierten Bestandseinheit gespeichert.",
+      "selectConfiguredField": "Wähle ein vorhandenes Feld für Bestandseinheiten aus.",
+      "manageCustomFields": "Benutzerdefinierte Felder verwalten",
+      "metadataKey": "Metadaten-Schlüssel",
+      "executionKey": "Schlüssel der Flow-Ausführung",
+      "metadataHint": "Der erkannte Wert wird als freie Metadaten an der serialisierten Bestandseinheit gespeichert.",
+      "executionHint": "Der erkannte Wert bleibt ausschließlich im Ausführungsprotokoll dieses Flows.",
+      "inventoryItemScope": "Wichtig: Dieses Ziel gehört zur serialisierten Bestandseinheit. Benutzerdefinierte Felder des übergeordneten Inventareintrags werden dabei nicht verändert.",
+      "additionalFieldsTitle": "Weitere Werte aus dem Code",
+      "additionalFieldsDescription": "Extrahiere zusätzliche Werte und weise jedem ein eigenes Speicherziel zu.",
+      "addField": "Weiteres QR-Feld",
+      "propertyKey": "Technischer Schlüssel"
+    },
     "steps": {
       "trigger": {
         "title": "Auslöser",
@@ -342,15 +419,40 @@
       },
       "target": {
         "title": "Zieleintrag auswählen",
-        "description": "Nur Inventar mit serialisierter Bestandserfassung kann identifizierte Einheiten aufnehmen.",
-        "field": "Serialisierter Eintrag",
+        "description": "Wähle einen oder mehrere Inventareinträge und bestimme, ob sie gemeinsam oder nach Auswahl ausgeführt werden.",
+        "field": "Zieleinträge",
         "select": "Eintrag auswählen…",
+        "searchDescription": "Durchsuche das Inventar nach Name oder SKU und wähle die gewünschten Ziele aus.",
+        "searchPlaceholder": "Nach Name oder SKU suchen",
+        "searching": "Einträge werden gesucht…",
+        "noMatches": "Keine passenden Einträge gefunden.",
+        "selectedShort": "Gewählt",
+        "selectedCount_one": "{{count}} ausgewählt",
+        "selectedCount_other": "{{count}} ausgewählt",
         "resourceQuantity": "{{name}} · {{quantity}} {{unit}}",
         "units_one": "Einheit",
         "units_other": "Einheiten",
-        "none": "Noch keine serialisierten Einträge verfügbar.",
+        "none": "Noch keine Inventareinträge mit Bestand verfügbar.",
         "configure": "Inventar konfigurieren",
-        "selected": "{{name}} verwendet serialisierte Erfassung."
+        "selected": "Ziel: {{name}}",
+        "variantOf": "Variation von {{name}}",
+        "executionMode": "Auswahl während der Ausführung",
+        "modes": {
+          "all": {
+            "label": "Alle auf einmal",
+            "description": "Die Aktion wird auf alle Ziele angewendet."
+          },
+          "radio": {
+            "label": "Ein Ziel (Radio)",
+            "description": "Der Benutzer wählt genau ein Ziel."
+          },
+          "checkbox": {
+            "label": "Mehrere (Checkboxen)",
+            "description": "Der Benutzer wählt ein oder mehrere Ziele."
+          }
+        },
+        "allowVariants": "Variation auswählbar machen",
+        "allowVariantsDescription": "Bei Produkten mit Variationen wird die konkrete Variation während der Ausführung als Radio-Auswahl abgefragt."
       },
       "inputs": {
         "title": "Eingaben während des Scans abfragen",
@@ -396,6 +498,32 @@
         "newProperty": "Eigenschaft {{value}}",
         "defaultValue": "Wert"
       }
+    },
+    "publicTrigger": {
+      "title": "Öffentliche Action-URL",
+      "description": "Öffnet ohne Anmeldung ein kompaktes Formular und führt diesen Flow nach Bestätigung aus.",
+      "toggle": "Öffentliche Action-URL aktivieren",
+      "fixedCode": "Fester Code / Kennung (optional)",
+      "fixedCodePlaceholder": "Zum Beispiel manual-restock oder die vollständige von der Extraktion erwartete URL",
+      "fixedCodeDescription": "Leer gelassen fragt das öffentliche Formular nach dem Code. Mit Vorgabe sehen Besucher nur die zusätzlichen Felder.",
+      "live": "Öffentliche URL aktiv",
+      "url": "Öffentliche Action-URL",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "open": "Öffnen",
+      "rotate": "URL ersetzen",
+      "security": "Die zufällige URL ist der Zugangsschlüssel. Deaktivieren oder Ersetzen widerruft den Zugriff sofort.",
+      "saveToActivate": "Speichere den Flow, um seine nicht gelistete öffentliche URL zu erstellen und zu aktivieren.",
+      "rotateConfirm": "Öffentliche URL ersetzen? Die bisherige URL funktioniert danach sofort nicht mehr.",
+      "rotated": "Die öffentliche Action-URL wurde ersetzt. Die bisherige URL ist nicht mehr gültig.",
+      "rotateError": "Die öffentliche Action-URL konnte nicht ersetzt werden.",
+      "copyError": "Die öffentliche Action-URL konnte nicht kopiert werden."
+    },
+    "quantityInput": {
+      "label": "Quelle der Menge",
+      "fixed": "Fest konfigurierte Menge verwenden",
+      "description": "Ein erforderliches Zahlenfeld kann den absoluten Mengenwert ersetzen. Bei Bestandsänderungen bleibt die konfigurierte Plus-/Minus-Richtung erhalten.",
+      "noNumberField": "Füge in Schritt 4 ein Zahlenfeld hinzu, wenn die Person an der URL die Menge wählen soll."
     },
     "preview": {
       "title": "Lokale Scan-Vorschau",

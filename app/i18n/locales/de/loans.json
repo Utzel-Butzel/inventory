@@ -1,0 +1,46 @@
+{
+  "metadata": {
+    "title": "Ausleihen",
+    "description": "Aktive, überfällige und reservierte Ausleihen verwalten."
+  },
+  "eyebrow": "Inventarnutzung",
+  "title": "Ausleihen",
+  "description": "Behalte aktive und überfällige Ausleihen, anstehende Reservierungen und abgeschlossene Rückgaben zentral im Blick.",
+  "refresh": "Aktualisieren",
+  "loading": "Ausleihen werden geladen",
+  "search": "Nach Eintrag, Empfänger, SKU oder Einheit suchen…",
+  "filters": {
+    "active": "Aktive Ausleihen",
+    "overdue": "Überfällig",
+    "reservations": "Reservierungen",
+    "history": "Verlauf"
+  },
+  "status": {
+    "active": "Aktiv",
+    "reserved": "Reserviert",
+    "returned": "Zurückgegeben",
+    "cancelled": "Storniert",
+    "overdue": "Überfällig"
+  },
+  "quantity_one": "{{count}} Einheit",
+  "quantity_other": "{{count}} Einheiten",
+  "due": "Fällig {{date}}",
+  "actions": {
+    "return": "Zurückgeben",
+    "cancel": "Stornieren",
+    "open": "Eintrag öffnen",
+    "checkoutAtItem": "Ausgabe vorbereiten"
+  },
+  "empty": {
+    "title": "Keine Ausleihen gefunden",
+    "filtered": "Keine Ausleihe entspricht der aktuellen Suche.",
+    "active": "Derzeit ist nichts ausgeliehen.",
+    "overdue": "Keine Rückgabe ist überfällig.",
+    "reservations": "Es gibt keine anstehenden Reservierungen.",
+    "history": "Es sind noch keine abgeschlossenen Ausleihen vorhanden."
+  },
+  "errors": {
+    "load": "Ausleihen konnten nicht geladen werden.",
+    "update": "Die Ausleihe konnte nicht aktualisiert werden."
+  }
+}

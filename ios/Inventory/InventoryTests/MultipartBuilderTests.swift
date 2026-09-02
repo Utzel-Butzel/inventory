@@ -87,8 +87,40 @@ final class MultipartBuilderTests: XCTestCase {
     func testUnifiedCameraIncludesRecognitionBetweenScanAndCount() {
         XCTAssertEqual(
             CameraMode.allCases.map(\.rawValue),
-            ["capture", "scan", "recognize", "count"]
+            ["capture", "video", "document", "scan", "recognize", "count"]
         )
+    }
+
+    func testBuildsVideoAndPDFMultipartPartsWithTheirMIMETypes() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let video = directory.appendingPathComponent("capture.mov")
+        let document = directory.appendingPathComponent("scan.pdf")
+        try Data([0x00, 0x01, 0x02]).write(to: video)
+        try Data("%PDF-1.7".utf8).write(to: document)
+
+        let body = try MultipartFormFileBuilder.build(files: [
+            MediaUploadFile(
+                fileURL: video,
+                filename: "Inventar-Video.mov",
+                mimeType: "video/quicktime"
+            ),
+            MediaUploadFile(
+                fileURL: document,
+                filename: "Inventar-Dokumentscan.pdf",
+                mimeType: "application/pdf"
+            ),
+        ])
+        defer { try? FileManager.default.removeItem(at: body.fileURL) }
+
+        let text = String(decoding: try Data(contentsOf: body.fileURL), as: UTF8.self)
+        XCTAssertTrue(text.contains("filename=\"Inventar-Video.mov\""))
+        XCTAssertTrue(text.contains("Content-Type: video/quicktime"))
+        XCTAssertTrue(text.contains("filename=\"Inventar-Dokumentscan.pdf\""))
+        XCTAssertTrue(text.contains("Content-Type: application/pdf"))
     }
 
     func testRoomScanBodyIncludesMultiRoomAndGeoreferenceContract() throws {

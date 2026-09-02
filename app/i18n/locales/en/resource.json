@@ -2,6 +2,28 @@
   "fallback": {
     "untitled": "Untitled item"
   },
+  "inventorySelect": {
+    "preview": {
+      "button": "Quick preview",
+      "open": "Open quick preview for {{name}}",
+      "close": "Close quick preview",
+      "eyebrow": "Quick preview",
+      "loading": "Loading item details…",
+      "loadError": "The item details could not be loaded.",
+      "partial": "Some details could not be loaded. The available selection data is shown.",
+      "noDescription": "No description available.",
+      "openItem": "Open full item",
+      "fields": {
+        "sku": "SKU",
+        "type": "Type",
+        "status": "Status",
+        "quantity": "Stock",
+        "location": "Location",
+        "barcode": "Barcode",
+        "description": "Description"
+      }
+    }
+  },
   "types": {
     "tool": "Tool",
     "object": "Object",
@@ -120,6 +142,59 @@
       "cancel": "Cancel",
       "apply": "Apply changes",
       "applying": "Applying…"
+    },
+    "capture": {
+      "open": "Open camera",
+      "summary": "Capture a photo, video, or searchable PDF directly",
+      "title": "Capture inventory",
+      "close": "Close camera",
+      "camera": "Select camera",
+      "cameraNumber": "Camera {{number}}",
+      "preview": "Live camera preview",
+      "cameraHint": "Point the camera at the inventory item.",
+      "documentHint": "Keep the complete document visible and as straight as possible.",
+      "openingCamera": "Opening camera…",
+      "cameraOff": "The camera is not active.",
+      "modes": {
+        "photo": "Photo",
+        "video": "Video",
+        "document": "Document"
+      },
+      "takePhoto": "Take photo",
+      "startVideo": "Start video recording",
+      "stopVideo": "Stop video recording",
+      "scanPage": "Scan document page",
+      "scannerLoading": "Loading edge detection…",
+      "findDocument": "Fit the complete document in the frame",
+      "edgesFound": "Edges detected",
+      "holdStill": "Hold still · {{percent}}%",
+      "autoCapture": "Capture automatically",
+      "filters": {
+        "color": "Color",
+        "grayscale": "Gray",
+        "black-white": "B&W"
+      },
+      "page": "Scanned page {{number}}",
+      "removePage": "Remove page {{number}}",
+      "noPages": "No pages scanned yet",
+      "finish_one": "PDF · 1 page",
+      "finish_other": "PDF · {{count}} pages",
+      "ocrRunning": "Running OCR on page {{page}} of {{count}}…",
+      "ocrLocal": "Text recognition runs locally on this device.",
+      "searchablePdf": "Multi-page PDF with a searchable OCR text layer",
+      "errors": {
+        "permission": "Camera access was blocked. Allow it in your browser settings.",
+        "notFound": "No suitable camera was found on this device.",
+        "inUse": "The camera is currently being used by another app.",
+        "unavailable": "The camera could not be opened.",
+        "unsupported": "This browser does not support direct camera capture, or the page is not loaded securely.",
+        "scannerLoad": "Edge detection could not be loaded. You can still capture pages manually.",
+        "scanFailed": "The document page could not be processed.",
+        "photoFailed": "The photo could not be captured.",
+        "videoUnsupported": "Video recording is not supported by this browser.",
+        "videoFailed": "The video could not be recorded.",
+        "ocrFailed": "OCR and PDF creation could not be completed."
+      }
     },
     "drop": "Drop files here or browse",
     "formats": "JPG, PNG, WebP, HEIC, MP4, MOV, PDF or USDZ · up to 12 files",
@@ -483,8 +558,8 @@
     }
   },
   "assignments": {
-    "title": "Assignments & reservations",
-    "description": "Check out, reserve, or permanently assign available inventory with a complete stock trail.",
+    "title": "Loans, assignments & reservations",
+    "description": "Loan, reserve for later, or permanently assign available inventory with a complete stock trail.",
     "refresh": "Refresh assignments",
     "sections": {
       "active": "Active",
@@ -495,7 +570,9 @@
       "available_one": "{{count}} available",
       "available_other": "{{count}} available",
       "allocated_one": "{{count}} allocated",
-      "allocated_other": "{{count}} allocated"
+      "allocated_other": "{{count}} allocated",
+      "reserved_one": "{{count}} reserved",
+      "reserved_other": "{{count}} reserved"
     },
     "loading": "Loading assignments",
     "empty": {
@@ -504,27 +581,41 @@
     },
     "readOnly": "You have read-only access to assignments.",
     "kinds": {
-      "checkout": "Checkout",
+      "checkout": "Loan",
       "assignment": "Assignment",
       "reservation": "Reservation"
     },
     "statuses": {
       "active": "Active",
       "returned": "Returned",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "overdue": "Overdue"
+    },
+    "lending": {
+      "enabled": "This item can be loaned",
+      "description": "Enables direct loans and reservations and makes the item available in internal requests.",
+      "approvalRequired": "Internal requests require approval",
+      "defaultDuration": "Default duration in days",
+      "maxDuration": "Maximum duration in days",
+      "save": "Save settings"
     },
     "form": {
       "action": "Action",
       "recipient": "Recipient",
+      "recipientType": "Recipient type",
+      "externalRecipient": "Person, team, or project",
+      "registeredUser": "Registered user",
+      "chooseUser": "Choose a user",
       "recipientPlaceholder": "Person, team, or project",
       "serializedUnit": "Serialized unit",
       "chooseUnit": "Choose a unit",
+      "reservationUnitLater": "The specific unit is selected when the reservation is checked out.",
       "quantity": "Quantity",
       "starts": "Starts",
       "due": "Due",
       "note": "Note",
       "create": {
-        "checkout": "Create checkout",
+        "checkout": "Create loan",
         "assignment": "Create assignment",
         "reservation": "Create reservation"
       }
@@ -533,12 +624,15 @@
     "units_other": "{{count}} units",
     "dueDate": "Due {{date}}",
     "actions": {
+      "checkout": "Check out now",
       "return": "Return",
       "cancel": "Cancel"
     },
     "errors": {
       "load": "Unable to load assignments.",
+      "settings": "Unable to save lending settings.",
       "create": "Unable to create assignment.",
+      "checkout": "Unable to check out the reservation.",
       "complete": "Unable to complete assignment."
     }
   },

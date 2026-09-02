@@ -23,6 +23,7 @@ import {
   inventoryCyclePolicies,
   media,
   purchaseOrderLines,
+  resourceLendingSettings,
   resourceCreationRequests,
   resourceOptionSelections,
   resourceOptionValues,
@@ -148,6 +149,7 @@ export async function listResources(options: {
   query?: string;
   type?: string;
   status?: string;
+  loanable?: boolean;
   page?: number;
   pageSize?: number;
   mediaMode?: "all" | "cover";
@@ -202,6 +204,18 @@ export async function listResources(options: {
   }
   if (options.status && options.status !== "all") {
     conditions.push(eq(resources.status, options.status));
+  }
+  if (options.loanable) {
+    const loanableResources = db
+      .select({ resourceId: resourceLendingSettings.resourceId })
+      .from(resourceLendingSettings)
+      .where(
+        and(
+          eq(resourceLendingSettings.organizationId, options.organizationId),
+          eq(resourceLendingSettings.enabled, true),
+        ),
+      );
+    conditions.push(inArray(resources.id, loanableResources));
   }
 
   const where = conditions.length ? and(...conditions) : undefined;
@@ -1875,11 +1889,29 @@ export async function mergeResources(
         )
         .limit(1);
       if (collision) {
+        const mergedOrderedQuantity =
+          collision.orderedQuantity + line.orderedQuantity;
+        const mergedReceivedQuantity =
+          collision.receivedQuantity + line.receivedQuantity;
+        const compatiblePurchaseUnit =
+          collision.purchaseUnitName === line.purchaseUnitName &&
+          collision.purchaseUnitFactor === line.purchaseUnitFactor &&
+          mergedOrderedQuantity % collision.purchaseUnitFactor === 0 &&
+          mergedReceivedQuantity % collision.purchaseUnitFactor === 0;
         await transaction
           .update(purchaseOrderLines)
           .set({
-            orderedQuantity: collision.orderedQuantity + line.orderedQuantity,
-            receivedQuantity: collision.receivedQuantity + line.receivedQuantity,
+            orderedQuantity: mergedOrderedQuantity,
+            receivedQuantity: mergedReceivedQuantity,
+            purchaseUnitName: compatiblePurchaseUnit
+              ? collision.purchaseUnitName
+              : null,
+            purchaseUnitFactor: compatiblePurchaseUnit
+              ? collision.purchaseUnitFactor
+              : 1,
+            ...(compatiblePurchaseUnit
+              ? {}
+              : { unitPriceCents: null, priceCurrency: null }),
             updatedAt: new Date(),
           })
           .where(
@@ -1927,6 +1959,17 @@ export async function mergeResources(
       duplicateSettings?.trackingMode === "serialized"
         ? ("serialized" as const)
         : ("bulk" as const);
+    const finalUnitName =
+      keepSettings?.unitName && keepSettings.unitName !== "unit"
+        ? keepSettings.unitName
+        : duplicateSettings?.unitName ?? keepSettings?.unitName ?? "unit";
+    const finalPurchaseUnitSettings =
+      keepSettings?.purchaseUnitName && keepSettings.unitName === finalUnitName
+        ? keepSettings
+        : duplicateSettings?.purchaseUnitName &&
+            duplicateSettings.unitName === finalUnitName
+          ? duplicateSettings
+          : null;
 
     const materializeBulkUnits = async (resource: ResourceRecord) => {
       if (resource.quantity === 0) return;
@@ -2059,10 +2102,9 @@ export async function mergeResources(
           keepSettings?.leadTimeDays ?? 0,
           duplicateSettings?.leadTimeDays ?? 0,
         ),
-        unitName:
-          keepSettings?.unitName && keepSettings.unitName !== "unit"
-            ? keepSettings.unitName
-            : duplicateSettings?.unitName ?? keepSettings?.unitName ?? "unit",
+        unitName: finalUnitName,
+        purchaseUnitName: finalPurchaseUnitSettings?.purchaseUnitName ?? null,
+        purchaseUnitFactor: finalPurchaseUnitSettings?.purchaseUnitFactor ?? null,
         updatedAt: now,
       })
       .onConflictDoUpdate({
@@ -2081,10 +2123,9 @@ export async function mergeResources(
             keepSettings?.leadTimeDays ?? 0,
             duplicateSettings?.leadTimeDays ?? 0,
           ),
-          unitName:
-            keepSettings?.unitName && keepSettings.unitName !== "unit"
-              ? keepSettings.unitName
-              : duplicateSettings?.unitName ?? keepSettings?.unitName ?? "unit",
+          unitName: finalUnitName,
+          purchaseUnitName: finalPurchaseUnitSettings?.purchaseUnitName ?? null,
+          purchaseUnitFactor: finalPurchaseUnitSettings?.purchaseUnitFactor ?? null,
           updatedAt: now,
         },
       });

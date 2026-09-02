@@ -87,10 +87,32 @@ type Workflow = {
   revision: number;
   resourceId: string;
   codeTypes: ScanCodeType[];
+  targetSelectionMode: "all" | "radio" | "checkbox";
   operation:
     | { type: "unit" }
     | { type: "stock-adjustment"; delta: number }
     | { type: "assembly-build"; quantity: number };
+};
+
+type WorkflowTargetOption = {
+  id: string;
+  name: string;
+  quantity: number;
+  trackingMode: string;
+  updatedAt: string;
+};
+
+type WorkflowTargetGroup = {
+  resourceId: string;
+  name: string;
+  options: WorkflowTargetOption[];
+};
+
+type ExpectedWorkflowTarget = {
+  resourceId: string;
+  resourceUpdatedAt: string;
+  unitId: string | null;
+  unitUpdatedAt: string | null;
 };
 
 type WorkflowInput = {
@@ -116,6 +138,10 @@ type ScanResolution = {
   expectedResourceUpdatedAt: string;
   expectedUnitId: string | null;
   expectedUnitUpdatedAt: string | null;
+  targetGroups: WorkflowTargetGroup[];
+  selectedResourceIds: string[];
+  expectedTargets: ExpectedWorkflowTarget[];
+  resources: Array<{ id: string; name: string; quantity: number; trackingMode: string }>;
 };
 
 type Movement = {
@@ -689,7 +715,11 @@ export function PublicStockScannerLauncher({
     if (!open) reset();
   }, [open, reset]);
 
-  async function scan(code: string, codeType: ScanCodeType | null = null) {
+  async function scan(
+    code: string,
+    codeType: ScanCodeType | null = null,
+    selectedResourceIds: string[] = [],
+  ) {
     const normalized = code.trim();
     if (!normalized || busy) return;
     setBusy(true);
@@ -710,7 +740,12 @@ export function PublicStockScannerLauncher({
       const response = await fetch(`/api/public/shares/${encodeURIComponent(shareId)}/scans/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workflowId, code: normalized, codeType }),
+        body: JSON.stringify({
+          workflowId,
+          code: normalized,
+          codeType,
+          selectedResourceIds,
+        }),
       });
       if (!response.ok) throw new Error(await responseError(response, t("tool.scanner.resolveError")));
       const next = (await response.json()) as ScanResolution;
@@ -756,6 +791,8 @@ export function PublicStockScannerLauncher({
           expectedResourceUpdatedAt: resolution.expectedResourceUpdatedAt,
           expectedUnitId: resolution.expectedUnitId,
           expectedUnitUpdatedAt: resolution.expectedUnitUpdatedAt,
+          selectedResourceIds: resolution.selectedResourceIds,
+          expectedTargets: resolution.expectedTargets,
           inputs: cleaned,
         }),
       });
@@ -794,7 +831,14 @@ export function PublicStockScannerLauncher({
             <div className="mt-5 rounded-2xl border border-success-border bg-success-soft p-6 text-center text-success"><CheckCircle2 className="mx-auto size-12" /><p className="mt-3 text-lg font-semibold">{success}</p><Button size="lg" className="mt-5" onClick={reset}>{t("tool.scanner.scanAnother")}</Button></div>
           ) : resolution ? (
             <div className="mt-5 space-y-5">
-              <section className="rounded-2xl border border-brand-border bg-brand-soft p-5"><p className="text-xs font-semibold uppercase tracking-[0.1em] text-brand">{resolution.workflow.name}</p><h3 className="mt-1 text-xl font-semibold text-foreground">{resolution.resource.name}</h3><div className="mt-4 flex items-center gap-3 text-2xl font-bold text-brand-strong"><span>{resolution.quantityBefore}</span><ArrowRight className="size-6" /><span>{resolution.quantityAfter}</span></div><p className="mt-1 font-mono text-xs text-muted">{resolution.identifier}</p></section>
+              <section className="rounded-2xl border border-brand-border bg-brand-soft p-5"><p className="text-xs font-semibold uppercase tracking-[0.1em] text-brand">{resolution.workflow.name}</p><h3 className="mt-1 text-xl font-semibold text-foreground">{(resolution.resources ?? [resolution.resource]).map((resource) => resource.name).join(", ")}</h3><div className="mt-4 flex items-center gap-3 text-2xl font-bold text-brand-strong"><span>{resolution.quantityBefore}</span><ArrowRight className="size-6" /><span>{resolution.quantityAfter}</span></div><p className="mt-1 font-mono text-xs text-muted">{resolution.identifier}</p></section>
+              <PublicShareWorkflowTargets
+                resolution={resolution}
+                disabled={busy}
+                onChange={(resourceIds) =>
+                  void scan(rawCode, rawCodeType, resourceIds)
+                }
+              />
               {resolution.inputFields.length ? <section className="grid gap-4 sm:grid-cols-2">{resolution.inputFields.map((field) => <WorkflowField key={field.key} field={field} value={inputs[field.key]} onChange={(value) => setInputs((current) => ({ ...current, [field.key]: value }))} />)}</section> : null}
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><Button variant="secondary" size="lg" onClick={reset}>{t("tool.scanner.cancel")}</Button><Button size="lg" onClick={() => void execute()} disabled={busy}>{busy ? <LoaderCircle className="size-5 animate-spin" /> : <ScanLine className="size-5" />}{t("tool.scanner.execute")}</Button></div>
             </div>
@@ -822,6 +866,136 @@ export function PublicStockScannerButton({ shareId }: { shareId: string }) {
         onOpenChange={setOpen}
       />
     </>
+  );
+}
+
+function PublicShareWorkflowTargets({
+  resolution,
+  disabled,
+  onChange,
+}: {
+  resolution: ScanResolution;
+  disabled: boolean;
+  onChange: (resourceIds: string[]) => void;
+}) {
+  const { t } = useT("share");
+  const groups = resolution.targetGroups ?? [];
+  if (
+    groups.length < 2 &&
+    !groups.some((group) => group.options.length > 1)
+  ) {
+    return null;
+  }
+  const selected = new Set(resolution.selectedResourceIds ?? []);
+  const selectedForGroup = (group: WorkflowTargetGroup) =>
+    group.options.find((option) => selected.has(option.id));
+  const select = (group: WorkflowTargetGroup, resourceId?: string) => {
+    const current = selectedForGroup(group);
+    const remaining = resolution.selectedResourceIds.filter(
+      (selectedId) =>
+        !group.options.some((option) => option.id === selectedId),
+    );
+    if (resourceId) {
+      onChange(
+        resolution.workflow.targetSelectionMode === "radio"
+          ? [resourceId]
+          : [...remaining, resourceId],
+      );
+      return;
+    }
+    if (resolution.workflow.targetSelectionMode === "radio") {
+      const next = current?.id ?? group.options[0]?.id;
+      if (next) onChange([next]);
+      return;
+    }
+    if (resolution.workflow.targetSelectionMode !== "checkbox") return;
+    if (current && remaining.length === 0) return;
+    onChange(
+      current
+        ? remaining
+        : group.options[0]
+          ? [...remaining, group.options[0].id]
+          : remaining,
+    );
+  };
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-4 sm:p-5">
+      <h3 className="text-sm font-semibold text-foreground">
+        {t("tool.scanner.targets")}
+      </h3>
+      <p className="mt-1 text-xs leading-5 text-muted">
+        {t(`tool.scanner.targetModes.${resolution.workflow.targetSelectionMode}`)}
+      </p>
+      <div className="mt-3 space-y-3">
+        {groups.map((group) => {
+          const current = selectedForGroup(group);
+          return (
+            <div
+              key={group.resourceId}
+              className={cn(
+                "rounded-xl border p-3.5",
+                current
+                  ? "border-brand-border bg-brand-soft/50"
+                  : "border-border bg-surface-subtle",
+              )}
+            >
+              <label className="flex items-center gap-3 text-sm font-semibold text-foreground">
+                {resolution.workflow.targetSelectionMode === "all" ? (
+                  <CheckCircle2 className="size-4 text-brand" />
+                ) : (
+                  <input
+                    type={
+                      resolution.workflow.targetSelectionMode === "radio"
+                        ? "radio"
+                        : "checkbox"
+                    }
+                    name={
+                      resolution.workflow.targetSelectionMode === "radio"
+                        ? "public-share-target"
+                        : `public-share-target-${group.resourceId}`
+                    }
+                    checked={Boolean(current)}
+                    disabled={disabled}
+                    onChange={() => select(group)}
+                    className="size-4 accent-brand-solid"
+                  />
+                )}
+                {group.name}
+              </label>
+              {group.options.length > 1 && current ? (
+                <div
+                  role="radiogroup"
+                  aria-label={t("tool.scanner.variationFor", {
+                    name: group.name,
+                  })}
+                  className="mt-3 grid gap-2 border-t border-border pt-3 sm:grid-cols-2"
+                >
+                  {group.options.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={current.id === option.id}
+                      disabled={disabled}
+                      onClick={() => select(group, option.id)}
+                      className={cn(
+                        "min-h-10 rounded-lg border bg-surface px-3 text-left text-xs font-semibold",
+                        current.id === option.id
+                          ? "border-brand-border text-brand-strong"
+                          : "border-border text-muted-strong",
+                      )}
+                    >
+                      {option.name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

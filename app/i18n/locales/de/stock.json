@@ -185,6 +185,7 @@
       "reorderQuantity": "Die Bestellmenge muss null oder größer sein.",
       "leadTime": "Die Vorlaufzeit muss eine nicht negative ganze Zahl sein.",
       "unitName": "Gib eine Einheitenbezeichnung ein.",
+      "purchaseUnit": "Gib sowohl eine Verpackungseinheit als auch eine positive ganze Umrechnungsmenge ein.",
       "saveSettings": "Die Bestandseinstellungen konnten nicht gespeichert werden.",
       "validQuantity": "Gib eine Menge größer als null ein.",
       "validMovementDate": "Wähle ein gültiges Datum und eine gültige Uhrzeit für die Bewegung.",
@@ -254,6 +255,8 @@
       "stockIn": "Zugang",
       "stockOut": "Abgang",
       "quantity": "Menge",
+      "quantityUnit": "Mengeneinheit",
+      "purchaseUnitConversion": "Bucht {{quantity}} {{unit}} in den Bestand ein.",
       "movementType": "Bewegungsart",
       "date": "Datum und Uhrzeit",
       "inboundPrice": "Gesamtpreis des Zugangs",
@@ -321,6 +324,12 @@
       "dayUnit": "T",
       "unitName": "Einheitenbezeichnung",
       "unitNamePlaceholder": "z. B. Stück, Rollen, Liter",
+      "purchaseUnitTitle": "Einkaufs- und Verpackungseinheit",
+      "purchaseUnitHelp": "Optional. Lege fest, wie viele Basiseinheiten eine gekaufte Verpackung enthält.",
+      "purchaseUnitName": "Verpackungseinheit",
+      "purchaseUnitNamePlaceholder": "z. B. Rolle, Karton, Kanister",
+      "purchaseUnitFactor": "Inhalt je Verpackung",
+      "purchaseUnitPreview": "1 {{purchaseUnit}} = {{factor}} {{baseUnit}}",
       "cannotReturnBulk": "Installierte serialisierte Einheiten müssen aus ihren Baugruppen entfernt werden, bevor du zum Mengenbestand zurückkehren kannst."
     },
     "forecast": {
@@ -603,8 +612,8 @@
     },
     "notices": {
       "created": "Bestellung erstellt.",
-      "received_one": "{{value}} Einheit von {{name}} in den Bestand eingebucht.",
-      "received_other": "{{value}} Einheiten von {{name}} in den Bestand eingebucht."
+      "received_one": "{{value}} {{unit}} von {{name}} in den Bestand eingebucht.",
+      "received_other": "{{value}} {{unit}} von {{name}} in den Bestand eingebucht."
     },
     "metrics": {
       "openOrders": "Offene Bestellungen",
@@ -632,6 +641,7 @@
       "noItemsFound": "Keine Einträge gefunden",
       "available": "{{quantity}} verfügbar",
       "orderQuantity": "Bestellmenge",
+      "purchaseUnitConversion": "jeweils {{factor}} {{unit}}",
       "unitPrice": "Stückpreis",
       "lineEta": "Positionstermin",
       "lineNote": "Positionsnotiz",
@@ -674,6 +684,7 @@
       "eta": "Termin",
       "price": "Preis",
       "unit": "Stück",
+      "purchaseUnitConversion": "1 {{purchaseUnit}} = {{factor}} {{baseUnit}}",
       "noEta": "Kein Termin",
       "lines_one": "{{value}} Position",
       "lines_other": "{{value}} Positionen",
@@ -682,6 +693,7 @@
     "receipt": {
       "description": "{{name}} in den verfügbaren Bestand einbuchen.",
       "maximum": "Maximal {{maximum}}",
+      "baseQuantity": "entspricht {{quantity}} {{unit}}",
       "quantity": "Erhaltene Menge",
       "receivedAt": "Erhalten am",
       "location": "Standort",

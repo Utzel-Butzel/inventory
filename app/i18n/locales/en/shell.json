@@ -33,6 +33,7 @@
     "requests": "Requests",
     "requestsOverview": "Overview",
     "reservationCalendar": "Reservation calendar",
+    "loans": "Loans",
     "settings": "Settings"
   },
   "notifications": {

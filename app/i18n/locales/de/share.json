@@ -153,6 +153,13 @@
       "fileInputUnsupported": "Das Pflichtfeld „{{field}}“ benötigt eine Datei. Führe diesen Flow in der internen App aus.",
       "fileInputHint": "Optionale Datei- und Medienfelder werden im öffentlichen Bestandstool übersprungen.",
       "chooseValue": "Wert auswählen",
+      "targets": "Ziele dieser Ausführung",
+      "targetModes": {
+        "all": "Der Actionflow wird auf alle Ziele angewendet.",
+        "radio": "Wähle genau ein Ziel aus.",
+        "checkbox": "Wähle ein oder mehrere Ziele aus."
+      },
+      "variationFor": "Variation für {{name}}",
       "cancel": "Neu scannen",
       "execute": "Actionflow ausführen"
     }

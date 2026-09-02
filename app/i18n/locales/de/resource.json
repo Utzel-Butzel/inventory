@@ -2,6 +2,28 @@
   "fallback": {
     "untitled": "Unbenannter Eintrag"
   },
+  "inventorySelect": {
+    "preview": {
+      "button": "Schnellvorschau",
+      "open": "Schnellvorschau für {{name}} öffnen",
+      "close": "Schnellvorschau schließen",
+      "eyebrow": "Schnellvorschau",
+      "loading": "Eintragsdetails werden geladen…",
+      "loadError": "Die Eintragsdetails konnten nicht geladen werden.",
+      "partial": "Einige Details konnten nicht geladen werden. Die verfügbaren Auswahldaten werden angezeigt.",
+      "noDescription": "Keine Beschreibung vorhanden.",
+      "openItem": "Vollständigen Eintrag öffnen",
+      "fields": {
+        "sku": "SKU",
+        "type": "Typ",
+        "status": "Status",
+        "quantity": "Bestand",
+        "location": "Standort",
+        "barcode": "Barcode",
+        "description": "Beschreibung"
+      }
+    }
+  },
   "types": {
     "tool": "Werkzeug",
     "object": "Objekt",
@@ -120,6 +142,59 @@
       "cancel": "Abbrechen",
       "apply": "Änderungen übernehmen",
       "applying": "Wird übernommen…"
+    },
+    "capture": {
+      "open": "Kamera öffnen",
+      "summary": "Foto, Video oder durchsuchbares PDF direkt aufnehmen",
+      "title": "Inventar aufnehmen",
+      "close": "Kamera schließen",
+      "camera": "Kamera auswählen",
+      "cameraNumber": "Kamera {{number}}",
+      "preview": "Live-Kamerabild",
+      "cameraHint": "Richte die Kamera auf das Inventarobjekt.",
+      "documentHint": "Halte das Dokument vollständig und möglichst gerade ins Bild.",
+      "openingCamera": "Kamera wird geöffnet…",
+      "cameraOff": "Die Kamera ist nicht aktiv.",
+      "modes": {
+        "photo": "Foto",
+        "video": "Video",
+        "document": "Dokument"
+      },
+      "takePhoto": "Foto aufnehmen",
+      "startVideo": "Videoaufnahme starten",
+      "stopVideo": "Videoaufnahme stoppen",
+      "scanPage": "Dokumentseite scannen",
+      "scannerLoading": "Kantenerkennung wird geladen…",
+      "findDocument": "Dokument vollständig ins Bild halten",
+      "edgesFound": "Kanten erkannt",
+      "holdStill": "Ruhig halten · {{percent}} %",
+      "autoCapture": "Automatisch auslösen",
+      "filters": {
+        "color": "Farbe",
+        "grayscale": "Grau",
+        "black-white": "S/W"
+      },
+      "page": "Gescannte Seite {{number}}",
+      "removePage": "Seite {{number}} entfernen",
+      "noPages": "Noch keine Seite gescannt",
+      "finish_one": "PDF · 1 Seite",
+      "finish_other": "PDF · {{count}} Seiten",
+      "ocrRunning": "OCR für Seite {{page}} von {{count}}…",
+      "ocrLocal": "Texterkennung läuft lokal auf diesem Gerät.",
+      "searchablePdf": "Mehrseitiges PDF mit durchsuchbarer OCR-Textebene",
+      "errors": {
+        "permission": "Der Kamerazugriff wurde blockiert. Erlaube ihn in den Browser-Einstellungen.",
+        "notFound": "Auf diesem Gerät wurde keine passende Kamera gefunden.",
+        "inUse": "Die Kamera wird gerade von einer anderen App verwendet.",
+        "unavailable": "Die Kamera konnte nicht geöffnet werden.",
+        "unsupported": "Dieser Browser unterstützt die direkte Kameraaufnahme nicht oder die Seite ist nicht sicher geladen.",
+        "scannerLoad": "Die Kantenerkennung konnte nicht geladen werden. Du kannst Seiten weiterhin manuell aufnehmen.",
+        "scanFailed": "Die Dokumentseite konnte nicht verarbeitet werden.",
+        "photoFailed": "Das Foto konnte nicht aufgenommen werden.",
+        "videoUnsupported": "Videoaufnahmen werden von diesem Browser nicht unterstützt.",
+        "videoFailed": "Das Video konnte nicht aufgenommen werden.",
+        "ocrFailed": "OCR und PDF-Erstellung konnten nicht abgeschlossen werden."
+      }
     },
     "drop": "Dateien hier ablegen oder auswählen",
     "formats": "JPG, PNG, WebP, HEIC, MP4, MOV, PDF oder USDZ · bis zu 12 Dateien",
@@ -483,8 +558,8 @@
     }
   },
   "assignments": {
-    "title": "Zuweisungen & Reservierungen",
-    "description": "Verfügbares Inventar ausgeben, reservieren oder dauerhaft zuweisen – mit vollständiger Bestandsverfolgung.",
+    "title": "Ausleihen, Zuweisungen & Reservierungen",
+    "description": "Verfügbares Inventar ausleihen, für später reservieren oder dauerhaft zuweisen – mit vollständiger Bestandsverfolgung.",
     "refresh": "Zuweisungen aktualisieren",
     "sections": {
       "active": "Aktiv",
@@ -495,7 +570,9 @@
       "available_one": "{{count}} verfügbar",
       "available_other": "{{count}} verfügbar",
       "allocated_one": "{{count}} zugeordnet",
-      "allocated_other": "{{count}} zugeordnet"
+      "allocated_other": "{{count}} zugeordnet",
+      "reserved_one": "{{count}} reserviert",
+      "reserved_other": "{{count}} reserviert"
     },
     "loading": "Zuweisungen werden geladen",
     "empty": {
@@ -504,27 +581,41 @@
     },
     "readOnly": "Du hast nur Lesezugriff auf Zuweisungen.",
     "kinds": {
-      "checkout": "Ausgabe",
+      "checkout": "Ausleihe",
       "assignment": "Zuweisung",
       "reservation": "Reservierung"
     },
     "statuses": {
       "active": "Aktiv",
       "returned": "Zurückgegeben",
-      "cancelled": "Storniert"
+      "cancelled": "Storniert",
+      "overdue": "Überfällig"
+    },
+    "lending": {
+      "enabled": "Dieser Eintrag kann ausgeliehen werden",
+      "description": "Aktiviert direkte Ausleihen und Reservierungen sowie die Auswahl in internen Anfragen.",
+      "approvalRequired": "Interne Anfragen müssen genehmigt werden",
+      "defaultDuration": "Standarddauer in Tagen",
+      "maxDuration": "Maximaldauer in Tagen",
+      "save": "Einstellung speichern"
     },
     "form": {
       "action": "Aktion",
       "recipient": "Empfänger",
+      "recipientType": "Empfängertyp",
+      "externalRecipient": "Person, Team oder Projekt",
+      "registeredUser": "Registrierter Benutzer",
+      "chooseUser": "Benutzer auswählen",
       "recipientPlaceholder": "Person, Team oder Projekt",
       "serializedUnit": "Serialisierte Einheit",
       "chooseUnit": "Einheit wählen",
+      "reservationUnitLater": "Die konkrete Einheit wird erst bei der Ausgabe ausgewählt.",
       "quantity": "Menge",
       "starts": "Beginn",
       "due": "Fällig",
       "note": "Notiz",
       "create": {
-        "checkout": "Ausgabe erstellen",
+        "checkout": "Ausleihe erstellen",
         "assignment": "Zuweisung erstellen",
         "reservation": "Reservierung erstellen"
       }
@@ -533,12 +624,15 @@
     "units_other": "{{count}} Einheiten",
     "dueDate": "Fällig {{date}}",
     "actions": {
+      "checkout": "Jetzt ausleihen",
       "return": "Zurückgeben",
       "cancel": "Stornieren"
     },
     "errors": {
       "load": "Zuweisungen konnten nicht geladen werden.",
+      "settings": "Ausleiheinstellungen konnten nicht gespeichert werden.",
       "create": "Zuweisung konnte nicht erstellt werden.",
+      "checkout": "Die Reservierung konnte nicht ausgeliehen werden.",
       "complete": "Zuweisung konnte nicht abgeschlossen werden."
     }
   },

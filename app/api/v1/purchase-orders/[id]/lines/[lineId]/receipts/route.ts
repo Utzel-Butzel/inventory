@@ -15,7 +15,8 @@ type Context = { params: Promise<{ id: string; lineId: string }> };
 
 const receiptSchema = z
   .object({
-    quantity: z.number().int().min(1).max(1_000),
+    quantity: z.number().int().min(1).max(1_000).optional(),
+    purchaseQuantity: z.number().int().min(1).max(1_000_000).optional(),
     receivedAt: z.string().datetime().optional(),
     location: z.string().trim().max(240).nullable().optional(),
     note: z.string().trim().max(20_000).optional(),
@@ -29,13 +30,26 @@ const receiptSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (
+      (value.quantity === undefined) ===
+      (value.purchaseQuantity === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Provide either quantity or purchaseQuantity.",
+      });
+    }
     if ((value.totalPriceCents == null) !== (value.priceCurrency == null)) {
       context.addIssue({
         code: "custom",
         message: "totalPriceCents and priceCurrency must be supplied together.",
       });
     }
-    if (value.unitCodes && value.unitCodes.length !== value.quantity) {
+    if (
+      value.unitCodes &&
+      value.quantity !== undefined &&
+      value.unitCodes.length !== value.quantity
+    ) {
       context.addIssue({
         code: "custom",
         path: ["unitCodes"],

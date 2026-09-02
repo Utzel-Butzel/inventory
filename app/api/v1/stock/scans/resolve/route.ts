@@ -38,6 +38,7 @@ export async function POST(request: Request) {
         parsed.data.workflowId,
         parsed.data.code,
         parsed.data.codeType,
+        parsed.data.selectedResourceIds,
       ),
     );
   } catch (error) {

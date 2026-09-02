@@ -185,6 +185,7 @@
       "reorderQuantity": "Reorder quantity must be zero or greater.",
       "leadTime": "Lead time must be a non-negative whole number.",
       "unitName": "Enter a unit name.",
+      "purchaseUnit": "Enter both a packaging unit and a positive whole-number conversion quantity.",
       "saveSettings": "Unable to save stock settings.",
       "validQuantity": "Enter a quantity greater than zero.",
       "validMovementDate": "Choose a valid movement date and time.",
@@ -254,6 +255,8 @@
       "stockIn": "Stock in",
       "stockOut": "Stock out",
       "quantity": "Quantity",
+      "quantityUnit": "Quantity unit",
+      "purchaseUnitConversion": "Adds {{quantity}} {{unit}} to stock.",
       "movementType": "Movement type",
       "date": "Date and time",
       "inboundPrice": "Total inbound price",
@@ -321,6 +324,12 @@
       "dayUnit": "d",
       "unitName": "Unit name",
       "unitNamePlaceholder": "e.g. pieces, rolls, litres",
+      "purchaseUnitTitle": "Purchase and packaging unit",
+      "purchaseUnitHelp": "Optional. Define how many base units are contained in one purchased package.",
+      "purchaseUnitName": "Packaging unit",
+      "purchaseUnitNamePlaceholder": "e.g. roll, box, canister",
+      "purchaseUnitFactor": "Contents per package",
+      "purchaseUnitPreview": "1 {{purchaseUnit}} = {{factor}} {{baseUnit}}",
       "cannotReturnBulk": "Installed serialized units must be removed from their assemblies before switching back to bulk tracking."
     },
     "forecast": {
@@ -603,8 +612,8 @@
     },
     "notices": {
       "created": "Purchase order created.",
-      "received_one": "Received {{value}} unit of {{name}} into stock.",
-      "received_other": "Received {{value}} units of {{name}} into stock."
+      "received_one": "Received {{value}} {{unit}} of {{name}} into stock.",
+      "received_other": "Received {{value}} {{unit}} of {{name}} into stock."
     },
     "metrics": {
       "openOrders": "Open orders",
@@ -632,6 +641,7 @@
       "noItemsFound": "No items found",
       "available": "{{quantity}} available",
       "orderQuantity": "Order quantity",
+      "purchaseUnitConversion": "{{factor}} {{unit}} each",
       "unitPrice": "Unit price",
       "lineEta": "Line ETA",
       "lineNote": "Line note",
@@ -674,6 +684,7 @@
       "eta": "ETA",
       "price": "Price",
       "unit": "unit",
+      "purchaseUnitConversion": "1 {{purchaseUnit}} = {{factor}} {{baseUnit}}",
       "noEta": "No ETA",
       "lines_one": "{{value}} line",
       "lines_other": "{{value}} lines",
@@ -682,6 +693,7 @@
     "receipt": {
       "description": "Receive {{name}} into available stock.",
       "maximum": "Maximum {{maximum}}",
+      "baseQuantity": "equals {{quantity}} {{unit}}",
       "quantity": "Quantity received",
       "receivedAt": "Received at",
       "location": "Location",

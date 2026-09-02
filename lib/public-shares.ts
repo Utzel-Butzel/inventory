@@ -35,6 +35,7 @@ import {
   type PublicShareCreateInput,
   type PublicShareFilter,
 } from "@/lib/public-share-contract";
+import { getScanWorkflowTargetGroups } from "@/lib/scan-workflows";
 
 export class PublicShareError extends Error {
   constructor(
@@ -551,6 +552,10 @@ export async function listPublicShareWorkflows(share: PublicShareRecord) {
       description: stockScanWorkflows.description,
       revision: stockScanWorkflows.revision,
       resourceId: stockScanWorkflows.resourceId,
+      resourceIds: stockScanWorkflows.resourceIds,
+      targetSelectionMode: stockScanWorkflows.targetSelectionMode,
+      allowVariantSelection: stockScanWorkflows.allowVariantSelection,
+      codeTypes: stockScanWorkflows.codeTypes,
       operation: stockScanWorkflows.operation,
     })
     .from(stockScanWorkflows)
@@ -569,7 +574,32 @@ export async function listPublicShareWorkflows(share: PublicShareRecord) {
       ),
     )
     .orderBy(asc(stockScanWorkflows.name), asc(stockScanWorkflows.id));
-  return rows;
+  const checked = await Promise.all(
+    rows.map(async (workflow) => {
+      const targetGroups = await getScanWorkflowTargetGroups(
+        share.organizationId,
+        workflow,
+      );
+      const candidateIds = targetGroups.flatMap((group) =>
+        group.options.map((option) => option.id),
+      );
+      if (!candidateIds.length) return null;
+      const allowedTargets = await db
+        .select({ id: resources.id })
+        .from(resources)
+        .where(
+          and(
+            eq(resources.organizationId, share.organizationId),
+            inArray(resources.id, candidateIds),
+            shareCondition,
+          ),
+        );
+      return allowedTargets.length === new Set(candidateIds).size
+        ? workflow
+        : null;
+    }),
+  );
+  return checked.filter((workflow) => workflow !== null);
 }
 
 export async function getPublicSharedResource(

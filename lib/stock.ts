@@ -25,6 +25,7 @@ import {
   organizations,
   purchaseOrderLines,
   purchaseOrders,
+  resourceRelations,
   resources,
   stockMovementRequests,
   stockMovements,
@@ -56,10 +57,10 @@ import {
   consumeStockCost,
   splitCents,
 } from "@/lib/stock-costing";
+import { MAX_STOCK_QUANTITY } from "@/lib/stock-quantity-units";
 
 const FORECAST_WINDOW_DAYS = 30;
 const MAX_SERIALIZATION_UNITS = 5_000;
-const MAX_STOCK_QUANTITY = 2_000_000_000;
 
 export type StockConfig = {
   trackingMode: StockTrackingMode;
@@ -67,6 +68,8 @@ export type StockConfig = {
   reorderQuantity: number;
   leadTimeDays: number;
   unitName: string;
+  purchaseUnitName: string | null;
+  purchaseUnitFactor: number | null;
 };
 
 export type StockForecast = {
@@ -155,6 +158,8 @@ const defaultConfig: StockConfig = {
   reorderQuantity: 0,
   leadTimeDays: 0,
   unitName: "unit",
+  purchaseUnitName: null,
+  purchaseUnitFactor: null,
 };
 
 const configDto = (row?: StockSettingsRecord | null): StockConfig =>
@@ -165,6 +170,8 @@ const configDto = (row?: StockSettingsRecord | null): StockConfig =>
         reorderQuantity: row.reorderQuantity,
         leadTimeDays: row.leadTimeDays,
         unitName: row.unitName,
+        purchaseUnitName: row.purchaseUnitName,
+        purchaseUnitFactor: row.purchaseUnitFactor,
       }
     : { ...defaultConfig };
 
@@ -615,6 +622,7 @@ export async function getStockOverview(organizationId: string) {
     .select({
       resourceId: resources.id,
       name: resources.name,
+      sku: resources.sku,
       type: resources.type,
       quantity: resources.quantity,
       trackingMode: stockSettings.trackingMode,
@@ -622,6 +630,8 @@ export async function getStockOverview(organizationId: string) {
       reorderQuantity: stockSettings.reorderQuantity,
       leadTimeDays: stockSettings.leadTimeDays,
       unitName: stockSettings.unitName,
+      purchaseUnitName: stockSettings.purchaseUnitName,
+      purchaseUnitFactor: stockSettings.purchaseUnitFactor,
     })
     .from(stockSettings)
     .innerJoin(resources, eq(resources.id, stockSettings.resourceId))
@@ -634,7 +644,7 @@ export async function getStockOverview(organizationId: string) {
     .orderBy(asc(resources.name));
 
   const ids = rows.map((row) => row.resourceId);
-  const [usageRows, incomingRows, coverRows] = ids.length
+  const [usageRows, incomingRows, coverRows, variantMembershipRows] = ids.length
     ? await Promise.all([
         transaction
         .select({
@@ -694,8 +704,22 @@ export async function getStockOverview(organizationId: string) {
             asc(media.position),
             asc(media.createdAt),
           ),
+        transaction
+          .select({
+            variantResourceId: resourceRelations.sourceResourceId,
+            primaryResourceId: resourceRelations.targetResourceId,
+          })
+          .from(resourceRelations)
+          .where(
+            and(
+              eq(resourceRelations.organizationId, organizationId),
+              eq(resourceRelations.relationTypeKey, "variant_of"),
+              inArray(resourceRelations.sourceResourceId, ids),
+              inArray(resourceRelations.targetResourceId, ids),
+            ),
+          ),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
   const usageByResource = new Map(
     usageRows.map((row) => [row.resourceId, Number(row.consumed ?? 0)]),
   );
@@ -718,6 +742,12 @@ export async function getStockOverview(organizationId: string) {
       height: number | null;
     }
   >();
+  const primaryByVariantId = new Map(
+    variantMembershipRows.map((membership) => [
+      membership.variantResourceId,
+      membership.primaryResourceId,
+    ]),
+  );
   for (const cover of coverRows) {
     if (!coverByResource.has(cover.resourceId)) {
       coverByResource.set(cover.resourceId, {
@@ -737,6 +767,8 @@ export async function getStockOverview(organizationId: string) {
       reorderQuantity: row.reorderQuantity,
       leadTimeDays: row.leadTimeDays,
       unitName: row.unitName,
+      purchaseUnitName: row.purchaseUnitName,
+      purchaseUnitFactor: row.purchaseUnitFactor,
     };
     const incoming = incomingByResource.get(row.resourceId) ?? {
       onOrder: 0,
@@ -751,7 +783,9 @@ export async function getStockOverview(organizationId: string) {
     );
     return {
       resourceId: row.resourceId,
+      variantOfResourceId: primaryByVariantId.get(row.resourceId) ?? null,
       name: row.name,
+      sku: row.sku,
       type: row.type,
       cover: coverByResource.get(row.resourceId) ?? null,
       quantity: row.quantity,
@@ -765,6 +799,8 @@ export async function getStockOverview(organizationId: string) {
       predictedStockoutAt: forecast.predictedStockoutAt,
       reorderSuggested: forecast.suggestedReorderQuantity > 0,
       unitName: row.unitName,
+      purchaseUnitName: row.purchaseUnitName,
+      purchaseUnitFactor: row.purchaseUnitFactor,
     };
   });
 
@@ -1373,7 +1409,23 @@ export async function updateStockConfig(
       )
       .limit(1);
     const current = configDto(settings);
-    const next: StockConfig = { ...current, ...patch };
+    const next: StockConfig = {
+      ...current,
+      ...patch,
+      purchaseUnitName:
+        patch.purchaseUnitName === undefined
+          ? current.purchaseUnitName
+          : patch.purchaseUnitName?.trim() || null,
+    };
+    if (
+      (next.purchaseUnitName === null) !==
+      (next.purchaseUnitFactor === null)
+    ) {
+      throw new StockOperationError(
+        "Purchase unit name and conversion factor must be configured together.",
+        422,
+      );
+    }
     let unitsCreated = 0;
 
       if (current.trackingMode !== next.trackingMode) {

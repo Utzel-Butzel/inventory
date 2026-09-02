@@ -47,9 +47,15 @@ type PurchaseOrderLine = {
   resourceName: string;
   resourceSku: string | null;
   resourceCurrency: string;
+  baseUnitName: string;
   orderedQuantity: number;
   receivedQuantity: number;
   openQuantity: number;
+  purchaseUnitName: string | null;
+  purchaseUnitFactor: number;
+  orderedPurchaseQuantity: number | null;
+  receivedPurchaseQuantity: number | null;
+  openPurchaseQuantity: number | null;
   expectedAt: string | null;
   note: string | null;
   trackingMode: TrackingMode;
@@ -87,6 +93,20 @@ type DraftLine = {
   note: string;
   unitPrice: string;
   priceCurrency: string;
+  baseUnitName: string;
+  purchaseUnitName: string | null;
+  purchaseUnitFactor: number;
+};
+
+type StockPurchaseConfig = {
+  resourceId: string;
+  unitName: string;
+  purchaseUnitName: string | null;
+  purchaseUnitFactor: number | null;
+};
+
+type StockOverviewEnvelope = {
+  items?: StockPurchaseConfig[];
 };
 
 type OrderForm = {
@@ -104,6 +124,9 @@ type ReceiptForm = {
   trackingMode: TrackingMode;
   maxQuantity: number;
   quantity: string;
+  baseUnitName: string;
+  purchaseUnitName: string | null;
+  purchaseUnitFactor: number;
   receivedAt: string;
   location: string;
   note: string;
@@ -211,7 +234,14 @@ function newOrderForm(): OrderForm {
   };
 }
 
-function lineFromResource(resource: ClientResource): DraftLine {
+function lineFromResource(
+  resource: ClientResource,
+  config?: StockPurchaseConfig,
+): DraftLine {
+  const purchaseUnitFactor =
+    config?.purchaseUnitName && config.purchaseUnitFactor
+      ? config.purchaseUnitFactor
+      : 1;
   return {
     resourceId: resource.id,
     resourceName: resource.name,
@@ -220,8 +250,13 @@ function lineFromResource(resource: ClientResource): DraftLine {
     expectedAt: "",
     note: "",
     unitPrice:
-      resource.valueCents === null ? "" : (resource.valueCents / 100).toFixed(2),
+      resource.valueCents === null
+        ? ""
+        : ((resource.valueCents * purchaseUnitFactor) / 100).toFixed(2),
     priceCurrency: resource.currency,
+    baseUnitName: config?.unitName ?? "unit",
+    purchaseUnitName: config?.purchaseUnitName ?? null,
+    purchaseUnitFactor,
   };
 }
 
@@ -260,6 +295,10 @@ export function PurchaseOrdersManager({
   const [orderForm, setOrderForm] = useState<OrderForm>(newOrderForm);
   const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
   const [scopedResource, setScopedResource] = useState<ClientResource | null>(null);
+  const [stockConfigs, setStockConfigs] = useState<
+    Record<string, StockPurchaseConfig>
+  >({});
+  const [stockConfigsLoaded, setStockConfigsLoaded] = useState(false);
 
   const [itemQuery, setItemQuery] = useState("");
   const [itemResults, setItemResults] = useState<ClientResource[]>([]);
@@ -295,6 +334,28 @@ export function PurchaseOrdersManager({
   }, [loadOrders]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    void fetchJson<StockOverviewEnvelope>("/api/v1/stock", {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then((payload) => {
+        setStockConfigs(
+          Object.fromEntries(
+            (payload.items ?? []).map((item) => [item.resourceId, item]),
+          ),
+        );
+      })
+      .catch((loadError: unknown) => {
+        if (!(loadError instanceof DOMException && loadError.name === "AbortError")) {
+          setStockConfigs({});
+        }
+      })
+      .finally(() => setStockConfigsLoaded(true));
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
     if (!resourceId) {
       setScopedResource(null);
       return;
@@ -317,9 +378,11 @@ export function PurchaseOrdersManager({
   }, [resourceId, t]);
 
   useEffect(() => {
-    if (!scopedResource || draftLines.length) return;
-    setDraftLines([lineFromResource(scopedResource)]);
-  }, [draftLines.length, scopedResource]);
+    if (!scopedResource || !stockConfigsLoaded || draftLines.length) return;
+    setDraftLines([
+      lineFromResource(scopedResource, stockConfigs[scopedResource.id]),
+    ]);
+  }, [draftLines.length, scopedResource, stockConfigs, stockConfigsLoaded]);
 
   useEffect(() => {
     if (resourceId) return;
@@ -406,13 +469,20 @@ export function PurchaseOrdersManager({
 
   function resetCreateForm() {
     setOrderForm(newOrderForm());
-    setDraftLines(scopedResource ? [lineFromResource(scopedResource)] : []);
+    setDraftLines(
+      scopedResource
+        ? [lineFromResource(scopedResource, stockConfigs[scopedResource.id])]
+        : [],
+    );
     setItemQuery("");
     setItemResults([]);
   }
 
   function addDraftLine(resource: ClientResource) {
-    setDraftLines((current) => [...current, lineFromResource(resource)]);
+    setDraftLines((current) => [
+      ...current,
+      lineFromResource(resource, stockConfigs[resource.id]),
+    ]);
     setItemQuery("");
     setItemResults([]);
     setItemSearchOpen(false);
@@ -476,7 +546,9 @@ export function PurchaseOrdersManager({
         note: orderForm.note.trim() || undefined,
         lines: draftLines.map((line) => ({
           resourceId: line.resourceId,
-          orderedQuantity: Number(line.orderedQuantity),
+          ...(line.purchaseUnitName
+            ? { purchaseQuantity: Number(line.orderedQuantity) }
+            : { orderedQuantity: Number(line.orderedQuantity) }),
           expectedAt: toIsoDate(line.expectedAt),
           note: line.note.trim() || undefined,
           ...(moneyToCents(line.unitPrice) === null
@@ -519,13 +591,26 @@ export function PurchaseOrdersManager({
 
   function beginReceipt(order: PurchaseOrder, line: PurchaseOrderLine) {
     const openQuantity = effectiveLineOpen(line);
+    const usesPurchaseUnit =
+      Boolean(line.purchaseUnitName) && line.openPurchaseQuantity !== null;
+    const displayedOpenQuantity = usesPurchaseUnit
+      ? line.openPurchaseQuantity!
+      : openQuantity;
+    const receiptLimit =
+      line.trackingMode === "serialized"
+        ? Math.floor(1_000 / (usesPurchaseUnit ? line.purchaseUnitFactor : 1))
+        : 1_000;
+    const initialQuantity = Math.min(receiptLimit, displayedOpenQuantity);
     setReceiptForm({
       orderId: order.id,
       lineId: line.id,
       resourceName: line.resourceName,
       trackingMode: line.trackingMode,
-      maxQuantity: Math.min(1_000, openQuantity),
-      quantity: String(Math.min(1_000, openQuantity)),
+      maxQuantity: initialQuantity,
+      quantity: String(initialQuantity),
+      baseUnitName: line.baseUnitName,
+      purchaseUnitName: usesPurchaseUnit ? line.purchaseUnitName : null,
+      purchaseUnitFactor: usesPurchaseUnit ? line.purchaseUnitFactor : 1,
       receivedAt: localDateTime(),
       location: "",
       note: "",
@@ -533,7 +618,7 @@ export function PurchaseOrdersManager({
       totalPrice:
         line.unitPriceCents === null
           ? ""
-          : ((line.unitPriceCents * Math.min(1_000, openQuantity)) / 100).toFixed(2),
+          : ((line.unitPriceCents * initialQuantity) / 100).toFixed(2),
       priceCurrency: line.priceCurrency ?? line.resourceCurrency,
     });
   }
@@ -562,14 +647,15 @@ export function PurchaseOrdersManager({
       return;
     }
     const unitCodes = parsedCodes(receiptForm.unitCodes);
+    const baseQuantity = quantity * receiptForm.purchaseUnitFactor;
     if (
       receiptForm.trackingMode === "serialized" &&
-      unitCodes.length !== quantity
+      unitCodes.length !== baseQuantity
     ) {
       setError(
         t("orders.errors.unitCodeCount", {
-          count: quantity,
-          value: numberFormat.format(quantity),
+          count: baseQuantity,
+          value: numberFormat.format(baseQuantity),
         }),
       );
       return;
@@ -587,7 +673,9 @@ export function PurchaseOrdersManager({
     setReceiving(true);
     try {
       const requestBody = {
-        quantity,
+        ...(receiptForm.purchaseUnitName
+          ? { purchaseQuantity: quantity }
+          : { quantity }),
         receivedAt,
         location: receiptForm.location.trim() || undefined,
         note: receiptForm.note.trim() || undefined,
@@ -624,6 +712,7 @@ export function PurchaseOrdersManager({
           count: quantity,
           value: numberFormat.format(quantity),
           name: receivedName,
+          unit: receiptForm.purchaseUnitName ?? receiptForm.baseUnitName,
         }),
       );
     } catch (receiptError) {
@@ -745,7 +834,7 @@ export function PurchaseOrdersManager({
                 {draftLines.map((line) => (
                   <div key={line.resourceId} className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(190px,1fr)_110px_140px_160px_minmax(160px,1fr)_auto] lg:items-start">
                     <div className="flex min-w-0 items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted"><Package className="size-[18px]" aria-hidden="true" /></span><div className="min-w-0 pt-0.5"><Link href={`/inventory/${line.resourceId}`} className="block truncate text-[13px] font-semibold text-foreground hover:text-brand">{line.resourceName}</Link><p className="mt-1 truncate text-[10px] text-muted">{line.resourceSku || t("orders.noSku")}</p></div></div>
-                    <label className={labelClass}>{t("orders.create.orderQuantity")}<input type="number" min="1" max="2000000000" step="1" required value={line.orderedQuantity} onChange={(event) => updateDraftLine(line.resourceId, { orderedQuantity: event.target.value })} className={`${inputClass} mt-1.5 tabular-nums`} /></label>
+                    <label className={labelClass}>{t("orders.create.orderQuantity")}<div className="relative"><input type="number" min="1" max="2000000000" step="1" required value={line.orderedQuantity} onChange={(event) => updateDraftLine(line.resourceId, { orderedQuantity: event.target.value })} className={`${inputClass} mt-1.5 pr-20 tabular-nums`} /><span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[10px] text-muted">{line.purchaseUnitName ?? line.baseUnitName}</span></div>{line.purchaseUnitName ? <span className="mt-1 block text-[9px] font-normal text-muted">{t("orders.create.purchaseUnitConversion", { factor: numberFormat.format(line.purchaseUnitFactor), unit: line.baseUnitName })}</span> : null}</label>
                     <label className={labelClass}>{t("orders.create.unitPrice")} <span className="font-normal text-muted">· {t("orders.optional")}</span><div className="relative"><input type="number" min="0" max="20000000" step="0.01" inputMode="decimal" value={line.unitPrice} onChange={(event) => updateDraftLine(line.resourceId, { unitPrice: event.target.value })} placeholder="0.00" className={`${inputClass} mt-1.5 pr-12 tabular-nums`} /><span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[10px] text-muted">{line.priceCurrency}</span></div></label>
                     <label className={labelClass}>{t("orders.create.lineEta")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input type="date" value={line.expectedAt} onChange={(event) => updateDraftLine(line.resourceId, { expectedAt: event.target.value })} className={`${inputClass} mt-1.5`} /></label>
                     <label className={labelClass}>{t("orders.create.lineNote")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input value={line.note} onChange={(event) => updateDraftLine(line.resourceId, { note: event.target.value })} maxLength={20000} placeholder={t("orders.create.lineNotePlaceholder")} className={`${inputClass} mt-1.5`} /></label>
@@ -795,15 +884,21 @@ export function PurchaseOrdersManager({
                       <div className="divide-y divide-border">
                         {visibleLines.map((line) => {
                           const openQuantity = effectiveLineOpen(line);
+                          const displayedOrderedQuantity =
+                            line.orderedPurchaseQuantity ?? line.orderedQuantity;
+                          const displayedOpenQuantity =
+                            line.openPurchaseQuantity ?? openQuantity;
+                          const displayedUnitName =
+                            line.purchaseUnitName ?? line.baseUnitName;
                           const lineReceiptOpen = receiptForm?.orderId === order.id && receiptForm.lineId === line.id;
                           return (
                             <div key={line.id}>
                               <div className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-[minmax(220px,1fr)_95px_95px_130px_140px_auto] lg:items-center">
-                                <div className="flex min-w-0 items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted"><Package className="size-4" aria-hidden="true" /></span><div className="min-w-0"><Link href={`/inventory/${line.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-foreground hover:text-brand">{line.resourceName}</Link><p className="mt-0.5 truncate text-[9px] text-muted">{line.resourceSku || t("orders.noSku")} · {t(`orders.tracking.${line.trackingMode}`)}</p>{line.note ? <p className="mt-1.5 text-[10px] text-muted">{line.note}</p> : null}</div></div>
-                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-muted">{t("orders.list.ordered")}</span><p className="mt-0.5 text-[12px] font-semibold tabular-nums text-foreground">{numberFormat.format(line.orderedQuantity)}</p></div>
-                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-muted">{t("orders.list.open")}</span><p className={cn("mt-0.5 text-[12px] font-semibold tabular-nums", openQuantity ? "text-brand" : "text-success")}>{numberFormat.format(openQuantity)}</p></div>
+                                <div className="flex min-w-0 items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted"><Package className="size-4" aria-hidden="true" /></span><div className="min-w-0"><Link href={`/inventory/${line.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-foreground hover:text-brand">{line.resourceName}</Link><p className="mt-0.5 truncate text-[9px] text-muted">{line.resourceSku || t("orders.noSku")} · {t(`orders.tracking.${line.trackingMode}`)}</p>{line.purchaseUnitName ? <p className="mt-1 text-[9px] text-muted">{t("orders.list.purchaseUnitConversion", { purchaseUnit: line.purchaseUnitName, factor: numberFormat.format(line.purchaseUnitFactor), baseUnit: line.baseUnitName })}</p> : null}{line.note ? <p className="mt-1.5 text-[10px] text-muted">{line.note}</p> : null}</div></div>
+                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-muted">{t("orders.list.ordered")}</span><p className="mt-0.5 text-[12px] font-semibold tabular-nums text-foreground">{numberFormat.format(displayedOrderedQuantity)} {displayedUnitName}</p></div>
+                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-muted">{t("orders.list.open")}</span><p className={cn("mt-0.5 text-[12px] font-semibold tabular-nums", openQuantity ? "text-brand" : "text-success")}>{numberFormat.format(displayedOpenQuantity)} {displayedUnitName}</p></div>
                                 <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-muted">{t("orders.list.eta")}</span><p className="mt-0.5 text-[11px] font-medium text-muted">{formatDate(line.expectedAt ?? order.expectedAt, locale)}</p></div>
-                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-muted">{t("orders.list.price")}</span><p className="mt-0.5 text-[11px] font-semibold tabular-nums text-foreground">{line.totalPriceCents !== null && line.priceCurrency ? formatMoney(line.totalPriceCents, line.priceCurrency, locale) : "—"}</p>{line.unitPriceCents !== null && line.priceCurrency ? <p className="mt-0.5 text-[9px] text-muted">{formatMoney(line.unitPriceCents, line.priceCurrency, locale)} / {t("orders.list.unit")}</p> : null}</div>
+                                <div className="flex items-center justify-between lg:block"><span className="text-[9px] font-semibold uppercase tracking-wide text-muted">{t("orders.list.price")}</span><p className="mt-0.5 text-[11px] font-semibold tabular-nums text-foreground">{line.totalPriceCents !== null && line.priceCurrency ? formatMoney(line.totalPriceCents, line.priceCurrency, locale) : "—"}</p>{line.unitPriceCents !== null && line.priceCurrency ? <p className="mt-0.5 text-[9px] text-muted">{formatMoney(line.unitPriceCents, line.priceCurrency, locale)} / {displayedUnitName}</p> : null}</div>
                                 {openQuantity > 0 && (order.status === "ordered" || order.status === "partially-received") ? <Button size="sm" variant={lineReceiptOpen ? "ghost" : "secondary"} onClick={() => lineReceiptOpen ? setReceiptForm(null) : beginReceipt(order, line)}>{lineReceiptOpen ? <X className="size-3.5" aria-hidden="true" /> : <PackageCheck className="size-3.5" aria-hidden="true" />}{lineReceiptOpen ? t("orders.actions.close") : t("orders.actions.receive")}</Button> : <Badge tone={order.status === "cancelled" ? "danger" : openQuantity ? "neutral" : "success"}>{order.status === "cancelled" ? t("orders.status.cancelled") : openQuantity ? t("orders.status.pending") : t("orders.status.complete")}</Badge>}
                               </div>
 
@@ -811,12 +906,12 @@ export function PurchaseOrdersManager({
                                 <form onSubmit={receiveLine} className="border-t border-brand-border bg-brand-soft px-4 py-4 sm:px-5">
                                   <div className="mb-4 flex items-start gap-2 rounded-lg bg-surface/80 px-3 py-2.5 text-[10px] leading-4 text-muted"><PackageCheck className="mt-0.5 size-3.5 shrink-0 text-brand" aria-hidden="true" /><span>{t("orders.receipt.description", { name: receiptForm.resourceName })}</span></div>
                                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                                    <label className={labelClass}>{t("orders.receipt.quantity")}<input type="number" min="1" max={receiptForm.maxQuantity} step="1" required value={receiptForm.quantity} onChange={(event) => setReceiptForm((current) => current ? { ...current, quantity: event.target.value } : current)} className={`${inputClass} mt-1.5 tabular-nums`} /><span className="mt-1 block text-[9px] font-normal text-muted">{t("orders.receipt.maximum", { maximum: numberFormat.format(receiptForm.maxQuantity) })}</span></label>
+                                    <label className={labelClass}>{t("orders.receipt.quantity")}<div className="relative"><input type="number" min="1" max={receiptForm.maxQuantity} step="1" required value={receiptForm.quantity} onChange={(event) => setReceiptForm((current) => current ? { ...current, quantity: event.target.value } : current)} className={`${inputClass} mt-1.5 pr-20 tabular-nums`} /><span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[10px] text-muted">{receiptForm.purchaseUnitName ?? receiptForm.baseUnitName}</span></div><span className="mt-1 block text-[9px] font-normal text-muted">{t("orders.receipt.maximum", { maximum: numberFormat.format(receiptForm.maxQuantity) })}{receiptForm.purchaseUnitName ? ` · ${t("orders.receipt.baseQuantity", { quantity: numberFormat.format(Number(receiptForm.quantity || 0) * receiptForm.purchaseUnitFactor), unit: receiptForm.baseUnitName })}` : ""}</span></label>
                                     <label className={labelClass}>{t("orders.receipt.receivedAt")}<input type="datetime-local" required value={receiptForm.receivedAt} onChange={(event) => setReceiptForm((current) => current ? { ...current, receivedAt: event.target.value } : current)} className={`${inputClass} mt-1.5`} /></label>
                                     <label className={labelClass}>{t("orders.receipt.location")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input value={receiptForm.location} maxLength={240} onChange={(event) => setReceiptForm((current) => current ? { ...current, location: event.target.value } : current)} placeholder={t("orders.receipt.locationPlaceholder")} className={`${inputClass} mt-1.5`} /></label>
                                     <label className={labelClass}>{t("orders.receipt.note")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input value={receiptForm.note} maxLength={20000} onChange={(event) => setReceiptForm((current) => current ? { ...current, note: event.target.value } : current)} placeholder={t("orders.receipt.notePlaceholder")} className={`${inputClass} mt-1.5`} /></label>
                                     <label className={labelClass}>{t("orders.receipt.totalPrice")} <span className="font-normal text-muted">· {t("orders.optional")}</span><div className="relative"><input type="number" min="0" max="20000000" step="0.01" inputMode="decimal" value={receiptForm.totalPrice} onChange={(event) => setReceiptForm((current) => current ? { ...current, totalPrice: event.target.value } : current)} placeholder="0.00" className={`${inputClass} mt-1.5 pr-12 tabular-nums`} /><span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[10px] text-muted">{receiptForm.priceCurrency}</span></div></label>
-                                    {receiptForm.trackingMode === "serialized" ? <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>{t("orders.receipt.unitCodes")}<textarea rows={4} value={receiptForm.unitCodes} onChange={(event) => setReceiptForm((current) => current ? { ...current, unitCodes: event.target.value } : current)} placeholder={t("orders.receipt.unitCodesPlaceholder")} className={`${inputClass} mt-1.5 h-auto resize-y py-3 font-mono text-xs`} /><span className="mt-1 block text-[9px] font-normal text-muted">{t("orders.receipt.exactCodes", { count: Number(receiptForm.quantity) || 0, value: numberFormat.format(Number(receiptForm.quantity) || 0) })}</span></label> : null}
+                                    {receiptForm.trackingMode === "serialized" ? <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>{t("orders.receipt.unitCodes")}<textarea rows={4} value={receiptForm.unitCodes} onChange={(event) => setReceiptForm((current) => current ? { ...current, unitCodes: event.target.value } : current)} placeholder={t("orders.receipt.unitCodesPlaceholder")} className={`${inputClass} mt-1.5 h-auto resize-y py-3 font-mono text-xs`} /><span className="mt-1 block text-[9px] font-normal text-muted">{t("orders.receipt.exactCodes", { count: (Number(receiptForm.quantity) || 0) * receiptForm.purchaseUnitFactor, value: numberFormat.format((Number(receiptForm.quantity) || 0) * receiptForm.purchaseUnitFactor) })}</span></label> : null}
                                   </div>
                                   <div className="mt-4 flex justify-end gap-2 border-t border-brand-border pt-4"><Button type="button" variant="ghost" size="sm" onClick={() => setReceiptForm(null)}>{t("orders.actions.cancel")}</Button><Button type="submit" size="sm" disabled={receiving}>{receiving ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <PackageCheck className="size-3.5" aria-hidden="true" />}{receiving ? t("orders.actions.receiving") : t("orders.actions.receiveIntoStock")}</Button></div>
                                 </form>

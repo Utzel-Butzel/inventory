@@ -21,6 +21,8 @@ type StockSettingsData = {
     reorderQuantity: number;
     leadTimeDays: number;
     unitName: string;
+    purchaseUnitName: string | null;
+    purchaseUnitFactor: number | null;
   };
   units: Array<{ id: string }>;
 };
@@ -36,6 +38,8 @@ type SettingsForm = {
   reorderQuantity: string;
   leadTimeDays: string;
   unitName: string;
+  purchaseUnitName: string;
+  purchaseUnitFactor: string;
 };
 
 const inputClass =
@@ -49,6 +53,11 @@ function toForm(stock: StockSettingsData): SettingsForm {
     reorderQuantity: String(stock.config.reorderQuantity),
     leadTimeDays: String(stock.config.leadTimeDays),
     unitName: stock.config.unitName,
+    purchaseUnitName: stock.config.purchaseUnitName ?? "",
+    purchaseUnitFactor:
+      stock.config.purchaseUnitFactor === null
+        ? ""
+        : String(stock.config.purchaseUnitFactor),
   };
 }
 
@@ -119,6 +128,20 @@ export function ResourceStockSettings({ resourceId }: { resourceId: string }) {
       setError(t("resource.errors.unitName"));
       return;
     }
+    const purchaseUnitName = form.purchaseUnitName.trim();
+    const purchaseUnitFactor = form.purchaseUnitFactor.trim()
+      ? Number(form.purchaseUnitFactor)
+      : null;
+    if (
+      (purchaseUnitName &&
+        (!Number.isInteger(purchaseUnitFactor) ||
+          purchaseUnitFactor === null ||
+          purchaseUnitFactor < 1)) ||
+      (!purchaseUnitName && purchaseUnitFactor !== null)
+    ) {
+      setError(t("resource.errors.purchaseUnit"));
+      return;
+    }
 
     if (
       form.trackingMode !== stock.config.trackingMode &&
@@ -145,6 +168,8 @@ export function ResourceStockSettings({ resourceId }: { resourceId: string }) {
           reorderQuantity,
           leadTimeDays,
           unitName,
+          purchaseUnitName: purchaseUnitName || null,
+          purchaseUnitFactor: purchaseUnitName ? purchaseUnitFactor : null,
         }),
       });
       const nextStock = {
@@ -155,6 +180,8 @@ export function ResourceStockSettings({ resourceId }: { resourceId: string }) {
           reorderQuantity,
           leadTimeDays,
           unitName,
+          purchaseUnitName: purchaseUnitName || null,
+          purchaseUnitFactor: purchaseUnitName ? purchaseUnitFactor : null,
         },
       };
       setStock(nextStock);
@@ -321,6 +348,60 @@ export function ResourceStockSettings({ resourceId }: { resourceId: string }) {
                     className={inputClass}
                   />
                 </label>
+              </div>
+
+              <div className="rounded-xl border border-border bg-surface-subtle p-4">
+                <h3 className="text-xs font-semibold text-foreground">
+                  {t("resource.settings.purchaseUnitTitle")}
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  {t("resource.settings.purchaseUnitHelp")}
+                </p>
+                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  <label className={labelClass}>
+                    {t("resource.settings.purchaseUnitName")}
+                    <input
+                      maxLength={60}
+                      value={form.purchaseUnitName}
+                      onChange={(event) =>
+                        setForm({ ...form, purchaseUnitName: event.target.value })
+                      }
+                      placeholder={t("resource.settings.purchaseUnitNamePlaceholder")}
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className={labelClass}>
+                    {t("resource.settings.purchaseUnitFactor")}
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="1"
+                        max="2000000000"
+                        step="1"
+                        value={form.purchaseUnitFactor}
+                        onChange={(event) =>
+                          setForm({ ...form, purchaseUnitFactor: event.target.value })
+                        }
+                        placeholder="1000"
+                        className={`${inputClass} pr-20`}
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-muted">
+                        {form.unitName || t("resource.unit")}
+                      </span>
+                    </div>
+                  </label>
+                </div>
+                {form.purchaseUnitName.trim() &&
+                Number.isInteger(Number(form.purchaseUnitFactor)) &&
+                Number(form.purchaseUnitFactor) > 0 ? (
+                  <p className="mt-3 text-xs font-medium text-brand">
+                    {t("resource.settings.purchaseUnitPreview", {
+                      purchaseUnit: form.purchaseUnitName.trim(),
+                      factor: Number(form.purchaseUnitFactor),
+                      baseUnit: form.unitName.trim() || t("resource.unit"),
+                    })}
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex justify-end border-t border-border pt-5">

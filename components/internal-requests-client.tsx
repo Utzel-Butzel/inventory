@@ -193,7 +193,11 @@ export function InternalRequestsClient() {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setSearching("items");
-      const parameters = new URLSearchParams({ page: "1", pageSize: "8" });
+      const parameters = new URLSearchParams({
+        page: "1",
+        pageSize: "8",
+        loanable: "true",
+      });
       if (itemQuery.trim()) parameters.set("q", itemQuery.trim());
       void fetchJson<{ resources: ClientResource[] }>(
         `/api/v1/resources?${parameters.toString()}`,

@@ -13,6 +13,14 @@ const configSchema = z
     reorderQuantity: z.number().int().min(0).max(2_000_000_000).optional(),
     leadTimeDays: z.number().int().min(0).max(36_500).optional(),
     unitName: z.string().trim().min(1).max(80).optional(),
+    purchaseUnitName: z.string().trim().min(1).max(80).nullable().optional(),
+    purchaseUnitFactor: z
+      .number()
+      .int()
+      .min(1)
+      .max(2_000_000_000)
+      .nullable()
+      .optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {

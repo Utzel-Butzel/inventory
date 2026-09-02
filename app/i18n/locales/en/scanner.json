@@ -157,6 +157,13 @@
       "availableHelp": "Available stock counts only units whose lifecycle status is Available. A transition away from Available therefore reduces this quantity.",
       "fixedProperties": "Set by workflow",
       "completeProperties": "Complete scan properties",
+      "targetsTitle": "Targets for this run",
+      "targetModes": {
+        "all": "The action is applied to every target.",
+        "radio": "Choose exactly one target.",
+        "checkbox": "Choose one or more targets."
+      },
+      "variationFor": "Variation for {{name}}",
       "selectField": "Select {{field}}",
       "metadataPreview": "Metadata preview",
       "updateErrorTitle": "Update was not completed",
@@ -167,6 +174,44 @@
       "updating": "Updating stock…",
       "cannotUpdate": "Unit cannot be updated",
       "confirm": "Confirm and update stock"
+    }
+  },
+  "publicAction": {
+    "eyebrow": "Public inventory action",
+    "code": "Code / identifier ({{key}})",
+    "codePlaceholder": "Enter the code or identifier",
+    "confirm": "Confirm action",
+    "submitting": "Applying action…",
+    "security": "This unlisted URL grants permission to run this action. Do not forward it to people who should not be able to change inventory.",
+    "fileUnsupported": "Files and media must currently be added from the authenticated scanner.",
+    "targets": {
+      "title": "Choose target",
+      "modes": {
+        "all": "The action runs for every listed target.",
+        "radio": "Choose exactly one target.",
+        "checkbox": "Choose one or more targets."
+      },
+      "variationFor": "Variation for {{name}}"
+    },
+    "operation": {
+      "unit": "Create or update unit",
+      "assembly_one": "Complete {{count}} assembly",
+      "assembly_other": "Complete {{count}} assemblies",
+      "stockIn": "Book {{count}} into stock",
+      "stockOut": "Book {{count}} out of stock"
+    },
+    "errors": {
+      "codeRequired": "Enter a code or identifier.",
+      "required": "{{field}} is required.",
+      "targetRequired": "Choose at least one target.",
+      "allTargetsRequired": "Choose a variation for every target.",
+      "fileUnsupported": "A required file field cannot be completed on this public page.",
+      "execute": "The action could not be completed."
+    },
+    "success": {
+      "title": "Action completed",
+      "description": "{{action}} was applied successfully.",
+      "again": "Run another action"
     }
   },
   "workflows": {
@@ -210,7 +255,9 @@
       "optionValues": "Every option in {{field}} needs a value and label.",
       "optionUnique": "Option values in {{field}} must be unique.",
       "eachInput": "Each scan input",
-      "anInput": "a scan input"
+      "anInput": "a scan input",
+      "quantityInput": "Choose a required number field for the dynamic quantity.",
+      "publicTriggerCode": "The fixed public trigger code does not match the configured extraction rule."
     },
     "extractionErrors": {
       "empty": "Paste or scan a value to test extraction.",
@@ -305,6 +352,36 @@
       "descriptionPlaceholder": "Explain when this workflow should be used.",
       "viewerDescription": "You can inspect and locally preview this workflow. Editing, enabling, and deleting require editor access."
     },
+    "storage": {
+      "identifierTitle": "Recognition storage target",
+      "identifierDescription": "Choose where the recognized value is stored and select the exact destination field.",
+      "stockUnitBadge": "Serialized stock unit",
+      "destination": "Store in",
+      "targets": {
+        "customField": "Custom field on the stock unit",
+        "metadata": "Metadata on the stock unit",
+        "execution": "Flow execution only",
+        "customFieldShort": "Custom field",
+        "metadataShort": "Metadata",
+        "executionShort": "Flow execution only"
+      },
+      "customFieldLabel": "Specific custom field",
+      "customFieldPlaceholder": "Select a field…",
+      "noCustomFields": "No stock-unit fields available",
+      "missingCustomField": "Not configured: {{key}}",
+      "selectedCustomField": "The recognized value will be stored in “{{label}}” ({{key}}) on the serialized stock unit.",
+      "selectConfiguredField": "Select an existing stock-unit field.",
+      "manageCustomFields": "Manage custom fields",
+      "metadataKey": "Metadata key",
+      "executionKey": "Flow execution key",
+      "metadataHint": "The recognized value will be stored as free-form metadata on the serialized stock unit.",
+      "executionHint": "The recognized value remains only in this flow's execution log.",
+      "inventoryItemScope": "Important: this target belongs to the serialized stock unit. Custom fields on its parent inventory item are not changed.",
+      "additionalFieldsTitle": "Additional values from the code",
+      "additionalFieldsDescription": "Extract more values and assign a separate storage target to each one.",
+      "addField": "Add QR field",
+      "propertyKey": "Technical key"
+    },
     "steps": {
       "trigger": {
         "title": "Trigger",
@@ -342,15 +419,40 @@
       },
       "target": {
         "title": "Choose the target inventory item",
-        "description": "Only inventory configured for serialized stock can receive identified units.",
-        "field": "Serialized inventory item",
+        "description": "Choose one or more inventory items and decide whether they run together or after user selection.",
+        "field": "Target inventory items",
         "select": "Select an inventory item…",
+        "searchDescription": "Search inventory by name or SKU and choose the required targets.",
+        "searchPlaceholder": "Search by name or SKU",
+        "searching": "Searching items…",
+        "noMatches": "No matching items found.",
+        "selectedShort": "Selected",
+        "selectedCount_one": "{{count}} selected",
+        "selectedCount_other": "{{count}} selected",
         "resourceQuantity": "{{name}} · {{quantity}} {{unit}}",
         "units_one": "unit",
         "units_other": "units",
-        "none": "No serialized inventory items are available yet.",
+        "none": "No inventory items with stock are available yet.",
         "configure": "Configure inventory",
-        "selected": "{{name}} uses serialized tracking."
+        "selected": "Target: {{name}}",
+        "variantOf": "Variation of {{name}}",
+        "executionMode": "Selection during execution",
+        "modes": {
+          "all": {
+            "label": "All at once",
+            "description": "Apply the action to every target."
+          },
+          "radio": {
+            "label": "One target (radio)",
+            "description": "The user selects exactly one target."
+          },
+          "checkbox": {
+            "label": "Multiple (checkboxes)",
+            "description": "The user selects one or more targets."
+          }
+        },
+        "allowVariants": "Let users choose a variation",
+        "allowVariantsDescription": "For products with variations, ask for the concrete variation with radio buttons during execution."
       },
       "inputs": {
         "title": "Ask for scan-time inputs",
@@ -396,6 +498,32 @@
         "newProperty": "Property {{value}}",
         "defaultValue": "value"
       }
+    },
+    "publicTrigger": {
+      "title": "Public action URL",
+      "description": "Open a compact form without signing in and execute this flow after confirmation.",
+      "toggle": "Enable public action URL",
+      "fixedCode": "Fixed code / identifier (optional)",
+      "fixedCodePlaceholder": "For example manual-restock or the complete URL expected by extraction",
+      "fixedCodeDescription": "If empty, the public form asks for the code. If set, visitors only see the additional fields.",
+      "live": "Public URL active",
+      "url": "Public action URL",
+      "copy": "Copy",
+      "copied": "Copied",
+      "open": "Open",
+      "rotate": "Replace URL",
+      "security": "The random URL is the access credential. Disabling the trigger or replacing the URL immediately revokes access.",
+      "saveToActivate": "Save the workflow to create and activate its unlisted public URL.",
+      "rotateConfirm": "Replace the public URL? The previous URL will stop working immediately.",
+      "rotated": "The public action URL was replaced. The previous URL is no longer valid.",
+      "rotateError": "The public action URL could not be replaced.",
+      "copyError": "The public action URL could not be copied."
+    },
+    "quantityInput": {
+      "label": "Quantity source",
+      "fixed": "Use the fixed configured quantity",
+      "description": "A required number field can replace the absolute configured quantity. For stock adjustments, the configured plus/minus direction is retained.",
+      "noNumberField": "Add a number input in step 4 if the person opening the URL should choose the quantity."
     },
     "preview": {
       "title": "Local scan preview",

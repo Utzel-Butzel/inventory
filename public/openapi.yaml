@@ -2584,6 +2584,39 @@ paths:
         "404": { description: Workflow not found }
         "409": { description: Workflow revision changed; reload before deleting }
         "422": { description: The workflow id or required single positive revision is invalid }
+  /stock/scan-workflows/{workflowId}/public-trigger/rotate:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: workflowId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Scan workflows]
+      summary: Replace a workflow's unlisted public action URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              additionalProperties: false
+              properties:
+                revision: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Public trigger replaced; the previous URL is immediately invalid
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workflow]
+                properties:
+                  workflow: { $ref: "#/components/schemas/ScanWorkflow" }
+        "404": { description: Workflow not found }
+        "409": { description: Workflow revision changed }
+        "422": { description: Invalid workflow or revision }
   /stock/scan-workflows/extraction-suggestions:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -2604,6 +2637,11 @@ paths:
                   oneOf:
                     - { $ref: "#/components/schemas/ScanCodeType" }
                     - { type: "null" }
+                selectedResourceIds:
+                  type: array
+                  maxItems: 24
+                  uniqueItems: true
+                  items: { type: string, format: uuid }
                 desiredValue: { type: string, maxLength: 180 }
                 instruction: { type: string, maxLength: 500 }
       responses:
@@ -2650,7 +2688,7 @@ paths:
       - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Scan workflows]
-      summary: Atomically apply a previously reviewed stock scan
+      summary: Apply a previously reviewed stock scan to its selected targets
       parameters:
         - { $ref: "#/components/parameters/IdempotencyKey" }
       requestBody:
@@ -2673,6 +2711,62 @@ paths:
         "404": { description: Workflow or target unit not found }
         "409": { description: "Revision, stale resource or unit preview, idempotency, tracking-mode, or stock conflict" }
         "422": { description: Invalid code or operator input }
+  /public/action-flows/{triggerId}:
+    servers:
+      - url: /api
+    parameters:
+      - name: triggerId
+        in: path
+        required: true
+        description: Random bearer identifier embedded in the unlisted public URL.
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Scan workflows]
+      summary: Load the form definition for an enabled public action URL
+      security: []
+      responses:
+        "200":
+          description: Public action form
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [action]
+                properties:
+                  action: { $ref: "#/components/schemas/PublicActionFlow" }
+        "404": { description: Public action URL is disabled, revoked, or unknown }
+  /public/action-flows/{triggerId}/execute:
+    servers:
+      - url: /api
+    parameters:
+      - name: triggerId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Scan workflows]
+      summary: Confirm and execute an unlisted public action
+      security: []
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PublicActionFlowExecutionInput" }
+      responses:
+        "200": { description: Replayed an earlier execution with the same Idempotency-Key }
+        "201":
+          description: Public action applied
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockScanExecution" }
+        "400": { description: Missing or invalid Idempotency-Key }
+        "403": { description: Cross-origin request rejected }
+        "404": { description: Public action URL is disabled, revoked, or unknown }
+        "409": { description: Workflow revision, stock, or idempotency conflict }
+        "422": { description: Invalid code, quantity, or form input }
+        "429": { description: Public action rate limit reached }
   /resources/{id}/stock:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -2841,7 +2935,7 @@ paths:
     post:
       tags: [Internal requests]
       summary: Submit a multi-item inventory request
-      description: Creates a submitted request without changing stock. Availability is reserved only when a manager approves it.
+      description: Creates a request without changing stock. Policies that require approval leave it submitted; when every item permits automatic approval, availability is checked and the request is approved atomically.
       parameters:
         - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
       requestBody:
@@ -2944,7 +3038,7 @@ paths:
     post:
       tags: [Assignments]
       summary: Check out, assign, or reserve inventory
-      description: Atomically creates an active allocation, reduces available stock, updates a serialized unit when selected, and appends a stock movement.
+      description: Atomically creates an active loan or assignment and updates stock. A future reservation blocks its time window without changing current stock; its serialized unit is selected during checkout.
       parameters:
         - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
       requestBody:
@@ -2967,6 +3061,50 @@ paths:
         "404": { description: Inventory item or serialized unit not found }
         "409": { description: "Insufficient stock, unavailable unit, or conflicting idempotency key" }
         "422": { description: "Invalid recipient, quantity, dates, or tracking-mode combination" }
+  /resources/{id}/lending:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Assignments]
+      summary: Read the resource lending policy
+      responses:
+        "200":
+          description: Resource lending policy, with disabled defaults when none has been stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lending]
+                properties:
+                  lending: { $ref: "#/components/schemas/LendingSettings" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Assignments]
+      summary: Enable or configure loans for an inventory item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LendingSettings" }
+      responses:
+        "200": { description: Lending policy updated }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Invalid duration policy }
+  /loans:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    get:
+      tags: [Assignments]
+      summary: List loans and direct reservations across the workspace
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 500 }
+      responses:
+        "200":
+          description: Loans and reservations with resource context and management capability
+        "403": { description: Assignment read access is required }
   /assignments/{assignmentId}:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -2976,15 +3114,18 @@ paths:
         schema: { type: string, format: uuid }
     patch:
       tags: [Assignments]
-      summary: Return or cancel an active assignment
-      description: Atomically completes the assignment, restores stock when applicable, restores an assigned serialized unit to available, and appends a stock movement.
+      summary: Check out, return, or cancel an active assignment
+      description: A checkout action converts a reservation into a stock-affecting loan. Completion restores stock only when the assignment had previously affected stock.
       parameters:
         - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/InventoryAssignmentCompletion" }
+            schema:
+              oneOf:
+                - { $ref: "#/components/schemas/InventoryAssignmentCompletion" }
+                - { $ref: "#/components/schemas/InventoryReservationCheckout" }
       responses:
         "200":
           description: Assignment completed or an identical completion replayed
@@ -5119,6 +5260,14 @@ components:
       required: [resourceId, confidence, reason, evidence, resource]
       properties:
         resourceId: { type: string, format: uuid }
+        resourceIds:
+          type: array
+          maxItems: 24
+          uniqueItems: true
+          description: Configured targets; older clients may omit this to use resourceId as the only target.
+          items: { type: string, format: uuid }
+        targetSelectionMode: { type: string, enum: [all, radio, checkbox], default: all }
+        allowVariantSelection: { type: boolean, default: false }
         confidence: { type: number, minimum: 0, maximum: 1 }
         reason: { type: string, minLength: 1, maxLength: 600 }
         evidence:
@@ -5188,6 +5337,13 @@ components:
       additionalProperties: false
       properties:
         resourceId: { type: string, format: uuid }
+        resourceIds:
+          type: array
+          maxItems: 24
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        targetSelectionMode: { type: string, enum: [all, radio, checkbox] }
+        allowVariantSelection: { type: boolean }
         slotKey:
           type: string
           minLength: 1
@@ -5386,11 +5542,15 @@ components:
           items: { $ref: "#/components/schemas/StockUnit" }
     PurchaseOrderLineInput:
       type: object
-      required: [resourceId, orderedQuantity]
+      required: [resourceId]
+      oneOf:
+        - required: [orderedQuantity]
+        - required: [purchaseQuantity]
       additionalProperties: false
       properties:
         resourceId: { type: string, format: uuid }
-        orderedQuantity: { type: integer, minimum: 1 }
+        orderedQuantity: { type: integer, minimum: 1, description: Quantity in base stock units. Mutually exclusive with purchaseQuantity. }
+        purchaseQuantity: { type: integer, minimum: 1, description: Quantity in the configured purchase unit. Mutually exclusive with orderedQuantity. }
         expectedAt: { type: [string, "null"], format: date-time }
         note: { type: string, maxLength: 20000 }
         unitPriceCents: { type: [integer, "null"], minimum: 0, maximum: 2000000000 }
@@ -5415,12 +5575,18 @@ components:
       allOf:
         - { $ref: "#/components/schemas/PurchaseOrderLineInput" }
         - type: object
-          required: [id, resourceName, resourceCurrency, receivedQuantity, openQuantity, trackingMode, totalPriceCents]
+          required: [id, resourceName, resourceCurrency, baseUnitName, orderedQuantity, receivedQuantity, openQuantity, purchaseUnitName, purchaseUnitFactor, orderedPurchaseQuantity, receivedPurchaseQuantity, openPurchaseQuantity, trackingMode, totalPriceCents]
           properties:
             id: { type: string, format: uuid }
             resourceName: { type: string }
             resourceSku: { type: [string, "null"] }
             resourceCurrency: { type: string, minLength: 3, maxLength: 3 }
+            baseUnitName: { type: string }
+            purchaseUnitName: { type: [string, "null"] }
+            purchaseUnitFactor: { type: integer, minimum: 1 }
+            orderedPurchaseQuantity: { type: [integer, "null"], minimum: 0 }
+            receivedPurchaseQuantity: { type: [integer, "null"], minimum: 0 }
+            openPurchaseQuantity: { type: [integer, "null"], minimum: 0 }
             receivedQuantity: { type: integer, minimum: 0 }
             openQuantity: { type: integer, minimum: 0 }
             trackingMode: { type: string, enum: [bulk, serialized] }
@@ -5443,10 +5609,13 @@ components:
         totalOpen: { type: integer, minimum: 0 }
     PurchaseReceiptInput:
       type: object
-      required: [quantity]
+      oneOf:
+        - required: [quantity]
+        - required: [purchaseQuantity]
       additionalProperties: false
       properties:
-        quantity: { type: integer, minimum: 1, maximum: 1000 }
+        quantity: { type: integer, minimum: 1, maximum: 1000, description: Receipt quantity in base stock units. }
+        purchaseQuantity: { type: integer, minimum: 1, maximum: 1000000, description: Receipt quantity in the purchase unit snapshotted on the order line. }
         receivedAt: { type: string, format: date-time }
         location: { type: [string, "null"], maxLength: 240 }
         note: { type: string, maxLength: 20000 }
@@ -5659,6 +5828,18 @@ components:
           uniqueItems: true
           default: [qr_code, data_matrix, aztec, pdf417, code_128, code_93, code_39, codabar, ean_13, ean_8, upc_a, upc_e, itf]
           items: { $ref: "#/components/schemas/ScanCodeType" }
+        publicTriggerEnabled: { type: boolean, default: false }
+        publicTriggerCode:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 2048
+          description: Optional fixed code used by the public URL; when null the public form asks for a code.
+        quantityInputKey:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 80
+          pattern: "^[A-Za-z0-9_.-]+$"
+          description: Required number input whose positive integer value replaces the configured operation magnitude.
         extraction: { $ref: "#/components/schemas/ScanWorkflowExtraction" }
         identifierPropertyKey: { type: string, minLength: 1, maxLength: 80, pattern: "^[A-Za-z0-9_.-]+$" }
         identifierStorage: { type: string, enum: [custom-field, metadata, execution], default: metadata }
@@ -5703,6 +5884,9 @@ components:
           minItems: 1
           uniqueItems: true
           items: { $ref: "#/components/schemas/ScanCodeType" }
+        publicTriggerEnabled: { type: boolean }
+        publicTriggerCode: { type: [string, "null"], minLength: 1, maxLength: 2048 }
+        quantityInputKey: { type: [string, "null"], minLength: 1, maxLength: 80, pattern: "^[A-Za-z0-9_.-]+$" }
         extraction: { $ref: "#/components/schemas/ScanWorkflowExtraction" }
         identifierPropertyKey: { type: string, minLength: 1, maxLength: 80, pattern: "^[A-Za-z0-9_.-]+$" }
         identifierStorage: { type: string, enum: [custom-field, metadata, execution] }
@@ -5730,17 +5914,114 @@ components:
       allOf:
         - { $ref: "#/components/schemas/ScanWorkflowInput" }
         - type: object
-          required: [id, name, description, enabled, resourceId, codeTypes, revision, extraction, identifierPropertyKey, identifierStorage, extractedFields, operation, createMissingUnit, unitStatus, fixedProperties, inputFields, triggerWebhook, webhookEventName, createdBy, updatedBy, createdAt, updatedAt]
+          required: [id, name, description, enabled, resourceId, resourceIds, targetSelectionMode, allowVariantSelection, codeTypes, publicTriggerEnabled, publicTriggerId, publicTriggerCode, quantityInputKey, revision, extraction, identifierPropertyKey, identifierStorage, extractedFields, operation, createMissingUnit, unitStatus, fixedProperties, inputFields, triggerWebhook, webhookEventName, createdBy, updatedBy, createdAt, updatedAt]
           properties:
             id: { type: string, format: uuid }
+            publicTriggerId:
+              type: string
+              format: uuid
+              description: Random bearer identifier used in the public action URL.
             revision: { type: integer, minimum: 1 }
             createdBy: { type: [string, "null"] }
             updatedBy: { type: [string, "null"] }
             createdAt: { type: string, format: date-time }
             updatedAt: { type: string, format: date-time }
+    ScanWorkflowTargetOption:
+      type: object
+      additionalProperties: false
+      required: [id, name, quantity, trackingMode, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        quantity: { type: integer }
+        trackingMode: { type: string, enum: [bulk, serialized] }
+        updatedAt: { type: string, format: date-time }
+    ScanWorkflowTargetGroup:
+      type: object
+      additionalProperties: false
+      required: [resourceId, name, options]
+      properties:
+        resourceId: { type: string, format: uuid }
+        name: { type: string }
+        options:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/ScanWorkflowTargetOption" }
+    StockScanExpectedTarget:
+      type: object
+      additionalProperties: false
+      required: [resourceId, resourceUpdatedAt, unitId, unitUpdatedAt]
+      properties:
+        resourceId: { type: string, format: uuid }
+        resourceUpdatedAt: { type: string, format: date-time }
+        unitId: { type: [string, "null"], format: uuid }
+        unitUpdatedAt: { type: [string, "null"], format: date-time }
+    PublicActionFlow:
+      type: object
+      additionalProperties: false
+      required: [triggerId, name, description, resourceName, targetSelectionMode, allowVariantSelection, targetGroups, requiresCode, identifierLabel, quantityInputKey, inputFields, operation]
+      properties:
+        triggerId: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        resourceName: { type: string }
+        targetSelectionMode: { type: string, enum: [all, radio, checkbox] }
+        allowVariantSelection: { type: boolean }
+        targetGroups:
+          type: array
+          items: { $ref: "#/components/schemas/ScanWorkflowTargetGroup" }
+        requiresCode: { type: boolean }
+        identifierLabel: { type: string }
+        quantityInputKey: { type: [string, "null"] }
+        inputFields:
+          type: array
+          items: { $ref: "#/components/schemas/ScanWorkflowInputField" }
+        operation:
+          oneOf:
+            - type: object
+              required: [type]
+              additionalProperties: false
+              properties:
+                type: { type: string, const: unit }
+            - type: object
+              required: [type, direction, quantity]
+              additionalProperties: false
+              properties:
+                type: { type: string, const: stock-adjustment }
+                direction: { type: string, enum: [in, out] }
+                quantity: { type: integer, minimum: 1 }
+            - type: object
+              required: [type, quantity]
+              additionalProperties: false
+              properties:
+                type: { type: string, const: assembly-build }
+                quantity: { type: integer, minimum: 1 }
+    PublicActionFlowExecutionInput:
+      type: object
+      additionalProperties: false
+      properties:
+        code: { type: string, minLength: 1, maxLength: 2048 }
+        selectedResourceIds:
+          type: array
+          maxItems: 24
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        inputs:
+          type: object
+          default: {}
+          maxProperties: 24
+          propertyNames: { minLength: 1, maxLength: 80 }
+          additionalProperties:
+            oneOf:
+              - { type: string, maxLength: 20000 }
+              - { type: number }
+              - { type: boolean }
+              - type: array
+                maxItems: 12
+                items: { type: string, maxLength: 2048 }
     StockScanResolution:
       type: object
-      required: [workflow, resource, identifier, operation, unit, willCreate, fields, fixedProperties, metadataPreview, customFieldsPreview, executionPreview, statusBefore, statusAfter, quantityBefore, quantityAfter, delta, expectedResourceUpdatedAt, expectedUnitId, expectedUnitUpdatedAt]
+      required: [workflow, resource, resources, targetGroups, selectedResourceIds, expectedTargets, identifier, operation, unit, willCreate, fields, fixedProperties, metadataPreview, customFieldsPreview, executionPreview, statusBefore, statusAfter, quantityBefore, quantityAfter, delta, expectedResourceUpdatedAt, expectedUnitId, expectedUnitUpdatedAt]
       additionalProperties: false
       properties:
         workflow: { $ref: "#/components/schemas/ScanWorkflow" }
@@ -5752,6 +6033,19 @@ components:
             name: { type: string }
             quantity: { type: integer }
             trackingMode: { type: string, enum: [bulk, serialized] }
+        resources:
+          type: array
+          items: { $ref: "#/components/schemas/ScanWorkflowTargetOption" }
+        targetGroups:
+          type: array
+          items: { $ref: "#/components/schemas/ScanWorkflowTargetGroup" }
+        selectedResourceIds:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        expectedTargets:
+          type: array
+          items: { $ref: "#/components/schemas/StockScanExpectedTarget" }
         identifier: { type: string, minLength: 1, maxLength: 180 }
         operation: { $ref: "#/components/schemas/ScanWorkflowOperation" }
         unit:
@@ -5821,6 +6115,15 @@ components:
           oneOf:
             - { type: string, format: date-time }
             - { type: "null" }
+        selectedResourceIds:
+          type: array
+          maxItems: 24
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        expectedTargets:
+          type: array
+          maxItems: 24
+          items: { $ref: "#/components/schemas/StockScanExpectedTarget" }
         inputs:
           type: object
           default: {}
@@ -6163,15 +6466,35 @@ components:
         status: { type: string, enum: [returned, cancelled] }
         completedAt: { type: string, format: date-time }
         note: { type: string, maxLength: 20000 }
+    InventoryReservationCheckout:
+      type: object
+      required: [action]
+      additionalProperties: false
+      properties:
+        action: { type: string, const: checkout }
+        stockUnitId: { type: [string, "null"], format: uuid, description: Required when the reserved item uses serialized tracking. }
+        checkedOutAt: { type: string, format: date-time }
+        note: { type: string, maxLength: 20000 }
+    LendingSettings:
+      type: object
+      required: [enabled, approvalRequired, defaultDurationDays, maxDurationDays]
+      additionalProperties: false
+      properties:
+        enabled: { type: boolean }
+        approvalRequired: { type: boolean }
+        defaultDurationDays: { type: integer, minimum: 1, maximum: 3650 }
+        maxDurationDays: { type: integer, minimum: 1, maximum: 3650 }
     InventoryAssignment:
       type: object
-      required: [id, resourceId, stockUnitId, kind, status, quantity, assignee, stockUnit, startsAt, dueAt, completedAt, note, createdBy, completedBy, createdAt, updatedAt]
+      required: [id, resourceId, stockUnitId, kind, status, stockApplied, overdue, quantity, assignee, stockUnit, startsAt, dueAt, completedAt, note, createdBy, completedBy, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         resourceId: { type: string, format: uuid }
         stockUnitId: { type: [string, "null"], format: uuid }
         kind: { type: string, enum: [checkout, assignment, reservation] }
         status: { type: string, enum: [active, returned, cancelled] }
+        stockApplied: { type: boolean }
+        overdue: { type: boolean, description: Derived from an active checkout whose due date has passed. }
         quantity: { type: integer, minimum: 1 }
         assignee:
           type: object
@@ -6213,7 +6536,7 @@ components:
         movement: { $ref: "#/components/schemas/StockMovement" }
     InventoryAssignmentList:
       type: object
-      required: [resource, trackingMode, availability, availableUnits, assignments]
+      required: [resource, trackingMode, lending, availability, recipients, availableUnits, assignments]
       properties:
         resource:
           type: object
@@ -6223,12 +6546,28 @@ components:
             name: { type: string }
             quantity: { type: integer }
         trackingMode: { type: string, enum: [bulk, serialized] }
+        lending: { $ref: "#/components/schemas/LendingSettings" }
         availability:
           type: object
-          required: [availableQuantity, activeQuantity]
+          required: [availableQuantity, activeQuantity, reservedQuantity]
           properties:
             availableQuantity: { type: integer }
             activeQuantity: { type: integer, minimum: 0 }
+            reservedQuantity: { type: integer, minimum: 0 }
+        recipients:
+          type: object
+          required: [users]
+          properties:
+            users:
+              type: array
+              maxItems: 500
+              items:
+                type: object
+                required: [id, name, email]
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
+                  email: { type: string, format: email }
         availableUnits:
           type: array
           maxItems: 500
@@ -6252,11 +6591,13 @@ components:
         reorderQuantity: { type: integer, minimum: 0 }
         leadTimeDays: { type: integer, minimum: 0 }
         unitName: { type: string, minLength: 1, maxLength: 80 }
+        purchaseUnitName: { type: [string, "null"], minLength: 1, maxLength: 80 }
+        purchaseUnitFactor: { type: [integer, "null"], minimum: 1, maximum: 2000000000 }
     StockConfig:
       allOf:
         - { $ref: "#/components/schemas/StockConfigInput" }
         - type: object
-          required: [trackingMode, minimumStock, reorderQuantity, leadTimeDays, unitName]
+          required: [trackingMode, minimumStock, reorderQuantity, leadTimeDays, unitName, purchaseUnitName, purchaseUnitFactor]
     StockForecast:
       type: object
       required: [averageDailyUsage, daysUntilStockout, predictedStockoutAt, isBelowMinimum, suggestedReorderQuantity]
@@ -6361,9 +6702,10 @@ components:
         altText: { type: string }
     StockOverviewItem:
       type: object
-      required: [resourceId, name, type, cover, quantity, onOrder, projectedQuantity, minimumStock, trackingMode, reorderSuggested, unitName]
+      required: [resourceId, variantOfResourceId, name, type, cover, quantity, onOrder, projectedQuantity, minimumStock, trackingMode, reorderSuggested, unitName]
       properties:
         resourceId: { type: string, format: uuid }
+        variantOfResourceId: { type: [string, "null"], format: uuid }
         name: { type: string }
         type: { type: string }
         cover:

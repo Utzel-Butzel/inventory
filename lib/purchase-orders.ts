@@ -28,12 +28,17 @@ import {
 import { db } from "@/lib/db";
 import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 import { addInboundStockCost, splitCents } from "@/lib/stock-costing";
-
-const MAX_STOCK_QUANTITY = 2_000_000_000;
+import {
+  baseUnitsToPurchaseUnits,
+  hasPurchaseUnit,
+  MAX_STOCK_QUANTITY,
+  purchaseUnitsToBaseUnits,
+} from "@/lib/stock-quantity-units";
 
 export type PurchaseOrderLineInput = {
   resourceId: string;
-  orderedQuantity: number;
+  orderedQuantity?: number;
+  purchaseQuantity?: number;
   expectedAt?: Date | null;
   note?: string;
   unitPriceCents?: number | null;
@@ -60,7 +65,8 @@ export type PurchaseOrderPatchInput = {
 };
 
 export type PurchaseReceiptInput = {
-  quantity: number;
+  quantity?: number;
+  purchaseQuantity?: number;
   occurredAt?: Date;
   location?: string | null;
   note?: string;
@@ -175,8 +181,11 @@ type OrderLineDtoInput = {
   resourceName: string;
   resourceSku: string | null;
   resourceCurrency: string;
+  baseUnitName: string | null;
   orderedQuantity: number;
   receivedQuantity: number;
+  purchaseUnitName: string | null;
+  purchaseUnitFactor: number;
   unitPriceCents: number | null;
   priceCurrency: string | null;
   expectedAt: Date | null;
@@ -193,15 +202,34 @@ const lineDto = (line: OrderLineDtoInput) => ({
   resourceName: line.resourceName,
   resourceSku: line.resourceSku,
   resourceCurrency: line.resourceCurrency,
+  baseUnitName: line.baseUnitName ?? "unit",
   orderedQuantity: line.orderedQuantity,
   receivedQuantity: line.receivedQuantity,
+  purchaseUnitName: line.purchaseUnitName,
+  purchaseUnitFactor: line.purchaseUnitFactor,
+  orderedPurchaseQuantity: baseUnitsToPurchaseUnits(
+    line.orderedQuantity,
+    line.purchaseUnitFactor,
+  ),
+  receivedPurchaseQuantity: baseUnitsToPurchaseUnits(
+    line.receivedQuantity,
+    line.purchaseUnitFactor,
+  ),
   unitPriceCents: line.unitPriceCents,
   priceCurrency: line.priceCurrency,
   totalPriceCents:
     line.unitPriceCents === null
       ? null
-      : line.unitPriceCents * line.orderedQuantity,
+      : line.unitPriceCents *
+        (baseUnitsToPurchaseUnits(
+          line.orderedQuantity,
+          line.purchaseUnitFactor,
+        ) ?? line.orderedQuantity),
   openQuantity: Math.max(0, line.orderedQuantity - line.receivedQuantity),
+  openPurchaseQuantity: baseUnitsToPurchaseUnits(
+    Math.max(0, line.orderedQuantity - line.receivedQuantity),
+    line.purchaseUnitFactor,
+  ),
   expectedAt: line.expectedAt?.toISOString() ?? null,
   note: line.note,
   trackingMode: line.trackingMode ?? "bulk",
@@ -262,8 +290,11 @@ async function loadOrderLines(
       resourceName: resources.name,
       resourceSku: resources.sku,
       resourceCurrency: resources.currency,
+      baseUnitName: stockSettings.unitName,
       orderedQuantity: purchaseOrderLines.orderedQuantity,
       receivedQuantity: purchaseOrderLines.receivedQuantity,
+      purchaseUnitName: purchaseOrderLines.purchaseUnitName,
+      purchaseUnitFactor: purchaseOrderLines.purchaseUnitFactor,
       unitPriceCents: purchaseOrderLines.unitPriceCents,
       priceCurrency: purchaseOrderLines.priceCurrency,
       expectedAt: sql<Date | null>`coalesce(${purchaseOrderLines.expectedAt}, ${purchaseOrders.expectedAt})`,
@@ -459,6 +490,9 @@ export async function createPurchaseOrder(
         .select({
           resourceId: stockSettings.resourceId,
           trackingMode: stockSettings.trackingMode,
+          unitName: stockSettings.unitName,
+          purchaseUnitName: stockSettings.purchaseUnitName,
+          purchaseUnitFactor: stockSettings.purchaseUnitFactor,
         })
         .from(stockSettings)
         .where(
@@ -467,6 +501,62 @@ export async function createPurchaseOrder(
             inArray(stockSettings.resourceId, resourceIds),
           ),
         );
+      const settingsByResource = new Map(
+        settingsRows.map((row) => [row.resourceId, row]),
+      );
+      const normalizedLines = input.lines.map((line) => {
+        const hasBaseQuantity = line.orderedQuantity !== undefined;
+        const hasPackQuantity = line.purchaseQuantity !== undefined;
+        if (hasBaseQuantity === hasPackQuantity) {
+          throw new PurchaseOrderOperationError(
+            "Provide either orderedQuantity or purchaseQuantity for each order line.",
+            422,
+          );
+        }
+        const settings = settingsByResource.get(line.resourceId);
+        if (hasPackQuantity) {
+          if (!settings || !hasPurchaseUnit(settings)) {
+            throw new PurchaseOrderOperationError(
+              "This inventory item does not have a purchase unit configured.",
+              422,
+            );
+          }
+          try {
+            return {
+              ...line,
+              orderedQuantity: purchaseUnitsToBaseUnits(
+                line.purchaseQuantity!,
+                settings.purchaseUnitFactor,
+              ),
+              purchaseUnitName: settings.purchaseUnitName,
+              purchaseUnitFactor: settings.purchaseUnitFactor,
+              baseUnitName: settings.unitName,
+            };
+          } catch (error) {
+            throw new PurchaseOrderOperationError(
+              error instanceof Error ? error.message : "Invalid purchase quantity.",
+              422,
+            );
+          }
+        }
+        if (
+          !Number.isSafeInteger(line.orderedQuantity) ||
+          line.orderedQuantity! < 1 ||
+          line.orderedQuantity! > MAX_STOCK_QUANTITY
+        ) {
+          throw new PurchaseOrderOperationError(
+            "Ordered quantity must be a supported positive whole number.",
+            422,
+          );
+        }
+        return {
+          ...line,
+          orderedQuantity: line.orderedQuantity!,
+          purchaseUnitName: null,
+          purchaseUnitFactor: 1,
+          baseUnitName: settings?.unitName ?? "unit",
+        };
+      });
       const committedRows = await transaction
         .select({
           resourceId: purchaseOrderLines.resourceId,
@@ -495,7 +585,7 @@ export async function createPurchaseOrder(
       const committedByResource = new Map(
         committedRows.map((row) => [row.resourceId, Number(row.quantity)]),
       );
-      for (const line of input.lines) {
+      for (const line of normalizedLines) {
         if (
           (committedByResource.get(line.resourceId) ?? 0) +
             line.orderedQuantity >
@@ -516,7 +606,7 @@ export async function createPurchaseOrder(
       const resourceById = new Map(
         existingResources.map((resource) => [resource.id, resource]),
       );
-      for (const line of input.lines) {
+      for (const line of normalizedLines) {
         const resource = resourceById.get(line.resourceId);
         if (
           line.unitPriceCents !== null &&
@@ -549,11 +639,13 @@ export async function createPurchaseOrder(
       const insertedLines = await transaction
         .insert(purchaseOrderLines)
         .values(
-          input.lines.map((line) => ({
+          normalizedLines.map((line) => ({
             organizationId,
             purchaseOrderId: order.id,
             resourceId: line.resourceId,
             orderedQuantity: line.orderedQuantity,
+            purchaseUnitName: line.purchaseUnitName,
+            purchaseUnitFactor: line.purchaseUnitFactor,
             unitPriceCents: line.unitPriceCents ?? null,
             priceCurrency:
               line.unitPriceCents === null || line.unitPriceCents === undefined
@@ -579,6 +671,8 @@ export async function createPurchaseOrder(
           resourceName: resource.name,
           resourceSku: resource.sku,
           resourceCurrency: resource.currency,
+          baseUnitName:
+            settingsByResource.get(line.resourceId)?.unitName ?? "unit",
           expectedAt: line.expectedAt ?? order.expectedAt,
           trackingMode: trackingByResource.get(line.resourceId) ?? "bulk",
         };
@@ -816,13 +910,53 @@ export async function receivePurchaseOrderLine(
           409,
         );
       }
-      if (line.receivedQuantity + input.quantity > line.orderedQuantity) {
+      const hasBaseQuantity = input.quantity !== undefined;
+      const hasPackQuantity = input.purchaseQuantity !== undefined;
+      if (hasBaseQuantity === hasPackQuantity) {
+        throw new PurchaseOrderOperationError(
+          "Provide either quantity or purchaseQuantity for this receipt.",
+          422,
+        );
+      }
+      if (line.purchaseUnitName !== null && !hasPackQuantity) {
+        throw new PurchaseOrderOperationError(
+          `Receive this order line in ${line.purchaseUnitName}.`,
+          422,
+        );
+      }
+      if (line.purchaseUnitName === null && hasPackQuantity) {
+        throw new PurchaseOrderOperationError(
+          "This order line does not use a purchase unit.",
+          422,
+        );
+      }
+      let receiptQuantity: number;
+      try {
+        receiptQuantity = hasPackQuantity
+          ? purchaseUnitsToBaseUnits(
+              input.purchaseQuantity!,
+              line.purchaseUnitFactor,
+            )
+          : input.quantity!;
+      } catch (error) {
+        throw new PurchaseOrderOperationError(
+          error instanceof Error ? error.message : "Invalid receipt quantity.",
+          422,
+        );
+      }
+      if (!Number.isSafeInteger(receiptQuantity) || receiptQuantity < 1) {
+        throw new PurchaseOrderOperationError(
+          "Receipt quantity must be a positive whole number.",
+          422,
+        );
+      }
+      if (line.receivedQuantity + receiptQuantity > line.orderedQuantity) {
         throw new PurchaseOrderOperationError(
           `This receipt exceeds the ${line.orderedQuantity - line.receivedQuantity} units still open on the line.`,
           409,
         );
       }
-      if (resource.quantity + input.quantity > MAX_STOCK_QUANTITY) {
+      if (resource.quantity + receiptQuantity > MAX_STOCK_QUANTITY) {
         throw new PurchaseOrderOperationError(
           `This receipt would exceed the maximum supported stock of ${MAX_STOCK_QUANTITY}.`,
           409,
@@ -840,6 +974,12 @@ export async function receivePurchaseOrderLine(
         )
         .limit(1);
       const mode = settings?.trackingMode ?? "bulk";
+      if (mode === "serialized" && receiptQuantity > 1_000) {
+        throw new PurchaseOrderOperationError(
+          "Receive no more than 1,000 serialized units at once.",
+          422,
+        );
+      }
       if (mode === "bulk" && input.unitCodes?.length) {
         throw new PurchaseOrderOperationError(
           "Unit codes can only be supplied for serialized inventory items.",
@@ -849,7 +989,7 @@ export async function receivePurchaseOrderLine(
       if (
         mode === "serialized" &&
         input.unitCodes &&
-        (input.unitCodes.length !== input.quantity ||
+        (input.unitCodes.length !== receiptQuantity ||
           new Set(input.unitCodes).size !== input.unitCodes.length)
       ) {
         throw new PurchaseOrderOperationError(
@@ -865,7 +1005,8 @@ export async function receivePurchaseOrderLine(
         input.totalPriceCents ??
         (line.unitPriceCents === null
           ? null
-          : line.unitPriceCents * input.quantity);
+          : line.unitPriceCents *
+            (input.purchaseQuantity ?? receiptQuantity));
       const priceCurrency =
         totalPriceCents === null
           ? null
@@ -881,7 +1022,7 @@ export async function receivePurchaseOrderLine(
         .values({
           organizationId,
           purchaseOrderLineId: line.id,
-          quantity: input.quantity,
+          quantity: receiptQuantity,
           totalPriceCents,
           priceCurrency,
           occurredAt,
@@ -895,11 +1036,11 @@ export async function receivePurchaseOrderLine(
         .returning();
 
       let units: StockUnitRecord[] = [];
-      const serializedCosts = splitCents(totalPriceCents, input.quantity);
+      const serializedCosts = splitCents(totalPriceCents, receiptQuantity);
       if (mode === "serialized") {
         const codes =
           input.unitCodes ??
-          Array.from({ length: input.quantity }, () =>
+          Array.from({ length: receiptQuantity }, () =>
             `PO-${purchaseOrderId.slice(0, 8).toUpperCase()}-${randomUUID().slice(0, 8).toUpperCase()}`,
           );
         units = await transaction
@@ -925,7 +1066,7 @@ export async function receivePurchaseOrderLine(
           .returning();
       }
 
-      const balanceAfter = resource.quantity + input.quantity;
+      const balanceAfter = resource.quantity + receiptQuantity;
       await transaction
         .update(resources)
         .set({ quantity: balanceAfter, updatedAt: now })
@@ -969,8 +1110,8 @@ export async function receivePurchaseOrderLine(
             organizationId,
             resourceId: resource.id,
             purchaseReceiptId: receipt.id,
-            delta: input.quantity,
-            quantity: input.quantity,
+            delta: receiptQuantity,
+            quantity: receiptQuantity,
             totalPriceCents,
             priceCurrency,
             balanceAfter,
@@ -1007,7 +1148,7 @@ export async function receivePurchaseOrderLine(
       const costedMovementById = new Map(costedMovements.map((row) => [row.id, row]));
       await enqueueStockMovementWebhookEvents(transaction, movements);
 
-      const receivedQuantity = line.receivedQuantity + input.quantity;
+      const receivedQuantity = line.receivedQuantity + receiptQuantity;
       await transaction
         .update(purchaseOrderLines)
         .set({ receivedQuantity, updatedAt: now })
@@ -1026,8 +1167,11 @@ export async function receivePurchaseOrderLine(
           resourceName: resources.name,
           resourceSku: resources.sku,
           resourceCurrency: resources.currency,
+          baseUnitName: stockSettings.unitName,
           orderedQuantity: purchaseOrderLines.orderedQuantity,
           receivedQuantity: purchaseOrderLines.receivedQuantity,
+          purchaseUnitName: purchaseOrderLines.purchaseUnitName,
+          purchaseUnitFactor: purchaseOrderLines.purchaseUnitFactor,
           unitPriceCents: purchaseOrderLines.unitPriceCents,
           priceCurrency: purchaseOrderLines.priceCurrency,
           expectedAt: purchaseOrderLines.expectedAt,
@@ -1080,7 +1224,18 @@ export async function receivePurchaseOrderLine(
         );
       }
       const response = {
-        receipt: receiptDto(receipt),
+        receipt: {
+          ...receiptDto(receipt),
+          purchaseQuantity:
+            line.purchaseUnitName === null
+              ? null
+              : baseUnitsToPurchaseUnits(
+                  receipt.quantity,
+                  line.purchaseUnitFactor,
+                ),
+          purchaseUnitName: line.purchaseUnitName,
+          purchaseUnitFactor: line.purchaseUnitFactor,
+        },
         order: savedOrderDto,
         line: savedLineDto,
         resource: {

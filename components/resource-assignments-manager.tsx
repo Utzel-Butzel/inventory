@@ -7,6 +7,7 @@ import {
   LoaderCircle,
   PackageCheck,
   RefreshCw,
+  Settings2,
   Undo2,
   UserRound,
   XCircle,
@@ -27,6 +28,8 @@ type Assignment = {
   stockUnitId: string | null;
   kind: AssignmentKind;
   status: AssignmentStatus;
+  stockApplied: boolean;
+  overdue: boolean;
   quantity: number;
   assignee: {
     type: "user" | "resource" | "label";
@@ -52,7 +55,15 @@ type Assignment = {
 type AssignmentData = {
   resource: { id: string; name: string; quantity: number };
   trackingMode: "bulk" | "serialized";
-  availability: { availableQuantity: number; activeQuantity: number };
+  lending: LendingSettings;
+  availability: {
+    availableQuantity: number;
+    activeQuantity: number;
+    reservedQuantity: number;
+  };
+  recipients: {
+    users: Array<{ id: string; name: string; email: string }>;
+  };
   availableUnits: Array<{
     id: string;
     code: string;
@@ -62,10 +73,19 @@ type AssignmentData = {
   assignments: Assignment[];
 };
 
+type LendingSettings = {
+  enabled: boolean;
+  approvalRequired: boolean;
+  defaultDurationDays: number;
+  maxDurationDays: number;
+};
+
 type AssignmentForm = {
   kind: AssignmentKind;
   quantity: string;
   stockUnitId: string;
+  recipientType: "user" | "label";
+  recipientUserId: string;
   recipient: string;
   startsAt: string;
   dueAt: string;
@@ -73,13 +93,22 @@ type AssignmentForm = {
 };
 
 const emptyForm: AssignmentForm = {
-  kind: "checkout",
+  kind: "assignment",
   quantity: "1",
   stockUnitId: "",
+  recipientType: "label",
+  recipientUserId: "",
   recipient: "",
   startsAt: "",
   dueAt: "",
   note: "",
+};
+
+const emptyLendingSettings: LendingSettings = {
+  enabled: false,
+  approvalRequired: true,
+  defaultDurationDays: 7,
+  maxDurationDays: 30,
 };
 
 const inputClass =
@@ -99,6 +128,11 @@ const formatDate = (value: string | null, locale: string) =>
         timeStyle: "short",
       }).format(new Date(value))
     : "—";
+
+const localDateTimeValue = (date: Date) => {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+};
 
 const newIdempotencyKey = () => {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -121,8 +155,12 @@ export function ResourceAssignmentsManager({
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const [data, setData] = useState<AssignmentData | null>(null);
   const [form, setForm] = useState<AssignmentForm>(emptyForm);
+  const [lendingForm, setLendingForm] = useState<LendingSettings>(
+    emptyLendingSettings,
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingLending, setSavingLending] = useState(false);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const createRequest = useRef<{ fingerprint: string; key: string } | null>(null);
@@ -132,12 +170,39 @@ export function ResourceAssignmentsManager({
     setLoading(true);
     setError(null);
     try {
-      setData(
-        await fetchJson<AssignmentData>(
-          `/api/v1/resources/${resourceId}/assignments`,
-          { cache: "no-store" },
-        ),
+      const response = await fetchJson<AssignmentData>(
+        `/api/v1/resources/${resourceId}/assignments`,
+        { cache: "no-store" },
       );
+      setData(response);
+      setLendingForm(response.lending);
+      setForm((current) => {
+        if (!response.lending.enabled && current.kind !== "assignment") {
+          return { ...current, kind: "assignment", startsAt: "", dueAt: "" };
+        }
+        if (
+          response.lending.enabled &&
+          current.kind === "assignment" &&
+          !current.recipient &&
+          !current.recipientUserId &&
+          !current.startsAt &&
+          !current.dueAt
+        ) {
+          const startsAt = localDateTimeValue(new Date());
+          return {
+            ...current,
+            kind: "checkout",
+            startsAt,
+            dueAt: localDateTimeValue(
+              new Date(
+                new Date(startsAt).getTime() +
+                  response.lending.defaultDurationDays * 86_400_000,
+              ),
+            ),
+          };
+        }
+        return current;
+      });
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -165,17 +230,73 @@ export function ResourceAssignmentsManager({
   const setField = (field: keyof AssignmentForm, value: string) =>
     setForm((current) => ({ ...current, [field]: value }));
 
+  const setAssignmentKind = (kind: AssignmentKind) => {
+    setForm((current) => {
+      if (kind === "assignment") {
+        return { ...current, kind, startsAt: "", dueAt: "" };
+      }
+      const startsAt =
+        kind === "reservation"
+          ? localDateTimeValue(new Date(Date.now() + 24 * 60 * 60 * 1_000))
+          : localDateTimeValue(new Date());
+      const duration = data?.lending.defaultDurationDays ?? 7;
+      const dueAt = localDateTimeValue(
+        new Date(new Date(startsAt).getTime() + duration * 86_400_000),
+      );
+      return {
+        ...current,
+        kind,
+        startsAt: current.startsAt || startsAt,
+        dueAt: current.dueAt || dueAt,
+        stockUnitId: kind === "reservation" ? "" : current.stockUnitId,
+      };
+    });
+  };
+
+  async function saveLendingSettings() {
+    if (!canEdit) return;
+    setSavingLending(true);
+    setError(null);
+    try {
+      const response = await fetchJson<{ lending: LendingSettings }>(
+        `/api/v1/resources/${resourceId}/lending`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(lendingForm),
+        },
+      );
+      setLendingForm(response.lending);
+      setData((current) =>
+        current ? { ...current, lending: response.lending } : current,
+      );
+      if (!response.lending.enabled) setAssignmentKind("assignment");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : t("assignments.errors.settings"),
+      );
+    } finally {
+      setSavingLending(false);
+    }
+  }
+
   async function submitAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!data || !canEdit) return;
     const quantity = data.trackingMode === "serialized" ? 1 : Number(form.quantity);
+    const recipient =
+      form.recipientType === "user"
+        ? { type: "user" as const, userId: form.recipientUserId }
+        : { type: "label" as const, label: form.recipient.trim() };
     const payload = {
       kind: form.kind,
       quantity,
-      ...(data.trackingMode === "serialized"
+      ...(data.trackingMode === "serialized" && form.kind !== "reservation"
         ? { stockUnitId: form.stockUnitId }
         : {}),
-      recipient: { type: "label" as const, label: form.recipient.trim() },
+      recipient,
       ...(form.startsAt
         ? { startsAt: new Date(form.startsAt).toISOString() }
         : {}),
@@ -201,7 +322,10 @@ export function ResourceAssignmentsManager({
         body: JSON.stringify(payload),
       });
       createRequest.current = null;
-      setForm(emptyForm);
+      setForm({
+        ...emptyForm,
+        kind: data.lending.enabled ? "checkout" : "assignment",
+      });
       await load();
     } catch (saveError) {
       setError(
@@ -211,6 +335,40 @@ export function ResourceAssignmentsManager({
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function activateReservation(
+    assignment: Assignment,
+    stockUnitId?: string,
+  ) {
+    const operation = `${assignment.id}:checkout:${stockUnitId ?? "bulk"}`;
+    const key = completionKeys.current.get(operation) ?? newIdempotencyKey();
+    completionKeys.current.set(operation, key);
+    setCompletingId(assignment.id);
+    setError(null);
+    try {
+      await fetchJson(`/api/v1/assignments/${assignment.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": key,
+        },
+        body: JSON.stringify({
+          action: "checkout",
+          ...(stockUnitId ? { stockUnitId } : {}),
+        }),
+      });
+      completionKeys.current.delete(operation);
+      await load();
+    } catch (checkoutError) {
+      setError(
+        checkoutError instanceof Error
+          ? checkoutError.message
+          : t("assignments.errors.checkout"),
+      );
+    } finally {
+      setCompletingId(null);
     }
   }
 
@@ -279,6 +437,100 @@ export function ResourceAssignmentsManager({
           </div>
         ) : null}
 
+        {canEdit && data ? (
+          <div className="border-b border-border bg-surface-subtle/40 px-5 py-4 sm:px-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 grid size-9 place-items-center rounded-xl border border-border bg-surface text-muted-strong">
+                  <Settings2 className="size-4" aria-hidden="true" />
+                </span>
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={lendingForm.enabled}
+                      onChange={(event) =>
+                        setLendingForm((current) => ({
+                          ...current,
+                          enabled: event.target.checked,
+                        }))
+                      }
+                      className="size-4 rounded border-border accent-[var(--color-success)]"
+                      disabled={savingLending}
+                    />
+                    {t("assignments.lending.enabled")}
+                  </label>
+                  <p className="mt-1 max-w-2xl text-xs leading-5 text-muted">
+                    {t("assignments.lending.description")}
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-[180px_180px_auto] sm:items-end">
+                <label className={labelClass}>
+                  {t("assignments.lending.defaultDuration")}
+                  <input
+                    type="number"
+                    min={1}
+                    max={lendingForm.maxDurationDays}
+                    value={lendingForm.defaultDurationDays}
+                    onChange={(event) =>
+                      setLendingForm((current) => ({
+                        ...current,
+                        defaultDurationDays: Number(event.target.value),
+                      }))
+                    }
+                    className={inputClass}
+                    disabled={savingLending}
+                  />
+                </label>
+                <label className={labelClass}>
+                  {t("assignments.lending.maxDuration")}
+                  <input
+                    type="number"
+                    min={lendingForm.defaultDurationDays}
+                    max={3650}
+                    value={lendingForm.maxDurationDays}
+                    onChange={(event) =>
+                      setLendingForm((current) => ({
+                        ...current,
+                        maxDurationDays: Number(event.target.value),
+                      }))
+                    }
+                    className={inputClass}
+                    disabled={savingLending}
+                  />
+                </label>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void saveLendingSettings()}
+                  disabled={savingLending}
+                >
+                  {savingLending ? (
+                    <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                  ) : null}
+                  {t("assignments.lending.save")}
+                </Button>
+              </div>
+            </div>
+            <label className="mt-3 flex items-center gap-2 pl-12 text-xs font-medium text-muted-strong">
+              <input
+                type="checkbox"
+                checked={lendingForm.approvalRequired}
+                onChange={(event) =>
+                  setLendingForm((current) => ({
+                    ...current,
+                    approvalRequired: event.target.checked,
+                  }))
+                }
+                className="size-4 rounded border-border accent-[var(--color-success)]"
+                disabled={savingLending}
+              />
+              {t("assignments.lending.approvalRequired")}
+            </label>
+          </div>
+        ) : null}
+
         <div className="grid gap-6 p-5 sm:p-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -297,6 +549,13 @@ export function ResourceAssignmentsManager({
                       count: data.availability.activeQuantity,
                     })}
                   </span>
+                  {data.availability.reservedQuantity > 0 ? (
+                    <span>
+                      {t("assignments.availability.reserved", {
+                        count: data.availability.reservedQuantity,
+                      })}
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -317,6 +576,11 @@ export function ResourceAssignmentsManager({
                     canEdit={canEdit}
                     completing={completingId === assignment.id}
                     onComplete={(status) => void completeAssignment(assignment, status)}
+                    onCheckout={(stockUnitId) =>
+                      void activateReservation(assignment, stockUnitId)
+                    }
+                    trackingMode={data?.trackingMode ?? "bulk"}
+                    availableUnits={data?.availableUnits ?? []}
                     locale={locale}
                   />
                 ))}
@@ -343,6 +607,9 @@ export function ResourceAssignmentsManager({
                       canEdit={false}
                       completing={false}
                       onComplete={() => undefined}
+                      onCheckout={() => undefined}
+                      trackingMode={data?.trackingMode ?? "bulk"}
+                      availableUnits={[]}
                       locale={locale}
                     />
                   ))}
@@ -365,33 +632,78 @@ export function ResourceAssignmentsManager({
                   {t("assignments.form.action")}
                   <select
                     value={form.kind}
-                    onChange={(event) => setField("kind", event.target.value)}
+                    onChange={(event) =>
+                      setAssignmentKind(event.target.value as AssignmentKind)
+                    }
                     className={inputClass}
                     disabled={saving}
                   >
-                    <option value="checkout">{t("assignments.kinds.checkout")}</option>
                     <option value="assignment">{t("assignments.kinds.assignment")}</option>
-                    <option value="reservation">{t("assignments.kinds.reservation")}</option>
+                    {data?.lending.enabled ? (
+                      <>
+                        <option value="checkout">{t("assignments.kinds.checkout")}</option>
+                        <option value="reservation">{t("assignments.kinds.reservation")}</option>
+                      </>
+                    ) : null}
                   </select>
                 </label>
 
                 <label className={labelClass}>
-                  {t("assignments.form.recipient")}
-                  <div className="relative">
-                    <UserRound className="pointer-events-none absolute left-3 top-1/2 mt-0.5 size-4 -translate-y-1/2 text-muted" />
-                    <input
-                      required
-                      maxLength={240}
-                      value={form.recipient}
-                      onChange={(event) => setField("recipient", event.target.value)}
-                      placeholder={t("assignments.form.recipientPlaceholder")}
-                      className={`${inputClass} pl-9`}
-                      disabled={saving}
-                    />
-                  </div>
+                  {t("assignments.form.recipientType")}
+                  <select
+                    value={form.recipientType}
+                    onChange={(event) =>
+                      setField("recipientType", event.target.value)
+                    }
+                    className={inputClass}
+                    disabled={saving}
+                  >
+                    <option value="label">{t("assignments.form.externalRecipient")}</option>
+                    {data?.recipients.users.length ? (
+                      <option value="user">{t("assignments.form.registeredUser")}</option>
+                    ) : null}
+                  </select>
                 </label>
 
-                {data?.trackingMode === "serialized" ? (
+                {form.recipientType === "user" ? (
+                  <label className={labelClass}>
+                    {t("assignments.form.recipient")}
+                    <select
+                      required
+                      value={form.recipientUserId}
+                      onChange={(event) =>
+                        setField("recipientUserId", event.target.value)
+                      }
+                      className={inputClass}
+                      disabled={saving}
+                    >
+                      <option value="">{t("assignments.form.chooseUser")}</option>
+                      {data?.recipients.users.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name} · {user.email}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <label className={labelClass}>
+                    {t("assignments.form.recipient")}
+                    <div className="relative">
+                      <UserRound className="pointer-events-none absolute left-3 top-1/2 mt-0.5 size-4 -translate-y-1/2 text-muted" />
+                      <input
+                        required
+                        maxLength={240}
+                        value={form.recipient}
+                        onChange={(event) => setField("recipient", event.target.value)}
+                        placeholder={t("assignments.form.recipientPlaceholder")}
+                        className={`${inputClass} pl-9`}
+                        disabled={saving}
+                      />
+                    </div>
+                  </label>
+                )}
+
+                {data?.trackingMode === "serialized" && form.kind !== "reservation" ? (
                   <label className={labelClass}>
                     {t("assignments.form.serializedUnit")}
                     <select
@@ -409,6 +721,10 @@ export function ResourceAssignmentsManager({
                       ))}
                     </select>
                   </label>
+                ) : data?.trackingMode === "serialized" ? (
+                  <p className="rounded-xl border border-border bg-surface px-3 py-2 text-xs leading-5 text-muted">
+                    {t("assignments.form.reservationUnitLater")}
+                  </p>
                 ) : (
                   <label className={labelClass}>
                     {t("assignments.form.quantity")}
@@ -435,6 +751,7 @@ export function ResourceAssignmentsManager({
                     {t("assignments.form.starts")}
                     <input
                       type="datetime-local"
+                      required={form.kind === "reservation"}
                       value={form.startsAt}
                       onChange={(event) => setField("startsAt", event.target.value)}
                       className={inputClass}
@@ -445,6 +762,7 @@ export function ResourceAssignmentsManager({
                     {t("assignments.form.due")}
                     <input
                       type="datetime-local"
+                      required={form.kind !== "assignment"}
                       min={form.startsAt || undefined}
                       value={form.dueAt}
                       onChange={(event) => setField("dueAt", event.target.value)}
@@ -472,9 +790,13 @@ export function ResourceAssignmentsManager({
                   disabled={
                     saving ||
                     !data ||
-                    (!allowNegativeStock &&
+                    (form.kind !== "reservation" &&
+                      !allowNegativeStock &&
                       data.availability.availableQuantity < 1) ||
-                    (data.trackingMode === "serialized" && !data.availableUnits.length)
+                    (form.recipientType === "user" && !form.recipientUserId) ||
+                    (data.trackingMode === "serialized" &&
+                      form.kind !== "reservation" &&
+                      !data.availableUnits.length)
                   }
                 >
                   {saving ? (
@@ -498,15 +820,27 @@ function AssignmentRow({
   canEdit,
   completing,
   onComplete,
+  onCheckout,
+  trackingMode,
+  availableUnits,
   locale,
 }: {
   assignment: Assignment;
   canEdit: boolean;
   completing: boolean;
   onComplete: (status: "returned" | "cancelled") => void;
+  onCheckout: (stockUnitId?: string) => void;
+  trackingMode: "bulk" | "serialized";
+  availableUnits: Array<{
+    id: string;
+    code: string;
+    status: string;
+    location: string | null;
+  }>;
   locale: string;
 }) {
   const { t } = useT("resource");
+  const [checkoutUnitId, setCheckoutUnitId] = useState("");
   return (
     <article className="rounded-xl border border-border bg-surface p-4 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -518,6 +852,9 @@ function AssignmentRow({
             <Badge tone={statusTone(assignment.status)}>
               {t(`assignments.statuses.${assignment.status}`)}
             </Badge>
+            {assignment.overdue ? (
+              <Badge tone="danger">{t("assignments.statuses.overdue")}</Badge>
+            ) : null}
             <Badge>{t(`assignments.kinds.${assignment.kind}`)}</Badge>
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
@@ -547,8 +884,43 @@ function AssignmentRow({
         </div>
 
         {canEdit && assignment.status === "active" ? (
-          <div className="flex shrink-0 gap-2">
-            {assignment.kind !== "reservation" ? (
+          <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+            {assignment.kind === "reservation" ? (
+              <div className="flex flex-wrap justify-end gap-2">
+                {trackingMode === "serialized" ? (
+                  <select
+                    value={checkoutUnitId}
+                    onChange={(event) => setCheckoutUnitId(event.target.value)}
+                    className="h-9 min-w-44 rounded-lg border border-border bg-surface px-2 text-xs text-foreground"
+                    disabled={completing}
+                    aria-label={t("assignments.form.serializedUnit")}
+                  >
+                    <option value="">{t("assignments.form.chooseUnit")}</option>
+                    {availableUnits.map((unit) => (
+                      <option key={unit.id} value={unit.id}>
+                        {unit.code}{unit.location ? ` · ${unit.location}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => onCheckout(checkoutUnitId || undefined)}
+                  disabled={
+                    completing ||
+                    (trackingMode === "serialized" && !checkoutUnitId)
+                  }
+                >
+                  {completing ? (
+                    <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <HandCoins className="size-3.5" aria-hidden="true" />
+                  )}
+                  {t("assignments.actions.checkout")}
+                </Button>
+              </div>
+            ) : (
               <Button
                 size="sm"
                 variant="secondary"
@@ -562,7 +934,7 @@ function AssignmentRow({
                 )}
                 {t("assignments.actions.return")}
               </Button>
-            ) : null}
+            )}
             <Button
               size="sm"
               variant="ghost"

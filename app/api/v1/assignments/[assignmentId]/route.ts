@@ -8,6 +8,7 @@ import {
 } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import {
+  activateInventoryReservation,
   completeInventoryAssignment,
   inventoryAssignmentHttpError,
 } from "@/lib/inventory-assignments";
@@ -19,13 +20,23 @@ import {
 
 type Context = { params: Promise<{ assignmentId: string }> };
 
-const completionSchema = z
-  .object({
-    status: z.enum(["returned", "cancelled"]),
-    completedAt: z.string().datetime().optional(),
-    note: z.string().trim().max(20_000).optional(),
-  })
-  .strict();
+const assignmentUpdateSchema = z.union([
+  z
+    .object({
+      status: z.enum(["returned", "cancelled"]),
+      completedAt: z.string().datetime().optional(),
+      note: z.string().trim().max(20_000).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("checkout"),
+      stockUnitId: z.string().uuid().nullable().optional(),
+      checkedOutAt: z.string().datetime().optional(),
+      note: z.string().trim().max(20_000).optional(),
+    })
+    .strict(),
+]);
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +87,7 @@ export async function PATCH(request: Request, context: Context) {
   } catch {
     return Response.json({ error: "Expected a JSON request body." }, { status: 400 });
   }
-  const parsed = completionSchema.safeParse(payload);
+  const parsed = assignmentUpdateSchema.safeParse(payload);
   if (!parsed.success) {
     return Response.json(
       { error: "Invalid assignment completion.", details: parsed.error.flatten() },
@@ -85,25 +96,47 @@ export async function PATCH(request: Request, context: Context) {
   }
 
   try {
-    const result = await completeInventoryAssignment(
-      authorization.identity.organizationId,
-      assignmentId.data,
-      {
-        ...parsed.data,
-        completedAt: parsed.data.completedAt
-          ? new Date(parsed.data.completedAt)
-          : undefined,
-      },
-      authorization.identity.subject,
-      {
-        key: idempotency.key,
-        requestHash: hashIdempotentPayload({
-          operation: "inventory-assignment-complete",
-          assignmentId: assignmentId.data,
-          payload: parsed.data,
-        }),
-      },
-    );
+    const result =
+      "action" in parsed.data
+        ? await activateInventoryReservation(
+            authorization.identity.organizationId,
+            assignmentId.data,
+            {
+              stockUnitId: parsed.data.stockUnitId,
+              checkedOutAt: parsed.data.checkedOutAt
+                ? new Date(parsed.data.checkedOutAt)
+                : undefined,
+              note: parsed.data.note,
+            },
+            authorization.identity.subject,
+            {
+              key: idempotency.key,
+              requestHash: hashIdempotentPayload({
+                operation: "inventory-reservation-checkout",
+                assignmentId: assignmentId.data,
+                payload: parsed.data,
+              }),
+            },
+          )
+        : await completeInventoryAssignment(
+            authorization.identity.organizationId,
+            assignmentId.data,
+            {
+              ...parsed.data,
+              completedAt: parsed.data.completedAt
+                ? new Date(parsed.data.completedAt)
+                : undefined,
+            },
+            authorization.identity.subject,
+            {
+              key: idempotency.key,
+              requestHash: hashIdempotentPayload({
+                operation: "inventory-assignment-complete",
+                assignmentId: assignmentId.data,
+                payload: parsed.data,
+              }),
+            },
+          );
     return Response.json(result.response, {
       status: 200,
       headers: idempotencyResponseHeaders(idempotency.key, result.replayed),

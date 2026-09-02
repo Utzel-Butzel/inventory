@@ -54,12 +54,31 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
+    enum VideoCaptureError: Error, LocalizedError, Sendable {
+        case cameraNotReady
+        case unsupported
+        case recordingFailed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .cameraNotReady:
+                "Die Kamera ist noch nicht bereit. Bitte versuche es erneut."
+            case .unsupported:
+                "Videoaufnahmen werden auf diesem Gerät nicht unterstützt."
+            case .recordingFailed(let message):
+                "Das Video konnte nicht aufgenommen werden: \(message)"
+            }
+        }
+    }
+
     @Published private(set) var state: State = .idle
     @Published private(set) var torchEnabled = false
     @Published private(set) var torchAvailable = false
     @Published private(set) var canSwitchCamera = false
     @Published private(set) var isUsingFrontCamera = false
     @Published private(set) var isSwitchingCamera = false
+    @Published private(set) var isRecordingVideo = false
+    @Published private(set) var canRecordVideo = false
     @Published private(set) var zoomPresets: [ZoomPreset] = []
     @Published private(set) var selectedZoomFactor: CGFloat = 1
 
@@ -79,6 +98,7 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     var onCode: ((String) -> Void)?
     var onDetectedCode: ((DetectedCameraCode) -> Void)?
     var onPhoto: ((Result<Data, PhotoCaptureError>) -> Void)?
+    var onVideo: ((Result<MediaUploadFile, VideoCaptureError>) -> Void)?
 
     private let sessionQueue = DispatchQueue(
         label: "digital.congru.inventory.camera.session",
@@ -86,9 +106,11 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
     )
     private let metadataQueue = DispatchQueue(label: "digital.congru.inventory.camera.metadata")
     private let photoOutput = AVCapturePhotoOutput()
+    private let movieOutput = AVCaptureMovieFileOutput()
     private let metadataOutput = AVCaptureMetadataOutput()
     private var cameraDevice: AVCaptureDevice?
     private var cameraInput: AVCaptureDeviceInput?
+    private var audioInput: AVCaptureDeviceInput?
     private var configured = false
     private var switchInProgress = false
     private var lastScan: (value: String, time: Date)?
@@ -118,8 +140,34 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
 
     func stop() {
         sessionQueue.async { [weak self] in
-            guard let self, self.session.isRunning else { return }
+            guard let self else { return }
+            if self.movieOutput.isRecording {
+                self.movieOutput.stopRecording()
+            }
+            guard self.session.isRunning else { return }
             self.session.stopRunning()
+        }
+    }
+
+    func startVideoRecording() {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            beginVideoRecording(includeAudio: true)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+                self?.beginVideoRecording(includeAudio: granted)
+            }
+        case .denied, .restricted:
+            beginVideoRecording(includeAudio: false)
+        @unknown default:
+            beginVideoRecording(includeAudio: false)
+        }
+    }
+
+    func stopVideoRecording() {
+        sessionQueue.async { [weak self] in
+            guard let self, self.movieOutput.isRecording else { return }
+            self.movieOutput.stopRecording()
         }
     }
 
@@ -291,6 +339,12 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
             session.addOutput(photoOutput)
             configurePhotoDimensions(for: device)
 
+            if session.canAddOutput(movieOutput) {
+                session.addOutput(movieOutput)
+                movieOutput.maxRecordedDuration = CMTime(seconds: 60, preferredTimescale: 600)
+                movieOutput.maxRecordedFileSize = 23 * 1_024 * 1_024
+            }
+
             if session.canAddOutput(metadataOutput) {
                 session.addOutput(metadataOutput)
                 metadataOutput.setMetadataObjectsDelegate(self, queue: metadataQueue)
@@ -311,10 +365,73 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
             applyOutputGeometry()
             configured = true
             publishCapabilities(for: device)
+            DispatchQueue.main.async { [weak self] in
+                self?.canRecordVideo = self?.movieOutput.connection(with: .video) != nil
+            }
             return true
         } catch {
             setState(.unavailable(error.localizedDescription))
             return false
+        }
+    }
+
+    private func beginVideoRecording(includeAudio: Bool) {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            guard self.configured,
+                  self.session.isRunning,
+                  !self.movieOutput.isRecording,
+                  self.movieOutput.connection(with: .video) != nil else {
+                self.deliverVideoResult(.failure(.cameraNotReady))
+                return
+            }
+
+            if includeAudio, self.audioInput == nil,
+               let microphone = AVCaptureDevice.default(for: .audio),
+               let input = try? AVCaptureDeviceInput(device: microphone) {
+                self.session.beginConfiguration()
+                if self.session.canAddInput(input) {
+                    self.session.addInput(input)
+                    self.audioInput = input
+                }
+                self.session.commitConfiguration()
+            }
+            if self.session.canSetSessionPreset(.hd1280x720) {
+                self.session.beginConfiguration()
+                self.session.sessionPreset = .hd1280x720
+                self.session.commitConfiguration()
+            }
+            self.applyOutputGeometry()
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("inventory-video-\(UUID().uuidString)")
+                .appendingPathExtension("mov")
+            try? FileManager.default.removeItem(at: url)
+            DispatchQueue.main.async { [weak self] in self?.isRecordingVideo = true }
+            self.movieOutput.startRecording(to: url, recordingDelegate: self)
+        }
+    }
+
+    private func deliverVideoResult(
+        _ result: Result<MediaUploadFile, VideoCaptureError>
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            self?.isRecordingVideo = false
+            self?.onVideo?(result)
+        }
+    }
+
+    private func restorePhotoSessionPreset() {
+        sessionQueue.async { [weak self] in
+            guard let self, self.configured else { return }
+            if self.session.canSetSessionPreset(.photo) {
+                self.session.beginConfiguration()
+                self.session.sessionPreset = .photo
+                self.session.commitConfiguration()
+                if let cameraDevice = self.cameraDevice {
+                    self.configurePhotoDimensions(for: cameraDevice)
+                }
+            }
+            self.applyOutputGeometry()
         }
     }
 
@@ -668,6 +785,53 @@ extension CameraService: AVCapturePhotoCaptureDelegate {
         error: Error?
     ) {
         finishPhotoCapture(id: resolvedSettings.uniqueID, error: error)
+    }
+}
+
+extension CameraService: AVCaptureFileOutputRecordingDelegate {
+    func fileOutput(
+        _ output: AVCaptureFileOutput,
+        didFinishRecordingTo outputFileURL: URL,
+        from connections: [AVCaptureConnection],
+        error: Error?
+    ) {
+        restorePhotoSessionPreset()
+        let recordingSucceeded: Bool
+        if let nsError = error as NSError? {
+            recordingSucceeded =
+                nsError.userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool == true
+        } else {
+            recordingSucceeded = true
+        }
+
+        guard recordingSucceeded else {
+            try? FileManager.default.removeItem(at: outputFileURL)
+            deliverVideoResult(
+                .failure(.recordingFailed(error?.localizedDescription ?? "Unbekannter Fehler"))
+            )
+            return
+        }
+        do {
+            let values = try outputFileURL.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .fileSizeKey,
+            ])
+            guard values.isRegularFile == true, (values.fileSize ?? 0) > 0 else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            deliverVideoResult(
+                .success(
+                    MediaUploadFile(
+                        fileURL: outputFileURL,
+                        filename: "Inventar-Video.mov",
+                        mimeType: "video/quicktime"
+                    )
+                )
+            )
+        } catch {
+            try? FileManager.default.removeItem(at: outputFileURL)
+            deliverVideoResult(.failure(.recordingFailed(error.localizedDescription)))
+        }
     }
 }
 

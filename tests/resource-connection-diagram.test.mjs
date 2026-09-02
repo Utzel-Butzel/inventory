@@ -901,7 +901,7 @@ test("adds signed per-movement price flow to visible connection nodes", async ()
 });
 
 test("the diagram edits typed connections without bypassing existing APIs", async () => {
-  const [page, diagram, editor, assembly, relations] = await Promise.all([
+  const [page, diagram, editor, inventorySelect, assembly, relations] = await Promise.all([
     readFile(
       new URL("../app/(dashboard)/inventory/[id]/page.tsx", import.meta.url),
       "utf8",
@@ -915,6 +915,10 @@ test("the diagram edits typed connections without bypassing existing APIs", asyn
         "../components/resource-connection-editor-panel.tsx",
         import.meta.url,
       ),
+      "utf8",
+    ),
+    readFile(
+      new URL("../components/inventory-select.tsx", import.meta.url),
       "utf8",
     ),
     readFile(
@@ -938,8 +942,10 @@ test("the diagram edits typed connections without bypassing existing APIs", asyn
   assert.match(editor, /relationTypeKey: relationType/);
   assert.match(editor, /method: "DELETE"/);
   assert.match(editor, /bomWritePayload/);
-  assert.match(editor, /max-h-80/);
-  assert.match(editor, /media=\{candidate\.cover\}/);
+  assert.match(editor, /<InventorySelect/);
+  assert.match(inventorySelect, /max-h-80/);
+  assert.match(inventorySelect, /media=\{item\.cover\}/);
+  assert.match(inventorySelect, /InventoryQuickPreview/);
   assert.match(assembly, /resource-bom-changed/);
   assert.match(relations, /resource-relations-changed/);
 });

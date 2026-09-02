@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  publicActionFlowExecuteSchema,
   scanWorkflowCreateSchema,
   stockScanResolveSchema,
   stockScanExecuteSchema,
@@ -13,6 +14,7 @@ import {
 } from "../lib/scan-regex.ts";
 
 const resourceId = "4b277830-d4f3-42b6-9d13-f70801f32e76";
+const secondResourceId = "fcd3ccdc-68a4-4afd-a07c-094b942ffaee";
 
 test("the action-flow migration persists operations and permits action webhooks", async () => {
   const migration = await readFile(
@@ -33,6 +35,84 @@ test("the code setup migration stores accepted symbologies and execution metadat
   assert.match(migration, /"code_types" text\[\]/);
   assert.match(migration, /"code_type" varchar\(32\)/);
   assert.match(migration, /workflow_extraction/);
+});
+
+test("the public action URL migration adds an unguessable trigger and quantity source", async () => {
+  const migration = await readFile(
+    new URL("../db/migrations/0049_public_action_flow_urls.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /"public_trigger_id" uuid/);
+  assert.match(migration, /gen_random_uuid\(\)/);
+  assert.match(migration, /UNIQUE INDEX/iu);
+  assert.match(migration, /"quantity_input_key" varchar\(80\)/);
+});
+
+test("the target migration adds multi-target and variation selection settings", async () => {
+  const migration = await readFile(
+    new URL("../db/migrations/0050_action_flow_targets.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /"target_resource_ids" uuid\[\]/);
+  assert.match(migration, /"target_selection_mode" varchar\(16\)/);
+  assert.match(migration, /"allow_variant_selection" boolean/);
+  assert.match(migration, /ARRAY\["resource_id"\]/);
+});
+
+test("the target picker reuses the universal inventory select with quick preview", async () => {
+  const [builder, inventorySelect] = await Promise.all([
+    readFile(
+      new URL("../components/stock-workflow-builder.tsx", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../components/inventory-select.tsx", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(builder, /<InventorySelect/);
+  assert.match(builder, /targetQuery/);
+  assert.match(builder, /resource\.sku/);
+  assert.match(inventorySelect, /InventoryQuickPreview/);
+  assert.match(inventorySelect, /inventorySelect\.preview\.open/);
+  assert.match(inventorySelect, /\/api\/v1\/resources\/\$\{item\.id\}/);
+});
+
+test("an action flow can target all entries or let users select with radios or checkboxes", () => {
+  const base = {
+    name: "Mehrere Ziele",
+    resourceId,
+    resourceIds: [resourceId, secondResourceId],
+    extraction: { mode: "full" },
+    identifierPropertyKey: "code",
+    identifierStorage: "execution",
+    operation: { type: "stock-adjustment", delta: 1 },
+  };
+
+  for (const targetSelectionMode of ["all", "radio", "checkbox"]) {
+    const result = scanWorkflowCreateSchema.safeParse({
+      ...base,
+      targetSelectionMode,
+      allowVariantSelection: true,
+    });
+    assert.equal(result.success, true);
+  }
+  assert.equal(
+    stockScanResolveSchema.safeParse({
+      workflowId: resourceId,
+      code: "restock",
+      selectedResourceIds: [secondResourceId],
+    }).success,
+    true,
+  );
+  assert.equal(
+    publicActionFlowExecuteSchema.safeParse({
+      selectedResourceIds: [resourceId, secondResourceId],
+      inputs: {},
+    }).success,
+    true,
+  );
 });
 
 test("an E-paper assembly flow accepts extracted fields, typed input, media, and a webhook", () => {
@@ -113,6 +193,65 @@ test("a universal barcode flow can add five bulk items", () => {
     assert.equal(result.data.operation.delta, 5);
     assert.deepEqual(result.data.codeTypes, ["code_128", "ean_13", "qr_code"]);
   }
+});
+
+test("a public URL flow can use a required number input as its booking quantity", () => {
+  const result = scanWorkflowCreateSchema.safeParse({
+    name: "Öffentlich nachfüllen",
+    resourceId,
+    extraction: { mode: "full" },
+    identifierPropertyKey: "source",
+    identifierStorage: "execution",
+    publicTriggerEnabled: true,
+    publicTriggerCode: "public-restock",
+    operation: { type: "stock-adjustment", delta: 1 },
+    quantityInputKey: "quantity",
+    inputFields: [
+      {
+        key: "quantity",
+        label: "Menge",
+        type: "number",
+        storage: "execution",
+        required: true,
+      },
+      {
+        key: "note",
+        label: "Notiz",
+        type: "text",
+        storage: "execution",
+        required: false,
+      },
+    ],
+  });
+  assert.equal(result.success, true);
+  assert.equal(
+    publicActionFlowExecuteSchema.safeParse({
+      inputs: { quantity: 5, note: "Lieferung" },
+    }).success,
+    true,
+  );
+
+  assert.equal(
+    scanWorkflowCreateSchema.safeParse({
+      name: "Invalid quantity source",
+      resourceId,
+      extraction: { mode: "full" },
+      identifierPropertyKey: "source",
+      identifierStorage: "execution",
+      operation: { type: "stock-adjustment", delta: 1 },
+      quantityInputKey: "quantity",
+      inputFields: [
+        {
+          key: "quantity",
+          label: "Menge",
+          type: "number",
+          storage: "execution",
+          required: false,
+        },
+      ],
+    }).success,
+    false,
+  );
 });
 
 test("regex extraction supports a named group and rejects unsafe patterns", () => {

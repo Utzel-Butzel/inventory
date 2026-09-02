@@ -10,16 +10,15 @@ import {
   MapPin,
   Package,
   Plus,
-  Search,
   Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
 
+import { InventorySelect } from "@/components/inventory-select";
 import { OrganizationLink as Link } from "@/components/organization-routing";
-import { ResponsiveMediaImage } from "@/components/responsive-media-image";
-import { Badge, Button, cn } from "@/components/ui";
+import { Button, cn } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
 import type {
   ConnectionDiagramBomComponent,
@@ -834,73 +833,21 @@ export function ResourceConnectionEditorPanel({
 
           {candidateMode === "existing" ? (
             <div className="mt-4">
-              <label className={labelClass}>
-                {t("connectionDiagram.editor.fields.item")}
-                <span className="relative mt-1.5 block">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
-                  <input
-                    value={candidateQuery}
-                    onChange={(event) => setCandidateQuery(event.target.value)}
-                    placeholder={t(
-                      "connectionDiagram.editor.fields.searchPlaceholder",
-                    )}
-                    className={`${inputClass} pl-9`}
-                  />
-                </span>
-              </label>
-              <div className="mt-2 max-h-80 space-y-1 overflow-y-auto rounded-xl border border-border p-1.5">
-                {searching ? (
-                  <div className="flex min-h-20 items-center justify-center gap-2 text-[11px] text-muted">
-                    <LoaderCircle className="size-3.5 animate-spin" />
-                    {t("connectionDiagram.editor.searching")}
-                  </div>
-                ) : candidates.length ? (
-                  candidates.map((candidate) => (
-                    <button
-                      key={candidate.id}
-                      type="button"
-                      onClick={() => setCandidateId(candidate.id)}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition",
-                        candidate.id === candidateId
-                          ? "bg-brand-soft text-brand"
-                          : "hover:bg-surface-hover",
-                      )}
-                    >
-                      <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface-muted text-muted">
-                        {candidate.cover?.url ? (
-                          <ResponsiveMediaImage
-                            media={candidate.cover}
-                            alt=""
-                            widths={[96, 192]}
-                            sizes="40px"
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <Package className="size-4" aria-hidden="true" />
-                        )}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[11px] font-semibold">
-                          {candidate.name}
-                        </span>
-                        <span className="mt-0.5 block truncate text-[9px] text-muted">
-                          {candidate.sku || candidate.type || "—"}
-                        </span>
-                      </span>
-                      {candidate.id === candidateId ? (
-                        <Badge tone="brand" className="min-h-5 px-1.5 text-[9px]">
-                          {t("connectionDiagram.editor.selected")}
-                        </Badge>
-                      ) : null}
-                    </button>
-                  ))
-                ) : (
-                  <div className="flex min-h-20 items-center justify-center px-4 text-center text-[11px] leading-4 text-muted">
-                    {t("connectionDiagram.editor.noCandidates")}
-                  </div>
+              <InventorySelect
+                items={candidates}
+                selectedIds={candidateId ? [candidateId] : []}
+                onSelect={(candidate) => setCandidateId(candidate.id)}
+                query={candidateQuery}
+                onQueryChange={setCandidateQuery}
+                label={t("connectionDiagram.editor.fields.item")}
+                placeholder={t(
+                  "connectionDiagram.editor.fields.searchPlaceholder",
                 )}
-              </div>
+                emptyText={t("connectionDiagram.editor.noCandidates")}
+                searchingText={t("connectionDiagram.editor.searching")}
+                selectedText={t("connectionDiagram.editor.selected")}
+                searching={searching}
+              />
             </div>
           ) : (
             <div className="mt-4 space-y-3">

@@ -58,6 +58,7 @@ export async function POST(request: Request, context: Context) {
         parsed.data.workflowId,
         parsed.data.code,
         parsed.data.codeType,
+        parsed.data.selectedResourceIds,
       ),
       { headers: publicShareNoStoreHeaders() },
     );

@@ -1,11 +1,26 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import {
+  internalRequestLines,
+  internalRequests,
   inventoryAssignments,
   organizationMemberships,
   organizations,
+  resourceLendingSettings,
+  resourceVariants,
   resources,
   stockMovementRequests,
   stockMovements,
@@ -18,6 +33,8 @@ import {
   type InventoryAssignmentRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
+import { isLoanOverdue, loanWindowDurationDays } from "@/lib/lending-contract";
+import { lendingSettingsDto } from "@/lib/resource-lending";
 import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 import {
   allocatedVariantQuantity,
@@ -25,6 +42,7 @@ import {
 } from "@/lib/variant-stock-invariant";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type AssignmentRecipient =
   | { type: "user"; userId: string }
@@ -44,6 +62,12 @@ export type CreateInventoryAssignmentInput = {
 export type CompleteInventoryAssignmentInput = {
   status: Exclude<AssignmentStatus, "active">;
   completedAt?: Date;
+  note?: string;
+};
+
+export type ActivateInventoryReservationInput = {
+  stockUnitId?: string | null;
+  checkedOutAt?: Date;
   note?: string;
 };
 
@@ -119,6 +143,8 @@ const assignmentDto = (
     stockUnitId: row.stockUnitId,
     kind: row.kind,
     status: row.status,
+    stockApplied: row.stockApplied,
+    overdue: isLoanOverdue(row),
     quantity: row.quantity,
     assignee,
     stockUnit: row.stockUnitId
@@ -197,8 +223,15 @@ export async function listInventoryAssignments(
     .limit(1);
   if (!resource) return null;
 
-  const [assignmentRows, settingsRows, availableUnitRows, activeQuantityRows] =
-    await Promise.all([
+  const [
+    assignmentRows,
+    settingsRows,
+    lendingRows,
+    availableUnitRows,
+    activeQuantityRows,
+    reservedQuantityRows,
+    recipientUserRows,
+  ] = await Promise.all([
       transaction
         .select()
         .from(inventoryAssignments)
@@ -220,6 +253,16 @@ export async function listInventoryAssignments(
           and(
             eq(stockSettings.organizationId, organizationId),
             eq(stockSettings.resourceId, resourceId),
+          ),
+        )
+        .limit(1),
+      transaction
+        .select()
+        .from(resourceLendingSettings)
+        .where(
+          and(
+            eq(resourceLendingSettings.organizationId, organizationId),
+            eq(resourceLendingSettings.resourceId, resourceId),
           ),
         )
         .limit(1),
@@ -250,8 +293,36 @@ export async function listInventoryAssignments(
             eq(inventoryAssignments.organizationId, organizationId),
             eq(inventoryAssignments.resourceId, resourceId),
             eq(inventoryAssignments.status, "active"),
+            eq(inventoryAssignments.stockApplied, true),
           ),
         ),
+      transaction
+        .select({
+          value: sql<number>`coalesce(sum(${inventoryAssignments.quantity}), 0)::int`,
+        })
+        .from(inventoryAssignments)
+        .where(
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            eq(inventoryAssignments.resourceId, resourceId),
+            eq(inventoryAssignments.kind, "reservation"),
+            eq(inventoryAssignments.status, "active"),
+          ),
+        ),
+      transaction
+        .select({ id: users.id, name: users.name, email: users.email })
+        .from(users)
+        .innerJoin(
+          organizationMemberships,
+          and(
+            eq(organizationMemberships.organizationId, organizationId),
+            eq(organizationMemberships.userId, users.id),
+            eq(organizationMemberships.isActive, true),
+          ),
+        )
+        .where(eq(users.isActive, true))
+        .orderBy(asc(users.name), asc(users.email))
+        .limit(500),
     ]);
 
   const userIds = Array.from(
@@ -318,14 +389,18 @@ export async function listInventoryAssignments(
     ]),
   );
   const activeQuantity = Number(activeQuantityRows[0]?.value ?? 0);
+  const reservedQuantity = Number(reservedQuantityRows[0]?.value ?? 0);
 
   return {
     resource,
     trackingMode: settingsRows[0]?.trackingMode ?? "bulk",
+    lending: lendingSettingsDto(lendingRows[0]),
     availability: {
       availableQuantity: resource.quantity,
       activeQuantity,
+      reservedQuantity,
     },
+    recipients: { users: recipientUserRows },
     availableUnits: availableUnitRows,
     assignments: assignmentRows.map((row) =>
       assignmentDto(
@@ -339,7 +414,7 @@ export async function listInventoryAssignments(
 }
 
 async function resolveRecipient(
-  transaction: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  transaction: Transaction,
   organizationId: string,
   resourceId: string,
   recipient: AssignmentRecipient,
@@ -406,6 +481,135 @@ async function resolveRecipient(
     values: { assigneeResourceId: assigneeResource.id },
     label: assigneeResource.name,
   };
+}
+
+function assertLoanPolicy(
+  kind: AssignmentKind,
+  startsAt: Date,
+  dueAt: Date | null | undefined,
+  lending: ReturnType<typeof lendingSettingsDto>,
+) {
+  if (kind === "assignment") return;
+  if (!lending.enabled) {
+    throw new InventoryAssignmentError(
+      "This inventory item is not enabled for loans or reservations.",
+      422,
+    );
+  }
+  if (!dueAt) {
+    throw new InventoryAssignmentError(
+      "Loans and reservations require a return date.",
+      422,
+    );
+  }
+  if (dueAt <= startsAt) {
+    throw new InventoryAssignmentError(
+      "The return date must be after the assignment start.",
+      422,
+    );
+  }
+  if (loanWindowDurationDays(startsAt, dueAt) > lending.maxDurationDays) {
+    throw new InventoryAssignmentError(
+      `This item may be borrowed for at most ${lending.maxDurationDays} days.`,
+      422,
+    );
+  }
+  if (kind === "reservation" && startsAt <= new Date()) {
+    throw new InventoryAssignmentError(
+      "A reservation must start in the future. Create a loan for an immediate checkout.",
+      422,
+    );
+  }
+}
+
+async function assertReservationAvailability(
+  transaction: Transaction,
+  organizationId: string,
+  resource: { id: string; name: string; quantity: number },
+  quantity: number,
+  startsAt: Date,
+  dueAt: Date,
+) {
+  const [appliedRows, overlappingRows, approvedRows, variantRows] =
+    await Promise.all([
+      transaction
+        .select({
+          value: sql<number>`coalesce(sum(${inventoryAssignments.quantity}), 0)::int`,
+        })
+        .from(inventoryAssignments)
+        .where(
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            eq(inventoryAssignments.resourceId, resource.id),
+            eq(inventoryAssignments.status, "active"),
+            eq(inventoryAssignments.stockApplied, true),
+          ),
+        ),
+      transaction
+        .select({
+          value: sql<number>`coalesce(sum(${inventoryAssignments.quantity}), 0)::int`,
+        })
+        .from(inventoryAssignments)
+        .where(
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            eq(inventoryAssignments.resourceId, resource.id),
+            eq(inventoryAssignments.status, "active"),
+            lt(inventoryAssignments.startsAt, dueAt),
+            or(
+              isNull(inventoryAssignments.dueAt),
+              gt(inventoryAssignments.dueAt, startsAt),
+            ),
+          ),
+        ),
+      transaction
+        .select({
+          value: sql<number>`coalesce(sum(${internalRequestLines.quantity}), 0)::int`,
+        })
+        .from(internalRequestLines)
+        .innerJoin(
+          internalRequests,
+          and(
+            eq(internalRequests.organizationId, organizationId),
+            eq(internalRequests.id, internalRequestLines.requestId),
+          ),
+        )
+        .where(
+          and(
+            eq(internalRequestLines.organizationId, organizationId),
+            eq(internalRequestLines.resourceId, resource.id),
+            eq(internalRequests.status, "approved"),
+            lt(internalRequests.startsAt, dueAt),
+            gt(internalRequests.dueAt, startsAt),
+          ),
+        ),
+      transaction
+        .select({
+          value: sql<number>`coalesce(sum(${resourceVariants.quantity}), 0)::int`,
+        })
+        .from(resourceVariants)
+        .where(
+          and(
+            eq(resourceVariants.organizationId, organizationId),
+            eq(resourceVariants.resourceId, resource.id),
+          ),
+        ),
+    ]);
+
+  const capacity =
+    resource.quantity +
+    Number(appliedRows[0]?.value ?? 0) -
+    Number(variantRows[0]?.value ?? 0);
+  const allocated =
+    Number(overlappingRows[0]?.value ?? 0) +
+    Number(approvedRows[0]?.value ?? 0);
+  const available = Math.max(0, capacity - allocated);
+  if (quantity > available) {
+    throw new InventoryAssignmentError(
+      `${resource.name} has only ${available} available for the selected period.`,
+      409,
+    );
+  }
 }
 
 export async function createInventoryAssignment(
@@ -482,24 +686,48 @@ export async function createInventoryAssignment(
       if (input.dueAt && Number.isNaN(input.dueAt.getTime())) {
         throw new InventoryAssignmentError("Invalid assignment due date.", 422);
       }
-      if (input.dueAt && input.dueAt < startsAt) {
+      if (input.dueAt && input.dueAt <= startsAt) {
         throw new InventoryAssignmentError(
-          "The due date cannot be before the assignment start.",
+          "The due date must be after the assignment start.",
           422,
         );
       }
 
-      const [settings] = await transaction
-        .select({ trackingMode: stockSettings.trackingMode })
-        .from(stockSettings)
-        .where(
-          and(
-            eq(stockSettings.organizationId, organizationId),
-            eq(stockSettings.resourceId, resourceId),
-          ),
-        )
-        .limit(1);
+      const [[settings], [lendingRow]] = await Promise.all([
+        transaction
+          .select({ trackingMode: stockSettings.trackingMode })
+          .from(stockSettings)
+          .where(
+            and(
+              eq(stockSettings.organizationId, organizationId),
+              eq(stockSettings.resourceId, resourceId),
+            ),
+          )
+          .limit(1),
+        transaction
+          .select()
+          .from(resourceLendingSettings)
+          .where(
+            and(
+              eq(resourceLendingSettings.organizationId, organizationId),
+              eq(resourceLendingSettings.resourceId, resourceId),
+            ),
+          )
+          .limit(1),
+      ]);
       const trackingMode = settings?.trackingMode ?? "bulk";
+      const lending = lendingSettingsDto(lendingRow);
+      assertLoanPolicy(input.kind, startsAt, input.dueAt, lending);
+      if (input.kind === "reservation") {
+        await assertReservationAvailability(
+          transaction,
+          organizationId,
+          resource,
+          input.quantity,
+          startsAt,
+          input.dueAt!,
+        );
+      }
       const recipient = await resolveRecipient(
         transaction,
         organizationId,
@@ -516,6 +744,7 @@ export async function createInventoryAssignment(
             eq(inventoryAssignments.organizationId, organizationId),
             eq(inventoryAssignments.resourceId, resourceId),
             eq(inventoryAssignments.status, "active"),
+            eq(inventoryAssignments.stockApplied, true),
             isNull(inventoryAssignments.stockUnitId),
           ),
         );
@@ -523,53 +752,61 @@ export async function createInventoryAssignment(
 
       let unit: typeof stockUnits.$inferSelect | null = null;
       if (trackingMode === "serialized") {
-        if (!input.stockUnitId) {
-          throw new InventoryAssignmentError(
-            "Choose an available serialized unit.",
-            422,
-          );
-        }
         if (input.quantity !== 1) {
           throw new InventoryAssignmentError(
             "A serialized assignment must contain exactly one unit.",
             422,
           );
         }
-        [unit] = await transaction
-          .select()
-          .from(stockUnits)
-          .where(
-            and(
-              eq(stockUnits.organizationId, organizationId),
-              eq(stockUnits.id, input.stockUnitId),
-              eq(stockUnits.resourceId, resourceId),
-            ),
-          )
-          .limit(1)
-          .for("update");
-        if (!unit) throw new InventoryAssignmentError("Unit not found", 404);
-        if (unit.status !== "available") {
+        if (input.kind === "reservation" && input.stockUnitId) {
           throw new InventoryAssignmentError(
-            `Unit ${unit.code} is currently ${unit.status} and cannot be allocated.`,
-            409,
+            "Choose the serialized unit when the reservation is checked out.",
+            422,
           );
         }
-        const [activeUnitAssignment] = await transaction
-          .select({ id: inventoryAssignments.id })
-          .from(inventoryAssignments)
-          .where(
-            and(
-              eq(inventoryAssignments.organizationId, organizationId),
-              eq(inventoryAssignments.stockUnitId, unit.id),
-              eq(inventoryAssignments.status, "active"),
-            ),
-          )
-          .limit(1);
-        if (activeUnitAssignment) {
-          throw new InventoryAssignmentError(
-            "This serialized unit already has an active assignment or reservation.",
-            409,
-          );
+        if (input.kind !== "reservation") {
+          if (!input.stockUnitId) {
+            throw new InventoryAssignmentError(
+              "Choose an available serialized unit.",
+              422,
+            );
+          }
+          [unit] = await transaction
+            .select()
+            .from(stockUnits)
+            .where(
+              and(
+                eq(stockUnits.organizationId, organizationId),
+                eq(stockUnits.id, input.stockUnitId),
+                eq(stockUnits.resourceId, resourceId),
+              ),
+            )
+            .limit(1)
+            .for("update");
+          if (!unit) throw new InventoryAssignmentError("Unit not found", 404);
+          if (unit.status !== "available") {
+            throw new InventoryAssignmentError(
+              `Unit ${unit.code} is currently ${unit.status} and cannot be allocated.`,
+              409,
+            );
+          }
+          const [activeUnitAssignment] = await transaction
+            .select({ id: inventoryAssignments.id })
+            .from(inventoryAssignments)
+            .where(
+              and(
+                eq(inventoryAssignments.organizationId, organizationId),
+                eq(inventoryAssignments.stockUnitId, unit.id),
+                eq(inventoryAssignments.status, "active"),
+              ),
+            )
+            .limit(1);
+          if (activeUnitAssignment) {
+            throw new InventoryAssignmentError(
+              "This serialized unit already has an active assignment.",
+              409,
+            );
+          }
         }
       } else if (input.stockUnitId) {
         throw new InventoryAssignmentError(
@@ -579,6 +816,7 @@ export async function createInventoryAssignment(
       }
 
       if (
+        input.kind !== "reservation" &&
         (!resource.allowNegativeStock || trackingMode === "serialized") &&
         input.quantity > resource.quantity
       ) {
@@ -587,7 +825,11 @@ export async function createInventoryAssignment(
           409,
         );
       }
-      if (trackingMode === "bulk" && !resource.allowNegativeStock) {
+      if (
+        input.kind !== "reservation" &&
+        trackingMode === "bulk" &&
+        !resource.allowNegativeStock
+      ) {
         const [{ located }] = await transaction
           .select({
             located: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
@@ -617,6 +859,7 @@ export async function createInventoryAssignment(
           stockUnitId: unit?.id ?? null,
           kind: input.kind,
           status: "active",
+          stockApplied: input.kind !== "reservation",
           quantity: input.quantity,
           ...recipient.values,
           startsAt,
@@ -627,14 +870,17 @@ export async function createInventoryAssignment(
         })
         .returning();
 
-      const balanceAfter = resource.quantity - input.quantity;
+      const balanceAfter =
+        input.kind === "reservation"
+          ? resource.quantity
+          : resource.quantity - input.quantity;
       if (balanceAfter < -MAX_STOCK_QUANTITY) {
         throw new InventoryAssignmentError(
           `This assignment exceeds the minimum supported stock of -${MAX_STOCK_QUANTITY}.`,
           409,
         );
       }
-      if (!resource.allowNegativeStock) {
+      if (input.kind !== "reservation" && !resource.allowNegativeStock) {
         const variantAllocation = await allocatedVariantQuantity(
           transaction,
           resourceId,
@@ -645,16 +891,18 @@ export async function createInventoryAssignment(
           (message) => new InventoryAssignmentError(message, 409),
         );
       }
-      await transaction
-        .update(resources)
-        .set({ quantity: balanceAfter, updatedAt: now })
-        .where(
-          and(
-            eq(resources.organizationId, organizationId),
-            eq(resources.id, resourceId),
-          ),
-        );
-      const unitStatus = input.kind === "reservation" ? "reserved" : "in-use";
+      if (input.kind !== "reservation") {
+        await transaction
+          .update(resources)
+          .set({ quantity: balanceAfter, updatedAt: now })
+          .where(
+            and(
+              eq(resources.organizationId, organizationId),
+              eq(resources.id, resourceId),
+            ),
+          );
+      }
+      const unitStatus = "in-use";
       if (unit) {
         await transaction
           .update(stockUnits)
@@ -672,7 +920,7 @@ export async function createInventoryAssignment(
           organizationId,
           resourceId,
           unitId: unit?.id ?? null,
-          delta: -input.quantity,
+          delta: input.kind === "reservation" ? 0 : -input.quantity,
           quantity: input.quantity,
           balanceAfter,
           type: `assignment-${input.kind}`,
@@ -715,6 +963,420 @@ export async function createInventoryAssignment(
         organizationId,
         idempotencyKey: idempotency.key,
         resourceId,
+        actor,
+        requestHash: idempotency.requestHash,
+        response: storedResponse(response),
+      });
+      return { response, replayed: false } as const;
+    });
+  } catch (error) {
+    const [winner] = await db
+      .select()
+      .from(stockMovementRequests)
+      .where(
+        and(
+          eq(stockMovementRequests.organizationId, organizationId),
+          eq(stockMovementRequests.idempotencyKey, idempotency.key),
+        ),
+      )
+      .limit(1);
+    if (winner) return validateReplay(winner, replayExpected);
+    throw error;
+  }
+}
+
+export async function listLoanAssignments(
+  organizationId: string,
+  limit = 500,
+) {
+  const rows = await db
+    .select({
+      assignment: inventoryAssignments,
+      resource: {
+        id: resources.id,
+        name: resources.name,
+        sku: resources.sku,
+        status: resources.status,
+      },
+      trackingMode: stockSettings.trackingMode,
+      unit: {
+        code: stockUnits.code,
+        status: stockUnits.status,
+      },
+    })
+    .from(inventoryAssignments)
+    .innerJoin(
+      resources,
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, inventoryAssignments.resourceId),
+      ),
+    )
+    .leftJoin(
+      stockSettings,
+      and(
+        eq(stockSettings.organizationId, organizationId),
+        eq(stockSettings.resourceId, inventoryAssignments.resourceId),
+      ),
+    )
+    .leftJoin(
+      stockUnits,
+      and(
+        eq(stockUnits.organizationId, organizationId),
+        eq(stockUnits.id, inventoryAssignments.stockUnitId),
+      ),
+    )
+    .where(
+      and(
+        eq(inventoryAssignments.organizationId, organizationId),
+        inArray(inventoryAssignments.kind, ["checkout", "reservation"]),
+      ),
+    )
+    .orderBy(
+      asc(inventoryAssignments.status),
+      asc(inventoryAssignments.dueAt),
+      desc(inventoryAssignments.startsAt),
+    )
+    .limit(Math.min(500, Math.max(1, limit)));
+
+  const userIds = Array.from(
+    new Set(
+      rows
+        .map((row) => row.assignment.assigneeUserId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+  const assigneeResourceIds = Array.from(
+    new Set(
+      rows
+        .map((row) => row.assignment.assigneeResourceId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+  const [userRows, assigneeResourceRows] = await Promise.all([
+    userIds.length
+      ? db
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .where(inArray(users.id, userIds))
+      : Promise.resolve([]),
+    assigneeResourceIds.length
+      ? db
+          .select({ id: resources.id, name: resources.name })
+          .from(resources)
+          .where(
+            and(
+              eq(resources.organizationId, organizationId),
+              inArray(resources.id, assigneeResourceIds),
+            ),
+          )
+      : Promise.resolve([]),
+  ]);
+  const userLabels = new Map(
+    userRows.map((row) => [row.id, { name: row.name, email: row.email }]),
+  );
+  const resourceLabels = new Map(
+    assigneeResourceRows.map((row) => [row.id, row.name]),
+  );
+
+  return {
+    assignments: rows.map((row) => ({
+      ...assignmentDto(
+        row.assignment,
+        { users: userLabels, resources: resourceLabels },
+        row.assignment.stockUnitId && row.unit?.code && row.unit.status
+          ? { code: row.unit.code, status: row.unit.status }
+          : null,
+      ),
+      resource: row.resource,
+      trackingMode: row.trackingMode ?? "bulk",
+    })),
+  };
+}
+
+export async function activateInventoryReservation(
+  organizationId: string,
+  assignmentId: string,
+  input: ActivateInventoryReservationInput,
+  actor: string,
+  idempotency: AssignmentIdempotency,
+) {
+  const replayExpected = { actor, requestHash: idempotency.requestHash };
+
+  try {
+    return await db.transaction(async (transaction) => {
+      const [earlyReplay] = await transaction
+        .select()
+        .from(stockMovementRequests)
+        .where(
+          and(
+            eq(stockMovementRequests.organizationId, organizationId),
+            eq(stockMovementRequests.idempotencyKey, idempotency.key),
+          ),
+        )
+        .limit(1);
+      if (earlyReplay) return validateReplay(earlyReplay, replayExpected);
+
+      const [snapshot] = await transaction
+        .select({ resourceId: inventoryAssignments.resourceId })
+        .from(inventoryAssignments)
+        .where(
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            eq(inventoryAssignments.id, assignmentId),
+          ),
+        )
+        .limit(1);
+      if (!snapshot) {
+        throw new InventoryAssignmentError("Reservation not found", 404);
+      }
+
+      const [resource] = await transaction
+        .select({
+          id: resources.id,
+          name: resources.name,
+          quantity: resources.quantity,
+          allowNegativeStock: organizations.allowNegativeStock,
+        })
+        .from(resources)
+        .innerJoin(organizations, eq(organizations.id, resources.organizationId))
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, snapshot.resourceId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!resource) {
+        throw new InventoryAssignmentError("Inventory item not found", 404);
+      }
+
+      const [assignment] = await transaction
+        .select()
+        .from(inventoryAssignments)
+        .where(
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            eq(inventoryAssignments.id, assignmentId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!assignment) {
+        throw new InventoryAssignmentError("Reservation not found", 404);
+      }
+      if (assignment.kind !== "reservation" || assignment.status !== "active") {
+        throw new InventoryAssignmentError(
+          "Only an active reservation can be checked out.",
+          409,
+        );
+      }
+
+      const checkedOutAt = input.checkedOutAt ?? new Date();
+      if (Number.isNaN(checkedOutAt.getTime())) {
+        throw new InventoryAssignmentError("Invalid checkout date.", 422);
+      }
+      if (assignment.dueAt && assignment.dueAt <= checkedOutAt) {
+        throw new InventoryAssignmentError(
+          "This reservation has already passed its return date.",
+          409,
+        );
+      }
+
+      const [settings] = await transaction
+        .select({ trackingMode: stockSettings.trackingMode })
+        .from(stockSettings)
+        .where(
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            eq(stockSettings.resourceId, resource.id),
+          ),
+        )
+        .limit(1);
+      const trackingMode = settings?.trackingMode ?? "bulk";
+      let unit: typeof stockUnits.$inferSelect | null = null;
+      const selectedUnitId = input.stockUnitId ?? assignment.stockUnitId;
+      if (trackingMode === "serialized") {
+        if (assignment.quantity !== 1 || !selectedUnitId) {
+          throw new InventoryAssignmentError(
+            "Choose an available serialized unit for checkout.",
+            422,
+          );
+        }
+        [unit] = await transaction
+          .select()
+          .from(stockUnits)
+          .where(
+            and(
+              eq(stockUnits.organizationId, organizationId),
+              eq(stockUnits.resourceId, resource.id),
+              eq(stockUnits.id, selectedUnitId),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        if (!unit) throw new InventoryAssignmentError("Unit not found", 404);
+        const expectedStatus = assignment.stockApplied ? "reserved" : "available";
+        if (
+          unit.status !== expectedStatus &&
+          !(assignment.stockApplied && unit.status === "in-use")
+        ) {
+          throw new InventoryAssignmentError(
+            `Unit ${unit.code} is currently ${unit.status} and cannot be checked out.`,
+            409,
+          );
+        }
+        const [conflict] = await transaction
+          .select({ id: inventoryAssignments.id })
+          .from(inventoryAssignments)
+          .where(
+            and(
+              eq(inventoryAssignments.organizationId, organizationId),
+              eq(inventoryAssignments.stockUnitId, unit.id),
+              eq(inventoryAssignments.status, "active"),
+              sql`${inventoryAssignments.id} <> ${assignment.id}`,
+            ),
+          )
+          .limit(1);
+        if (conflict) {
+          throw new InventoryAssignmentError(
+            "This serialized unit already has an active assignment.",
+            409,
+          );
+        }
+      } else if (selectedUnitId) {
+        throw new InventoryAssignmentError(
+          "Bulk inventory cannot be checked out by serialized unit id.",
+          422,
+        );
+      }
+
+      if (
+        !assignment.stockApplied &&
+        (!resource.allowNegativeStock || trackingMode === "serialized") &&
+        assignment.quantity > resource.quantity
+      ) {
+        throw new InventoryAssignmentError(
+          `Only ${resource.quantity} units are currently available.`,
+          409,
+        );
+      }
+      if (
+        !assignment.stockApplied &&
+        trackingMode === "bulk" &&
+        !resource.allowNegativeStock
+      ) {
+        const [{ located }] = await transaction
+          .select({
+            located: sql<number>`coalesce(sum(${stockLocationBalances.quantity}), 0)::int`,
+          })
+          .from(stockLocationBalances)
+          .where(
+            and(
+              eq(stockLocationBalances.organizationId, organizationId),
+              eq(stockLocationBalances.resourceId, resource.id),
+            ),
+          );
+        const unassigned = resource.quantity - Number(located ?? 0);
+        if (assignment.quantity > unassigned) {
+          throw new InventoryAssignmentError(
+            `Only ${Math.max(0, unassigned)} unassigned units are available. Move stock to “Not assigned” before checkout.`,
+            409,
+          );
+        }
+      }
+
+      const balanceAfter = assignment.stockApplied
+        ? resource.quantity
+        : resource.quantity - assignment.quantity;
+      if (!resource.allowNegativeStock && !assignment.stockApplied) {
+        const variantAllocation = await allocatedVariantQuantity(
+          transaction,
+          resource.id,
+        );
+        assertVariantAllocationFits(
+          balanceAfter,
+          variantAllocation,
+          (message) => new InventoryAssignmentError(message, 409),
+        );
+      }
+
+      const now = new Date();
+      const [savedAssignment] = await transaction
+        .update(inventoryAssignments)
+        .set({
+          kind: "checkout",
+          stockUnitId: unit?.id ?? null,
+          stockApplied: true,
+          startsAt: checkedOutAt,
+          note: input.note ?? assignment.note,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            eq(inventoryAssignments.id, assignment.id),
+          ),
+        )
+        .returning();
+      if (!assignment.stockApplied) {
+        await transaction
+          .update(resources)
+          .set({ quantity: balanceAfter, updatedAt: now })
+          .where(
+            and(
+              eq(resources.organizationId, organizationId),
+              eq(resources.id, resource.id),
+            ),
+          );
+      }
+      if (unit) {
+        await transaction
+          .update(stockUnits)
+          .set({ status: "in-use", lastMovedAt: checkedOutAt, updatedAt: now })
+          .where(
+            and(
+              eq(stockUnits.organizationId, organizationId),
+              eq(stockUnits.id, unit.id),
+            ),
+          );
+      }
+
+      const [movement] = await transaction
+        .insert(stockMovements)
+        .values({
+          organizationId,
+          resourceId: resource.id,
+          unitId: unit?.id ?? null,
+          delta: assignment.stockApplied ? 0 : -assignment.quantity,
+          quantity: assignment.quantity,
+          balanceAfter,
+          type: "reservation-checkout",
+          reason: "Reservation checked out",
+          note: input.note
+            ? `Assignment ${assignment.id}: ${input.note}`
+            : `Assignment ${assignment.id}`,
+          location: unit?.location ?? null,
+          fromLocationResourceId: unit?.locationResourceId ?? null,
+          occurredAt: checkedOutAt,
+          createdBy: actor,
+        })
+        .returning();
+      await enqueueStockMovementWebhookEvents(transaction, [movement]);
+      const response: StoredMutationResponse = {
+        assignment: assignmentDto(
+          savedAssignment,
+          {},
+          unit ? { code: unit.code, status: "in-use" } : null,
+        ),
+        resource: { ...resource, quantity: balanceAfter },
+        movement: movementDto(movement),
+      };
+      await transaction.insert(stockMovementRequests).values({
+        organizationId,
+        idempotencyKey: idempotency.key,
+        resourceId: resource.id,
         actor,
         requestHash: idempotency.requestHash,
         response: storedResponse(response),
@@ -826,6 +1488,12 @@ export async function completeInventoryAssignment(
           409,
         );
       }
+      if (assignment.kind === "reservation" && input.status === "returned") {
+        throw new InventoryAssignmentError(
+          "A reservation must be checked out before it can be returned.",
+          409,
+        );
+      }
 
       let unit: typeof stockUnits.$inferSelect | null = null;
       if (assignment.stockUnitId) {
@@ -854,7 +1522,11 @@ export async function completeInventoryAssignment(
           422,
         );
       }
-      const quantityRestored = unit?.status === "available" ? 0 : assignment.quantity;
+      const quantityRestored = assignment.stockApplied
+        ? unit?.status === "available"
+          ? 0
+          : assignment.quantity
+        : 0;
       const balanceAfter = resource.quantity + quantityRestored;
       if (balanceAfter > MAX_STOCK_QUANTITY) {
         throw new InventoryAssignmentError(
@@ -879,7 +1551,7 @@ export async function completeInventoryAssignment(
           ),
         )
         .returning();
-      if (unit) {
+      if (unit && assignment.stockApplied) {
         await transaction
           .update(stockUnits)
           .set({ status: "available", lastMovedAt: completedAt, updatedAt: now })

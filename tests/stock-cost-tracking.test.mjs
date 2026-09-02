@@ -40,7 +40,10 @@ test("purchase receipts and assemblies retain their actual material costs", asyn
     source("components/assembly-manager.tsx"),
   ]);
 
-  assert.match(orders, /line\.unitPriceCents \* input\.quantity/);
+  assert.match(
+    orders,
+    /line\.unitPriceCents \*[\s\S]*input\.purchaseQuantity \?\? receiptQuantity/,
+  );
   assert.match(orders, /addInboundStockCost\(transaction/);
   assert.match(assemblies, /consumeStockCost\(transaction/);
   assert.match(assemblies, /materialCosts/);

@@ -59,6 +59,10 @@ import {
   type CustomFieldDefinition,
   type CustomFieldValues,
 } from "@/lib/custom-field-contract";
+import {
+  hasPurchaseUnit,
+  purchaseUnitsToBaseUnits,
+} from "@/lib/stock-quantity-units";
 
 type TrackingMode = "bulk" | "serialized";
 type MovementType =
@@ -83,6 +87,8 @@ type StockConfig = {
   reorderQuantity: number;
   leadTimeDays: number;
   unitName: string;
+  purchaseUnitName: string | null;
+  purchaseUnitFactor: number | null;
 };
 
 type StockForecast = {
@@ -181,6 +187,7 @@ type StockApiResponse = Partial<StockData> & {
 
 type MovementForm = {
   quantity: string;
+  quantityUnit: "base" | "purchase";
   type: MovementType;
   reason: string;
   note: string;
@@ -301,6 +308,7 @@ function localDateTime(value: Date | string = new Date()) {
 
 const defaultMovementForm = (direction: "in" | "out"): MovementForm => ({
   quantity: "1",
+  quantityUnit: "base",
   type: direction === "in" ? "receipt" : "issue",
   reason: "",
   note: "",
@@ -420,6 +428,8 @@ function normalizeStock(payload: StockApiResponse, t: TFunction): StockData {
       reorderQuantity: 0,
       leadTimeDays: 0,
       unitName: "unit",
+      purchaseUnitName: null,
+      purchaseUnitFactor: null,
     },
     forecast: source.forecast ?? {
       averageDailyUsage: 0,
@@ -550,6 +560,12 @@ export function ResourceStockManager({
         ]);
         const normalized = normalizeStock(payload, t);
         setStock(normalized);
+        if (!quiet && hasPurchaseUnit(normalized.config)) {
+          setMovementForm((current) => ({
+            ...current,
+            quantityUnit: "purchase",
+          }));
+        }
         if (definitionsResult.value) {
           setCustomFieldDefinitions(definitionsResult.value.definitions);
         } else {
@@ -581,6 +597,26 @@ export function ResourceStockManager({
 
   const currentQuantity = stock?.resource.quantity ?? 0;
   const unitName = stock?.config.unitName || t("resource.unit");
+  const purchaseUnit =
+    stock && hasPurchaseUnit(stock.config)
+      ? {
+          name: stock.config.purchaseUnitName,
+          factor: stock.config.purchaseUnitFactor,
+        }
+      : null;
+  const purchaseUnitConfigured = purchaseUnit !== null;
+  const enteredUnitName =
+    direction === "in" &&
+    movementForm.quantityUnit === "purchase" &&
+    purchaseUnitConfigured
+      ? purchaseUnit?.name ?? unitName
+      : unitName;
+  const enteredUnitFactor =
+    direction === "in" &&
+    movementForm.quantityUnit === "purchase" &&
+    purchaseUnitConfigured
+      ? purchaseUnit?.factor ?? 1
+      : 1;
   const onOrder = stock?.procurement.onOrder ?? 0;
   const movementTypes = direction === "in" ? incomingTypes : outgoingTypes;
   const applicableCustomFields = useMemo(
@@ -611,6 +647,10 @@ export function ResourceStockManager({
     setMovementForm((current) => ({
       ...current,
       type: next === "in" ? "receipt" : "issue",
+      quantityUnit:
+        next === "in" && stock && hasPurchaseUnit(stock.config)
+          ? "purchase"
+          : "base",
     }));
   }
 
@@ -622,15 +662,20 @@ export function ResourceStockManager({
     setMovementForm((current) => ({
       ...current,
       quantity: String(result.count),
+      quantityUnit: "base",
       reason: current.reason || t("resource.movements.photoAssisted"),
     }));
   }
 
   function buildMovementPayload() {
-    const quantity = Number(movementForm.quantity);
-    if (!Number.isInteger(quantity) || quantity < 1) {
+    const enteredQuantity = Number(movementForm.quantity);
+    if (!Number.isInteger(enteredQuantity) || enteredQuantity < 1) {
       throw new Error(t("resource.errors.validQuantity"));
     }
+    const quantity =
+      direction === "in" && movementForm.quantityUnit === "purchase"
+        ? purchaseUnitsToBaseUnits(enteredQuantity, enteredUnitFactor)
+        : enteredQuantity;
     if (
       !allowNegativeStock &&
       direction === "out" &&
@@ -741,6 +786,7 @@ export function ResourceStockManager({
     setMovementEditDirection(nextDirection);
     setMovementEditForm({
       quantity: String(Math.abs(movement.delta)),
+      quantityUnit: "base",
       type: movement.type as MovementType,
       reason: movement.reason ?? "",
       note: movement.note ?? "",
@@ -1203,17 +1249,51 @@ export function ResourceStockManager({
                     <input
                       type="number"
                       min="1"
-                      max={direction === "out" ? Math.max(0, currentQuantity) : 1_000_000}
+                      max={
+                        direction === "out"
+                          ? Math.max(0, currentQuantity)
+                          : Math.max(1, Math.floor(1_000_000 / enteredUnitFactor))
+                      }
                       step="1"
                       required
                       value={movementForm.quantity}
                       onChange={(event) => updateMovement("quantity", event.target.value)}
-                      className={`${inputClass} pr-20`}
+                      className={`${inputClass} ${purchaseUnitConfigured && direction === "in" ? "pr-24" : "pr-20"}`}
                     />
                     <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-muted">
-                      {unitName}
+                      {enteredUnitName}
                     </span>
                   </div>
+                  {purchaseUnitConfigured && direction === "in" ? (
+                    <select
+                      aria-label={t("resource.booking.quantityUnit")}
+                      value={movementForm.quantityUnit}
+                      onChange={(event) =>
+                        updateMovement(
+                          "quantityUnit",
+                          event.target.value as MovementForm["quantityUnit"],
+                        )
+                      }
+                      className={`${inputClass} mt-2`}
+                    >
+                      <option value="purchase">
+                        {purchaseUnit?.name}
+                      </option>
+                      <option value="base">{unitName}</option>
+                    </select>
+                  ) : null}
+                  {purchaseUnitConfigured &&
+                  direction === "in" &&
+                  movementForm.quantityUnit === "purchase" ? (
+                    <span className="mt-1 block text-[9px] font-normal leading-4 text-muted">
+                      {t("resource.booking.purchaseUnitConversion", {
+                        quantity: numberFormat.format(
+                          Number(movementForm.quantity || 0) * enteredUnitFactor,
+                        ),
+                        unit: unitName,
+                      })}
+                    </span>
+                  ) : null}
                 </label>
                 <label className={labelClass}>
                   {t("resource.booking.movementType")}
@@ -1336,7 +1416,8 @@ export function ResourceStockManager({
                         0,
                         currentQuantity +
                           (direction === "in" ? 1 : -1) *
-                            Number(movementForm.quantity || 0),
+                            Number(movementForm.quantity || 0) *
+                              enteredUnitFactor,
                       ),
                     ),
                     unit: unitName,

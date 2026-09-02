@@ -4,6 +4,8 @@ import UIKit
 
 enum CameraMode: String, CaseIterable, Identifiable, Sendable {
     case capture
+    case video
+    case document
     case scan
     case recognize
     case count
@@ -12,7 +14,9 @@ enum CameraMode: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .capture: "Erfassen"
+        case .capture: "Foto"
+        case .video: "Video"
+        case .document: "Dokument"
         case .scan: "Scannen"
         case .recognize: "Erkennen"
         case .count: "Zählen"
@@ -22,6 +26,8 @@ enum CameraMode: String, CaseIterable, Identifiable, Sendable {
     var navigationTitle: String {
         switch self {
         case .capture: "Inventar erfassen"
+        case .video: "Inventarvideo"
+        case .document: "Dokument scannen"
         case .scan: "QR & Barcode"
         case .recognize: "Objekt erkennen"
         case .count: "Teile per Foto zählen"
@@ -31,6 +37,8 @@ enum CameraMode: String, CaseIterable, Identifiable, Sendable {
     var accessibilityLabel: String {
         switch self {
         case .capture: "Inventar mit Fotos erfassen"
+        case .video: "Inventarvideo aufnehmen"
+        case .document: "Mehrseitiges Dokument mit OCR scannen"
         case .scan: "QR- oder Barcode scannen"
         case .recognize: "Inventarartikel per Foto erkennen"
         case .count: "Teile per Foto zählen"
@@ -79,6 +87,9 @@ struct UnifiedCameraView: View {
     @State private var showCaptureDetails = false
     @State private var detailsDetent: PresentationDetent = .medium
     @State private var showSpatialCapture = false
+    @State private var showDocumentScanner = false
+    @State private var documentRecognitionRunning = false
+    @State private var recordingSeconds = 0
 
     @State private var manualCode = ""
     @State private var lastCode: String?
@@ -136,7 +147,7 @@ struct UnifiedCameraView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, geometry.safeAreaInsets.top + 8)
 
-                    if mode == .capture, !captureModel.photos.isEmpty {
+                    if isIntakeMode, captureModel.mediaCount > 0 {
                         captureQuickBar
                             .padding(.horizontal, 16)
                             .padding(.top, 10)
@@ -153,7 +164,7 @@ struct UnifiedCameraView: View {
                     )
                     .padding(.bottom, max(8, geometry.safeAreaInsets.bottom))
                 }
-                .animation(.easeInOut(duration: 0.2), value: captureModel.photos.count)
+                .animation(.easeInOut(duration: 0.2), value: captureModel.mediaCount)
             }
             .background(.black)
             .ignoresSafeArea()
@@ -163,7 +174,11 @@ struct UnifiedCameraView: View {
             )
         }
         .statusBarHidden()
-        .interactiveDismissDisabled(countModel.phase == .booking)
+        .interactiveDismissDisabled(
+            countModel.phase == .booking
+                || camera.isRecordingVideo
+                || documentRecognitionRunning
+        )
         .onAppear {
             if !availableCameraModes.contains(mode) {
                 mode = .scan
@@ -181,6 +196,13 @@ struct UnifiedCameraView: View {
                    !scanActionWorkflows.contains(where: { $0.id == selectedScanActionWorkflowID }) {
                     self.selectedScanActionWorkflowID = nil
                 }
+            }
+        }
+        .task(id: camera.isRecordingVideo) {
+            recordingSeconds = 0
+            while camera.isRecordingVideo, !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                if camera.isRecordingVideo { recordingSeconds += 1 }
             }
         }
         .onDisappear(perform: tearDown)
@@ -257,6 +279,29 @@ struct UnifiedCameraView: View {
             }
             .environmentObject(state)
         }
+        .fullScreenCover(
+            isPresented: $showDocumentScanner,
+            onDismiss: { configureCamera() }
+        ) {
+            InventoryDocumentScannerView(
+                onRecognizing: {
+                    showDocumentScanner = false
+                    documentRecognitionRunning = true
+                },
+                onComplete: { result in
+                    documentRecognitionRunning = false
+                    showDocumentScanner = false
+                    switch result {
+                    case .success(let file):
+                        captureModel.addAttachment(file, kind: .document)
+                    case .failure(let error):
+                        captureModel.errorMessage = error.localizedDescription
+                    }
+                },
+                onCancel: { showDocumentScanner = false }
+            )
+            .ignoresSafeArea()
+        }
         .confirmationDialog(
             "Gezählte Teile entnehmen?",
             isPresented: $confirmIssue,
@@ -278,7 +323,7 @@ struct UnifiedCameraView: View {
             }
         }
         .alert(
-            "Foto konnte nicht verarbeitet werden",
+            "Medium konnte nicht verarbeitet werden",
             isPresented: Binding(
                 get: { captureModel.errorMessage != nil },
                 set: { if !$0 { captureModel.errorMessage = nil } }
@@ -376,6 +421,58 @@ struct UnifiedCameraView: View {
                 }
             }
 
+            if mode == .document {
+                VStack(spacing: 10) {
+                    Image(systemName: "doc.viewfinder")
+                        .font(.system(size: 54, weight: .light))
+                    Text("Kanten, Perspektive und Zuschnitt werden automatisch erkannt.")
+                        .font(.subheadline.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                }
+                .foregroundStyle(.white)
+                .padding(22)
+                .background(.black.opacity(0.52), in: RoundedRectangle(cornerRadius: 20))
+                .padding(24)
+            }
+
+            if camera.isRecordingVideo {
+                Label {
+                    Text(
+                        String(
+                            format: "%02d:%02d",
+                            recordingSeconds / 60,
+                            recordingSeconds % 60
+                        )
+                    )
+                    .monospacedDigit()
+                } icon: {
+                    Circle().fill(.red).frame(width: 9, height: 9)
+                }
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 38)
+                .background(.black.opacity(0.66), in: Capsule())
+                .frame(maxHeight: .infinity, alignment: .top)
+                .padding(.top, 90)
+            }
+
+            if documentRecognitionRunning {
+                VStack(spacing: 12) {
+                    ProgressView().tint(.white).controlSize(.large)
+                    Text("OCR-Texterkennung und PDF-Erstellung laufen …")
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                    Text("Die Verarbeitung findet direkt auf diesem Gerät statt.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .foregroundStyle(.white)
+                .padding(24)
+                .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 20))
+                .padding(24)
+            }
+
             if countModel.isAnalyzing, mode == .count {
                 VStack(spacing: 12) {
                     ProgressView().tint(.white).controlSize(.large)
@@ -428,7 +525,11 @@ struct UnifiedCameraView: View {
                     .background(.black.opacity(0.48), in: Circle())
             }
             .foregroundStyle(.white)
-            .disabled(countModel.phase == .booking)
+            .disabled(
+                countModel.phase == .booking
+                    || camera.isRecordingVideo
+                    || documentRecognitionRunning
+            )
             .accessibilityLabel("Kamera schließen")
 
             Spacer()
@@ -453,6 +554,7 @@ struct UnifiedCameraView: View {
                 .background(.black.opacity(0.48), in: Capsule())
             }
             .foregroundStyle(.white)
+            .disabled(camera.isRecordingVideo || documentRecognitionRunning)
             .accessibilityLabel("Details öffnen")
 
             if !showingCapturedPhoto {
@@ -490,6 +592,30 @@ struct UnifiedCameraView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel("Aufgenommenes Foto anzeigen")
                     }
+                    ForEach(captureModel.attachments) { attachment in
+                        Button(action: openCaptureDetails) {
+                            Image(
+                                systemName: attachment.kind == .video
+                                    ? "video.fill"
+                                    : "doc.text.fill"
+                            )
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                            .frame(width: 48, height: 48)
+                            .background(.black.opacity(0.48))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(.white.opacity(0.55), lineWidth: 1)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            attachment.kind == .video
+                                ? "Aufgenommenes Video anzeigen"
+                                : "Gescanntes Dokument anzeigen"
+                        )
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -509,7 +635,7 @@ struct UnifiedCameraView: View {
             .opacity(captureModel.processingCount == 0 ? 1 : 0.55)
             .accessibilityLabel("Inventar hochladen")
             .accessibilityHint(
-                "Lädt \(captureModel.photos.count) aufgenommene Fotos hoch"
+                "Lädt \(captureModel.mediaCount) aufgenommene Mediendateien hoch"
             )
         }
         .frame(height: 48)
@@ -525,9 +651,17 @@ struct UnifiedCameraView: View {
                 .frame(minHeight: 88)
 
             CameraModeBar(selection: $mode, modes: availableCameraModes)
-                .disabled(countModel.phase == .booking || pendingPhotoRequest != nil)
+                .disabled(
+                    countModel.phase == .booking
+                        || pendingPhotoRequest != nil
+                        || camera.isRecordingVideo
+                        || documentRecognitionRunning
+                )
                 .opacity(
-                    countModel.phase == .booking || pendingPhotoRequest != nil
+                    countModel.phase == .booking
+                        || pendingPhotoRequest != nil
+                        || camera.isRecordingVideo
+                        || documentRecognitionRunning
                         ? 0.65
                         : 1
                 )
@@ -577,7 +711,7 @@ struct UnifiedCameraView: View {
             HStack {
                 PhotosPicker(
                     selection: $pickerItems,
-                    maxSelectionCount: CaptureViewModel.maximumPhotos - captureModel.photos.count,
+                    maxSelectionCount: CaptureViewModel.maximumPhotos - captureModel.mediaCount,
                     matching: .images
                 ) {
                     Image(systemName: "photo.on.rectangle.angled")
@@ -586,7 +720,7 @@ struct UnifiedCameraView: View {
                         .background(.black.opacity(0.4), in: Circle())
                 }
                 .foregroundStyle(.white)
-                .disabled(captureModel.photos.count >= CaptureViewModel.maximumPhotos)
+                .disabled(captureModel.mediaCount >= CaptureViewModel.maximumPhotos)
 
                 Spacer()
                 shutterButton(accessibilityLabel: "Inventarfoto aufnehmen") {
@@ -600,10 +734,81 @@ struct UnifiedCameraView: View {
                 .disabled(
                     camera.state != .ready
                         || pendingPhotoRequest != nil
-                        || captureModel.photos.count >= CaptureViewModel.maximumPhotos
+                        || captureModel.mediaCount >= CaptureViewModel.maximumPhotos
                 )
                 Spacer()
                 cameraSwitchButton
+            }
+
+        case .video:
+            HStack {
+                Color.clear.frame(width: 52, height: 52)
+                Spacer()
+                Button {
+                    if camera.isRecordingVideo {
+                        camera.stopVideoRecording()
+                    } else {
+                        camera.startVideoRecording()
+                    }
+                } label: {
+                    ZStack {
+                        Circle()
+                            .stroke(.white.opacity(0.72), lineWidth: 4)
+                            .frame(width: 84, height: 84)
+                        if camera.isRecordingVideo {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(.red)
+                                .frame(width: 34, height: 34)
+                        } else {
+                            Circle().fill(.red).frame(width: 64, height: 64)
+                        }
+                    }
+                }
+                .disabled(
+                    camera.state != .ready
+                        || !camera.canRecordVideo
+                        || captureModel.mediaCount >= CaptureViewModel.maximumPhotos
+                )
+                .accessibilityLabel(
+                    camera.isRecordingVideo
+                        ? "Videoaufnahme stoppen"
+                        : "Videoaufnahme starten"
+                )
+                Spacer()
+                cameraSwitchButton
+                    .disabled(camera.isRecordingVideo)
+            }
+
+        case .document:
+            HStack {
+                Color.clear.frame(width: 52, height: 52)
+                Spacer()
+                Button {
+                    guard InventoryDocumentScannerView.isSupported else {
+                        captureModel.errorMessage = InventoryDocumentScannerError
+                            .unavailable.localizedDescription
+                        return
+                    }
+                    camera.stop()
+                    showDocumentScanner = true
+                } label: {
+                    Image(systemName: "doc.viewfinder")
+                        .font(.system(size: 34, weight: .medium))
+                        .foregroundStyle(InventoryTheme.ink)
+                        .frame(width: 78, height: 78)
+                        .background(InventoryTheme.lime, in: Circle())
+                        .overlay {
+                            Circle().stroke(.white.opacity(0.58), lineWidth: 3)
+                                .frame(width: 88, height: 88)
+                        }
+                }
+                .disabled(
+                    documentRecognitionRunning
+                        || captureModel.mediaCount >= CaptureViewModel.maximumPhotos
+                )
+                .accessibilityLabel("Mehrseitiges Dokument scannen")
+                Spacer()
+                Color.clear.frame(width: 52, height: 52)
             }
 
         case .scan:
@@ -1406,7 +1611,7 @@ struct UnifiedCameraView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     switch mode {
-                    case .capture:
+                    case .capture, .video, .document:
                         capturePhotoTray
                         captureOptions
                         captureUploadAction
@@ -1452,9 +1657,9 @@ struct UnifiedCameraView: View {
             .disabled(!captureModel.canSubmit || captureModel.processingCount > 0)
 
             Text(
-                captureModel.photos.isEmpty
-                    ? "Nimm mindestens ein Foto auf."
-                    : "\(captureModel.photos.count) von \(CaptureViewModel.maximumPhotos) Fotos bereit"
+                captureModel.mediaCount == 0
+                    ? "Nimm ein Foto oder Video auf oder scanne ein Dokument."
+                    : "\(captureModel.mediaCount) von \(CaptureViewModel.maximumPhotos) Medien bereit"
             )
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
@@ -1464,7 +1669,7 @@ struct UnifiedCameraView: View {
 
     @ViewBuilder
     private var capturePhotoTray: some View {
-        if !captureModel.photos.isEmpty {
+        if captureModel.mediaCount > 0 {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(captureModel.photos) { photo in
@@ -1473,6 +1678,37 @@ struct UnifiedCameraView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             Button {
                                 captureModel.removePhoto(photo)
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.caption.bold())
+                                    .frame(width: 25, height: 25)
+                                    .background(.black.opacity(0.7), in: Circle())
+                                    .foregroundStyle(.white)
+                            }
+                            .offset(x: 5, y: -5)
+                        }
+                        .padding(.top, 5)
+                    }
+                    ForEach(captureModel.attachments) { attachment in
+                        ZStack(alignment: .topTrailing) {
+                            VStack(spacing: 7) {
+                                Image(
+                                    systemName: attachment.kind == .video
+                                        ? "video.fill"
+                                        : "doc.text.fill"
+                                )
+                                .font(.title2)
+                                Text(attachment.kind == .video ? "Video" : "PDF + OCR")
+                                    .font(.caption2.weight(.semibold))
+                            }
+                            .foregroundStyle(InventoryTheme.ink)
+                            .frame(width: 92, height: 92)
+                            .background(
+                                InventoryTheme.lime.opacity(0.72),
+                                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            )
+                            Button {
+                                captureModel.removeAttachment(attachment)
                             } label: {
                                 Image(systemName: "xmark")
                                     .font(.caption.bold())
@@ -1669,8 +1905,8 @@ struct UnifiedCameraView: View {
 
     private var detailsBadgeText: String? {
         switch mode {
-        case .capture:
-            captureModel.photos.isEmpty ? nil : "\(captureModel.photos.count)"
+        case .capture, .video, .document:
+            captureModel.mediaCount == 0 ? nil : "\(captureModel.mediaCount)"
         case .scan:
             unmatchedCode == nil ? nil : "!"
         case .recognize:
@@ -1685,6 +1921,8 @@ struct UnifiedCameraView: View {
             .onEnded { value in
                 guard !isPinchingZoom,
                       pendingPhotoRequest == nil,
+                      !camera.isRecordingVideo,
+                      !documentRecognitionRunning,
                       countModel.phase != .booking,
                       abs(value.translation.width) > abs(value.translation.height),
                       abs(value.translation.width) >= 52,
@@ -1736,6 +1974,14 @@ struct UnifiedCameraView: View {
 
     private func configureCamera() {
         camera.onPhoto = { result in handleCapturedPhoto(result) }
+        camera.onVideo = { result in
+            switch result {
+            case .success(let file):
+                captureModel.addAttachment(file, kind: .video)
+            case .failure(let error):
+                captureModel.errorMessage = error.localizedDescription
+            }
+        }
         camera.onDetectedCode = { detected in
             switch mode {
             case .scan:
@@ -1750,7 +1996,7 @@ struct UnifiedCameraView: View {
                     purpose: .countTarget,
                     codeType: detected.type
                 )
-            case .capture, .recognize, .count:
+            case .capture, .video, .document, .recognize, .count:
                 break
             }
         }
@@ -1800,6 +2046,8 @@ struct UnifiedCameraView: View {
         camera.scanningEnabled = false
         camera.onDetectedCode = nil
         camera.onPhoto = nil
+        camera.onVideo = nil
+        if camera.isRecordingVideo { camera.stopVideoRecording() }
         if camera.torchEnabled { camera.toggleTorch() }
         camera.stop()
         pendingPhotoRequest = nil
@@ -1982,6 +2230,7 @@ struct UnifiedCameraView: View {
     }
 
     private func openCaptureDetails() {
+        guard !camera.isRecordingVideo, !documentRecognitionRunning else { return }
         detailsDetent = .medium
         showCaptureDetails = true
     }
@@ -2044,12 +2293,16 @@ struct UnifiedCameraView: View {
     private var availableCameraModes: [CameraMode] {
         CameraMode.allCases.filter { candidate in
             switch candidate {
-            case .capture: state.canCaptureInventory
+            case .capture, .video, .document: state.canCaptureInventory
             case .scan: true
             case .recognize: state.canUseAI
             case .count: state.canManageStock && state.canUseAI
             }
         }
+    }
+
+    private var isIntakeMode: Bool {
+        mode == .capture || mode == .video || mode == .document
     }
 
     private var captureTypes: [InventoryResourceType] {

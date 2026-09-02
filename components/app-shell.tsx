@@ -9,6 +9,7 @@ import {
   Camera,
   ChevronRight,
   ClipboardList,
+  HandCoins,
   LayoutDashboard,
   LockKeyhole,
   LogOut,
@@ -136,6 +137,12 @@ const navigation: Array<{
     ],
   },
   {
+    labelKey: "navigation.loans",
+    href: "/loans",
+    icon: HandCoins,
+    permission: "assignments.read",
+  },
+  {
     labelKey: "navigation.locations",
     href: "/map",
     icon: MapPinned,
@@ -174,6 +181,7 @@ const pageNames: Record<string, string> = {
   duplicates: "navigation.duplicates",
   notifications: "navigation.notifications",
   requests: "navigation.requests",
+  loans: "navigation.loans",
   settings: "navigation.settings",
 };
 
