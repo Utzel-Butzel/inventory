@@ -20,6 +20,14 @@ import { InventorySelect } from "@/components/inventory-select";
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import { Button, cn } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
+import {
+  availableBomQuantityUnits,
+  bomQuantityFromDisplay,
+  bomQuantityToDisplay,
+  normalizeBomQuantityUnit,
+  type BomQuantityUnit,
+  type BomQuantityUnitConfiguration,
+} from "@/lib/bom-quantity-units";
 import type {
   ConnectionDiagramBomComponent,
   ConnectionDiagramGraphEdge,
@@ -72,6 +80,16 @@ type InventoryType = {
   canContain: boolean;
 };
 
+type CandidateStock = BomQuantityUnitConfiguration & {
+  resourceId: string;
+};
+
+const defaultQuantityConfiguration: BomQuantityUnitConfiguration = {
+  unitName: "unit",
+  purchaseUnitName: null,
+  purchaseUnitFactor: null,
+};
+
 const inputClass =
   "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
 const labelClass = "block text-[11px] font-semibold text-muted-strong";
@@ -97,6 +115,7 @@ function bomWritePayload(
   appended?: {
     resourceId: string;
     quantityPerAssembly: number;
+    quantityUnit: BomQuantityUnit;
     note: string;
   },
 ) {
@@ -109,6 +128,7 @@ function bomWritePayload(
         ...(component.slotKey ? { slotKey: component.slotKey } : {}),
         resourceId: component.resourceId,
         quantityPerAssembly: component.quantityPerAssembly,
+        quantityUnit: component.quantityUnit ?? "base",
         position,
         note: component.note?.trim() || undefined,
       })),
@@ -117,6 +137,7 @@ function bomWritePayload(
             {
               resourceId: appended.resourceId,
               quantityPerAssembly: appended.quantityPerAssembly,
+              quantityUnit: appended.quantityUnit,
               position: ordered.length,
               note: appended.note.trim() || undefined,
             },
@@ -157,6 +178,10 @@ export function ResourceConnectionEditorPanel({
   const [candidateId, setCandidateId] = useState("");
   const [searching, setSearching] = useState(false);
   const [quantity, setQuantity] = useState("1");
+  const [quantityUnit, setQuantityUnit] = useState<BomQuantityUnit>("base");
+  const [candidateStock, setCandidateStock] = useState<CandidateStock | null>(
+    null,
+  );
   const [note, setNote] = useState("");
   const [newName, setNewName] = useState("");
   const [newSku, setNewSku] = useState("");
@@ -171,6 +196,9 @@ export function ResourceConnectionEditorPanel({
   const [edgeQuantities, setEdgeQuantities] = useState<Record<string, string>>(
     {},
   );
+  const [edgeQuantityUnits, setEdgeQuantityUnits] = useState<
+    Record<string, BomQuantityUnit>
+  >({});
 
   useEffect(() => {
     setAction(null);
@@ -180,12 +208,15 @@ export function ResourceConnectionEditorPanel({
     setCandidates([]);
     setCandidateId("");
     setQuantity("1");
+    setQuantityUnit("base");
+    setCandidateStock(null);
     setNote("");
     setNewName("");
     setNewSku("");
     setNewBarcode("");
     setError(null);
     setEdgeQuantities({});
+    setEdgeQuantityUnits({});
   }, [selectionKey]);
 
   useEffect(() => {
@@ -322,9 +353,37 @@ export function ResourceConnectionEditorPanel({
     t,
   ]);
 
+  useEffect(() => {
+    if (action !== "bom" || candidateMode !== "existing" || !candidateId) {
+      setCandidateStock(null);
+      setQuantityUnit("base");
+      return;
+    }
+    const controller = new AbortController();
+    setCandidateStock(null);
+    setQuantityUnit("base");
+    void fetchJson<{ stock: CandidateStock[] }>(
+      `/api/v1/resources/stock-summaries?id=${encodeURIComponent(candidateId)}`,
+      { signal: controller.signal, cache: "no-store" },
+    )
+      .then((response) => {
+        if (!controller.signal.aborted) {
+          setCandidateStock(response.stock[0] ?? null);
+        }
+      })
+      .catch(() => {
+        // The base unit remains usable when stock metadata is unavailable.
+      });
+    return () => controller.abort();
+  }, [action, candidateId, candidateMode]);
+
   const selectedCandidate = candidates.find(
     (candidate) => candidate.id === candidateId,
   );
+  const quantityConfiguration =
+    candidateMode === "existing" && candidateStock?.resourceId === candidateId
+      ? candidateStock
+      : defaultQuantityConfiguration;
   const variantUnavailable =
     payload?.family?.role === "variant" ||
     (payload?.family?.optionGroupCount ?? 0) > 0;
@@ -340,6 +399,9 @@ export function ResourceConnectionEditorPanel({
     setCandidateQuery("");
     setCandidates([]);
     setCandidateId("");
+    setQuantity("1");
+    setQuantityUnit("base");
+    setCandidateStock(null);
     setError(null);
   };
 
@@ -395,6 +457,19 @@ export function ResourceConnectionEditorPanel({
       setError(t("connectionDiagram.editor.errors.quantity"));
       return;
     }
+    let baseQuantity = parsedQuantity;
+    if (action === "bom") {
+      try {
+        baseQuantity = bomQuantityFromDisplay(
+          parsedQuantity,
+          quantityUnit,
+          quantityConfiguration,
+        );
+      } catch {
+        setError(t("connectionDiagram.editor.errors.quantity"));
+        return;
+      }
+    }
 
     setSaving(true);
     setError(null);
@@ -430,7 +505,8 @@ export function ResourceConnectionEditorPanel({
           body: JSON.stringify(
             bomWritePayload(current.bomComponents, {
               resourceId: candidate.id,
-              quantityPerAssembly: parsedQuantity,
+              quantityPerAssembly: baseQuantity,
+              quantityUnit,
               note,
             }),
           ),
@@ -487,6 +563,7 @@ export function ResourceConnectionEditorPanel({
     assemblyResourceId: string,
     componentResourceId: string,
     nextQuantity?: number,
+    nextQuantityUnit?: BomQuantityUnit,
   ) => {
     const current = await loadPayload(assemblyResourceId);
     const components = current.bomComponents
@@ -498,7 +575,11 @@ export function ResourceConnectionEditorPanel({
       .map((component) =>
         component.resourceId === componentResourceId &&
         nextQuantity !== undefined
-          ? { ...component, quantityPerAssembly: nextQuantity }
+          ? {
+              ...component,
+              quantityPerAssembly: nextQuantity,
+              quantityUnit: nextQuantityUnit ?? "base",
+            }
           : component,
       );
     await fetchJson(`/api/v1/resources/${assemblyResourceId}/bom`, {
@@ -516,11 +597,33 @@ export function ResourceConnectionEditorPanel({
     setError(null);
     try {
       if (connection.kind === "bom") {
+        const descriptor = connection.descriptor;
+        const quantityConfiguration =
+          descriptor.type === "component" || descriptor.type === "assembly"
+            ? {
+                unitName: descriptor.unitName ?? "unit",
+                purchaseUnitName: descriptor.purchaseUnitName ?? null,
+                purchaseUnitFactor: descriptor.purchaseUnitFactor ?? null,
+              }
+            : defaultQuantityConfiguration;
+        const storedQuantityUnit =
+          descriptor.type === "component" || descriptor.type === "assembly"
+            ? normalizeBomQuantityUnit(
+                descriptor.quantity,
+                descriptor.quantityUnit,
+                quantityConfiguration,
+              )
+            : "base";
+        const selectedQuantityUnit =
+          edgeQuantityUnits[connection.canonicalId] ?? storedQuantityUnit;
         const value = Number(
           edgeQuantities[connection.canonicalId] ||
-            (connection.descriptor.type === "component" ||
-            connection.descriptor.type === "assembly"
-              ? connection.descriptor.quantity
+            (descriptor.type === "component" || descriptor.type === "assembly"
+              ? bomQuantityToDisplay(
+                  descriptor.quantity,
+                  selectedQuantityUnit,
+                  quantityConfiguration,
+                )
               : 1),
         );
         if (
@@ -529,6 +632,19 @@ export function ResourceConnectionEditorPanel({
         ) {
           setError(t("connectionDiagram.editor.errors.quantity"));
           return;
+        }
+        let baseQuantity = value;
+        if (operation === "update") {
+          try {
+            baseQuantity = bomQuantityFromDisplay(
+              value,
+              selectedQuantityUnit,
+              quantityConfiguration,
+            );
+          } catch {
+            setError(t("connectionDiagram.editor.errors.quantity"));
+            return;
+          }
         }
         if (
           operation === "remove" &&
@@ -539,7 +655,8 @@ export function ResourceConnectionEditorPanel({
         await updateBomConnection(
           connection.toResourceId,
           connection.fromResourceId,
-          operation === "update" ? value : undefined,
+          operation === "update" ? baseQuantity : undefined,
+          operation === "update" ? selectedQuantityUnit : undefined,
         );
         await notifyChanged("bom");
         return;
@@ -609,6 +726,28 @@ export function ResourceConnectionEditorPanel({
           {selection.edge.connections.map((connection) => {
             const descriptor = connection.descriptor;
             const isSibling = descriptor.type === "sibling";
+            const bomDescriptor =
+              connection.kind === "bom" &&
+              (descriptor.type === "component" || descriptor.type === "assembly")
+                ? descriptor
+                : null;
+            const edgeQuantityConfiguration = bomDescriptor
+              ? {
+                  unitName: bomDescriptor.unitName ?? "unit",
+                  purchaseUnitName: bomDescriptor.purchaseUnitName ?? null,
+                  purchaseUnitFactor: bomDescriptor.purchaseUnitFactor ?? null,
+                }
+              : defaultQuantityConfiguration;
+            const storedEdgeQuantityUnit = bomDescriptor
+              ? normalizeBomQuantityUnit(
+                  bomDescriptor.quantity,
+                  bomDescriptor.quantityUnit,
+                  edgeQuantityConfiguration,
+                )
+              : "base";
+            const selectedEdgeQuantityUnit =
+              edgeQuantityUnits[connection.canonicalId] ??
+              storedEdgeQuantityUnit;
             return (
               <div
                 key={connection.canonicalId}
@@ -649,9 +788,7 @@ export function ResourceConnectionEditorPanel({
                   </div>
                 </div>
 
-                {connection.kind === "bom" &&
-                (descriptor.type === "component" ||
-                  descriptor.type === "assembly") ? (
+                {bomDescriptor ? (
                   <div className="mt-3 flex items-end gap-2">
                     <label className={`${labelClass} min-w-0 flex-1`}>
                       {t("connectionDiagram.editor.fields.quantity")}
@@ -661,7 +798,13 @@ export function ResourceConnectionEditorPanel({
                         step="1"
                         value={
                           edgeQuantities[connection.canonicalId] ??
-                          String(descriptor.quantity)
+                          String(
+                            bomQuantityToDisplay(
+                              bomDescriptor.quantity,
+                              selectedEdgeQuantityUnit,
+                              edgeQuantityConfiguration,
+                            ),
+                          )
                         }
                         onChange={(event) =>
                           setEdgeQuantities((current) => ({
@@ -671,6 +814,40 @@ export function ResourceConnectionEditorPanel({
                         }
                         className={`${inputClass} mt-1.5`}
                       />
+                    </label>
+                    <label className={`${labelClass} w-32 shrink-0`}>
+                      {t("connectionDiagram.editor.fields.quantityUnit")}
+                      <select
+                        value={selectedEdgeQuantityUnit}
+                        onChange={(event) => {
+                          const nextUnit = event.target.value as BomQuantityUnit;
+                          setEdgeQuantityUnits((current) => ({
+                            ...current,
+                            [connection.canonicalId]: nextUnit,
+                          }));
+                          setEdgeQuantities((current) => ({
+                            ...current,
+                            [connection.canonicalId]: String(
+                              bomQuantityToDisplay(
+                                bomDescriptor.quantity,
+                                nextUnit,
+                                edgeQuantityConfiguration,
+                              ),
+                            ),
+                          }));
+                        }}
+                        className={`${inputClass} mt-1.5`}
+                      >
+                        {availableBomQuantityUnits(edgeQuantityConfiguration).map(
+                          (unit) => (
+                            <option key={unit} value={unit}>
+                              {unit === "purchase"
+                                ? edgeQuantityConfiguration.purchaseUnitName
+                                : edgeQuantityConfiguration.unitName}
+                            </option>
+                          ),
+                        )}
+                      </select>
                     </label>
                     <Button
                       size="sm"
@@ -889,17 +1066,49 @@ export function ResourceConnectionEditorPanel({
 
           {action === "bom" ? (
             <div className="mt-4 space-y-3">
-              <label className={labelClass}>
-                {t("connectionDiagram.editor.fields.quantity")}
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={quantity}
-                  onChange={(event) => setQuantity(event.target.value)}
-                  className={`${inputClass} mt-1.5`}
-                />
-              </label>
+              <div className="grid grid-cols-[minmax(0,1fr)_132px] gap-2">
+                <label className={labelClass}>
+                  {t("connectionDiagram.editor.fields.quantity")}
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={quantity}
+                    onChange={(event) => setQuantity(event.target.value)}
+                    className={`${inputClass} mt-1.5`}
+                  />
+                </label>
+                <label className={labelClass}>
+                  {t("connectionDiagram.editor.fields.quantityUnit")}
+                  <select
+                    value={quantityUnit}
+                    onChange={(event) =>
+                      setQuantityUnit(event.target.value as BomQuantityUnit)
+                    }
+                    className={`${inputClass} mt-1.5`}
+                  >
+                    {availableBomQuantityUnits(quantityConfiguration).map(
+                      (unit) => (
+                        <option key={unit} value={unit}>
+                          {unit === "purchase"
+                            ? quantityConfiguration.purchaseUnitName
+                            : quantityConfiguration.unitName}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+              </div>
+              {quantityConfiguration.purchaseUnitName &&
+              quantityConfiguration.purchaseUnitFactor ? (
+                <p className="text-[10px] leading-4 text-muted">
+                  {t("connectionDiagram.editor.purchaseUnitConversion", {
+                    purchaseUnit: quantityConfiguration.purchaseUnitName,
+                    count: quantityConfiguration.purchaseUnitFactor,
+                    baseUnit: quantityConfiguration.unitName,
+                  })}
+                </p>
+              ) : null}
               <label className={labelClass}>
                 {t("connectionDiagram.editor.fields.note")}
                 <input

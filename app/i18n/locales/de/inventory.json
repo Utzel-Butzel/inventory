@@ -235,6 +235,16 @@
   "list": {
     "title": "Inventar"
   },
+  "favorites": {
+    "title": "Favoriten",
+    "emptyTitle": "Noch keine Favoriten",
+    "emptyDescription": "Markiere Einträge mit dem Stern, damit sie hier schnell erreichbar sind.",
+    "add": "{{name}} zu Favoriten hinzufügen",
+    "remove": "{{name}} aus Favoriten entfernen",
+    "errors": {
+      "update": "Der Favorit konnte nicht aktualisiert werden."
+    }
+  },
   "search": {
     "label": "Inventar durchsuchen",
     "placeholder": "Name, Slug, Beschreibung, SKU, Schlagwort oder Standort suchen…",

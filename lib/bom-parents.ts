@@ -1,4 +1,5 @@
 export type BomParentOrigin = "local" | "inherited" | "override" | "variant";
+export type BomParentQuantityUnit = "base" | "purchase";
 
 export type BomParent = {
   id: string;
@@ -8,6 +9,10 @@ export type BomParent = {
   type: string;
   status: string;
   quantityPerAssembly: number;
+  quantityUnit: BomParentQuantityUnit;
+  unitName: string;
+  purchaseUnitName: string | null;
+  purchaseUnitFactor: number | null;
   position: number;
   note: string;
   origin: BomParentOrigin;
@@ -15,7 +20,7 @@ export type BomParent = {
 
 export type BomParentReference = Omit<
   BomParent,
-  "name" | "type" | "status"
+  "name" | "type" | "status" | "unitName" | "purchaseUnitName" | "purchaseUnitFactor"
 >;
 
 type BomParentBaseRow = {
@@ -23,6 +28,7 @@ type BomParentBaseRow = {
   slotKey: string;
   assemblyResourceId: string;
   quantityPerAssembly: number;
+  quantityUnit?: BomParentQuantityUnit;
   position: number;
   note: string;
 };
@@ -32,6 +38,7 @@ type MatchingBomParentOverrideRow = {
   slotKey: string;
   variantResourceId: string;
   quantityPerAssembly: number | null;
+  quantityUnit?: BomParentQuantityUnit | null;
   position: number | null;
   note: string;
 };
@@ -80,6 +87,7 @@ export function resolveBomParentReferences(input: {
       slotKey: row.slotKey,
       resourceId: row.assemblyResourceId,
       quantityPerAssembly: row.quantityPerAssembly,
+      quantityUnit: row.quantityUnit ?? "base",
       position: row.position,
       note: row.note,
       origin: "local",
@@ -103,6 +111,7 @@ export function resolveBomParentReferences(input: {
           slotKey: override.slotKey,
           resourceId: variantResourceId,
           quantityPerAssembly: override.quantityPerAssembly,
+          quantityUnit: override.quantityUnit ?? "base",
           position: override.position,
           note: override.note,
           origin: "override",
@@ -114,6 +123,7 @@ export function resolveBomParentReferences(input: {
         slotKey: row.slotKey,
         resourceId: variantResourceId,
         quantityPerAssembly: row.quantityPerAssembly,
+        quantityUnit: row.quantityUnit ?? "base",
         position: row.position,
         note: row.note,
         origin: "inherited",
@@ -134,6 +144,7 @@ export function resolveBomParentReferences(input: {
       slotKey: row.slotKey,
       resourceId: row.variantResourceId,
       quantityPerAssembly: row.quantityPerAssembly,
+      quantityUnit: row.quantityUnit ?? "base",
       position: row.position,
       note: row.note,
       origin: "override",

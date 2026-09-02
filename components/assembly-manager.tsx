@@ -41,6 +41,15 @@ import {
 import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
 import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
+import {
+  availableBomQuantityUnits,
+  bomQuantityFromDisplay,
+  bomQuantityToDisplay,
+  bomQuantityUnitName,
+  normalizeBomQuantityUnit,
+  type BomQuantityUnit,
+  type BomQuantityUnitConfiguration,
+} from "@/lib/bom-quantity-units";
 
 type TrackingMode = "bulk" | "serialized";
 type AssemblyMode = "full" | "bom" | "build";
@@ -84,6 +93,10 @@ type BomComponent = {
   name: string;
   sku: string | null;
   quantityPerAssembly: number;
+  quantityUnit: BomQuantityUnit;
+  unitName: string;
+  purchaseUnitName: string | null;
+  purchaseUnitFactor: number | null;
   position: number;
   note: string | null;
   availableQuantity: number;
@@ -141,6 +154,16 @@ type BomEnvelope = BomData & {
 type BuildsEnvelope = {
   builds?: AssemblyBuild[];
   data?: { builds?: AssemblyBuild[] } | AssemblyBuild[];
+};
+
+type ComponentStockSummary = BomQuantityUnitConfiguration & {
+  resourceId: string;
+};
+
+const defaultQuantityConfiguration: BomQuantityUnitConfiguration = {
+  unitName: "unit",
+  purchaseUnitName: null,
+  purchaseUnitFactor: null,
 };
 
 type BuildForm = {
@@ -203,6 +226,18 @@ function normalizeBom(payload: BomEnvelope, t: TFunction<"assembly">): BomData {
       .map((component) => ({
         ...component,
         slotKey: component.slotKey ?? component.id,
+        unitName: component.unitName ?? "unit",
+        purchaseUnitName: component.purchaseUnitName ?? null,
+        purchaseUnitFactor: component.purchaseUnitFactor ?? null,
+        quantityUnit: normalizeBomQuantityUnit(
+          component.quantityPerAssembly,
+          component.quantityUnit,
+          {
+            unitName: component.unitName ?? "unit",
+            purchaseUnitName: component.purchaseUnitName ?? null,
+            purchaseUnitFactor: component.purchaseUnitFactor ?? null,
+          },
+        ),
         choices: component.choices?.length
           ? component.choices
           : [
@@ -236,9 +271,31 @@ function componentSnapshot(components: BomComponent[]) {
       slotKey: component.slotKey,
       resourceId: component.resourceId,
       quantityPerAssembly: component.quantityPerAssembly,
+      quantityUnit: component.quantityUnit,
       position,
       note: component.note?.trim() || null,
     })),
+  );
+}
+
+function componentQuantityConfiguration(
+  component: Pick<
+    BomComponent,
+    "unitName" | "purchaseUnitName" | "purchaseUnitFactor"
+  >,
+): BomQuantityUnitConfiguration {
+  return {
+    unitName: component.unitName,
+    purchaseUnitName: component.purchaseUnitName,
+    purchaseUnitFactor: component.purchaseUnitFactor,
+  };
+}
+
+function displayedComponentQuantity(component: BomComponent) {
+  return bomQuantityToDisplay(
+    component.quantityPerAssembly,
+    component.quantityUnit,
+    componentQuantityConfiguration(component),
   );
 }
 
@@ -583,7 +640,17 @@ export function AssemblyManager({
       outputCodesValid,
   );
 
-  function addComponent(resource: ClientResource) {
+  async function addComponent(resource: ClientResource) {
+    let quantityConfiguration = defaultQuantityConfiguration;
+    try {
+      const response = await fetchJson<{ stock: ComponentStockSummary[] }>(
+        `/api/v1/resources/stock-summaries?id=${encodeURIComponent(resource.id)}`,
+        { cache: "no-store" },
+      );
+      quantityConfiguration = response.stock[0] ?? defaultQuantityConfiguration;
+    } catch {
+      // A component can still be added in its base unit without stock metadata.
+    }
     const slotKey = crypto.randomUUID();
     setComponents((current) => [
       ...current,
@@ -594,6 +661,8 @@ export function AssemblyManager({
         name: resource.name,
         sku: resource.sku,
         quantityPerAssembly: 1,
+        quantityUnit: "base",
+        ...quantityConfiguration,
         position: current.length,
         note: null,
         availableQuantity: resource.quantity,
@@ -638,7 +707,9 @@ export function AssemblyManager({
 
   function updateComponent(
     slotKeyToUpdate: string,
-    values: Partial<Pick<BomComponent, "quantityPerAssembly" | "note">>,
+    values: Partial<
+      Pick<BomComponent, "quantityPerAssembly" | "quantityUnit" | "note">
+    >,
   ) {
     setComponents((current) =>
       current.map((component) =>
@@ -682,6 +753,7 @@ export function AssemblyManager({
             slotKey: component.slotKey,
             resourceId: component.resourceId,
             quantityPerAssembly: component.quantityPerAssembly,
+            quantityUnit: component.quantityUnit,
             position,
             note: component.note?.trim() || undefined,
           })),
@@ -1008,7 +1080,7 @@ export function AssemblyManager({
                           key={resource.id}
                           type="button"
                           onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => addComponent(resource)}
+                          onClick={() => void addComponent(resource)}
                           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-surface-hover"
                         >
                           <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
@@ -1047,7 +1119,7 @@ export function AssemblyManager({
                     : null;
                 return (
                   <div key={component.slotKey} className="p-4 sm:p-5">
-                    <div className="grid gap-4 lg:grid-cols-[minmax(210px,1fr)_130px_140px_auto] lg:items-start">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(210px,1fr)_240px_140px_auto] lg:items-start">
                       <div className="flex min-w-0 items-start gap-3">
                         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted">
                           {component.trackingMode === "serialized" ? (
@@ -1087,27 +1159,94 @@ export function AssemblyManager({
                         </div>
                       </div>
 
-                      <label className={labelClass}>
-                        {t("assembly:labels.perFinishedItem")}
-                        <input
-                          type="number"
-                          min="1"
-                          max="1000000"
-                          step="1"
-                          value={component.quantityPerAssembly}
-                          onChange={(event) =>
-                            updateComponent(component.slotKey, {
-                              quantityPerAssembly: Number(event.target.value),
-                            })
-                          }
-                          className={`${inputClass} mt-1.5 tabular-nums`}
-                        />
-                      </label>
+                      <div>
+                        <div className="grid grid-cols-[minmax(0,1fr)_108px] gap-2">
+                          <label className={labelClass}>
+                            {t("assembly:labels.perFinishedItem")}
+                            <input
+                              type="number"
+                              min="1"
+                              max="2000000000"
+                              step="1"
+                              value={displayedComponentQuantity(component)}
+                              onChange={(event) => {
+                                const value = Number(event.target.value);
+                                try {
+                                  updateComponent(component.slotKey, {
+                                    quantityPerAssembly: bomQuantityFromDisplay(
+                                      value,
+                                      component.quantityUnit,
+                                      componentQuantityConfiguration(component),
+                                    ),
+                                  });
+                                } catch {
+                                  updateComponent(component.slotKey, {
+                                    quantityPerAssembly: value,
+                                  });
+                                }
+                              }}
+                              className={`${inputClass} mt-1.5 tabular-nums`}
+                            />
+                          </label>
+                          <label className={labelClass}>
+                            {t("assembly:labels.quantityUnit")}
+                            <select
+                              value={component.quantityUnit}
+                              onChange={(event) => {
+                                const nextUnit = event.target.value as BomQuantityUnit;
+                                const configuration =
+                                  componentQuantityConfiguration(component);
+                                const nextQuantity =
+                                  nextUnit === "purchase" &&
+                                  normalizeBomQuantityUnit(
+                                    component.quantityPerAssembly,
+                                    nextUnit,
+                                    configuration,
+                                  ) !== "purchase"
+                                    ? bomQuantityFromDisplay(
+                                        1,
+                                        nextUnit,
+                                        configuration,
+                                      )
+                                    : component.quantityPerAssembly;
+                                updateComponent(component.slotKey, {
+                                  quantityPerAssembly: nextQuantity,
+                                  quantityUnit: nextUnit,
+                                });
+                              }}
+                              className={`${inputClass} mt-1.5`}
+                            >
+                              {availableBomQuantityUnits(
+                                componentQuantityConfiguration(component),
+                              ).map((unit) => (
+                                <option key={unit} value={unit}>
+                                  {bomQuantityUnitName(
+                                    unit,
+                                    componentQuantityConfiguration(component),
+                                  )}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        {component.purchaseUnitName &&
+                        component.purchaseUnitFactor ? (
+                          <p className="mt-1 text-[9px] leading-4 text-muted">
+                            {t("assembly:purchaseUnitConversion", {
+                              purchaseUnit: component.purchaseUnitName,
+                              count: component.purchaseUnitFactor,
+                              baseUnit: component.unitName,
+                            })}
+                          </p>
+                        ) : null}
+                      </div>
 
                       <div>
                         <p className={labelClass}>{t("assembly:labels.available")}</p>
                         <div className="mt-1.5 flex h-10 items-center gap-2 rounded-xl border border-border bg-surface-subtle px-3">
-                          <span className={cn("text-sm font-semibold tabular-nums", enough ? "text-foreground" : "text-danger")}>{component.availableQuantity}</span>
+                          <span className={cn("text-sm font-semibold tabular-nums", enough ? "text-foreground" : "text-danger")}>
+                            {component.availableQuantity} {component.unitName}
+                          </span>
                           <Badge tone={enough ? "success" : "danger"} className="ml-auto">
                             {enough
                               ? t("assembly:labels.ready")
@@ -1359,8 +1498,12 @@ export function AssemblyManager({
                                 <div className="min-w-0">
                                   <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
                                   <p className="mt-0.5 text-[9px] text-muted">
-                                    {t("assembly:perFinishedCount", {
-                                      count: component.quantityPerAssembly,
+                                    {t("assembly:perFinishedQuantity", {
+                                      count: displayedComponentQuantity(component),
+                                      unit: bomQuantityUnitName(
+                                        component.quantityUnit,
+                                        componentQuantityConfiguration(component),
+                                      ),
                                     })}
                                   </p>
                                 </div>
@@ -1370,8 +1513,12 @@ export function AssemblyManager({
                               <>
                                 <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
                                 <p className="mt-0.5 text-[9px] text-muted">
-                                  {t("assembly:perFinishedCount", {
-                                    count: component.quantityPerAssembly,
+                                  {t("assembly:perFinishedQuantity", {
+                                    count: displayedComponentQuantity(component),
+                                    unit: bomQuantityUnitName(
+                                      component.quantityUnit,
+                                      componentQuantityConfiguration(component),
+                                    ),
                                   })}
                                 </p>
                               </>

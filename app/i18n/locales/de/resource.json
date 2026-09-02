@@ -419,6 +419,31 @@
         "load": "Der Preisfluss für den Verbindungsfluss konnte nicht geladen werden."
       }
     },
+    "costStructure": {
+      "show": "Kostenstruktur anzeigen",
+      "loading": "Kostenstruktur wird geladen…",
+      "unitPrice": "{{price}} je Einheit",
+      "calculation": "{{quantity}} × {{unitPrice}}",
+      "total": "= {{total}}",
+      "noUnitPrice": "Kein Preis je Einheit",
+      "summary": {
+        "title": "Kosten für einen fertigen Eintrag",
+        "description": "Direkte Bauteile werden hier summiert; Unterbaugruppen sind in den Knoten weiter aufgeschlüsselt.",
+        "componentCount_one": "{{value}} direktes Bauteil",
+        "componentCount_other": "{{value}} direkte Bauteile",
+        "itemPrice": "Eintragspreis",
+        "componentCosts": "Bauteilkosten",
+        "remaining": "Übrig",
+        "missingItemPrice": "Für diesen Eintrag ist kein Preis je Einheit hinterlegt.",
+        "missingComponentPrices_one": "Für {{value}} Bauteil fehlt der Preis je Einheit.",
+        "missingComponentPrices_other": "Für {{value}} Bauteile fehlt der Preis je Einheit.",
+        "incompatibleCurrencies_one": "{{value}} Bauteil verwendet eine andere Währung.",
+        "incompatibleCurrencies_other": "{{value}} Bauteile verwenden eine andere Währung."
+      },
+      "errors": {
+        "load": "Die Kostenstruktur für den Verbindungsfluss konnte nicht geladen werden."
+      }
+    },
     "legend": {
       "family": "Variantenfamilie",
       "bom": "Stückliste",
@@ -485,9 +510,11 @@
         "sku": "SKU · optional",
         "barcode": "Barcode · optional",
         "quantity": "Menge pro fertigem Eintrag",
+        "quantityUnit": "Einheit",
         "note": "Montagehinweis · optional",
         "relationType": "Beziehungstyp"
       },
+      "purchaseUnitConversion": "1 {{purchaseUnit}} = {{count}} {{baseUnit}}",
       "edge": {
         "title": "Verbindung bearbeiten",
         "between": "{{first}} ↔ {{second}}",
@@ -540,13 +567,13 @@
       "containsEmpty": "Enthält keine weiteren Einträge",
       "bom": "Stückliste",
       "usedIn": "Verwendet in",
-      "usedInQuantity_one": "×{{count}} pro fertigem Eintrag",
-      "usedInQuantity_other": "×{{count}} pro fertigem Eintrag",
+      "usedInQuantity_one": "×{{count}} {{unit}} pro fertigem Eintrag",
+      "usedInQuantity_other": "×{{count}} {{unit}} pro fertigem Eintrag",
       "family": "Variantenfamilie",
       "otherRelations_one": "{{count}} weitere Beziehung",
       "otherRelations_other": "{{count}} weitere Beziehungen",
       "automatic": "Auto",
-      "quantity": "×{{count}}",
+      "quantity": "×{{count}} {{unit}}",
       "primaryBadge": "Haupteintrag",
       "removeLocatedIn": "Standort entfernen",
       "removeContains": "Untereintrag entfernen",

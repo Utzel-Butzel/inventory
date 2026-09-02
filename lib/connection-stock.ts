@@ -12,6 +12,8 @@ export type ConnectionStockSummary = {
   quantity: number;
   minimumStock: number;
   unitName: string;
+  purchaseUnitName: string | null;
+  purchaseUnitFactor: number | null;
   status: ConnectionStockStatus;
   priceFlow: ConnectionPriceFlow;
 };
@@ -47,6 +49,8 @@ export async function getConnectionStockSummaries(
         currency: resources.currency,
         minimumStock: stockSettings.minimumStock,
         unitName: stockSettings.unitName,
+        purchaseUnitName: stockSettings.purchaseUnitName,
+        purchaseUnitFactor: stockSettings.purchaseUnitFactor,
       })
       .from(resources)
       .leftJoin(
@@ -120,6 +124,8 @@ export async function getConnectionStockSummaries(
       quantity: row.quantity,
       minimumStock,
       unitName: row.unitName ?? "unit",
+      purchaseUnitName: row.purchaseUnitName,
+      purchaseUnitFactor: row.purchaseUnitFactor,
       status,
       priceFlow: {
         currency: row.currency,

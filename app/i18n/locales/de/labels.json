@@ -82,6 +82,12 @@
     "fitImage": "Ganzes Bild einpassen",
     "fontSize": "Schriftgröße (mm)",
     "alignment": "Ausrichtung",
+    "textOverflow": "Bei Platzmangel",
+    "minimumFontSize": "Kleinste Schriftgröße (mm)",
+    "textOverflowModes": {
+      "ellipsis": "Text mit … kürzen",
+      "shrink": "Schrift verkleinern"
+    },
     "instructions": "Ziehe das ausgewählte Element auf dem Etikett. Ändere seine Größe am Eckgriff oder gib hier genaue Prozentwerte ein.",
     "chooseElement": "Wähle ein Element aus, um Position und Stil zu bearbeiten.",
     "overlap": "Verschiebe oder skaliere das Bild, damit es den QR-Code nicht überdeckt.",

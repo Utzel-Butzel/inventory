@@ -22,6 +22,7 @@ import {
   PackageOpen,
   Search,
   Shirt,
+  Star,
   Wrench,
   X,
 } from "lucide-react";
@@ -137,10 +138,12 @@ export function InventoryClient({
   initialQuery = "",
   initialPageSize,
   developerMode = false,
+  favoritesOnly = false,
 }: {
   initialQuery?: string;
   initialPageSize?: number;
   developerMode?: boolean;
+  favoritesOnly?: boolean;
 }) {
   const { t, i18n } = useT("inventory");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
@@ -172,6 +175,7 @@ export function InventoryClient({
   const [batchForm, setBatchForm] = useState<BatchForm>(emptyBatchForm);
   const [applyLocation, setApplyLocation] = useState(false);
   const [batchSaving, setBatchSaving] = useState(false);
+  const [favoriteSavingIds, setFavoriteSavingIds] = useState<string[]>([]);
 
   useEffect(() => {
     setQuery(normalizedInitialQuery);
@@ -211,6 +215,7 @@ export function InventoryClient({
       media: "cover",
     });
     if (debouncedQuery) search.set("q", debouncedQuery);
+    if (favoritesOnly) search.set("favorites", "true");
     try {
       const result = await fetchJson<{
         resources: ClientResource[];
@@ -223,7 +228,7 @@ export function InventoryClient({
     } finally {
       setLoading(false);
     }
-  }, [debouncedQuery, page, pageSize, status, t, type]);
+  }, [debouncedQuery, favoritesOnly, page, pageSize, status, t, type]);
 
   useEffect(() => {
     void loadResources();
@@ -254,6 +259,10 @@ export function InventoryClient({
   const statusLabel = (value: string) =>
     t(`statuses.${value}`, { defaultValue: value.replaceAll("-", " ") });
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const favoriteSavingSet = useMemo(
+    () => new Set(favoriteSavingIds),
+    [favoriteSavingIds],
+  );
   const pageIds = useMemo(() => resources.map((resource) => resource.id), [resources]);
   const eagerCoverId = resources.find((resource) => resource.cover?.url)?.id;
   const pageIsSelected =
@@ -296,6 +305,38 @@ export function InventoryClient({
     }
     setError(null);
     setSelectedIds((current) => [...current, resourceId]);
+  };
+
+  const toggleFavorite = async (resource: ClientResource) => {
+    if (favoriteSavingSet.has(resource.id)) return;
+    const favorite = !resource.isFavorite;
+    setFavoriteSavingIds((current) => [...current, resource.id]);
+    setError(null);
+    setResources((current) =>
+      current.map((item) =>
+        item.id === resource.id ? { ...item, isFavorite: favorite } : item,
+      ),
+    );
+    try {
+      await fetchJson<{ favorite: boolean }>(
+        `/api/v1/resources/${resource.id}/favorite`,
+        { method: favorite ? "PUT" : "DELETE" },
+      );
+      if (favoritesOnly && !favorite) await loadResources();
+    } catch {
+      setResources((current) =>
+        current.map((item) =>
+          item.id === resource.id
+            ? { ...item, isFavorite: resource.isFavorite }
+            : item,
+        ),
+      );
+      setError(t("favorites.errors.update"));
+    } finally {
+      setFavoriteSavingIds((current) =>
+        current.filter((id) => id !== resource.id),
+      );
+    }
   };
 
   const togglePageSelection = () => {
@@ -372,7 +413,7 @@ export function InventoryClient({
     <div className="mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <div className="mb-7">
         <h1 className="text-3xl font-semibold tracking-[-0.025em] text-foreground sm:text-4xl">
-          {t("list.title")}
+          {favoritesOnly ? t("favorites.title") : t("list.title")}
         </h1>
       </div>
 
@@ -727,12 +768,18 @@ export function InventoryClient({
             {activeFilters ? <Search size={20} /> : <PackageOpen size={20} />}
           </div>
           <h2 className="text-base font-semibold text-foreground">
-            {activeFilters ? t("empty.filteredTitle") : t("empty.title")}
+            {activeFilters
+              ? t("empty.filteredTitle")
+              : favoritesOnly
+                ? t("favorites.emptyTitle")
+                : t("empty.title")}
           </h2>
           <p className="mt-1.5 max-w-sm text-[13px] leading-5 text-muted">
             {activeFilters
               ? t("empty.filteredDescription")
-              : t("empty.description")}
+              : favoritesOnly
+                ? t("favorites.emptyDescription")
+                : t("empty.description")}
           </p>
           {activeFilters ? (
             <div className="mt-4">
@@ -835,13 +882,39 @@ export function InventoryClient({
                 {content}
               </button>
             ) : (
-              <Link
-                key={resource.id}
-                href={`/inventory/${primaryResourceReference(resource)}`}
-                className={cardClass}
-              >
-                {content}
-              </Link>
+              <div key={resource.id} className="relative">
+                <Link
+                  href={`/inventory/${primaryResourceReference(resource)}`}
+                  className={cardClass}
+                >
+                  {content}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => void toggleFavorite(resource)}
+                  disabled={favoriteSavingSet.has(resource.id)}
+                  className={`absolute right-3 top-3 grid size-8 place-items-center rounded-lg border bg-surface/95 shadow-sm backdrop-blur-sm transition disabled:cursor-wait disabled:opacity-60 ${
+                    resource.isFavorite
+                      ? "border-warning-border text-warning"
+                      : "border-border-strong text-muted hover:text-warning"
+                  }`}
+                  aria-label={t(
+                    resource.isFavorite ? "favorites.remove" : "favorites.add",
+                    { name: resource.name },
+                  )}
+                  aria-pressed={Boolean(resource.isFavorite)}
+                  title={t(
+                    resource.isFavorite ? "favorites.remove" : "favorites.add",
+                    { name: resource.name },
+                  )}
+                >
+                  <Star
+                    size={16}
+                    fill={resource.isFavorite ? "currentColor" : "none"}
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
             );
           })}
         </div>
@@ -907,11 +980,7 @@ export function InventoryClient({
                   <span className="text-xs font-semibold text-muted-strong">
                     {formatValue(resource.valueCents, resource.currency, locale)}
                   </span>
-                  {!selectionMode ? (
-                    <ArrowRight size={16} className="hidden text-muted transition group-hover:translate-x-0.5 group-hover:text-muted-strong lg:block" />
-                  ) : (
-                    <span className="hidden lg:block" />
-                  )}
+                  <span className="hidden lg:block" />
                 </>
               );
               const rowClass = `group grid w-full gap-3 px-4 py-3 text-left transition lg:grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] lg:items-center lg:gap-4 ${
@@ -933,13 +1002,39 @@ export function InventoryClient({
                   {content}
                 </button>
               ) : (
-                <Link
-                  key={resource.id}
-                  href={`/inventory/${primaryResourceReference(resource)}`}
-                  className={rowClass}
-                >
-                  {content}
-                </Link>
+                <div key={resource.id} className="relative">
+                  <Link
+                    href={`/inventory/${primaryResourceReference(resource)}`}
+                    className={`${rowClass} pr-14`}
+                  >
+                    {content}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => void toggleFavorite(resource)}
+                    disabled={favoriteSavingSet.has(resource.id)}
+                    className={`absolute right-4 top-3 grid size-8 place-items-center rounded-lg transition disabled:cursor-wait disabled:opacity-60 lg:top-1/2 lg:-translate-y-1/2 ${
+                      resource.isFavorite
+                        ? "text-warning"
+                        : "text-muted hover:bg-surface-muted hover:text-warning"
+                    }`}
+                    aria-label={t(
+                      resource.isFavorite ? "favorites.remove" : "favorites.add",
+                      { name: resource.name },
+                    )}
+                    aria-pressed={Boolean(resource.isFavorite)}
+                    title={t(
+                      resource.isFavorite ? "favorites.remove" : "favorites.add",
+                      { name: resource.name },
+                    )}
+                  >
+                    <Star
+                      size={17}
+                      fill={resource.isFavorite ? "currentColor" : "none"}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
               );
             })}
           </div>

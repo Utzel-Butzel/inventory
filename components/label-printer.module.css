@@ -134,6 +134,25 @@
   transform: translateY(-0.14em);
 }
 
+.designedTextContent {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.designedTextEllipsis {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+}
+
+.designedTextShrink {
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
 .designedName {
   font-weight: 800;
 }

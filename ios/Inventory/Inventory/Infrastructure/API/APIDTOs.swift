@@ -346,6 +346,72 @@ public struct InventoryResourceAccess: Codable, Equatable, Sendable {
     public let ai: Bool
 }
 
+public struct ResourceTranslationField: Codable, Equatable, Identifiable, Sendable {
+    public var id: String { fieldKey }
+    public let fieldKey: String
+    public let label: String
+    public let sourceText: String
+    public let translatedText: String?
+    public let suggestion: String?
+    public let state: String
+    public let origin: String?
+    public let model: String?
+    public let updatedAt: Date?
+}
+
+public struct ResourceTranslationLanguage: Codable, Equatable, Identifiable, Sendable {
+    public var id: String { code }
+    public let code: String
+    public let label: String
+    public let autoTranslate: Bool
+    public let revision: Int
+    public let status: String
+    public let currentCount: Int
+    public let totalCount: Int
+    public let lastError: String?
+    public let fields: [ResourceTranslationField]
+}
+
+public struct ResourceTranslationLanguageLabel: Codable, Equatable, Sendable {
+    public let code: String
+    public let label: String
+}
+
+public struct ResourceTranslationOverview: Codable, Equatable, Sendable {
+    public let resourceId: UUID
+    public let contentRevision: Int
+    public let defaultLanguage: ResourceTranslationLanguageLabel
+    public let languages: [ResourceTranslationLanguage]
+}
+
+public enum ResourceTranslationOperation: Encodable, Equatable, Sendable {
+    case set(fieldKey: String, translatedText: String)
+    case acceptSuggestion(fieldKey: String)
+    case useAI(fieldKey: String)
+
+    private enum CodingKeys: String, CodingKey {
+        case action
+        case fieldKey
+        case translatedText
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .set(let fieldKey, let translatedText):
+            try container.encode("set", forKey: .action)
+            try container.encode(fieldKey, forKey: .fieldKey)
+            try container.encode(translatedText, forKey: .translatedText)
+        case .acceptSuggestion(let fieldKey):
+            try container.encode("accept_suggestion", forKey: .action)
+            try container.encode(fieldKey, forKey: .fieldKey)
+        case .useAI(let fieldKey):
+            try container.encode("use_ai", forKey: .action)
+            try container.encode(fieldKey, forKey: .fieldKey)
+        }
+    }
+}
+
 public enum ResourceCodeMatch: String, Codable, CaseIterable, Sendable {
     case id
     case sku

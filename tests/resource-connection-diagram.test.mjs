@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { resolveBomParentReferences } from "../lib/bom-parents.ts";
 import {
+  buildConnectionCostStructure,
   buildWavyConnectionPath,
   buildResourceConnectionDiagram,
   buildResourceConnectionGraph,
@@ -12,6 +13,131 @@ import {
 } from "../lib/resource-connection-diagram.ts";
 
 const item = (id, name) => ({ id, name, type: "item", status: "available" });
+
+test("calculates nested component costs from unit prices and BOM quantities", () => {
+  const payloads = new Map([
+    [
+      "root",
+      {
+        family: null,
+        relations: [],
+        bomComponents: [
+          {
+            resourceId: "module",
+            name: "Module",
+            quantityPerAssembly: 2,
+          },
+        ],
+      },
+    ],
+    [
+      "module",
+      {
+        family: null,
+        relations: [],
+        bomComponents: [
+          {
+            resourceId: "battery",
+            name: "Battery",
+            quantityPerAssembly: 4,
+          },
+        ],
+      },
+    ],
+    [
+      "battery",
+      { family: null, relations: [], bomComponents: [] },
+    ],
+  ]);
+  const unitCosts = new Map(
+    [
+      { resourceId: "root", unitPriceCents: 10_000, currency: "EUR" },
+      { resourceId: "module", unitPriceCents: 3_000, currency: "EUR" },
+      { resourceId: "battery", unitPriceCents: 200, currency: "EUR" },
+    ].map((cost) => [cost.resourceId, cost]),
+  );
+
+  const structure = buildConnectionCostStructure({
+    rootResourceId: "root",
+    payloads,
+    unitCosts,
+    maxDepth: 2,
+  });
+
+  assert.equal(structure.root.directComponentCostCents, 6_000);
+  assert.equal(structure.root.remainingPriceCents, 4_000);
+  assert.equal(structure.items.get("module").requiredQuantity, 2);
+  assert.equal(structure.items.get("module").totalPriceCents, 6_000);
+  assert.equal(structure.items.get("module").directComponentCostCents, 800);
+  assert.equal(structure.items.get("battery").requiredQuantity, 8);
+  assert.equal(structure.items.get("battery").totalPriceCents, 1_600);
+});
+
+test("does not invent a remaining amount when component prices are incomplete", () => {
+  const payloads = new Map([
+    [
+      "root",
+      {
+        family: null,
+        relations: [],
+        bomComponents: [
+          { resourceId: "missing", name: "Missing", quantityPerAssembly: 1 },
+          { resourceId: "usd", name: "USD part", quantityPerAssembly: 2 },
+        ],
+      },
+    ],
+  ]);
+  const unitCosts = new Map(
+    [
+      { resourceId: "root", unitPriceCents: 5_000, currency: "EUR" },
+      { resourceId: "missing", unitPriceCents: null, currency: "EUR" },
+      { resourceId: "usd", unitPriceCents: 300, currency: "USD" },
+    ].map((cost) => [cost.resourceId, cost]),
+  );
+
+  const structure = buildConnectionCostStructure({
+    rootResourceId: "root",
+    payloads,
+    unitCosts,
+    maxDepth: 1,
+  });
+
+  assert.equal(structure.root.missingDirectComponentPriceCount, 1);
+  assert.equal(structure.root.incompatibleCurrencyCount, 1);
+  assert.equal(structure.root.remainingPriceCents, null);
+});
+
+test("limits cost indicators to the current item and its BOM descendants", () => {
+  const payloads = new Map([
+    [
+      "root",
+      {
+        family: null,
+        relations: [],
+        bomComponents: [
+          { resourceId: "part", name: "Part", quantityPerAssembly: 3 },
+        ],
+      },
+    ],
+  ]);
+  const unitCosts = new Map(
+    [
+      { resourceId: "root", unitPriceCents: 2_000, currency: "EUR" },
+      { resourceId: "part", unitPriceCents: 100, currency: "EUR" },
+      { resourceId: "related", unitPriceCents: 900, currency: "EUR" },
+    ].map((cost) => [cost.resourceId, cost]),
+  );
+
+  const structure = buildConnectionCostStructure({
+    rootResourceId: "root",
+    payloads,
+    unitCosts,
+    maxDepth: 1,
+  });
+
+  assert.deepEqual([...structure.items.keys()], ["root", "part"]);
+  assert.equal(structure.items.get("part").requiredQuantity, 3);
+});
 
 test("resolves direct, inherited, and overridden BOM parents", () => {
   const references = resolveBomParentReferences({
@@ -762,7 +888,7 @@ test("the detail-page connection flow opens by default and owns every connection
   assert.match(component, /NODE_HEIGHT = 152/);
   assert.match(component, /NODE_MEDIA_CENTER_Y = 55/);
   assert.match(component, /ROW_STEP = 244/);
-  assert.match(component, /priceFlow \? "size-16" : "size-20"/);
+  assert.match(component, /showsFinancialDetails \? "size-16" : "size-20"/);
   assert.match(component, /const middleY = \(startY \+ endY\) \/ 2/);
   assert.match(component, /flex h-full w-full flex-col items-center/);
   assert.match(component, /MAX_GRAPH_NODES = 45/);
@@ -898,6 +1024,34 @@ test("adds signed per-movement price flow to visible connection nodes", async ()
   assert.match(stockService, /Inbound stock prices cannot be negative/);
   assert.doesNotMatch(schema, /stock_movements_total_price_nonnegative/);
   assert.doesNotMatch(migration, /stock_movements_total_price_nonnegative/);
+});
+
+test("shows a permission-controlled cost structure beside the price flow", async () => {
+  const [route, diagram] = await Promise.all([
+    readFile(
+      new URL(
+        "../app/api/v1/resources/cost-summaries/route.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL("../components/resource-connection-diagram.tsx", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(route, /resourceIdsSchema[\s\S]*\.max\(45\)/);
+  assert.match(route, /requirePermission\(request, "inventory\.read"\)/);
+  assert.match(route, /canAccessResource[\s\S]*"inventory\.read"/);
+  assert.match(route, /unitPriceCents: resource\.valueCents/);
+  assert.match(diagram, /connectionDiagram\.costStructure\.show/);
+  assert.match(diagram, /showCostStructure/);
+  assert.match(diagram, /\/api\/v1\/resources\/cost-summaries/);
+  assert.match(diagram, /buildConnectionCostStructure/);
+  assert.match(diagram, /<CostStructureIndicator/);
+  assert.match(diagram, /<CostStructureSummary/);
+  assert.match(diagram, /remainingPriceCents/);
 });
 
 test("the diagram edits typed connections without bypassing existing APIs", async () => {

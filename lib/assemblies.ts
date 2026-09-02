@@ -60,6 +60,11 @@ import {
   resolveBomParentReferences,
   type BomParent,
 } from "@/lib/bom-parents";
+import {
+  normalizeBomQuantityUnit,
+  type BomQuantityUnit,
+} from "@/lib/bom-quantity-units";
+import { hasPurchaseUnit } from "@/lib/stock-quantity-units";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 
@@ -67,6 +72,7 @@ export type BomComponentInput = {
   resourceId: string;
   slotKey?: string;
   quantityPerAssembly: number;
+  quantityUnit?: BomQuantityUnit;
   position?: number;
   note?: string;
 };
@@ -171,6 +177,7 @@ type StoredBomLine = {
   slotKey: string;
   componentResourceId: string;
   quantityPerAssembly: number;
+  quantityUnit: BomQuantityUnit;
   position: number;
   note: string;
 };
@@ -183,6 +190,7 @@ type StoredVariantOverride = {
   slotKey: string;
   componentResourceId: string | null;
   quantityPerAssembly: number | null;
+  quantityUnit: BomQuantityUnit | null;
   position: number | null;
   note: string;
   removed: boolean;
@@ -192,6 +200,7 @@ type NormalizedBomComponent = {
   slotKey: string;
   componentResourceId: string;
   quantityPerAssembly: number;
+  quantityUnit: BomQuantityUnit;
   position: number;
   note: string;
 };
@@ -237,6 +246,7 @@ async function readStoredBom(
       slotKey: bomLines.slotKey,
       componentResourceId: bomLines.componentResourceId,
       quantityPerAssembly: bomLines.quantityPerAssembly,
+      quantityUnit: bomLines.quantityUnit,
       position: bomLines.position,
       note: bomLines.note,
     })
@@ -262,6 +272,7 @@ async function readVariantOverrides(
       slotKey: variantBomOverrides.slotKey,
       componentResourceId: variantBomOverrides.componentResourceId,
       quantityPerAssembly: variantBomOverrides.quantityPerAssembly,
+      quantityUnit: variantBomOverrides.quantityUnit,
       position: variantBomOverrides.position,
       note: variantBomOverrides.note,
       removed: variantBomOverrides.removed,
@@ -294,6 +305,7 @@ function applyVariantBomOverrides(
     if (
       override.componentResourceId === null ||
       override.quantityPerAssembly === null ||
+      override.quantityUnit === null ||
       override.position === null
     ) {
       throw new AssemblyOperationError(
@@ -306,6 +318,7 @@ function applyVariantBomOverrides(
       slotKey: override.slotKey,
       componentResourceId: override.componentResourceId,
       quantityPerAssembly: override.quantityPerAssembly,
+      quantityUnit: override.quantityUnit,
       position: override.position,
       note: override.note,
       origin: "override",
@@ -317,6 +330,7 @@ function applyVariantBomOverrides(
     if (
       override.componentResourceId === null ||
       override.quantityPerAssembly === null ||
+      override.quantityUnit === null ||
       override.position === null
     ) {
       throw new AssemblyOperationError(
@@ -329,6 +343,7 @@ function applyVariantBomOverrides(
       slotKey: override.slotKey,
       componentResourceId: override.componentResourceId,
       quantityPerAssembly: override.quantityPerAssembly,
+      quantityUnit: override.quantityUnit,
       position: override.position,
       note: override.note,
       origin: "variant",
@@ -463,6 +478,7 @@ async function readOptionControlledBomLines(
       slotKey: base.slotKey,
       componentResourceId: selection.componentResourceId,
       quantityPerAssembly: base.quantityPerAssembly,
+      quantityUnit: "base" as const,
       position: base.position,
       note: base.note,
       baseComponentResourceId: base.componentResourceId,
@@ -537,6 +553,7 @@ async function syncOptionBomOverridesForPrimary(
                 slotKey: line.slotKey,
                 componentResourceId: line.componentResourceId,
                 quantityPerAssembly: line.quantityPerAssembly,
+                quantityUnit: line.quantityUnit,
                 position: line.position,
                 note: line.note,
                 removed: false,
@@ -620,6 +637,9 @@ async function getBomWithExecutor(
           sku: resources.sku,
           availableQuantity: resources.quantity,
           trackingMode: stockSettings.trackingMode,
+          unitName: stockSettings.unitName,
+          purchaseUnitName: stockSettings.purchaseUnitName,
+          purchaseUnitFactor: stockSettings.purchaseUnitFactor,
         })
         .from(resources)
         .leftJoin(
@@ -750,6 +770,9 @@ async function getBomWithExecutor(
       sku: choice.sku,
       availableQuantity: choice.availableQuantity,
       trackingMode: trackingMode(choice.trackingMode),
+      unitName: choice.unitName ?? "unit",
+      purchaseUnitName: choice.purchaseUnitName,
+      purchaseUnitFactor: choice.purchaseUnitFactor,
       cover: coverByResource.get(choice.id) ?? null,
       availableUnits: (unitsByResource.get(choice.id) ?? []).map((unit) => ({
         id: unit.id,
@@ -761,6 +784,11 @@ async function getBomWithExecutor(
   };
   const components = recipe.lines.map((line) => {
     const component = componentById.get(line.componentResourceId)!;
+    const quantityConfiguration = {
+      unitName: component.unitName ?? "unit",
+      purchaseUnitName: component.purchaseUnitName,
+      purchaseUnitFactor: component.purchaseUnitFactor,
+    };
     return {
       id: line.id,
       slotKey: line.slotKey,
@@ -769,6 +797,12 @@ async function getBomWithExecutor(
       name: component.name,
       sku: component.sku,
       quantityPerAssembly: line.quantityPerAssembly,
+      quantityUnit: normalizeBomQuantityUnit(
+        line.quantityPerAssembly,
+        line.quantityUnit,
+        quantityConfiguration,
+      ),
+      ...quantityConfiguration,
       position: line.position,
       note: line.note,
       availableQuantity: component.availableQuantity,
@@ -845,6 +879,7 @@ async function listBomParentsWithExecutor(
         slotKey: bomLines.slotKey,
         assemblyResourceId: bomLines.assemblyResourceId,
         quantityPerAssembly: bomLines.quantityPerAssembly,
+        quantityUnit: bomLines.quantityUnit,
         position: bomLines.position,
         note: bomLines.note,
       })
@@ -861,6 +896,7 @@ async function listBomParentsWithExecutor(
         slotKey: variantBomOverrides.slotKey,
         variantResourceId: variantBomOverrides.variantResourceId,
         quantityPerAssembly: variantBomOverrides.quantityPerAssembly,
+        quantityUnit: variantBomOverrides.quantityUnit,
         position: variantBomOverrides.position,
         note: variantBomOverrides.note,
       })
@@ -921,6 +957,7 @@ async function listBomParentsWithExecutor(
           slotKey: variantBomOverrides.slotKey,
           componentResourceId: variantBomOverrides.componentResourceId,
           quantityPerAssembly: variantBomOverrides.quantityPerAssembly,
+          quantityUnit: variantBomOverrides.quantityUnit,
           position: variantBomOverrides.position,
           note: variantBomOverrides.note,
           removed: variantBomOverrides.removed,
@@ -955,6 +992,25 @@ async function listBomParentsWithExecutor(
       ),
     )
     .orderBy(asc(resources.name), asc(resources.id));
+  const [componentUnitSettings] = await executor
+    .select({
+      unitName: stockSettings.unitName,
+      purchaseUnitName: stockSettings.purchaseUnitName,
+      purchaseUnitFactor: stockSettings.purchaseUnitFactor,
+    })
+    .from(stockSettings)
+    .where(
+      and(
+        eq(stockSettings.organizationId, organizationId),
+        eq(stockSettings.resourceId, componentResourceId),
+      ),
+    )
+    .limit(1);
+  const quantityConfiguration = {
+    unitName: componentUnitSettings?.unitName ?? "unit",
+    purchaseUnitName: componentUnitSettings?.purchaseUnitName ?? null,
+    purchaseUnitFactor: componentUnitSettings?.purchaseUnitFactor ?? null,
+  };
   const access = await Promise.all(
     parentResources.map(async (resource) => ({
       resource,
@@ -969,6 +1025,12 @@ async function listBomParentsWithExecutor(
       ? [
           {
             ...reference,
+            quantityUnit: normalizeBomQuantityUnit(
+              reference.quantityPerAssembly,
+              reference.quantityUnit,
+              quantityConfiguration,
+            ),
+            ...quantityConfiguration,
             name: resource.name,
             type: resource.type,
             status: resource.status,
@@ -1005,6 +1067,7 @@ function normalizeBomComponents(
     slotKey: component.slotKey ?? null,
     componentResourceId: component.resourceId,
     quantityPerAssembly: component.quantityPerAssembly,
+    quantityUnit: component.quantityUnit ?? "base",
     position: component.position ?? index,
     note: component.note ?? "",
   }));
@@ -1074,6 +1137,7 @@ async function assertEffectiveBomGraphAcyclic(
       slotKey: bomLines.slotKey,
       componentResourceId: bomLines.componentResourceId,
       quantityPerAssembly: bomLines.quantityPerAssembly,
+      quantityUnit: bomLines.quantityUnit,
       position: bomLines.position,
       note: bomLines.note,
     })
@@ -1086,6 +1150,7 @@ async function assertEffectiveBomGraphAcyclic(
       slotKey: variantBomOverrides.slotKey,
       componentResourceId: variantBomOverrides.componentResourceId,
       quantityPerAssembly: variantBomOverrides.quantityPerAssembly,
+      quantityUnit: variantBomOverrides.quantityUnit,
       position: variantBomOverrides.position,
       note: variantBomOverrides.note,
       removed: variantBomOverrides.removed,
@@ -1216,6 +1281,7 @@ export async function assertCurrentEffectiveBomGraphAcyclic(
       slotKey: line.slotKey,
       componentResourceId: line.componentResourceId,
       quantityPerAssembly: line.quantityPerAssembly,
+      quantityUnit: line.quantityUnit,
       position: line.position,
       note: line.note,
     })),
@@ -1276,6 +1342,41 @@ export async function replaceBom(
         422,
       );
     }
+    const purchaseUnitComponentIds = normalizedComponents.flatMap((item) =>
+      item.quantityUnit === "purchase" ? [item.componentResourceId] : [],
+    );
+    if (purchaseUnitComponentIds.length) {
+      const purchaseUnitSettings = await transaction
+        .select({
+          resourceId: stockSettings.resourceId,
+          purchaseUnitName: stockSettings.purchaseUnitName,
+          purchaseUnitFactor: stockSettings.purchaseUnitFactor,
+        })
+        .from(stockSettings)
+        .where(
+          and(
+            eq(stockSettings.organizationId, organizationId),
+            inArray(stockSettings.resourceId, purchaseUnitComponentIds),
+          ),
+        );
+      const settingsByResource = new Map(
+        purchaseUnitSettings.map((settings) => [settings.resourceId, settings]),
+      );
+      for (const item of normalizedComponents) {
+        if (item.quantityUnit !== "purchase") continue;
+        const settings = settingsByResource.get(item.componentResourceId);
+        if (
+          !settings ||
+          !hasPurchaseUnit(settings) ||
+          item.quantityPerAssembly % settings.purchaseUnitFactor !== 0
+        ) {
+          throw new AssemblyOperationError(
+            "A packaging-unit BOM quantity requires a configured conversion and must equal a whole number of packaging units.",
+            422,
+          );
+        }
+      }
+    }
     if (
       normalizedComponents.some(
         (item) => item.componentResourceId === assemblyResourceId,
@@ -1304,6 +1405,7 @@ export async function replaceBom(
           !submitted ||
           submitted.componentResourceId !== controlled.componentResourceId ||
           submitted.quantityPerAssembly !== controlled.quantityPerAssembly ||
+          submitted.quantityUnit !== controlled.quantityUnit ||
           submitted.position !== controlled.position ||
           submitted.note !== controlled.note
         ) {
@@ -1387,6 +1489,7 @@ export async function replaceBom(
         if (
           submitted.componentResourceId === base.componentResourceId &&
           submitted.quantityPerAssembly === base.quantityPerAssembly &&
+          submitted.quantityUnit === base.quantityUnit &&
           submitted.position === base.position &&
           submitted.note === base.note
         ) {
@@ -1398,6 +1501,7 @@ export async function replaceBom(
           slotKey: submitted.slotKey,
           componentResourceId: submitted.componentResourceId,
           quantityPerAssembly: submitted.quantityPerAssembly,
+          quantityUnit: submitted.quantityUnit,
           position: submitted.position,
           note: submitted.note,
           updatedAt: now,
@@ -1411,6 +1515,7 @@ export async function replaceBom(
           slotKey: submitted.slotKey,
           componentResourceId: submitted.componentResourceId,
           quantityPerAssembly: submitted.quantityPerAssembly,
+          quantityUnit: submitted.quantityUnit,
           position: submitted.position,
           note: submitted.note,
           updatedAt: now,
@@ -1445,6 +1550,7 @@ export async function replaceBom(
             slotKey: component.slotKey,
             componentResourceId: component.componentResourceId,
             quantityPerAssembly: component.quantityPerAssembly,
+            quantityUnit: component.quantityUnit,
             position: component.position,
             note: component.note,
             updatedAt: now,
@@ -1460,6 +1566,7 @@ export async function replaceBom(
           slotKey: line.slotKey,
           componentResourceId: line.componentResourceId,
           quantityPerAssembly: line.quantityPerAssembly,
+          quantityUnit: line.quantityUnit,
           position: line.position,
           note: line.note,
         })),
@@ -1506,6 +1613,8 @@ export async function resetVariantBomOverrides(
         controlledBySlot.get(line.slotKey)?.componentResourceId ??
         line.componentResourceId,
       quantityPerAssembly: line.quantityPerAssembly,
+      quantityUnit:
+        controlledBySlot.get(line.slotKey)?.quantityUnit ?? line.quantityUnit,
       position: line.position,
       note: line.note,
     }));
@@ -1532,6 +1641,7 @@ export async function resetVariantBomOverrides(
               slotKey: line.slotKey,
               componentResourceId: line.componentResourceId,
               quantityPerAssembly: line.quantityPerAssembly,
+              quantityUnit: line.quantityUnit,
               position: line.position,
               note: line.note,
               removed: false,
@@ -1628,6 +1738,7 @@ export async function detachResourceVariant(
           slotKey: line.slotKey,
           componentResourceId: line.componentResourceId,
           quantityPerAssembly: line.quantityPerAssembly,
+          quantityUnit: line.quantityUnit,
           position: line.position,
           note: line.note,
           updatedAt: now,

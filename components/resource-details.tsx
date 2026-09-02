@@ -32,6 +32,7 @@ import {
   Paperclip,
   Pencil,
   Rotate3d,
+  Star,
   Tag,
   Trash2,
   Warehouse,
@@ -547,6 +548,8 @@ export function ResourceDetails({
   >(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
+  const [favoriteSaving, setFavoriteSaving] = useState(false);
   const [lightboxImageId, setLightboxImageId] = useState<string | null>(null);
   const closeLightbox = useCallback(() => setLightboxImageId(null), []);
 
@@ -634,6 +637,25 @@ export function ResourceDetails({
           ? deleteError.message
           : t("details.errors.delete"),
       );
+    }
+  };
+
+  const toggleFavorite = async () => {
+    if (!resource || favoriteSaving) return;
+    const favorite = !resource.isFavorite;
+    setFavoriteSaving(true);
+    setFavoriteError(null);
+    setResource({ ...resource, isFavorite: favorite });
+    try {
+      await fetchJson<{ favorite: boolean }>(
+        `/api/v1/resources/${resource.id}/favorite`,
+        { method: favorite ? "PUT" : "DELETE" },
+      );
+    } catch {
+      setResource({ ...resource, isFavorite: resource.isFavorite });
+      setFavoriteError(t("favorites.errors.update"));
+    } finally {
+      setFavoriteSaving(false);
     }
   };
 
@@ -768,6 +790,35 @@ export function ResourceDetails({
               </select>
             </label>
           ) : null}
+          <button
+            type="button"
+            onClick={() => void toggleFavorite()}
+            disabled={favoriteSaving}
+            className={`grid size-10 place-items-center rounded-xl border bg-surface transition disabled:cursor-wait disabled:opacity-60 ${
+              resource.isFavorite
+                ? "border-warning-border text-warning"
+                : "border-border text-muted hover:border-warning-border hover:bg-warning-soft hover:text-warning"
+            }`}
+            aria-label={t(
+              resource.isFavorite ? "favorites.remove" : "favorites.add",
+              { name: resource.name },
+            )}
+            aria-pressed={Boolean(resource.isFavorite)}
+            title={t(
+              resource.isFavorite ? "favorites.remove" : "favorites.add",
+              { name: resource.name },
+            )}
+          >
+            {favoriteSaving ? (
+              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Star
+                className="size-4"
+                fill={resource.isFavorite ? "currentColor" : "none"}
+                aria-hidden="true"
+              />
+            )}
+          </button>
           {canShare ? (
             <ResourceShareButton
               resourceId={resource.id}
@@ -803,6 +854,12 @@ export function ResourceDetails({
           ) : null}
         </div>
       </header>
+
+      {favoriteError ? (
+        <div className="mb-5 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
+          {favoriteError}
+        </div>
+      ) : null}
 
       {localization &&
       !localization.isDefault &&

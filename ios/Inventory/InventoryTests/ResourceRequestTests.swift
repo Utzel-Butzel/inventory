@@ -22,6 +22,7 @@ final class ResourceRequestTests: XCTestCase {
     func testResourceRequestEncodesBarcodeAndCustomFields() throws {
         let request = ResourceCreateRequest(
             name: "Messgerät",
+            slugs: ["messgeraet", "kalibrierung-messgeraet"],
             barcode: "4006381333931",
             customFields: [
                 "calibrated": .boolean(true),
@@ -35,6 +36,10 @@ final class ResourceRequestTests: XCTestCase {
         let fields = try XCTUnwrap(object["customFields"] as? [String: Any])
 
         XCTAssertEqual(object["barcode"] as? String, "4006381333931")
+        XCTAssertEqual(
+            object["slugs"] as? [String],
+            ["messgeraet", "kalibrierung-messgeraet"]
+        )
         XCTAssertEqual(fields["calibrated"] as? Bool, true)
         XCTAssertEqual(fields["accuracy"] as? Double, 0.01)
         XCTAssertEqual(
@@ -49,6 +54,32 @@ final class ResourceRequestTests: XCTestCase {
 
         XCTAssertTrue(object.keys.contains("barcode"))
         XCTAssertTrue(object["barcode"] is NSNull)
+    }
+
+    func testPatchCanReplaceAllResourceSlugs() throws {
+        let data = try JSONEncoder().encode(
+            ResourcePatchRequest(slugs: ["bohrmaschine", "werkstatt-bohrer"])
+        )
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(
+            object["slugs"] as? [String],
+            ["bohrmaschine", "werkstatt-bohrer"]
+        )
+    }
+
+    func testManualTranslationOperationUsesAPIContractKeys() throws {
+        let data = try JSONEncoder().encode(
+            ResourceTranslationOperation.set(
+                fieldKey: "description",
+                translatedText: "Übersetzter Text"
+            )
+        )
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(object["action"] as? String, "set")
+        XCTAssertEqual(object["fieldKey"] as? String, "description")
+        XCTAssertEqual(object["translatedText"] as? String, "Übersetzter Text")
     }
 
     func testCapabilitiesDecodeGranularPermissionsAndStockPolicy() throws {

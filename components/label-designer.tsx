@@ -35,6 +35,10 @@ import {
 } from "@/lib/label-setup-contract";
 
 type ElementType = LabelElement["type"];
+type TextElement = Extract<
+  LabelElement,
+  { type: "name" | "identifier" | "url" | "location" }
+>;
 
 export type LabelSetupDraft = Pick<
   LabelSetupDto,
@@ -74,13 +78,37 @@ const newElement = (type: ElementType): LabelElement => {
     case "image":
       return { type, ...box, fit: "cover" };
     case "name":
-      return { type, ...box, fontSizeMm: 3.8, align: "left" };
+      return {
+        type,
+        ...box,
+        fontSizeMm: 3.8,
+        align: "left",
+        textOverflow: "ellipsis",
+      };
     case "identifier":
-      return { type, ...box, fontSizeMm: 2.5, align: "left" };
+      return {
+        type,
+        ...box,
+        fontSizeMm: 2.5,
+        align: "left",
+        textOverflow: "ellipsis",
+      };
     case "url":
-      return { type, ...box, fontSizeMm: 1.8, align: "left" };
+      return {
+        type,
+        ...box,
+        fontSizeMm: 1.8,
+        align: "left",
+        textOverflow: "ellipsis",
+      };
     case "location":
-      return { type, ...box, fontSizeMm: 2.5, align: "left" };
+      return {
+        type,
+        ...box,
+        fontSizeMm: 2.5,
+        align: "left",
+        textOverflow: "ellipsis",
+      };
     case "qr":
     case "barcode":
       return { type, ...box };
@@ -617,10 +645,18 @@ export function LabelDesigner({
                         min="0.5"
                         max="100"
                         step="0.1"
-                        value={(selected as Extract<LabelElement, { type: "name" }>).fontSizeMm ?? 3}
+                        value={(selected as TextElement).fontSizeMm ?? 3}
                         onChange={(event) => {
                           const next = Number(event.target.value);
-                          if (Number.isFinite(next)) updateElement(selected.type, { fontSizeMm: next } as Partial<LabelElement>);
+                          if (!Number.isFinite(next)) return;
+                          const textElement = selected as TextElement;
+                          updateElement(selected.type, {
+                            fontSizeMm: next,
+                            ...(textElement.minFontSizeMm !== undefined &&
+                            textElement.minFontSizeMm > next
+                              ? { minFontSizeMm: next }
+                              : {}),
+                          } as Partial<LabelElement>);
                         }}
                         className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus"
                       />
@@ -628,7 +664,7 @@ export function LabelDesigner({
                     <label className="mt-4 block text-[11px] font-semibold text-muted">
                       {t("designer.alignment")}
                       <select
-                        value={(selected as Extract<LabelElement, { type: "name" }>).align ?? "left"}
+                        value={(selected as TextElement).align ?? "left"}
                         onChange={(event) => updateElement(selected.type, { align: event.target.value as "left" | "center" | "right" } as Partial<LabelElement>)}
                         className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
                       >
@@ -637,6 +673,49 @@ export function LabelDesigner({
                         <option value="right">{t("designer.align.right")}</option>
                       </select>
                     </label>
+                    <label className="mt-4 block text-[11px] font-semibold text-muted">
+                      {t("designer.textOverflow")}
+                      <select
+                        value={(selected as TextElement).textOverflow ?? "ellipsis"}
+                        onChange={(event) =>
+                          updateElement(selected.type, {
+                            textOverflow: event.target.value as "ellipsis" | "shrink",
+                          } as Partial<LabelElement>)
+                        }
+                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
+                      >
+                        <option value="ellipsis">
+                          {t("designer.textOverflowModes.ellipsis")}
+                        </option>
+                        <option value="shrink">
+                          {t("designer.textOverflowModes.shrink")}
+                        </option>
+                      </select>
+                    </label>
+                    {(selected as TextElement).textOverflow === "shrink" ? (
+                      <label className="mt-4 block text-[11px] font-semibold text-muted">
+                        {t("designer.minimumFontSize")}
+                        <input
+                          type="number"
+                          min="0.5"
+                          max={(selected as TextElement).fontSizeMm ?? 3}
+                          step="0.1"
+                          value={
+                            (selected as TextElement).minFontSizeMm ??
+                            Math.min((selected as TextElement).fontSizeMm ?? 3, 1)
+                          }
+                          onChange={(event) => {
+                            const next = Number(event.target.value);
+                            if (Number.isFinite(next)) {
+                              updateElement(selected.type, {
+                                minFontSizeMm: next,
+                              } as Partial<LabelElement>);
+                            }
+                          }}
+                          className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus"
+                        />
+                      </label>
+                    ) : null}
                   </>
                 ) : null}
                 <p className="mt-5 text-[11px] leading-5 text-muted">

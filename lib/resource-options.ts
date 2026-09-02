@@ -984,6 +984,7 @@ export async function generateResourceOptionVariants(options: {
           slotKey: base.slotKey,
           componentResourceId: value.componentResourceId,
           quantityPerAssembly: base.quantityPerAssembly,
+          quantityUnit: "base" as const,
           position: base.position,
           note: base.note,
           removed: false,

@@ -3,6 +3,7 @@
 import {
   Boxes,
   ChevronRight,
+  CircleDollarSign,
   CircleDot,
   GitBranch,
   LayoutList,
@@ -30,10 +31,17 @@ import {
 import { Badge, Button, Card, cn } from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
 import {
+  bomQuantityToDisplay,
+  bomQuantityUnitName,
+  normalizeBomQuantityUnit,
+} from "@/lib/bom-quantity-units";
+import {
+  buildConnectionCostStructure,
   buildWavyConnectionPath,
   buildResourceConnectionGraph,
   getConnectionFamilyGroups,
   orderConnectionRows,
+  type ConnectionCostStructureItem,
   type ConnectionDiagramBomComponent,
   type ConnectionDiagramBomParent,
   type ConnectionDiagramConnection,
@@ -44,12 +52,36 @@ import {
   type ConnectionDiagramPayload,
   type ConnectionDiagramRelation,
   type ConnectionDiagramResource,
+  type ConnectionUnitCost,
 } from "@/lib/resource-connection-diagram";
 
 type PayloadResult = {
   payload: ConnectionDiagramPayload;
   partial: boolean;
 };
+
+function displayBomQuantity(
+  component: ConnectionDiagramBomComponent | ConnectionDiagramBomParent,
+) {
+  const configuration = {
+    unitName: component.unitName ?? "unit",
+    purchaseUnitName: component.purchaseUnitName ?? null,
+    purchaseUnitFactor: component.purchaseUnitFactor ?? null,
+  };
+  const unit = normalizeBomQuantityUnit(
+    component.quantityPerAssembly,
+    component.quantityUnit,
+    configuration,
+  );
+  return {
+    count: bomQuantityToDisplay(
+      component.quantityPerAssembly,
+      unit,
+      configuration,
+    ),
+    unit: bomQuantityUnitName(unit, configuration),
+  };
+}
 
 type ConnectionDiagramCover = {
   id: string;
@@ -67,6 +99,8 @@ type ConnectionStockSummary = {
   quantity: number;
   minimumStock: number;
   unitName: string;
+  purchaseUnitName: string | null;
+  purchaseUnitFactor: number | null;
   status: ConnectionStockStatus;
   priceFlow: ConnectionPriceFlow;
 };
@@ -347,6 +381,16 @@ async function loadResourceStock(resourceIds: string[], signal: AbortSignal) {
   ).then((result) => result.stock);
 }
 
+async function loadResourceCosts(resourceIds: string[], signal: AbortSignal) {
+  if (!resourceIds.length) return [];
+  const search = new URLSearchParams();
+  for (const resourceId of resourceIds) search.append("id", resourceId);
+  return fetchJson<{ costs: ConnectionUnitCost[] }>(
+    `/api/v1/resources/cost-summaries?${search.toString()}`,
+    { cache: "no-store", signal },
+  ).then((result) => result.costs);
+}
+
 export function ResourceConnectionDiagram({
   resource,
   canEdit,
@@ -376,6 +420,9 @@ export function ResourceConnectionDiagram({
   const [stockSnapshot, setStockSnapshot] = useState<
     ReadonlyMap<string, ConnectionStockSummary>
   >(new Map());
+  const [costSnapshot, setCostSnapshot] = useState<
+    ReadonlyMap<string, ConnectionUnitCost>
+  >(new Map());
   const [depth, setDepth] = useState(3);
   const [partial, setPartial] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -388,8 +435,11 @@ export function ResourceConnectionDiagram({
   const [listRemoveError, setListRemoveError] = useState<string | null>(null);
   const [showStock, setShowStock] = useState(false);
   const [showPriceFlow, setShowPriceFlow] = useState(false);
+  const [showCostStructure, setShowCostStructure] = useState(false);
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState<string | null>(null);
+  const [costLoading, setCostLoading] = useState(false);
+  const [costError, setCostError] = useState<string | null>(null);
 
   const load = useCallback(
     async (requestedDepth: number, refresh = false) => {
@@ -573,6 +623,48 @@ export function ResourceConnectionDiagram({
       });
     return () => controller.abort();
   }, [canViewStock, showPriceFlow, showStock, stockResourceKey, t]);
+
+  useEffect(() => {
+    if (!showCostStructure || !stockResourceKey) {
+      setCostLoading(false);
+      setCostError(null);
+      return;
+    }
+    const controller = new AbortController();
+    setCostLoading(true);
+    setCostError(null);
+    void loadResourceCosts(stockResourceKey.split("|"), controller.signal)
+      .then((costs) => {
+        if (!controller.signal.aborted) {
+          setCostSnapshot(
+            new Map(costs.map((item) => [item.resourceId, item])),
+          );
+        }
+      })
+      .catch((costLoadError) => {
+        if (controller.signal.aborted) return;
+        setCostError(
+          costLoadError instanceof Error
+            ? costLoadError.message
+            : t("connectionDiagram.costStructure.errors.load"),
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCostLoading(false);
+      });
+    return () => controller.abort();
+  }, [showCostStructure, stockResourceKey, t]);
+
+  const costStructure = useMemo(
+    () =>
+      buildConnectionCostStructure({
+        rootResourceId: resource.id,
+        payloads: payloadSnapshot,
+        unitCosts: costSnapshot,
+        maxDepth: depth,
+      }),
+    [costSnapshot, depth, payloadSnapshot, resource.id],
+  );
 
   const rows = useMemo(() => {
     const result = new Map<number, DisplayRowItem[]>();
@@ -793,9 +885,11 @@ export function ResourceConnectionDiagram({
                           <input
                             type="checkbox"
                             checked={showPriceFlow}
-                            onChange={(event) =>
-                              setShowPriceFlow(event.target.checked)
-                            }
+                            onChange={(event) => {
+                              const checked = event.target.checked;
+                              setShowPriceFlow(checked);
+                              if (checked) setShowCostStructure(false);
+                            }}
                             className="size-3.5 rounded border-border-strong accent-brand-solid"
                           />
                           <span>{t("connectionDiagram.priceFlow.show")}</span>
@@ -808,6 +902,27 @@ export function ResourceConnectionDiagram({
                         </label>
                       </>
                     ) : null}
+                    <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
+                      <input
+                        type="checkbox"
+                        checked={showCostStructure}
+                        onChange={(event) => {
+                          const checked = event.target.checked;
+                          setShowCostStructure(checked);
+                          if (checked) setShowPriceFlow(false);
+                        }}
+                        className="size-3.5 rounded border-border-strong accent-brand-solid"
+                      />
+                      <span>{t("connectionDiagram.costStructure.show")}</span>
+                      {showCostStructure && costLoading ? (
+                        <LoaderCircle
+                          className="size-3 animate-spin text-muted"
+                          aria-label={t(
+                            "connectionDiagram.costStructure.loading",
+                          )}
+                        />
+                      ) : null}
+                    </label>
                     <label className="flex h-8 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
                       <span>{t("connectionDiagram.depth.label")}</span>
                       <select
@@ -890,6 +1005,18 @@ export function ResourceConnectionDiagram({
               <p className="border-b border-danger-border bg-danger-soft px-5 py-2.5 text-xs text-danger sm:px-6">
                 {stockError}
               </p>
+            ) : null}
+            {costError ? (
+              <p className="border-b border-danger-border bg-danger-soft px-5 py-2.5 text-xs text-danger sm:px-6">
+                {costError}
+              </p>
+            ) : null}
+            {showCostStructure && costStructure.root ? (
+              <CostStructureSummary
+                item={costStructure.root}
+                locale={locale}
+                number={number}
+              />
             ) : null}
             {error ? (
               <div className="px-5 py-8 text-center sm:px-6">
@@ -1006,6 +1133,13 @@ export function ResourceConnectionDiagram({
                                   ? (stockSnapshot.get(
                                       item.node.resource.id,
                                     )?.priceFlow ?? null)
+                                  : null
+                              }
+                              costStructure={
+                                showCostStructure && item.type === "resource"
+                                  ? (costStructure.items.get(
+                                      item.node.resource.id,
+                                    ) ?? null)
                                   : null
                               }
                               buildableQuantity={
@@ -1191,18 +1325,19 @@ function ConnectionListView({
             tone="warning"
             label={t("connectionDiagram.list.bom")}
           >
-            {bomComponents.map((component) => (
-              <ListItem
-                key={component.resourceId}
-                href={`/inventory/${component.resourceId}`}
-                name={component.name}
-                subtitle={t("connectionDiagram.list.quantity", {
-                  count: component.quantityPerAssembly,
-                })}
-                icon={<Package className="size-3.5" />}
-                iconTone="text-warning"
-              />
-            ))}
+            {bomComponents.map((component) => {
+              const quantity = displayBomQuantity(component);
+              return (
+                <ListItem
+                  key={component.resourceId}
+                  href={`/inventory/${component.resourceId}`}
+                  name={component.name}
+                  subtitle={t("connectionDiagram.list.quantity", quantity)}
+                  icon={<Package className="size-3.5" />}
+                  iconTone="text-warning"
+                />
+              );
+            })}
           </ListSection>
         ) : null}
 
@@ -1212,18 +1347,22 @@ function ConnectionListView({
             tone="warning"
             label={t("connectionDiagram.list.usedIn")}
           >
-            {bomParents.map((parent) => (
-              <ListItem
-                key={parent.resourceId}
-                href={`/inventory/${parent.resourceId}`}
-                name={parent.name}
-                subtitle={t("connectionDiagram.list.usedInQuantity", {
-                  count: parent.quantityPerAssembly,
-                })}
-                icon={<Package className="size-3.5" />}
-                iconTone="text-warning"
-              />
-            ))}
+            {bomParents.map((parent) => {
+              const quantity = displayBomQuantity(parent);
+              return (
+                <ListItem
+                  key={parent.resourceId}
+                  href={`/inventory/${parent.resourceId}`}
+                  name={parent.name}
+                  subtitle={t(
+                    "connectionDiagram.list.usedInQuantity",
+                    quantity,
+                  )}
+                  icon={<Package className="size-3.5" />}
+                  iconTone="text-warning"
+                />
+              );
+            })}
           </ListSection>
         ) : null}
 
@@ -1711,6 +1850,7 @@ function PositionedGraphNode({
   cover,
   stock,
   priceFlow,
+  costStructure,
   buildableQuantity,
   rootResourceId,
   x,
@@ -1725,6 +1865,7 @@ function PositionedGraphNode({
   cover: ConnectionDiagramCover | null;
   stock: ConnectionStockSummary | null;
   priceFlow: ConnectionPriceFlow | null;
+  costStructure: ConnectionCostStructureItem | null;
   buildableQuantity: number | null;
   rootResourceId: string;
   x: number;
@@ -1765,6 +1906,7 @@ function PositionedGraphNode({
     ? t("connectionDiagram.current")
     : Array.from(new Set(descriptions)).join(" · ") ||
       humanize(item.node.resource.type ?? "inventory");
+  const showsFinancialDetails = Boolean(priceFlow || costStructure);
   const content = (
     <>
       <span
@@ -1776,7 +1918,7 @@ function PositionedGraphNode({
         <span
           className={cn(
             "grid place-items-center overflow-hidden rounded-xl bg-surface-muted",
-            priceFlow ? "size-16" : "size-20",
+            showsFinancialDetails ? "size-16" : "size-20",
           )}
           style={
             cover
@@ -1832,6 +1974,14 @@ function PositionedGraphNode({
           locale={locale}
         />
       ) : null}
+      {costStructure ? (
+        <CostStructureIndicator
+          item={costStructure}
+          isRoot={isRoot}
+          number={number}
+          locale={locale}
+        />
+      ) : null}
     </>
   );
   const selected = item.node.resource.id === selectedResourceId;
@@ -1842,7 +1992,7 @@ function PositionedGraphNode({
   } ${selected ? "ring-4 ring-focus/15" : ""}`;
   const contentClassName =
     `flex h-full w-full flex-col items-center justify-center rounded-[inherit] px-3 py-2 text-center ${
-      priceFlow ? "gap-1.5" : "gap-2"
+      showsFinancialDetails ? "gap-1.5" : "gap-2"
     }`;
   const style = { left: x, top: y, width: NODE_WIDTH, height: NODE_HEIGHT };
   if (editing) {
@@ -1886,6 +2036,204 @@ function PositionedGraphNode({
     >
       <span className={contentClassName}>{content}</span>
     </Link>
+  );
+}
+
+function CostStructureSummary({
+  item,
+  locale,
+  number,
+}: {
+  item: ConnectionCostStructureItem;
+  locale: string;
+  number: Intl.NumberFormat;
+}) {
+  const { t } = useT("resource");
+  const money = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: item.currency,
+  });
+  const incomplete =
+    item.missingDirectComponentPriceCount > 0 ||
+    item.incompatibleCurrencyCount > 0;
+  const componentCost = money.format(item.directComponentCostCents / 100);
+  const notices = [
+    item.unitPriceCents === null
+      ? t("connectionDiagram.costStructure.summary.missingItemPrice")
+      : null,
+    item.missingDirectComponentPriceCount > 0
+      ? t("connectionDiagram.costStructure.summary.missingComponentPrices", {
+          count: item.missingDirectComponentPriceCount,
+          value: number.format(item.missingDirectComponentPriceCount),
+        })
+      : null,
+    item.incompatibleCurrencyCount > 0
+      ? t("connectionDiagram.costStructure.summary.incompatibleCurrencies", {
+          count: item.incompatibleCurrencyCount,
+          value: number.format(item.incompatibleCurrencyCount),
+        })
+      : null,
+  ].filter((notice): notice is string => Boolean(notice));
+
+  return (
+    <div className="border-b border-border bg-warning-soft/40 px-5 py-3 sm:px-6">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-warning-soft text-warning">
+          <CircleDollarSign className="size-4" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <div>
+              <p className="text-xs font-semibold text-foreground">
+                {t("connectionDiagram.costStructure.summary.title")}
+              </p>
+              <p className="mt-0.5 text-[10px] leading-4 text-muted">
+                {t("connectionDiagram.costStructure.summary.description")}
+              </p>
+            </div>
+            <span className="text-[10px] font-semibold text-muted">
+              {t("connectionDiagram.costStructure.summary.componentCount", {
+                count: item.directComponentCount,
+                value: number.format(item.directComponentCount),
+              })}
+            </span>
+          </div>
+          <dl className="mt-2 grid grid-cols-3 overflow-hidden rounded-lg border border-warning-border bg-surface">
+            <CostSummaryValue
+              label={t(
+                "connectionDiagram.costStructure.summary.itemPrice",
+              )}
+              value={
+                item.unitPriceCents === null
+                  ? "—"
+                  : money.format(item.unitPriceCents / 100)
+              }
+            />
+            <CostSummaryValue
+              label={t(
+                "connectionDiagram.costStructure.summary.componentCosts",
+              )}
+              value={`${incomplete ? "≥" : ""}${componentCost}`}
+              bordered
+            />
+            <CostSummaryValue
+              label={t("connectionDiagram.costStructure.summary.remaining")}
+              value={
+                item.remainingPriceCents === null
+                  ? "—"
+                  : money.format(item.remainingPriceCents / 100)
+              }
+              tone={
+                item.remainingPriceCents === null
+                  ? "muted"
+                  : item.remainingPriceCents < 0
+                    ? "danger"
+                    : "success"
+              }
+              bordered
+            />
+          </dl>
+          {notices.length ? (
+            <p className="mt-2 text-[10px] leading-4 text-warning">
+              {notices.join(" · ")}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CostSummaryValue({
+  label,
+  value,
+  bordered = false,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  bordered?: boolean;
+  tone?: "default" | "muted" | "success" | "danger";
+}) {
+  return (
+    <div className={cn("min-w-0 px-2.5 py-2", bordered && "border-l border-border")}>
+      <dt className="truncate text-[9px] font-semibold uppercase tracking-wide text-muted">
+        {label}
+      </dt>
+      <dd
+        className={cn(
+          "mt-0.5 truncate text-xs font-bold tabular-nums",
+          tone === "default" && "text-foreground",
+          tone === "muted" && "text-muted",
+          tone === "success" && "text-success",
+          tone === "danger" && "text-danger",
+        )}
+        title={value}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function CostStructureIndicator({
+  item,
+  isRoot,
+  number,
+  locale,
+}: {
+  item: ConnectionCostStructureItem;
+  isRoot: boolean;
+  number: Intl.NumberFormat;
+  locale: string;
+}) {
+  const { t } = useT("resource");
+  const money = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: item.currency,
+  });
+  const unitPrice =
+    item.unitPriceCents === null
+      ? null
+      : money.format(item.unitPriceCents / 100);
+  const isRequiredComponent = !isRoot && item.requiredQuantity !== null;
+  const primaryLabel = unitPrice
+    ? isRequiredComponent
+      ? t("connectionDiagram.costStructure.calculation", {
+          quantity: number.format(item.requiredQuantity ?? 0),
+          unitPrice,
+        })
+      : t("connectionDiagram.costStructure.unitPrice", { price: unitPrice })
+    : t("connectionDiagram.costStructure.noUnitPrice");
+  const totalLabel =
+    isRequiredComponent && item.totalPriceCents !== null
+      ? t("connectionDiagram.costStructure.total", {
+          total: money.format(item.totalPriceCents / 100),
+        })
+      : null;
+
+  return (
+    <span
+      className={cn(
+        "grid w-full overflow-hidden rounded-md border bg-surface-subtle px-1.5 py-1 tabular-nums",
+        unitPrice ? "border-warning-border" : "border-border",
+      )}
+      title={[primaryLabel, totalLabel].filter(Boolean).join(" · ")}
+    >
+      <span
+        className={cn(
+          "block truncate text-[8px] font-semibold leading-3",
+          unitPrice ? "text-warning" : "text-muted",
+        )}
+      >
+        {primaryLabel}
+      </span>
+      {totalLabel ? (
+        <span className="block truncate text-[9px] font-bold leading-3 text-foreground">
+          {totalLabel}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

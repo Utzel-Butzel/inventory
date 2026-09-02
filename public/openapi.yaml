@@ -5166,7 +5166,9 @@ components:
             height: { type: number, exclusiveMinimum: 0, maximum: 100 }
             visible: { type: boolean }
             fontSizeMm: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            minFontSizeMm: { type: number, exclusiveMinimum: 0, maximum: 100, description: Smallest font size used when textOverflow is shrink. }
             align: { type: string, enum: [left, center, right], default: left }
+            textOverflow: { type: string, enum: [ellipsis, shrink], default: ellipsis }
       description: A normalized percentage box. The element must fit entirely inside the label; options are restricted by element type.
     LabelElements:
       type: array

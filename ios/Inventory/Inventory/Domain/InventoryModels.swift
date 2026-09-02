@@ -245,6 +245,7 @@ public struct InventoryMedia: Codable, Identifiable, Equatable, Sendable {
 public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
     public let id: UUID
     public let name: String
+    public let slugs: [String]?
     public let description: String
     public let type: InventoryResourceType
     public let status: InventoryResourceStatus
@@ -274,6 +275,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
     public init(
         id: UUID,
         name: String,
+        slugs: [String] = [],
         description: String,
         type: InventoryResourceType,
         status: InventoryResourceStatus,
@@ -302,6 +304,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
     ) {
         self.id = id
         self.name = name
+        self.slugs = slugs
         self.description = description
         self.type = type
         self.status = status
@@ -332,6 +335,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id
         case name
+        case slugs
         case description
         case type
         case status

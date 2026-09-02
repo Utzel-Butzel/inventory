@@ -235,6 +235,16 @@
   "list": {
     "title": "Inventory"
   },
+  "favorites": {
+    "title": "Favorites",
+    "emptyTitle": "No favorites yet",
+    "emptyDescription": "Mark items with the star to keep them close at hand here.",
+    "add": "Add {{name}} to favorites",
+    "remove": "Remove {{name}} from favorites",
+    "errors": {
+      "update": "The favorite could not be updated."
+    }
+  },
   "search": {
     "label": "Search inventory",
     "placeholder": "Search name, slug, description, SKU, tag or location…",

@@ -73,7 +73,15 @@ final class AppState: ObservableObject {
     var canManageStock: Bool { allows("stock.manage", legacyScope: "write") }
     var canReadSpatial: Bool { allows("spatial.read", legacyScope: "read") }
     var canManageSpatial: Bool { allows("spatial.manage", legacyScope: "write") }
-    var canUseAI: Bool { allows("ai.use", legacyScope: "ai") }
+    var canUseAI: Bool {
+        hasGranularPermissions
+            ? grantedPermissions.contains { $0.hasPrefix("ai.") }
+            : grantedScopes.contains("ai")
+    }
+    var canAnalyzeInventory: Bool { allows("ai.analyze", legacyScope: "ai") }
+    var canResearchInventory: Bool { allows("ai.research", legacyScope: "ai") }
+    var canGenerateInventoryImages: Bool { allows("ai.images", legacyScope: "ai") }
+    var canTranslateInventory: Bool { allows("ai.translate", legacyScope: "ai") }
     var canCaptureInventory: Bool { canCreateInventory && canUpdateInventory }
     var canWrite: Bool {
         canCreateInventory || canUpdateInventory || canDeleteInventory ||

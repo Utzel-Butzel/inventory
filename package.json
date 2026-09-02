@@ -22,6 +22,7 @@
     "test:locations": "node --experimental-strip-types --test tests/spatial-containment.test.mjs tests/client-media-location.test.mjs",
     "test:labels": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/resource-short-link.test.mjs tests/label-setup-contract.test.mjs",
     "test:slugs": "node --experimental-strip-types --test tests/resource-slug-contract.test.mjs",
+    "test:favorites": "node --test tests/resource-favorites-contract.test.mjs",
     "test:translations": "node --experimental-strip-types --test tests/translation-contract.test.mjs",
     "test:i18n": "node --experimental-strip-types --test tests/ui-i18n.test.mjs",
     "test:custom-fields": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/custom-field-contract.test.mjs",

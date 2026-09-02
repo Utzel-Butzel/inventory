@@ -1,6 +1,11 @@
 "use client";
 
-import { type CSSProperties } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { useT } from "next-i18next/client";
 
 import {
@@ -25,6 +30,11 @@ export type LabelResource = Pick<
   | "type"
   | "quantity"
   | "cover"
+>;
+
+type TextElement = Extract<
+  LabelElement,
+  { type: "name" | "identifier" | "url" | "location" }
 >;
 
 const elementPosition = (element: LabelElement): CSSProperties => ({
@@ -66,14 +76,12 @@ function PrintableImage({
   );
 }
 
-function textStyle(
-  element: Extract<
-    LabelElement,
-    { type: "name" | "identifier" | "url" | "location" }
-  >,
-  pixelsPerMm?: number,
-): CSSProperties {
-  const defaultSize = element.type === "name" ? 3.8 : element.type === "url" ? 1.8 : 2.5;
+function defaultFontSizeMm(element: TextElement) {
+  return element.type === "name" ? 3.8 : element.type === "url" ? 1.8 : 2.5;
+}
+
+function textStyle(element: TextElement, pixelsPerMm?: number): CSSProperties {
+  const defaultSize = defaultFontSizeMm(element);
   return {
     fontSize: pixelsPerMm
       ? `${(element.fontSizeMm ?? defaultSize) * pixelsPerMm}px`
@@ -86,6 +94,98 @@ function textStyle(
           ? "flex-end"
           : "flex-start",
   };
+}
+
+function ShrinkingText({
+  value,
+  element,
+}: {
+  value: string;
+  element: TextElement;
+}) {
+  const textRef = useRef<HTMLSpanElement>(null);
+  const maximumFontSizeMm = element.fontSizeMm ?? defaultFontSizeMm(element);
+  const minimumFontSizeMm = Math.min(
+    maximumFontSizeMm,
+    element.minFontSizeMm ?? 1,
+  );
+
+  const fitText = useCallback(() => {
+    const text = textRef.current;
+    const container = text?.parentElement;
+    if (!text || !container) return;
+
+    text.style.fontSize = "";
+    const maximumFontSizePx = Number.parseFloat(
+      window.getComputedStyle(text).fontSize,
+    );
+    if (!Number.isFinite(maximumFontSizePx) || maximumFontSizePx <= 0) return;
+
+    const minimumFontSizePx =
+      maximumFontSizePx * (minimumFontSizeMm / maximumFontSizeMm);
+    const fits = () =>
+      text.scrollWidth <= container.clientWidth + 0.5 &&
+      text.scrollHeight <= container.clientHeight + 0.5;
+
+    if (fits()) return;
+
+    text.style.fontSize = `${minimumFontSizePx}px`;
+    if (!fits()) return;
+
+    let smallestFit = minimumFontSizePx;
+    let largestCandidate = maximumFontSizePx;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const candidate = (smallestFit + largestCandidate) / 2;
+      text.style.fontSize = `${candidate}px`;
+      if (fits()) {
+        smallestFit = candidate;
+      } else {
+        largestCandidate = candidate;
+      }
+    }
+    text.style.fontSize = `${Math.floor(smallestFit * 100) / 100}px`;
+  }, [maximumFontSizeMm, minimumFontSizeMm]);
+
+  useLayoutEffect(() => {
+    fitText();
+    const text = textRef.current;
+    const container = text?.parentElement;
+    if (!container || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(fitText);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [fitText, value]);
+
+  return (
+    <span
+      ref={textRef}
+      className={`${styles.designedTextContent} ${styles.designedTextShrink}`}
+    >
+      {value}
+    </span>
+  );
+}
+
+function EllipsisText({
+  value,
+  element,
+  labelHeightMm,
+}: {
+  value: string;
+  element: TextElement;
+  labelHeightMm: number;
+}) {
+  const fontSizeMm = element.fontSizeMm ?? defaultFontSizeMm(element);
+  const availableHeightMm = (labelHeightMm * element.height) / 100;
+  const lines = Math.max(1, Math.floor(availableHeightMm / (fontSizeMm * 1.05)));
+  return (
+    <span
+      className={`${styles.designedTextContent} ${styles.designedTextEllipsis}`}
+      style={{ WebkitLineClamp: lines }}
+    >
+      {value}
+    </span>
+  );
 }
 
 export function LabelRenderer({
@@ -183,6 +283,7 @@ export function LabelRenderer({
                 : element.type === "url"
                   ? shortUrl
                   : location;
+          const textOverflow = element.textOverflow ?? "ellipsis";
           return (
             <div
               key={element.type}
@@ -195,7 +296,15 @@ export function LabelRenderer({
               }`}
               style={{ ...position, ...textStyle(element, pixelsPerMm) }}
             >
-              {value}
+              {textOverflow === "shrink" ? (
+                <ShrinkingText value={value} element={element} />
+              ) : (
+                <EllipsisText
+                  value={value}
+                  element={element}
+                  labelHeightMm={setup.heightMm}
+                />
+              )}
             </div>
           );
         })}

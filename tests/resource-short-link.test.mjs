@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { parseResourceCode } from "../lib/resource-code.ts";
@@ -50,4 +51,14 @@ test("recognizes compact links in scanner input", () => {
     parseResourceCode(`https://inventory.example/r/${code}`).resourceId,
     resourceId,
   );
+});
+
+test("keeps short-link redirects on the current public origin", async () => {
+  const route = await readFile(
+    new URL("../app/r/[code]/route.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(route, /Location: redirectLocation/);
+  assert.doesNotMatch(route, /request\.url/);
 });

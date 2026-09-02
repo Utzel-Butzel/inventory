@@ -46,6 +46,8 @@ export async function GET(request: Request) {
   );
   const result = await listResources({
     organizationId: authorization.identity.organizationId,
+    favoriteUserId: authorization.identity.userId,
+    favoritesOnly: url.searchParams.get("favorites") === "true",
     query: url.searchParams.get("q") ?? undefined,
     type: url.searchParams.get("type") ?? undefined,
     status: url.searchParams.get("status") ?? undefined,

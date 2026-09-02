@@ -35,6 +35,10 @@ export type ConnectionDiagramBomComponent = {
   type?: string | null;
   status?: string | null;
   quantityPerAssembly: number;
+  quantityUnit?: "base" | "purchase";
+  unitName?: string;
+  purchaseUnitName?: string | null;
+  purchaseUnitFactor?: number | null;
   position?: number;
   note?: string | null;
   origin?: "local" | "base" | "inherited" | "override" | "variant";
@@ -57,8 +61,22 @@ export type ConnectionDiagramDescriptor =
   | { type: "primary" }
   | { type: "variant" }
   | { type: "sibling" }
-  | { type: "component"; quantity: number }
-  | { type: "assembly"; quantity: number }
+  | {
+      type: "component";
+      quantity: number;
+      quantityUnit?: "base" | "purchase";
+      unitName?: string;
+      purchaseUnitName?: string | null;
+      purchaseUnitFactor?: number | null;
+    }
+  | {
+      type: "assembly";
+      quantity: number;
+      quantityUnit?: "base" | "purchase";
+      unitName?: string;
+      purchaseUnitName?: string | null;
+      purchaseUnitFactor?: number | null;
+    }
   | { type: "located-in" }
   | { type: "contains" }
   | { type: "relationship"; label: string };
@@ -90,6 +108,119 @@ export type ConnectionDiagramPayload = {
   bomParents?: ConnectionDiagramBomParent[];
   bomBuildableQuantity?: number | null;
 };
+
+export type ConnectionUnitCost = {
+  resourceId: string;
+  unitPriceCents: number | null;
+  currency: string;
+};
+
+export type ConnectionCostStructureItem = ConnectionUnitCost & {
+  requiredQuantity: number | null;
+  totalPriceCents: number | null;
+  directComponentCount: number;
+  directComponentCostCents: number;
+  missingDirectComponentPriceCount: number;
+  incompatibleCurrencyCount: number;
+  remainingPriceCents: number | null;
+};
+
+export type ConnectionCostStructure = {
+  items: ReadonlyMap<string, ConnectionCostStructureItem>;
+  root: ConnectionCostStructureItem | null;
+};
+
+export function buildConnectionCostStructure({
+  rootResourceId,
+  payloads,
+  unitCosts,
+  maxDepth,
+}: {
+  rootResourceId: string;
+  payloads: ReadonlyMap<string, ConnectionDiagramPayload>;
+  unitCosts: ReadonlyMap<string, ConnectionUnitCost>;
+  maxDepth: number;
+}): ConnectionCostStructure {
+  const requiredQuantities = new Map<string, number>([[rootResourceId, 1]]);
+  const depthLimit = Math.max(0, Math.floor(maxDepth));
+
+  const walk = (
+    resourceId: string,
+    requiredQuantity: number,
+    currentDepth: number,
+    path: ReadonlySet<string>,
+  ) => {
+    if (currentDepth >= depthLimit) return;
+    const components = payloads.get(resourceId)?.bomComponents ?? [];
+    for (const component of components) {
+      if (path.has(component.resourceId)) continue;
+      const componentQuantity =
+        requiredQuantity * component.quantityPerAssembly;
+      requiredQuantities.set(
+        component.resourceId,
+        (requiredQuantities.get(component.resourceId) ?? 0) + componentQuantity,
+      );
+      walk(
+        component.resourceId,
+        componentQuantity,
+        currentDepth + 1,
+        new Set([...path, component.resourceId]),
+      );
+    }
+  };
+
+  walk(rootResourceId, 1, 0, new Set([rootResourceId]));
+
+  const items = new Map<string, ConnectionCostStructureItem>();
+  for (const unitCost of unitCosts.values()) {
+    const requiredQuantity = requiredQuantities.get(unitCost.resourceId) ?? null;
+    if (requiredQuantity === null) continue;
+    const components =
+      payloads.get(unitCost.resourceId)?.bomComponents ?? [];
+    let directComponentCostCents = 0;
+    let missingDirectComponentPriceCount = 0;
+    let incompatibleCurrencyCount = 0;
+
+    for (const component of components) {
+      const componentCost = unitCosts.get(component.resourceId);
+      if (!componentCost || componentCost.unitPriceCents === null) {
+        missingDirectComponentPriceCount += 1;
+        continue;
+      }
+      if (componentCost.currency !== unitCost.currency) {
+        incompatibleCurrencyCount += 1;
+        continue;
+      }
+      directComponentCostCents +=
+        componentCost.unitPriceCents * component.quantityPerAssembly;
+    }
+
+    const complete =
+      missingDirectComponentPriceCount === 0 &&
+      incompatibleCurrencyCount === 0;
+    items.set(unitCost.resourceId, {
+      ...unitCost,
+      requiredQuantity,
+      totalPriceCents:
+        requiredQuantity !== null && unitCost.unitPriceCents !== null
+          ? unitCost.unitPriceCents * requiredQuantity
+          : null,
+      directComponentCount: components.length,
+      directComponentCostCents,
+      missingDirectComponentPriceCount,
+      incompatibleCurrencyCount,
+      remainingPriceCents:
+        complete && unitCost.unitPriceCents !== null
+          ? unitCost.unitPriceCents - directComponentCostCents
+          : null,
+    });
+  }
+
+  return {
+    items,
+    root: items.get(rootResourceId) ?? null,
+  };
+}
 
 export type ConnectionDiagramGraphNode = {
   resource: ConnectionDiagramResource;
@@ -286,6 +417,16 @@ export function buildResourceConnectionDiagram(
         descriptor: {
           type: "component",
           quantity: component.quantityPerAssembly,
+          ...(component.quantityUnit
+            ? { quantityUnit: component.quantityUnit }
+            : {}),
+          ...(component.unitName ? { unitName: component.unitName } : {}),
+          ...(component.purchaseUnitName
+            ? { purchaseUnitName: component.purchaseUnitName }
+            : {}),
+          ...(component.purchaseUnitFactor
+            ? { purchaseUnitFactor: component.purchaseUnitFactor }
+            : {}),
         },
       },
     );
@@ -308,6 +449,14 @@ export function buildResourceConnectionDiagram(
         descriptor: {
           type: "assembly",
           quantity: parent.quantityPerAssembly,
+          ...(parent.quantityUnit ? { quantityUnit: parent.quantityUnit } : {}),
+          ...(parent.unitName ? { unitName: parent.unitName } : {}),
+          ...(parent.purchaseUnitName
+            ? { purchaseUnitName: parent.purchaseUnitName }
+            : {}),
+          ...(parent.purchaseUnitFactor
+            ? { purchaseUnitFactor: parent.purchaseUnitFactor }
+            : {}),
         },
       },
     );

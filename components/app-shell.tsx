@@ -84,6 +84,11 @@ const navigation: Array<{
         permission: "inventory.read",
       },
       {
+        labelKey: "navigation.favorites",
+        href: "/inventory/favorites",
+        permission: "inventory.read",
+      },
+      {
         labelKey: "navigation.labels",
         href: "/labels",
         permission: "labels.read",
@@ -173,6 +178,7 @@ const navigation: Array<{
 const pageNames: Record<string, string> = {
   dashboard: "navigation.statistics",
   inventory: "navigation.inventory",
+  favorites: "navigation.favorites",
   stock: "navigation.stock",
   map: "navigation.map",
   spaces: "navigation.rooms",

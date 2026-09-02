@@ -499,6 +499,7 @@ type FamilyBomLine = {
   slotKey: string;
   componentResourceId: string;
   quantityPerAssembly: number;
+  quantityUnit: "base" | "purchase";
   position: number;
   note: string;
 };
@@ -506,6 +507,7 @@ type FamilyBomLine = {
 const sameBomLine = (left: FamilyBomLine, right: FamilyBomLine) =>
   left.componentResourceId === right.componentResourceId &&
   left.quantityPerAssembly === right.quantityPerAssembly &&
+  left.quantityUnit === right.quantityUnit &&
   left.position === right.position &&
   left.note === right.note;
 
@@ -605,6 +607,7 @@ export async function attachExistingResourceVariant(options: {
         slotKey: bomLines.slotKey,
         componentResourceId: bomLines.componentResourceId,
         quantityPerAssembly: bomLines.quantityPerAssembly,
+        quantityUnit: bomLines.quantityUnit,
         position: bomLines.position,
         note: bomLines.note,
       })
@@ -811,6 +814,7 @@ export async function attachExistingResourceVariant(options: {
           slotKey: variantLine.slotKey,
           componentResourceId: variantLine.componentResourceId,
           quantityPerAssembly: variantLine.quantityPerAssembly,
+          quantityUnit: variantLine.quantityUnit,
           position: variantLine.position,
           note: variantLine.note,
           updatedAt: now,
@@ -825,6 +829,7 @@ export async function attachExistingResourceVariant(options: {
         slotKey: variantLine.slotKey,
         componentResourceId: variantLine.componentResourceId,
         quantityPerAssembly: variantLine.quantityPerAssembly,
+        quantityUnit: variantLine.quantityUnit,
         position: variantLine.position,
         note: variantLine.note,
         updatedAt: now,

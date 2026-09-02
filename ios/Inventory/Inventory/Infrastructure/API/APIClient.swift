@@ -611,6 +611,35 @@ public final class APIClient: Sendable {
         }
     }
 
+    public func deleteResourceMedia(resourceID: UUID, mediaID: UUID) async throws {
+        let url = try makeAPIURL(path: [
+            "resources",
+            resourceID.uuidString.lowercased(),
+            "media",
+            mediaID.uuidString.lowercased(),
+        ])
+        let request = try await authorizedRequest(url: url, method: "DELETE")
+        try await executeWithoutResponse(request)
+    }
+
+    public func reorderResourceMedia(
+        resourceID: UUID,
+        order: [UUID]
+    ) async throws -> InventoryResource {
+        let url = try makeAPIURL(path: [
+            "resources",
+            resourceID.uuidString.lowercased(),
+            "media",
+        ])
+        let request = try await jsonRequest(
+            url: url,
+            method: "PATCH",
+            body: ResourceMediaOrderRequest(order: order)
+        )
+        let response: ResourceResponse = try await execute(request)
+        return response.resource
+    }
+
     public func analyzeResource(
         id: UUID,
         overwrite: Bool = true,
@@ -632,6 +661,106 @@ public final class APIClient: Sendable {
         )
         setIdempotencyKey(idempotencyKey, on: &request)
         return try await execute(request)
+    }
+
+    public func researchResource(
+        id: UUID,
+        idempotencyKey: UUID? = nil
+    ) async throws -> InventoryResource {
+        let url = try makeAPIURL(path: [
+            "resources",
+            id.uuidString.lowercased(),
+            "research",
+        ])
+        var request = try await jsonRequest(
+            url: url,
+            method: "POST",
+            body: EmptyJSONRequest()
+        )
+        setIdempotencyKey(idempotencyKey, on: &request)
+        let response: ResourceResponse = try await execute(request)
+        return response.resource
+    }
+
+    public func acquireResourceImage(
+        id: UUID,
+        mode: ResourceImageAcquisitionMode,
+        query: String? = nil,
+        prompt: String? = nil,
+        modelID: String? = nil,
+        maximumImageSize: Int? = nil,
+        idempotencyKey: UUID? = nil
+    ) async throws -> InventoryResource {
+        let url = try makeAPIURL(path: [
+            "resources",
+            id.uuidString.lowercased(),
+            "image",
+        ])
+        let body = ResourceImageAcquisitionRequest(
+            mode: mode,
+            query: query,
+            prompt: prompt,
+            modelID: modelID,
+            maximumImageSize: maximumImageSize
+        )
+        var request = try await jsonRequest(url: url, method: "POST", body: body)
+        setIdempotencyKey(idempotencyKey, on: &request)
+        let response: ResourceResponse = try await execute(request)
+        return response.resource
+    }
+
+    public func getResourceTranslations(id: UUID) async throws -> ResourceTranslationOverview {
+        let url = try makeAPIURL(path: [
+            "resources",
+            id.uuidString.lowercased(),
+            "translations",
+        ])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        let response: ResourceTranslationOverviewResponse = try await execute(request)
+        return response.translations
+    }
+
+    public func translateResource(
+        id: UUID,
+        languageCodes: [String]? = nil,
+        force: Bool = false
+    ) async throws -> ResourceTranslationOverview {
+        let url = try makeAPIURL(path: [
+            "resources",
+            id.uuidString.lowercased(),
+            "translations",
+        ])
+        let request = try await jsonRequest(
+            url: url,
+            method: "POST",
+            body: ResourceTranslationRequest(languageCodes: languageCodes, force: force)
+        )
+        let response: ResourceTranslationOverviewResponse = try await execute(request)
+        return response.translations
+    }
+
+    public func updateResourceTranslation(
+        id: UUID,
+        languageCode: String,
+        expectedRevision: Int,
+        operations: [ResourceTranslationOperation]
+    ) async throws -> ResourceTranslationOverview {
+        let url = try makeAPIURL(path: [
+            "resources",
+            id.uuidString.lowercased(),
+            "translations",
+            languageCode,
+        ])
+        let request = try await jsonRequest(
+            url: url,
+            method: "PATCH",
+            body: ResourceTranslationPatchRequest(
+                expectedRevision: expectedRevision,
+                operations: operations
+            )
+        )
+        let response: ResourceTranslationOverviewResponse = try await execute(request)
+        return response.translations
     }
 
     public func recognizeInventoryObject(
@@ -1535,6 +1664,71 @@ struct AnalyzeRequest: Encodable, Sendable {
     let prompt: String?
 }
 
+private struct EmptyJSONRequest: Encodable, Sendable { }
+
+private struct ResourceMediaOrderRequest: Encodable, Sendable {
+    let order: [UUID]
+}
+
+public enum ResourceImageAcquisitionMode: String, Encodable, Hashable, Sendable {
+    case search
+    case generate
+}
+
+private struct ResourceImageAcquisitionRequest: Encodable, Sendable {
+    let mode: ResourceImageAcquisitionMode
+    let query: String?
+    let prompt: String?
+    let modelID: String?
+    let maximumImageSize: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case mode
+        case query
+        case prompt
+        case modelID = "modelId"
+        case maximumImageSize
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(mode, forKey: .mode)
+        switch mode {
+        case .search:
+            try container.encodeIfPresent(query, forKey: .query)
+        case .generate:
+            try container.encodeIfPresent(prompt, forKey: .prompt)
+            try container.encodeIfPresent(modelID, forKey: .modelID)
+            try container.encodeIfPresent(maximumImageSize, forKey: .maximumImageSize)
+        }
+    }
+}
+
+private struct ResourceTranslationOverviewResponse: Decodable, Sendable {
+    let translations: ResourceTranslationOverview
+}
+
+private struct ResourceTranslationRequest: Encodable, Sendable {
+    let languageCodes: [String]?
+    let force: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case languageCodes
+        case force
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(languageCodes, forKey: .languageCodes)
+        try container.encode(force, forKey: .force)
+    }
+}
+
+private struct ResourceTranslationPatchRequest: Encodable, Sendable {
+    let expectedRevision: Int
+    let operations: [ResourceTranslationOperation]
+}
+
 private enum ObjectCountStep {
     case completed(ObjectCountResponse)
     case processing(jobToken: String, retryAfter: TimeInterval, expiresAt: Date)
@@ -1564,7 +1758,7 @@ struct OrganizationSelectionRequest: Encodable, Sendable {
     }
 }
 
-public enum CoverTransparencyMethod: String, Codable, Sendable {
+public enum CoverTransparencyMethod: String, Codable, Hashable, Sendable {
     case greenscreen
     case differenceMatting = "difference-matting"
 }

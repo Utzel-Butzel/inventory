@@ -27,6 +27,7 @@ export type ClientResource = Omit<
   ResourceRecord,
   "createdAt" | "updatedAt"
 > & {
+  isFavorite?: boolean;
   slugs: string[];
   createdAt: string;
   updatedAt: string;

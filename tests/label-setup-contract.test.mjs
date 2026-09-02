@@ -28,7 +28,9 @@ const elements = [
     height: 10,
     visible: true,
     fontSizeMm: 3.5,
+    minFontSizeMm: 1,
     align: "center",
+    textOverflow: "shrink",
   },
   {
     type: "identifier",
@@ -133,6 +135,34 @@ test("allows only type-specific element options", () => {
         height: 20,
         visible: true,
         fit: "cover",
+      },
+    ]).success,
+    false,
+  );
+  assert.equal(
+    labelElementsSchema.safeParse([
+      {
+        type: "qr",
+        x: 0,
+        y: 0,
+        width: 20,
+        height: 20,
+        visible: true,
+        textOverflow: "ellipsis",
+      },
+    ]).success,
+    false,
+  );
+  assert.equal(
+    labelElementsSchema.safeParse([
+      {
+        type: "name",
+        x: 0,
+        y: 0,
+        width: 20,
+        height: 20,
+        visible: true,
+        textOverflow: "clip",
       },
     ]).success,
     false,

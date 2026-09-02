@@ -11,6 +11,7 @@ export const labelElementTypes = [
 ] as const;
 
 export const labelTextAlignments = ["left", "center", "right"] as const;
+export const labelTextOverflowModes = ["ellipsis", "shrink"] as const;
 export const labelImageFits = ["cover", "contain"] as const;
 
 const normalizedPositionSchema = z.number().finite().min(0).max(100);
@@ -26,7 +27,9 @@ const labelElementBoxShape = {
 
 const textElementOptions = {
   fontSizeMm: z.number().finite().positive().max(100).optional(),
+  minFontSizeMm: z.number().finite().positive().max(100).optional(),
   align: z.enum(labelTextAlignments).optional(),
+  textOverflow: z.enum(labelTextOverflowModes).optional(),
 };
 
 const labelElementSchemaBase = z.discriminatedUnion("type", [
@@ -141,6 +144,7 @@ export const labelSetupDeleteSchema = z
 
 export type LabelElementType = (typeof labelElementTypes)[number];
 export type LabelTextAlignment = (typeof labelTextAlignments)[number];
+export type LabelTextOverflowMode = (typeof labelTextOverflowModes)[number];
 export type LabelImageFit = (typeof labelImageFits)[number];
 export type LabelElement = z.infer<typeof labelElementSchema>;
 export type LabelSetupCreate = z.infer<typeof labelSetupCreateSchema>;

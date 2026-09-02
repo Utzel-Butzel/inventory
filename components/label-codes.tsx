@@ -480,7 +480,7 @@ export function QrCode({
   className?: string;
   ariaLabel?: string;
 }) {
-  const quietZone = 4;
+  const quietZone = 0;
   const matrix = useMemo(() => makeQrMatrix(value), [value]);
   const size = matrix.length + quietZone * 2;
   const path = useMemo(() => qrPath(matrix, quietZone), [matrix]);

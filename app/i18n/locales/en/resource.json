@@ -419,6 +419,31 @@
         "load": "Unable to load price flow for the connection flow."
       }
     },
+    "costStructure": {
+      "show": "Show cost structure",
+      "loading": "Loading cost structure…",
+      "unitPrice": "{{price}} per unit",
+      "calculation": "{{quantity}} × {{unitPrice}}",
+      "total": "= {{total}}",
+      "noUnitPrice": "No price per unit",
+      "summary": {
+        "title": "Cost for one finished item",
+        "description": "Direct components are totaled here; subassemblies are broken down further in their nodes.",
+        "componentCount_one": "{{value}} direct component",
+        "componentCount_other": "{{value}} direct components",
+        "itemPrice": "Item price",
+        "componentCosts": "Component costs",
+        "remaining": "Remaining",
+        "missingItemPrice": "This item does not have a price per unit yet.",
+        "missingComponentPrices_one": "{{value}} component does not have a price per unit.",
+        "missingComponentPrices_other": "{{value}} components do not have a price per unit.",
+        "incompatibleCurrencies_one": "{{value}} component uses a different currency.",
+        "incompatibleCurrencies_other": "{{value}} components use a different currency."
+      },
+      "errors": {
+        "load": "Unable to load the cost structure for the connection flow."
+      }
+    },
     "legend": {
       "family": "Variant family",
       "bom": "Bill of materials",
@@ -485,9 +510,11 @@
         "sku": "SKU · optional",
         "barcode": "Barcode · optional",
         "quantity": "Quantity per finished item",
+        "quantityUnit": "Unit",
         "note": "Assembly note · optional",
         "relationType": "Relationship type"
       },
+      "purchaseUnitConversion": "1 {{purchaseUnit}} = {{count}} {{baseUnit}}",
       "edge": {
         "title": "Edit connection",
         "between": "{{first}} ↔ {{second}}",
@@ -540,13 +567,13 @@
       "containsEmpty": "Does not contain any items",
       "bom": "Bill of materials",
       "usedIn": "Used in",
-      "usedInQuantity_one": "×{{count}} per finished item",
-      "usedInQuantity_other": "×{{count}} per finished item",
+      "usedInQuantity_one": "×{{count}} {{unit}} per finished item",
+      "usedInQuantity_other": "×{{count}} {{unit}} per finished item",
       "family": "Variant family",
       "otherRelations_one": "{{count}} other relationship",
       "otherRelations_other": "{{count}} other relationships",
       "automatic": "Auto",
-      "quantity": "×{{count}}",
+      "quantity": "×{{count}} {{unit}}",
       "primaryBadge": "Primary",
       "removeLocatedIn": "Remove location",
       "removeContains": "Remove child",

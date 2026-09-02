@@ -655,6 +655,42 @@ export const resourceSlugs = pgTable(
   ],
 );
 
+export const resourceFavorites = pgTable(
+  "resource_favorites",
+  {
+    organizationId: organizationIdColumn(),
+    userId: uuid("user_id").notNull(),
+    resourceId: uuid("resource_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "resource_favorites_organization_user_resource_pk",
+      columns: [table.organizationId, table.userId, table.resourceId],
+    }),
+    foreignKey({
+      name: "resource_favorites_membership_fk",
+      columns: [table.organizationId, table.userId],
+      foreignColumns: [
+        organizationMemberships.organizationId,
+        organizationMemberships.userId,
+      ],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "resource_favorites_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    index("resource_favorites_user_created_idx").on(
+      table.organizationId,
+      table.userId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const resourceComments = pgTable(
   "resource_comments",
   {
@@ -1713,6 +1749,10 @@ export const bomLines = pgTable(
       .references(() => resources.id, { onDelete: "restrict" }),
     slotKey: varchar("slot_key", { length: 80 }).notNull(),
     quantityPerAssembly: integer("quantity_per_assembly").notNull(),
+    quantityUnit: varchar("quantity_unit", { length: 16 })
+      .$type<"base" | "purchase">()
+      .notNull()
+      .default("base"),
     position: integer("position").notNull().default(0),
     note: text("note").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -1747,6 +1787,10 @@ export const bomLines = pgTable(
       "bom_lines_quantity_per_assembly_positive",
       sql`${table.quantityPerAssembly} > 0`,
     ),
+    check(
+      "bom_lines_quantity_unit_check",
+      sql`${table.quantityUnit} in ('base', 'purchase')`,
+    ),
     check("bom_lines_position_nonnegative", sql`${table.position} >= 0`),
     check(
       "bom_lines_slot_key_check",
@@ -1778,6 +1822,9 @@ export const variantBomOverrides = pgTable(
       { onDelete: "restrict" },
     ),
     quantityPerAssembly: integer("quantity_per_assembly"),
+    quantityUnit: varchar("quantity_unit", { length: 16 }).$type<
+      "base" | "purchase"
+    >(),
     position: integer("position"),
     note: text("note").notNull().default(""),
     removed: boolean("removed").notNull().default(false),
@@ -1815,7 +1862,7 @@ export const variantBomOverrides = pgTable(
     ),
     check(
       "variant_bom_overrides_payload_check",
-      sql`(${table.removed} and ${table.componentResourceId} is null and ${table.quantityPerAssembly} is null) or (not ${table.removed} and ${table.componentResourceId} is not null and ${table.quantityPerAssembly} > 0 and ${table.position} is not null)`,
+      sql`(${table.removed} and ${table.componentResourceId} is null and ${table.quantityPerAssembly} is null and ${table.quantityUnit} is null) or (not ${table.removed} and ${table.componentResourceId} is not null and ${table.quantityPerAssembly} > 0 and ${table.quantityUnit} in ('base', 'purchase') and ${table.position} is not null)`,
     ),
     check(
       "variant_bom_overrides_distinct_resources",
@@ -3891,6 +3938,7 @@ export const apiTokens = pgTable(
 export type ResourceRecord = typeof resources.$inferSelect;
 export type NewResource = typeof resources.$inferInsert;
 export type ResourceSlugRecord = typeof resourceSlugs.$inferSelect;
+export type ResourceFavoriteRecord = typeof resourceFavorites.$inferSelect;
 export type ResourceCommentRecord = typeof resourceComments.$inferSelect;
 export type NewResourceComment = typeof resourceComments.$inferInsert;
 export type ResourceVariantRecord = typeof resourceVariants.$inferSelect;

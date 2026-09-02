@@ -82,6 +82,12 @@
     "fitImage": "Fit whole image",
     "fontSize": "Font size (mm)",
     "alignment": "Alignment",
+    "textOverflow": "When space runs out",
+    "minimumFontSize": "Minimum font size (mm)",
+    "textOverflowModes": {
+      "ellipsis": "Shorten text with …",
+      "shrink": "Reduce font size"
+    },
     "instructions": "Drag the selected element on the label. Use its corner handle to resize it, or enter exact percentages here.",
     "chooseElement": "Choose an element to edit its position and style.",
     "overlap": "Move or resize the image so it does not cover the QR code.",

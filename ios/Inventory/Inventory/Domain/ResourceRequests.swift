@@ -2,6 +2,7 @@ import Foundation
 
 public struct ResourceCreateRequest: Codable, Equatable, Sendable {
     public var name: String
+    public var slugs: [String]
     public var description: String
     public var type: InventoryResourceType
     public var status: InventoryResourceStatus
@@ -24,6 +25,7 @@ public struct ResourceCreateRequest: Codable, Equatable, Sendable {
 
     public init(
         name: String,
+        slugs: [String] = [],
         description: String = "",
         type: InventoryResourceType = .object,
         status: InventoryResourceStatus = .available,
@@ -45,6 +47,7 @@ public struct ResourceCreateRequest: Codable, Equatable, Sendable {
         notes: String = ""
     ) {
         self.name = name
+        self.slugs = slugs
         self.description = description
         self.type = type
         self.status = status
@@ -68,6 +71,7 @@ public struct ResourceCreateRequest: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case name
+        case slugs
         case description
         case type
         case status
@@ -118,6 +122,7 @@ public enum NullablePatch<Value: Codable & Sendable>: Codable, Sendable {
 
 public struct ResourcePatchRequest: Codable, Sendable {
     public var name: String?
+    public var slugs: [String]?
     public var description: String?
     public var type: InventoryResourceType?
     public var status: InventoryResourceStatus?
@@ -139,6 +144,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
 
     public init(
         name: String? = nil,
+        slugs: [String]? = nil,
         description: String? = nil,
         type: InventoryResourceType? = nil,
         status: InventoryResourceStatus? = nil,
@@ -159,6 +165,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
         notes: String? = nil
     ) {
         self.name = name
+        self.slugs = slugs
         self.description = description
         self.type = type
         self.status = status
@@ -181,6 +188,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case name
+        case slugs
         case description
         case type
         case status
@@ -204,6 +212,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decodeIfPresent(String.self, forKey: .name)
+        slugs = try container.decodeIfPresent([String].self, forKey: .slugs)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         type = try container.decodeIfPresent(InventoryResourceType.self, forKey: .type)
         status = try container.decodeIfPresent(InventoryResourceStatus.self, forKey: .status)
@@ -233,6 +242,7 @@ public struct ResourcePatchRequest: Codable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(name, forKey: .name)
+        try container.encodeIfPresent(slugs, forKey: .slugs)
         try container.encodeIfPresent(description, forKey: .description)
         try container.encodeIfPresent(type, forKey: .type)
         try container.encodeIfPresent(status, forKey: .status)

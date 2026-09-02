@@ -31,6 +31,7 @@ import {
   isResourceSlugConflict,
 } from "@/lib/resource-slug-contract";
 import { resolveResourceId } from "@/lib/resource-slugs";
+import { isResourceFavorite } from "@/lib/resource-favorites";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -51,11 +52,20 @@ export async function GET(request: Request, context: Context) {
   );
   if (!resource) return Response.json({ error: "Not found" }, { status: 404 });
   try {
-    const localized = await localizeResource(
-      authorization.identity.organizationId,
-      resource,
-      new URL(request.url).searchParams.get("language"),
-    );
+    const [localized, favorite] = await Promise.all([
+      localizeResource(
+        authorization.identity.organizationId,
+        resource,
+        new URL(request.url).searchParams.get("language"),
+      ),
+      authorization.identity.userId
+        ? isResourceFavorite({
+            organizationId: authorization.identity.organizationId,
+            userId: authorization.identity.userId,
+            resourceId: resource.id,
+          })
+        : false,
+    ]);
     const access = {
       update: await canAccessResource(
         authorization.identity,
@@ -96,7 +106,11 @@ export async function GET(request: Request, context: Context) {
         ])
       ).some(Boolean),
     };
-    return Response.json({ ...localized, access }, {
+    return Response.json({
+      ...localized,
+      resource: { ...localized.resource, isFavorite: favorite },
+      access,
+    }, {
       headers: { "Content-Language": localized.localization.languageCode },
     });
   } catch (error) {

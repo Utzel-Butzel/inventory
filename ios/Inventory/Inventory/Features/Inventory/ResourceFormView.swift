@@ -37,6 +37,7 @@ struct ObjectCaptureAISettingsSnapshot: Equatable, Sendable {
 }
 
 private struct ValidatedResourceFormValues {
+    let slugs: [String]
     let valueCents: Int?
     let currency: String
     let categories: [InventoryResourceCategory]
@@ -53,9 +54,12 @@ struct ResourceFormView: View {
     let resource: InventoryResource?
     let prefilledCode: String?
     let objectModel: CapturedObjectModel?
+    let resourceAccess: InventoryResourceAccess?
     let onSaved: (InventoryResource) -> Void
+    let onDeleted: (() -> Void)?
 
     @State private var name: String
+    @State private var slugs: [String]
     @State private var description: String
     @State private var type: InventoryResourceType
     @State private var status: InventoryResourceStatus
@@ -91,22 +95,33 @@ struct ResourceFormView: View {
     @State private var objectCoverCompleted = false
     @State private var objectAISettingsSnapshot: ObjectCaptureAISettingsSnapshot?
     @State private var confirmCloseAfterCreation = false
+    @State private var serverResource: InventoryResource?
+    @State private var currentMedia: [InventoryMedia]
+    @State private var pendingMediaUploads: [PendingResourceMedia] = []
+    @State private var mediaBusy = false
+    @State private var confirmDeletion = false
+    @State private var deleting = false
 
     init(
         resource: InventoryResource? = nil,
         prefilledCode: String? = nil,
         objectModel: CapturedObjectModel? = nil,
-        onSaved: @escaping (InventoryResource) -> Void
+        resourceAccess: InventoryResourceAccess? = nil,
+        onSaved: @escaping (InventoryResource) -> Void,
+        onDeleted: (() -> Void)? = nil
     ) {
         self.resource = resource
         self.prefilledCode = prefilledCode
         self.objectModel = objectModel
+        self.resourceAccess = resourceAccess
         self.onSaved = onSaved
+        self.onDeleted = onDeleted
 
         let scanned = prefilledCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let useAsBarcode = resource == nil && !scanned.isEmpty && scanned.count <= 180 &&
             ResourceCodeParser.parse(scanned).resourceID == nil
         _name = State(initialValue: resource?.name ?? "")
+        _slugs = State(initialValue: resource?.slugs ?? [])
         _description = State(initialValue: resource?.description ?? "")
         _type = State(initialValue: resource?.type ?? .object)
         _status = State(initialValue: resource?.status ?? .available)
@@ -137,6 +152,8 @@ struct ResourceFormView: View {
                     : ""
             )
         )
+        _serverResource = State(initialValue: resource)
+        _currentMedia = State(initialValue: resource?.media ?? [])
     }
 
     var body: some View {
@@ -208,6 +225,8 @@ struct ResourceFormView: View {
                 }
                 .disabled(createdResource != nil)
 
+                slugEditorSection
+
                 Section("Identifikation") {
                     TextField("SKU", text: $sku)
                         .textInputAutocapitalization(.never)
@@ -269,6 +288,8 @@ struct ResourceFormView: View {
                     .disabled(createdResource != nil)
                 }
 
+                webParitySections
+
                 if let metadataErrorMessage {
                     Section {
                         Label(metadataErrorMessage, systemImage: "exclamationmark.triangle")
@@ -291,12 +312,18 @@ struct ResourceFormView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(saving ? "Speichert …" : "Speichern") { save() }
-                        .disabled(saving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(
+                            saving || mediaBusy || deleting ||
+                                name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        )
                 }
             }
-            .interactiveDismissDisabled(saving || createdResource != nil)
+            .interactiveDismissDisabled(saving || mediaBusy || deleting || createdResource != nil)
             .task(id: state.organizationContextIdentifier) { await loadMetadata() }
-            .onDisappear(perform: cleanupObjectModel)
+            .onDisappear {
+                cleanupObjectModel()
+                cleanupPendingMedia()
+            }
             .confirmationDialog(
                 closeAfterPartialCreationTitle,
                 isPresented: $confirmCloseAfterCreation,
@@ -313,6 +340,16 @@ struct ResourceFormView: View {
             } message: {
                 Text(closeAfterPartialCreationMessage)
             }
+            .confirmationDialog(
+                "„\(name)“ wirklich löschen?",
+                isPresented: $confirmDeletion,
+                titleVisibility: .visible
+            ) {
+                Button("Löschen", role: .destructive) { deleteResource() }
+                Button("Abbrechen", role: .cancel) { }
+            } message: {
+                Text("Der Inventargegenstand und seine Medien werden dauerhaft entfernt.")
+            }
             .alert(
                 "Speichern fehlgeschlagen",
                 isPresented: Binding(
@@ -323,6 +360,117 @@ struct ResourceFormView: View {
                 Button("OK", role: .cancel) { errorMessage = nil }
             } message: {
                 Text(errorMessage ?? "Unbekannter Fehler")
+            }
+        }
+    }
+
+    private var slugEditorSection: some View {
+        Section {
+            if slugs.isEmpty {
+                Text("Noch kein lesbarer Kurzlink eingerichtet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(slugs.indices, id: \.self) { index in
+                HStack(spacing: 8) {
+                    Text("/")
+                        .font(.body.monospaced())
+                        .foregroundStyle(.secondary)
+                    TextField("kurzer-name", text: slugBinding(at: index))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    slugMenu(at: index)
+                }
+            }
+            Button {
+                slugs.append("")
+            } label: {
+                Label("Alias hinzufügen", systemImage: "plus")
+            }
+            .disabled(slugs.count >= 20)
+        } header: {
+            Text("Aliase und Links")
+        } footer: {
+            Text("Der erste Alias ist der Standardlink. Erlaubt sind Kleinbuchstaben, Zahlen und einzelne Bindestriche.")
+        }
+        .disabled(createdResource != nil)
+    }
+
+    private func slugMenu(at index: Int) -> some View {
+        Menu {
+            Button {
+                moveSlug(at: index, by: -1)
+            } label: {
+                Label("Nach oben", systemImage: "arrow.up")
+            }
+            .disabled(index == 0)
+
+            Button {
+                moveSlug(at: index, by: 1)
+            } label: {
+                Label("Nach unten", systemImage: "arrow.down")
+            }
+            .disabled(index == slugs.count - 1)
+
+            Divider()
+
+            Button(role: .destructive) {
+                slugs.remove(at: index)
+            } label: {
+                Label("Entfernen", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+    }
+
+    @ViewBuilder
+    private var webParitySections: some View {
+        if let resource {
+            ResourceMediaEditorSection(
+                resourceID: resource.id,
+                client: state.client,
+                maximumImagePixelSize: state.maximumUploadImagePixelSize,
+                disabled: createdResource != nil || deleting,
+                media: $currentMedia,
+                pendingUploads: $pendingMediaUploads,
+                busy: $mediaBusy,
+                reportError: { errorMessage = $0 },
+                onUpdated: { serverResource = $0 }
+            )
+        }
+
+        if let resource = serverResource,
+           let client = state.client,
+           canUseAIForResource {
+            ResourceAIEditorSection(
+                resource: resource,
+                client: client,
+                canAnalyze: state.canAnalyzeInventory,
+                canResearch: state.canResearchInventory,
+                canGenerateImages: state.canGenerateInventoryImages,
+                analysisPrompt: state.analysisPrompt,
+                coverPrompt: state.coverPrompt,
+                selectedImageModelID: state.selectedImageModelID,
+                maximumImageSize: state.maximumAIGeneratedImagePixelSize,
+                onUpdated: applyServerResource
+            )
+        }
+
+        if let resource, let client = state.client {
+            ResourceTranslationsEditorSection(
+                resourceID: resource.id,
+                client: client,
+                canTranslateWithAI: state.canTranslateInventory && (resourceAccess?.ai ?? true)
+            )
+        }
+
+        if resource != nil, canDeleteResource {
+            Section {
+                Button("Inventargegenstand löschen", role: .destructive) {
+                    confirmDeletion = true
+                }
+                .disabled(saving || mediaBusy || deleting)
             }
         }
     }
@@ -369,6 +517,7 @@ struct ResourceFormView: View {
                         id: resource.id,
                         with: ResourcePatchRequest(
                             name: normalized(name),
+                            slugs: formValues.slugs,
                             description: normalized(description),
                             type: type,
                             status: status,
@@ -396,6 +545,7 @@ struct ResourceFormView: View {
                         created = try await client.createResource(
                             ResourceCreateRequest(
                                 name: normalized(name),
+                                slugs: formValues.slugs,
                                 description: normalized(description),
                                 type: type,
                                 status: status,
@@ -488,8 +638,20 @@ struct ResourceFormView: View {
                         saved = created
                     }
                 }
+                let fullySaved: InventoryResource
+                if let resource, !pendingMediaUploads.isEmpty {
+                    _ = try await client.uploadMedia(
+                        resourceID: resource.id,
+                        files: pendingMediaUploads.map(\.file),
+                        idempotencyKey: UUID()
+                    )
+                    fullySaved = try await client.getResource(id: resource.id)
+                } else {
+                    fullySaved = saved
+                }
                 cleanupObjectModel()
-                onSaved(saved)
+                cleanupPendingMedia()
+                onSaved(fullySaved)
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription
@@ -595,6 +757,7 @@ struct ResourceFormView: View {
 
         let fields = try validatedCustomFields()
         return ValidatedResourceFormValues(
+            slugs: try validatedSlugs(),
             valueCents: valueCents,
             currency: normalizedCurrency,
             categories: parsedCategories,
@@ -603,6 +766,104 @@ struct ResourceFormView: View {
             gpsLongitude: longitude,
             gpsAltitude: altitude
         )
+    }
+
+    private func validatedSlugs() throws -> [String] {
+        let normalizedSlugs = slugs.map {
+            normalized($0).lowercased()
+        }.filter { !$0.isEmpty }
+        guard normalizedSlugs.count <= 20 else {
+            throw APIClientError.invalidRequest("Es sind höchstens 20 Aliase erlaubt.")
+        }
+        guard Set(normalizedSlugs).count == normalizedSlugs.count else {
+            throw APIClientError.invalidRequest("Jeder Alias darf nur einmal vorkommen.")
+        }
+        let pattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+        guard normalizedSlugs.allSatisfy({
+            $0.count <= 80 && $0.wholeMatch(of: pattern) != nil
+        }) else {
+            throw APIClientError.invalidRequest(
+                "Aliase dürfen nur Kleinbuchstaben, Zahlen und einzelne Bindestriche enthalten."
+            )
+        }
+        return normalizedSlugs
+    }
+
+    private func slugBinding(at index: Int) -> Binding<String> {
+        Binding(
+            get: { slugs.indices.contains(index) ? slugs[index] : "" },
+            set: { value in
+                guard slugs.indices.contains(index) else { return }
+                slugs[index] = value.lowercased()
+            }
+        )
+    }
+
+    private func moveSlug(at index: Int, by offset: Int) {
+        let destination = index + offset
+        guard slugs.indices.contains(index), slugs.indices.contains(destination) else { return }
+        slugs.swapAt(index, destination)
+    }
+
+    private var canUseAIForResource: Bool {
+        state.canUseAI && (resourceAccess?.ai ?? true)
+    }
+
+    private var canDeleteResource: Bool {
+        state.canDeleteInventory && (resourceAccess?.delete ?? true)
+    }
+
+    private func applyServerResource(_ updated: InventoryResource) {
+        serverResource = updated
+        currentMedia = updated.media
+        name = updated.name
+        slugs = updated.slugs ?? []
+        description = updated.description
+        type = updated.type
+        status = updated.status
+        sku = updated.sku ?? ""
+        barcode = updated.barcode ?? ""
+        serialNumber = updated.serialNumber ?? ""
+        quantity = updated.quantity
+        location = updated.location ?? ""
+        tags = updated.tags.joined(separator: ", ")
+        categories = updated.categories.map(\.name).joined(separator: ", ")
+        value = updated.valueCents.map {
+            (Double($0) / 100).formatted(.number.precision(.fractionLength(2)))
+        } ?? ""
+        currency = updated.currency
+        priority = updated.priority
+        gpsLatitude = updated.gpsLatitude.map { String($0) } ?? ""
+        gpsLongitude = updated.gpsLongitude.map { String($0) } ?? ""
+        gpsAltitude = updated.gpsAltitude.map { String($0) } ?? ""
+        notes = updated.notes
+        customFieldValues = updated.customFields ?? [:]
+        customFieldNumberDrafts = [:]
+        for definition in customFieldDefinitions where definition.fieldType == .number {
+            guard case .number(let number) = customFieldValues[definition.key] else { continue }
+            customFieldNumberDrafts[definition.key] = number.formatted(.number.grouping(.never))
+        }
+    }
+
+    private func deleteResource() {
+        guard let resource, let client = state.client, canDeleteResource, !deleting else { return }
+        deleting = true
+        Task {
+            do {
+                try await client.deleteResource(id: resource.id)
+                cleanupPendingMedia()
+                onDeleted?()
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            deleting = false
+        }
+    }
+
+    private func cleanupPendingMedia() {
+        pendingMediaUploads.forEach { $0.removeLocalFile() }
+        pendingMediaUploads = []
     }
 
     private func validatedCustomFields() throws -> [String: CustomFieldValue]? {

@@ -25,6 +25,7 @@ const bomSchema = z
               .regex(/^[A-Za-z0-9_-]+$/)
               .optional(),
             quantityPerAssembly: z.number().int().min(1).max(2_000_000_000),
+            quantityUnit: z.enum(["base", "purchase"]).optional(),
             position: z.number().int().min(0).max(2_000_000_000).optional(),
             note: z.string().trim().max(20_000).optional(),
           })

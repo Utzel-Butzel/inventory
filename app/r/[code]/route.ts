@@ -4,7 +4,7 @@ import { resourceIdFromShortCode } from "@/lib/resource-short-link";
 
 type Context = { params: Promise<{ code: string }> };
 
-export async function GET(request: Request, context: Context) {
+export async function GET(_request: Request, context: Context) {
   const { code } = await context.params;
   const resourceId = resourceIdFromShortCode(code);
   if (!resourceId) {
@@ -21,13 +21,13 @@ export async function GET(request: Request, context: Context) {
   const destination = identity
     ? organizationPath(identity.organization.slug, `/inventory/${resourceId}`)
     : `/inventory/${resourceId}`;
-  const redirectUrl = identity
-    ? new URL(destination, request.url)
-    : new URL(`/login?callbackUrl=${encodeURIComponent(destination)}`, request.url);
+  const redirectLocation = identity
+    ? destination
+    : `/login?callbackUrl=${encodeURIComponent(destination)}`;
   return new Response(null, {
     status: 307,
     headers: {
-      Location: redirectUrl.toString(),
+      Location: redirectLocation,
       "Cache-Control": "private, no-store",
       Vary: "Cookie",
     },

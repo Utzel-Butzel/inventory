@@ -11,6 +11,7 @@ private struct PendingStockAction: Sendable {
 }
 
 struct ResourceDetailView: View {
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var state: AppState
     @State private var current: InventoryResource
     @State private var showEditor = false
@@ -61,11 +62,22 @@ struct ResourceDetailView: View {
             await refresh()
             await loadMetadata()
         }
-        .sheet(isPresented: $showEditor) {
-            ResourceFormView(resource: current, prefilledCode: nil) {
-                current = $0
-                showEditor = false
-            }
+        .sheet(isPresented: $showEditor, onDismiss: {
+            Task { await refresh() }
+        }) {
+            ResourceFormView(
+                resource: current,
+                prefilledCode: nil,
+                resourceAccess: resourceAccess,
+                onSaved: {
+                    current = $0
+                    showEditor = false
+                },
+                onDeleted: {
+                    showEditor = false
+                    dismiss()
+                }
+            )
         }
         .fullScreenCover(isPresented: $showStockCounter) {
             UnifiedCameraView(

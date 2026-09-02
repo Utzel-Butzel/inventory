@@ -25,6 +25,7 @@ import {
   purchaseOrderLines,
   resourceLendingSettings,
   resourceCreationRequests,
+  resourceFavorites,
   resourceOptionSelections,
   resourceOptionValues,
   resourceRelations,
@@ -146,6 +147,8 @@ const attachMedia = (
 
 export async function listResources(options: {
   organizationId: string;
+  favoriteUserId?: string;
+  favoritesOnly?: boolean;
   query?: string;
   type?: string;
   status?: string;
@@ -217,6 +220,24 @@ export async function listResources(options: {
       );
     conditions.push(inArray(resources.id, loanableResources));
   }
+  const favoriteResources = options.favoriteUserId
+    ? db
+        .select({ resourceId: resourceFavorites.resourceId })
+        .from(resourceFavorites)
+        .where(
+          and(
+            eq(resourceFavorites.organizationId, options.organizationId),
+            eq(resourceFavorites.userId, options.favoriteUserId),
+          ),
+        )
+    : null;
+  if (options.favoritesOnly) {
+    conditions.push(
+      favoriteResources
+        ? inArray(resources.id, favoriteResources)
+        : sql`false`,
+    );
+  }
 
   const where = conditions.length ? and(...conditions) : undefined;
   const [rows, totalRows] = await Promise.all([
@@ -258,18 +279,37 @@ export async function listResources(options: {
           )
           .orderBy(asc(media.position));
 
-  const [mediaRows, slugRows] = rows.length
+  const [mediaRows, slugRows, favoriteRows] = rows.length
     ? await Promise.all([
         mediaRowsPromise,
         listResourceSlugRows(
           options.organizationId,
           rows.map((row) => row.id),
         ),
+        options.favoriteUserId
+          ? db
+              .select({ resourceId: resourceFavorites.resourceId })
+              .from(resourceFavorites)
+              .where(
+                and(
+                  eq(resourceFavorites.organizationId, options.organizationId),
+                  eq(resourceFavorites.userId, options.favoriteUserId),
+                  inArray(
+                    resourceFavorites.resourceId,
+                    rows.map((row) => row.id),
+                  ),
+                ),
+              )
+          : Promise.resolve([]),
       ])
-    : [[], []];
+    : [[], [], []];
+  const favoriteIds = new Set(favoriteRows.map((row) => row.resourceId));
 
   return {
-    resources: attachMedia(rows, mediaRows, slugRows),
+    resources: attachMedia(rows, mediaRows, slugRows).map((resource) => ({
+      ...resource,
+      isFavorite: favoriteIds.has(resource.id),
+    })),
     pagination: {
       page,
       pageSize,
@@ -1849,6 +1889,7 @@ export async function mergeResources(
           .set({
             quantityPerAssembly:
               collision.quantityPerAssembly + line.quantityPerAssembly,
+            quantityUnit: "base",
             updatedAt: new Date(),
           })
           .where(
@@ -1866,7 +1907,11 @@ export async function mergeResources(
       } else {
         await transaction
           .update(bomLines)
-          .set({ componentResourceId: keepId, updatedAt: new Date() })
+          .set({
+            componentResourceId: keepId,
+            quantityUnit: "base",
+            updatedAt: new Date(),
+          })
           .where(
             and(
               eq(bomLines.organizationId, organizationId),
