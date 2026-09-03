@@ -142,7 +142,14 @@ export function organizationPath(organizationReference: string, href: string) {
   }
 
   const normalizedReference = organizationReference.toLowerCase();
-  const existingPagePath = organizationPagePathFromPathname(pathname);
+  const existingReference = organizationReferenceFromPathname(pathname);
+  const existingPagePath =
+    existingReference &&
+    (isOrganizationId(existingReference) ||
+      existingReference === normalizedReference ||
+      !ORGANIZATION_ROUTE_ROOTS.has(existingReference))
+      ? organizationPagePathFromPathname(pathname)
+      : null;
   const unscopedHref = existingPagePath ?? pathname;
   return `/${normalizedReference}${unscopedHref === "/" ? "/inventory" : unscopedHref}${suffix}`;
 }

@@ -71,6 +71,14 @@ test("organization path parsing recognizes slug and legacy UUID prefixes", () =>
 
 test("app-root slugs remain unambiguous", () => {
   assert.equal(organizationPath("inventory", "/inventory"), "/inventory/inventory");
+  assert.equal(
+    organizationPath("inventory", "/operations/loans"),
+    "/inventory/operations/loans",
+  );
+  assert.equal(
+    organizationPath(organizationSlug, "/operations/loans"),
+    `/${organizationSlug}/operations/loans`,
+  );
   assert.equal(isOrganizationScopedPagePath("/inventory"), false);
   assert.equal(isOrganizationScopedPagePath("/inventory/dashboard"), true);
   assert.equal(stripOrganizationPathname("/inventory/dashboard"), "/dashboard");
