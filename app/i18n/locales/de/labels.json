@@ -70,6 +70,8 @@
     "edit": "Vorlage bearbeiten",
     "create": "Vorlage erstellen",
     "close": "Etikettendesigner schließen",
+    "undo": "Rückgängig",
+    "redo": "Wiederholen",
     "setupName": "Vorlagenname",
     "width": "Breite (mm)",
     "height": "Höhe (mm)",
@@ -77,10 +79,44 @@
     "showElement": "{{element}} anzeigen",
     "resizeElement": "Größe von {{element}} ändern",
     "properties": "Eigenschaften",
+    "previewScenario": "Testdaten",
+    "previewScenarios": {
+      "current": "Aktueller Eintrag",
+      "stress": "Längste Inhalte",
+      "missing": "Fehlende Inhalte"
+    },
+    "grid": "Raster",
+    "gridSize": "Rasterweite",
+    "coordinateUnit": "Maßeinheit der Koordinaten",
+    "zoomOut": "Verkleinern",
+    "zoomIn": "Vergrößern",
+    "canvas": "Etikettenfläche. Pfeiltasten verschieben das ausgewählte Element um 0,1 mm, mit Umschalttaste um 1 mm.",
     "imageFit": "Bildanpassung",
     "fillFrame": "Rahmen füllen (zuschneiden)",
     "fitImage": "Ganzes Bild einpassen",
+    "uploadBackground": "Hintergrund hochladen",
+    "replaceBackground": "Hintergrund ersetzen",
+    "removeBackground": "Hintergrund entfernen",
+    "backgroundHint": "PNG, JPEG, WebP, GIF, AVIF oder SVG bis 2 MB. Die Datei wird in der Vorlage gespeichert.",
+    "backgroundOpacity": "Deckkraft",
+    "backgroundUnsupported": "Dieses Bildformat wird nicht unterstützt.",
+    "backgroundTooLarge": "Das Hintergrundbild darf höchstens 2 MB groß sein.",
+    "backgroundReadError": "Das Hintergrundbild konnte nicht gelesen werden.",
+    "qrForeground": "QR-Farbe",
+    "qrBackground": "Hintergrund",
+    "qrMargin": "QR-Rand",
+    "qrMarginNone": "Randlos",
+    "qrMarginModules_one": "{{count}} Modul",
+    "qrMarginModules_other": "{{count}} Module",
+    "qrColorHint": "Für zuverlässiges Scannen einen starken Kontrast zwischen QR-Code und Hintergrund verwenden.",
     "fontSize": "Schriftgröße (mm)",
+    "fontFamily": "Schriftart",
+    "fontFamilies": {
+      "sans": "Systemschrift",
+      "serif": "Serifenschrift",
+      "monospace": "Monospace",
+      "rounded": "Abgerundet"
+    },
     "alignment": "Ausrichtung",
     "textOverflow": "Bei Platzmangel",
     "minimumFontSize": "Kleinste Schriftgröße (mm)",
@@ -88,7 +124,7 @@
       "ellipsis": "Text mit … kürzen",
       "shrink": "Schrift verkleinern"
     },
-    "instructions": "Ziehe das ausgewählte Element auf dem Etikett. Ändere seine Größe am Eckgriff oder gib hier genaue Prozentwerte ein.",
+    "instructions": "Ziehe das ausgewählte Element, ändere seine Größe am Eckgriff oder gib genaue Maße ein. Pfeiltasten verschieben um 0,1 mm, mit Umschalttaste um 1 mm.",
     "chooseElement": "Wähle ein Element aus, um Position und Stil zu bearbeiten.",
     "overlap": "Verschiebe oder skaliere das Bild, damit es den QR-Code nicht überdeckt.",
     "previewNote": "Vorschau und gedrucktes Etikett verwenden dieselben Positionen.",
@@ -97,6 +133,7 @@
     "saving": "Wird gespeichert…",
     "save": "Vorlage speichern",
     "elements": {
+      "background": "Eigener Hintergrund",
       "qr": "QR-Code",
       "image": "Titelbild",
       "name": "Eintragsname",
@@ -118,7 +155,11 @@
     },
     "sample": {
       "name": "Akku-Schlagschrauber",
-      "location": "Werkstatt · Regal B"
+      "location": "Werkstatt · Regal B",
+      "longName": "Akku-Schlagschrauber mit besonders langer Produktbezeichnung und umfangreichem Zubehörset",
+      "longSku": "WERKZEUG-AKKU-SCHLAGSCHRAUBER-SET-2026-EXTRA-LANG",
+      "longLocation": "Werkstatt · Werkzeuglager · Regal B · Fach 12 · Hintere Aufbewahrungsbox",
+      "missingName": "Eintrag ohne optionale Angaben"
     }
   },
   "renderer": {

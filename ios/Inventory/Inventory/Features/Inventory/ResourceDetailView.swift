@@ -18,6 +18,7 @@ struct ResourceDetailView: View {
     @State private var showStockCounter = false
     @State private var showStockManagement = false
     @State private var booking = false
+    @State private var updatingFavorite = false
     @State private var confirmIssue = false
     @State private var pendingStockAction: PendingStockAction?
     @State private var errorMessage: String?
@@ -27,9 +28,14 @@ struct ResourceDetailView: View {
     @State private var inventoryTypes: [InventoryTypeDefinition] = []
     @State private var customFieldDefinitions: [CustomFieldDefinition] = []
     @State private var resourceAccess: InventoryResourceAccess?
+    private let onFavoriteChanged: ((UUID, Bool) -> Void)?
 
-    init(resource: InventoryResource) {
+    init(
+        resource: InventoryResource,
+        onFavoriteChanged: ((UUID, Bool) -> Void)? = nil
+    ) {
         _current = State(initialValue: resource)
+        self.onFavoriteChanged = onFavoriteChanged
     }
 
     var body: some View {
@@ -38,6 +44,7 @@ struct ResourceDetailView: View {
                 hero
                 identityCard
                 stockCard
+                if canReadCurrentAssignments { assignmentsCard }
                 if !current.description.isEmpty { descriptionCard }
                 if hasAdditionalDetails { additionalDetailsCard }
                 if !(current.customFields ?? [:]).isEmpty { customFieldsCard }
@@ -52,8 +59,19 @@ struct ResourceDetailView: View {
         .navigationTitle(current.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if canUpdateCurrentResource {
-                ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    toggleFavorite()
+                } label: {
+                    Image(systemName: current.isFavorite == true ? "star.fill" : "star")
+                }
+                .foregroundStyle(current.isFavorite == true ? .yellow : .primary)
+                .disabled(updatingFavorite)
+                .accessibilityLabel(
+                    current.isFavorite == true ? "Favorit entfernen" : "Als Favorit markieren"
+                )
+
+                if canUpdateCurrentResource {
                     Button("Bearbeiten") { showEditor = true }
                 }
             }
@@ -272,6 +290,29 @@ struct ResourceDetailView: View {
         .inventoryCard()
     }
 
+    private var assignmentsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Ausleihen & Zuweisungen", systemImage: "person.crop.circle.badge.clock")
+                .font(.headline)
+            Text("Empfänger, Reservierungen und Rückgaben für diesen Eintrag verwalten.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            NavigationLink {
+                ResourceAssignmentsView(
+                    resourceID: current.id,
+                    canEdit: canManageCurrentAssignments,
+                    onInventoryChanged: { Task { await refresh() } }
+                )
+            } label: {
+                Label("Nutzung verwalten", systemImage: "arrow.right.circle.fill")
+                    .frame(maxWidth: .infinity, minHeight: 42)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(InventoryTheme.ink)
+        }
+        .inventoryCard()
+    }
+
     @ViewBuilder
     private var mediaSection: some View {
         if let client = state.client, !imageMedia.isEmpty {
@@ -386,6 +427,7 @@ struct ResourceDetailView: View {
             let response = try await client.getResourceDetail(id: current.id)
             current = response.resource
             resourceAccess = response.access
+            onFavoriteChanged?(current.id, current.isFavorite == true)
         } catch { }
     }
 
@@ -583,6 +625,26 @@ struct ResourceDetailView: View {
         performStockAction(action)
     }
 
+    private func toggleFavorite() {
+        guard let client = state.client, !updatingFavorite else { return }
+        updatingFavorite = true
+        let desiredFavorite = current.isFavorite != true
+        Task {
+            defer { updatingFavorite = false }
+            do {
+                let response = try await client.setResourceFavorite(
+                    resourceID: current.id,
+                    favorite: desiredFavorite
+                )
+                current.isFavorite = response.favorite
+                onFavoriteChanged?(current.id, response.favorite)
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
     private func retryPendingStockAction() {
         guard let action = pendingStockAction else { return }
         errorMessage = nil
@@ -617,6 +679,14 @@ struct ResourceDetailView: View {
 
     private var canManageCurrentStock: Bool {
         state.canManageStock && (resourceAccess?.stock ?? true)
+    }
+
+    private var canReadCurrentAssignments: Bool {
+        state.canReadAssignments && (resourceAccess?.assignments ?? true)
+    }
+
+    private var canManageCurrentAssignments: Bool {
+        state.canManageAssignments && (resourceAccess?.assignments ?? true)
     }
 
     private var canUseAIForCurrentResource: Bool {

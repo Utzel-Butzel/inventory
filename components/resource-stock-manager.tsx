@@ -101,6 +101,7 @@ type StockForecast = {
 
 type StockMovement = {
   id: string;
+  contactId?: string | null;
   delta: number;
   balanceAfter: number;
   type: string;
@@ -194,6 +195,15 @@ type MovementForm = {
   location: string;
   occurredAt: string;
   totalPrice: string;
+  contactId: string;
+};
+
+type StockContact = {
+  id: string;
+  name: string;
+  company: string | null;
+  roles: Array<"customer" | "supplier">;
+  archivedAt: string | null;
 };
 
 type UnitCreateForm = {
@@ -230,6 +240,7 @@ type MovementPayload = {
   occurredAt?: string;
   totalPriceCents?: number;
   priceCurrency?: string;
+  contactId?: string | null;
 };
 
 const editableMovementTypes = new Set<MovementType>([
@@ -315,6 +326,7 @@ const defaultMovementForm = (direction: "in" | "out"): MovementForm => ({
   location: "",
   occurredAt: localDateTime(),
   totalPrice: "",
+  contactId: "",
 });
 
 const defaultUnitCreateForm = (): UnitCreateForm => ({
@@ -499,6 +511,7 @@ export function ResourceStockManager({
   >([]);
   const [customFieldError, setCustomFieldError] = useState<string | null>(null);
   const [availableLocations, setAvailableLocations] = useState<StockLocationOption[]>([]);
+  const [availableContacts, setAvailableContacts] = useState<StockContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -533,6 +546,33 @@ export function ResourceStockManager({
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [unitEditForm, setUnitEditForm] = useState<UnitEditForm | null>(null);
   const [savingUnit, setSavingUnit] = useState(false);
+  const contactNameById = useMemo(
+    () =>
+      new Map(
+        availableContacts.map((contact) => [
+          contact.id,
+          contact.company
+            ? `${contact.name} · ${contact.company}`
+            : contact.name,
+        ]),
+      ),
+    [availableContacts],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchJson<{ contacts: StockContact[] }>(
+      "/api/v1/contacts?includeArchived=true",
+      { cache: "no-store", signal: controller.signal },
+    )
+      .then((payload) => setAvailableContacts(payload.contacts ?? []))
+      .catch((contactError: unknown) => {
+        if (!(contactError instanceof DOMException && contactError.name === "AbortError")) {
+          setAvailableContacts([]);
+        }
+      });
+    return () => controller.abort();
+  }, []);
 
   const loadStock = useCallback(
     async (quiet = false) => {
@@ -710,6 +750,7 @@ export function ResourceStockManager({
       note: movementForm.note.trim() || undefined,
       location: movementForm.location.trim() || undefined,
       occurredAt,
+      contactId: movementForm.contactId || null,
       ...(totalPriceCents === null
         ? {}
         : { totalPriceCents, priceCurrency: stock?.resource.currency ?? "EUR" }),
@@ -797,6 +838,7 @@ export function ResourceStockManager({
         movement.totalPriceCents === undefined
           ? ""
           : (movement.totalPriceCents / 100).toFixed(2),
+      contactId: movement.contactId ?? "",
     });
     setError(null);
   }
@@ -866,6 +908,7 @@ export function ResourceStockManager({
       note: movementEditForm.note.trim() || undefined,
       location: movementEditForm.location.trim() || undefined,
       occurredAt,
+      contactId: movementEditForm.contactId || null,
       ...(totalPriceCents === null
         ? {}
         : {
@@ -1319,6 +1362,32 @@ export function ResourceStockManager({
                     className={inputClass}
                   />
                 </label>
+                {availableContacts.some((contact) => !contact.archivedAt) ? (
+                  <label className={labelClass}>
+                    {t("resource.booking.contact")} {" "}
+                    <span className="font-normal text-muted">
+                      · {t("resource.optional")}
+                    </span>
+                    <select
+                      value={movementForm.contactId}
+                      onChange={(event) =>
+                        updateMovement("contactId", event.target.value)
+                      }
+                      className={inputClass}
+                    >
+                      <option value="">{t("resource.booking.noContact")}</option>
+                      {availableContacts
+                        .filter((contact) => !contact.archivedAt)
+                        .map((contact) => (
+                          <option key={contact.id} value={contact.id}>
+                            {contact.company
+                              ? `${contact.name} · ${contact.company}`
+                              : contact.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                ) : null}
                 <label className={labelClass}>
                   {direction === "in"
                     ? t("resource.booking.inboundPrice")
@@ -1604,6 +1673,13 @@ export function ResourceStockManager({
                             )}
                             {movement.note ? ` · ${movement.note}` : ""}
                           </p>
+                          {movement.contactId ? (
+                            <p className="mt-1 truncate text-[10px] font-medium text-brand">
+                              {t("resource.movements.contact")}: {" "}
+                              {contactNameById.get(movement.contactId) ??
+                                t("resource.movements.unknownContact")}
+                            </p>
+                          ) : null}
                           {movement.totalPriceCents !== null &&
                           movement.totalPriceCents !== undefined &&
                           movement.priceCurrency ? (
@@ -1785,6 +1861,39 @@ export function ResourceStockManager({
                                   className={inputClass}
                                 />
                               </label>
+                              {availableContacts.length ? (
+                                <label className={labelClass}>
+                                  {t("resource.booking.contact")}
+                                  <select
+                                    value={movementEditForm.contactId}
+                                    onChange={(event) =>
+                                      updateMovementEdit(
+                                        "contactId",
+                                        event.target.value,
+                                      )
+                                    }
+                                    className={inputClass}
+                                  >
+                                    <option value="">
+                                      {t("resource.booking.noContact")}
+                                    </option>
+                                    {availableContacts.map((contact) => (
+                                      <option
+                                        key={contact.id}
+                                        value={contact.id}
+                                        disabled={Boolean(contact.archivedAt)}
+                                      >
+                                        {contact.company
+                                          ? `${contact.name} · ${contact.company}`
+                                          : contact.name}
+                                        {contact.archivedAt
+                                          ? ` · ${t("resource.booking.archivedContact")}`
+                                          : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              ) : null}
                               <label className={labelClass}>
                                 {movementEditDirection === "in"
                                   ? t("resource.booking.inboundPrice")

@@ -1,0 +1,95 @@
+{
+  "metadata": {
+    "title": "Contacts",
+    "description": "Connect customers and suppliers to inventory and stock movements."
+  },
+  "eyebrow": "Master data",
+  "title": "Contacts",
+  "description": "Manage customers and suppliers together and connect them directly to inventory and stock movements.",
+  "roles": {
+    "customer": "Customer",
+    "supplier": "Supplier"
+  },
+  "stats": {
+    "all": "Active contacts",
+    "customers": "Customers",
+    "suppliers": "Suppliers"
+  },
+  "actions": {
+    "new": "New contact",
+    "create": "Create contact",
+    "save": "Save changes",
+    "cancel": "Cancel",
+    "close": "Close form",
+    "editContact": "Edit {{name}}",
+    "commentsContact": "Open comments for {{name}}",
+    "archiveContact": "Archive {{name}}",
+    "removeInventory": "Remove {{name}}"
+  },
+  "filters": {
+    "search": "Search contacts…",
+    "role": "Filter by role",
+    "all": "All roles"
+  },
+  "form": {
+    "createTitle": "New contact",
+    "editTitle": "Edit contact",
+    "description": "One contact can be both a customer and a supplier.",
+    "addressTitle": "Address",
+    "inventoryTitle": "Assigned inventory",
+    "inventoryDescription": "Connect items, equipment, or other records to this contact.",
+    "inventorySearch": "Search inventory…",
+    "searchingInventory": "Searching inventory…",
+    "assign": "Assign",
+    "assigned": "Assigned",
+    "noInventory": "No matching inventory items found."
+  },
+  "fields": {
+    "name": "Name",
+    "company": "Company",
+    "roles": "Roles",
+    "email": "Email",
+    "phone": "Phone",
+    "website": "Website",
+    "customerNumber": "Customer number",
+    "supplierNumber": "Supplier number",
+    "taxId": "Tax ID",
+    "addressLine1": "Street address",
+    "addressLine2": "Address line 2",
+    "postalCode": "Postal code",
+    "city": "City",
+    "state": "State / region",
+    "countryCode": "Country code",
+    "tags": "Tags",
+    "tagsPlaceholder": "B2B, key account, EU",
+    "notes": "Notes"
+  },
+  "table": {
+    "contact": "Contact",
+    "roles": "Roles",
+    "details": "Contact details",
+    "inventory": "Inventory",
+    "movements": "Movements",
+    "actions": "Actions",
+    "none": "Not assigned"
+  },
+  "empty": {
+    "title": "No contacts yet",
+    "description": "Create the first customer or supplier and assign inventory.",
+    "filteredTitle": "No matches",
+    "filteredDescription": "Adjust the search or role filter."
+  },
+  "archive": {
+    "confirm": "Archive {{name}}? Historical stock movements will remain connected."
+  },
+  "notices": {
+    "created": "Contact created.",
+    "updated": "Contact updated.",
+    "archived": "Contact archived."
+  },
+  "errors": {
+    "load": "Contacts could not be loaded.",
+    "save": "Contact could not be saved.",
+    "archive": "Contact could not be archived."
+  }
+}

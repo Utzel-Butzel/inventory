@@ -475,15 +475,21 @@ export function QrCode({
   value,
   className,
   ariaLabel,
+  foregroundColor = "#000000",
+  backgroundColor = "#ffffff",
+  quietZoneModules = 0,
 }: {
   value: string;
   className?: string;
   ariaLabel?: string;
+  foregroundColor?: string;
+  backgroundColor?: string;
+  quietZoneModules?: number;
 }) {
-  const quietZone = 0;
+  const quietZone = Math.min(4, Math.max(0, Math.round(quietZoneModules)));
   const matrix = useMemo(() => makeQrMatrix(value), [value]);
   const size = matrix.length + quietZone * 2;
-  const path = useMemo(() => qrPath(matrix, quietZone), [matrix]);
+  const path = useMemo(() => qrPath(matrix, quietZone), [matrix, quietZone]);
   return (
     <svg
       className={className}
@@ -492,8 +498,8 @@ export function QrCode({
       aria-label={ariaLabel ?? `QR code for ${value}`}
       shapeRendering="crispEdges"
     >
-      <rect width={size} height={size} fill="#fff" />
-      <path d={path} fill="#000" />
+      <rect width={size} height={size} fill={backgroundColor} />
+      <path d={path} fill={foregroundColor} />
     </svg>
   );
 }

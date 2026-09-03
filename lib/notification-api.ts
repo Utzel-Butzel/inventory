@@ -19,12 +19,12 @@ export async function requireNotificationRecipient(request: Request) {
       ),
     } as const;
   }
-  if (identity.kind !== "session") {
+  if (!identity.userId) {
     return {
       identity: null,
       recipient: null,
       response: Response.json(
-        { error: "Notifications require an authenticated browser session." },
+        { error: "Notifications require a signed-in user." },
         { status: 403, headers: notificationNoStoreHeaders },
       ),
     } as const;

@@ -66,6 +66,7 @@ type PurchaseOrderLine = {
 
 type PurchaseOrder = {
   id: string;
+  contactId: string | null;
   reference: string | null;
   supplier: string | null;
   status: PurchaseOrderStatus;
@@ -111,6 +112,7 @@ type StockOverviewEnvelope = {
 
 type OrderForm = {
   reference: string;
+  contactId: string;
   supplier: string;
   orderedAt: string;
   expectedAt: string;
@@ -133,6 +135,12 @@ type ReceiptForm = {
   unitCodes: string;
   totalPrice: string;
   priceCurrency: string;
+};
+
+type SupplierContact = {
+  id: string;
+  name: string;
+  company: string | null;
 };
 
 const inputClass =
@@ -227,6 +235,7 @@ function parsedCodes(value: string) {
 function newOrderForm(): OrderForm {
   return {
     reference: "",
+    contactId: "",
     supplier: "",
     orderedAt: localDateTime(),
     expectedAt: "",
@@ -299,6 +308,7 @@ export function PurchaseOrdersManager({
     Record<string, StockPurchaseConfig>
   >({});
   const [stockConfigsLoaded, setStockConfigsLoaded] = useState(false);
+  const [supplierContacts, setSupplierContacts] = useState<SupplierContact[]>([]);
 
   const [itemQuery, setItemQuery] = useState("");
   const [itemResults, setItemResults] = useState<ClientResource[]>([]);
@@ -352,6 +362,21 @@ export function PurchaseOrdersManager({
         }
       })
       .finally(() => setStockConfigsLoaded(true));
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchJson<{ contacts: SupplierContact[] }>(
+      "/api/v1/contacts?role=supplier",
+      { cache: "no-store", signal: controller.signal },
+    )
+      .then((payload) => setSupplierContacts(payload.contacts ?? []))
+      .catch((loadError: unknown) => {
+        if (!(loadError instanceof DOMException && loadError.name === "AbortError")) {
+          setSupplierContacts([]);
+        }
+      });
     return () => controller.abort();
   }, []);
 
@@ -539,6 +564,7 @@ export function PurchaseOrdersManager({
     try {
       const requestBody = {
         reference: orderForm.reference.trim() || null,
+        contactId: orderForm.contactId || undefined,
         supplier: orderForm.supplier.trim() || undefined,
         status: "ordered" as const,
         orderedAt,
@@ -806,7 +832,7 @@ export function PurchaseOrdersManager({
           </div>
           <form onSubmit={createOrder}>
             <div className="grid gap-4 border-b border-border p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
-              <label className={labelClass}>{t("orders.create.supplier")}<input value={orderForm.supplier} onChange={(event) => setOrderForm((current) => ({ ...current, supplier: event.target.value }))} placeholder={t("orders.create.supplierPlaceholder")} maxLength={240} className={`${inputClass} mt-1.5`} /></label>
+              <label className={labelClass}>{t("orders.create.supplier")}<select value={orderForm.contactId} onChange={(event) => { const contact = supplierContacts.find((candidate) => candidate.id === event.target.value); setOrderForm((current) => ({ ...current, contactId: event.target.value, supplier: contact ? (contact.company ?? contact.name) : "" })); }} className={`${inputClass} mt-1.5`}><option value="">{t("orders.create.supplierManual")}</option>{supplierContacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.company ? `${contact.company} · ${contact.name}` : contact.name}</option>)}</select>{!orderForm.contactId ? <input value={orderForm.supplier} onChange={(event) => setOrderForm((current) => ({ ...current, supplier: event.target.value }))} placeholder={t("orders.create.supplierPlaceholder")} maxLength={240} className={`${inputClass} mt-2`} /> : null}</label>
               <label className={labelClass}>{t("orders.create.reference")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input value={orderForm.reference} onChange={(event) => setOrderForm((current) => ({ ...current, reference: event.target.value }))} placeholder="PO-1048" maxLength={160} className={`${inputClass} mt-1.5`} /></label>
               <label className={labelClass}>{t("orders.create.orderedAt")}<input type="datetime-local" required value={orderForm.orderedAt} onChange={(event) => setOrderForm((current) => ({ ...current, orderedAt: event.target.value }))} className={`${inputClass} mt-1.5`} /></label>
               <label className={labelClass}>{t("orders.create.expectedArrival")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input type="date" min={dateInput()} value={orderForm.expectedAt} onChange={(event) => setOrderForm((current) => ({ ...current, expectedAt: event.target.value }))} className={`${inputClass} mt-1.5`} /></label>

@@ -271,6 +271,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
     public let updatedAt: Date
     public let media: [InventoryMedia]
     public let cover: InventoryMedia?
+    public var isFavorite: Bool?
 
     public init(
         id: UUID,
@@ -300,7 +301,8 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
         createdAt: Date,
         updatedAt: Date,
         media: [InventoryMedia] = [],
-        cover: InventoryMedia? = nil
+        cover: InventoryMedia? = nil,
+        isFavorite: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -330,6 +332,7 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
         self.updatedAt = updatedAt
         self.media = media
         self.cover = cover
+        self.isFavorite = isFavorite
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -361,5 +364,6 @@ public struct InventoryResource: Codable, Identifiable, Equatable, Sendable {
         case updatedAt
         case media
         case cover
+        case isFavorite
     }
 }

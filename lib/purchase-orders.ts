@@ -11,8 +11,9 @@ import {
 import { randomUUID } from "node:crypto";
 
 import {
-  purchaseOrderLines,
-  purchaseOrders,
+  contacts,
+  orderLines as purchaseOrderLines,
+  orders as purchaseOrders,
   purchaseReceipts,
   resources,
   stockMovements,
@@ -47,6 +48,7 @@ export type PurchaseOrderLineInput = {
 
 export type PurchaseOrderCreateInput = {
   reference?: string | null;
+  contactId?: string | null;
   supplier?: string;
   status?: "draft" | "ordered";
   orderedAt?: Date;
@@ -57,6 +59,7 @@ export type PurchaseOrderCreateInput = {
 
 export type PurchaseOrderPatchInput = {
   reference?: string | null;
+  contactId?: string | null;
   supplier?: string;
   status?: "draft" | "ordered" | "cancelled";
   orderedAt?: Date;
@@ -144,6 +147,7 @@ const movementDto = (row: StockMovementRecord) => ({
   unitId: row.unitId,
   assemblyBuildId: row.assemblyBuildId,
   purchaseReceiptId: row.purchaseReceiptId,
+  orderLineId: row.orderLineId,
   delta: row.delta,
   quantity: row.quantity,
   totalPriceCents: row.totalPriceCents,
@@ -163,7 +167,7 @@ const movementDto = (row: StockMovementRecord) => ({
 
 const receiptDto = (row: PurchaseReceiptRecord) => ({
   id: row.id,
-  purchaseOrderLineId: row.purchaseOrderLineId,
+  purchaseOrderLineId: row.orderLineId,
   quantity: row.quantity,
   totalPriceCents: row.totalPriceCents,
   priceCurrency: row.priceCurrency,
@@ -241,9 +245,10 @@ const orderDto = (order: PurchaseOrderRecord, rows: OrderLineDtoInput[]) => {
   const lines = rows.map(lineDto);
   return {
     id: order.id,
+    contactId: order.contactId,
     reference: order.reference,
-    supplier: order.supplier,
-    status: order.status,
+    supplier: order.contactName,
+    status: order.status as PurchaseOrderStatus,
     orderedAt: order.orderedAt.toISOString(),
     expectedAt: order.expectedAt?.toISOString() ?? null,
     note: order.note,
@@ -285,14 +290,14 @@ async function loadOrderLines(
   return database
     .select({
       id: purchaseOrderLines.id,
-      purchaseOrderId: purchaseOrderLines.purchaseOrderId,
+      purchaseOrderId: purchaseOrderLines.orderId,
       resourceId: purchaseOrderLines.resourceId,
       resourceName: resources.name,
       resourceSku: resources.sku,
       resourceCurrency: resources.currency,
       baseUnitName: stockSettings.unitName,
       orderedQuantity: purchaseOrderLines.orderedQuantity,
-      receivedQuantity: purchaseOrderLines.receivedQuantity,
+      receivedQuantity: purchaseOrderLines.fulfilledQuantity,
       purchaseUnitName: purchaseOrderLines.purchaseUnitName,
       purchaseUnitFactor: purchaseOrderLines.purchaseUnitFactor,
       unitPriceCents: purchaseOrderLines.unitPriceCents,
@@ -308,7 +313,7 @@ async function loadOrderLines(
       purchaseOrders,
       and(
         eq(purchaseOrders.organizationId, organizationId),
-        eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+        eq(purchaseOrders.id, purchaseOrderLines.orderId),
       ),
     )
     .innerJoin(
@@ -328,7 +333,8 @@ async function loadOrderLines(
     .where(
       and(
         eq(purchaseOrderLines.organizationId, organizationId),
-        inArray(purchaseOrderLines.purchaseOrderId, orderIds),
+        inArray(purchaseOrderLines.orderId, orderIds),
+        eq(purchaseOrders.type, "purchase"),
       ),
     )
     .orderBy(asc(purchaseOrderLines.createdAt), asc(purchaseOrderLines.id));
@@ -347,6 +353,7 @@ export async function listPurchaseOrders(
           .where(
             and(
               eq(purchaseOrders.organizationId, organizationId),
+              eq(purchaseOrders.type, "purchase"),
               eq(purchaseOrders.status, options.status),
             ),
           )
@@ -355,7 +362,12 @@ export async function listPurchaseOrders(
       : await transaction
           .select()
           .from(purchaseOrders)
-          .where(eq(purchaseOrders.organizationId, organizationId))
+          .where(
+            and(
+              eq(purchaseOrders.organizationId, organizationId),
+              eq(purchaseOrders.type, "purchase"),
+            ),
+          )
           .orderBy(desc(purchaseOrders.orderedAt), desc(purchaseOrders.createdAt))
           .limit(limit);
     const lineRows = await loadOrderLines(
@@ -386,6 +398,7 @@ export async function getPurchaseOrder(organizationId: string, id: string) {
         and(
           eq(purchaseOrders.organizationId, organizationId),
           eq(purchaseOrders.id, id),
+          eq(purchaseOrders.type, "purchase"),
         ),
       )
       .limit(1);
@@ -468,6 +481,47 @@ export async function createPurchaseOrder(
       if (existingResources.length !== resourceIds.length) {
         throw new PurchaseOrderOperationError(
           "One or more purchase order items no longer exist.",
+          422,
+        );
+      }
+
+      const [supplierContact] = input.contactId
+        ? await transaction
+            .select({
+              id: contacts.id,
+              name: contacts.name,
+              company: contacts.company,
+              roles: contacts.roles,
+              archivedAt: contacts.archivedAt,
+            })
+            .from(contacts)
+            .where(
+              and(
+                eq(contacts.organizationId, organizationId),
+                eq(contacts.id, input.contactId),
+              ),
+            )
+            .limit(1)
+        : [];
+      if (
+        input.contactId &&
+        (!supplierContact ||
+          supplierContact.archivedAt ||
+          !supplierContact.roles.includes("supplier"))
+      ) {
+        throw new PurchaseOrderOperationError(
+          "Choose an active supplier contact for this purchase order.",
+          422,
+        );
+      }
+      const supplierName =
+        input.supplier?.trim() ||
+        supplierContact?.company ||
+        supplierContact?.name ||
+        "";
+      if (!supplierName) {
+        throw new PurchaseOrderOperationError(
+          "Choose or enter a supplier for this purchase order.",
           422,
         );
       }
@@ -560,14 +614,15 @@ export async function createPurchaseOrder(
       const committedRows = await transaction
         .select({
           resourceId: purchaseOrderLines.resourceId,
-          quantity: sql<string>`coalesce(sum((${purchaseOrderLines.orderedQuantity} - ${purchaseOrderLines.receivedQuantity})::bigint), 0)`,
+          quantity: sql<string>`coalesce(sum((${purchaseOrderLines.orderedQuantity} - ${purchaseOrderLines.fulfilledQuantity})::bigint), 0)`,
         })
         .from(purchaseOrderLines)
         .innerJoin(
           purchaseOrders,
           and(
             eq(purchaseOrders.organizationId, organizationId),
-            eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+            eq(purchaseOrders.id, purchaseOrderLines.orderId),
+            eq(purchaseOrders.type, "purchase"),
           ),
         )
         .where(
@@ -624,8 +679,10 @@ export async function createPurchaseOrder(
         .insert(purchaseOrders)
         .values({
           organizationId,
+          type: "purchase",
+          contactId: supplierContact?.id ?? null,
           reference: input.reference || null,
-          supplier: input.supplier ?? "",
+          contactName: supplierName,
           status: input.status ?? "ordered",
           orderedAt: input.orderedAt ?? new Date(),
           expectedAt: input.expectedAt ?? null,
@@ -641,7 +698,7 @@ export async function createPurchaseOrder(
         .values(
           normalizedLines.map((line) => ({
             organizationId,
-            purchaseOrderId: order.id,
+            orderId: order.id,
             resourceId: line.resourceId,
             orderedQuantity: line.orderedQuantity,
             purchaseUnitName: line.purchaseUnitName,
@@ -668,6 +725,8 @@ export async function createPurchaseOrder(
         }
         return {
           ...line,
+          purchaseOrderId: line.orderId,
+          receivedQuantity: line.fulfilledQuantity,
           resourceName: resource.name,
           resourceSku: resource.sku,
           resourceCurrency: resource.currency,
@@ -719,22 +778,53 @@ export async function updatePurchaseOrder(
         and(
           eq(purchaseOrders.organizationId, organizationId),
           eq(purchaseOrders.id, id),
+          eq(purchaseOrders.type, "purchase"),
         ),
       )
       .limit(1)
       .for("update");
     if (!order) return false;
 
+    const [supplierContact] = patch.contactId
+      ? await transaction
+          .select({
+            id: contacts.id,
+            name: contacts.name,
+            company: contacts.company,
+            roles: contacts.roles,
+            archivedAt: contacts.archivedAt,
+          })
+          .from(contacts)
+          .where(
+            and(
+              eq(contacts.organizationId, organizationId),
+              eq(contacts.id, patch.contactId),
+            ),
+          )
+          .limit(1)
+      : [];
+    if (
+      patch.contactId &&
+      (!supplierContact ||
+        supplierContact.archivedAt ||
+        !supplierContact.roles.includes("supplier"))
+    ) {
+      throw new PurchaseOrderOperationError(
+        "Choose an active supplier contact for this purchase order.",
+        422,
+      );
+    }
+
     const lines = await transaction
       .select({
         orderedQuantity: purchaseOrderLines.orderedQuantity,
-        receivedQuantity: purchaseOrderLines.receivedQuantity,
+        receivedQuantity: purchaseOrderLines.fulfilledQuantity,
       })
       .from(purchaseOrderLines)
       .where(
         and(
           eq(purchaseOrderLines.organizationId, organizationId),
-          eq(purchaseOrderLines.purchaseOrderId, id),
+          eq(purchaseOrderLines.orderId, id),
         ),
       );
     if (order.status === "received" && patch.status !== undefined) {
@@ -757,12 +847,25 @@ export async function updatePurchaseOrder(
     const nextStatus =
       requestedStatus === "cancelled"
         ? "cancelled"
-        : deriveStatus(requestedStatus, lines);
+        : deriveStatus(requestedStatus as PurchaseOrderStatus, lines);
     await transaction
       .update(purchaseOrders)
       .set({
         ...(patch.reference !== undefined ? { reference: patch.reference || null } : {}),
-        ...(patch.supplier !== undefined ? { supplier: patch.supplier } : {}),
+        ...(patch.supplier !== undefined
+          ? { contactName: patch.supplier }
+          : {}),
+        ...(patch.contactId !== undefined
+          ? {
+              contactId: patch.contactId,
+              ...(supplierContact
+                ? {
+                    contactName:
+                      supplierContact.company ?? supplierContact.name,
+                  }
+                : {}),
+            }
+          : {}),
         ...(patch.orderedAt !== undefined ? { orderedAt: patch.orderedAt } : {}),
         ...(patch.expectedAt !== undefined ? { expectedAt: patch.expectedAt } : {}),
         ...(patch.note !== undefined ? { note: patch.note } : {}),
@@ -795,7 +898,7 @@ export async function receivePurchaseOrderLine(
         ? (storedOrder as { id?: unknown }).id
         : null;
     if (
-      existing.purchaseOrderLineId !== lineId ||
+      existing.orderLineId !== lineId ||
       existing.createdBy !== actor ||
       existing.requestHash !== idempotency.requestHash ||
       storedOrderId !== purchaseOrderId
@@ -825,7 +928,7 @@ export async function receivePurchaseOrderLine(
       const [initialLine] = await transaction
         .select({
           id: purchaseOrderLines.id,
-          purchaseOrderId: purchaseOrderLines.purchaseOrderId,
+          purchaseOrderId: purchaseOrderLines.orderId,
           resourceId: purchaseOrderLines.resourceId,
         })
         .from(purchaseOrderLines)
@@ -833,7 +936,7 @@ export async function receivePurchaseOrderLine(
           and(
             eq(purchaseOrderLines.organizationId, organizationId),
             eq(purchaseOrderLines.id, lineId),
-            eq(purchaseOrderLines.purchaseOrderId, purchaseOrderId),
+            eq(purchaseOrderLines.orderId, purchaseOrderId),
           ),
         )
         .limit(1);
@@ -848,6 +951,7 @@ export async function receivePurchaseOrderLine(
           and(
             eq(purchaseOrders.organizationId, organizationId),
             eq(purchaseOrders.id, purchaseOrderId),
+            eq(purchaseOrders.type, "purchase"),
           ),
         )
         .limit(1)
@@ -877,7 +981,7 @@ export async function receivePurchaseOrderLine(
           and(
             eq(purchaseOrderLines.organizationId, organizationId),
             eq(purchaseOrderLines.id, lineId),
-            eq(purchaseOrderLines.purchaseOrderId, purchaseOrderId),
+            eq(purchaseOrderLines.orderId, purchaseOrderId),
           ),
         )
         .limit(1)
@@ -950,9 +1054,9 @@ export async function receivePurchaseOrderLine(
           422,
         );
       }
-      if (line.receivedQuantity + receiptQuantity > line.orderedQuantity) {
+      if (line.fulfilledQuantity + receiptQuantity > line.orderedQuantity) {
         throw new PurchaseOrderOperationError(
-          `This receipt exceeds the ${line.orderedQuantity - line.receivedQuantity} units still open on the line.`,
+          `This receipt exceeds the ${line.orderedQuantity - line.fulfilledQuantity} units still open on the line.`,
           409,
         );
       }
@@ -1021,7 +1125,7 @@ export async function receivePurchaseOrderLine(
         .insert(purchaseReceipts)
         .values({
           organizationId,
-          purchaseOrderLineId: line.id,
+          orderLineId: line.id,
           quantity: receiptQuantity,
           totalPriceCents,
           priceCurrency,
@@ -1086,6 +1190,8 @@ export async function receivePurchaseOrderLine(
               resourceId: resource.id,
               unitId: unit.id,
               purchaseReceiptId: receipt.id,
+              orderLineId: line.id,
+              contactId: order.contactId,
               delta: 1,
               quantity: 1,
               totalPriceCents: serializedCosts[index],
@@ -1110,6 +1216,8 @@ export async function receivePurchaseOrderLine(
             organizationId,
             resourceId: resource.id,
             purchaseReceiptId: receipt.id,
+            orderLineId: line.id,
+            contactId: order.contactId,
             delta: receiptQuantity,
             quantity: receiptQuantity,
             totalPriceCents,
@@ -1148,10 +1256,10 @@ export async function receivePurchaseOrderLine(
       const costedMovementById = new Map(costedMovements.map((row) => [row.id, row]));
       await enqueueStockMovementWebhookEvents(transaction, movements);
 
-      const receivedQuantity = line.receivedQuantity + receiptQuantity;
+      const receivedQuantity = line.fulfilledQuantity + receiptQuantity;
       await transaction
         .update(purchaseOrderLines)
-        .set({ receivedQuantity, updatedAt: now })
+        .set({ fulfilledQuantity: receivedQuantity, updatedAt: now })
         .where(
           and(
             eq(purchaseOrderLines.organizationId, organizationId),
@@ -1162,14 +1270,14 @@ export async function receivePurchaseOrderLine(
       const rawLines = await transaction
         .select({
           id: purchaseOrderLines.id,
-          purchaseOrderId: purchaseOrderLines.purchaseOrderId,
+          purchaseOrderId: purchaseOrderLines.orderId,
           resourceId: purchaseOrderLines.resourceId,
           resourceName: resources.name,
           resourceSku: resources.sku,
           resourceCurrency: resources.currency,
           baseUnitName: stockSettings.unitName,
           orderedQuantity: purchaseOrderLines.orderedQuantity,
-          receivedQuantity: purchaseOrderLines.receivedQuantity,
+          receivedQuantity: purchaseOrderLines.fulfilledQuantity,
           purchaseUnitName: purchaseOrderLines.purchaseUnitName,
           purchaseUnitFactor: purchaseOrderLines.purchaseUnitFactor,
           unitPriceCents: purchaseOrderLines.unitPriceCents,
@@ -1198,11 +1306,14 @@ export async function receivePurchaseOrderLine(
         .where(
           and(
             eq(purchaseOrderLines.organizationId, organizationId),
-            eq(purchaseOrderLines.purchaseOrderId, purchaseOrderId),
+            eq(purchaseOrderLines.orderId, purchaseOrderId),
           ),
         )
         .orderBy(asc(purchaseOrderLines.createdAt), asc(purchaseOrderLines.id));
-      const nextStatus = deriveStatus(order.status, rawLines);
+      const nextStatus = deriveStatus(
+        order.status as PurchaseOrderStatus,
+        rawLines,
+      );
       const [savedOrder] = await transaction
         .update(purchaseOrders)
         .set({ status: nextStatus, updatedAt: now })

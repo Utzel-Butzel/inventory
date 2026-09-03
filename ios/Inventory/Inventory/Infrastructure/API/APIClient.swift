@@ -111,6 +111,8 @@ public final class APIClient: Sendable {
         query: String? = nil,
         type: InventoryResourceType? = nil,
         status: InventoryResourceStatus? = nil,
+        favoritesOnly: Bool = false,
+        loanableOnly: Bool = false,
         page: Int = 1,
         pageSize: Int = 24
     ) async throws -> ResourceListResponse {
@@ -133,6 +135,12 @@ public final class APIClient: Sendable {
         }
         if let status {
             queryItems.append(URLQueryItem(name: "status", value: status.rawValue))
+        }
+        if favoritesOnly {
+            queryItems.append(URLQueryItem(name: "favorites", value: "true"))
+        }
+        if loanableOnly {
+            queryItems.append(URLQueryItem(name: "loanable", value: "true"))
         }
 
         let url = try makeAPIURL(path: ["resources"], queryItems: queryItems)
@@ -363,6 +371,251 @@ public final class APIClient: Sendable {
     public func getResourceDetail(id: UUID) async throws -> ResourceResponse {
         let url = try makeAPIURL(path: ["resources", id.uuidString.lowercased()])
         let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func setResourceFavorite(
+        resourceID: UUID,
+        favorite: Bool
+    ) async throws -> ResourceFavoriteResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "favorite",
+        ])
+        let request = try await authorizedRequest(
+            url: url,
+            method: favorite ? "PUT" : "DELETE"
+        )
+        return try await execute(request)
+    }
+
+    public func listNotifications(
+        limit: Int = 100,
+        unreadOnly: Bool = false
+    ) async throws -> NotificationInboxResponse {
+        guard (1 ... 100).contains(limit) else {
+            throw APIClientError.invalidRequest(
+                "Notification limit must be between one and 100."
+            )
+        }
+        let url = try makeAPIURL(
+            path: ["notifications"],
+            queryItems: [
+                URLQueryItem(name: "limit", value: String(limit)),
+                URLQueryItem(name: "unreadOnly", value: unreadOnly ? "true" : "false"),
+            ]
+        )
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func markNotificationRead(id: UUID) async throws -> NotificationUpdateResponse {
+        let url = try makeAPIURL(path: [
+            "notifications", id.uuidString.lowercased(),
+        ])
+        let request = try await authorizedRequest(url: url, method: "PATCH")
+        return try await execute(request)
+    }
+
+    public func markAllNotificationsRead() async throws -> NotificationReadAllResponse {
+        let url = try makeAPIURL(path: ["notifications", "read-all"])
+        let request = try await authorizedRequest(url: url, method: "POST")
+        return try await execute(request)
+    }
+
+    public func notificationSettings() async throws -> NotificationSettingsResponse {
+        let url = try makeAPIURL(path: ["notifications", "preferences"])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func updateNotificationSettings(
+        _ input: NotificationPreferenceUpdateRequest
+    ) async throws -> NotificationPreferenceUpdateResponse {
+        let url = try makeAPIURL(path: ["notifications", "preferences"])
+        let request = try await jsonRequest(url: url, method: "PATCH", body: input)
+        return try await execute(request)
+    }
+
+    public func previewNotificationChannel(
+        _ channel: NotificationChannel
+    ) async throws -> NotificationChannelPreviewResponse {
+        let url = try makeAPIURL(path: ["notifications", "test"])
+        let request = try await jsonRequest(
+            url: url,
+            method: "POST",
+            body: NotificationChannelPreviewRequest(channel: channel)
+        )
+        return try await execute(request)
+    }
+
+    public func listLoans(limit: Int = 500) async throws -> LoansResponse {
+        guard (1 ... 500).contains(limit) else {
+            throw APIClientError.invalidRequest(
+                "Loan limit must be between one and 500."
+            )
+        }
+        let url = try makeAPIURL(
+            path: ["loans"],
+            queryItems: [URLQueryItem(name: "limit", value: String(limit))]
+        )
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func completeAssignment(
+        id: UUID,
+        status: AssignmentCompletionStatus,
+        idempotencyKey: UUID
+    ) async throws {
+        let url = try makeAPIURL(path: [
+            "assignments", id.uuidString.lowercased(),
+        ])
+        var request = try await jsonRequest(
+            url: url,
+            method: "PATCH",
+            body: AssignmentCompletionRequest(status: status)
+        )
+        setIdempotencyKey(idempotencyKey, on: &request)
+        try await executeWithoutResponse(request)
+    }
+
+    public func resourceAssignments(
+        resourceID: UUID
+    ) async throws -> ResourceAssignmentsResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "assignments",
+        ])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func createResourceAssignment(
+        resourceID: UUID,
+        input: ResourceAssignmentCreateRequest,
+        idempotencyKey: UUID
+    ) async throws {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "assignments",
+        ])
+        var request = try await jsonRequest(url: url, method: "POST", body: input)
+        setIdempotencyKey(idempotencyKey, on: &request)
+        try await executeWithoutResponse(request)
+    }
+
+    public func updateResourceLendingSettings(
+        resourceID: UUID,
+        settings: ResourceLendingSettings
+    ) async throws -> ResourceLendingSettingsResponse {
+        let url = try makeAPIURL(path: [
+            "resources", resourceID.uuidString.lowercased(), "lending",
+        ])
+        let request = try await jsonRequest(
+            url: url,
+            method: "PATCH",
+            body: settings
+        )
+        return try await execute(request)
+    }
+
+    public func activateReservation(
+        id: UUID,
+        stockUnitID: UUID? = nil,
+        idempotencyKey: UUID
+    ) async throws {
+        let url = try makeAPIURL(path: [
+            "assignments", id.uuidString.lowercased(),
+        ])
+        var request = try await jsonRequest(
+            url: url,
+            method: "PATCH",
+            body: AssignmentActivationRequest(stockUnitId: stockUnitID)
+        )
+        setIdempotencyKey(idempotencyKey, on: &request)
+        try await executeWithoutResponse(request)
+    }
+
+    public func listInternalRequests(
+        limit: Int = 200,
+        status: InternalRequestStatus? = nil,
+        mineOnly: Bool = false
+    ) async throws -> InternalRequestsResponse {
+        guard (1 ... 200).contains(limit) else {
+            throw APIClientError.invalidRequest(
+                "Request limit must be between one and 200."
+            )
+        }
+        var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
+        if let status {
+            queryItems.append(URLQueryItem(name: "status", value: status.rawValue))
+        }
+        if mineOnly {
+            queryItems.append(URLQueryItem(name: "mine", value: "true"))
+        }
+        let url = try makeAPIURL(
+            path: ["internal-requests"],
+            queryItems: queryItems
+        )
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func internalRequest(id: UUID) async throws -> InternalRequestResponse {
+        let url = try makeAPIURL(path: [
+            "internal-requests", id.uuidString.lowercased(),
+        ])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func createInternalRequest(
+        input: InternalRequestCreateRequest,
+        idempotencyKey: UUID
+    ) async throws -> InternalRequestResponse {
+        guard (1 ... 50).contains(input.lines.count) else {
+            throw APIClientError.invalidRequest(
+                "An internal request must contain between one and 50 items."
+            )
+        }
+        guard input.dueAt > input.startsAt else {
+            throw APIClientError.invalidRequest(
+                "The return date must be after the start date."
+            )
+        }
+        guard input.dueAt.timeIntervalSince(input.startsAt) <= 366 * 86_400 else {
+            throw APIClientError.invalidRequest(
+                "An internal request may cover at most 366 days."
+            )
+        }
+        guard Set(input.lines.map(\.resourceId)).count == input.lines.count else {
+            throw APIClientError.invalidRequest(
+                "Each inventory item may appear only once in an internal request."
+            )
+        }
+        guard input.lines.allSatisfy({ (1 ... 2_000_000_000).contains($0.quantity) }) else {
+            throw APIClientError.invalidRequest(
+                "Each requested quantity must be between one and 2,000,000,000."
+            )
+        }
+
+        let url = try makeAPIURL(path: ["internal-requests"])
+        var request = try await jsonRequest(url: url, method: "POST", body: input)
+        setIdempotencyKey(idempotencyKey, on: &request)
+        return try await execute(request)
+    }
+
+    public func transitionInternalRequest(
+        id: UUID,
+        action: InternalRequestAction,
+        note: String? = nil
+    ) async throws -> InternalRequestResponse {
+        let url = try makeAPIURL(path: [
+            "internal-requests", id.uuidString.lowercased(),
+        ])
+        let request = try await jsonRequest(
+            url: url,
+            method: "PATCH",
+            body: InternalRequestActionRequest(action: action, note: note)
+        )
         return try await execute(request)
     }
 

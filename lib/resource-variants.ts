@@ -6,9 +6,11 @@ import {
   organizations,
   resources,
   resourceVariants,
+  stockMovementRequests,
   stockMovements,
   stockSettings,
   type ResourceVariantRecord,
+  type StockMovementRecord,
 } from "@/db/schema";
 import { db } from "@/lib/db";
 import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
@@ -454,8 +456,59 @@ export async function bookResourceVariantMovement(
   variantId: string,
   input: ResourceVariantMovementInput,
   actor: string,
+  idempotency?: { key: string; requestHash: string },
+  transactionEffect?: (
+    transaction: DbExecutor,
+    movement: StockMovementRecord,
+  ) => Promise<void>,
 ) {
-  return db.transaction(async (transaction) => {
+  type Result = {
+    variant: ReturnType<typeof resourceVariantDto>;
+    resource: { id: string; quantity: number };
+    movement: {
+      id: string;
+      delta: number;
+      balanceAfter: number;
+      variantDelta: number | null;
+      variantBalanceAfter: number | null;
+      occurredAt: string;
+    };
+  };
+  const validateReplay = (existing: {
+    resourceId: string;
+    actor: string;
+    requestHash: string;
+    response: Record<string, unknown>;
+  }) => {
+    if (
+      existing.resourceId !== resourceId ||
+      existing.actor !== actor ||
+      existing.requestHash !== idempotency?.requestHash
+    ) {
+      throw new ResourceVariantError(
+        "That Idempotency-Key was already used for another resource, actor, or payload.",
+        409,
+      );
+    }
+    return existing.response as unknown as Result;
+  };
+
+  try {
+    return await db.transaction(async (transaction) => {
+      if (idempotency) {
+        const [existing] = await transaction
+          .select()
+          .from(stockMovementRequests)
+          .where(
+            and(
+              eq(stockMovementRequests.organizationId, organizationId),
+              eq(stockMovementRequests.idempotencyKey, idempotency.key),
+            ),
+          )
+          .limit(1);
+        if (existing) return validateReplay(existing);
+      }
+
     const [resource] = await transaction
       .select({
         id: resources.id,
@@ -477,6 +530,20 @@ export async function bookResourceVariantMovement(
       .for("update");
     if (!resource) throw new ResourceVariantError("Not found", 404);
     await assertBulkTracking(transaction, organizationId, resourceId);
+
+    if (idempotency) {
+      const [existing] = await transaction
+        .select()
+        .from(stockMovementRequests)
+        .where(
+          and(
+            eq(stockMovementRequests.organizationId, organizationId),
+            eq(stockMovementRequests.idempotencyKey, idempotency.key),
+          ),
+        )
+        .limit(1);
+      if (existing) return validateReplay(existing);
+    }
 
     const [variant] = await transaction
       .select()
@@ -562,7 +629,7 @@ export async function bookResourceVariantMovement(
       })
       .returning();
     await enqueueStockMovementWebhookEvents(transaction, [movement]);
-    return {
+    const response: Result = {
       variant: resourceVariantDto(savedVariant),
       resource: { id: resource.id, quantity: nextResourceQuantity },
       movement: {
@@ -574,5 +641,38 @@ export async function bookResourceVariantMovement(
         occurredAt: movement.occurredAt.toISOString(),
       },
     };
-  });
+    if (transactionEffect) {
+      await transactionEffect(transaction, movement);
+    }
+    if (idempotency) {
+      await transaction.insert(stockMovementRequests).values({
+        organizationId,
+        idempotencyKey: idempotency.key,
+        resourceId,
+        actor,
+        requestHash: idempotency.requestHash,
+        response: JSON.parse(JSON.stringify(response)) as Record<
+          string,
+          unknown
+        >,
+      });
+    }
+    return response;
+    });
+  } catch (error) {
+    if (idempotency) {
+      const [winner] = await db
+        .select()
+        .from(stockMovementRequests)
+        .where(
+          and(
+            eq(stockMovementRequests.organizationId, organizationId),
+            eq(stockMovementRequests.idempotencyKey, idempotency.key),
+          ),
+        )
+        .limit(1);
+      if (winner) return validateReplay(winner);
+    }
+    throw error;
+  }
 }

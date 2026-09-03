@@ -85,10 +85,15 @@
 
 .designedQr,
 .designedBarcode,
+.designedBackground,
 .labelImage {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.designedBackground {
+  pointer-events: none;
 }
 
 .designedQr {

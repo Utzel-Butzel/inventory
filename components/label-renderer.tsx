@@ -13,7 +13,11 @@ import {
   Code128Barcode,
   QrCode,
 } from "@/components/label-codes";
-import type { LabelElement, LabelSetupDto } from "@/lib/label-setup-contract";
+import type {
+  LabelElement,
+  LabelFontFamily,
+  LabelSetupDto,
+} from "@/lib/label-setup-contract";
 import type { ClientResource } from "@/lib/client-types";
 import { resourceShortUrl } from "@/lib/resource-short-link";
 import { printableLabelBarcode } from "@/lib/label-barcode";
@@ -80,12 +84,26 @@ function defaultFontSizeMm(element: TextElement) {
   return element.type === "name" ? 3.8 : element.type === "url" ? 1.8 : 2.5;
 }
 
+const FONT_FAMILY_STACKS: Record<LabelFontFamily, string> = {
+  sans: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  serif: 'ui-serif, Georgia, Cambria, "Times New Roman", serif',
+  monospace:
+    'ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace',
+  rounded: 'ui-rounded, "SF Pro Rounded", system-ui, sans-serif',
+};
+
+function defaultFontFamily(element: TextElement): LabelFontFamily {
+  return element.type === "name" ? "sans" : "monospace";
+}
+
 function textStyle(element: TextElement, pixelsPerMm?: number): CSSProperties {
   const defaultSize = defaultFontSizeMm(element);
   return {
     fontSize: pixelsPerMm
       ? `${(element.fontSizeMm ?? defaultSize) * pixelsPerMm}px`
       : `${element.fontSizeMm ?? defaultSize}mm`,
+    fontFamily:
+      FONT_FAMILY_STACKS[element.fontFamily ?? defaultFontFamily(element)],
     textAlign: element.align ?? "left",
     justifyContent:
       element.align === "center"
@@ -232,8 +250,37 @@ export function LabelRenderer({
     >
       {setup.elements
         .filter((element) => element.visible)
+        .sort((left, right) =>
+          left.type === "background"
+            ? -1
+            : right.type === "background"
+              ? 1
+              : 0,
+        )
         .map((element) => {
           const position = elementPosition(element);
+          if (element.type === "background") {
+            return element.source ? (
+              <div
+                key={element.type}
+                className={styles.designedElement}
+                style={position}
+                aria-hidden="true"
+              >
+                {/* User-provided data URLs need to render identically in preview and print. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={element.source}
+                  alt=""
+                  className={styles.designedBackground}
+                  style={{
+                    objectFit: element.fit ?? "cover",
+                    opacity: element.opacity ?? 1,
+                  }}
+                />
+              </div>
+            ) : null;
+          }
           if (element.type === "qr") {
             return (
               <div key={element.type} className={styles.designedElement} style={position}>
@@ -242,6 +289,9 @@ export function LabelRenderer({
                     value={qrValue}
                     className={styles.designedQr}
                     ariaLabel={t("renderer.qr", { value: qrValue })}
+                    foregroundColor={element.foregroundColor}
+                    backgroundColor={element.backgroundColor}
+                    quietZoneModules={element.quietZoneModules}
                   />
                 ) : (
                   <span className={styles.qrUnavailable}>

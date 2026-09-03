@@ -6,12 +6,25 @@ struct ResourcePickerView: View {
 
     let title: String
     let excludedResourceIDs: Set<UUID>
+    let loanableOnly: Bool
     let onSelect: (InventoryResource) -> Void
 
     @State private var query = ""
     @State private var resources: [InventoryResource] = []
     @State private var loading = false
     @State private var errorMessage: String?
+
+    init(
+        title: String,
+        excludedResourceIDs: Set<UUID>,
+        loanableOnly: Bool = false,
+        onSelect: @escaping (InventoryResource) -> Void
+    ) {
+        self.title = title
+        self.excludedResourceIDs = excludedResourceIDs
+        self.loanableOnly = loanableOnly
+        self.onSelect = onSelect
+    }
 
     var body: some View {
         List {
@@ -70,6 +83,7 @@ struct ResourcePickerView: View {
             do {
                 let response = try await client.listResources(
                     query: query,
+                    loanableOnly: loanableOnly,
                     page: 1,
                     pageSize: 100
                 )

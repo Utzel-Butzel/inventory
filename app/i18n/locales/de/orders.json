@@ -1,0 +1,103 @@
+{
+  "metadata": {
+    "title": "Vorgänge",
+    "description": "Einkäufe, Verkäufe und mehrteilige Ausleihen gemeinsam verwalten."
+  },
+  "types": {
+    "purchase": "Einkauf",
+    "sale": "Verkauf",
+    "loan": "Ausleihe"
+  },
+  "eyebrow": {
+    "sale": "Verkauf",
+    "loan": "Inventarnutzung"
+  },
+  "title": {
+    "sale": "Verkaufsaufträge",
+    "loan": "Ausleihen"
+  },
+  "description": {
+    "sale": "Fasse mehrere Verkaufspositionen pro Kunde zusammen und buche ihre Ausgabe direkt in den Bestand.",
+    "loan": "Leihe mehrere Dinge gemeinsam aus und verfolge Ausgabe, Fälligkeit und Rückgabe pro Position."
+  },
+  "actions": {
+    "refresh": "Aktualisieren",
+    "new": "Neuer Vorgang",
+    "close": "Formular schließen",
+    "create": "Vorgang erstellen",
+    "cancel": "Abbrechen",
+    "cancelOrder": "Vorgang stornieren",
+    "removeLine": "{{name}} entfernen",
+    "issue": "Ausgeben",
+    "return": "Zurücknehmen"
+  },
+  "fields": {
+    "contact": "Kunde / Kontakt",
+    "chooseContact": "Kontakt auswählen",
+    "reference": "Referenz",
+    "orderedAt": "Erfasst am",
+    "dueAt": "Rückgabe fällig",
+    "note": "Notiz",
+    "searchInventory": "Inventar nach Name oder SKU suchen…",
+    "noSku": "Keine SKU",
+    "available": "verfügbar",
+    "quantity": "Menge",
+    "unitPrice": "Stückpreis",
+    "lineNote": "Positionsnotiz",
+    "movementQuantity": "Bewegungsmenge"
+  },
+  "metrics": {
+    "active": "Aktive Vorgänge",
+    "open": "Offene Menge",
+    "overdue": "Überfällig"
+  },
+  "status": {
+    "draft": "Entwurf",
+    "confirmed": "Bestätigt",
+    "partially-fulfilled": "Teilweise erfüllt",
+    "fulfilled": "Erfüllt",
+    "reserved": "Reserviert",
+    "partially-issued": "Teilweise ausgegeben",
+    "issued": "Ausgegeben",
+    "partially-returned": "Teilweise zurückgegeben",
+    "returned": "Zurückgegeben",
+    "overdue": "Überfällig",
+    "cancelled": "Storniert"
+  },
+  "list": {
+    "due": "fällig {{date}}",
+    "progress": "{{fulfilled}} von {{total}} ausgegeben",
+    "issued": "Ausgegeben",
+    "returned": "Zurück",
+    "complete": "Abgeschlossen",
+    "pending": "Ausstehend"
+  },
+  "tracking": {
+    "serialized": "Serialisiert",
+    "serializedHelp": "Serialisierte Einheiten weiterhin direkt am Inventareintrag ausgeben."
+  },
+  "empty": {
+    "noInventory": "Keine passenden Inventareinträge gefunden.",
+    "linesTitle": "Noch keine Positionen",
+    "linesDescription": "Suche oben nach Inventar und füge mehrere Positionen hinzu.",
+    "saleTitle": "Noch keine Verkaufsaufträge",
+    "saleDescription": "Erstelle den ersten Verkaufsauftrag für einen Kunden.",
+    "loanTitle": "Noch keine mehrteiligen Ausleihen",
+    "loanDescription": "Erstelle eine Ausleihe und füge alle gemeinsam ausgegebenen Dinge hinzu."
+  },
+  "notices": {
+    "created": "{{type}} wurde erstellt.",
+    "issue": "{{quantity}} × {{name}} wurde ausgegeben.",
+    "return": "{{quantity}} × {{name}} wurde zurückgenommen.",
+    "cancelled": "Vorgang wurde storniert."
+  },
+  "errors": {
+    "load": "Vorgänge konnten nicht geladen werden.",
+    "create": "Der Vorgang konnte nicht erstellt werden.",
+    "update": "Der Vorgang konnte nicht aktualisiert werden.",
+    "movement": "Die Bestandsbewegung konnte nicht gebucht werden.",
+    "missingContactOrLines": "Wähle einen Kontakt und füge mindestens eine Position hinzu.",
+    "invalidLines": "Prüfe Mengen und Preise der Positionen.",
+    "invalidMovementQuantity": "Gib eine ganze Menge zwischen 1 und {{maximum}} ein."
+  }
+}

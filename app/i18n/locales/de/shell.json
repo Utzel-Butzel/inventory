@@ -21,9 +21,10 @@
     "inventory": "Inventar",
     "entries": "Einträge",
     "favorites": "Favoriten",
+    "contacts": "Kontakte",
     "stock": "Bestand",
     "stockOverview": "Übersicht",
-    "stockOrders": "Bestellungen",
+    "stockOrders": "Vorgänge",
     "stockScan": "Scannen",
     "locations": "Orte",
     "map": "Karte",
@@ -142,6 +143,10 @@
       "actionFlows": {
         "label": "Action Flows",
         "description": "Abläufe für Codes und Bestandsaktionen konfigurieren"
+      },
+      "woocommerce": {
+        "label": "WooCommerce",
+        "description": "Einen WooCommerce-Shop verbinden"
       },
       "webhooks": {
         "label": "Webhooks",

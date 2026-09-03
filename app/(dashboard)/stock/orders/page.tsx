@@ -1,25 +1,25 @@
 import type { Metadata } from "next";
 
-import { PurchaseOrdersManager } from "@/components/purchase-orders-manager";
+import { OrdersManager } from "@/components/orders-manager";
 import { getT } from "@/lib/ui-i18n/server";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { t } = await getT("stock");
+  const { t } = await getT("orders");
 
   return {
-    title: t("orders.metadata.title"),
-    description: t("orders.metadata.description"),
+    title: t("metadata.title"),
+    description: t("metadata.description"),
   };
 }
 
-export default async function PurchaseOrdersPage() {
-  await getT("stock");
+export default async function OrdersPage() {
+  await getT("orders");
 
   return (
     <main className="mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <PurchaseOrdersManager />
+      <OrdersManager />
     </main>
   );
 }

@@ -10,7 +10,29 @@ import {
 } from "../lib/label-setup-contract.ts";
 
 const elements = [
-  { type: "qr", x: 0, y: 0, width: 25, height: 50, visible: true },
+  {
+    type: "background",
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    visible: true,
+    source:
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    fit: "cover",
+    opacity: 0.5,
+  },
+  {
+    type: "qr",
+    x: 0,
+    y: 0,
+    width: 25,
+    height: 50,
+    visible: true,
+    foregroundColor: "#102030",
+    backgroundColor: "#fefefe",
+    quietZoneModules: 2,
+  },
   {
     type: "image",
     x: 25,
@@ -29,6 +51,7 @@ const elements = [
     visible: true,
     fontSizeMm: 3.5,
     minFontSizeMm: 1,
+    fontFamily: "serif",
     align: "center",
     textOverflow: "shrink",
   },
@@ -79,6 +102,24 @@ test("accepts a setup with each supported element type exactly once", () => {
   assert.deepEqual(parsed.elements, elements);
 });
 
+test("accepts an embedded SVG label background", () => {
+  assert.equal(
+    labelElementsSchema.safeParse([
+      {
+        type: "background",
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        visible: true,
+        source:
+          "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=",
+      },
+    ]).success,
+    true,
+  );
+});
+
 test("rejects boxes that extend beyond the normalized label", () => {
   assert.equal(
     labelElementsSchema.safeParse([
@@ -89,6 +130,48 @@ test("rejects boxes that extend beyond the normalized label", () => {
   assert.equal(
     labelElementsSchema.safeParse([
       { type: "qr", x: 0, y: 90, width: 20, height: 11, visible: true },
+    ]).success,
+    false,
+  );
+  assert.equal(
+    labelElementsSchema.safeParse([
+      {
+        type: "background",
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        visible: true,
+        source: "https://example.com/background.svg",
+      },
+    ]).success,
+    false,
+  );
+  assert.equal(
+    labelElementsSchema.safeParse([
+      {
+        type: "qr",
+        x: 0,
+        y: 0,
+        width: 20,
+        height: 20,
+        visible: true,
+        quietZoneModules: 5,
+      },
+    ]).success,
+    false,
+  );
+  assert.equal(
+    labelElementsSchema.safeParse([
+      {
+        type: "name",
+        x: 0,
+        y: 0,
+        width: 20,
+        height: 20,
+        visible: true,
+        fontFamily: "comic-sans",
+      },
     ]).success,
     false,
   );

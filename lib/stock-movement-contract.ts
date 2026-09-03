@@ -17,6 +17,7 @@ export const stockMovementSchema = z
     location: z.string().trim().max(240).nullable().optional(),
     fromLocationResourceId: z.string().uuid().nullable().optional(),
     toLocationResourceId: z.string().uuid().nullable().optional(),
+    contactId: z.string().uuid().nullable().optional(),
     occurredAt: z.string().datetime().optional(),
     totalPriceCents: z
       .number()

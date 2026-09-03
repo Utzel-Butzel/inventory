@@ -21,6 +21,7 @@
     "inventory": "Inventory",
     "entries": "Items",
     "favorites": "Favorites",
+    "contacts": "Contacts",
     "stock": "Stock",
     "stockOverview": "Overview",
     "stockOrders": "Orders",
@@ -142,6 +143,10 @@
       "actionFlows": {
         "label": "Action flows",
         "description": "Configure code-driven stock actions"
+      },
+      "woocommerce": {
+        "label": "WooCommerce",
+        "description": "Connect a WooCommerce store"
       },
       "webhooks": {
         "label": "Webhooks",

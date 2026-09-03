@@ -11,6 +11,8 @@ export const UI_NAMESPACES = [
   "shell",
   "dashboard",
   "inventory",
+  "contacts",
+  "orders",
   "resource",
   "stock",
   "counting",

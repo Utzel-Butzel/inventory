@@ -831,6 +831,8 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
         <LabelDesigner
           value={designerDraft}
           sampleResource={selectedResources[0] ?? resources[0] ?? null}
+          sampleResources={selectedResources.length ? selectedResources : resources}
+          origin={origin || "https://inventory.example"}
           saving={designerSaving}
           error={designerError}
           onChange={setDesignerDraft}

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inventory API
-  version: 1.19.0
+  version: 1.20.0
   description: >-
     Organization-scoped API for configurable inventory structures, localized
     content, indoor 3D room scans, location-aware stock, cycle counts,
@@ -25,6 +25,8 @@ tags:
     description: Session-administered roles, granular permissions, and conditional inventory-item access rules.
   - name: Resources
     description: Inventory item creation, lookup, retrieval, and lifecycle.
+  - name: Contacts
+    description: Organization-scoped customers and suppliers with inventory and stock-ledger assignments.
   - name: Inventory structure
     description: Configurable inventory types, relationship types, and directed resource relationships.
   - name: Data exchange
@@ -47,6 +49,8 @@ tags:
     description: Bills of materials and atomic assembly builds.
   - name: Purchasing
     description: Purchase orders, incoming quantities, and stock receipts.
+  - name: Orders
+    description: Shared purchase, sales, and multi-item loan workflows with line-linked stock movements.
   - name: Scan workflows
     description: Configurable scan actions and execution.
   - name: Media
@@ -59,6 +63,8 @@ tags:
     description: Workspace statistics and duplicate detection.
   - name: Notifications
     description: Session-scoped in-app inbox, anti-noise preferences, Web Push subscriptions, and preview-only channel tests.
+  - name: Integrations
+    description: Session-administered connections to external inventory and commerce systems.
   - name: Webhooks
     description: Session-administered outgoing integration events with durable at-least-once delivery, HMAC signatures, retry history, and manual replay.
 paths:
@@ -192,6 +198,160 @@ paths:
         "200": { description: Detection and dispatch counters }
         "401": { description: Missing or invalid cron secret or browser session }
         "403": { description: Browser session lacks tokens.manage }
+  /integrations/woocommerce:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    get:
+      tags: [Integrations]
+      summary: Read the WooCommerce connection status
+      description: Requires an authenticated browser session with `webhooks.manage`. Credentials are never returned.
+      security: [{ adminSession: [] }]
+      responses:
+        "200":
+          description: Current connection status and encryption readiness
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WooCommerceConnectionStatusResponse" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+    put:
+      tags: [Integrations]
+      summary: Connect or replace a WooCommerce store
+      description: Tests the credentials against WooCommerce REST API v3 before encrypting and storing them. Requires `webhooks.manage`.
+      security: [{ adminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WooCommerceConnectionInput" }
+      responses:
+        "200":
+          description: Connection tested and stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WooCommerceConnectionMutationResponse" }
+        "400": { description: Request body is not valid JSON }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "422": { description: Invalid store URL or credential format }
+        "502": { description: WooCommerce rejected the request or returned an invalid response }
+        "503": { description: Integration credential encryption is not configured }
+    patch:
+      tags: [Integrations]
+      summary: Enable or disable WooCommerce order stock sync
+      description: Creates or removes signed order.created and order.updated webhooks in WooCommerce. Enabling requires a public HTTPS AUTH_URL and a Consumer Key with write access.
+      security: [{ adminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WooCommerceSyncPatch" }
+      responses:
+        "200":
+          description: Stock sync state updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WooCommerceConnectionStatusResponse" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "404": { description: No WooCommerce connection is configured }
+        "422": { description: Invalid stock sync setting }
+        "502": { description: WooCommerce webhook registration failed }
+        "503": { description: Public callback URL or integration encryption is not configured }
+    delete:
+      tags: [Integrations]
+      summary: Disconnect the WooCommerce store
+      description: Permanently removes the encrypted credentials for the selected organization. Requires `webhooks.manage`.
+      security: [{ adminSession: [] }]
+      responses:
+        "204": { description: Connection removed, or no connection existed }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+  /integrations/woocommerce/test:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    post:
+      tags: [Integrations]
+      summary: Test the saved WooCommerce connection
+      description: Decrypts the saved credentials only in memory and verifies product read access against WooCommerce REST API v3. Requires `webhooks.manage`.
+      security: [{ adminSession: [] }]
+      responses:
+        "200":
+          description: Connection test succeeded and status was updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WooCommerceConnectionMutationResponse" }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "404": { description: No WooCommerce connection is configured }
+        "502": { description: WooCommerce rejected the request or returned an invalid response }
+        "503": { description: Integration credential encryption is not configured }
+  /integrations/woocommerce/sync:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    post:
+      tags: [Integrations]
+      summary: Reconcile one WooCommerce order or retry orders with issues
+      description: Fetches canonical order and refund data from WooCommerce, maps exact item or variant SKUs, and writes idempotent issue or return stock movements. Omitting orderId retries up to 20 recorded orders with issues.
+      security: [{ adminSession: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WooCommerceManualSyncRequest" }
+      responses:
+        "200": { description: Reconciliation results }
+        "401": { description: An authenticated browser session is required }
+        "403": { description: Browser session lacks webhooks.manage }
+        "404": { description: No WooCommerce connection is configured }
+        "422": { description: Invalid order ID }
+        "502": { description: WooCommerce order or refund retrieval failed }
+  /integrations/woocommerce/webhook/{connectionId}:
+    parameters:
+      - name: connectionId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Integrations]
+      summary: Receive a signed WooCommerce order webhook
+      description: Public callback registered automatically in WooCommerce. The exact raw body is authenticated with X-WC-Webhook-Signature and the registered webhook ID before canonical order data is fetched.
+      security: []
+      parameters:
+        - name: X-WC-Webhook-Signature
+          in: header
+          required: true
+          schema: { type: string }
+        - name: X-WC-Webhook-Topic
+          in: header
+          required: true
+          schema: { type: string, enum: [order.created, order.updated] }
+        - name: X-WC-Webhook-ID
+          in: header
+          required: true
+          schema: { type: integer }
+        - name: X-WC-Webhook-Delivery-ID
+          in: header
+          required: false
+          schema: { type: string, maxLength: 160 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: integer, minimum: 1 }
+              additionalProperties: true
+      responses:
+        "200": { description: Delivery authenticated and reconciled, or safely recognized as a duplicate }
+        "400": { description: Invalid JSON or unsupported topic }
+        "401": { description: Invalid signature or unknown WooCommerce webhook ID }
+        "410": { description: Stock sync is disabled }
+        "413": { description: Payload exceeds one megabyte }
+        "422": { description: Payload has no valid order ID }
+        "502": { description: Canonical WooCommerce order retrieval failed and the delivery may be retried }
   /webhooks:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -1905,6 +2065,170 @@ paths:
       responses:
         "200": { description: No target-language jobs were needed }
         "202": { description: Durable translation jobs queued }
+  /contacts:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    get:
+      tags: [Contacts]
+      summary: List customers and suppliers
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 240 }
+        - name: role
+          in: query
+          schema: { type: string, enum: [customer, supplier] }
+        - name: includeArchived
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Contacts with linked inventory and movement counts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contacts]
+                properties:
+                  contacts: { type: array, items: { $ref: "#/components/schemas/Contact" } }
+    post:
+      tags: [Contacts]
+      summary: Create a customer, supplier, or dual-role contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactInput" }
+      responses:
+        "201":
+          description: Contact created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contact]
+                properties:
+                  contact: { $ref: "#/components/schemas/Contact" }
+        "422": { description: Invalid contact or cross-organization inventory assignment }
+  /contacts/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Contacts]
+      summary: Get one contact
+      responses:
+        "200":
+          description: Contact details
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contact]
+                properties:
+                  contact: { $ref: "#/components/schemas/Contact" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Contacts]
+      summary: Update a contact and its inventory assignments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactPatch" }
+      responses:
+        "200":
+          description: Contact updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contact]
+                properties:
+                  contact: { $ref: "#/components/schemas/Contact" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Invalid contact or cross-organization inventory assignment }
+    delete:
+      tags: [Contacts]
+      summary: Archive a contact
+      description: Historical stock-movement references are retained.
+      responses:
+        "204": { description: Contact archived }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /contacts/{id}/comments:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Contacts]
+      summary: List a contact's comments
+      responses:
+        "200":
+          description: Chronological contact comment thread
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [comments]
+                properties:
+                  comments: { type: array, items: { $ref: "#/components/schemas/ContactComment" } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Contacts]
+      summary: Add a comment to a contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommentInput" }
+      responses:
+        "201":
+          description: Comment created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [comment]
+                properties:
+                  comment: { $ref: "#/components/schemas/ContactComment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Invalid comment body }
+  /contacts/{id}/comments/{commentId}:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: commentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [Contacts]
+      summary: Edit an owned contact comment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommentInput" }
+      responses:
+        "200": { description: Comment updated }
+        "403": { description: Comment belongs to another author }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Contacts]
+      summary: Delete an owned contact comment
+      responses:
+        "204": { description: Comment deleted }
+        "403": { description: Comment belongs to another author }
+        "404": { $ref: "#/components/responses/NotFound" }
   /resources:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -3490,6 +3814,107 @@ paths:
         "201": { description: Receipt and physical stock movements created atomically }
         "400": { description: Missing or invalid Idempotency-Key }
         "409": { description: "Over-receipt, order-state, serialized-unit, or idempotency conflict" }
+  /orders:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+    get:
+      tags: [Orders]
+      summary: List purchase, sales, or loan orders from the shared order model
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string, enum: [purchase, sale, loan] }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/OrderStatus" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+      responses:
+        "200":
+          description: Orders and their embedded lines
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [orders]
+                properties:
+                  orders: { type: array, items: { $ref: "#/components/schemas/Order" } }
+    post:
+      tags: [Orders]
+      summary: Create a purchase, sales, or multi-item loan order
+      parameters:
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderInput" }
+      responses:
+        "200": { description: Replayed original response }
+        "201": { description: Order created }
+        "409": { description: Idempotency conflict }
+        "422": { description: Invalid contact, status, or order line }
+  /orders/{orderId}:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: orderId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Orders]
+      summary: Retrieve one shared order with all lines
+      responses:
+        "200":
+          description: Order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [order]
+                properties:
+                  order: { $ref: "#/components/schemas/Order" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Orders]
+      summary: Update common order fields or change lifecycle state
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderPatch" }
+      responses:
+        "200": { description: Order updated }
+        "409": { description: Completed or cancelled orders cannot be reopened }
+        "422": { description: Invalid type-specific status or contact role }
+  /orders/{orderId}/lines/{lineId}/movements:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: orderId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: lineId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Orders]
+      summary: Issue a sales or loan line, or return a loan line
+      description: Creates an idempotent stock movement linked to the order line and recalculates the order status atomically. Bulk-tracked inventory is supported by this endpoint.
+      parameters:
+        - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderLineMovementInput" }
+      responses:
+        "200": { description: Replayed original stock movement }
+        "201": { description: Movement created and order progress updated }
+        "409": { description: Insufficient stock, excessive quantity, or invalid lifecycle state }
+        "422": { description: Invalid movement for the order type }
   /resources/{id}/media:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -3955,6 +4380,128 @@ components:
         slackEnabled: { type: boolean, default: false }
         teamsEnabled: { type: boolean, default: false }
         webhookEnabled: { type: boolean, default: false }
+    WooCommerceConnectionInput:
+      type: object
+      additionalProperties: false
+      required: [storeUrl, consumerKey, consumerSecret]
+      properties:
+        storeUrl:
+          type: string
+          format: uri
+          minLength: 1
+          maxLength: 2048
+          description: Public HTTPS WooCommerce store URL, optionally including a WordPress subdirectory. Query strings and fragments are rejected.
+          examples: [https://shop.example.com]
+        consumerKey:
+          type: string
+          minLength: 8
+          maxLength: 200
+          pattern: '^ck_'
+          writeOnly: true
+        consumerSecret:
+          type: string
+          minLength: 8
+          maxLength: 200
+          pattern: '^cs_'
+          writeOnly: true
+    WooCommerceConnection:
+      type: object
+      additionalProperties: false
+      required: [id, storeUrl, consumerKeyHint, status, syncEnabled, lastCheckedAt, lastSuccessAt, lastError, lastWebhookAt, lastSyncAt, lastSyncError, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        storeUrl: { type: string, format: uri }
+        consumerKeyHint:
+          type: string
+          description: Redacted Consumer Key. The complete key and secret are never returned.
+          examples: [ck_1234…cdef]
+        status: { type: string, enum: [connected, error] }
+        syncEnabled: { type: boolean }
+        lastCheckedAt: { type: [string, "null"], format: date-time }
+        lastSuccessAt: { type: [string, "null"], format: date-time }
+        lastError: { type: [string, "null"] }
+        lastWebhookAt: { type: [string, "null"], format: date-time }
+        lastSyncAt: { type: [string, "null"], format: date-time }
+        lastSyncError: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    WooCommerceConnectionTest:
+      type: object
+      additionalProperties: false
+      required: [productCount, checkedAt]
+      properties:
+        productCount:
+          type: [integer, "null"]
+          minimum: 0
+          description: Product count reported by WooCommerce when available.
+        checkedAt: { type: string, format: date-time }
+    WooCommerceConnectionStatusResponse:
+      type: object
+      additionalProperties: false
+      required: [connection, sync, encryptionConfigured]
+      properties:
+        connection:
+          oneOf:
+            - { $ref: "#/components/schemas/WooCommerceConnection" }
+            - { type: "null" }
+        sync:
+          oneOf:
+            - { $ref: "#/components/schemas/WooCommerceSyncOverview" }
+            - { type: "null" }
+        encryptionConfigured: { type: boolean }
+    WooCommerceSyncPatch:
+      type: object
+      additionalProperties: false
+      required: [syncEnabled]
+      properties:
+        syncEnabled: { type: boolean }
+    WooCommerceManualSyncRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        orderId: { type: integer, minimum: 1 }
+    WooCommerceOrderLineIssue:
+      type: object
+      additionalProperties: false
+      required: [lineItemId, sku, status, error]
+      properties:
+        lineItemId: { type: integer, minimum: 1 }
+        sku: { type: string }
+        status: { type: string, enum: [unmapped, error] }
+        error: { type: [string, "null"] }
+    WooCommerceOrderSync:
+      type: object
+      additionalProperties: false
+      required: [orderId, orderNumber, orderStatus, status, totalLines, syncedLines, lastError, updatedAt, issues]
+      properties:
+        orderId: { type: integer, minimum: 1 }
+        orderNumber: { type: string }
+        orderStatus: { type: string }
+        status: { type: string, enum: [succeeded, partial, failed] }
+        totalLines: { type: integer, minimum: 0 }
+        syncedLines: { type: integer, minimum: 0 }
+        lastError: { type: [string, "null"] }
+        updatedAt: { type: string, format: date-time }
+        issues:
+          type: array
+          items: { $ref: "#/components/schemas/WooCommerceOrderLineIssue" }
+    WooCommerceSyncOverview:
+      type: object
+      additionalProperties: false
+      required: [totalOrders, issueOrders, recentOrders]
+      properties:
+        totalOrders: { type: integer, minimum: 0 }
+        issueOrders: { type: integer, minimum: 0 }
+        recentOrders:
+          type: array
+          items: { $ref: "#/components/schemas/WooCommerceOrderSync" }
+    WooCommerceConnectionMutationResponse:
+      type: object
+      additionalProperties: false
+      required: [connection, test]
+      properties:
+        connection: { $ref: "#/components/schemas/WooCommerceConnection" }
+        test: { $ref: "#/components/schemas/WooCommerceConnectionTest" }
     WebhookEventType:
       type: string
       description: Stable integration event name selected when configuring an endpoint.
@@ -4174,6 +4721,8 @@ components:
         - inventory.delete
         - inventory.import
         - inventory.export
+        - contacts.read
+        - contacts.manage
         - stock.read
         - stock.manage
         - assignments.read
@@ -5132,11 +5681,39 @@ components:
     LabelElement:
       oneOf:
         - type: object
-          title: QR or barcode element
+          title: Custom background element
           required: [type, x, y, width, height, visible]
           additionalProperties: false
           properties:
-            type: { type: string, enum: [qr, barcode] }
+            type: { type: string, const: background }
+            x: { type: number, minimum: 0, maximum: 100 }
+            y: { type: number, minimum: 0, maximum: 100 }
+            width: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            height: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            visible: { type: boolean }
+            source: { type: string, maxLength: 3000000, description: Base64 data URL for a PNG, JPEG, WebP, GIF, AVIF, or SVG image. }
+            fit: { type: string, enum: [cover, contain], default: cover }
+            opacity: { type: number, minimum: 0, maximum: 1, default: 1 }
+        - type: object
+          title: QR element
+          required: [type, x, y, width, height, visible]
+          additionalProperties: false
+          properties:
+            type: { type: string, const: qr }
+            x: { type: number, minimum: 0, maximum: 100 }
+            y: { type: number, minimum: 0, maximum: 100 }
+            width: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            height: { type: number, exclusiveMinimum: 0, maximum: 100 }
+            visible: { type: boolean }
+            foregroundColor: { type: string, pattern: '^#[0-9a-fA-F]{6}$', default: '#000000' }
+            backgroundColor: { type: string, pattern: '^#[0-9a-fA-F]{6}$', default: '#ffffff' }
+            quietZoneModules: { type: integer, minimum: 0, maximum: 4, default: 0 }
+        - type: object
+          title: Barcode element
+          required: [type, x, y, width, height, visible]
+          additionalProperties: false
+          properties:
+            type: { type: string, const: barcode }
             x: { type: number, minimum: 0, maximum: 100 }
             y: { type: number, minimum: 0, maximum: 100 }
             width: { type: number, exclusiveMinimum: 0, maximum: 100 }
@@ -5167,13 +5744,14 @@ components:
             visible: { type: boolean }
             fontSizeMm: { type: number, exclusiveMinimum: 0, maximum: 100 }
             minFontSizeMm: { type: number, exclusiveMinimum: 0, maximum: 100, description: Smallest font size used when textOverflow is shrink. }
+            fontFamily: { type: string, enum: [sans, serif, monospace, rounded], description: Defaults to sans for names and monospace for other text elements. }
             align: { type: string, enum: [left, center, right], default: left }
             textOverflow: { type: string, enum: [ellipsis, shrink], default: ellipsis }
       description: A normalized percentage box. The element must fit entirely inside the label; options are restricted by element type.
     LabelElements:
       type: array
-      maxItems: 7
-      description: At most one element of each type. A visible object image may not overlap a visible QR code. The image element prints the resource cover image; QR and URL elements use the compact resource link.
+      maxItems: 8
+      description: At most one element of each type. A visible object image may not overlap a visible QR code. The custom background is stored as a data URL; the object image prints the resource cover image; QR and URL elements use the compact resource link.
       items: { $ref: "#/components/schemas/LabelElement" }
     LabelSetupInput:
       type: object
@@ -5563,6 +6141,7 @@ components:
       additionalProperties: false
       properties:
         reference: { type: [string, "null"], maxLength: 160 }
+        contactId: { type: [string, "null"], format: uuid }
         supplier: { type: string, maxLength: 240 }
         status: { type: string, enum: [draft, ordered] }
         orderedAt: { type: string, format: date-time }
@@ -5609,6 +6188,95 @@ components:
         totalOrdered: { type: integer, minimum: 0 }
         totalReceived: { type: integer, minimum: 0 }
         totalOpen: { type: integer, minimum: 0 }
+    OrderType:
+      type: string
+      enum: [purchase, sale, loan]
+    OrderStatus:
+      type: string
+      enum: [draft, ordered, partially-received, received, confirmed, partially-fulfilled, fulfilled, reserved, partially-issued, issued, partially-returned, returned, overdue, cancelled]
+    OrderLineInput:
+      type: object
+      additionalProperties: false
+      required: [resourceId, quantity]
+      properties:
+        resourceId: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1, maximum: 2000000000 }
+        expectedAt: { type: [string, "null"], format: date-time }
+        note: { type: string, maxLength: 20000 }
+        unitPriceCents: { type: [integer, "null"], minimum: 0, maximum: 2000000000 }
+        priceCurrency: { type: [string, "null"], minLength: 3, maxLength: 3 }
+    OrderInput:
+      type: object
+      additionalProperties: false
+      required: [type, contactId, lines]
+      properties:
+        type: { $ref: "#/components/schemas/OrderType" }
+        contactId: { type: string, format: uuid }
+        reference: { type: [string, "null"], maxLength: 160 }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        orderedAt: { type: string, format: date-time }
+        expectedAt: { type: [string, "null"], format: date-time, description: Required return due date for loans. }
+        note: { type: string, maxLength: 20000 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/OrderLineInput" }
+    OrderPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        contactId: { type: string, format: uuid }
+        reference: { type: [string, "null"], maxLength: 160 }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        orderedAt: { type: string, format: date-time }
+        expectedAt: { type: [string, "null"], format: date-time }
+        note: { type: string, maxLength: 20000 }
+    OrderLine:
+      allOf:
+        - { $ref: "#/components/schemas/OrderLineInput" }
+        - type: object
+          required: [id, orderId, resourceName, fulfilledQuantity, returnedQuantity, openQuantity, openReturnQuantity, trackingMode, unitName]
+          properties:
+            id: { type: string, format: uuid }
+            orderId: { type: string, format: uuid }
+            resourceName: { type: string }
+            resourceSku: { type: [string, "null"] }
+            fulfilledQuantity: { type: integer, minimum: 0 }
+            returnedQuantity: { type: integer, minimum: 0 }
+            openQuantity: { type: integer, minimum: 0 }
+            openReturnQuantity: { type: integer, minimum: 0 }
+            totalPriceCents: { type: [integer, "null"], minimum: 0 }
+            trackingMode: { type: string, enum: [bulk, serialized] }
+            unitName: { type: string }
+    Order:
+      type: object
+      required: [id, type, contactName, status, orderedAt, lines, totalQuantity, totalFulfilled, totalReturned]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: "#/components/schemas/OrderType" }
+        contactId: { type: [string, "null"], format: uuid }
+        contactName: { type: string }
+        reference: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/OrderStatus" }
+        orderedAt: { type: string, format: date-time }
+        expectedAt: { type: [string, "null"], format: date-time }
+        note: { type: string }
+        lines: { type: array, items: { $ref: "#/components/schemas/OrderLine" } }
+        totalQuantity: { type: integer, minimum: 0 }
+        totalFulfilled: { type: integer, minimum: 0 }
+        totalReturned: { type: integer, minimum: 0 }
+    OrderLineMovementInput:
+      type: object
+      additionalProperties: false
+      required: [action, quantity]
+      properties:
+        action: { type: string, enum: [issue, return] }
+        quantity: { type: integer, minimum: 1, maximum: 2000000000 }
+        occurredAt: { type: string, format: date-time }
+        location: { type: [string, "null"], maxLength: 240 }
+        note: { type: string, maxLength: 20000 }
     PurchaseReceiptInput:
       type: object
       oneOf:
@@ -6595,6 +7263,88 @@ components:
         unitName: { type: string, minLength: 1, maxLength: 80 }
         purchaseUnitName: { type: [string, "null"], minLength: 1, maxLength: 80 }
         purchaseUnitFactor: { type: [integer, "null"], minimum: 1, maximum: 2000000000 }
+    ContactFields:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 240 }
+        company: { type: [string, "null"], maxLength: 240 }
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, enum: [customer, supplier] }
+        email: { type: [string, "null"], format: email, maxLength: 320 }
+        phone: { type: [string, "null"], maxLength: 80 }
+        website: { type: [string, "null"], format: uri, maxLength: 2048 }
+        customerNumber: { type: [string, "null"], maxLength: 80 }
+        supplierNumber: { type: [string, "null"], maxLength: 80 }
+        taxId: { type: [string, "null"], maxLength: 80 }
+        addressLine1: { type: [string, "null"], maxLength: 240 }
+        addressLine2: { type: [string, "null"], maxLength: 240 }
+        postalCode: { type: [string, "null"], maxLength: 32 }
+        city: { type: [string, "null"], maxLength: 120 }
+        state: { type: [string, "null"], maxLength: 120 }
+        countryCode: { type: [string, "null"], pattern: "^[A-Z]{2}$" }
+        tags:
+          type: array
+          maxItems: 50
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 80 }
+        notes: { type: string, maxLength: 20000 }
+        resourceIds:
+          type: array
+          maxItems: 500
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    ContactInput:
+      allOf:
+        - { $ref: "#/components/schemas/ContactFields" }
+        - type: object
+          required: [name, roles]
+    ContactPatch:
+      allOf:
+        - { $ref: "#/components/schemas/ContactFields" }
+        - type: object
+          minProperties: 1
+    Contact:
+      allOf:
+        - { $ref: "#/components/schemas/ContactFields" }
+        - type: object
+          required: [id, name, roles, tags, notes, archivedAt, createdAt, updatedAt, resources, movementCount, commentCount]
+          properties:
+            id: { type: string, format: uuid }
+            archivedAt: { type: [string, "null"], format: date-time }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+            resources:
+              type: array
+              items:
+                type: object
+                required: [id, name, sku, type]
+                properties:
+                  id: { type: string, format: uuid }
+                  name: { type: string }
+                  sku: { type: [string, "null"] }
+                  type: { type: string }
+            movementCount: { type: integer, minimum: 0 }
+            commentCount: { type: integer, minimum: 0 }
+    CommentInput:
+      type: object
+      additionalProperties: false
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 10000 }
+    ContactComment:
+      type: object
+      required: [id, contactId, body, authorName, createdAt, updatedAt, canEdit]
+      properties:
+        id: { type: string, format: uuid }
+        contactId: { type: string, format: uuid }
+        body: { type: string, minLength: 1, maxLength: 10000 }
+        authorName: { type: string, minLength: 1, maxLength: 160 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        canEdit: { type: boolean }
     StockConfig:
       allOf:
         - { $ref: "#/components/schemas/StockConfigInput" }
@@ -6622,15 +7372,17 @@ components:
         location: { type: [string, "null"], maxLength: 240 }
         fromLocationResourceId: { type: [string, "null"], format: uuid, description: Structured source location for an issue or transfer. }
         toLocationResourceId: { type: [string, "null"], format: uuid, description: Structured destination location for a receipt or transfer. }
+        contactId: { type: [string, "null"], format: uuid, description: Active customer or supplier associated with this movement. }
         occurredAt: { type: string, format: date-time }
         totalPriceCents: { type: [integer, "null"], minimum: -2000000000, maximum: 2000000000, description: Signed transaction value; negative values can represent outbound revenue. Inbound prices must be nonnegative. }
         priceCurrency: { type: [string, "null"], minLength: 3, maxLength: 3 }
     StockMovement:
       type: object
-      required: [id, resourceId, delta, quantity, balanceAfter, fromLocationBalanceAfter, toLocationBalanceAfter, type, note, location, fromLocationResourceId, toLocationResourceId, occurredAt, createdAt, createdBy]
+      required: [id, resourceId, contactId, delta, quantity, balanceAfter, fromLocationBalanceAfter, toLocationBalanceAfter, type, note, location, fromLocationResourceId, toLocationResourceId, occurredAt, createdAt, createdBy]
       properties:
         id: { type: string, format: uuid }
         resourceId: { type: string, format: uuid }
+        contactId: { type: [string, "null"], format: uuid }
         unitId: { type: [string, "null"], format: uuid }
         assemblyBuildId: { type: [string, "null"], format: uuid }
         purchaseReceiptId: { type: [string, "null"], format: uuid }

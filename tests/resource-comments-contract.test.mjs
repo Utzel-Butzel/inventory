@@ -65,7 +65,10 @@ test("inventory details expose a Markdown comment composer and renderer", async 
     read("../components/resource-comments.tsx"),
   ]);
 
-  assert.match(page, /<ResourceComments resourceId=\{id\} canComment=\{canEdit\}/);
+  assert.match(
+    page,
+    /<ResourceComments resourceId=\{resourceId\} canComment=\{canEdit\}/,
+  );
   assert.match(component, /<MarkdownContent/);
   assert.match(component, /RESOURCE_COMMENT_MAX_LENGTH/);
   assert.match(component, /method: "POST"/);

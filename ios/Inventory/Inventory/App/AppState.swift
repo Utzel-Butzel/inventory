@@ -71,6 +71,11 @@ final class AppState: ObservableObject {
     var canDeleteInventory: Bool { allows("inventory.delete", legacyScope: "write") }
     var canReadStock: Bool { allows("stock.read", legacyScope: "read") }
     var canManageStock: Bool { allows("stock.manage", legacyScope: "write") }
+    var canReadAssignments: Bool { allows("assignments.read", legacyScope: "read") }
+    var canManageAssignments: Bool { allows("assignments.manage", legacyScope: "write") }
+    var canReadRequests: Bool { allows("requests.read", legacyScope: "read") }
+    var canCreateRequests: Bool { allows("requests.create", legacyScope: "write") }
+    var canManageRequests: Bool { allows("requests.manage", legacyScope: "write") }
     var canReadSpatial: Bool { allows("spatial.read", legacyScope: "read") }
     var canManageSpatial: Bool { allows("spatial.manage", legacyScope: "write") }
     var canUseAI: Bool {
@@ -85,7 +90,8 @@ final class AppState: ObservableObject {
     var canCaptureInventory: Bool { canCreateInventory && canUpdateInventory }
     var canWrite: Bool {
         canCreateInventory || canUpdateInventory || canDeleteInventory ||
-            canManageStock || canManageSpatial
+            canManageStock || canManageAssignments || canCreateRequests ||
+            canManageRequests || canManageSpatial
     }
     var allowsNegativeStock: Bool { activeOrganization?.allowNegativeStock ?? false }
     var organizationContextIdentifier: String { client?.contextIdentifier ?? "unconfigured" }

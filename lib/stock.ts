@@ -19,12 +19,13 @@ import { randomUUID } from "node:crypto";
 import {
   assemblyBuildComponents,
   assemblyBuilds,
+  contacts,
   inventoryAssignments,
   inventoryTypeDefinitions,
   media,
   organizations,
-  purchaseOrderLines,
-  purchaseOrders,
+  orderLines as purchaseOrderLines,
+  orders as purchaseOrders,
   resourceRelations,
   resources,
   stockMovementRequests,
@@ -89,6 +90,7 @@ export type StockMovementInput = {
   location?: string | null;
   fromLocationResourceId?: string | null;
   toLocationResourceId?: string | null;
+  contactId?: string | null;
   occurredAt?: Date;
   totalPriceCents?: number | null;
   priceCurrency?: string | null;
@@ -178,6 +180,7 @@ const configDto = (row?: StockSettingsRecord | null): StockConfig =>
 const movementDto = (row: StockMovementRecord) => ({
   id: row.id,
   resourceId: row.resourceId,
+  contactId: row.contactId,
   delta: row.delta,
   quantity: row.quantity,
   totalPriceCents: row.totalPriceCents,
@@ -207,6 +210,7 @@ const movementDto = (row: StockMovementRecord) => ({
   ...(row.unitId ? { unitId: row.unitId } : {}),
   ...(row.assemblyBuildId ? { assemblyBuildId: row.assemblyBuildId } : {}),
   ...(row.purchaseReceiptId ? { purchaseReceiptId: row.purchaseReceiptId } : {}),
+  ...(row.orderLineId ? { orderLineId: row.orderLineId } : {}),
 });
 
 const unitDto = (row: StockUnitRecord) => ({
@@ -477,9 +481,9 @@ export async function getStockDetail(
         lineId: purchaseOrderLines.id,
         orderId: purchaseOrders.id,
         reference: purchaseOrders.reference,
-        supplier: purchaseOrders.supplier,
+        supplier: purchaseOrders.contactName,
         orderedQuantity: purchaseOrderLines.orderedQuantity,
-        receivedQuantity: purchaseOrderLines.receivedQuantity,
+        receivedQuantity: purchaseOrderLines.fulfilledQuantity,
         expectedAt: sql<Date | null>`coalesce(${purchaseOrderLines.expectedAt}, ${purchaseOrders.expectedAt})`,
       })
       .from(purchaseOrderLines)
@@ -487,7 +491,8 @@ export async function getStockDetail(
         purchaseOrders,
         and(
           eq(purchaseOrders.organizationId, organizationId),
-          eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+          eq(purchaseOrders.id, purchaseOrderLines.orderId),
+          eq(purchaseOrders.type, "purchase"),
         ),
       )
       .where(
@@ -495,7 +500,7 @@ export async function getStockDetail(
           eq(purchaseOrderLines.organizationId, organizationId),
           eq(purchaseOrderLines.resourceId, resourceId),
           inArray(purchaseOrders.status, ["ordered", "partially-received"]),
-          sql`${purchaseOrderLines.receivedQuantity} < ${purchaseOrderLines.orderedQuantity}`,
+          sql`${purchaseOrderLines.fulfilledQuantity} < ${purchaseOrderLines.orderedQuantity}`,
         ),
       )
       .orderBy(asc(sql`coalesce(${purchaseOrderLines.expectedAt}, ${purchaseOrders.expectedAt})`)),
@@ -664,21 +669,22 @@ export async function getStockOverview(organizationId: string) {
         transaction
           .select({
             resourceId: purchaseOrderLines.resourceId,
-            onOrder: sql<string>`coalesce(sum((${purchaseOrderLines.orderedQuantity} - ${purchaseOrderLines.receivedQuantity})::bigint), 0)`,
+            onOrder: sql<string>`coalesce(sum((${purchaseOrderLines.orderedQuantity} - ${purchaseOrderLines.fulfilledQuantity})::bigint), 0)`,
             nextExpectedAt: sql<Date | null>`min(coalesce(${purchaseOrderLines.expectedAt}, ${purchaseOrders.expectedAt}))`,
           })
           .from(purchaseOrderLines)
           .innerJoin(
             purchaseOrders,
-            eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId),
+            eq(purchaseOrders.id, purchaseOrderLines.orderId),
           )
           .where(
             and(
               eq(purchaseOrderLines.organizationId, organizationId),
               eq(purchaseOrders.organizationId, organizationId),
+              eq(purchaseOrders.type, "purchase"),
               inArray(purchaseOrderLines.resourceId, ids),
               inArray(purchaseOrders.status, ["ordered", "partially-received"]),
-              sql`${purchaseOrderLines.receivedQuantity} < ${purchaseOrderLines.orderedQuantity}`,
+              sql`${purchaseOrderLines.fulfilledQuantity} < ${purchaseOrderLines.orderedQuantity}`,
             ),
           )
           .groupBy(purchaseOrderLines.resourceId),
@@ -884,6 +890,31 @@ function assertManualMovementEditable(movement: StockMovementRecord) {
 }
 
 type StockTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function assertStockMovementContact(
+  transaction: StockTransaction,
+  organizationId: string,
+  contactId: string | null | undefined,
+) {
+  if (!contactId) return;
+  const [contact] = await transaction
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.organizationId, organizationId),
+        eq(contacts.id, contactId),
+        isNull(contacts.archivedAt),
+      ),
+    )
+    .limit(1);
+  if (!contact) {
+    throw new StockOperationError(
+      "The selected contact does not exist or is archived.",
+      422,
+    );
+  }
+}
 
 async function undoStockMovementCost(
   transaction: StockTransaction,
@@ -1105,6 +1136,11 @@ export async function updateStockMovement(
       .for("update");
     if (!movement) throw new StockOperationError("Movement not found", 404);
     assertManualMovementEditable(movement);
+    await assertStockMovementContact(
+      transaction,
+      organizationId,
+      input.contactId,
+    );
 
     const [settings] = await transaction
       .select({ trackingMode: stockSettings.trackingMode })
@@ -1209,6 +1245,7 @@ export async function updateStockMovement(
         costEstimated: costChanged ? false : movement.costEstimated,
         balanceAfter: movement.balanceAfter + deltaDifference,
         type: input.type,
+        contactId: input.contactId ?? null,
         reason: input.reason ?? null,
         note: input.note ?? "",
         location: input.location ?? null,
@@ -1577,6 +1614,10 @@ export async function bookStockMovement(
     requestHash: string;
     expectedResourceUpdatedAt?: string;
   },
+  transactionEffect?: (
+    transaction: StockTransaction,
+    movement: StockMovementRecord,
+  ) => Promise<void>,
 ) {
   const validateReplay = (existing: {
     resourceId: string;
@@ -1638,6 +1679,11 @@ export async function bookStockMovement(
         .limit(1)
         .for("update");
       if (!resource) throw new StockOperationError("Not found", 404);
+      await assertStockMovementContact(
+        transaction,
+        organizationId,
+        input.contactId,
+      );
       if (
         idempotency?.expectedResourceUpdatedAt &&
         resource.updatedAt.toISOString() !== idempotency.expectedResourceUpdatedAt
@@ -1894,6 +1940,7 @@ export async function bookStockMovement(
           fromLocationBalanceAfter,
           toLocationBalanceAfter,
           type: input.type,
+          contactId: input.contactId ?? null,
           reason: input.reason ?? null,
           note: input.note ?? "",
           location: input.location ?? null,
@@ -1937,6 +1984,9 @@ export async function bookStockMovement(
         resource: { ...resource, quantity: balanceAfter },
         movement: movementPayload,
       };
+      if (transactionEffect) {
+        await transactionEffect(transaction, costedMovement ?? movement);
+      }
       if (idempotency) {
         await transaction.insert(stockMovementRequests).values({
           organizationId,

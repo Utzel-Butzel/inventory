@@ -5,6 +5,8 @@ export const appPermissions = [
   "inventory.delete",
   "inventory.import",
   "inventory.export",
+  "contacts.read",
+  "contacts.manage",
   "stock.read",
   "stock.manage",
   "assignments.read",
@@ -138,6 +140,15 @@ export const permissionGroups: Array<{
     ],
   },
   {
+    key: "contacts",
+    label: "Contacts",
+    description: "Customers and suppliers connected to inventory activity.",
+    permissions: [
+      { key: "contacts.read", label: "View contacts", description: "View customers, suppliers, and their inventory assignments." },
+      { key: "contacts.manage", label: "Manage contacts", description: "Create, update, archive, and assign contacts." },
+    ],
+  },
+  {
     key: "operations",
     label: "Operations",
     description: "Stock, custody, counting, space, and purchasing workflows.",
@@ -195,6 +206,7 @@ export const permissionGroups: Array<{
 
 const viewerPermissions: AppPermission[] = [
   "inventory.read",
+  "contacts.read",
   "stock.read",
   "assignments.read",
   "counts.read",

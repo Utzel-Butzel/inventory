@@ -14,10 +14,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import { useT } from "next-i18next/client";
 
 import { MarkdownContent } from "@/components/markdown-content";
-import {
-  fetchJson,
-  type ClientResourceComment,
-} from "@/lib/client-types";
+import { fetchJson } from "@/lib/client-types";
 import { RESOURCE_COMMENT_MAX_LENGTH } from "@/lib/resource-comment-contract";
 
 const initialsFor = (name: string) =>
@@ -28,15 +25,26 @@ const initialsFor = (name: string) =>
     .map((part) => part[0]?.toLocaleUpperCase())
     .join("") || "?";
 
-const hasBeenEdited = (comment: ClientResourceComment) =>
+type ClientComment = {
+  id: string;
+  body: string;
+  authorName: string;
+  createdAt: string;
+  updatedAt: string;
+  canEdit: boolean;
+};
+
+const hasBeenEdited = (comment: ClientComment) =>
   comment.updatedAt !== comment.createdAt;
 
-export function ResourceComments({
-  resourceId,
+export function CommentsThread({
+  endpoint,
   canComment,
+  embedded = false,
 }: {
-  resourceId: string;
+  endpoint: string;
   canComment: boolean;
+  embedded?: boolean;
 }) {
   const { t, i18n } = useT("inventory");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
@@ -49,7 +57,7 @@ export function ResourceComments({
     [locale],
   );
   const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
-  const [comments, setComments] = useState<ClientResourceComment[]>([]);
+  const [comments, setComments] = useState<ClientComment[]>([]);
   const [body, setBody] = useState("");
   const [composerMode, setComposerMode] = useState<"write" | "preview">(
     "write",
@@ -65,8 +73,8 @@ export function ResourceComments({
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchJson<{ comments: ClientResourceComment[] }>(
-        `/api/v1/resources/${resourceId}/comments`,
+      const result = await fetchJson<{ comments: ClientComment[] }>(
+        endpoint,
         { cache: "no-store" },
       );
       setComments(result.comments);
@@ -75,7 +83,7 @@ export function ResourceComments({
     } finally {
       setLoading(false);
     }
-  }, [resourceId, t]);
+  }, [endpoint, t]);
 
   useEffect(() => {
     void loadComments();
@@ -87,8 +95,8 @@ export function ResourceComments({
     setSaving(true);
     setError(null);
     try {
-      const result = await fetchJson<{ comment: ClientResourceComment }>(
-        `/api/v1/resources/${resourceId}/comments`,
+      const result = await fetchJson<{ comment: ClientComment }>(
+        endpoint,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -109,7 +117,7 @@ export function ResourceComments({
     }
   };
 
-  const startEditing = (comment: ClientResourceComment) => {
+  const startEditing = (comment: ClientComment) => {
     setEditingId(comment.id);
     setEditBody(comment.body);
     setError(null);
@@ -120,8 +128,8 @@ export function ResourceComments({
     setSaving(true);
     setError(null);
     try {
-      const result = await fetchJson<{ comment: ClientResourceComment }>(
-        `/api/v1/resources/${resourceId}/comments/${commentId}`,
+      const result = await fetchJson<{ comment: ClientComment }>(
+        `${endpoint}/${commentId}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -157,7 +165,7 @@ export function ResourceComments({
     setError(null);
     try {
       await fetchJson(
-        `/api/v1/resources/${resourceId}/comments/${commentId}`,
+        `${endpoint}/${commentId}`,
         { method: "DELETE" },
       );
       setComments((current) =>
@@ -179,7 +187,13 @@ export function ResourceComments({
   };
 
   return (
-    <section className="mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
+    <section
+      className={
+        embedded
+          ? "w-full"
+          : "mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8"
+      }
+    >
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
           <div>
@@ -423,5 +437,20 @@ export function ResourceComments({
         </div>
       </div>
     </section>
+  );
+}
+
+export function ResourceComments({
+  resourceId,
+  canComment,
+}: {
+  resourceId: string;
+  canComment: boolean;
+}) {
+  return (
+    <CommentsThread
+      endpoint={`/api/v1/resources/${resourceId}/comments`}
+      canComment={canComment}
+    />
   );
 }

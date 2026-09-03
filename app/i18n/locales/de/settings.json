@@ -64,6 +64,11 @@
       "metaDescription": "Inventarhinweise und Zusammenfassungen konfigurieren.",
       "description": "Wähle Ereignisse, Schwellen, Digest-Zeit und optionale externe Kanäle. Das In-App-Postfach ist immer verfügbar."
     },
+    "woocommerce": {
+      "title": "WooCommerce",
+      "metaDescription": "Diesen Inventar-Arbeitsbereich mit einem WooCommerce-Shop verbinden.",
+      "description": "Verbinde einen WooCommerce-Shop sicher über REST-API-Consumer-Key und Consumer-Secret und prüfe anschließend die Verbindung."
+    },
     "webhooks": {
       "title": "Webhooks",
       "metaDescription": "Inventarereignisse über signierte Webhooks mit externen Systemen verbinden.",
@@ -361,6 +366,111 @@
     },
     "unsaved": "Ungespeicherte Änderungen",
     "savedState": "Alle Änderungen gespeichert"
+  },
+  "woocommerce": {
+    "loading": "WooCommerce-Verbindung wird geladen",
+    "connection": {
+      "title": "WooCommerce-Shop",
+      "consumerKey": "Consumer Key",
+      "lastChecked": "Zuletzt geprüft",
+      "lastSuccess": "Letzte erfolgreiche Verbindung",
+      "never": "Noch nie"
+    },
+    "status": {
+      "connected": "Verbunden",
+      "error": "Verbindungsproblem"
+    },
+    "stockSync": {
+      "title": "Bestellungs-Bestandssync",
+      "enabled": "Aktiv",
+      "disabled": "Inaktiv",
+      "description": "WooCommerce-Bestellungen reduzieren den Inventory-Bestand über die exakte SKU. Rückerstattungen, Stornos und fehlgeschlagene Bestellungen buchen die zuvor abgezogene Menge zurück.",
+      "enable": "Bestandssync aktivieren",
+      "disable": "Sync deaktivieren",
+      "orders": "Verarbeitete Bestellungen",
+      "issues": "Bestellungen mit Problemen",
+      "lastWebhook": "Letzter Webhook",
+      "lastSync": "Letzter Bestandssync",
+      "skuRule": "Zuordnung: Die SKU der WooCommerce-Position muss exakt einer Artikel- oder Varianten-SKU in Inventory entsprechen. Automatisch gebucht werden kann nur mengenbasierter Bestand.",
+      "statusRule": "Bei Bestellungen mit Status Wartend, In Bearbeitung oder Abgeschlossen wird Bestand ausgebucht. Rückerstattungen sowie stornierte, fehlgeschlagene, ausstehende und erstattete Zustände werden durch Gegenbuchungen abgeglichen.",
+      "manualTitle": "Bestellung erneut abgleichen",
+      "manualDescription": "Gib eine WooCommerce-Bestell-ID ein, um den aktuellen Bestell- und Erstattungsstand neu zu laden, oder wiederhole alle Bestellungen mit offenen Positionen.",
+      "orderId": "WooCommerce-Bestell-ID",
+      "orderIdPlaceholder": "WooCommerce-Bestell-ID",
+      "syncOrder": "Bestellung synchronisieren",
+      "retryIssues": "Probleme wiederholen",
+      "recentTitle": "Letzte Bestellungsabgleiche",
+      "lineProgress": "{{synced}}/{{total}} Positionen",
+      "missingSku": "SKU fehlt",
+      "syncStatus": {
+        "succeeded": "Synchronisiert",
+        "partial": "Teilweise synchronisiert",
+        "failed": "Prüfung nötig"
+      }
+    },
+    "form": {
+      "connectTitle": "WooCommerce verbinden",
+      "replaceTitle": "WooCommerce-Zugangsdaten ersetzen",
+      "description": "Die Verbindung wird geprüft, bevor Zugangsdaten gespeichert werden.",
+      "replacementWarning": "Beim Ersetzen der Zugangsdaten werden der Bestellungssync deaktiviert und sein Abgleichverlauf gelöscht. Aktiviere den Sync danach erneut.",
+      "storeUrl": "Shop-URL",
+      "storeUrlPlaceholder": "https://shop.beispiel.de",
+      "storeUrlHint": "Gib die öffentliche HTTPS-Basis-URL der WordPress-Installation ein.",
+      "consumerKey": "Consumer Key",
+      "consumerSecret": "Consumer Secret",
+      "securityHint": "Die Zugangsdaten werden nur an deinen Shop gesendet und vor dem Speichern verschlüsselt. Sie werden nie an den Browser zurückgegeben."
+    },
+    "encryption": {
+      "title": "Integrationsverschlüsselung ist nicht konfiguriert",
+      "description": "Setze INTEGRATION_ENCRYPTION_KEY auf einen neuen 32-Byte-Base64url-Wert oder einen 64-stelligen Hexadezimalwert, bevor du einen Shop verbindest."
+    },
+    "guide": {
+      "title": "API-Zugangsdaten in WooCommerce erstellen",
+      "step1": "Öffne WooCommerce → Einstellungen → Erweitert → REST API und füge einen Schlüssel hinzu.",
+      "step2": "Wähle einen eigenen WordPress-Benutzer und erteile Lese-/Schreibzugriff, damit Inventory die Bestellungs-Webhooks registrieren kann.",
+      "step3": "Kopiere Consumer Key und Consumer Secret, bevor du WooCommerce verlässt, und trage beide oben ein.",
+      "documentation": "WooCommerce-REST-API-Anleitung öffnen"
+    },
+    "actions": {
+      "connect": "Shop verbinden",
+      "connecting": "Verbindung wird geprüft…",
+      "saveReplacement": "Prüfen und ersetzen",
+      "replace": "Zugangsdaten ersetzen",
+      "test": "Verbindung testen",
+      "testing": "Wird getestet…",
+      "refresh": "Aktualisieren",
+      "disconnect": "Trennen",
+      "cancel": "Abbrechen",
+      "dismiss": "Meldung ausblenden"
+    },
+    "disconnect": {
+      "title": "Diesen WooCommerce-Shop trennen?",
+      "description": "Der verschlüsselte Consumer Key und das Consumer Secret werden dauerhaft aus diesem Arbeitsbereich entfernt.",
+      "confirm": "Shop trennen"
+    },
+    "notices": {
+      "connected": "WooCommerce ist verbunden.",
+      "connectedWithProducts_one": "WooCommerce ist verbunden. {{count}} Produkt ist über die API verfügbar.",
+      "connectedWithProducts_other": "WooCommerce ist verbunden. {{count}} Produkte sind über die API verfügbar.",
+      "tested": "Die WooCommerce-Verbindung funktioniert.",
+      "testedWithProducts_one": "Verbindungstest erfolgreich. {{count}} Produkt ist über die API verfügbar.",
+      "testedWithProducts_other": "Verbindungstest erfolgreich. {{count}} Produkte sind über die API verfügbar.",
+      "disconnected": "WooCommerce wurde getrennt und die Zugangsdaten wurden entfernt.",
+      "syncEnabled": "Der WooCommerce-Bestellungssync ist aktiv.",
+      "syncDisabled": "Der WooCommerce-Bestellungssync wurde deaktiviert.",
+      "noSyncIssues": "Es gibt keine offenen WooCommerce-Bestellungen zum Wiederholen.",
+      "syncRun": "WooCommerce-Abgleich abgeschlossen: {{succeeded}} von {{attempted}} Bestellungen wurden ohne Probleme synchronisiert."
+    },
+    "errors": {
+      "load": "Die WooCommerce-Verbindung konnte nicht geladen werden.",
+      "required": "Gib Shop-URL, Consumer Key und Consumer Secret ein.",
+      "connect": "WooCommerce konnte nicht verbunden werden.",
+      "test": "Der WooCommerce-Verbindungstest ist fehlgeschlagen.",
+      "disconnect": "Die WooCommerce-Verbindung konnte nicht getrennt werden.",
+      "updateSync": "Der WooCommerce-Bestandssync konnte nicht aktualisiert werden.",
+      "runSync": "Die WooCommerce-Bestellung konnte nicht abgeglichen werden.",
+      "orderId": "Gib eine gültige positive WooCommerce-Bestell-ID ein."
+    }
   },
   "webhooks": {
     "list": {

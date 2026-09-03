@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const labelElementTypes = [
+  "background",
   "qr",
   "image",
   "name",
@@ -12,7 +13,21 @@ export const labelElementTypes = [
 
 export const labelTextAlignments = ["left", "center", "right"] as const;
 export const labelTextOverflowModes = ["ellipsis", "shrink"] as const;
+export const labelFontFamilies = [
+  "sans",
+  "serif",
+  "monospace",
+  "rounded",
+] as const;
 export const labelImageFits = ["cover", "contain"] as const;
+
+const labelColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i);
+const labelBackgroundSourceSchema = z
+  .string()
+  .max(3_000_000)
+  .regex(
+    /^data:image\/(?:png|jpeg|webp|gif|avif|svg\+xml);base64,[a-z0-9+/=\s]+$/i,
+  );
 
 const normalizedPositionSchema = z.number().finite().min(0).max(100);
 const normalizedSizeSchema = z.number().finite().positive().max(100);
@@ -28,12 +43,30 @@ const labelElementBoxShape = {
 const textElementOptions = {
   fontSizeMm: z.number().finite().positive().max(100).optional(),
   minFontSizeMm: z.number().finite().positive().max(100).optional(),
+  fontFamily: z.enum(labelFontFamilies).optional(),
   align: z.enum(labelTextAlignments).optional(),
   textOverflow: z.enum(labelTextOverflowModes).optional(),
 };
 
 const labelElementSchemaBase = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("qr"), ...labelElementBoxShape }).strict(),
+  z
+    .object({
+      type: z.literal("background"),
+      ...labelElementBoxShape,
+      source: labelBackgroundSourceSchema.optional(),
+      fit: z.enum(labelImageFits).optional(),
+      opacity: z.number().finite().min(0).max(1).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("qr"),
+      ...labelElementBoxShape,
+      foregroundColor: labelColorSchema.optional(),
+      backgroundColor: labelColorSchema.optional(),
+      quietZoneModules: z.number().int().min(0).max(4).optional(),
+    })
+    .strict(),
   z
     .object({
       type: z.literal("image"),
@@ -145,6 +178,7 @@ export const labelSetupDeleteSchema = z
 export type LabelElementType = (typeof labelElementTypes)[number];
 export type LabelTextAlignment = (typeof labelTextAlignments)[number];
 export type LabelTextOverflowMode = (typeof labelTextOverflowModes)[number];
+export type LabelFontFamily = (typeof labelFontFamilies)[number];
 export type LabelImageFit = (typeof labelImageFits)[number];
 export type LabelElement = z.infer<typeof labelElementSchema>;
 export type LabelSetupCreate = z.infer<typeof labelSetupCreateSchema>;

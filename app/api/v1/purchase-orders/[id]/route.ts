@@ -12,6 +12,7 @@ type Context = { params: Promise<{ id: string }> };
 const orderPatchSchema = z
   .object({
     reference: z.string().trim().max(160).nullable().optional(),
+    contactId: z.string().uuid().nullable().optional(),
     supplier: z.string().trim().max(240).optional(),
     status: z.enum(["draft", "ordered", "cancelled"]).optional(),
     orderedAt: z.string().datetime().optional(),

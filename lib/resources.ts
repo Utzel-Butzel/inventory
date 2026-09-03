@@ -22,7 +22,7 @@ import {
   inventoryCounts,
   inventoryCyclePolicies,
   media,
-  purchaseOrderLines,
+  orderLines as purchaseOrderLines,
   resourceLendingSettings,
   resourceCreationRequests,
   resourceFavorites,
@@ -1757,7 +1757,7 @@ export async function mergeResources(
       .orderBy(asc(purchaseOrderLines.id))
       .for("update");
     const receivedOrderLine = duplicateOrderLines.find(
-      (line) => line.receivedQuantity > 0,
+      (line) => line.fulfilledQuantity > 0,
     );
     if (receivedOrderLine) {
       throw new Error(
@@ -1928,7 +1928,7 @@ export async function mergeResources(
         .where(
           and(
             eq(purchaseOrderLines.organizationId, organizationId),
-            eq(purchaseOrderLines.purchaseOrderId, line.purchaseOrderId),
+            eq(purchaseOrderLines.orderId, line.orderId),
             eq(purchaseOrderLines.resourceId, keepId),
           ),
         )
@@ -1937,7 +1937,7 @@ export async function mergeResources(
         const mergedOrderedQuantity =
           collision.orderedQuantity + line.orderedQuantity;
         const mergedReceivedQuantity =
-          collision.receivedQuantity + line.receivedQuantity;
+          collision.fulfilledQuantity + line.fulfilledQuantity;
         const compatiblePurchaseUnit =
           collision.purchaseUnitName === line.purchaseUnitName &&
           collision.purchaseUnitFactor === line.purchaseUnitFactor &&
@@ -1947,7 +1947,7 @@ export async function mergeResources(
           .update(purchaseOrderLines)
           .set({
             orderedQuantity: mergedOrderedQuantity,
-            receivedQuantity: mergedReceivedQuantity,
+            fulfilledQuantity: mergedReceivedQuantity,
             purchaseUnitName: compatiblePurchaseUnit
               ? collision.purchaseUnitName
               : null,

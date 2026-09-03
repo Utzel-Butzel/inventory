@@ -149,3 +149,14 @@ test("session-triggered notification cycles stay in the active organization", as
     /eq\(notificationPreferences\.organizationId, organizationId\)/,
   );
 });
+
+test("notification inbox accepts user-linked API tokens but not standalone tokens", async () => {
+  const source = await readFile(
+    new URL("../lib/notification-api.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /if \(!identity\.userId\)/);
+  assert.doesNotMatch(source, /identity\.kind !== ["']session["']/);
+  assert.match(source, /Notifications require a signed-in user\./);
+});

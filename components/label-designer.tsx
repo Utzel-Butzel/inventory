@@ -2,6 +2,7 @@
 
 import {
   Barcode,
+  Grid3X3,
   Grip,
   Hash,
   Image as ImageIcon,
@@ -9,8 +10,14 @@ import {
   MapPin,
   Maximize2,
   QrCode as QrCodeIcon,
+  Redo2,
+  Trash2,
   Type,
+  Undo2,
+  Upload,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import {
   useEffect,
@@ -18,6 +25,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useT } from "next-i18next/client";
@@ -31,6 +39,7 @@ import {
   hasVisibleQrImageOverlap,
   labelElementsOverlap,
   type LabelElement,
+  type LabelFontFamily,
   type LabelSetupDto,
 } from "@/lib/label-setup-contract";
 
@@ -39,6 +48,11 @@ type TextElement = Extract<
   LabelElement,
   { type: "name" | "identifier" | "url" | "location" }
 >;
+type BackgroundElement = Extract<LabelElement, { type: "background" }>;
+type QrElement = Extract<LabelElement, { type: "qr" }>;
+type CoordinateKey = "x" | "y" | "width" | "height";
+type CoordinateUnit = "mm" | "percent";
+type PreviewScenario = "current" | "stress" | "missing";
 
 export type LabelSetupDraft = Pick<
   LabelSetupDto,
@@ -47,6 +61,7 @@ export type LabelSetupDraft = Pick<
   Partial<Pick<LabelSetupDto, "id" | "revision">>;
 
 const ELEMENT_OPTIONS = [
+  { type: "background", labelKey: "designer.elements.background", icon: ImageIcon },
   { type: "qr", labelKey: "designer.elements.qr", icon: QrCodeIcon },
   { type: "image", labelKey: "designer.elements.image", icon: ImageIcon },
   { type: "name", labelKey: "designer.elements.name", icon: Type },
@@ -55,6 +70,17 @@ const ELEMENT_OPTIONS = [
   { type: "url", labelKey: "designer.elements.url", icon: Link2 },
   { type: "location", labelKey: "designer.elements.location", icon: MapPin },
 ] as const;
+
+const MAX_HISTORY_LENGTH = 80;
+const MAX_BACKGROUND_FILE_BYTES = 2 * 1024 * 1024;
+const BACKGROUND_FILE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+  "image/svg+xml",
+]);
 
 const SAMPLE_RESOURCE: LabelResource = {
   id: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
@@ -67,7 +93,8 @@ const SAMPLE_RESOURCE: LabelResource = {
   cover: null,
 };
 
-const roundCoordinate = (value: number) => Math.round(value * 10) / 10;
+const roundCoordinate = (value: number) => Math.round(value * 1_000) / 1_000;
+const roundMeasurement = (value: number) => Math.round(value * 100) / 100;
 
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
@@ -75,6 +102,17 @@ const clamp = (value: number, minimum: number, maximum: number) =>
 const newElement = (type: ElementType): LabelElement => {
   const box = { x: 5, y: 5, width: 30, height: 25, visible: true };
   switch (type) {
+    case "background":
+      return {
+        type,
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        visible: true,
+        fit: "cover",
+        opacity: 1,
+      };
     case "image":
       return { type, ...box, fit: "cover" };
     case "name":
@@ -82,6 +120,7 @@ const newElement = (type: ElementType): LabelElement => {
         type,
         ...box,
         fontSizeMm: 3.8,
+        fontFamily: "sans",
         align: "left",
         textOverflow: "ellipsis",
       };
@@ -90,6 +129,7 @@ const newElement = (type: ElementType): LabelElement => {
         type,
         ...box,
         fontSizeMm: 2.5,
+        fontFamily: "monospace",
         align: "left",
         textOverflow: "ellipsis",
       };
@@ -98,6 +138,7 @@ const newElement = (type: ElementType): LabelElement => {
         type,
         ...box,
         fontSizeMm: 1.8,
+        fontFamily: "monospace",
         align: "left",
         textOverflow: "ellipsis",
       };
@@ -106,14 +147,47 @@ const newElement = (type: ElementType): LabelElement => {
         type,
         ...box,
         fontSizeMm: 2.5,
+        fontFamily: "monospace",
         align: "left",
         textOverflow: "ellipsis",
       };
     case "qr":
+      return {
+        type,
+        ...box,
+        foregroundColor: "#000000",
+        backgroundColor: "#ffffff",
+        quietZoneModules: 0,
+      };
     case "barcode":
       return { type, ...box };
   }
 };
+
+function longestValue(
+  resources: LabelResource[],
+  pick: (resource: LabelResource) => string | null | undefined,
+  fallback: string,
+) {
+  return resources.reduce((longest, resource) => {
+    const candidate = pick(resource) ?? "";
+    return candidate.length > longest.length ? candidate : longest;
+  }, fallback);
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Unable to read background image."));
+    });
+    reader.addEventListener("error", () =>
+      reject(reader.error ?? new Error("Unable to read background image.")),
+    );
+    reader.readAsDataURL(file);
+  });
+}
 
 function separateQrAndImage(
   elements: LabelElement[],
@@ -189,6 +263,8 @@ function previewSetup(draft: LabelSetupDraft): LabelSetupDto {
 export function LabelDesigner({
   value,
   sampleResource,
+  sampleResources,
+  origin = "https://inventory.example",
   saving,
   error,
   onChange,
@@ -198,6 +274,8 @@ export function LabelDesigner({
 }: {
   value: LabelSetupDraft;
   sampleResource?: LabelResource | null;
+  sampleResources?: LabelResource[];
+  origin?: string;
   saving: boolean;
   error?: string | null;
   onChange: (next: LabelSetupDraft) => void;
@@ -211,7 +289,21 @@ export function LabelDesigner({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
+  const currentValueRef = useRef(value);
+  const pastRef = useRef<LabelSetupDraft[]>([]);
+  const futureRef = useRef<LabelSetupDraft[]>([]);
+  const undoRef = useRef<() => void>(() => undefined);
+  const redoRef = useRef<() => void>(() => undefined);
+  const [historyState, setHistoryState] = useState({ past: 0, future: 0 });
   const [selectedType, setSelectedType] = useState<ElementType>("qr");
+  const [zoomPercent, setZoomPercent] = useState(100);
+  const [gridSizeMm, setGridSizeMm] = useState(1);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [coordinateUnit, setCoordinateUnit] =
+    useState<CoordinateUnit>("mm");
+  const [previewScenario, setPreviewScenario] =
+    useState<PreviewScenario>("current");
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
   const [interaction, setInteraction] = useState<{
     type: ElementType;
     mode: "move" | "resize";
@@ -219,15 +311,17 @@ export function LabelDesigner({
     startX: number;
     startY: number;
     original: LabelElement;
+    draftBefore: LabelSetupDraft;
   } | null>(null);
 
   const selected =
     value.elements.find((element) => element.type === selectedType) ?? null;
-  const pixelsPerMm = Math.min(
+  const fitPixelsPerMm = Math.min(
     4,
     560 / Math.max(value.widthMm, 1),
     500 / Math.max(value.heightMm, 1),
   );
+  const pixelsPerMm = fitPixelsPerMm * (zoomPercent / 100);
   const canvasWidth = value.widthMm * pixelsPerMm;
   const canvasHeight = value.heightMm * pixelsPerMm;
   const renderedSetup = useMemo(() => previewSetup(value), [value]);
@@ -239,33 +333,144 @@ export function LabelDesigner({
     }),
     [t],
   );
+  const stressSampleResource = useMemo<LabelResource>(() => {
+    const resources = [
+      ...(sampleResources ?? []),
+      ...(sampleResource ? [sampleResource] : []),
+    ];
+    const base = sampleResource ?? resources[0] ?? fallbackSampleResource;
+    return {
+      ...base,
+      name: longestValue(
+        resources,
+        (resource) => resource.name,
+        t("designer.sample.longName"),
+      ),
+      sku: longestValue(
+        resources,
+        (resource) => resource.sku,
+        t("designer.sample.longSku"),
+      ),
+      location: longestValue(
+        resources,
+        (resource) => resource.location,
+        t("designer.sample.longLocation"),
+      ),
+    };
+  }, [fallbackSampleResource, sampleResource, sampleResources, t]);
+  const missingSampleResource = useMemo<LabelResource>(
+    () => ({
+      ...(sampleResource ?? fallbackSampleResource),
+      name: t("designer.sample.missingName"),
+      sku: null,
+      barcode: null,
+      location: "",
+      cover: null,
+      quantity: 0,
+    }),
+    [fallbackSampleResource, sampleResource, t],
+  );
+  const previewResource =
+    previewScenario === "stress"
+      ? stressSampleResource
+      : previewScenario === "missing"
+        ? missingSampleResource
+        : (sampleResource ?? fallbackSampleResource);
   const qrImageOverlap = hasVisibleQrImageOverlap(value.elements);
+  const canUndo = historyState.past > 0;
+  const canRedo = historyState.future > 0;
+  const gridSpacingPx = gridSizeMm * pixelsPerMm;
 
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
 
-  const updateElement = useCallback((type: ElementType, patch: Partial<LabelElement>) => {
-    onChange({
-      ...value,
-      elements: value.elements.map((element) =>
-        element.type === type
-          ? ({ ...element, ...patch } as LabelElement)
-          : element,
-      ),
+  useEffect(() => {
+    currentValueRef.current = value;
+  }, [value]);
+
+  const refreshHistory = useCallback(() => {
+    setHistoryState({
+      past: pastRef.current.length,
+      future: futureRef.current.length,
     });
-  }, [onChange, value]);
+  }, []);
+
+  const recordHistory = useCallback(
+    (draft: LabelSetupDraft) => {
+      pastRef.current.push(structuredClone(draft));
+      if (pastRef.current.length > MAX_HISTORY_LENGTH) pastRef.current.shift();
+      futureRef.current = [];
+      refreshHistory();
+    },
+    [refreshHistory],
+  );
+
+  const applyDraft = useCallback(
+    (next: LabelSetupDraft, record = true) => {
+      if (record) recordHistory(currentValueRef.current);
+      currentValueRef.current = next;
+      onChange(next);
+    },
+    [onChange, recordHistory],
+  );
+
+  const undo = useCallback(() => {
+    const previous = pastRef.current.pop();
+    if (!previous) return;
+    futureRef.current.push(structuredClone(currentValueRef.current));
+    currentValueRef.current = previous;
+    onChange(previous);
+    refreshHistory();
+  }, [onChange, refreshHistory]);
+
+  const redo = useCallback(() => {
+    const next = futureRef.current.pop();
+    if (!next) return;
+    pastRef.current.push(structuredClone(currentValueRef.current));
+    currentValueRef.current = next;
+    onChange(next);
+    refreshHistory();
+  }, [onChange, refreshHistory]);
+
+  useEffect(() => {
+    undoRef.current = undo;
+    redoRef.current = redo;
+  }, [redo, undo]);
+
+  const updateElement = useCallback(
+    (
+      type: ElementType,
+      patch: Partial<LabelElement>,
+      record = true,
+    ) => {
+      const current = currentValueRef.current;
+      applyDraft(
+        {
+          ...current,
+          elements: current.elements.map((element) =>
+            element.type === type
+              ? ({ ...element, ...patch } as LabelElement)
+              : element,
+          ),
+        },
+        record,
+      );
+    },
+    [applyDraft],
+  );
 
   const toggleElement = useCallback(
     (type: ElementType) => {
-      const existing = value.elements.find((element) => element.type === type);
+      const current = currentValueRef.current;
+      const existing = current.elements.find((element) => element.type === type);
       let elements = existing
-        ? value.elements.map((element) =>
+        ? current.elements.map((element) =>
             element.type === type
               ? ({ ...element, visible: !element.visible } as LabelElement)
               : element,
           )
-        : [...value.elements, newElement(type)];
+        : [...current.elements, newElement(type)];
       if (
         (type === "qr" || type === "image") &&
         (!existing || !existing.visible)
@@ -273,14 +478,26 @@ export function LabelDesigner({
         elements = separateQrAndImage(
           elements,
           type,
-          value.widthMm,
-          value.heightMm,
+          current.widthMm,
+          current.heightMm,
         );
       }
       setSelectedType(type);
-      onChange({ ...value, elements });
+      applyDraft({ ...current, elements });
     },
-    [onChange, value],
+    [applyDraft],
+  );
+
+  const snapCoordinate = useCallback(
+    (coordinate: number, dimensionMm: number) => {
+      if (!snapToGrid) return roundCoordinate(coordinate);
+      const millimeters = (coordinate / 100) * dimensionMm;
+      return roundCoordinate(
+        ((Math.round(millimeters / gridSizeMm) * gridSizeMm) / dimensionMm) *
+          100,
+      );
+    },
+    [gridSizeMm, snapToGrid],
   );
 
   useEffect(() => {
@@ -290,6 +507,12 @@ export function LabelDesigner({
     document.body.style.overflow = "hidden";
     const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redoRef.current();
+        else undoRef.current();
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         onCloseRef.current();
@@ -342,19 +565,52 @@ export function LabelDesigner({
       const original = interaction.original;
 
       if (interaction.mode === "move") {
+        const maximumX = 100 - original.width;
+        const maximumY = 100 - original.height;
         updateElement(interaction.type, {
-          x: roundCoordinate(clamp(original.x + deltaX, 0, 100 - original.width)),
-          y: roundCoordinate(clamp(original.y + deltaY, 0, 100 - original.height)),
-        });
+          x: clamp(
+            snapCoordinate(original.x + deltaX, value.widthMm),
+            0,
+            maximumX,
+          ),
+          y: clamp(
+            snapCoordinate(original.y + deltaY, value.heightMm),
+            0,
+            maximumY,
+          ),
+        }, false);
       } else {
+        const minimumWidth = (0.1 / value.widthMm) * 100;
+        const minimumHeight = (0.1 / value.heightMm) * 100;
         updateElement(interaction.type, {
-          width: roundCoordinate(clamp(original.width + deltaX, 1, 100 - original.x)),
-          height: roundCoordinate(clamp(original.height + deltaY, 1, 100 - original.y)),
-        });
+          width: clamp(
+            snapCoordinate(original.width + deltaX, value.widthMm),
+            minimumWidth,
+            100 - original.x,
+          ),
+          height: clamp(
+            snapCoordinate(original.height + deltaY, value.heightMm),
+            minimumHeight,
+            100 - original.y,
+          ),
+        }, false);
       }
     };
     const handlePointerUp = (event: PointerEvent) => {
-      if (event.pointerId === interaction.pointerId) setInteraction(null);
+      if (event.pointerId !== interaction.pointerId) return;
+      const currentElement = currentValueRef.current.elements.find(
+        (element) => element.type === interaction.type,
+      );
+      if (
+        currentElement &&
+        (currentElement.x !== interaction.original.x ||
+          currentElement.y !== interaction.original.y ||
+          currentElement.width !== interaction.original.width ||
+          currentElement.height !== interaction.original.height)
+      ) {
+        recordHistory(interaction.draftBefore);
+      }
+      setInteraction(null);
     };
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
@@ -364,7 +620,7 @@ export function LabelDesigner({
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [interaction, updateElement]);
+  }, [interaction, recordHistory, snapCoordinate, updateElement, value.heightMm, value.widthMm]);
 
   const beginInteraction = (
     event: ReactPointerEvent,
@@ -373,6 +629,7 @@ export function LabelDesigner({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    canvasRef.current?.focus();
     setSelectedType(element.type);
     setInteraction({
       type: element.type,
@@ -381,8 +638,84 @@ export function LabelDesigner({
       startX: event.clientX,
       startY: event.clientY,
       original: element,
+      draftBefore: structuredClone(currentValueRef.current),
     });
   };
+
+  const nudgeSelected = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (
+      !selected ||
+      selected.type === "background" ||
+      !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
+    ) {
+      return;
+    }
+    event.preventDefault();
+    const stepMm = event.shiftKey ? 1 : 0.1;
+    const deltaX = (stepMm / value.widthMm) * 100;
+    const deltaY = (stepMm / value.heightMm) * 100;
+    updateElement(selected.type, {
+      x: roundCoordinate(
+        clamp(
+          selected.x +
+            (event.key === "ArrowLeft" ? -deltaX : event.key === "ArrowRight" ? deltaX : 0),
+          0,
+          100 - selected.width,
+        ),
+      ),
+      y: roundCoordinate(
+        clamp(
+          selected.y +
+            (event.key === "ArrowUp" ? -deltaY : event.key === "ArrowDown" ? deltaY : 0),
+          0,
+          100 - selected.height,
+        ),
+      ),
+    });
+  };
+
+  const uploadBackground = async (file: File) => {
+    setBackgroundError(null);
+    if (!BACKGROUND_FILE_TYPES.has(file.type)) {
+      setBackgroundError(t("designer.backgroundUnsupported"));
+      return;
+    }
+    if (file.size > MAX_BACKGROUND_FILE_BYTES) {
+      setBackgroundError(t("designer.backgroundTooLarge"));
+      return;
+    }
+
+    try {
+      const source = await readFileAsDataUrl(file);
+      const current = currentValueRef.current;
+      const existing = current.elements.find(
+        (element): element is BackgroundElement => element.type === "background",
+      );
+      const elements = existing
+        ? current.elements.map((element) =>
+            element.type === "background"
+              ? { ...element, source, visible: true }
+              : element,
+          )
+        : [...current.elements, { ...newElement("background"), source }];
+      applyDraft({ ...current, elements });
+      setSelectedType("background");
+    } catch {
+      setBackgroundError(t("designer.backgroundReadError"));
+    }
+  };
+
+  const updateZoom = (next: number) => {
+    setZoomPercent(Math.min(400, Math.max(50, next)));
+  };
+
+  const coordinateDimensionMm = (key: CoordinateKey) =>
+    key === "x" || key === "width" ? value.widthMm : value.heightMm;
+
+  const displayedCoordinate = (key: CoordinateKey, normalized: number) =>
+    coordinateUnit === "mm"
+      ? roundMeasurement((normalized / 100) * coordinateDimensionMm(key))
+      : roundCoordinate(normalized);
 
   return (
     <div
@@ -410,15 +743,38 @@ export function LabelDesigner({
               {value.id ? t("designer.edit") : t("designer.create")}
             </h2>
           </div>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={onClose}
-            aria-label={t("designer.close")}
-            className="grid size-9 place-items-center rounded-xl text-muted hover:bg-surface-hover hover:text-foreground"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={undo}
+              disabled={!canUndo}
+              aria-label={t("designer.undo")}
+              title={`${t("designer.undo")} (⌘Z)`}
+              className="grid size-9 place-items-center rounded-xl text-muted hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <Undo2 size={17} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={!canRedo}
+              aria-label={t("designer.redo")}
+              title={`${t("designer.redo")} (⇧⌘Z)`}
+              className="grid size-9 place-items-center rounded-xl text-muted hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <Redo2 size={17} aria-hidden="true" />
+            </button>
+            <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+            <button
+              ref={closeButtonRef}
+              type="button"
+              onClick={onClose}
+              aria-label={t("designer.close")}
+              className="grid size-9 place-items-center rounded-xl text-muted hover:bg-surface-hover hover:text-foreground"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
         </header>
 
         <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[250px_minmax(360px,1fr)_260px] lg:overflow-hidden">
@@ -428,7 +784,12 @@ export function LabelDesigner({
               <input
                 value={value.name}
                 maxLength={160}
-                onChange={(event) => onChange({ ...value, name: event.target.value })}
+                onChange={(event) =>
+                  applyDraft({
+                    ...currentValueRef.current,
+                    name: event.target.value,
+                  })
+                }
                 className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus focus:ring-4 focus:ring-focus/10"
               />
             </label>
@@ -446,7 +807,9 @@ export function LabelDesigner({
                     value={value[key]}
                     onChange={(event) => {
                       const next = Number(event.target.value);
-                      if (Number.isFinite(next)) onChange({ ...value, [key]: next });
+                      if (Number.isFinite(next)) {
+                        applyDraft({ ...currentValueRef.current, [key]: next });
+                      }
                     }}
                     className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus"
                   />
@@ -506,25 +869,130 @@ export function LabelDesigner({
             </div>
           </aside>
 
-          <main className="flex min-h-[500px] items-center justify-center overflow-auto bg-surface-muted p-6 subtle-grid lg:min-h-0">
-            <div
-              ref={canvasRef}
-              className="relative shrink-0 touch-none"
-              style={{ width: canvasWidth, height: canvasHeight }}
-              onPointerDown={() => setSelectedType("qr")}
-            >
+          <main className="relative min-h-[500px] overflow-auto bg-surface-muted p-6 pt-40 subtle-grid sm:pt-28 lg:min-h-0">
+            <div className="absolute left-3 right-3 top-3 z-40 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface/95 p-2 shadow-sm backdrop-blur">
+              <label className="flex min-w-0 items-center gap-2 text-[10px] font-semibold text-muted">
+                <span className="hidden xl:inline">{t("designer.previewScenario")}</span>
+                <select
+                  value={previewScenario}
+                  onChange={(event) =>
+                    setPreviewScenario(event.target.value as PreviewScenario)
+                  }
+                  className="h-8 min-w-0 rounded-lg border border-border bg-surface px-2 text-[11px] text-foreground outline-none"
+                >
+                  <option value="current">{t("designer.previewScenarios.current")}</option>
+                  <option value="stress">{t("designer.previewScenarios.stress")}</option>
+                  <option value="missing">{t("designer.previewScenarios.missing")}</option>
+                </select>
+              </label>
+              <span className="h-5 w-px bg-border" aria-hidden="true" />
+              <button
+                type="button"
+                role="switch"
+                aria-checked={snapToGrid}
+                onClick={() => setSnapToGrid((enabled) => !enabled)}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-semibold ${
+                  snapToGrid
+                    ? "bg-brand-soft text-brand"
+                    : "text-muted hover:bg-surface-hover"
+                }`}
+              >
+                <Grid3X3 size={14} aria-hidden="true" />
+                {t("designer.grid")}
+              </button>
+              <label className="flex items-center gap-1 text-[10px] font-semibold text-muted">
+                <select
+                  value={gridSizeMm}
+                  onChange={(event) => setGridSizeMm(Number(event.target.value))}
+                  aria-label={t("designer.gridSize")}
+                  disabled={!snapToGrid}
+                  className="h-8 rounded-lg border border-border bg-surface px-2 text-[11px] text-foreground outline-none disabled:opacity-40"
+                >
+                  {[0.5, 1, 2, 5].map((size) => (
+                    <option key={size} value={size}>
+                      {size} mm
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="h-5 w-px bg-border" aria-hidden="true" />
+              <div className="flex rounded-lg border border-border bg-surface p-0.5" aria-label={t("designer.coordinateUnit")}>
+                {(["mm", "percent"] as const).map((unit) => (
+                  <button
+                    key={unit}
+                    type="button"
+                    onClick={() => setCoordinateUnit(unit)}
+                    className={`h-7 rounded-md px-2 text-[10px] font-semibold ${
+                      coordinateUnit === unit
+                        ? "bg-brand-soft text-brand"
+                        : "text-muted"
+                    }`}
+                  >
+                    {unit === "mm" ? "mm" : "%"}
+                  </button>
+                ))}
+              </div>
+              <span className="h-5 w-px bg-border" aria-hidden="true" />
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => updateZoom(zoomPercent - 25)}
+                  disabled={zoomPercent <= 50}
+                  aria-label={t("designer.zoomOut")}
+                  className="grid size-8 place-items-center rounded-lg text-muted hover:bg-surface-hover disabled:opacity-35"
+                >
+                  <ZoomOut size={15} aria-hidden="true" />
+                </button>
+                <span className="min-w-12 text-center text-[10px] font-semibold tabular-nums text-muted-strong">
+                  {zoomPercent}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => updateZoom(zoomPercent + 25)}
+                  disabled={zoomPercent >= 400}
+                  aria-label={t("designer.zoomIn")}
+                  className="grid size-8 place-items-center rounded-lg text-muted hover:bg-surface-hover disabled:opacity-35"
+                >
+                  <ZoomIn size={15} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+            <div className="flex h-max min-h-full w-max min-w-full items-center justify-center">
+              <div
+                ref={canvasRef}
+                role="application"
+                tabIndex={0}
+                aria-label={t("designer.canvas")}
+                className="relative shrink-0 touch-none outline-none focus-visible:ring-4 focus-visible:ring-focus/30"
+                style={{ width: canvasWidth, height: canvasHeight }}
+                onKeyDown={nudgeSelected}
+                onPointerDown={() => canvasRef.current?.focus()}
+              >
               <LabelRenderer
-                resource={sampleResource ?? fallbackSampleResource}
+                resource={previewResource}
                 setup={renderedSetup}
-                origin="https://inventory.example"
+                origin={origin}
                 pixelsPerMm={pixelsPerMm}
                 showImagePlaceholder
                 className="!shadow-[var(--shadow-md)]"
               />
-              <div className="absolute inset-0">
-                {value.elements
-                  .filter((element) => element.visible)
-                  .map((element) => (
+              {snapToGrid ? (
+                <div
+                  className="pointer-events-none absolute inset-0 z-[5]"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(to right, rgb(14 116 144 / 0.2) 1px, transparent 1px), linear-gradient(to bottom, rgb(14 116 144 / 0.2) 1px, transparent 1px)",
+                    backgroundSize: `${gridSpacingPx}px ${gridSpacingPx}px`,
+                  }}
+                  aria-hidden="true"
+                />
+              ) : null}
+                <div className="absolute inset-0 z-10">
+                  {value.elements
+                    .filter(
+                      (element) => element.visible && element.type !== "background",
+                    )
+                    .map((element) => (
                     <div
                       key={element.type}
                       className={`absolute cursor-move border-2 transition-colors ${
@@ -567,7 +1035,8 @@ export function LabelDesigner({
                         </>
                       ) : null}
                     </div>
-                  ))}
+                    ))}
+                </div>
               </div>
             </div>
           </main>
@@ -591,36 +1060,130 @@ export function LabelDesigner({
                     )}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["x", "y", "width", "height"] as const).map((key) => (
-                    <label key={key} className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
-                      {t(`designer.coordinates.${key}`)} (%)
+                {selected.type !== "background" ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["x", "y", "width", "height"] as const).map((key) => {
+                      const dimensionMm = coordinateDimensionMm(key);
+                      const minimumNormalized =
+                        key === "width" || key === "height"
+                          ? (0.1 / dimensionMm) * 100
+                          : 0;
+                      const maximumNormalized =
+                        key === "x"
+                          ? 100 - selected.width
+                          : key === "y"
+                            ? 100 - selected.height
+                            : key === "width"
+                              ? 100 - selected.x
+                              : 100 - selected.y;
+                      return (
+                        <label key={key} className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                          {t(`designer.coordinates.${key}`)} ({coordinateUnit === "mm" ? "mm" : "%"})
+                          <input
+                            type="number"
+                            min={displayedCoordinate(key, minimumNormalized)}
+                            max={displayedCoordinate(key, maximumNormalized)}
+                            step={coordinateUnit === "mm" ? "0.1" : "0.01"}
+                            value={displayedCoordinate(key, selected[key])}
+                            onChange={(event) => {
+                              const next = Number(event.target.value);
+                              if (!Number.isFinite(next)) return;
+                              const normalized =
+                                coordinateUnit === "mm"
+                                  ? (next / dimensionMm) * 100
+                                  : next;
+                              updateElement(selected.type, {
+                                [key]: roundCoordinate(
+                                  clamp(
+                                    normalized,
+                                    minimumNormalized,
+                                    maximumNormalized,
+                                  ),
+                                ),
+                              });
+                            }}
+                            className="mt-1.5 h-9 w-full rounded-lg border border-border bg-surface px-2.5 text-xs font-medium text-foreground outline-none focus:border-focus"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {selected.type === "background" ? (
+                  <div className="space-y-4">
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-surface-subtle px-3 py-3 text-xs font-semibold text-muted-strong hover:border-focus hover:text-foreground">
+                      <Upload size={15} aria-hidden="true" />
+                      {selected.source
+                        ? t("designer.replaceBackground")
+                        : t("designer.uploadBackground")}
                       <input
-                        type="number"
-                        min={key === "width" || key === "height" ? 1 : 0}
-                        max="100"
-                        step="0.1"
-                        value={selected[key]}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml"
+                        className="sr-only"
                         onChange={(event) => {
-                          const next = Number(event.target.value);
-                          if (!Number.isFinite(next)) return;
-                          const maximum =
-                            key === "x"
-                              ? 100 - selected.width
-                              : key === "y"
-                                ? 100 - selected.height
-                                : key === "width"
-                                  ? 100 - selected.x
-                                  : 100 - selected.y;
-                          updateElement(selected.type, {
-                            [key]: roundCoordinate(clamp(next, key === "width" || key === "height" ? 1 : 0, maximum)),
-                          });
+                          const file = event.target.files?.[0];
+                          event.target.value = "";
+                          if (file) void uploadBackground(file);
                         }}
-                        className="mt-1.5 h-9 w-full rounded-lg border border-border bg-surface px-2.5 text-xs font-medium text-foreground outline-none focus:border-focus"
                       />
                     </label>
-                  ))}
-                </div>
+                    <p className="text-[10px] leading-4 text-muted">
+                      {t("designer.backgroundHint")}
+                    </p>
+                    {backgroundError ? (
+                      <p role="alert" className="text-[11px] font-medium text-danger">
+                        {backgroundError}
+                      </p>
+                    ) : null}
+                    <label className="block text-[11px] font-semibold text-muted">
+                      {t("designer.imageFit")}
+                      <select
+                        value={selected.fit ?? "cover"}
+                        onChange={(event) =>
+                          updateElement(selected.type, {
+                            fit: event.target.value as "cover" | "contain",
+                          })
+                        }
+                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
+                      >
+                        <option value="cover">{t("designer.fillFrame")}</option>
+                        <option value="contain">{t("designer.fitImage")}</option>
+                      </select>
+                    </label>
+                    <label className="block text-[11px] font-semibold text-muted">
+                      <span className="flex items-center justify-between gap-2">
+                        {t("designer.backgroundOpacity")}
+                        <output>{Math.round((selected.opacity ?? 1) * 100)}%</output>
+                      </span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={Math.round((selected.opacity ?? 1) * 100)}
+                        onChange={(event) =>
+                          updateElement(selected.type, {
+                            opacity: Number(event.target.value) / 100,
+                          })
+                        }
+                        className="mt-2 w-full accent-[var(--color-brand-solid)]"
+                      />
+                    </label>
+                    {selected.source ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateElement(selected.type, { source: undefined })
+                        }
+                        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-danger-border bg-danger-soft px-3 text-xs font-semibold text-danger"
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                        {t("designer.removeBackground")}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {selected.type === "image" ? (
                   <label className="mt-4 block text-[11px] font-semibold text-muted">
@@ -634,6 +1197,54 @@ export function LabelDesigner({
                       <option value="contain">{t("designer.fitImage")}</option>
                     </select>
                   </label>
+                ) : null}
+
+                {selected.type === "qr" ? (
+                  <div className="mt-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        ["foregroundColor", "designer.qrForeground", "#000000"],
+                        ["backgroundColor", "designer.qrBackground", "#ffffff"],
+                      ] as const).map(([key, labelKey, fallback]) => (
+                        <label key={key} className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                          {t(labelKey)}
+                          <input
+                            type="color"
+                            value={(selected as QrElement)[key] ?? fallback}
+                            onChange={(event) =>
+                              updateElement(selected.type, {
+                                [key]: event.target.value,
+                              })
+                            }
+                            className="mt-1.5 h-10 w-full cursor-pointer rounded-lg border border-border bg-surface p-1"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <label className="block text-[11px] font-semibold text-muted">
+                      {t("designer.qrMargin")}
+                      <select
+                        value={(selected as QrElement).quietZoneModules ?? 0}
+                        onChange={(event) =>
+                          updateElement(selected.type, {
+                            quietZoneModules: Number(event.target.value),
+                          })
+                        }
+                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
+                      >
+                        {[0, 1, 2, 3, 4].map((modules) => (
+                          <option key={modules} value={modules}>
+                            {modules === 0
+                              ? t("designer.qrMarginNone")
+                              : t("designer.qrMarginModules", { count: modules })}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p className="text-[10px] leading-4 text-muted">
+                      {t("designer.qrColorHint")}
+                    </p>
+                  </div>
                 ) : null}
 
                 {["name", "identifier", "url", "location"].includes(selected.type) ? (
@@ -660,6 +1271,34 @@ export function LabelDesigner({
                         }}
                         className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus"
                       />
+                    </label>
+                    <label className="mt-4 block text-[11px] font-semibold text-muted">
+                      {t("designer.fontFamily")}
+                      <select
+                        value={
+                          (selected as TextElement).fontFamily ??
+                          (selected.type === "name" ? "sans" : "monospace")
+                        }
+                        onChange={(event) =>
+                          updateElement(selected.type, {
+                            fontFamily: event.target.value as LabelFontFamily,
+                          } as Partial<LabelElement>)
+                        }
+                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
+                      >
+                        <option value="sans">
+                          {t("designer.fontFamilies.sans")}
+                        </option>
+                        <option value="serif">
+                          {t("designer.fontFamilies.serif")}
+                        </option>
+                        <option value="monospace">
+                          {t("designer.fontFamilies.monospace")}
+                        </option>
+                        <option value="rounded">
+                          {t("designer.fontFamilies.rounded")}
+                        </option>
+                      </select>
                     </label>
                     <label className="mt-4 block text-[11px] font-semibold text-muted">
                       {t("designer.alignment")}

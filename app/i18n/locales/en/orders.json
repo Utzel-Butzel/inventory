@@ -1,0 +1,103 @@
+{
+  "metadata": {
+    "title": "Orders",
+    "description": "Manage purchases, sales, and multi-item loans together."
+  },
+  "types": {
+    "purchase": "Purchases",
+    "sale": "Sales",
+    "loan": "Loans"
+  },
+  "eyebrow": {
+    "sale": "Sales",
+    "loan": "Inventory use"
+  },
+  "title": {
+    "sale": "Sales orders",
+    "loan": "Loans"
+  },
+  "description": {
+    "sale": "Group multiple sales lines per customer and issue them directly from stock.",
+    "loan": "Loan several items together and track issue, due date, and return per line."
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "new": "New order",
+    "close": "Close form",
+    "create": "Create order",
+    "cancel": "Cancel",
+    "cancelOrder": "Cancel order",
+    "removeLine": "Remove {{name}}",
+    "issue": "Issue",
+    "return": "Return"
+  },
+  "fields": {
+    "contact": "Customer / contact",
+    "chooseContact": "Choose a contact",
+    "reference": "Reference",
+    "orderedAt": "Recorded at",
+    "dueAt": "Return due",
+    "note": "Note",
+    "searchInventory": "Search inventory by name or SKU…",
+    "noSku": "No SKU",
+    "available": "available",
+    "quantity": "Quantity",
+    "unitPrice": "Unit price",
+    "lineNote": "Line note",
+    "movementQuantity": "Movement quantity"
+  },
+  "metrics": {
+    "active": "Active orders",
+    "open": "Open quantity",
+    "overdue": "Overdue"
+  },
+  "status": {
+    "draft": "Draft",
+    "confirmed": "Confirmed",
+    "partially-fulfilled": "Partially fulfilled",
+    "fulfilled": "Fulfilled",
+    "reserved": "Reserved",
+    "partially-issued": "Partially issued",
+    "issued": "Issued",
+    "partially-returned": "Partially returned",
+    "returned": "Returned",
+    "overdue": "Overdue",
+    "cancelled": "Cancelled"
+  },
+  "list": {
+    "due": "due {{date}}",
+    "progress": "{{fulfilled}} of {{total}} issued",
+    "issued": "Issued",
+    "returned": "Returned",
+    "complete": "Complete",
+    "pending": "Pending"
+  },
+  "tracking": {
+    "serialized": "Serialized",
+    "serializedHelp": "Continue issuing identified units directly from the inventory item."
+  },
+  "empty": {
+    "noInventory": "No matching inventory items found.",
+    "linesTitle": "No lines yet",
+    "linesDescription": "Search inventory above and add multiple lines.",
+    "saleTitle": "No sales orders yet",
+    "saleDescription": "Create the first sales order for a customer.",
+    "loanTitle": "No multi-item loans yet",
+    "loanDescription": "Create a loan and add everything issued together."
+  },
+  "notices": {
+    "created": "{{type}} created.",
+    "issue": "Issued {{quantity}} × {{name}}.",
+    "return": "Returned {{quantity}} × {{name}}.",
+    "cancelled": "Order cancelled."
+  },
+  "errors": {
+    "load": "Orders could not be loaded.",
+    "create": "The order could not be created.",
+    "update": "The order could not be updated.",
+    "movement": "The stock movement could not be recorded.",
+    "missingContactOrLines": "Choose a contact and add at least one line.",
+    "invalidLines": "Check line quantities and prices.",
+    "invalidMovementQuantity": "Enter a whole number between 1 and {{maximum}}."
+  }
+}

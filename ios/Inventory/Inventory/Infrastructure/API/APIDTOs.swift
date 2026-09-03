@@ -336,6 +336,574 @@ public struct ResourceResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct ResourceFavoriteResponse: Codable, Equatable, Sendable {
+    public let favorite: Bool
+}
+
+public struct InventoryNotification: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let eventType: String
+    public let resourceID: UUID?
+    public let assignmentID: UUID?
+    public let title: String
+    public let body: String
+    public let href: String?
+    public let readAt: Date?
+    public let createdAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case eventType
+        case resourceID = "resourceId"
+        case assignmentID = "assignmentId"
+        case title
+        case body
+        case href
+        case readAt
+        case createdAt
+    }
+}
+
+public struct NotificationInboxResponse: Codable, Equatable, Sendable {
+    public let notifications: [InventoryNotification]
+    public let unread: Int
+}
+
+public struct NotificationUpdateResponse: Codable, Equatable, Sendable {
+    public let notification: InventoryNotification
+}
+
+public struct NotificationReadAllResponse: Codable, Equatable, Sendable {
+    public let updated: Int
+}
+
+public enum NotificationEventType: String, Codable, CaseIterable, Identifiable, Sendable {
+    case lowStock = "low_stock"
+    case expiry
+    case maintenance
+    case returnDue = "return_due"
+
+    public var id: Self { self }
+}
+
+public enum NotificationFrequency: String, Codable, CaseIterable, Identifiable, Sendable {
+    case daily
+    case immediate
+
+    public var id: Self { self }
+}
+
+public enum NotificationLocale: String, Codable, CaseIterable, Identifiable, Sendable {
+    case german = "de"
+    case english = "en"
+
+    public var id: Self { self }
+}
+
+public enum NotificationChannel: String, Codable, CaseIterable, Identifiable, Sendable {
+    case email
+    case push
+    case slack
+    case teams
+    case webhook
+
+    public var id: Self { self }
+}
+
+public struct NotificationPreference: Codable, Equatable, Sendable {
+    public let recipientKey: String
+    public let recipientEmail: String?
+    public let recipientName: String?
+    public var enabledEventTypes: [NotificationEventType]
+    public var frequency: NotificationFrequency
+    public var digestHour: Int
+    public var timezone: String
+    public var locale: NotificationLocale
+    public var cooldownHours: Int
+    public var lowStockThresholdPercent: Int
+    public var expiryWindowDays: Int
+    public var expiryFieldKey: String
+    public var maintenanceWindowDays: Int
+    public var maintenanceFieldKey: String
+    public var returnDueWindowDays: Int
+    public var emailEnabled: Bool
+    public var pushEnabled: Bool
+    public var slackEnabled: Bool
+    public var teamsEnabled: Bool
+    public var webhookEnabled: Bool
+    public let lastDigestAt: Date?
+    public let createdAt: Date
+    public let updatedAt: Date
+}
+
+public struct NotificationRuntimeChannel: Codable, Equatable, Sendable {
+    public let configured: Bool
+    public let target: String?
+    public let publicKey: String?
+}
+
+public struct NotificationRuntimeConfiguration: Codable, Equatable, Sendable {
+    public let email: NotificationRuntimeChannel
+    public let push: NotificationRuntimeChannel
+    public let slack: NotificationRuntimeChannel
+    public let teams: NotificationRuntimeChannel
+    public let webhook: NotificationRuntimeChannel
+}
+
+public struct NotificationSettingsResponse: Codable, Equatable, Sendable {
+    public let preference: NotificationPreference
+    public let runtime: NotificationRuntimeConfiguration
+    public let pushSubscriptionCount: Int
+}
+
+public struct NotificationPreferenceUpdateRequest: Codable, Equatable, Sendable {
+    public let enabledEventTypes: [NotificationEventType]
+    public let frequency: NotificationFrequency
+    public let digestHour: Int
+    public let timezone: String
+    public let locale: NotificationLocale
+    public let cooldownHours: Int
+    public let lowStockThresholdPercent: Int
+    public let expiryWindowDays: Int
+    public let expiryFieldKey: String
+    public let maintenanceWindowDays: Int
+    public let maintenanceFieldKey: String
+    public let returnDueWindowDays: Int
+    public let emailEnabled: Bool
+    public let pushEnabled: Bool
+    public let slackEnabled: Bool
+    public let teamsEnabled: Bool
+    public let webhookEnabled: Bool
+
+    public init(preference: NotificationPreference) {
+        enabledEventTypes = preference.enabledEventTypes
+        frequency = preference.frequency
+        digestHour = preference.digestHour
+        timezone = preference.timezone.trimmingCharacters(in: .whitespacesAndNewlines)
+        locale = preference.locale
+        cooldownHours = preference.cooldownHours
+        lowStockThresholdPercent = preference.lowStockThresholdPercent
+        expiryWindowDays = preference.expiryWindowDays
+        expiryFieldKey = preference.expiryFieldKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        maintenanceWindowDays = preference.maintenanceWindowDays
+        maintenanceFieldKey = preference.maintenanceFieldKey
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        returnDueWindowDays = preference.returnDueWindowDays
+        emailEnabled = preference.emailEnabled
+        pushEnabled = preference.pushEnabled
+        slackEnabled = preference.slackEnabled
+        teamsEnabled = preference.teamsEnabled
+        webhookEnabled = preference.webhookEnabled
+    }
+}
+
+public struct NotificationPreferenceUpdateResponse: Codable, Equatable, Sendable {
+    public let preference: NotificationPreference
+}
+
+public struct NotificationChannelPreviewRequest: Codable, Equatable, Sendable {
+    public let channel: NotificationChannel
+}
+
+public struct NotificationPreviewEvent: Codable, Equatable, Sendable {
+    public let eventType: NotificationEventType
+    public let title: String
+    public let body: String
+}
+
+public struct NotificationChannelPreview: Codable, Equatable, Sendable {
+    public let dryRun: Bool
+    public let channel: NotificationChannel
+    public let target: String?
+    public let subject: String
+    public let events: [NotificationPreviewEvent]
+}
+
+public struct NotificationChannelPreviewResponse: Codable, Equatable, Sendable {
+    public let configured: Bool
+    public let preview: NotificationChannelPreview
+}
+
+public enum LoanAssignmentKind: String, Codable, CaseIterable, Sendable {
+    case checkout
+    case reservation
+}
+
+public enum LoanAssignmentStatus: String, Codable, CaseIterable, Sendable {
+    case active
+    case returned
+    case cancelled
+}
+
+public enum LoanAssigneeType: String, Codable, CaseIterable, Sendable {
+    case user
+    case resource
+    case label
+}
+
+public struct LoanAssignee: Codable, Equatable, Sendable {
+    public let type: LoanAssigneeType
+    public let id: UUID?
+    public let label: String
+    public let detail: String?
+}
+
+public struct LoanStockUnit: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let code: String
+    public let status: String?
+}
+
+public struct LoanResourceSummary: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let sku: String?
+    public let status: String
+}
+
+public struct LoanAssignment: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let resourceId: UUID
+    public let stockUnitId: UUID?
+    public let kind: LoanAssignmentKind
+    public let status: LoanAssignmentStatus
+    public let stockApplied: Bool
+    public let overdue: Bool
+    public let quantity: Int
+    public let assignee: LoanAssignee
+    public let stockUnit: LoanStockUnit?
+    public let startsAt: Date
+    public let dueAt: Date?
+    public let completedAt: Date?
+    public let note: String
+    public let resource: LoanResourceSummary
+    public let trackingMode: StockTrackingMode
+}
+
+public struct LoanCapabilities: Codable, Equatable, Sendable {
+    public let canManage: Bool
+}
+
+public struct LoansResponse: Codable, Equatable, Sendable {
+    public let assignments: [LoanAssignment]
+    public let capabilities: LoanCapabilities
+}
+
+public enum AssignmentCompletionStatus: String, Codable, Sendable {
+    case returned
+    case cancelled
+}
+
+public struct AssignmentCompletionRequest: Codable, Equatable, Sendable {
+    public let status: AssignmentCompletionStatus
+
+    public init(status: AssignmentCompletionStatus) {
+        self.status = status
+    }
+}
+
+public enum ResourceAssignmentKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case checkout
+    case assignment
+    case reservation
+
+    public var id: Self { self }
+}
+
+public struct ResourceAssignment: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let resourceId: UUID
+    public let stockUnitId: UUID?
+    public let kind: ResourceAssignmentKind
+    public let status: LoanAssignmentStatus
+    public let stockApplied: Bool
+    public let overdue: Bool
+    public let quantity: Int
+    public let assignee: LoanAssignee
+    public let stockUnit: LoanStockUnit?
+    public let startsAt: Date
+    public let dueAt: Date?
+    public let completedAt: Date?
+    public let note: String
+}
+
+public struct AssignmentResourceSnapshot: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let quantity: Int
+}
+
+public struct ResourceLendingSettings: Codable, Equatable, Sendable {
+    public var enabled: Bool
+    public var approvalRequired: Bool
+    public var defaultDurationDays: Int
+    public var maxDurationDays: Int
+
+    public init(
+        enabled: Bool,
+        approvalRequired: Bool,
+        defaultDurationDays: Int,
+        maxDurationDays: Int
+    ) {
+        self.enabled = enabled
+        self.approvalRequired = approvalRequired
+        self.defaultDurationDays = defaultDurationDays
+        self.maxDurationDays = maxDurationDays
+    }
+}
+
+public struct AssignmentAvailability: Codable, Equatable, Sendable {
+    public let availableQuantity: Int
+    public let activeQuantity: Int
+    public let reservedQuantity: Int
+}
+
+public struct AssignmentRecipientUser: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let email: String
+}
+
+public struct AssignmentRecipients: Codable, Equatable, Sendable {
+    public let users: [AssignmentRecipientUser]
+}
+
+public struct AssignmentAvailableUnit: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let code: String
+    public let status: StockUnitStatus
+    public let location: String?
+}
+
+public struct ResourceAssignmentsResponse: Codable, Equatable, Sendable {
+    public let resource: AssignmentResourceSnapshot
+    public let trackingMode: StockTrackingMode
+    public let lending: ResourceLendingSettings
+    public let availability: AssignmentAvailability
+    public let recipients: AssignmentRecipients
+    public let availableUnits: [AssignmentAvailableUnit]
+    public let assignments: [ResourceAssignment]
+}
+
+public struct ResourceLendingSettingsResponse: Codable, Equatable, Sendable {
+    public let lending: ResourceLendingSettings
+}
+
+public enum AssignmentRecipientRequest: Encodable, Equatable, Sendable {
+    case user(UUID)
+    case resource(UUID)
+    case label(String)
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case userId
+        case resourceId
+        case label
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .user(let id):
+            try container.encode("user", forKey: .type)
+            try container.encode(id, forKey: .userId)
+        case .resource(let id):
+            try container.encode("resource", forKey: .type)
+            try container.encode(id, forKey: .resourceId)
+        case .label(let label):
+            try container.encode("label", forKey: .type)
+            try container.encode(
+                label.trimmingCharacters(in: .whitespacesAndNewlines),
+                forKey: .label
+            )
+        }
+    }
+}
+
+public struct ResourceAssignmentCreateRequest: Encodable, Equatable, Sendable {
+    public let kind: ResourceAssignmentKind
+    public let quantity: Int
+    public let stockUnitId: UUID?
+    public let recipient: AssignmentRecipientRequest
+    public let startsAt: Date?
+    public let dueAt: Date?
+    public let note: String?
+
+    public init(
+        kind: ResourceAssignmentKind,
+        quantity: Int,
+        stockUnitId: UUID? = nil,
+        recipient: AssignmentRecipientRequest,
+        startsAt: Date? = nil,
+        dueAt: Date? = nil,
+        note: String? = nil
+    ) {
+        self.kind = kind
+        self.quantity = quantity
+        self.stockUnitId = stockUnitId
+        self.recipient = recipient
+        self.startsAt = startsAt
+        self.dueAt = dueAt
+        let normalizedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.note = normalizedNote?.isEmpty == false ? normalizedNote : nil
+    }
+}
+
+public struct AssignmentActivationRequest: Encodable, Equatable, Sendable {
+    public let action = "checkout"
+    public let stockUnitId: UUID?
+    public let checkedOutAt: Date?
+    public let note: String?
+
+    public init(
+        stockUnitId: UUID? = nil,
+        checkedOutAt: Date? = nil,
+        note: String? = nil
+    ) {
+        self.stockUnitId = stockUnitId
+        self.checkedOutAt = checkedOutAt
+        let normalizedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.note = normalizedNote?.isEmpty == false ? normalizedNote : nil
+    }
+}
+
+public enum InternalRequestStatus: String, Codable, CaseIterable, Identifiable, Sendable {
+    case submitted
+    case approved
+    case rejected
+    case fulfilled
+    case cancelled
+
+    public var id: Self { self }
+}
+
+public enum InternalRequestAction: String, Codable, CaseIterable, Identifiable, Sendable {
+    case approve
+    case reject
+    case cancel
+    case fulfill
+
+    public var id: Self { self }
+}
+
+public struct InternalRequestRequester: Codable, Equatable, Sendable {
+    public let userId: UUID?
+    public let name: String
+    public let email: String?
+}
+
+public struct InternalRequestDelivery: Codable, Equatable, Sendable {
+    public let resourceId: UUID
+    public let name: String
+}
+
+public struct InternalRequestLineResource: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let sku: String?
+    public let status: String
+    public let currentQuantity: Int
+    public let trackingMode: StockTrackingMode
+}
+
+public struct InternalRequestLine: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let resource: InternalRequestLineResource
+    public let quantity: Int
+    public let note: String
+}
+
+public struct InternalRequestEvent: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let type: InternalRequestStatus
+    public let actor: String
+    public let note: String
+    public let occurredAt: Date
+}
+
+public struct InventoryInternalRequest: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let reference: String
+    public let status: InternalRequestStatus
+    public let requester: InternalRequestRequester
+    public let delivery: InternalRequestDelivery?
+    public let startsAt: Date
+    public let dueAt: Date
+    public let note: String
+    public let decisionNote: String
+    public let decidedBy: String?
+    public let decidedAt: Date?
+    public let fulfilledBy: String?
+    public let fulfilledAt: Date?
+    public let createdBy: String
+    public let createdAt: Date
+    public let updatedAt: Date
+    public let canCancel: Bool
+    public let lines: [InternalRequestLine]
+    public let events: [InternalRequestEvent]
+}
+
+public struct InternalRequestCapabilities: Codable, Equatable, Sendable {
+    public let canCreate: Bool
+    public let canManage: Bool
+}
+
+public struct InternalRequestsResponse: Codable, Equatable, Sendable {
+    public let requests: [InventoryInternalRequest]
+    public let capabilities: InternalRequestCapabilities
+}
+
+public struct InternalRequestResponse: Codable, Equatable, Sendable {
+    public let request: InventoryInternalRequest
+}
+
+public struct InternalRequestCreateLineRequest: Encodable, Equatable, Sendable {
+    public let resourceId: UUID
+    public let quantity: Int
+    public let note: String?
+
+    public init(resourceId: UUID, quantity: Int, note: String? = nil) {
+        self.resourceId = resourceId
+        self.quantity = quantity
+        let normalizedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.note = normalizedNote?.isEmpty == false ? normalizedNote : nil
+    }
+}
+
+public struct InternalRequestCreateRequest: Encodable, Equatable, Sendable {
+    public let deliveryResourceId: UUID?
+    public let startsAt: Date
+    public let dueAt: Date
+    public let note: String?
+    public let lines: [InternalRequestCreateLineRequest]
+
+    public init(
+        deliveryResourceId: UUID? = nil,
+        startsAt: Date,
+        dueAt: Date,
+        note: String? = nil,
+        lines: [InternalRequestCreateLineRequest]
+    ) {
+        self.deliveryResourceId = deliveryResourceId
+        self.startsAt = startsAt
+        self.dueAt = dueAt
+        let normalizedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.note = normalizedNote?.isEmpty == false ? normalizedNote : nil
+        self.lines = lines
+    }
+}
+
+public struct InternalRequestActionRequest: Encodable, Equatable, Sendable {
+    public let action: InternalRequestAction
+    public let note: String?
+
+    public init(action: InternalRequestAction, note: String? = nil) {
+        self.action = action
+        let normalizedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.note = normalizedNote?.isEmpty == false ? normalizedNote : nil
+    }
+}
+
 public struct InventoryResourceAccess: Codable, Equatable, Sendable {
     public let update: Bool
     public let delete: Bool

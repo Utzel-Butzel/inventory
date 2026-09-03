@@ -18,6 +18,7 @@ import {
   Share2,
   ShieldCheck,
   ShieldPlus,
+  ShoppingBag,
   UserRound,
   Users,
   Webhook,
@@ -146,6 +147,13 @@ const navigationGroups: Array<{
   {
     labelKey: "settings.groups.integrationsAdvanced",
     items: [
+      {
+        labelKey: "settings.items.woocommerce.label",
+        descriptionKey: "settings.items.woocommerce.description",
+        href: "/settings/woocommerce",
+        icon: ShoppingBag,
+        requiredPermission: "webhooks.manage",
+      },
       {
         labelKey: "settings.items.webhooks.label",
         descriptionKey: "settings.items.webhooks.description",

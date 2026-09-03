@@ -275,6 +275,7 @@ test("built-in roles have the intended default permission boundaries", () => {
 
   assert.deepEqual(builtinRolePermissions.viewer, [
     "inventory.read",
+    "contacts.read",
     "stock.read",
     "assignments.read",
     "counts.read",

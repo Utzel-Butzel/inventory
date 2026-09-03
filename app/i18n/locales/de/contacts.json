@@ -1,0 +1,95 @@
+{
+  "metadata": {
+    "title": "Kontakte",
+    "description": "Kunden und Lieferanten mit Inventar und Bestandsbewegungen verknüpfen."
+  },
+  "eyebrow": "Stammdaten",
+  "title": "Kontakte",
+  "description": "Kunden und Lieferanten gemeinsam verwalten und direkt mit Inventar sowie Bestandsbewegungen verbinden.",
+  "roles": {
+    "customer": "Kunde",
+    "supplier": "Lieferant"
+  },
+  "stats": {
+    "all": "Aktive Kontakte",
+    "customers": "Kunden",
+    "suppliers": "Lieferanten"
+  },
+  "actions": {
+    "new": "Kontakt anlegen",
+    "create": "Kontakt anlegen",
+    "save": "Änderungen speichern",
+    "cancel": "Abbrechen",
+    "close": "Formular schließen",
+    "editContact": "{{name}} bearbeiten",
+    "commentsContact": "Kommentare zu {{name}} öffnen",
+    "archiveContact": "{{name}} archivieren",
+    "removeInventory": "{{name}} entfernen"
+  },
+  "filters": {
+    "search": "Kontakte durchsuchen…",
+    "role": "Rolle filtern",
+    "all": "Alle Rollen"
+  },
+  "form": {
+    "createTitle": "Neuer Kontakt",
+    "editTitle": "Kontakt bearbeiten",
+    "description": "Ein Kontakt kann gleichzeitig Kunde und Lieferant sein.",
+    "addressTitle": "Adresse",
+    "inventoryTitle": "Zugeordnetes Inventar",
+    "inventoryDescription": "Verknüpfe Artikel, Geräte oder andere Einträge mit diesem Kontakt.",
+    "inventorySearch": "Inventar suchen…",
+    "searchingInventory": "Inventar wird gesucht…",
+    "assign": "Zuweisen",
+    "assigned": "Zugewiesen",
+    "noInventory": "Keine passenden Inventareinträge gefunden."
+  },
+  "fields": {
+    "name": "Name",
+    "company": "Unternehmen",
+    "roles": "Rollen",
+    "email": "E-Mail",
+    "phone": "Telefon",
+    "website": "Website",
+    "customerNumber": "Kundennummer",
+    "supplierNumber": "Lieferantennummer",
+    "taxId": "USt-IdNr. / Steuernummer",
+    "addressLine1": "Straße und Hausnummer",
+    "addressLine2": "Adresszusatz",
+    "postalCode": "Postleitzahl",
+    "city": "Ort",
+    "state": "Bundesland / Region",
+    "countryCode": "Ländercode",
+    "tags": "Tags",
+    "tagsPlaceholder": "B2B, Stammkunde, EU",
+    "notes": "Notizen"
+  },
+  "table": {
+    "contact": "Kontakt",
+    "roles": "Rollen",
+    "details": "Kontaktdaten",
+    "inventory": "Inventar",
+    "movements": "Bewegungen",
+    "actions": "Aktionen",
+    "none": "Nicht zugewiesen"
+  },
+  "empty": {
+    "title": "Noch keine Kontakte",
+    "description": "Lege den ersten Kunden oder Lieferanten an und ordne Inventar zu.",
+    "filteredTitle": "Keine Treffer",
+    "filteredDescription": "Passe Suche oder Rollenfilter an."
+  },
+  "archive": {
+    "confirm": "{{name}} archivieren? Historische Bestandsbewegungen bleiben verknüpft."
+  },
+  "notices": {
+    "created": "Kontakt wurde angelegt.",
+    "updated": "Kontakt wurde aktualisiert.",
+    "archived": "Kontakt wurde archiviert."
+  },
+  "errors": {
+    "load": "Kontakte konnten nicht geladen werden.",
+    "save": "Kontakt konnte nicht gespeichert werden.",
+    "archive": "Kontakt konnte nicht archiviert werden."
+  }
+}

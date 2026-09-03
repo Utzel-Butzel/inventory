@@ -19,6 +19,7 @@ import {
   Plus,
   Search,
   Settings,
+  UsersRound,
   Warehouse,
   X,
 } from "lucide-react";
@@ -124,6 +125,12 @@ const navigation: Array<{
     ],
   },
   {
+    labelKey: "navigation.contacts",
+    href: "/contacts",
+    icon: UsersRound,
+    permission: "contacts.read",
+  },
+  {
     labelKey: "navigation.requests",
     href: "/requests",
     icon: ClipboardList,
@@ -145,7 +152,7 @@ const navigation: Array<{
     labelKey: "navigation.loans",
     href: "/loans",
     icon: HandCoins,
-    permission: "assignments.read",
+    permission: "orders.read",
   },
   {
     labelKey: "navigation.locations",
@@ -179,6 +186,7 @@ const pageNames: Record<string, string> = {
   dashboard: "navigation.statistics",
   inventory: "navigation.inventory",
   favorites: "navigation.favorites",
+  contacts: "navigation.contacts",
   stock: "navigation.stock",
   map: "navigation.map",
   spaces: "navigation.rooms",
@@ -208,6 +216,7 @@ const settingsPageNames: Record<string, string> = {
   sharing: "settings.items.sharing.label",
   notifications: "settings.items.notifications.label",
   "action-flows": "settings.items.actionFlows.label",
+  woocommerce: "settings.items.woocommerce.label",
   webhooks: "settings.items.webhooks.label",
   api: "settings.items.api.label",
 };

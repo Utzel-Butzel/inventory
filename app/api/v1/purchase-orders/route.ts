@@ -43,6 +43,7 @@ const lineSchema = z
 const orderCreateSchema = z
   .object({
     reference: z.string().trim().max(160).nullable().optional(),
+    contactId: z.string().uuid().nullable().optional(),
     supplier: z.string().trim().max(240).optional(),
     status: z.enum(["draft", "ordered"]).optional(),
     orderedAt: z.string().datetime().optional(),

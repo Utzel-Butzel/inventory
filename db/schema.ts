@@ -347,6 +347,44 @@ export const purchaseOrderStatuses = [
 ] as const;
 export type PurchaseOrderStatus = (typeof purchaseOrderStatuses)[number];
 
+export const orderTypes = ["purchase", "sale", "loan"] as const;
+export type OrderType = (typeof orderTypes)[number];
+
+export const salesOrderStatuses = [
+  "draft",
+  "confirmed",
+  "partially-fulfilled",
+  "fulfilled",
+  "cancelled",
+] as const;
+export type SalesOrderStatus = (typeof salesOrderStatuses)[number];
+
+export const loanOrderStatuses = [
+  "draft",
+  "reserved",
+  "partially-issued",
+  "issued",
+  "partially-returned",
+  "returned",
+  "overdue",
+  "cancelled",
+] as const;
+export type LoanOrderStatus = (typeof loanOrderStatuses)[number];
+
+export const orderStatuses = [
+  ...purchaseOrderStatuses,
+  "confirmed",
+  "partially-fulfilled",
+  "fulfilled",
+  "reserved",
+  "partially-issued",
+  "issued",
+  "partially-returned",
+  "returned",
+  "overdue",
+] as const;
+export type OrderStatus = (typeof orderStatuses)[number];
+
 export const roomScanStatuses = ["active", "superseded"] as const;
 export type RoomScanStatus = (typeof roomScanStatuses)[number];
 
@@ -613,6 +651,148 @@ export const resources = pgTable(
     check(
       "resources_custom_fields_object",
       sql`jsonb_typeof(${table.customFields}) = 'object'`,
+    ),
+  ],
+);
+
+export const contactRoles = ["customer", "supplier"] as const;
+export type ContactRole = (typeof contactRoles)[number];
+
+export const contacts = pgTable(
+  "contacts",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 240 }).notNull(),
+    company: varchar("company", { length: 240 }),
+    roles: text("roles")
+      .array()
+      .$type<ContactRole[]>()
+      .notNull(),
+    email: varchar("email", { length: 320 }),
+    phone: varchar("phone", { length: 80 }),
+    website: varchar("website", { length: 2_048 }),
+    customerNumber: varchar("customer_number", { length: 80 }),
+    supplierNumber: varchar("supplier_number", { length: 80 }),
+    taxId: varchar("tax_id", { length: 80 }),
+    addressLine1: varchar("address_line_1", { length: 240 }),
+    addressLine2: varchar("address_line_2", { length: 240 }),
+    postalCode: varchar("postal_code", { length: 32 }),
+    city: varchar("city", { length: 120 }),
+    state: varchar("state", { length: 120 }),
+    countryCode: varchar("country_code", { length: 2 }),
+    tags: text("tags").array().notNull().default([]),
+    notes: text("notes").notNull().default(""),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("contacts_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    index("contacts_organization_name_idx").on(
+      table.organizationId,
+      table.name,
+    ),
+    index("contacts_organization_archived_idx").on(
+      table.organizationId,
+      table.archivedAt,
+    ),
+    check("contacts_name_nonempty", sql`length(btrim(${table.name})) > 0`),
+    check(
+      "contacts_roles_check",
+      sql`cardinality(${table.roles}) > 0 and ${table.roles} <@ array['customer', 'supplier']::text[]`,
+    ),
+    check(
+      "contacts_country_code_check",
+      sql`${table.countryCode} is null or ${table.countryCode} ~ '^[A-Z]{2}$'`,
+    ),
+  ],
+);
+
+export const contactResources = pgTable(
+  "contact_resources",
+  {
+    organizationId: organizationIdColumn(),
+    contactId: uuid("contact_id").notNull(),
+    resourceId: uuid("resource_id").notNull(),
+    createdBy: varchar("created_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "contact_resources_organization_contact_resource_pk",
+      columns: [table.organizationId, table.contactId, table.resourceId],
+    }),
+    foreignKey({
+      name: "contact_resources_organization_contact_fk",
+      columns: [table.organizationId, table.contactId],
+      foreignColumns: [contacts.organizationId, contacts.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "contact_resources_organization_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("cascade"),
+    index("contact_resources_resource_idx").on(
+      table.organizationId,
+      table.resourceId,
+    ),
+  ],
+);
+
+export const contactComments = pgTable(
+  "contact_comments",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    contactId: uuid("contact_id").notNull(),
+    body: text("body").notNull(),
+    authorName: varchar("author_name", { length: 160 }).notNull(),
+    authorIdentityHash: varchar("author_identity_hash", {
+      length: 64,
+    }).notNull(),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "contact_comments_organization_contact_fk",
+      columns: [table.organizationId, table.contactId],
+      foreignColumns: [contacts.organizationId, contacts.id],
+    }).onDelete("cascade"),
+    index("contact_comments_contact_created_idx").on(
+      table.organizationId,
+      table.contactId,
+      table.createdAt,
+    ),
+    check(
+      "contact_comments_body_length_check",
+      sql`length(btrim(${table.body})) between 1 and 10000`,
+    ),
+    check(
+      "contact_comments_author_name_nonempty",
+      sql`length(btrim(${table.authorName})) > 0`,
+    ),
+    check(
+      "contact_comments_author_identity_hash_check",
+      sql`${table.authorIdentityHash} ~ '^[0-9a-f]{64}$'`,
     ),
   ],
 );
@@ -2165,15 +2345,20 @@ export const assemblyBuilds = pgTable(
   ],
 );
 
-export const purchaseOrders = pgTable(
-  "purchase_orders",
+export const orders = pgTable(
+  "orders",
   {
     organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
+    type: varchar("type", { length: 16 })
+      .$type<OrderType>()
+      .notNull()
+      .default("purchase"),
+    contactId: uuid("contact_id"),
+    contactName: varchar("contact_name", { length: 240 }).notNull(),
     reference: varchar("reference", { length: 160 }),
-    supplier: varchar("supplier", { length: 240 }).notNull(),
     status: varchar("status", { length: 32 })
-      .$type<PurchaseOrderStatus>()
+      .$type<OrderStatus>()
       .notNull()
       .default("draft"),
     orderedAt: timestamp("ordered_at", { withTimezone: true })
@@ -2196,32 +2381,48 @@ export const purchaseOrders = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("purchase_orders_idempotency_key_unique").on(
+    uniqueIndex("orders_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    uniqueIndex("orders_idempotency_key_unique").on(
       table.organizationId,
       table.idempotencyKey,
     ),
-    index("purchase_orders_status_idx").on(table.status),
-    index("purchase_orders_expected_at_idx").on(table.expectedAt),
-    check(
-      "purchase_orders_status_check",
-      sql`${table.status} in ('draft', 'ordered', 'partially-received', 'received', 'cancelled')`,
+    foreignKey({
+      name: "orders_organization_contact_fk",
+      columns: [table.organizationId, table.contactId],
+      foreignColumns: [contacts.organizationId, contacts.id],
+    }).onDelete("restrict"),
+    index("orders_type_status_idx").on(
+      table.organizationId,
+      table.type,
+      table.status,
     ),
+    index("orders_expected_at_idx").on(table.organizationId, table.expectedAt),
+    index("orders_contact_id_idx").on(table.organizationId, table.contactId),
+    check(
+      "orders_type_status_check",
+      sql`(${table.type} = 'purchase' and ${table.status} in ('draft', 'ordered', 'partially-received', 'received', 'cancelled')) or (${table.type} = 'sale' and ${table.status} in ('draft', 'confirmed', 'partially-fulfilled', 'fulfilled', 'cancelled')) or (${table.type} = 'loan' and ${table.status} in ('draft', 'reserved', 'partially-issued', 'issued', 'partially-returned', 'returned', 'overdue', 'cancelled'))`,
+    ),
+    check("orders_contact_name_nonempty", sql`length(btrim(${table.contactName})) > 0`),
   ],
 );
 
-export const purchaseOrderLines = pgTable(
-  "purchase_order_lines",
+export const orderLines = pgTable(
+  "order_lines",
   {
     organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
-    purchaseOrderId: uuid("purchase_order_id")
+    orderId: uuid("order_id")
       .notNull()
-      .references(() => purchaseOrders.id, { onDelete: "cascade" }),
+      .references(() => orders.id, { onDelete: "cascade" }),
     resourceId: uuid("resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "restrict" }),
-    orderedQuantity: integer("ordered_quantity").notNull(),
-    receivedQuantity: integer("received_quantity").notNull().default(0),
+    orderedQuantity: integer("quantity").notNull(),
+    fulfilledQuantity: integer("fulfilled_quantity").notNull().default(0),
+    returnedQuantity: integer("returned_quantity").notNull().default(0),
     purchaseUnitName: varchar("purchase_unit_name", { length: 80 }),
     purchaseUnitFactor: integer("purchase_unit_factor").notNull().default(1),
     unitPriceCents: integer("unit_price_cents"),
@@ -2236,49 +2437,56 @@ export const purchaseOrderLines = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("purchase_order_lines_order_resource_unique").on(
-      table.purchaseOrderId,
+    uniqueIndex("order_lines_order_resource_unique").on(
+      table.orderId,
       table.resourceId,
     ),
-    index("purchase_order_lines_purchase_order_id_idx").on(
-      table.purchaseOrderId,
-    ),
-    index("purchase_order_lines_resource_id_idx").on(table.resourceId),
+    index("order_lines_order_id_idx").on(table.orderId),
+    index("order_lines_resource_id_idx").on(table.resourceId),
     check(
-      "purchase_order_lines_ordered_quantity_positive",
+      "order_lines_quantity_positive",
       sql`${table.orderedQuantity} > 0`,
     ),
     check(
-      "purchase_order_lines_received_quantity_nonnegative",
-      sql`${table.receivedQuantity} >= 0`,
+      "order_lines_fulfilled_quantity_nonnegative",
+      sql`${table.fulfilledQuantity} >= 0`,
     ),
     check(
-      "purchase_order_lines_received_not_above_ordered",
-      sql`${table.receivedQuantity} <= ${table.orderedQuantity}`,
+      "order_lines_fulfilled_not_above_quantity",
+      sql`${table.fulfilledQuantity} <= ${table.orderedQuantity}`,
     ),
     check(
-      "purchase_order_lines_purchase_unit_valid",
+      "order_lines_returned_quantity_valid",
+      sql`${table.returnedQuantity} >= 0 and ${table.returnedQuantity} <= ${table.fulfilledQuantity}`,
+    ),
+    check(
+      "order_lines_purchase_unit_valid",
       sql`(${table.purchaseUnitName} is null and ${table.purchaseUnitFactor} = 1) or (${table.purchaseUnitName} is not null and ${table.purchaseUnitFactor} > 0)`,
     ),
     check(
-      "purchase_order_lines_unit_price_nonnegative",
+      "order_lines_unit_price_nonnegative",
       sql`${table.unitPriceCents} is null or ${table.unitPriceCents} >= 0`,
     ),
     check(
-      "purchase_order_lines_price_fields_together",
+      "order_lines_price_fields_together",
       sql`(${table.unitPriceCents} is null and ${table.priceCurrency} is null) or (${table.unitPriceCents} is not null and ${table.priceCurrency} ~ '^[A-Z]{3}$')`,
     ),
   ],
 );
+
+// Compatibility aliases keep the established purchase-order service and public
+// route names stable while all order types share the same physical tables.
+export const purchaseOrders = orders;
+export const purchaseOrderLines = orderLines;
 
 export const purchaseReceipts = pgTable(
   "purchase_receipts",
   {
     organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
-    purchaseOrderLineId: uuid("purchase_order_line_id")
+    orderLineId: uuid("order_line_id")
       .notNull()
-      .references(() => purchaseOrderLines.id, { onDelete: "restrict" }),
+      .references(() => orderLines.id, { onDelete: "restrict" }),
     quantity: integer("quantity").notNull(),
     totalPriceCents: integer("total_price_cents"),
     priceCurrency: varchar("price_currency", { length: 3 }),
@@ -2303,11 +2511,9 @@ export const purchaseReceipts = pgTable(
       table.organizationId,
       table.idempotencyKey,
     ),
-    index("purchase_receipts_purchase_order_line_id_idx").on(
-      table.purchaseOrderLineId,
-    ),
+    index("purchase_receipts_order_line_id_idx").on(table.orderLineId),
     index("purchase_receipts_line_occurred_idx").on(
-      table.purchaseOrderLineId,
+      table.orderLineId,
       table.occurredAt,
     ),
     check("purchase_receipts_quantity_positive", sql`${table.quantity} > 0`),
@@ -2592,6 +2798,10 @@ export const stockMovements = pgTable(
       () => purchaseReceipts.id,
       { onDelete: "set null" },
     ),
+    orderLineId: uuid("order_line_id").references(() => orderLines.id, {
+      onDelete: "set null",
+    }),
+    contactId: uuid("contact_id"),
     delta: integer("delta").notNull(),
     quantity: integer("quantity").notNull().default(0),
     totalPriceCents: integer("total_price_cents"),
@@ -2628,6 +2838,11 @@ export const stockMovements = pgTable(
       columns: [table.organizationId, table.resourceId],
       foreignColumns: [resources.organizationId, resources.id],
     }).onDelete("cascade"),
+    foreignKey({
+      name: "stock_movements_organization_contact_fk",
+      columns: [table.organizationId, table.contactId],
+      foreignColumns: [contacts.organizationId, contacts.id],
+    }),
     index("stock_movements_resource_id_idx").on(table.resourceId),
     index("stock_movements_variant_id_idx").on(table.variantId),
     foreignKey({
@@ -2643,6 +2858,11 @@ export const stockMovements = pgTable(
     index("stock_movements_assembly_build_id_idx").on(table.assemblyBuildId),
     index("stock_movements_purchase_receipt_id_idx").on(
       table.purchaseReceiptId,
+    ),
+    index("stock_movements_order_line_id_idx").on(table.orderLineId),
+    index("stock_movements_contact_id_idx").on(
+      table.organizationId,
+      table.contactId,
     ),
     index("stock_movements_from_location_idx").on(table.fromLocationResourceId),
     index("stock_movements_to_location_idx").on(table.toLocationResourceId),
@@ -3903,6 +4123,260 @@ export const webhookDeliveries = pgTable(
   ],
 );
 
+export const wooCommerceConnections = pgTable(
+  "woocommerce_connections",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    storeUrl: varchar("store_url", { length: 2_048 }).notNull(),
+    consumerKeyHint: varchar("consumer_key_hint", { length: 32 }).notNull(),
+    encryptedConsumerKey: text("encrypted_consumer_key").notNull(),
+    encryptedConsumerSecret: text("encrypted_consumer_secret").notNull(),
+    syncEnabled: boolean("sync_enabled").notNull().default(false),
+    encryptedWebhookSecret: text("encrypted_webhook_secret"),
+    orderCreatedWebhookId: bigint("order_created_webhook_id", {
+      mode: "number",
+    }),
+    orderUpdatedWebhookId: bigint("order_updated_webhook_id", {
+      mode: "number",
+    }),
+    status: varchar("status", { length: 16 })
+      .$type<"connected" | "error">()
+      .notNull()
+      .default("connected"),
+    lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    lastWebhookAt: timestamp("last_webhook_at", { withTimezone: true }),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    lastSyncError: text("last_sync_error"),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("woocommerce_connections_organization_unique").on(
+      table.organizationId,
+    ),
+    uniqueIndex("woocommerce_connections_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    index("woocommerce_connections_status_idx").on(
+      table.status,
+      table.lastCheckedAt,
+    ),
+    check(
+      "woocommerce_connections_status_check",
+      sql`${table.status} in ('connected', 'error')`,
+    ),
+    check(
+      "woocommerce_connections_sync_webhooks_check",
+      sql`not ${table.syncEnabled} or (${table.encryptedWebhookSecret} is not null and ${table.orderCreatedWebhookId} is not null and ${table.orderUpdatedWebhookId} is not null)`,
+    ),
+  ],
+);
+
+export const wooCommerceOrderSyncs = pgTable(
+  "woocommerce_order_syncs",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    connectionId: uuid("connection_id").notNull(),
+    orderId: bigint("order_id", { mode: "number" }).notNull(),
+    orderNumber: varchar("order_number", { length: 80 }).notNull(),
+    orderStatus: varchar("order_status", { length: 80 }).notNull(),
+    status: varchar("status", { length: 16 })
+      .$type<"succeeded" | "partial" | "failed">()
+      .notNull()
+      .default("succeeded"),
+    totalLines: integer("total_lines").notNull().default(0),
+    syncedLines: integer("synced_lines").notNull().default(0),
+    lastDeliveryId: varchar("last_delivery_id", { length: 160 }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "woocommerce_order_syncs_connection_fk",
+      columns: [table.organizationId, table.connectionId],
+      foreignColumns: [
+        wooCommerceConnections.organizationId,
+        wooCommerceConnections.id,
+      ],
+    }).onDelete("cascade"),
+    uniqueIndex("woocommerce_order_syncs_tenant_order_unique").on(
+      table.organizationId,
+      table.connectionId,
+      table.orderId,
+    ),
+    index("woocommerce_order_syncs_connection_updated_idx").on(
+      table.organizationId,
+      table.connectionId,
+      table.updatedAt,
+    ),
+    index("woocommerce_order_syncs_issue_idx").on(
+      table.organizationId,
+      table.connectionId,
+      table.status,
+    ).where(sql`${table.status} <> 'succeeded'`),
+    check(
+      "woocommerce_order_syncs_status_check",
+      sql`${table.status} in ('succeeded', 'partial', 'failed')`,
+    ),
+    check(
+      "woocommerce_order_syncs_counts_check",
+      sql`${table.totalLines} >= 0 and ${table.syncedLines} >= 0 and ${table.syncedLines} <= ${table.totalLines}`,
+    ),
+    check(
+      "woocommerce_order_syncs_order_positive",
+      sql`${table.orderId} > 0`,
+    ),
+  ],
+);
+
+export const wooCommerceOrderLineSyncs = pgTable(
+  "woocommerce_order_line_syncs",
+  {
+    organizationId: organizationIdColumn(),
+    connectionId: uuid("connection_id").notNull(),
+    orderId: bigint("order_id", { mode: "number" }).notNull(),
+    lineItemId: bigint("line_item_id", { mode: "number" }).notNull(),
+    resourceId: uuid("resource_id"),
+    variantId: uuid("variant_id"),
+    sku: varchar("sku", { length: 80 }).notNull().default(""),
+    orderedQuantity: integer("ordered_quantity").notNull().default(0),
+    refundedQuantity: integer("refunded_quantity").notNull().default(0),
+    appliedQuantity: integer("applied_quantity").notNull().default(0),
+    revision: integer("revision").notNull().default(0),
+    status: varchar("status", { length: 16 })
+      .$type<"synced" | "unmapped" | "error">()
+      .notNull()
+      .default("synced"),
+    lastMovementId: uuid("last_movement_id").references(
+      () => stockMovements.id,
+      { onDelete: "set null" },
+    ),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "woocommerce_order_line_syncs_pk",
+      columns: [
+        table.organizationId,
+        table.connectionId,
+        table.orderId,
+        table.lineItemId,
+      ],
+    }),
+    foreignKey({
+      name: "woocommerce_order_line_syncs_order_fk",
+      columns: [table.organizationId, table.connectionId, table.orderId],
+      foreignColumns: [
+        wooCommerceOrderSyncs.organizationId,
+        wooCommerceOrderSyncs.connectionId,
+        wooCommerceOrderSyncs.orderId,
+      ],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "woocommerce_order_line_syncs_resource_fk",
+      columns: [table.organizationId, table.resourceId],
+      foreignColumns: [resources.organizationId, resources.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "woocommerce_order_line_syncs_variant_fk",
+      columns: [table.variantId, table.resourceId],
+      foreignColumns: [resourceVariants.id, resourceVariants.resourceId],
+    }).onDelete("restrict"),
+    index("woocommerce_order_line_syncs_resource_idx").on(
+      table.organizationId,
+      table.resourceId,
+    ),
+    index("woocommerce_order_line_syncs_issue_idx").on(
+      table.organizationId,
+      table.connectionId,
+      table.status,
+    ).where(sql`${table.status} <> 'synced'`),
+    check(
+      "woocommerce_order_line_syncs_status_check",
+      sql`${table.status} in ('synced', 'unmapped', 'error')`,
+    ),
+    check(
+      "woocommerce_order_line_syncs_quantities_check",
+      sql`${table.orderedQuantity} >= 0 and ${table.refundedQuantity} >= 0 and ${table.appliedQuantity} >= 0 and ${table.revision} >= 0`,
+    ),
+    check(
+      "woocommerce_order_line_syncs_mapping_check",
+      sql`(${table.resourceId} is null and ${table.variantId} is null) or ${table.resourceId} is not null`,
+    ),
+  ],
+);
+
+export const wooCommerceWebhookDeliveries = pgTable(
+  "woocommerce_webhook_deliveries",
+  {
+    organizationId: organizationIdColumn(),
+    connectionId: uuid("connection_id").notNull(),
+    deliveryId: varchar("delivery_id", { length: 160 }).notNull(),
+    webhookId: bigint("webhook_id", { mode: "number" }),
+    topic: varchar("topic", { length: 80 }).notNull(),
+    payloadSha256: varchar("payload_sha256", { length: 64 }).notNull(),
+    orderId: bigint("order_id", { mode: "number" }),
+    status: varchar("status", { length: 16 })
+      .$type<"processing" | "succeeded" | "failed">()
+      .notNull()
+      .default("processing"),
+    error: text("error"),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (table) => [
+    primaryKey({
+      name: "woocommerce_webhook_deliveries_pk",
+      columns: [table.organizationId, table.connectionId, table.deliveryId],
+    }),
+    foreignKey({
+      name: "woocommerce_webhook_deliveries_connection_fk",
+      columns: [table.organizationId, table.connectionId],
+      foreignColumns: [
+        wooCommerceConnections.organizationId,
+        wooCommerceConnections.id,
+      ],
+    }).onDelete("cascade"),
+    index("woocommerce_webhook_deliveries_received_idx").on(
+      table.organizationId,
+      table.connectionId,
+      table.receivedAt,
+    ),
+    check(
+      "woocommerce_webhook_deliveries_status_check",
+      sql`${table.status} in ('processing', 'succeeded', 'failed')`,
+    ),
+    check(
+      "woocommerce_webhook_deliveries_payload_hash_check",
+      sql`${table.payloadSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+  ],
+);
+
 export const apiTokens = pgTable(
   "api_tokens",
   {
@@ -3937,6 +4411,10 @@ export const apiTokens = pgTable(
 
 export type ResourceRecord = typeof resources.$inferSelect;
 export type NewResource = typeof resources.$inferInsert;
+export type ContactRecord = typeof contacts.$inferSelect;
+export type NewContact = typeof contacts.$inferInsert;
+export type ContactResourceRecord = typeof contactResources.$inferSelect;
+export type ContactCommentRecord = typeof contactComments.$inferSelect;
 export type ResourceSlugRecord = typeof resourceSlugs.$inferSelect;
 export type ResourceFavoriteRecord = typeof resourceFavorites.$inferSelect;
 export type ResourceCommentRecord = typeof resourceComments.$inferSelect;
@@ -3967,6 +4445,14 @@ export type NotificationPushSubscriptionRecord =
 export type WebhookEndpointRecord = typeof webhookEndpoints.$inferSelect;
 export type WebhookEventRecord = typeof webhookEvents.$inferSelect;
 export type WebhookDeliveryRecord = typeof webhookDeliveries.$inferSelect;
+export type WooCommerceConnectionRecord =
+  typeof wooCommerceConnections.$inferSelect;
+export type WooCommerceOrderSyncRecord =
+  typeof wooCommerceOrderSyncs.$inferSelect;
+export type WooCommerceOrderLineSyncRecord =
+  typeof wooCommerceOrderLineSyncs.$inferSelect;
+export type WooCommerceWebhookDeliveryRecord =
+  typeof wooCommerceWebhookDeliveries.$inferSelect;
 export type StockSettingsRecord = typeof stockSettings.$inferSelect;
 export type ResourceLendingSettingsRecord =
   typeof resourceLendingSettings.$inferSelect;
@@ -4000,8 +4486,12 @@ export type ResourceOptionSelectionRecord =
 export type AssemblyBuildRecord = typeof assemblyBuilds.$inferSelect;
 export type AssemblyBuildComponentRecord =
   typeof assemblyBuildComponents.$inferSelect;
-export type PurchaseOrderRecord = typeof purchaseOrders.$inferSelect;
-export type PurchaseOrderLineRecord = typeof purchaseOrderLines.$inferSelect;
+export type OrderRecord = typeof orders.$inferSelect;
+export type NewOrder = typeof orders.$inferInsert;
+export type OrderLineRecord = typeof orderLines.$inferSelect;
+export type NewOrderLine = typeof orderLines.$inferInsert;
+export type PurchaseOrderRecord = OrderRecord;
+export type PurchaseOrderLineRecord = OrderLineRecord;
 export type PurchaseReceiptRecord = typeof purchaseReceipts.$inferSelect;
 export type StockScanWorkflowRecord = typeof stockScanWorkflows.$inferSelect;
 export type StockScanExecutionRecord = typeof stockScanExecutions.$inferSelect;

@@ -8,6 +8,7 @@ struct InventoryListView: View {
     @State private var resources: [InventoryResource] = []
     @State private var typeFilter: InventoryResourceType?
     @State private var statusFilter: InventoryResourceStatus?
+    @State private var favoritesOnly = false
     @State private var page = 1
     @State private var pages = 1
     @State private var total = 0
@@ -21,6 +22,8 @@ struct InventoryListView: View {
     @State private var resourcePendingDeletion: InventoryResource?
     @State private var deletingResourceID: UUID?
     @State private var deletionErrorMessage: String?
+    @State private var updatingFavoriteIDs: Set<UUID> = []
+    @State private var favoriteErrorMessage: String?
 
     init(
         query: Binding<String>,
@@ -176,6 +179,17 @@ struct InventoryListView: View {
             } message: {
                 Text(deletionErrorMessage ?? "Unbekannter Fehler")
             }
+            .alert(
+                "Favorit konnte nicht aktualisiert werden",
+                isPresented: Binding(
+                    get: { favoriteErrorMessage != nil },
+                    set: { if !$0 { favoriteErrorMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) { favoriteErrorMessage = nil }
+            } message: {
+                Text(favoriteErrorMessage ?? "Unbekannter Fehler")
+            }
         }
     }
 
@@ -241,11 +255,14 @@ struct InventoryListView: View {
                 }
             }
 
+            Toggle("Nur Favoriten", isOn: $favoritesOnly)
+
             if hasActiveFilters {
                 Divider()
                 Button("Filter zurücksetzen", systemImage: "xmark.circle") {
                     typeFilter = nil
                     statusFilter = nil
+                    favoritesOnly = false
                 }
             }
         } label: {
@@ -261,7 +278,9 @@ struct InventoryListView: View {
 
     private func inventoryListRow(_ resource: InventoryResource) -> some View {
         NavigationLink {
-            ResourceDetailView(resource: resource)
+            ResourceDetailView(resource: resource) { resourceID, favorite in
+                updateFavoriteState(resourceID: resourceID, favorite: favorite)
+            }
         } label: {
             resourceRow(resource)
         }
@@ -277,6 +296,18 @@ struct InventoryListView: View {
                 }
                 .disabled(deletingResourceID != nil)
             }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                toggleFavorite(resource)
+            } label: {
+                Label(
+                    resource.isFavorite == true ? "Favorit entfernen" : "Als Favorit markieren",
+                    systemImage: resource.isFavorite == true ? "star.slash" : "star"
+                )
+            }
+            .tint(resource.isFavorite == true ? .gray : .yellow)
+            .disabled(updatingFavoriteIDs.contains(resource.id))
         }
     }
 
@@ -297,7 +328,15 @@ struct InventoryListView: View {
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(resource.name).font(.headline).lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(resource.name).font(.headline).lineLimit(2)
+                    if resource.isFavorite == true {
+                        Image(systemName: "star.fill")
+                            .font(.caption)
+                            .foregroundStyle(.yellow)
+                            .accessibilityLabel("Favorit")
+                    }
+                }
                 HStack(spacing: 5) {
                     Text(resource.type.localizedName)
                     if let location = resource.location, !location.isEmpty {
@@ -320,7 +359,7 @@ struct InventoryListView: View {
     }
 
     private var hasActiveFilters: Bool {
-        typeFilter != nil || statusFilter != nil
+        typeFilter != nil || statusFilter != nil || favoritesOnly
     }
 
     private var hasActiveSearchOrFilters: Bool {
@@ -329,7 +368,11 @@ struct InventoryListView: View {
 
     private var filterAccessibilityValue: String {
         guard hasActiveFilters else { return "Keine Filter aktiv" }
-        return [typeFilter?.localizedName, statusFilter?.localizedName]
+        return [
+            typeFilter?.localizedName,
+            statusFilter?.localizedName,
+            favoritesOnly ? "Nur Favoriten" : nil,
+        ]
             .compactMap { $0 }
             .joined(separator: ", ")
     }
@@ -342,6 +385,7 @@ struct InventoryListView: View {
         query = ""
         typeFilter = nil
         statusFilter = nil
+        favoritesOnly = false
     }
 
     private var searchKey: SearchKey {
@@ -349,6 +393,7 @@ struct InventoryListView: View {
             query: query,
             type: typeFilter,
             status: statusFilter,
+            favoritesOnly: favoritesOnly,
             contextIdentifier: state.client?.contextIdentifier
         )
     }
@@ -370,6 +415,7 @@ struct InventoryListView: View {
                 query: query,
                 type: typeFilter,
                 status: statusFilter,
+                favoritesOnly: favoritesOnly,
                 page: reset ? 1 : page,
                 pageSize: 40
             )
@@ -419,6 +465,43 @@ struct InventoryListView: View {
             deletionErrorMessage = error.localizedDescription
         }
     }
+
+    private func toggleFavorite(_ resource: InventoryResource) {
+        guard let client = state.client,
+              !updatingFavoriteIDs.contains(resource.id) else { return }
+        updatingFavoriteIDs.insert(resource.id)
+        let desiredFavorite = resource.isFavorite != true
+        Task {
+            defer { updatingFavoriteIDs.remove(resource.id) }
+            do {
+                let response = try await client.setResourceFavorite(
+                    resourceID: resource.id,
+                    favorite: desiredFavorite
+                )
+                withAnimation {
+                    updateFavoriteState(
+                        resourceID: resource.id,
+                        favorite: response.favorite
+                    )
+                }
+                favoriteErrorMessage = nil
+            } catch {
+                favoriteErrorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func updateFavoriteState(resourceID: UUID, favorite: Bool) {
+        guard let index = resources.firstIndex(where: { $0.id == resourceID }) else { return }
+        if favoritesOnly && !favorite {
+            resources.remove(at: index)
+            total = max(0, total - 1)
+            pages = max(1, (total + 39) / 40)
+            page = min(page, pages)
+        } else {
+            resources[index].isFavorite = favorite
+        }
+    }
 }
 
 private enum InventoryCreationSheet: Identifiable {
@@ -437,5 +520,6 @@ private struct SearchKey: Hashable {
     let query: String
     let type: InventoryResourceType?
     let status: InventoryResourceStatus?
+    let favoritesOnly: Bool
     let contextIdentifier: String?
 }

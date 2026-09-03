@@ -64,6 +64,11 @@
       "metaDescription": "Configure quiet inventory notifications and digests.",
       "description": "Choose attention events, thresholds, digest timing, and optional external delivery channels. The in-app inbox is always available."
     },
+    "woocommerce": {
+      "title": "WooCommerce",
+      "metaDescription": "Connect this inventory workspace to a WooCommerce store.",
+      "description": "Securely connect a WooCommerce store with its REST API Consumer Key and Consumer Secret, then verify the connection."
+    },
     "webhooks": {
       "title": "Webhooks",
       "metaDescription": "Connect inventory events to external systems with signed webhooks.",
@@ -361,6 +366,111 @@
     },
     "unsaved": "Unsaved changes",
     "savedState": "All changes saved"
+  },
+  "woocommerce": {
+    "loading": "Loading WooCommerce connection",
+    "connection": {
+      "title": "WooCommerce store",
+      "consumerKey": "Consumer Key",
+      "lastChecked": "Last checked",
+      "lastSuccess": "Last successful connection",
+      "never": "Never"
+    },
+    "status": {
+      "connected": "Connected",
+      "error": "Connection problem"
+    },
+    "stockSync": {
+      "title": "Order stock sync",
+      "enabled": "Active",
+      "disabled": "Inactive",
+      "description": "WooCommerce orders reduce Inventory stock by exact SKU. Refunds, cancellations, and failed orders restore the previously booked quantity.",
+      "enable": "Enable stock sync",
+      "disable": "Disable sync",
+      "orders": "Orders processed",
+      "issues": "Orders with issues",
+      "lastWebhook": "Last webhook",
+      "lastSync": "Last stock sync",
+      "skuRule": "Mapping: the WooCommerce line SKU must exactly match an Inventory item SKU or variant SKU. Only bulk-tracked stock can be booked automatically.",
+      "statusRule": "Stock is issued for on-hold, processing, and completed orders. Refunds, cancelled, failed, pending, and refunded states are reconciled with compensating returns.",
+      "manualTitle": "Reconcile an order",
+      "manualDescription": "Enter a WooCommerce order ID to load its current order and refund state again, or retry every order with unresolved lines.",
+      "orderId": "WooCommerce order ID",
+      "orderIdPlaceholder": "WooCommerce order ID",
+      "syncOrder": "Sync order",
+      "retryIssues": "Retry issues",
+      "recentTitle": "Recent order syncs",
+      "lineProgress": "{{synced}}/{{total}} lines",
+      "missingSku": "Missing SKU",
+      "syncStatus": {
+        "succeeded": "Synced",
+        "partial": "Partially synced",
+        "failed": "Needs attention"
+      }
+    },
+    "form": {
+      "connectTitle": "Connect WooCommerce",
+      "replaceTitle": "Replace WooCommerce credentials",
+      "description": "The connection is verified before any credentials are saved.",
+      "replacementWarning": "Replacing credentials disables order stock sync and clears its reconciliation history. Enable sync again after saving.",
+      "storeUrl": "Store URL",
+      "storeUrlPlaceholder": "https://shop.example.com",
+      "storeUrlHint": "Enter the public HTTPS root URL of the WordPress installation.",
+      "consumerKey": "Consumer Key",
+      "consumerSecret": "Consumer Secret",
+      "securityHint": "The credentials are sent only to your store and are encrypted before they are stored. They are never returned to the browser."
+    },
+    "encryption": {
+      "title": "Integration encryption is not configured",
+      "description": "Set INTEGRATION_ENCRYPTION_KEY to a new 32-byte base64url value or a 64-character hexadecimal value before connecting a store."
+    },
+    "guide": {
+      "title": "Create the API credentials in WooCommerce",
+      "step1": "Open WooCommerce → Settings → Advanced → REST API and add a key.",
+      "step2": "Choose a dedicated WordPress user and grant Read/Write access so Inventory can register the order webhooks.",
+      "step3": "Copy the Consumer Key and Consumer Secret before leaving WooCommerce, then enter both above.",
+      "documentation": "Open WooCommerce REST API guide"
+    },
+    "actions": {
+      "connect": "Connect store",
+      "connecting": "Checking connection…",
+      "saveReplacement": "Verify and replace",
+      "replace": "Replace credentials",
+      "test": "Test connection",
+      "testing": "Testing…",
+      "refresh": "Refresh",
+      "disconnect": "Disconnect",
+      "cancel": "Cancel",
+      "dismiss": "Dismiss message"
+    },
+    "disconnect": {
+      "title": "Disconnect this WooCommerce store?",
+      "description": "The encrypted Consumer Key and Consumer Secret will be permanently removed from this workspace.",
+      "confirm": "Disconnect store"
+    },
+    "notices": {
+      "connected": "WooCommerce is connected.",
+      "connectedWithProducts_one": "WooCommerce is connected. {{count}} product is available through the API.",
+      "connectedWithProducts_other": "WooCommerce is connected. {{count}} products are available through the API.",
+      "tested": "The WooCommerce connection is healthy.",
+      "testedWithProducts_one": "Connection test succeeded. {{count}} product is available through the API.",
+      "testedWithProducts_other": "Connection test succeeded. {{count}} products are available through the API.",
+      "disconnected": "WooCommerce was disconnected and its credentials were removed.",
+      "syncEnabled": "WooCommerce order stock sync is active.",
+      "syncDisabled": "WooCommerce order stock sync was disabled.",
+      "noSyncIssues": "There are no unresolved WooCommerce orders to retry.",
+      "syncRun": "WooCommerce reconciliation finished: {{succeeded}} of {{attempted}} orders synced without issues."
+    },
+    "errors": {
+      "load": "The WooCommerce connection could not be loaded.",
+      "required": "Enter the store URL, Consumer Key, and Consumer Secret.",
+      "connect": "WooCommerce could not be connected.",
+      "test": "The WooCommerce connection test failed.",
+      "disconnect": "WooCommerce could not be disconnected.",
+      "updateSync": "WooCommerce stock sync could not be updated.",
+      "runSync": "The WooCommerce order could not be reconciled.",
+      "orderId": "Enter a valid positive WooCommerce order ID."
+    }
   },
   "webhooks": {
     "list": {

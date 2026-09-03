@@ -142,6 +142,50 @@ struct SettingsView: View {
             }
 
             Section("Aktivität") {
+                if state.canReadRequests {
+                    NavigationLink {
+                        InternalRequestsView()
+                    } label: {
+                        settingsRow(
+                            title: "Interne Anfragen",
+                            subtitle: "Prüfen, genehmigen und erfüllen",
+                            systemImage: "clipboard"
+                        )
+                    }
+                }
+
+                if state.canReadAssignments {
+                    NavigationLink {
+                        LoansOverviewView()
+                    } label: {
+                        settingsRow(
+                            title: "Ausleihen & Reservierungen",
+                            subtitle: "Aktiv, überfällig und abgeschlossen",
+                            systemImage: "person.crop.circle.badge.clock"
+                        )
+                    }
+                }
+
+                NavigationLink {
+                    NotificationInboxView()
+                } label: {
+                    settingsRow(
+                        title: "Benachrichtigungen",
+                        subtitle: "Bestände, Fristen und Rückgaben",
+                        systemImage: "bell.badge"
+                    )
+                }
+
+                NavigationLink {
+                    NotificationSettingsView()
+                } label: {
+                    settingsRow(
+                        title: "Benachrichtigungsregeln",
+                        subtitle: "Ereignisse, Schwellenwerte und Kanäle",
+                        systemImage: "bell.and.waves.left.and.right"
+                    )
+                }
+
                 NavigationLink {
                     UploadJobsView()
                 } label: {

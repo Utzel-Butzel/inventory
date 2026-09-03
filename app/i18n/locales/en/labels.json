@@ -70,6 +70,8 @@
     "edit": "Edit setup",
     "create": "Create setup",
     "close": "Close label designer",
+    "undo": "Undo",
+    "redo": "Redo",
     "setupName": "Setup name",
     "width": "Width (mm)",
     "height": "Height (mm)",
@@ -77,10 +79,44 @@
     "showElement": "Show {{element}}",
     "resizeElement": "Resize {{element}}",
     "properties": "Properties",
+    "previewScenario": "Test data",
+    "previewScenarios": {
+      "current": "Current item",
+      "stress": "Longest content",
+      "missing": "Missing content"
+    },
+    "grid": "Grid",
+    "gridSize": "Grid spacing",
+    "coordinateUnit": "Coordinate unit",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "canvas": "Label canvas. Arrow keys move the selected element by 0.1 mm; hold Shift to move it by 1 mm.",
     "imageFit": "Image fit",
     "fillFrame": "Fill frame (crop)",
     "fitImage": "Fit whole image",
+    "uploadBackground": "Upload background",
+    "replaceBackground": "Replace background",
+    "removeBackground": "Remove background",
+    "backgroundHint": "PNG, JPEG, WebP, GIF, AVIF, or SVG up to 2 MB. The file is stored in the setup.",
+    "backgroundOpacity": "Opacity",
+    "backgroundUnsupported": "This image format is not supported.",
+    "backgroundTooLarge": "The background image must be no larger than 2 MB.",
+    "backgroundReadError": "The background image could not be read.",
+    "qrForeground": "QR color",
+    "qrBackground": "Background",
+    "qrMargin": "QR margin",
+    "qrMarginNone": "Borderless",
+    "qrMarginModules_one": "{{count}} module",
+    "qrMarginModules_other": "{{count}} modules",
+    "qrColorHint": "Use strong contrast between the QR code and its background for reliable scanning.",
     "fontSize": "Font size (mm)",
+    "fontFamily": "Font",
+    "fontFamilies": {
+      "sans": "System sans",
+      "serif": "Serif",
+      "monospace": "Monospace",
+      "rounded": "Rounded"
+    },
     "alignment": "Alignment",
     "textOverflow": "When space runs out",
     "minimumFontSize": "Minimum font size (mm)",
@@ -88,7 +124,7 @@
       "ellipsis": "Shorten text with …",
       "shrink": "Reduce font size"
     },
-    "instructions": "Drag the selected element on the label. Use its corner handle to resize it, or enter exact percentages here.",
+    "instructions": "Drag the selected element, resize it with the corner handle, or enter exact measurements. Arrow keys move it by 0.1 mm; hold Shift for 1 mm.",
     "chooseElement": "Choose an element to edit its position and style.",
     "overlap": "Move or resize the image so it does not cover the QR code.",
     "previewNote": "The preview and printed label use the same positions.",
@@ -97,6 +133,7 @@
     "saving": "Saving…",
     "save": "Save setup",
     "elements": {
+      "background": "Custom background",
       "qr": "QR code",
       "image": "Object image",
       "name": "Object name",
@@ -118,7 +155,11 @@
     },
     "sample": {
       "name": "Cordless impact driver",
-      "location": "Workshop · Shelf B"
+      "location": "Workshop · Shelf B",
+      "longName": "Cordless impact driver with an exceptionally long product name and comprehensive accessory set",
+      "longSku": "TOOL-CORDLESS-IMPACT-DRIVER-KIT-2026-EXTRA-LONG",
+      "longLocation": "Workshop · Tool storage · Shelf B · Compartment 12 · Rear storage box",
+      "missingName": "Item without optional information"
     }
   },
   "renderer": {
