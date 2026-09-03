@@ -7,7 +7,6 @@ import {
   LoaderCircle,
   Pencil,
   Plus,
-  RefreshCw,
   Save,
   X,
 } from "lucide-react";
@@ -74,7 +73,6 @@ export function OrganizationManager({
   const [organizations, setOrganizations] = useState<ManagedOrganization[]>([]);
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -89,8 +87,7 @@ export function OrganizationManager({
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (quiet = false) => {
-    if (quiet) setRefreshing(true);
-    else setLoading(true);
+    if (!quiet) setLoading(true);
     setLoadError(null);
     try {
       const response = await fetch("/api/v1/organizations", {
@@ -118,7 +115,6 @@ export function OrganizationManager({
       );
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [t]);
 
@@ -266,19 +262,6 @@ export function OrganizationManager({
               </p>
             </div>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void load(true)}
-            disabled={loading || refreshing}
-            aria-label={t("organizations.actions.refresh")}
-          >
-            <RefreshCw
-              className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
-              aria-hidden="true"
-            />
-            {t("organizations.actions.refresh")}
-          </Button>
         </div>
 
         {notice ? (
