@@ -214,6 +214,10 @@ test("seed is opt-in, transactional, reconciling, and marks read-only last", asy
     source,
     /DELETE FROM stock_movements[\s\S]*type = 'opening_balance'[\s\S]*created_by = \$\{DEMO_ACTOR\}/,
   );
+  assert.match(source, /INSERT INTO orders/);
+  assert.match(source, /INSERT INTO order_lines/);
+  assert.doesNotMatch(source, /INSERT INTO purchase_orders/);
+  assert.doesNotMatch(source, /INSERT INTO purchase_order_lines/);
 
   const seedStart = source.indexOf("async function seedDemo");
   const seedEnd = source.indexOf("async function removeDemo");

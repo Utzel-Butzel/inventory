@@ -75,11 +75,11 @@ async function cleanup() {
   for (const orderId of orderIds) {
     await sql`
       DELETE FROM purchase_receipts AS receipt
-      USING purchase_order_lines AS line
-      WHERE receipt.purchase_order_line_id = line.id
-        AND line.purchase_order_id = ${orderId}
+      USING order_lines AS line
+      WHERE receipt.order_line_id = line.id
+        AND line.order_id = ${orderId}
     `;
-    await sql`DELETE FROM purchase_orders WHERE id = ${orderId}`;
+    await sql`DELETE FROM orders WHERE id = ${orderId}`;
   }
   for (const resourceId of resourceIds) {
     await sql`
@@ -105,7 +105,7 @@ async function cleanup() {
 
   for (const orderId of orderIds) {
     const [row] = await sql`
-      SELECT count(*)::int AS count FROM purchase_orders WHERE id = ${orderId}
+      SELECT count(*)::int AS count FROM orders WHERE id = ${orderId}
     `;
     assert(row.count === 0, `Cleanup left purchase order ${orderId}.`);
   }

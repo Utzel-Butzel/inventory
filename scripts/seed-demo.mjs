@@ -223,10 +223,10 @@ async function assertTenantRowIdsAreSafe(transaction) {
       SELECT 'inventory_assignments', id, organization_id FROM inventory_assignments
       WHERE id = ANY(${DEMO_ASSIGNMENTS.map(({ id }) => id)})
       UNION ALL
-      SELECT 'purchase_orders', id, organization_id FROM purchase_orders
+      SELECT 'orders', id, organization_id FROM orders
       WHERE id = ANY(${DEMO_PURCHASE_ORDERS.map(({ id }) => id)})
       UNION ALL
-      SELECT 'purchase_order_lines', id, organization_id FROM purchase_order_lines
+      SELECT 'order_lines', id, organization_id FROM order_lines
       WHERE id = ANY(${DEMO_PURCHASE_ORDER_LINES.map(({ id }) => id)})
       UNION ALL
       SELECT 'resource_relations', id, organization_id FROM resource_relations
@@ -572,19 +572,21 @@ async function seedDemo(transaction, configuration, preparedMedia) {
 
   for (const order of DEMO_PURCHASE_ORDERS) {
     await transaction`
-      INSERT INTO purchase_orders (
-        organization_id, id, reference, supplier, status, ordered_at,
+      INSERT INTO orders (
+        organization_id, id, reference, type, contact_name, status, ordered_at,
         expected_at, note, response, created_by, updated_at
       ) VALUES (
         ${DEMO_ORGANIZATION.id}, ${order.id}, ${order.reference},
-        ${order.supplier}, ${order.status},
+        'purchase', ${order.supplier}, ${order.status},
         ${atDaysAgo(referenceTime, order.orderedDaysAgo)},
         ${atDaysFromNow(referenceTime, order.expectedDaysFromNow)},
         ${order.note}, ${transaction.json({})}, ${DEMO_ACTOR}, now()
       )
       ON CONFLICT (id) DO UPDATE SET
         reference = excluded.reference,
-        supplier = excluded.supplier,
+        type = excluded.type,
+        contact_id = null,
+        contact_name = excluded.contact_name,
         status = excluded.status,
         ordered_at = excluded.ordered_at,
         expected_at = excluded.expected_at,
@@ -597,9 +599,9 @@ async function seedDemo(transaction, configuration, preparedMedia) {
 
   for (const line of DEMO_PURCHASE_ORDER_LINES) {
     await transaction`
-      INSERT INTO purchase_order_lines (
-        organization_id, id, purchase_order_id, resource_id, ordered_quantity,
-        received_quantity, expected_at, note, updated_at
+      INSERT INTO order_lines (
+        organization_id, id, order_id, resource_id, quantity,
+        fulfilled_quantity, expected_at, note, updated_at
       ) VALUES (
         ${DEMO_ORGANIZATION.id}, ${line.id}, ${line.purchaseOrderId},
         ${line.resourceId}, ${line.orderedQuantity}, ${line.receivedQuantity},
@@ -607,10 +609,11 @@ async function seedDemo(transaction, configuration, preparedMedia) {
         ${line.note}, now()
       )
       ON CONFLICT (id) DO UPDATE SET
-        purchase_order_id = excluded.purchase_order_id,
+        order_id = excluded.order_id,
         resource_id = excluded.resource_id,
-        ordered_quantity = excluded.ordered_quantity,
-        received_quantity = excluded.received_quantity,
+        quantity = excluded.quantity,
+        fulfilled_quantity = excluded.fulfilled_quantity,
+        returned_quantity = 0,
         expected_at = excluded.expected_at,
         note = excluded.note,
         updated_at = now()
