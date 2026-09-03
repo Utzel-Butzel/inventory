@@ -8,6 +8,16 @@ ALTER TABLE "orders"
   ADD COLUMN "type" varchar(16) DEFAULT 'purchase' NOT NULL,
   ADD COLUMN "contact_id" uuid;
 
+-- Older purchase orders could contain an empty supplier even though the
+-- column itself was required. Give those rows a stable, identifiable snapshot
+-- before enforcing the stronger shared-order invariant below.
+UPDATE "orders"
+SET "contact_name" = coalesce(
+  nullif(btrim("reference"), ''),
+  concat('Legacy supplier ', left("id"::text, 8))
+)
+WHERE length(btrim("contact_name")) = 0;
+
 ALTER TABLE "order_lines" RENAME COLUMN "purchase_order_id" TO "order_id";
 ALTER TABLE "order_lines" RENAME COLUMN "ordered_quantity" TO "quantity";
 ALTER TABLE "order_lines" RENAME COLUMN "received_quantity" TO "fulfilled_quantity";

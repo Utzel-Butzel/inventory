@@ -80,4 +80,15 @@ test("the migration preserves purchase ids in shared physical tables", async () 
   assert.match(migration, /ADD COLUMN "type" varchar\(16\)/);
   assert.match(migration, /ADD COLUMN "order_line_id" uuid/);
   assert.match(migration, /REFERENCES "contacts" \("organization_id", "id"\)/);
+
+  const legacyContactBackfill = migration.indexOf('UPDATE "orders"');
+  const contactNameConstraint = migration.indexOf(
+    'ADD CONSTRAINT "orders_contact_name_nonempty"',
+  );
+  assert.ok(legacyContactBackfill >= 0);
+  assert.ok(legacyContactBackfill < contactNameConstraint);
+  assert.match(
+    migration,
+    /WHERE length\(btrim\("contact_name"\)\) = 0/,
+  );
 });
