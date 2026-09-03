@@ -293,7 +293,7 @@ function PublicToolHeader({
             <Boxes className="size-5" aria-hidden="true" />
           </span>
           <span className="min-w-0">
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.13em] text-muted">
+            <span className="block text-[12px] font-semibold uppercase tracking-[0.13em] text-muted">
               {t("tool.header.eyebrow")}
             </span>
             <span className="block truncate text-sm font-semibold text-foreground">{title}</span>

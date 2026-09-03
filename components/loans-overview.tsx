@@ -301,7 +301,7 @@ export function LoansOverview() {
                   ) : null}
                   <Link
                     href={`/inventory/${loan.resource.id}`}
-                    className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-transparent px-3 text-[13px] font-medium text-muted-strong transition hover:bg-surface-muted hover:text-foreground"
+                    className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-transparent px-3 text-[15px] font-medium text-muted-strong transition hover:bg-surface-muted hover:text-foreground"
                   >
                     {loan.kind === "reservation" && loan.status === "active"
                       ? t("actions.checkoutAtItem")

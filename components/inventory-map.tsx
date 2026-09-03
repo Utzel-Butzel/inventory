@@ -542,7 +542,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
     <main className="flex min-h-[calc(100vh-68px)] flex-col px-3 py-4 sm:px-5 lg:px-6">
       <header className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground sm:text-[28px]">
+          <h1 className="text-2xl font-semibold text-foreground sm:text-[30px]">
             {t(isEditing ? "map.title.edit" : "map.title.view")}
           </h1>
           <p className="mt-1 text-sm text-muted">
@@ -628,7 +628,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("map.search.placeholder")} className={`${inputClass} pl-9`} />
             </label>
             {isEditing ? (
-              <div className="mt-2 flex items-center justify-between text-[11px] text-muted">
+              <div className="mt-2 flex items-center justify-between text-[13px] text-muted">
                 <span>{t("map.selection.selected", {
                   count: selectedIds.length,
                   value: integer.format(selectedIds.length),
@@ -666,7 +666,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-semibold text-foreground">{resource.name}</span>
-                    <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-muted">
+                    <span className="mt-0.5 flex items-center gap-1 truncate text-[12px] text-muted">
                       {features.some((feature) => feature.type === "polygon") ? <Shapes size={10} /> : features.length ? <MapPin size={10} /> : <CircleDot size={10} />}
                       {features.length
                         ? t("map.resource.features", {
@@ -690,25 +690,25 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-foreground">{activeResource.name}</p>
-                      <p className="text-[10px] text-muted">
+                      <p className="text-[12px] text-muted">
                         {t(`map.types.${activeResource.type}`, { defaultValue: activeResource.type })}
                         {" · "}
                         {t(`map.statuses.${activeResource.status}`, { defaultValue: activeResource.status })}
                       </p>
                     </div>
-                    <Link href={`/inventory/${activeResource.id}`} className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-semibold text-muted hover:bg-surface-hover">{t("map.resource.open")}</Link>
+                    <Link href={`/inventory/${activeResource.id}`} className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[12px] font-semibold text-muted hover:bg-surface-hover">{t("map.resource.open")}</Link>
                   </div>
 
                   {isEditing ? (
                     <div className="rounded-xl border border-border bg-surface-subtle p-2.5">
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">{t("map.draw.title")}</p>
+                      <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">{t("map.draw.title")}</p>
                       <input value={newLayer} onChange={(event) => setNewLayer(event.target.value)} placeholder={t("map.draw.layerPlaceholder")} className={inputClass} />
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         <button type="button" onClick={() => startDrawing("point")} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold ${drawMode === "point" ? "bg-brand-solid text-on-brand" : "border border-border bg-surface text-muted-strong"}`}><MapPin size={14} /> {t("map.draw.placePoint")}</button>
                         <button type="button" onClick={() => startDrawing("polygon")} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold ${drawMode === "polygon" ? "bg-warning text-on-strong" : "border border-border bg-surface text-muted-strong"}`}><PenTool size={14} /> {t("map.draw.drawOutline")}</button>
                       </div>
                       {drawMode !== "idle" ? (
-                        <div className="mt-2 rounded-lg bg-surface p-2 text-[10px] leading-4 text-muted ring-1 ring-border">
+                        <div className="mt-2 rounded-lg bg-surface p-2 text-[12px] leading-4 text-muted ring-1 ring-border">
                           {drawMode === "point"
                             ? t("map.draw.pointHint")
                             : t("map.draw.polygonHint", {
@@ -727,7 +727,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
 
                 {activeFeatures.length ? (
                   <section>
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">{t("map.features.title")}</p>
+                    <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">{t("map.features.title")}</p>
                     <div className="space-y-1">
                       {activeFeatures.map((feature, index) => (
                         <button key={feature.id} type="button" onClick={() => setActiveFeatureId(feature.id)} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs ${activeFeatureId === feature.id ? "bg-brand-soft text-brand ring-1 ring-inset ring-brand-border" : "bg-surface-subtle text-muted hover:bg-surface-hover"}`}>
@@ -737,7 +737,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                               ? t("map.defaultLayers.location")
                               : feature.layer}
                           </span>
-                          <span className="text-[10px] text-muted">{integer.format(index + 1)}</span>
+                          <span className="text-[12px] text-muted">{integer.format(index + 1)}</span>
                         </button>
                       ))}
                     </div>
@@ -747,28 +747,28 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                 {activeFeature && isEditing ? (
                   <section className="rounded-xl border border-warning-border bg-warning-soft p-3">
                     <div className="mb-2 flex items-center justify-between">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-warning">
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-warning">
                         {t("map.features.edit", {
                           type: t(`map.features.types.${activeFeature.type}`),
                         })}
                       </p>
                       <button type="button" onClick={deleteActiveFeature} className="text-danger" aria-label={t("map.features.delete")}><Trash2 size={14} /></button>
                     </div>
-                    <label className="block text-[10px] font-semibold text-muted">{t("map.features.layer")}<input value={activeFeature.layer} onChange={(event) => updateActiveFeature({ layer: event.target.value })} className={`${inputClass} mt-1`} /></label>
-                    <label className="mt-2 block text-[10px] font-semibold text-muted">{t("map.features.description")}<textarea value={activeFeature.description} onChange={(event) => updateActiveFeature({ description: event.target.value })} rows={2} className={`${inputClass} mt-1 h-auto py-2`} /></label>
-                    <p className="mt-2 text-[10px] leading-4 text-muted">{t("map.features.editHint")}</p>
+                    <label className="block text-[12px] font-semibold text-muted">{t("map.features.layer")}<input value={activeFeature.layer} onChange={(event) => updateActiveFeature({ layer: event.target.value })} className={`${inputClass} mt-1`} /></label>
+                    <label className="mt-2 block text-[12px] font-semibold text-muted">{t("map.features.description")}<textarea value={activeFeature.description} onChange={(event) => updateActiveFeature({ description: event.target.value })} rows={2} className={`${inputClass} mt-1 h-auto py-2`} /></label>
+                    <p className="mt-2 text-[12px] leading-4 text-muted">{t("map.features.editHint")}</p>
                   </section>
                 ) : null}
 
                 {isEditing && selectedIds.length ? (
                   <section className="border-t border-border pt-4">
-                    <div className="mb-2 flex items-center gap-2"><MousePointer2 size={13} className="text-brand" /><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">{t("map.quickEdit.title", { count: selectedIds.length, value: integer.format(selectedIds.length) })}</p></div>
+                    <div className="mb-2 flex items-center gap-2"><MousePointer2 size={13} className="text-brand" /><p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">{t("map.quickEdit.title", { count: selectedIds.length, value: integer.format(selectedIds.length) })}</p></div>
                     <div className="grid grid-cols-2 gap-2">
                       <select value={batchForm.status} onChange={(event) => setBatchForm((current) => ({ ...current, status: event.target.value }))} className={inputClass}><option value="">{t("map.quickEdit.keepStatus")}</option><option value="available">{t("map.statuses.available")}</option><option value="in-use">{t("map.statuses.in-use")}</option><option value="maintenance">{t("map.statuses.maintenance")}</option><option value="archived">{t("map.statuses.archived")}</option></select>
                       <select value={batchForm.type} onChange={(event) => setBatchForm((current) => ({ ...current, type: event.target.value }))} className={inputClass}><option value="">{t("map.quickEdit.keepType")}</option>{resourceTypes.map((type) => <option key={type.key} value={type.key}>{t(`map.types.${type.key}`, { defaultValue: type.label })}</option>)}</select>
                       <select value={batchForm.priority} onChange={(event) => setBatchForm((current) => ({ ...current, priority: event.target.value }))} className={`${inputClass} col-span-2`}><option value="">{t("map.quickEdit.keepPriority")}</option>{[1, 2, 3, 4, 5].map((priority) => <option key={priority} value={priority}>{t("map.quickEdit.priority", { value: integer.format(priority) })}</option>)}</select>
                       <input value={batchForm.addTags} onChange={(event) => setBatchForm((current) => ({ ...current, addTags: event.target.value }))} placeholder={t("map.quickEdit.addTags")} className={`${inputClass} col-span-2`} />
-                      <label className="col-span-2 flex items-center gap-2 rounded-lg bg-surface-subtle px-2.5 py-2 text-[10px] font-semibold text-muted"><input type="checkbox" checked={applyLocation} onChange={(event) => setApplyLocation(event.target.checked)} className="accent-brand-solid" /> {t("map.quickEdit.changeLocation")}</label>
+                      <label className="col-span-2 flex items-center gap-2 rounded-lg bg-surface-subtle px-2.5 py-2 text-[12px] font-semibold text-muted"><input type="checkbox" checked={applyLocation} onChange={(event) => setApplyLocation(event.target.checked)} className="accent-brand-solid" /> {t("map.quickEdit.changeLocation")}</label>
                       {applyLocation ? <input value={batchForm.location} onChange={(event) => setBatchForm((current) => ({ ...current, location: event.target.value }))} placeholder={t("map.quickEdit.locationPlaceholder")} className={`${inputClass} col-span-2`} /> : null}
                     </div>
                     <button type="button" onClick={() => void applyBatch()} disabled={batchSaving} className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-strong text-xs font-semibold text-on-strong disabled:opacity-50">{batchSaving ? <LoaderCircle size={14} className="animate-spin" /> : <ListChecks size={14} />}{t("map.quickEdit.apply")}</button>
@@ -804,7 +804,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
 
           {structures.length ? (
             <div className="absolute right-14 top-3 z-10 w-[min(300px,calc(100%-72px))] rounded-xl border border-border bg-surface/95 p-2 shadow-lg backdrop-blur">
-              <div className="flex items-center gap-2 px-1 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+              <div className="flex items-center gap-2 px-1 pb-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
                 <Building2 size={13} className="text-brand" /> {t("map.structures.title")}
               </div>
               <select
@@ -840,7 +840,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                         setActiveFloorIdentifier(identifier);
                         updateSpatialUrl(activeStructureId, identifier);
                       }}
-                      className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold ${activeFloorIdentifier === floorIdentifier(floor.identifier, floor.index) ? "bg-brand-solid text-on-brand" : "bg-surface-muted text-muted hover:bg-surface-hover"}`}
+                      className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold ${activeFloorIdentifier === floorIdentifier(floor.identifier, floor.index) ? "bg-brand-solid text-on-brand" : "bg-surface-muted text-muted hover:bg-surface-hover"}`}
                     >
                       {floorIdentifier(floor.identifier, floor.index)} · {t("map.structures.rooms", {
                         count: floor.roomCount,
@@ -853,7 +853,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
               {activeStructureId ? (
                 <Link
                   href={`/spaces?structure=${encodeURIComponent(activeStructureId)}${activeFloorIdentifier ? `&floor=${encodeURIComponent(activeFloorIdentifier)}` : ""}`}
-                  className="mt-2 flex h-8 items-center justify-center rounded-lg bg-strong text-[10px] font-semibold text-on-strong hover:opacity-90"
+                  className="mt-2 flex h-8 items-center justify-center rounded-lg bg-strong text-[12px] font-semibold text-on-strong hover:opacity-90"
                 >
                   {t("map.structures.open3d")}
                 </Link>
@@ -862,8 +862,8 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
           ) : null}
 
           <div className="absolute left-3 top-3 z-10 flex rounded-xl border border-border bg-surface/95 p-1 shadow-lg backdrop-blur">
-            <button type="button" onClick={() => setBasemap("streets")} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold ${basemap === "streets" ? "bg-strong text-on-strong" : "text-muted hover:bg-surface-hover"}`}><MapIcon size={13} /> {t("map.basemap.map")}</button>
-            <button type="button" onClick={() => setBasemap("satellite")} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold ${basemap === "satellite" ? "bg-strong text-on-strong" : "text-muted hover:bg-surface-hover"}`}><Satellite size={13} /> {t("map.basemap.satellite")}</button>
+            <button type="button" onClick={() => setBasemap("streets")} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold ${basemap === "streets" ? "bg-strong text-on-strong" : "text-muted hover:bg-surface-hover"}`}><MapIcon size={13} /> {t("map.basemap.map")}</button>
+            <button type="button" onClick={() => setBasemap("satellite")} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold ${basemap === "satellite" ? "bg-strong text-on-strong" : "text-muted hover:bg-surface-hover"}`}><Satellite size={13} /> {t("map.basemap.satellite")}</button>
           </div>
           {isEditing && drawMode !== "idle" ? (
             <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-xl border border-border-strong bg-strong/90 px-3 py-2 text-xs font-semibold text-on-strong shadow-xl backdrop-blur">
@@ -876,7 +876,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
             </div>
           ) : null}
           {isEditing ? (
-            <div className="pointer-events-none absolute bottom-3 right-3 z-10 hidden rounded-lg bg-surface/90 px-2.5 py-1.5 text-[10px] text-muted shadow sm:block">
+            <div className="pointer-events-none absolute bottom-3 right-3 z-10 hidden rounded-lg bg-surface/90 px-2.5 py-1.5 text-[12px] text-muted shadow sm:block">
               {t("map.shortcuts")}
             </div>
           ) : null}

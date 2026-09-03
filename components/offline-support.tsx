@@ -15,6 +15,7 @@ import { useT } from "next-i18next/client";
 import {
   browserSupportsOfflineMode,
   configureOfflineMode,
+  ensureAppServiceWorker,
   readOfflinePreference,
   writeOfflinePreference,
 } from "@/lib/offline-support-client";
@@ -63,6 +64,7 @@ export function OfflineSupportProvider({
     }
 
     if (!preferred) {
+      void ensureAppServiceWorker().catch(() => undefined);
       setBusy(false);
       setInitialized(true);
       return;
@@ -137,7 +139,7 @@ export function OfflineSupportProvider({
       {isOffline ? (
         <div
           role="status"
-          className="fixed inset-x-4 bottom-4 z-[80] mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-2.5 rounded-xl border border-warning-border bg-warning-soft px-4 py-3 text-[13px] font-semibold text-warning shadow-xl"
+          className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[80] mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-2.5 rounded-xl border border-warning-border bg-warning-soft px-4 py-3 text-[15px] font-semibold text-warning shadow-xl"
         >
           <WifiOff className="size-4 shrink-0" aria-hidden="true" />
           <span>

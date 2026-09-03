@@ -242,12 +242,12 @@ function Runway({ item, compact = false }: { item: StockItem; compact?: boolean 
   if (item.quantity <= 0) {
     return (
       <div className={cn("flex items-center gap-2", compact && "justify-between")}>
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-danger">
+        <span className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-danger">
           <CircleAlert className="size-3.5" aria-hidden="true" />
           {t("overview.runway.outNow")}
         </span>
         {predictedDate ? (
-          <span className="text-[10px] text-danger">
+          <span className="text-[12px] text-danger">
             {t("overview.runway.since", { date: predictedDate })}
           </span>
         ) : null}
@@ -258,11 +258,11 @@ function Runway({ item, compact = false }: { item: StockItem; compact?: boolean 
   if (days === null || !Number.isFinite(days)) {
     return (
       <div className={cn(compact && "flex items-center justify-between")}>
-        <p className="text-[12px] font-medium text-muted">
+        <p className="text-[14px] font-medium text-muted">
           {t("overview.runway.notForecast")}
         </p>
         {!compact ? (
-          <p className="mt-0.5 text-[10px] text-muted">
+          <p className="mt-0.5 text-[12px] text-muted">
             {t("overview.runway.addUsage")}
           </p>
         ) : null}
@@ -282,12 +282,12 @@ function Runway({ item, compact = false }: { item: StockItem; compact?: boolean 
 
   return (
     <div className={cn(compact && "flex items-center justify-between gap-3")}>
-      <p className={cn("flex items-center gap-1.5 text-[12px] font-semibold", color)}>
+      <p className={cn("flex items-center gap-1.5 text-[14px] font-semibold", color)}>
         <span className={cn("size-1.5 rounded-full", dot)} />
         {label}
       </p>
       {predictedDate ? (
-        <p className={cn("text-[10px] text-muted", !compact && "mt-0.5")}>
+        <p className={cn("text-[12px] text-muted", !compact && "mt-0.5")}>
           {t("overview.runway.runsOut", { date: predictedDate })}
         </p>
       ) : null}
@@ -309,7 +309,7 @@ function StockStatus({ item }: { item: StockItem }) {
     return (
       <div>
         <Badge tone="danger">{t("overview.status.out")}</Badge>
-        <p className="mt-1 text-[10px] font-medium text-danger">
+        <p className="mt-1 text-[12px] font-medium text-danger">
           {t("overview.status.replenishNow")}
         </p>
       </div>
@@ -321,7 +321,7 @@ function StockStatus({ item }: { item: StockItem }) {
     return (
       <div>
         <Badge tone="warning">{t("overview.status.low")}</Badge>
-        <p className="mt-1 text-[10px] font-medium text-warning">
+        <p className="mt-1 text-[12px] font-medium text-warning">
           {shortage && shortage > 0
             ? t("overview.status.belowMinimum", {
                 quantity: numberFormat.format(shortage),
@@ -492,7 +492,7 @@ export function StockOverview() {
   return (
     <div className="mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-semibold text-foreground sm:text-[28px]">
+        <h1 className="text-2xl font-semibold text-foreground sm:text-[30px]">
           {t("overview.title")}
         </h1>
       </div>
@@ -677,7 +677,7 @@ export function StockOverview() {
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder={t("overview.search.placeholder")}
-                    className="h-10 w-full rounded-xl border border-border bg-surface-subtle pl-10 pr-10 text-[13px] text-foreground outline-none transition placeholder:text-muted focus:border-focus focus:bg-surface focus:ring-3 focus:ring-focus/10"
+                    className="h-10 w-full rounded-xl border border-border bg-surface-subtle pl-10 pr-10 text-[15px] text-foreground outline-none transition placeholder:text-muted focus:border-focus focus:bg-surface focus:ring-3 focus:ring-focus/10"
                   />
                   {query ? (
                     <button
@@ -710,7 +710,7 @@ export function StockOverview() {
                         onClick={() => setFilter(value)}
                         aria-pressed={filter === value}
                         className={cn(
-                          "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[11px] font-semibold transition",
+                          "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[13px] font-semibold transition",
                           filter === value
                             ? "bg-surface text-foreground shadow-sm"
                             : "text-muted hover:text-foreground",
@@ -764,7 +764,7 @@ export function StockOverview() {
                 <div className="hidden overflow-x-auto lg:block">
                   <table className="w-full min-w-[960px] border-collapse text-left">
                     <thead>
-                      <tr className="border-b border-border bg-surface-subtle text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">
+                      <tr className="border-b border-border bg-surface-subtle text-[12px] font-semibold uppercase tracking-[0.09em] text-muted">
                         <th className="px-5 py-3">{t("overview.table.item")}</th>
                         <th className="px-4 py-3">{t("overview.table.onHand")}</th>
                         <th className="px-4 py-3">{t("overview.table.incoming")}</th>
@@ -793,10 +793,10 @@ export function StockOverview() {
                               <div className="flex items-center gap-3">
                                 <StockItemVisual item={item} state={state} />
                                 <div className="min-w-0">
-                                  <Link href={`/inventory/${item.resourceId}/stock`} className="block max-w-[260px] truncate text-[13px] font-semibold text-foreground transition hover:text-brand">
+                                  <Link href={`/inventory/${item.resourceId}/stock`} className="block max-w-[260px] truncate text-[15px] font-semibold text-foreground transition hover:text-brand">
                                     {item.name}
                                   </Link>
-                                  <p className="mt-0.5 text-[10px] text-muted">
+                                  <p className="mt-0.5 text-[12px] text-muted">
                                     {stockValueLabel(item.type, t)} ·{" "}
                                     {stockValueLabel(item.trackingMode, t)}
                                   </p>
@@ -804,17 +804,17 @@ export function StockOverview() {
                               </div>
                             </td>
                             <td className="px-4 py-4">
-                              <p className={cn("text-[13px] font-semibold tabular-nums", state === "out" ? "text-danger" : "text-foreground")}>
+                              <p className={cn("text-[15px] font-semibold tabular-nums", state === "out" ? "text-danger" : "text-foreground")}>
                                 {formatQuantity(item.quantity, item.unitName, compactNumber)}
                               </p>
                             </td>
                             <td className="px-4 py-4">
                               {item.onOrder > 0 ? (
                                 <div>
-                                  <p className="text-[12px] font-semibold tabular-nums text-info">
+                                  <p className="text-[14px] font-semibold tabular-nums text-info">
                                     +{formatQuantity(item.onOrder, item.unitName, compactNumber)}
                                   </p>
-                                  <p className="mt-0.5 text-[10px] text-muted">
+                                  <p className="mt-0.5 text-[12px] text-muted">
                                     {formatDate(item.nextExpectedAt, locale)
                                       ? t("overview.table.expected", {
                                           date: formatDate(item.nextExpectedAt, locale),
@@ -829,10 +829,10 @@ export function StockOverview() {
                                   </p>
                                 </div>
                               ) : (
-                                <span className="text-[12px] text-muted">—</span>
+                                <span className="text-[14px] text-muted">—</span>
                               )}
                             </td>
-                            <td className="px-4 py-4 text-[12px] font-medium tabular-nums text-muted">
+                            <td className="px-4 py-4 text-[14px] font-medium tabular-nums text-muted">
                               {item.minimumStock === null
                                 ? t("overview.table.notSet")
                                 : formatQuantity(
@@ -841,7 +841,7 @@ export function StockOverview() {
                                     compactNumber,
                                   )}
                             </td>
-                            <td className="px-4 py-4 text-[12px] font-medium text-muted">
+                            <td className="px-4 py-4 text-[14px] font-medium text-muted">
                               {formatUsage(
                                 item.averageDailyUsage,
                                 item.unitName,
@@ -887,8 +887,8 @@ export function StockOverview() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <h3 className="truncate text-[13px] font-semibold text-foreground">{item.name}</h3>
-                                <p className="mt-0.5 text-[10px] text-muted">
+                                <h3 className="truncate text-[15px] font-semibold text-foreground">{item.name}</h3>
+                                <p className="mt-0.5 text-[12px] text-muted">
                                   {stockValueLabel(item.type, t)} ·{" "}
                                   {stockValueLabel(item.trackingMode, t)}
                                 </p>
@@ -898,18 +898,18 @@ export function StockOverview() {
 
                             <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-surface/80 p-3 ring-1 ring-inset ring-border">
                               <div>
-                                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                                   {t("overview.table.onHand")}
                                 </p>
-                                <p className={cn("mt-1 text-[13px] font-semibold tabular-nums", state === "out" ? "text-danger" : "text-foreground")}>
+                                <p className={cn("mt-1 text-[15px] font-semibold tabular-nums", state === "out" ? "text-danger" : "text-foreground")}>
                                   {formatQuantity(item.quantity, item.unitName, compactNumber)}
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                                   {t("overview.table.minimum")}
                                 </p>
-                                <p className="mt-1 text-[13px] font-semibold tabular-nums text-muted-strong">
+                                <p className="mt-1 text-[15px] font-semibold tabular-nums text-muted-strong">
                                   {item.minimumStock === null
                                     ? t("overview.table.notSet")
                                     : formatQuantity(
@@ -920,10 +920,10 @@ export function StockOverview() {
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                                   {t("overview.table.incoming")}
                                 </p>
-                                <p className="mt-1 text-[13px] font-semibold tabular-nums text-info">
+                                <p className="mt-1 text-[15px] font-semibold tabular-nums text-info">
                                   {item.onOrder > 0
                                     ? `+${formatQuantity(
                                         item.onOrder,
@@ -934,7 +934,7 @@ export function StockOverview() {
                                 </p>
                               </div>
                               <div className="col-span-2 border-t border-border pt-3">
-                                <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-muted">
+                                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
                                   {t("overview.table.estimatedRunway")}
                                 </p>
                                 <Runway item={item} compact />
@@ -943,7 +943,7 @@ export function StockOverview() {
 
                             <div className="mt-3 flex items-center justify-between gap-3">
                               <StockStatus item={item} />
-                              <span className="flex items-center gap-1 text-[10px] font-medium text-muted">
+                              <span className="flex items-center gap-1 text-[12px] font-medium text-muted">
                                 <Clock3 className="size-3" aria-hidden="true" />
                                 {formatUsage(
                                   item.averageDailyUsage,
@@ -963,7 +963,7 @@ export function StockOverview() {
             )}
 
             {filteredItems.length ? (
-              <div className="flex flex-col gap-2 border-t border-border bg-surface-subtle px-4 py-3 text-[11px] text-muted sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="flex flex-col gap-2 border-t border-border bg-surface-subtle px-4 py-3 text-[13px] text-muted sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <span>
                   {t("overview.footer.showing", {
                     shown: compactNumber.format(filteredItems.length),

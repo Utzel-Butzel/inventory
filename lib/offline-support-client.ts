@@ -47,6 +47,16 @@ export function writeOfflinePreference(enabled: boolean) {
   }
 }
 
+export async function ensureAppServiceWorker() {
+  if (!browserSupportsOfflineMode()) {
+    throw new Error("Service workers are not supported by this browser.");
+  }
+  return navigator.serviceWorker.register(SERVICE_WORKER_URL, {
+    scope: SERVICE_WORKER_SCOPE,
+    updateViaCache: "none",
+  });
+}
+
 function waitForWorkerState(worker: ServiceWorker) {
   if (worker.state === "activated") return Promise.resolve(worker);
 
@@ -127,10 +137,7 @@ export async function configureOfflineMode(
   }
 
   const registration = configuration.enabled
-    ? await navigator.serviceWorker.register(SERVICE_WORKER_URL, {
-        scope: SERVICE_WORKER_SCOPE,
-        updateViaCache: "none",
-      })
+    ? await ensureAppServiceWorker()
     : await navigator.serviceWorker.getRegistration(SERVICE_WORKER_SCOPE);
 
   if (!registration) return { ok: true, enabled: false };

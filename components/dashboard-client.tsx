@@ -212,7 +212,7 @@ export function DashboardClient() {
   return (
     <div className="mx-auto max-w-[1540px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-9">
       <div className="mb-7">
-        <h1 className="text-[28px] font-semibold tracking-[-0.025em] text-foreground sm:text-[32px]">
+        <h1 className="text-[30px] font-semibold tracking-[-0.025em] text-foreground sm:text-[34px]">
           {greeting}
         </h1>
       </div>
@@ -275,13 +275,13 @@ export function DashboardClient() {
               },
             ].map((metric) => (
               <div key={metric.id} className="p-5">
-                <p className="text-[12px] font-medium text-muted">
+                <p className="text-[14px] font-medium text-muted">
                   {metric.label}
                 </p>
-                <p className="mt-3 truncate text-[27px] font-semibold tracking-[-0.03em] text-foreground">
+                <p className="mt-3 truncate text-[29px] font-semibold tracking-[-0.03em] text-foreground">
                   {metric.value}
                 </p>
-                <p className="mt-1 text-[11px] text-muted">{metric.detail}</p>
+                <p className="mt-1 text-[13px] text-muted">{metric.detail}</p>
               </div>
             ))}
           </Card>
@@ -293,13 +293,13 @@ export function DashboardClient() {
                   <h2 className="text-sm font-semibold text-foreground">
                     {t("recent.title")}
                   </h2>
-                  <p className="mt-0.5 text-[11px] text-muted">
+                  <p className="mt-0.5 text-[13px] text-muted">
                     {t("recent.subtitle")}
                   </p>
                 </div>
                 <Link
                   href="/inventory"
-                  className="group flex items-center gap-1 text-[12px] font-semibold text-brand hover:text-brand-strong"
+                  className="group flex items-center gap-1 text-[14px] font-semibold text-brand hover:text-brand-strong"
                 >
                   {t("actions.viewAll")}
                   <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" aria-hidden="true" />
@@ -333,10 +333,10 @@ export function DashboardClient() {
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-[13px] font-semibold text-foreground transition group-hover:text-brand">
+                          <p className="truncate text-[15px] font-semibold text-foreground transition group-hover:text-brand">
                             {resource.name}
                           </p>
-                          <div className="mt-1 flex min-w-0 items-center gap-2 text-[10px] text-muted">
+                          <div className="mt-1 flex min-w-0 items-center gap-2 text-[12px] text-muted">
                             <span>{typeLabel(resource.type)}</span>
                             <span aria-hidden="true">·</span>
                             <span>
@@ -358,7 +358,7 @@ export function DashboardClient() {
                         </div>
                       </div>
                       <div className="hidden sm:block">{statusBadge(resource.status)}</div>
-                      <span className="text-right text-[10px] text-muted">
+                      <span className="text-right text-[12px] text-muted">
                         {relativeDate(resource.updatedAt)}
                       </span>
                     </Link>
@@ -381,7 +381,7 @@ export function DashboardClient() {
                     <h2 className="text-sm font-semibold text-foreground">
                       {t("mix.title")}
                     </h2>
-                    <p className="mt-0.5 text-[11px] text-muted">
+                    <p className="mt-0.5 text-[13px] text-muted">
                       {t("mix.subtitle")}
                     </p>
                   </div>
@@ -393,7 +393,7 @@ export function DashboardClient() {
                   <div className="mt-6 space-y-4">
                     {stats.byType.slice(0, 6).map((item, index) => (
                       <div key={item.type}>
-                        <div className="mb-1.5 flex items-center justify-between text-[11px]">
+                        <div className="mb-1.5 flex items-center justify-between text-[13px]">
                           <span className="font-medium text-muted">
                             {typeGroupLabel(item.type)}
                           </span>
@@ -414,7 +414,7 @@ export function DashboardClient() {
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-6 rounded-xl bg-surface-subtle p-4 text-center text-[12px] text-muted">
+                  <p className="mt-6 rounded-xl bg-surface-subtle p-4 text-center text-[14px] text-muted">
                     {t("mix.empty")}
                   </p>
                 )}

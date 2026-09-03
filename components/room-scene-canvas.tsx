@@ -4747,7 +4747,7 @@ export function RoomSceneCanvas({
             type="button"
             onClick={() => setSceneMode("roomplan")}
             className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold transition",
               sceneMode === "roomplan"
                 ? "bg-brand-solid text-on-brand"
                 : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -4762,7 +4762,7 @@ export function RoomSceneCanvas({
               type="button"
               onClick={() => setSceneMode("textured_mesh")}
               className={cn(
-                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold transition",
                 sceneMode === "textured_mesh"
                   ? "bg-brand-solid text-on-brand"
                   : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -4778,7 +4778,7 @@ export function RoomSceneCanvas({
               type="button"
               onClick={() => setSceneMode("gaussian_splat")}
               className={cn(
-                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold transition",
                 sceneMode === "gaussian_splat"
                   ? "bg-brand-solid text-on-brand"
                   : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -4801,7 +4801,7 @@ export function RoomSceneCanvas({
             type="button"
             onClick={() => selectLightingMode("live")}
             className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold transition",
               lightingMode === "live"
                 ? "bg-brand-solid text-on-brand"
                 : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -4816,7 +4816,7 @@ export function RoomSceneCanvas({
             type="button"
             onClick={() => selectLightingMode("progressive")}
             className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold transition",
               lightingMode === "progressive"
                 ? "bg-brand-solid text-on-brand"
                 : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -4831,7 +4831,7 @@ export function RoomSceneCanvas({
             type="button"
             onClick={() => selectLightingMode("realistic")}
             className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold transition",
               lightingMode === "realistic"
                 ? "bg-brand-solid text-on-brand"
                 : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -4846,7 +4846,7 @@ export function RoomSceneCanvas({
             type="button"
             onClick={() => selectLightingMode("rendering")}
             className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold transition",
               lightingMode === "rendering"
                 ? "bg-brand-solid text-on-brand"
                 : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -4864,7 +4864,7 @@ export function RoomSceneCanvas({
         !mapBackground &&
         lightingMode === "progressive" ? (
           <label
-            className="pointer-events-auto grid w-64 gap-1.5 rounded-lg border border-border bg-surface/92 px-3 py-2 text-[10px] font-semibold text-muted shadow-sm backdrop-blur"
+            className="pointer-events-auto grid w-64 gap-1.5 rounded-lg border border-border bg-surface/92 px-3 py-2 text-[12px] font-semibold text-muted shadow-sm backdrop-blur"
             title={t("canvas.lighting.progressiveQualityDescription")}
           >
             <span className="flex items-center justify-between gap-3">
@@ -4903,7 +4903,7 @@ export function RoomSceneCanvas({
         {!isLayoutEditing && !mapBackground && lightingMode === "realistic" ? (
           <div className="pointer-events-auto flex w-fit flex-wrap items-center gap-2">
             <label
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface/92 px-2.5 py-2 text-[10px] font-semibold text-muted shadow-sm backdrop-blur"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface/92 px-2.5 py-2 text-[12px] font-semibold text-muted shadow-sm backdrop-blur"
               title={t("canvas.lighting.roomOnlyDescription")}
             >
               <input
@@ -4919,7 +4919,7 @@ export function RoomSceneCanvas({
               {t("canvas.lighting.roomOnly")}
             </label>
             <label
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface/92 px-2.5 py-2 text-[10px] font-semibold text-muted shadow-sm backdrop-blur"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface/92 px-2.5 py-2 text-[12px] font-semibold text-muted shadow-sm backdrop-blur"
               title={t("canvas.lighting.slowDescription")}
             >
               <input
@@ -4939,7 +4939,7 @@ export function RoomSceneCanvas({
 
         {!isLayoutEditing && !mapBackground && lightingMode !== "live" ? (
           <div
-            className="pointer-events-none min-w-48 rounded-lg border border-border bg-surface/92 px-2.5 py-2 text-[10px] font-medium text-muted shadow-sm backdrop-blur"
+            className="pointer-events-none min-w-48 rounded-lg border border-border bg-surface/92 px-2.5 py-2 text-[12px] font-medium text-muted shadow-sm backdrop-blur"
             role="status"
             aria-live="polite"
           >
@@ -4989,7 +4989,7 @@ export function RoomSceneCanvas({
         {sceneMode !== "roomplan" && assetLoadState !== "ready" ? (
           <div
             className={cn(
-              "pointer-events-none inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-medium shadow-sm backdrop-blur",
+              "pointer-events-none inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium shadow-sm backdrop-blur",
               assetLoadState === "loading"
                 ? "border-border bg-surface/90 text-muted"
                 : "border-warning-border bg-warning-soft/95 text-warning-strong",
@@ -5017,7 +5017,7 @@ export function RoomSceneCanvas({
               type="button"
               onClick={() => setShowKeyframes((current) => !current)}
               className={cn(
-                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[10px] font-semibold transition",
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold transition",
                 showKeyframes
                   ? "bg-brand-soft text-brand-strong"
                   : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -5034,7 +5034,7 @@ export function RoomSceneCanvas({
               <select
                 value={selectedKeyframeId ?? ""}
                 onChange={(event) => setSelectedKeyframeId(event.target.value || null)}
-                className="h-8 min-w-0 max-w-44 rounded-lg border-0 bg-surface-muted px-2 text-[10px] font-medium text-foreground outline-none focus:ring-2 focus:ring-focus/30"
+                className="h-8 min-w-0 max-w-44 rounded-lg border-0 bg-surface-muted px-2 text-[12px] font-medium text-foreground outline-none focus:ring-2 focus:ring-focus/30"
                 aria-label={t("canvas.keyframes.select")}
               >
                 <option value="">{t("canvas.keyframes.select")}</option>
@@ -5060,7 +5060,7 @@ export function RoomSceneCanvas({
                 current === "walk" ? "orbit" : "walk")}
               disabled={lightingMode === "rendering"}
               className={cn(
-                "pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-[10px] font-semibold shadow-sm backdrop-blur transition disabled:cursor-not-allowed disabled:opacity-50",
+                "pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-[12px] font-semibold shadow-sm backdrop-blur transition disabled:cursor-not-allowed disabled:opacity-50",
                 navigationMode === "walk"
                   ? "border-brand-border bg-brand-solid text-on-brand"
                   : "border-border bg-surface/90 text-muted hover:text-brand",
@@ -5099,7 +5099,7 @@ export function RoomSceneCanvas({
           </button>
         </div>
         {!mapBackground && navigationMode === "walk" ? (
-          <label className="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface/90 px-3 text-[10px] font-semibold text-muted shadow-sm backdrop-blur">
+          <label className="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface/90 px-3 text-[12px] font-semibold text-muted shadow-sm backdrop-blur">
             <input
               type="checkbox"
               checked={walkThroughWalls}
@@ -5120,7 +5120,7 @@ export function RoomSceneCanvas({
             type="button"
             onClick={() => setSuggestionEditTool("translate")}
             className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[10px] font-semibold transition",
+              "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition",
               suggestionEditTool === "translate"
                 ? "bg-brand-solid text-on-brand"
                 : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -5134,7 +5134,7 @@ export function RoomSceneCanvas({
             type="button"
             onClick={() => setSuggestionEditTool("rotate")}
             className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[10px] font-semibold transition",
+              "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition",
               suggestionEditTool === "rotate"
                 ? "bg-brand-solid text-on-brand"
                 : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -5165,7 +5165,7 @@ export function RoomSceneCanvas({
             type="button"
             onClick={() => setLayoutTool("translate")}
             className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[10px] font-semibold transition",
+              "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition",
               layoutTool === "translate"
                 ? "bg-brand-solid text-on-brand"
                 : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -5181,7 +5181,7 @@ export function RoomSceneCanvas({
             type="button"
             onClick={() => setLayoutTool("rotate")}
             className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[10px] font-semibold transition",
+              "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition",
               layoutTool === "rotate"
                 ? "bg-brand-solid text-on-brand"
                 : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -5197,7 +5197,7 @@ export function RoomSceneCanvas({
       ) : null}
       <div
         className={cn(
-          "pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-surface/78 px-2.5 py-1.5 text-[10px] font-medium text-muted shadow-sm backdrop-blur",
+          "pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-surface/78 px-2.5 py-1.5 text-[12px] font-medium text-muted shadow-sm backdrop-blur",
           navigationMode === "walk" && "max-w-[calc(100%_-_13rem)]",
         )}
       >
@@ -5330,7 +5330,7 @@ export function RoomSceneCanvas({
               <X className="size-3.5" aria-hidden="true" />
             </button>
           </div>
-          <div className="flex items-center justify-between gap-2 px-3 py-2 text-[10px] text-muted">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 text-[12px] text-muted">
             <span>{new Intl.DateTimeFormat(locale, {
               dateStyle: "short",
               timeStyle: "medium",

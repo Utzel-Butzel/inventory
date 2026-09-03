@@ -176,7 +176,7 @@ type BuildForm = {
 
 const inputClass =
   "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
-const labelClass = "block text-[11px] font-semibold text-muted-strong";
+const labelClass = "block text-[13px] font-semibold text-muted-strong";
 
 function localDateTime(value: Date | string = new Date()) {
   const date = typeof value === "string" ? new Date(value) : value;
@@ -357,7 +357,7 @@ function SectionHeading({
         </span>
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          <p className="mt-0.5 text-[12px] leading-5 text-muted">{description}</p>
+          <p className="mt-0.5 text-[14px] leading-5 text-muted">{description}</p>
         </div>
       </div>
       {trailing ? <div className="shrink-0 pl-12 sm:pl-0">{trailing}</div> : null}
@@ -1008,13 +1008,13 @@ export function AssemblyManager({
               <div className="min-w-0">
                 <Link
                   href={`/inventory/${bom.inheritance.primaryResourceId}`}
-                  className="text-[12px] font-semibold text-foreground hover:text-brand"
+                  className="text-[14px] font-semibold text-foreground hover:text-brand"
                 >
                   {t("assembly:bom.inheritance.basedOn", {
                     name: bom.inheritance.primaryName,
                   })}
                 </Link>
-                <p className="mt-0.5 text-[11px] leading-4 text-muted">
+                <p className="mt-0.5 text-[13px] leading-4 text-muted">
                   {t("assembly:bom.inheritance.description")}
                 </p>
               </div>
@@ -1070,7 +1070,7 @@ export function AssemblyManager({
               {searchOpen && query.trim().length >= 2 ? (
                 <div className="absolute inset-x-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow-md)]">
                   {searching ? (
-                    <div className="px-4 py-5 text-center text-[12px] text-muted">
+                    <div className="px-4 py-5 text-center text-[14px] text-muted">
                       {t("assembly:search.searching")}
                     </div>
                   ) : searchResults.length ? (
@@ -1087,8 +1087,8 @@ export function AssemblyManager({
                             <Package className="size-4" aria-hidden="true" />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[13px] font-semibold text-foreground">{resource.name}</span>
-                            <span className="mt-0.5 block truncate text-[10px] text-muted">
+                            <span className="block truncate text-[15px] font-semibold text-foreground">{resource.name}</span>
+                            <span className="mt-0.5 block truncate text-[12px] text-muted">
                               {resource.sku || t("assembly:labels.noSku")} · {t("assembly:availableCount", { count: resource.quantity })}
                             </span>
                           </span>
@@ -1097,7 +1097,7 @@ export function AssemblyManager({
                       ))}
                     </div>
                   ) : (
-                    <div className="px-4 py-5 text-center text-[12px] text-muted">
+                    <div className="px-4 py-5 text-center text-[14px] text-muted">
                       {t("assembly:search.empty")}
                     </div>
                   )}
@@ -1132,7 +1132,7 @@ export function AssemblyManager({
                           <div className="flex min-w-0 items-center gap-2">
                             <Link
                               href={`/inventory/${component.resourceId}`}
-                              className="min-w-0 truncate text-[13px] font-semibold text-foreground hover:text-brand"
+                              className="min-w-0 truncate text-[15px] font-semibold text-foreground hover:text-brand"
                             >
                               {component.name}
                             </Link>
@@ -1145,7 +1145,7 @@ export function AssemblyManager({
                                       ? "warning"
                                       : "neutral"
                                 }
-                                className="min-h-5 shrink-0 px-2 py-0 text-[10px]"
+                                className="min-h-5 shrink-0 px-2 py-0 text-[12px]"
                               >
                                 {t(
                                   `assembly:bom.inheritance.origins.${variantOrigin}`,
@@ -1153,7 +1153,7 @@ export function AssemblyManager({
                               </Badge>
                             ) : null}
                           </div>
-                          <p className="mt-1 truncate text-[10px] text-muted">
+                          <p className="mt-1 truncate text-[12px] text-muted">
                             {component.sku || t("assembly:labels.noSku")} · {t(`assembly:tracking.${component.trackingMode}`)}
                           </p>
                         </div>
@@ -1231,7 +1231,7 @@ export function AssemblyManager({
                         </div>
                         {component.purchaseUnitName &&
                         component.purchaseUnitFactor ? (
-                          <p className="mt-1 text-[9px] leading-4 text-muted">
+                          <p className="mt-1 text-[11px] leading-4 text-muted">
                             {t("assembly:purchaseUnitConversion", {
                               purchaseUnit: component.purchaseUnitName,
                               count: component.purchaseUnitFactor,
@@ -1319,7 +1319,7 @@ export function AssemblyManager({
 
           {dirty ? (
             <div className="flex flex-col gap-3 border-t border-border bg-surface-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <p className="text-[11px] text-muted">
+              <p className="text-[13px] text-muted">
                 {t("assembly:bom.unsavedDescription")}
               </p>
               <Button
@@ -1434,7 +1434,7 @@ export function AssemblyManager({
                         placeholder={t("assembly:placeholders.codes")}
                         className={`${inputClass} mt-1.5 h-auto resize-y py-3 font-mono text-xs`}
                       />
-                      <span className={cn("mt-1.5 block text-[10px]", outputCodesValid ? "text-muted" : "text-danger")}>
+                      <span className={cn("mt-1.5 block text-[12px]", outputCodesValid ? "text-muted" : "text-danger")}>
                         {t("assembly:build.codeHint", { count: buildQuantity })}
                       </span>
                     </label>
@@ -1443,7 +1443,7 @@ export function AssemblyManager({
 
                 <div className="min-w-0">
                   <div className="overflow-hidden rounded-xl border border-border">
-                    <div className="hidden grid-cols-[minmax(180px,1fr)_90px_90px_90px] gap-3 border-b border-border bg-surface-subtle px-4 py-2.5 text-[9px] font-semibold uppercase tracking-[0.09em] text-muted sm:grid">
+                    <div className="hidden grid-cols-[minmax(180px,1fr)_90px_90px_90px] gap-3 border-b border-border bg-surface-subtle px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.09em] text-muted sm:grid">
                       <span>{t("assembly:labels.component")}</span>
                       <span>{t("assembly:labels.required")}</span>
                       <span>{t("assembly:labels.available")}</span>
@@ -1454,7 +1454,7 @@ export function AssemblyManager({
                         <div key={component.slotKey} className={cn("grid gap-3 px-4 py-3 sm:grid-cols-[minmax(180px,1fr)_90px_90px_90px] sm:items-center", component.blockingShortage && "bg-danger-soft")}>
                           <div className="min-w-0">
                             {component.choices.length > 1 ? (
-                              <label className="mb-2 block text-[9px] font-semibold uppercase tracking-[0.08em] text-muted">
+                              <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
                                 {t("assembly:labels.componentConfiguration")}
                                 <span className="relative mt-1.5 block">
                                   <ResourceThumbnail
@@ -1496,8 +1496,8 @@ export function AssemblyManager({
                                   cover={component.cover}
                                 />
                                 <div className="min-w-0">
-                                  <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
-                                  <p className="mt-0.5 text-[9px] text-muted">
+                                  <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[14px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
+                                  <p className="mt-0.5 text-[11px] text-muted">
                                     {t("assembly:perFinishedQuantity", {
                                       count: displayedComponentQuantity(component),
                                       unit: bomQuantityUnitName(
@@ -1511,8 +1511,8 @@ export function AssemblyManager({
                             )}
                             {component.choices.length > 1 ? (
                               <>
-                                <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[12px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
-                                <p className="mt-0.5 text-[9px] text-muted">
+                                <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[14px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
+                                <p className="mt-0.5 text-[11px] text-muted">
                                   {t("assembly:perFinishedQuantity", {
                                     count: displayedComponentQuantity(component),
                                     unit: bomQuantityUnitName(
@@ -1524,9 +1524,9 @@ export function AssemblyManager({
                               </>
                             ) : null}
                           </div>
-                          <div className="flex items-center justify-between sm:block"><span className="text-[9px] uppercase text-muted sm:hidden">{t("assembly:labels.required")}</span><span className="text-[12px] font-semibold tabular-nums text-foreground">{component.required}</span></div>
-                          <div className="flex items-center justify-between sm:block"><span className="text-[9px] uppercase text-muted sm:hidden">{t("assembly:labels.available")}</span><span className={cn("text-[12px] font-semibold tabular-nums", component.shortage ? "text-danger" : "text-foreground")}>{component.availableQuantity}</span></div>
-                          <div className="flex items-center justify-between sm:block"><span className="text-[9px] uppercase text-muted sm:hidden">{t("assembly:labels.afterBuild")}</span><span className={cn("text-[12px] font-semibold tabular-nums", component.remaining < 0 ? "text-danger" : component.remaining === 0 ? "text-warning" : "text-success")}>{component.remaining}</span></div>
+                          <div className="flex items-center justify-between sm:block"><span className="text-[11px] uppercase text-muted sm:hidden">{t("assembly:labels.required")}</span><span className="text-[14px] font-semibold tabular-nums text-foreground">{component.required}</span></div>
+                          <div className="flex items-center justify-between sm:block"><span className="text-[11px] uppercase text-muted sm:hidden">{t("assembly:labels.available")}</span><span className={cn("text-[14px] font-semibold tabular-nums", component.shortage ? "text-danger" : "text-foreground")}>{component.availableQuantity}</span></div>
+                          <div className="flex items-center justify-between sm:block"><span className="text-[11px] uppercase text-muted sm:hidden">{t("assembly:labels.afterBuild")}</span><span className={cn("text-[14px] font-semibold tabular-nums", component.remaining < 0 ? "text-danger" : component.remaining === 0 ? "text-warning" : "text-success")}>{component.remaining}</span></div>
                         </div>
                       ))}
                     </div>
@@ -1538,10 +1538,10 @@ export function AssemblyManager({
                       <div key={component.resourceId} className="mt-4 rounded-xl border border-brand-border bg-brand-soft p-3.5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
-                            <p className="text-[11px] font-semibold text-brand-strong">
+                            <p className="text-[13px] font-semibold text-brand-strong">
                               {t("assembly:build.selectUnits", { name: component.name })}
                             </p>
-                            <p className="mt-0.5 text-[10px] text-brand">
+                            <p className="mt-0.5 text-[12px] text-brand">
                               {t("assembly:build.selectedCount", {
                                 selected: selected.length,
                                 required: component.required,
@@ -1561,7 +1561,7 @@ export function AssemblyManager({
                                 className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition", checked ? "border-brand bg-surface text-brand" : "border-brand-border bg-surface/60 text-muted hover:border-brand-border")}
                               >
                                 <span className={cn("grid size-4 shrink-0 place-items-center rounded border", checked ? "border-focus bg-brand-solid text-on-brand" : "border-border-strong bg-surface")}>{checked ? <Check className="size-3" aria-hidden="true" /> : null}</span>
-                                <span className="min-w-0"><span className="block truncate font-mono text-[10px] font-semibold">{unit.code}</span><span className="mt-0.5 block truncate text-[9px] opacity-70">{unit.location || t("assembly:labels.noLocation")}</span></span>
+                                <span className="min-w-0"><span className="block truncate font-mono text-[12px] font-semibold">{unit.code}</span><span className="mt-0.5 block truncate text-[11px] opacity-70">{unit.location || t("assembly:labels.noLocation")}</span></span>
                               </button>
                             );
                           })}
@@ -1573,7 +1573,7 @@ export function AssemblyManager({
               </div>
 
               <div className="flex flex-col gap-3 border-t border-border bg-surface-subtle px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                <div className="text-[11px] text-muted">
+                <div className="text-[13px] text-muted">
                   {dirty ? (
                     <span className="font-medium text-warning">
                       {t("assembly:build.saveFirst")}
@@ -1632,19 +1632,19 @@ export function AssemblyManager({
                     <div className="flex min-w-0 items-start gap-3">
                       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-success-soft text-success"><Factory className="size-[18px]" aria-hidden="true" /></span>
                       <div className="min-w-0">
-                        <p className="text-[13px] font-semibold text-foreground">
+                        <p className="text-[15px] font-semibold text-foreground">
                           {t("assembly:history.built", {
                             count: build.quantity,
                             name: bom.resource.name,
                           })}
                         </p>
-                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted">
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-muted">
                           <span className="flex items-center gap-1"><CalendarDays className="size-3" aria-hidden="true" /> {formatDate(build.occurredAt, true, locale)}</span>
                           {build.location ? <span className="flex items-center gap-1"><MapPin className="size-3" aria-hidden="true" /> {build.location}</span> : null}
                           <span>{build.createdBy || t("assembly:labels.system")}</span>
                         </div>
-                        {build.note ? <p className="mt-2 text-[11px] leading-5 text-muted">{build.note}</p> : null}
-                        <p className="mt-2 text-[11px] font-semibold text-brand">
+                        {build.note ? <p className="mt-2 text-[13px] leading-5 text-muted">{build.note}</p> : null}
+                        <p className="mt-2 text-[13px] font-semibold text-brand">
                           {t("assembly:history.materialCost")}: {" "}
                           {formatCosts(build.materialCosts, locale)}
                           {build.costEstimated
@@ -1652,7 +1652,7 @@ export function AssemblyManager({
                             : ""}
                         </p>
                         {(build.unpricedComponentQuantity ?? 0) > 0 ? (
-                          <p className="mt-1 text-[10px] font-medium text-warning">
+                          <p className="mt-1 text-[12px] font-medium text-warning">
                             {t("assembly:history.unpricedComponents", {
                               count: build.unpricedComponentQuantity,
                             })}
@@ -1660,12 +1660,12 @@ export function AssemblyManager({
                         ) : null}
                       </div>
                     </div>
-                    <span className="shrink-0 font-mono text-[9px] text-muted">{build.id.slice(0, 8)}</span>
+                    <span className="shrink-0 font-mono text-[11px] text-muted">{build.id.slice(0, 8)}</span>
                   </div>
                   {build.components?.length ? (
                     <div className="mt-3 flex flex-wrap gap-1.5 pl-[52px]">
                       {build.components.map((component, index) => (
-                        <span key={component.resourceId ?? `${build.id}-${index}`} className="rounded-lg bg-surface-muted px-2.5 py-1 text-[10px] text-muted">{component.quantityConsumed ?? component.quantity ?? 0} × {component.name ?? component.resourceName ?? component.resourceId?.slice(0, 8) ?? t("assembly:labels.deletedComponent")} · {formatCosts(component.costs, locale)}{component.costEstimated ? ` (${t("assembly:history.estimated")})` : ""}</span>
+                        <span key={component.resourceId ?? `${build.id}-${index}`} className="rounded-lg bg-surface-muted px-2.5 py-1 text-[12px] text-muted">{component.quantityConsumed ?? component.quantity ?? 0} × {component.name ?? component.resourceName ?? component.resourceId?.slice(0, 8) ?? t("assembly:labels.deletedComponent")} · {formatCosts(component.costs, locale)}{component.costEstimated ? ` (${t("assembly:history.estimated")})` : ""}</span>
                       ))}
                     </div>
                   ) : null}
@@ -1682,7 +1682,7 @@ export function AssemblyManager({
           )}
           {builds.length > 12 ? (
             <div className="border-t border-border bg-surface-subtle px-5 py-3 text-right">
-              <Link href={`/inventory/${resourceId}/stock`} className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand">
+              <Link href={`/inventory/${resourceId}/stock`} className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand">
                 {t("assembly:history.openStock")}
                 <ArrowRight className="size-3" aria-hidden="true" />
               </Link>

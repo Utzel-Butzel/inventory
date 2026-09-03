@@ -327,7 +327,7 @@ function PhotoCountPreview({
           })
         : null}
       {markers.length ? (
-        <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-slate-950/75 px-2 py-1 text-[9px] font-bold text-white shadow-sm backdrop-blur">
+        <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-slate-950/75 px-2 py-1 text-[11px] font-bold text-white shadow-sm backdrop-blur">
           {t("preview.highlighted", {
             count: markers.length,
             value: numberFormat.format(markers.length),
@@ -560,12 +560,12 @@ export function PhotoCountCapture({
             <span className="block text-xs font-semibold text-foreground">
               {t("launch.title")}
             </span>
-            <span className="mt-0.5 block text-[11px] leading-4 text-muted">
+            <span className="mt-0.5 block text-[13px] leading-4 text-muted">
               {t("launch.description")}
             </span>
           </span>
         </span>
-        <span className="shrink-0 text-[11px] font-semibold text-muted-strong">
+        <span className="shrink-0 text-[13px] font-semibold text-muted-strong">
           {t("launch.action")}
         </span>
       </button>
@@ -583,7 +583,7 @@ export function PhotoCountCapture({
             <h3 className="text-xs font-semibold text-foreground">
               {t("header.title")}
             </h3>
-            <p className="mt-0.5 text-[10px] leading-4 text-muted">
+            <p className="mt-0.5 text-[12px] leading-4 text-muted">
               {t("header.description")}
             </p>
           </div>
@@ -616,7 +616,7 @@ export function PhotoCountCapture({
 
         {!countModelPreference.loading && countModelPreference.models.length ? (
           <details className="mb-3 rounded-xl border border-border bg-surface-subtle px-3 py-2.5">
-            <summary className="cursor-pointer text-[11px] font-semibold text-muted-strong">
+            <summary className="cursor-pointer text-[13px] font-semibold text-muted-strong">
               {t("capture.advancedOptions")}
             </summary>
             <div className="mt-3 border-t border-border pt-3">
@@ -653,7 +653,7 @@ export function PhotoCountCapture({
             <span className="mt-2 text-xs font-semibold text-muted-strong">
               {preparing ? t("upload.preparing") : t("upload.choose")}
             </span>
-            <span className="mt-1 text-[10px] text-muted">
+            <span className="mt-1 text-[12px] text-muted">
               {t("upload.privacy")}
             </span>
           </label>
@@ -678,10 +678,10 @@ export function PhotoCountCapture({
             <div className="flex min-w-0 flex-col justify-center">
               {!result ? (
                 <>
-                  <p className="truncate text-[11px] font-semibold text-muted-strong">
+                  <p className="truncate text-[13px] font-semibold text-muted-strong">
                     {image.name || t("fallback.cameraPhoto")}
                   </p>
-                  <p className="mt-1 text-[10px] leading-4 text-muted">
+                  <p className="mt-1 text-[12px] leading-4 text-muted">
                     {t("capture.countHint", {
                       unit: unitName,
                       item: itemName,
@@ -715,7 +715,7 @@ export function PhotoCountCapture({
                     )}
                     <label
                       htmlFor={inputId}
-                      className="inline-flex h-9 cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-3 text-[11px] font-semibold text-muted transition hover:bg-surface-subtle"
+                      className="inline-flex h-9 cursor-pointer items-center justify-center rounded-xl border border-border bg-surface px-3 text-[13px] font-semibold text-muted transition hover:bg-surface-subtle"
                     >
                       {t("actions.replacePhoto")}
                     </label>
@@ -743,7 +743,7 @@ export function PhotoCountCapture({
                       {result.detectedItem}
                     </span>
                   </div>
-                  <p className="mt-1.5 text-[10px] leading-4 text-muted">
+                  <p className="mt-1.5 text-[12px] leading-4 text-muted">
                     {result.count > 0
                       ? t("result.filled")
                       : t("result.noneFound")}
@@ -755,7 +755,7 @@ export function PhotoCountCapture({
         )}
 
         {result && (result.explanation || result.warnings.length > 0 || !result.isExact) ? (
-          <div className="mt-3 rounded-xl border border-border bg-surface px-3.5 py-3 text-[10px] leading-4 text-muted">
+          <div className="mt-3 rounded-xl border border-border bg-surface px-3.5 py-3 text-[12px] leading-4 text-muted">
             {result.explanation ? <p>{result.explanation}</p> : null}
             {!result.isExact ? (
               <p className="mt-1.5 font-semibold text-warning">
@@ -772,7 +772,7 @@ export function PhotoCountCapture({
         ) : null}
 
         {result ? (
-          <details className="mt-3 rounded-xl border border-border bg-surface-subtle px-3.5 py-2.5 text-[10px] text-muted">
+          <details className="mt-3 rounded-xl border border-border bg-surface-subtle px-3.5 py-2.5 text-[12px] text-muted">
             <summary className="cursor-pointer font-semibold text-muted-strong">
               {t("result.technicalDetails")}
             </summary>
@@ -790,7 +790,7 @@ export function PhotoCountCapture({
         ) : null}
 
         {exceedsAvailable ? (
-          <p className="mt-3 flex items-start gap-1.5 rounded-xl border border-danger-border bg-danger-soft px-3 py-2.5 text-[10px] leading-4 text-danger">
+          <p className="mt-3 flex items-start gap-1.5 rounded-xl border border-danger-border bg-danger-soft px-3 py-2.5 text-[12px] leading-4 text-danger">
             <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
             {t("result.exceedsAvailable", {
               quantity: numberFormat.format(availableQuantity),
@@ -800,7 +800,7 @@ export function PhotoCountCapture({
 
         {error ? (
           <div
-            className="mt-3 flex items-start justify-between gap-3 rounded-xl border border-danger-border bg-danger-soft px-3 py-2.5 text-[10px] leading-4 text-danger"
+            className="mt-3 flex items-start justify-between gap-3 rounded-xl border border-danger-border bg-danger-soft px-3 py-2.5 text-[12px] leading-4 text-danger"
             role="alert"
           >
             <span className="flex items-start gap-1.5">
@@ -826,14 +826,14 @@ export function PhotoCountCapture({
                 setError(null);
               }}
               disabled={busy}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-brand-border bg-surface px-3 text-[10px] font-semibold text-brand transition hover:bg-brand-soft disabled:opacity-40"
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-brand-border bg-surface px-3 text-[12px] font-semibold text-brand transition hover:bg-brand-soft disabled:opacity-40"
             >
               <ScanSearch className="size-3" aria-hidden="true" />
               {t("actions.countAgain")}
             </button>
             <label
               htmlFor={inputId}
-              className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface px-3 text-[10px] font-semibold text-muted transition hover:bg-surface-subtle"
+              className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface px-3 text-[12px] font-semibold text-muted transition hover:bg-surface-subtle"
             >
               {t("actions.useAnotherPhoto")}
             </label>

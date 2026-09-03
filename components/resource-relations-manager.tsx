@@ -390,7 +390,7 @@ function RelationRow({
         <p className="truncate text-sm font-semibold text-muted-strong">
           {resource?.name ?? t("relations.missingItem")}
         </p>
-        <p className="mt-0.5 text-[10px] text-muted">
+        <p className="mt-0.5 text-[12px] text-muted">
           {label} · {resource?.type ?? t("relations.unknown")}
         </p>
       </div>

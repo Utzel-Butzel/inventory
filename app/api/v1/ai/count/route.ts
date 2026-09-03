@@ -1,5 +1,7 @@
 import {
+  countDenseRepeatedInventoryItems,
   countInventoryItems,
+  denseComponentCountModelLabel,
   InventoryCountLocalizationError,
   prepareInventoryCountImage,
 } from "@/lib/ai";
@@ -237,16 +239,6 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
-    validateReplicateCountJobSigningSecret();
-  } catch (error) {
-    console.error("Replicate count job signing is not configured.", error);
-    return json(
-      { error: "Photo counting has an invalid server configuration." },
-      { status: 503 },
-    );
-  }
-
   const imageBytes = Buffer.from(await image.arrayBuffer());
 
   let operationId: string | null = null;
@@ -402,6 +394,41 @@ export async function POST(request: Request) {
     }
     return json(body, { status, headers });
   };
+
+  try {
+    const localResult = await countDenseRepeatedInventoryItems({
+      imageDataUrl: preparedImage.dataUrl,
+      itemHint: parsed.data.itemHint,
+      language: process.env.AI_OUTPUT_LANGUAGE,
+    });
+    if (localResult) {
+      return finish(
+        { ...localResult, model: denseComponentCountModelLabel },
+        200,
+      );
+    }
+  } catch (error) {
+    // This path is an optional, conservative optimization. An unexpected
+    // local analysis failure must not prevent the configured provider model
+    // from handling the same valid image.
+    console.error("Unable to run local dense-component counting.", error);
+  }
+
+  try {
+    validateReplicateCountJobSigningSecret();
+  } catch (error) {
+    if (operationId) {
+      await releaseAiOperation(
+        authorization.identity.organizationId,
+        operationId,
+      ).catch(() => undefined);
+    }
+    console.error("Replicate count job signing is not configured.", error);
+    return json(
+      { error: "Photo counting has an invalid server configuration." },
+      { status: 503 },
+    );
+  }
 
   let providerAttempted = false;
   try {

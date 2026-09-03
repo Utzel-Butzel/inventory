@@ -328,7 +328,7 @@ export function LanguageManager() {
                     </span>
                     <div>
                       <p className="text-sm font-semibold text-foreground">{language.label}</p>
-                      <p className="mt-0.5 text-[11px] text-muted">
+                      <p className="mt-0.5 text-[13px] text-muted">
                         {language.archivedAt
                           ? t("languages.status.archived")
                           : language.isDefault
@@ -403,7 +403,7 @@ export function LanguageManager() {
                         </button>
                       </>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-[11px] font-semibold text-success">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-[13px] font-semibold text-success">
                         <Check className="size-3" /> {t("languages.default")}
                       </span>
                     )}

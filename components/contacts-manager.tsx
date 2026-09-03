@@ -87,7 +87,7 @@ type ContactForm = {
 
 const inputClass =
   "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
-const labelClass = "block text-[11px] font-semibold text-muted-strong";
+const labelClass = "block text-[13px] font-semibold text-muted-strong";
 
 function emptyForm(): ContactForm {
   return {
@@ -341,7 +341,7 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
         <div>
           <div className="flex items-center gap-2 text-brand">
             <UsersRound className="size-5" aria-hidden="true" />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em]">
+            <span className="text-[13px] font-semibold uppercase tracking-[0.12em]">
               {t("eyebrow")}
             </span>
           </div>
@@ -543,7 +543,7 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
         ) : filteredContacts.length ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left">
-              <thead className="bg-surface-subtle text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+              <thead className="bg-surface-subtle text-[13px] font-semibold uppercase tracking-[0.08em] text-muted">
                 <tr><th className="px-4 py-3">{t("table.contact")}</th><th className="px-4 py-3">{t("table.roles")}</th><th className="px-4 py-3">{t("table.details")}</th><th className="px-4 py-3">{t("table.inventory")}</th><th className="px-4 py-3 text-right">{t("table.movements")}</th><th className="px-4 py-3 text-right">{t("table.actions")}</th></tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -553,7 +553,7 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
                       <td className="px-4 py-4">
                         <div className="flex items-start gap-3">
                           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">{contact.company ? <Building2 className="size-4" /> : <UserRound className="size-4" />}</span>
-                          <div><p className="font-semibold text-foreground">{contact.name}</p>{contact.company ? <p className="mt-0.5 text-xs text-muted">{contact.company}</p> : null}{contact.tags.length ? <p className="mt-1 text-[11px] text-muted">{contact.tags.join(" · ")}</p> : null}</div>
+                          <div><p className="font-semibold text-foreground">{contact.name}</p>{contact.company ? <p className="mt-0.5 text-xs text-muted">{contact.company}</p> : null}{contact.tags.length ? <p className="mt-1 text-[13px] text-muted">{contact.tags.join(" · ")}</p> : null}</div>
                         </div>
                       </td>
                       <td className="px-4 py-4"><div className="flex flex-wrap gap-1.5">{contact.roles.map((role) => <Badge key={role} tone={role === "supplier" ? "brand" : "neutral"}>{t(`roles.${role}`)}</Badge>)}</div></td>

@@ -1,7 +1,7 @@
 /* global clients */
 
 const OFFLINE_CACHE_PREFIX = "open-inventory-offline";
-const OFFLINE_CACHE_VERSION = "v2";
+const OFFLINE_CACHE_VERSION = "v3";
 const ASSET_CACHE = `${OFFLINE_CACHE_PREFIX}-assets-${OFFLINE_CACHE_VERSION}`;
 const PAGE_CACHE = `${OFFLINE_CACHE_PREFIX}-pages-${OFFLINE_CACHE_VERSION}`;
 const STATE_CACHE = `${OFFLINE_CACHE_PREFIX}-state`;
@@ -162,7 +162,12 @@ async function cacheOfflineFallback() {
 }
 
 async function warmOfflineResources(warmUrl) {
-  const assetUrls = ["/icon.svg", "/manifest.webmanifest"];
+  const assetUrls = [
+    "/icon.svg",
+    "/pwa/icon-192.png",
+    "/pwa/icon-512.png",
+    "/manifest.webmanifest",
+  ];
   await Promise.allSettled(
     assetUrls.map(async (url) => {
       const response = await fetch(url, { cache: "reload" });
@@ -327,6 +332,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: payload.body || "You have a new inventory notification.",
+      icon: "/pwa/icon-192.png",
       tag: "inventory-notification-digest",
       renotify: false,
       data: { url: payload.url || "/notifications" },

@@ -172,7 +172,7 @@ function RoomScanSummary({
               {t("details.roomScan.title")}
             </h2>
           </div>
-          <span className="rounded-full bg-success-soft px-2.5 py-1 text-[10px] font-semibold text-success ring-1 ring-inset ring-success-border">
+          <span className="rounded-full bg-success-soft px-2.5 py-1 text-[12px] font-semibold text-success ring-1 ring-inset ring-success-border">
             {t("details.roomScan.revision", {
               value: integer.format(scan.revision),
             })}
@@ -185,7 +185,7 @@ function RoomScanSummary({
 
       <dl className="grid grid-cols-2 border-y border-border">
         <div className="border-b border-r border-border p-4">
-          <dt className="flex items-center gap-2 text-[11px] text-muted">
+          <dt className="flex items-center gap-2 text-[13px] text-muted">
             <Building2 className="size-3.5" aria-hidden="true" />
             {t("details.roomScan.structure")}
           </dt>
@@ -194,7 +194,7 @@ function RoomScanSummary({
           </dd>
         </div>
         <div className="border-b border-border p-4">
-          <dt className="flex items-center gap-2 text-[11px] text-muted">
+          <dt className="flex items-center gap-2 text-[13px] text-muted">
             <Layers3 className="size-3.5" aria-hidden="true" />
             {t("details.roomScan.floor")}
           </dt>
@@ -203,7 +203,7 @@ function RoomScanSummary({
           </dd>
         </div>
         <div className="border-r border-border p-4">
-          <dt className="flex items-center gap-2 text-[11px] text-muted">
+          <dt className="flex items-center gap-2 text-[13px] text-muted">
             <Package className="size-3.5" aria-hidden="true" />
             {t("details.roomScan.contents")}
           </dt>
@@ -215,7 +215,7 @@ function RoomScanSummary({
           </dd>
         </div>
         <div className="p-4">
-          <dt className="flex items-center gap-2 text-[11px] text-muted">
+          <dt className="flex items-center gap-2 text-[13px] text-muted">
             <Camera className="size-3.5" aria-hidden="true" />
             {t("details.roomScan.capture")}
           </dt>
@@ -751,7 +751,7 @@ export function ResourceDetails({
                 <Link
                   key={slug}
                   href={`/inventory/${slug}`}
-                  className={`rounded-md px-2 py-1 font-mono text-[11px] transition ${
+                  className={`rounded-md px-2 py-1 font-mono text-[13px] transition ${
                     index === 0
                       ? "bg-brand-soft text-brand"
                       : "bg-surface-muted text-muted-strong hover:bg-brand-soft hover:text-brand"
@@ -888,7 +888,7 @@ export function ResourceDetails({
                       eager
                       className="h-full w-full object-contain"
                     />
-                    <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1 text-[10px] font-semibold text-muted shadow-sm">
+                    <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1 text-[12px] font-semibold text-muted shadow-sm">
                       <ImageIcon className="size-3.5" aria-hidden="true" />
                       {t("details.articleImage")}
                     </span>
@@ -947,7 +947,7 @@ export function ResourceDetails({
                 {isRoom && roomScan ? (
                   <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 bg-gradient-to-t from-black/75 via-black/25 to-transparent px-5 pb-5 pt-16 text-white">
                     <div className="min-w-0">
-                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70">
+                      <p className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-white/70">
                         <Rotate3d className="size-3.5" aria-hidden="true" />
                         {t("details.roomScan.roomPlan")}
                       </p>
@@ -958,7 +958,7 @@ export function ResourceDetails({
                           : ""}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-full bg-black/35 px-2.5 py-1 text-[10px] font-semibold text-white/85 ring-1 ring-inset ring-white/20 backdrop-blur-sm">
+                    <span className="shrink-0 rounded-full bg-black/35 px-2.5 py-1 text-[12px] font-semibold text-white/85 ring-1 ring-inset ring-white/20 backdrop-blur-sm">
                       {t("details.roomScan.revision", {
                         value: integer.format(roomScan.revision),
                       })}
@@ -1203,7 +1203,7 @@ export function ResourceDetails({
               </p>
               <dl className="mt-4 space-y-3">
                 <div>
-                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                  <dt className="text-[12px] font-semibold uppercase tracking-wider text-muted">
                     {t("developer.resourceId")}
                   </dt>
                   <dd className="mt-1 break-all font-mono text-xs text-foreground">
@@ -1211,7 +1211,7 @@ export function ResourceDetails({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                  <dt className="text-[12px] font-semibold uppercase tracking-wider text-muted">
                     {t("developer.organizationHeader")}
                   </dt>
                   <dd className="mt-1 break-all font-mono text-xs text-foreground">
@@ -1219,7 +1219,7 @@ export function ResourceDetails({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                  <dt className="text-[12px] font-semibold uppercase tracking-wider text-muted">
                     {t("developer.endpoints")}
                   </dt>
                   <dd className="mt-1 space-y-1.5">

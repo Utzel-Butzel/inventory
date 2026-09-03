@@ -328,7 +328,7 @@ function TypeRow({
             onChange={(event) => setLabel(event.target.value)}
             className="h-9 w-full rounded-lg border border-transparent bg-transparent px-2 text-sm font-semibold text-foreground outline-none hover:border-border focus:border-brand-border focus:bg-surface"
           />
-          <p className="truncate px-2 font-mono text-[10px] text-muted">{type.key}</p>
+          <p className="truncate px-2 font-mono text-[12px] text-muted">{type.key}</p>
         </div>
       </div>
       <label className="flex items-center gap-2 text-xs font-medium text-muted">

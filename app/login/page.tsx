@@ -81,11 +81,11 @@ export default async function LoginPage({
   return (
     <UiI18nProvider language={translation.lng} resources={resources}>
       <main className="min-h-dvh bg-surface-subtle">
-        <div className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col px-5 py-5 sm:px-8 sm:py-7">
+        <div className="safe-area-page mx-auto flex min-h-dvh w-full max-w-5xl flex-col">
           <header className="flex items-center justify-between gap-4 text-foreground">
             <div className="flex items-center gap-2.5">
               <BrandMark className="size-8 shrink-0" aria-hidden="true" />
-              <span className="text-[15px] font-semibold">
+              <span className="text-[17px] font-semibold">
                 {t("brand")}
               </span>
             </div>
@@ -97,10 +97,10 @@ export default async function LoginPage({
 
           <section className="flex flex-1 items-center justify-center py-12">
             <div className="w-full max-w-[400px]">
-              <h1 className="text-2xl font-semibold text-foreground sm:text-[28px]">
+              <h1 className="text-2xl font-semibold text-foreground sm:text-[30px]">
                 {t(demoHighlighted ? "hero.demoTitle" : "hero.title")}
               </h1>
-              <p className="mt-2 text-[15px] leading-6 text-muted">
+              <p className="mt-2 text-[17px] leading-6 text-muted">
                 {t(
                   demoHighlighted
                     ? "hero.demoDescription"

@@ -395,12 +395,12 @@ function ReferenceFieldInput({
                         {option.label}
                       </span>
                       {selected ? (
-                        <span className="text-[10px] font-semibold text-brand">
+                        <span className="text-[12px] font-semibold text-brand">
                           {t("settings:customInputs.selected")}
                         </span>
                       ) : null}
                     </span>
-                    <span className="mt-0.5 block truncate text-[10px] text-muted">
+                    <span className="mt-0.5 block truncate text-[12px] text-muted">
                       {option.description}
                     </span>
                   </button>
@@ -462,7 +462,7 @@ export function CustomFieldInputs({
           </>
         );
         const description = definition.description ? (
-          <span id={descriptionId} className="mt-1.5 block text-[11px] font-normal leading-4 text-muted">
+          <span id={descriptionId} className="mt-1.5 block text-[13px] font-normal leading-4 text-muted">
             {definition.description}
           </span>
         ) : null;
@@ -684,7 +684,7 @@ export function CustomFieldValueSummary({
       {visible.map((definition) => (
         <span
           key={definition.id}
-          className="rounded-md bg-surface-muted px-2 py-1 text-[9px] text-muted"
+          className="rounded-md bg-surface-muted px-2 py-1 text-[11px] text-muted"
           title={definition.description || undefined}
         >
           <span className="font-semibold">{definition.label}:</span>{" "}

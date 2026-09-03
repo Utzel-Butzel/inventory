@@ -218,7 +218,7 @@ export function SettingsNavigation({
           >
             {visibleGroups.map((group) => (
               <div key={group.labelKey}>
-                <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+                <p className="mb-2 px-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
                   {t(group.labelKey)}
                 </p>
                 <div className="space-y-1">
@@ -247,7 +247,7 @@ export function SettingsNavigation({
                           strokeWidth={active ? 2.2 : 1.9}
                           aria-hidden="true"
                         />
-                        <span className="min-w-0 truncate text-[13px] font-semibold">
+                        <span className="min-w-0 truncate text-[15px] font-semibold">
                           {t(item.labelKey)}
                         </span>
                       </Link>
@@ -262,7 +262,7 @@ export function SettingsNavigation({
 
       <div className="border-b border-border bg-surface px-4 py-3 xl:hidden">
         <details className="group relative">
-          <summary className="flex h-10 cursor-pointer list-none items-center justify-between rounded-xl border border-border bg-surface px-3 text-[13px] font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+          <summary className="flex h-10 cursor-pointer list-none items-center justify-between rounded-xl border border-border bg-surface px-3 text-[15px] font-semibold text-foreground [&::-webkit-details-marker]:hidden">
             <span className="truncate">
               {activeItem ? t(activeItem.labelKey) : t("settings.title")}
             </span>
@@ -277,7 +277,7 @@ export function SettingsNavigation({
           >
             {visibleGroups.map((group) => (
               <div key={group.labelKey}>
-                <p className="px-2 py-1 text-[11px] font-semibold text-muted">
+                <p className="px-2 py-1 text-[13px] font-semibold text-muted">
                   {t(group.labelKey)}
                 </p>
                 {group.items.map((item) => {
@@ -294,7 +294,7 @@ export function SettingsNavigation({
                       }
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "flex min-h-10 items-center gap-3 rounded-lg px-2.5 text-[13px] font-medium",
+                        "flex min-h-10 items-center gap-3 rounded-lg px-2.5 text-[15px] font-medium",
                         active
                           ? "bg-brand-soft text-brand"
                           : "text-foreground hover:bg-surface-muted",

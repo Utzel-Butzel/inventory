@@ -184,13 +184,13 @@ export function ResourceStockConfigurationSwitcher({
     return (
       <div className="mb-5 rounded-xl border border-brand-border bg-brand-soft/40 p-4">
         <label
-          className="block text-[11px] font-semibold uppercase tracking-wider text-muted-strong"
+          className="block text-[13px] font-semibold uppercase tracking-wider text-muted-strong"
           htmlFor={selectId}
         >
           {t("resource.configuration.label")}
         </label>
         <div className="mt-2">{configurationSelect}</div>
-        <p className="mt-2 text-[11px] leading-4 text-muted">
+        <p className="mt-2 text-[13px] leading-4 text-muted">
           {t("resource.configuration.movementHelp")}
         </p>
       </div>

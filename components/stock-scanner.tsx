@@ -602,7 +602,7 @@ function MetadataRows({ metadata }: { metadata: JsonRecord | null }) {
     <dl className="grid gap-x-5 gap-y-2 sm:grid-cols-2">
       {entries.map(([key, value]) => (
         <div key={key} className="min-w-0">
-          <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+          <dt className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
             {titleCase(key)}
           </dt>
           <dd className="mt-0.5 break-words text-xs font-medium text-foreground">
@@ -997,7 +997,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                     <div className="grid gap-3 sm:grid-cols-2">
                       {result.unit ? (
                         <div className="rounded-xl bg-surface-subtle p-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
                             {t("scan.success.unit")}
                           </p>
                           <p className="mt-1 break-all font-mono text-sm font-semibold text-foreground">
@@ -1013,7 +1013,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                         </div>
                       ) : (
                         <div className="rounded-xl bg-surface-subtle p-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
                             Neuer Bestand
                           </p>
                           <div className="mt-1 space-y-1 text-sm font-semibold text-foreground">
@@ -1029,7 +1029,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                         </div>
                       )}
                       <div className="rounded-xl bg-surface-subtle p-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+                        <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
                           {t("scan.success.resource")}
                         </p>
                         <div className="mt-1 space-y-1">
@@ -1131,7 +1131,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                 <ol className="mt-4 space-y-4">
                   {(["scan", "enrich", "review"] as const).map((step) => (
                     <li key={step} className="flex gap-3">
-                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand">
+                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-brand-soft text-[13px] font-bold text-brand">
                         {t(`scan.how.steps.${step}.number`)}
                       </span>
                       <span>
@@ -1363,7 +1363,7 @@ function ReviewForm({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-border p-4">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+            <p className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
               <QrCode className="size-3" aria-hidden="true" /> {t("scan.review.extractedCode")}
             </p>
             <p className="mt-2 break-all font-mono text-sm font-semibold text-foreground">
@@ -1371,7 +1371,7 @@ function ReviewForm({
             </p>
           </div>
           <div className="rounded-xl border border-border p-4">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+            <p className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
               <Warehouse className="size-3" aria-hidden="true" /> {t("scan.review.targetUnit")}
             </p>
             <p className="mt-2 text-sm font-semibold text-foreground">
@@ -1406,7 +1406,7 @@ function ReviewForm({
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {resolution.statusAfter ? (
             <div className="rounded-lg bg-surface/80 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
                 {t("scan.review.lifecycleStatus")}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
@@ -1425,7 +1425,7 @@ function ReviewForm({
             </div>
             ) : (
               <div className="rounded-lg bg-surface/80 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
                   Aktion
                 </p>
                 <p className="mt-2 text-sm font-semibold text-foreground">
@@ -1440,7 +1440,7 @@ function ReviewForm({
             <div className="rounded-lg bg-surface/80 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
                     {t("scan.review.availableStock")}
                   </p>
                   <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -1464,7 +1464,7 @@ function ReviewForm({
               </div>
             </div>
           </div>
-          <p className="mt-2 text-[11px] leading-5 text-brand-strong/75">
+          <p className="mt-2 text-[13px] leading-5 text-brand-strong/75">
             {t("scan.review.availableHelp")}
           </p>
         </section>
@@ -1480,7 +1480,7 @@ function ReviewForm({
             <dl className="mt-3 grid gap-2 sm:grid-cols-2">
               {resolution.fixedProperties.map((property) => (
                 <div key={property.key} className="rounded-xl bg-surface-muted px-3 py-2.5">
-                  <dt className="text-[10px] font-medium text-muted">{property.label}</dt>
+                  <dt className="text-[12px] font-medium text-muted">{property.label}</dt>
                   <dd className="mt-0.5 text-sm font-semibold text-foreground">
                     {displayValue(property.value, t, number)}
                   </dd>
@@ -1667,7 +1667,7 @@ function ReviewForm({
             <div>
               <p className="font-semibold">{t("scan.review.updateErrorTitle")}</p>
               <p className="mt-0.5 text-xs leading-5 text-danger">{requestError}</p>
-              <p className="mt-1 text-[11px] text-danger">
+              <p className="mt-1 text-[13px] text-danger">
                 {t("scan.review.retryHelp")}
               </p>
             </div>

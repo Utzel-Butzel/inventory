@@ -79,12 +79,15 @@ export type ReplicateCountOutcome =
   | { kind: "processing"; job: ReplicateCountJob };
 
 class ReplicatePredictionCreateError extends Error {
+  readonly response: Response;
+
   constructor(
     message: string,
-    readonly response: Response,
+    response: Response,
   ) {
     super(message);
     this.name = "ReplicatePredictionCreateError";
+    this.response = response;
   }
 }
 

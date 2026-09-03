@@ -330,7 +330,7 @@ export function PublicShareManager() {
                 <h2 className="text-sm font-semibold text-foreground">
                   {t("settings:sharing.create.title")}
                 </h2>
-                <p className="mt-1 text-[12px] leading-5 text-muted">
+                <p className="mt-1 text-[14px] leading-5 text-muted">
                   {t("settings:sharing.create.description")}
                 </p>
               </div>
@@ -338,7 +338,7 @@ export function PublicShareManager() {
             <div className="mt-5 rounded-xl border border-warning-border bg-warning-soft/60 p-3.5">
               <div className="flex gap-2.5">
                 <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
-                <p className="text-[11px] leading-5 text-warning">
+                <p className="text-[13px] leading-5 text-warning">
                   {t("settings:sharing.create.warning")}
                 </p>
               </div>
@@ -438,7 +438,7 @@ export function PublicShareManager() {
                           <span className="block text-xs font-semibold">
                             {t(`settings:sharing.create.accessModes.${value}.label`)}
                           </span>
-                          <span className="mt-0.5 block text-[10px] font-normal leading-4 text-muted">
+                          <span className="mt-0.5 block text-[12px] font-normal leading-4 text-muted">
                             {t(`settings:sharing.create.accessModes.${value}.description`)}
                           </span>
                         </span>
@@ -459,7 +459,7 @@ export function PublicShareManager() {
                       placeholder={t("settings:sharing.create.passwordPlaceholder")}
                       className={inputClass}
                     />
-                    <span className="mt-1.5 block text-[10px] font-normal leading-4 text-muted">
+                    <span className="mt-1.5 block text-[12px] font-normal leading-4 text-muted">
                       {t("settings:sharing.create.passwordHint")}
                     </span>
                   </label>
@@ -489,7 +489,7 @@ export function PublicShareManager() {
                 </label>
                 {selectedDefinition ? (
                   <div className="rounded-xl border border-border bg-surface-subtle p-4">
-                    <p className="mb-3 text-[11px] leading-5 text-muted">
+                    <p className="mb-3 text-[13px] leading-5 text-muted">
                       {t("settings:sharing.create.filterHint", {
                         field: selectedDefinition.label,
                       })}
@@ -537,7 +537,7 @@ export function PublicShareManager() {
                       <span className="block truncate text-xs font-semibold text-foreground">
                         {selectedResource.name}
                       </span>
-                      <span className="mt-0.5 block truncate text-[10px] text-muted">
+                      <span className="mt-0.5 block truncate text-[12px] text-muted">
                         {selectedResource.sku || selectedResource.location || selectedResource.type}
                       </span>
                     </span>
@@ -577,7 +577,7 @@ export function PublicShareManager() {
                             <span className="block truncate text-xs font-semibold text-foreground">
                               {resource.name}
                             </span>
-                            <span className="mt-0.5 block truncate text-[10px] text-muted">
+                            <span className="mt-0.5 block truncate text-[12px] text-muted">
                               {resource.sku || resource.location || resource.type}
                             </span>
                           </span>
@@ -627,7 +627,7 @@ export function PublicShareManager() {
             <h2 id="active-shares-title" className="text-sm font-semibold text-foreground">
               {t("settings:sharing.list.title")}
             </h2>
-            <p className="mt-1 text-[12px] text-muted">
+            <p className="mt-1 text-[14px] text-muted">
               {t("settings:sharing.list.description")}
             </p>
           </div>
@@ -708,14 +708,14 @@ export function PublicShareManager() {
                           </Badge>
                         ) : null}
                       </div>
-                      <p className="mt-1 truncate text-[11px] text-muted-strong">
+                      <p className="mt-1 truncate text-[13px] text-muted-strong">
                         {share.scope === "item"
                           ? share.resourceName || t("settings:sharing.list.unavailableItem")
                           : share.filter
                             ? formatFilter(share.filter)
                             : t("settings:sharing.list.allInventory")}
                       </p>
-                      <p className="mt-1.5 text-[10px] text-muted">
+                      <p className="mt-1.5 text-[12px] text-muted">
                         {t("settings:sharing.list.created", {
                           date: dateFormatter.format(new Date(share.createdAt)),
                         })}
@@ -740,7 +740,7 @@ export function PublicShareManager() {
                         href={sharePath(share.id)}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-[13px] font-medium text-foreground shadow-sm transition hover:border-border-strong hover:bg-surface-subtle"
+                        className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-[15px] font-medium text-foreground shadow-sm transition hover:border-border-strong hover:bg-surface-subtle"
                       >
                         <ExternalLink className="size-3.5" aria-hidden="true" />
                         {t("settings:sharing.list.open")}

@@ -58,7 +58,7 @@ function PublicHeader({
             <Boxes className="size-[18px]" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-muted">
+            <p className="text-[12px] font-semibold uppercase tracking-[0.13em] text-muted">
               {eyebrow}
             </p>
             <p className="truncate text-sm font-semibold text-foreground">{title}</p>
@@ -68,7 +68,7 @@ function PublicHeader({
           {stockToolShareId ? (
             <PublicStockScannerButton shareId={stockToolShareId} />
           ) : null}
-          <span className="hidden rounded-full bg-brand-soft px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-brand sm:inline-flex">
+          <span className="hidden rounded-full bg-brand-soft px-2.5 py-1 text-[12px] font-semibold uppercase tracking-wider text-brand sm:inline-flex">
             {viewOnly}
           </span>
           <LocalizedThemeToggle />
@@ -184,7 +184,7 @@ export async function PublicInventoryView({
                     resource={resource}
                     eager={resource.id === eagerCoverId}
                   />
-                  <span className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
+                  <span className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[13px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
                     {t(`statuses.${resource.status}`, {
                       defaultValue: humanize(resource.status),
                     })}
@@ -307,7 +307,7 @@ export async function PublicResourceView({
         <header className="mb-6 border-b border-border pb-5">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-[-0.035em] text-foreground sm:text-4xl">{resource.name}</h1>
-            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
+            <span className={`rounded-full px-2.5 py-1 text-[13px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
               {t(`statuses.${resource.status}`, {
                 defaultValue: humanize(resource.status),
               })}

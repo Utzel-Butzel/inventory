@@ -83,13 +83,49 @@ type OrganizationLinkProps = LinkProps &
     children?: ReactNode;
   };
 
-export function OrganizationLink({ href, ...props }: OrganizationLinkProps) {
+function stripOrganizationHref(href: string) {
+  if (!href.startsWith("/") || href.startsWith("//")) return href;
+  const suffixIndex = href.search(/[?#]/);
+  const pathname = suffixIndex >= 0 ? href.slice(0, suffixIndex) : href;
+  const suffix = suffixIndex >= 0 ? href.slice(suffixIndex) : "";
+  const internalPathname = stripOrganizationPathname(pathname);
+  return `${internalPathname === "/" ? "/inventory" : internalPathname}${suffix}`;
+}
+
+export function OrganizationLink({
+  as,
+  href,
+  ...props
+}: OrganizationLinkProps) {
   const organizationHref = useOrganizationHref();
-  const scopedHref =
-    typeof href === "string"
-      ? organizationHref(href)
-      : href.pathname && typeof href.pathname === "string"
-        ? { ...href, pathname: organizationHref(href.pathname) }
-        : href;
-  return <Link href={scopedHref} {...props} />;
+
+  if (typeof href === "string") {
+    const internalHref = stripOrganizationHref(href);
+    const scopedHref = organizationHref(internalHref);
+    return (
+      <Link
+        href={internalHref}
+        as={as ?? (scopedHref === internalHref ? undefined : scopedHref)}
+        {...props}
+      />
+    );
+  }
+
+  if (href.pathname && typeof href.pathname === "string") {
+    const strippedPathname = stripOrganizationPathname(href.pathname);
+    const internalPathname =
+      strippedPathname === "/" ? "/inventory" : strippedPathname;
+    const scopedPathname = organizationHref(internalPathname);
+    const internalHref = { ...href, pathname: internalPathname };
+    const scopedHref = { ...href, pathname: scopedPathname };
+    return (
+      <Link
+        href={internalHref}
+        as={as ?? (scopedPathname === internalPathname ? undefined : scopedHref)}
+        {...props}
+      />
+    );
+  }
+
+  return <Link href={href} as={as} {...props} />;
 }

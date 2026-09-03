@@ -22,6 +22,7 @@ import {
   inventoryCounts,
   inventoryCyclePolicies,
   media,
+  orderLineUnits,
   orderLines as purchaseOrderLines,
   resourceLendingSettings,
   resourceCreationRequests,
@@ -1963,6 +1964,15 @@ export async function mergeResources(
             and(
               eq(purchaseOrderLines.organizationId, organizationId),
               eq(purchaseOrderLines.id, collision.id),
+            ),
+          );
+        await transaction
+          .update(orderLineUnits)
+          .set({ orderLineId: collision.id, updatedAt: new Date() })
+          .where(
+            and(
+              eq(orderLineUnits.organizationId, organizationId),
+              eq(orderLineUnits.orderLineId, line.id),
             ),
           );
         await transaction

@@ -3901,7 +3901,7 @@ paths:
         schema: { type: string, format: uuid }
     post:
       tags: [Orders]
-      summary: Issue a sales or loan line, or return a loan line
+      summary: Issue or return a bulk-tracked sales or loan line
       description: Creates an idempotent stock movement linked to the order line and recalculates the order status atomically. Bulk-tracked inventory is supported by this endpoint.
       parameters:
         - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
@@ -3915,6 +3915,54 @@ paths:
         "201": { description: Movement created and order progress updated }
         "409": { description: Insufficient stock, excessive quantity, or invalid lifecycle state }
         "422": { description: Invalid movement for the order type }
+  /orders/{orderId}/lines/{lineId}/units:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: orderId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: lineId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Orders]
+      summary: List available and assigned serialized units for an order line
+      responses:
+        "200":
+          description: Serialized units available to the line and its assignment history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SerializedOrderLineUnits" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: The line does not use serialized stock tracking }
+    post:
+      tags: [Orders]
+      summary: Reserve, release, issue, or return concrete serialized units
+      description: Updates the unit lifecycle, available stock, order progress, cost layers, and immutable stock movement ledger atomically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrderLineUnitActionInput" }
+      responses:
+        "200":
+          description: Unit action applied, including replay-safe no-op actions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [changed, movementIds, order, units]
+                properties:
+                  changed: { type: integer, minimum: 0 }
+                  movementIds:
+                    type: array
+                    items: { type: string, format: uuid }
+                  order: { $ref: "#/components/schemas/Order" }
+                  units: { $ref: "#/components/schemas/SerializedOrderLineUnits" }
+        "409": { description: Unit state, capacity, assignment, or order lifecycle conflict }
+        "422": { description: Invalid action or non-serialized order line }
   /resources/{id}/media:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -6237,7 +6285,7 @@ components:
       allOf:
         - { $ref: "#/components/schemas/OrderLineInput" }
         - type: object
-          required: [id, orderId, resourceName, fulfilledQuantity, returnedQuantity, openQuantity, openReturnQuantity, trackingMode, unitName]
+          required: [id, orderId, resourceName, fulfilledQuantity, returnedQuantity, openQuantity, reservedQuantity, openReservationQuantity, openReturnQuantity, trackingMode, unitName, units]
           properties:
             id: { type: string, format: uuid }
             orderId: { type: string, format: uuid }
@@ -6246,13 +6294,18 @@ components:
             fulfilledQuantity: { type: integer, minimum: 0 }
             returnedQuantity: { type: integer, minimum: 0 }
             openQuantity: { type: integer, minimum: 0 }
+            reservedQuantity: { type: integer, minimum: 0 }
+            openReservationQuantity: { type: integer, minimum: 0 }
             openReturnQuantity: { type: integer, minimum: 0 }
             totalPriceCents: { type: [integer, "null"], minimum: 0 }
             trackingMode: { type: string, enum: [bulk, serialized] }
             unitName: { type: string }
+            units:
+              type: array
+              items: { $ref: "#/components/schemas/OrderLineUnit" }
     Order:
       type: object
-      required: [id, type, contactName, status, orderedAt, lines, totalQuantity, totalFulfilled, totalReturned]
+      required: [id, type, contactName, status, orderedAt, lines, totalQuantity, totalFulfilled, totalReturned, totalReserved]
       properties:
         id: { type: string, format: uuid }
         type: { $ref: "#/components/schemas/OrderType" }
@@ -6267,6 +6320,7 @@ components:
         totalQuantity: { type: integer, minimum: 0 }
         totalFulfilled: { type: integer, minimum: 0 }
         totalReturned: { type: integer, minimum: 0 }
+        totalReserved: { type: integer, minimum: 0 }
     OrderLineMovementInput:
       type: object
       additionalProperties: false
@@ -6276,6 +6330,59 @@ components:
         quantity: { type: integer, minimum: 1, maximum: 2000000000 }
         occurredAt: { type: string, format: date-time }
         location: { type: [string, "null"], maxLength: 240 }
+        note: { type: string, maxLength: 20000 }
+    OrderLineUnit:
+      type: object
+      required: [id, stockUnitId, code, status, stockStatus, reservedAt, fulfilledAt, returnedAt]
+      properties:
+        id: { type: string, format: uuid }
+        stockUnitId: { type: string, format: uuid }
+        code: { type: string, maxLength: 180 }
+        status: { type: string, enum: [reserved, fulfilled, returned] }
+        stockStatus: { type: string, enum: [available, reserved, in-use, maintenance, consumed, lost, retired] }
+        reservedAt: { type: string, format: date-time }
+        fulfilledAt: { type: [string, "null"], format: date-time }
+        returnedAt: { type: [string, "null"], format: date-time }
+    SerializedOrderLineUnits:
+      type: object
+      required: [line, availableUnits, assignments]
+      properties:
+        line:
+          type: object
+          required: [id, resourceId, resourceName, quantity, fulfilledQuantity, returnedQuantity]
+          properties:
+            id: { type: string, format: uuid }
+            resourceId: { type: string, format: uuid }
+            resourceName: { type: string }
+            quantity: { type: integer, minimum: 1 }
+            fulfilledQuantity: { type: integer, minimum: 0 }
+            returnedQuantity: { type: integer, minimum: 0 }
+        availableUnits:
+          type: array
+          items:
+            type: object
+            required: [id, code, status, location]
+            properties:
+              id: { type: string, format: uuid }
+              code: { type: string, maxLength: 180 }
+              status: { type: string, const: available }
+              location: { type: [string, "null"], maxLength: 240 }
+        assignments:
+          type: array
+          items: { $ref: "#/components/schemas/OrderLineUnit" }
+    OrderLineUnitActionInput:
+      type: object
+      additionalProperties: false
+      required: [action, unitIds]
+      properties:
+        action: { type: string, enum: [reserve, release, issue, return] }
+        unitIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
         note: { type: string, maxLength: 20000 }
     PurchaseReceiptInput:
       type: object

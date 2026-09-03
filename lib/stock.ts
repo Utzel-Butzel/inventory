@@ -24,6 +24,7 @@ import {
   inventoryTypeDefinitions,
   media,
   organizations,
+  orderLineUnits,
   orderLines as purchaseOrderLines,
   orders as purchaseOrders,
   resourceRelations,
@@ -2300,6 +2301,23 @@ export async function updateStockUnit(
     );
 
     if (input.status !== undefined && input.status !== unit.status) {
+      const [activeOrderLine] = await transaction
+        .select({ id: orderLineUnits.id })
+        .from(orderLineUnits)
+        .where(
+          and(
+            eq(orderLineUnits.organizationId, organizationId),
+            eq(orderLineUnits.stockUnitId, unit.id),
+            inArray(orderLineUnits.status, ["reserved", "fulfilled"]),
+          ),
+        )
+        .limit(1);
+      if (activeOrderLine) {
+        throw new StockOperationError(
+          "This unit is reserved or fulfilled on an order. Update it from the order line so stock and order history remain consistent.",
+          409,
+        );
+      }
       const [activeAssignment] = await transaction
         .select({ id: inventoryAssignments.id })
         .from(inventoryAssignments)

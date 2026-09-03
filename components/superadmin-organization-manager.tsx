@@ -345,7 +345,7 @@ export function SuperadminOrganizationManager() {
                             <span className="block text-xs font-semibold text-muted-strong">
                               {t("organizations.form.allowNegativeStock")}
                             </span>
-                            <span className="mt-0.5 block text-[11px] leading-4 text-muted">
+                            <span className="mt-0.5 block text-[13px] leading-4 text-muted">
                               {t("organizations.form.allowNegativeStockHint")}
                             </span>
                           </span>

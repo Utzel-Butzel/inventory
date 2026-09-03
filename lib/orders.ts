@@ -3,16 +3,22 @@ import "server-only";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import {
+  assemblyBuildComponents,
   contacts,
+  inventoryAssignments,
+  orderLineUnits,
   orderLines,
   orders,
   resources,
   stockMovements,
   stockSettings,
+  stockUnits,
   type OrderRecord,
+  type OrderLineUnitStatus,
   type OrderStatus,
   type OrderType,
   type StockTrackingMode,
+  type StockUnitStatus,
 } from "@/db/schema";
 import { db } from "@/lib/db";
 import {
@@ -22,12 +28,18 @@ import {
   requiredContactRole,
   type OrderCreateRequest,
   type OrderLineMovementRequest,
+  type OrderLineUnitActionRequest,
   type OrderPatchRequest,
 } from "@/lib/order-contract";
+import {
+  addInboundStockCost,
+  consumeStockCost,
+} from "@/lib/stock-costing";
 import {
   bookStockMovement,
   StockOperationError,
 } from "@/lib/stock";
+import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 
 type IdempotencyInput = { key: string; requestHash: string };
 
@@ -80,19 +92,19 @@ function assertOrderMovementAllowed(
     );
   }
   if (action === "return") {
-    if (order.type !== "loan") {
-      throw new OrderOperationError("Only loan orders can be returned.", 422);
-    }
-    if (
-      ![
-        "partially-issued",
-        "issued",
-        "partially-returned",
-        "overdue",
-      ].includes(order.status)
-    ) {
+    const returnStatuses =
+      order.type === "sale"
+        ? ["partially-fulfilled", "fulfilled", "partially-returned", "returned"]
+        : [
+            "partially-issued",
+            "issued",
+            "partially-returned",
+            "overdue",
+            "returned",
+          ];
+    if (!returnStatuses.includes(order.status)) {
       throw new OrderOperationError(
-        "This loan is not currently awaiting a return.",
+        "This order is not currently awaiting a return.",
         409,
       );
     }
@@ -128,36 +140,72 @@ type OrderLineDtoInput = {
   unitName: string | null;
   createdAt: Date;
   updatedAt: Date;
+  units: OrderLineUnitDtoInput[];
 };
 
-const lineDto = (line: OrderLineDtoInput) => ({
-  id: line.id,
-  orderId: line.orderId,
-  resourceId: line.resourceId,
-  resourceName: line.resourceName,
-  resourceSku: line.resourceSku,
-  resourceCurrency: line.resourceCurrency,
-  quantity: line.orderedQuantity,
-  fulfilledQuantity: line.fulfilledQuantity,
-  returnedQuantity: line.returnedQuantity,
-  openQuantity: Math.max(0, line.orderedQuantity - line.fulfilledQuantity),
-  openReturnQuantity: Math.max(
-    0,
-    line.fulfilledQuantity - line.returnedQuantity,
-  ),
-  unitPriceCents: line.unitPriceCents,
-  priceCurrency: line.priceCurrency,
-  totalPriceCents:
-    line.unitPriceCents === null
-      ? null
-      : line.unitPriceCents * line.orderedQuantity,
-  expectedAt: line.expectedAt?.toISOString() ?? null,
-  note: line.note,
-  trackingMode: line.trackingMode ?? "bulk",
-  unitName: line.unitName ?? "unit",
-  createdAt: line.createdAt.toISOString(),
-  updatedAt: line.updatedAt.toISOString(),
+type OrderLineUnitDtoInput = {
+  id: string;
+  orderLineId: string;
+  stockUnitId: string;
+  code: string;
+  status: OrderLineUnitStatus;
+  stockStatus: StockUnitStatus;
+  reservedAt: Date;
+  fulfilledAt: Date | null;
+  returnedAt: Date | null;
+};
+
+const orderLineUnitDto = (unit: OrderLineUnitDtoInput) => ({
+  id: unit.id,
+  stockUnitId: unit.stockUnitId,
+  code: unit.code,
+  status: unit.status,
+  stockStatus: unit.stockStatus,
+  reservedAt: unit.reservedAt.toISOString(),
+  fulfilledAt: unit.fulfilledAt?.toISOString() ?? null,
+  returnedAt: unit.returnedAt?.toISOString() ?? null,
 });
+
+const lineDto = (line: OrderLineDtoInput) => {
+  const units = line.units.map(orderLineUnitDto);
+  const reservedQuantity = units.filter(
+    (unit) => unit.status === "reserved",
+  ).length;
+  return {
+    id: line.id,
+    orderId: line.orderId,
+    resourceId: line.resourceId,
+    resourceName: line.resourceName,
+    resourceSku: line.resourceSku,
+    resourceCurrency: line.resourceCurrency,
+    quantity: line.orderedQuantity,
+    fulfilledQuantity: line.fulfilledQuantity,
+    returnedQuantity: line.returnedQuantity,
+    openQuantity: Math.max(0, line.orderedQuantity - line.fulfilledQuantity),
+    reservedQuantity,
+    openReservationQuantity: Math.max(
+      0,
+      line.orderedQuantity - line.fulfilledQuantity - reservedQuantity,
+    ),
+    openReturnQuantity: Math.max(
+      0,
+      line.fulfilledQuantity - line.returnedQuantity,
+    ),
+    unitPriceCents: line.unitPriceCents,
+    priceCurrency: line.priceCurrency,
+    totalPriceCents:
+      line.unitPriceCents === null
+        ? null
+        : line.unitPriceCents * line.orderedQuantity,
+    expectedAt: line.expectedAt?.toISOString() ?? null,
+    note: line.note,
+    trackingMode: line.trackingMode ?? "bulk",
+    unitName: line.unitName ?? "unit",
+    units,
+    createdAt: line.createdAt.toISOString(),
+    updatedAt: line.updatedAt.toISOString(),
+  };
+};
 
 const orderDto = (order: OrderRecord, rows: OrderLineDtoInput[]) => {
   const lines = rows.map(lineDto);
@@ -193,6 +241,10 @@ const orderDto = (order: OrderRecord, rows: OrderLineDtoInput[]) => {
       (total, line) => total + line.returnedQuantity,
       0,
     ),
+    totalReserved: lines.reduce(
+      (total, line) => total + line.reservedQuantity,
+      0,
+    ),
   };
 };
 
@@ -204,7 +256,7 @@ async function loadOrderLines(
   database: OrderReader = db,
 ) {
   if (!orderIds.length) return [];
-  return database
+  const rows = await database
     .select({
       id: orderLines.id,
       orderId: orderLines.orderId,
@@ -246,6 +298,47 @@ async function loadOrderLines(
       ),
     )
     .orderBy(asc(orderLines.createdAt), asc(orderLines.id));
+  if (!rows.length) return [];
+  const unitRows = await database
+    .select({
+      id: orderLineUnits.id,
+      orderLineId: orderLineUnits.orderLineId,
+      stockUnitId: orderLineUnits.stockUnitId,
+      code: stockUnits.code,
+      status: orderLineUnits.status,
+      stockStatus: stockUnits.status,
+      reservedAt: orderLineUnits.reservedAt,
+      fulfilledAt: orderLineUnits.fulfilledAt,
+      returnedAt: orderLineUnits.returnedAt,
+    })
+    .from(orderLineUnits)
+    .innerJoin(
+      stockUnits,
+      and(
+        eq(stockUnits.organizationId, organizationId),
+        eq(stockUnits.id, orderLineUnits.stockUnitId),
+      ),
+    )
+    .where(
+      and(
+        eq(orderLineUnits.organizationId, organizationId),
+        inArray(
+          orderLineUnits.orderLineId,
+          rows.map((row) => row.id),
+        ),
+      ),
+    )
+    .orderBy(asc(orderLineUnits.reservedAt), asc(stockUnits.code));
+  const unitsByLine = new Map<string, OrderLineUnitDtoInput[]>();
+  for (const unit of unitRows) {
+    const current = unitsByLine.get(unit.orderLineId) ?? [];
+    current.push(unit);
+    unitsByLine.set(unit.orderLineId, current);
+  }
+  return rows.map((row) => ({
+    ...row,
+    units: unitsByLine.get(row.id) ?? [],
+  }));
 }
 
 export async function listOrders(
@@ -532,6 +625,32 @@ export async function updateOrder(
         409,
       );
     }
+    if (patch.status === "cancelled") {
+      const [reservedUnit] = await transaction
+        .select({ id: orderLineUnits.id })
+        .from(orderLineUnits)
+        .innerJoin(
+          orderLines,
+          and(
+            eq(orderLines.organizationId, organizationId),
+            eq(orderLines.id, orderLineUnits.orderLineId),
+          ),
+        )
+        .where(
+          and(
+            eq(orderLineUnits.organizationId, organizationId),
+            eq(orderLines.orderId, orderId),
+            eq(orderLineUnits.status, "reserved"),
+          ),
+        )
+        .limit(1);
+      if (reservedUnit) {
+        throw new OrderOperationError(
+          "Release reserved serialized units before cancelling this order.",
+          409,
+        );
+      }
+    }
     const nextOrderedAt =
       patch.orderedAt === undefined
         ? order.orderedAt
@@ -691,9 +810,6 @@ export async function executeOrderLineMovement(
       }
       assertOrderMovementAllowed(order, input.action);
       if (isReturn) {
-        if (order.type !== "loan") {
-          throw new OrderOperationError("Only loan orders can be returned.", 422);
-        }
         const returnable = line.fulfilledQuantity - line.returnedQuantity;
         if (input.quantity > returnable) {
           throw new OrderOperationError(
@@ -752,5 +868,696 @@ export async function executeOrderLineMovement(
   return {
     ...movementResult,
     order: await getOrder(organizationId, orderId),
+  };
+}
+
+async function loadSerializedLineContext(
+  organizationId: string,
+  orderId: string,
+  lineId: string,
+) {
+  const [context] = await db
+    .select({
+      order: orders,
+      line: orderLines,
+      resourceName: resources.name,
+      trackingMode: stockSettings.trackingMode,
+    })
+    .from(orderLines)
+    .innerJoin(
+      orders,
+      and(
+        eq(orders.organizationId, organizationId),
+        eq(orders.id, orderLines.orderId),
+      ),
+    )
+    .innerJoin(
+      resources,
+      and(
+        eq(resources.organizationId, organizationId),
+        eq(resources.id, orderLines.resourceId),
+      ),
+    )
+    .leftJoin(
+      stockSettings,
+      and(
+        eq(stockSettings.organizationId, organizationId),
+        eq(stockSettings.resourceId, orderLines.resourceId),
+      ),
+    )
+    .where(
+      and(
+        eq(orderLines.organizationId, organizationId),
+        eq(orderLines.id, lineId),
+        eq(orderLines.orderId, orderId),
+      ),
+    )
+    .limit(1);
+  if (!context) throw new OrderOperationError("Order line not found.", 404);
+  if (context.order.type === "purchase") {
+    throw new OrderOperationError(
+      "Serialized fulfillment is available for sales and loans.",
+      422,
+    );
+  }
+  if ((context.trackingMode ?? "bulk") !== "serialized") {
+    throw new OrderOperationError(
+      "This order line does not use serialized stock tracking.",
+      422,
+    );
+  }
+  return context;
+}
+
+export async function listOrderLineUnits(
+  organizationId: string,
+  orderId: string,
+  lineId: string,
+) {
+  const context = await loadSerializedLineContext(
+    organizationId,
+    orderId,
+    lineId,
+  );
+  return db.transaction(async (transaction) => {
+    const assignments = await transaction
+      .select({
+        id: orderLineUnits.id,
+        orderLineId: orderLineUnits.orderLineId,
+        stockUnitId: orderLineUnits.stockUnitId,
+        code: stockUnits.code,
+        status: orderLineUnits.status,
+        stockStatus: stockUnits.status,
+        reservedAt: orderLineUnits.reservedAt,
+        fulfilledAt: orderLineUnits.fulfilledAt,
+        returnedAt: orderLineUnits.returnedAt,
+      })
+      .from(orderLineUnits)
+      .innerJoin(
+        stockUnits,
+        and(
+          eq(stockUnits.organizationId, organizationId),
+          eq(stockUnits.id, orderLineUnits.stockUnitId),
+        ),
+      )
+      .where(
+        and(
+          eq(orderLineUnits.organizationId, organizationId),
+          eq(orderLineUnits.orderLineId, lineId),
+        ),
+      )
+      .orderBy(asc(orderLineUnits.reservedAt), asc(stockUnits.code));
+    const activeLinks = await transaction
+      .select({ stockUnitId: orderLineUnits.stockUnitId })
+      .from(orderLineUnits)
+      .innerJoin(
+        stockUnits,
+        and(
+          eq(stockUnits.organizationId, organizationId),
+          eq(stockUnits.id, orderLineUnits.stockUnitId),
+          eq(stockUnits.resourceId, context.line.resourceId),
+        ),
+      )
+      .where(
+        and(
+          eq(orderLineUnits.organizationId, organizationId),
+          inArray(orderLineUnits.status, ["reserved", "fulfilled"]),
+        ),
+      );
+    const unavailableIds = new Set(activeLinks.map((row) => row.stockUnitId));
+    const currentLineIds = new Set(assignments.map((row) => row.stockUnitId));
+    const availableRows = await transaction
+      .select({
+        id: stockUnits.id,
+        code: stockUnits.code,
+        status: stockUnits.status,
+        location: stockUnits.location,
+      })
+      .from(stockUnits)
+      .where(
+        and(
+          eq(stockUnits.organizationId, organizationId),
+          eq(stockUnits.resourceId, context.line.resourceId),
+          eq(stockUnits.status, "available"),
+        ),
+      )
+      .orderBy(asc(stockUnits.code));
+    return {
+      line: {
+        id: context.line.id,
+        resourceId: context.line.resourceId,
+        resourceName: context.resourceName,
+        quantity: context.line.orderedQuantity,
+        fulfilledQuantity: context.line.fulfilledQuantity,
+        returnedQuantity: context.line.returnedQuantity,
+      },
+      availableUnits: availableRows.filter(
+        (unit) =>
+          !unavailableIds.has(unit.id) && !currentLineIds.has(unit.id),
+      ),
+      assignments: assignments.map(orderLineUnitDto),
+    };
+  }, { isolationLevel: "repeatable read", accessMode: "read only" });
+}
+
+function assertSerializedActionAllowed(
+  order: Pick<OrderRecord, "type" | "status">,
+  action: OrderLineUnitActionRequest["action"],
+) {
+  if (action === "issue" || action === "return") {
+    assertOrderMovementAllowed(order, action);
+    return;
+  }
+  if (order.status === "cancelled" || order.status === "draft") {
+    throw new OrderOperationError(
+      "Confirm or reserve this order before assigning serialized units.",
+      409,
+    );
+  }
+  const reservable =
+    order.type === "sale"
+      ? ["confirmed", "partially-fulfilled"]
+      : ["reserved", "partially-issued"];
+  if (!reservable.includes(order.status)) {
+    throw new OrderOperationError(
+      "This order is not currently available for unit reservations.",
+      409,
+    );
+  }
+}
+
+export async function executeOrderLineUnitAction(
+  organizationId: string,
+  orderId: string,
+  lineId: string,
+  input: OrderLineUnitActionRequest,
+  actor: string,
+) {
+  const initial = await loadSerializedLineContext(
+    organizationId,
+    orderId,
+    lineId,
+  );
+  assertSerializedActionAllowed(initial.order, input.action);
+  const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
+  const unitIds = [...input.unitIds].sort();
+
+  const outcome = await db.transaction(async (transaction) => {
+    const [resource] = await transaction
+      .select({
+        id: resources.id,
+        name: resources.name,
+        quantity: resources.quantity,
+        valueCents: resources.valueCents,
+        currency: resources.currency,
+      })
+      .from(resources)
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, initial.line.resourceId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    const [order] = await transaction
+      .select()
+      .from(orders)
+      .where(
+        and(
+          eq(orders.organizationId, organizationId),
+          eq(orders.id, orderId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    const [line] = await transaction
+      .select()
+      .from(orderLines)
+      .where(
+        and(
+          eq(orderLines.organizationId, organizationId),
+          eq(orderLines.id, lineId),
+          eq(orderLines.orderId, orderId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!resource || !order || !line) {
+      throw new OrderOperationError("Order line not found.", 404);
+    }
+    if (order.type === "purchase") {
+      throw new OrderOperationError(
+        "Serialized fulfillment is available for sales and loans.",
+        422,
+      );
+    }
+    assertSerializedActionAllowed(order, input.action);
+    const [settings] = await transaction
+      .select({ trackingMode: stockSettings.trackingMode })
+      .from(stockSettings)
+      .where(
+        and(
+          eq(stockSettings.organizationId, organizationId),
+          eq(stockSettings.resourceId, resource.id),
+        ),
+      )
+      .limit(1);
+    if ((settings?.trackingMode ?? "bulk") !== "serialized") {
+      throw new OrderOperationError(
+        "This order line no longer uses serialized stock tracking.",
+        409,
+      );
+    }
+    const units = await transaction
+      .select()
+      .from(stockUnits)
+      .where(
+        and(
+          eq(stockUnits.organizationId, organizationId),
+          eq(stockUnits.resourceId, line.resourceId),
+          inArray(stockUnits.id, unitIds),
+        ),
+      )
+      .orderBy(asc(stockUnits.id))
+      .for("update");
+    if (units.length !== unitIds.length) {
+      throw new OrderOperationError(
+        "One or more serialized units do not belong to this order line.",
+        422,
+      );
+    }
+    const links = await transaction
+      .select()
+      .from(orderLineUnits)
+      .where(
+        and(
+          eq(orderLineUnits.organizationId, organizationId),
+          eq(orderLineUnits.orderLineId, lineId),
+          inArray(orderLineUnits.stockUnitId, unitIds),
+        ),
+      )
+      .orderBy(asc(orderLineUnits.stockUnitId))
+      .for("update");
+    const activeLinks = await transaction
+      .select()
+      .from(orderLineUnits)
+      .where(
+        and(
+          eq(orderLineUnits.organizationId, organizationId),
+          inArray(orderLineUnits.stockUnitId, unitIds),
+          inArray(orderLineUnits.status, ["reserved", "fulfilled"]),
+        ),
+      )
+      .orderBy(asc(orderLineUnits.stockUnitId))
+      .for("update");
+    const linksByUnit = new Map(links.map((link) => [link.stockUnitId, link]));
+    const conflict = activeLinks.find((link) => link.orderLineId !== lineId);
+    if (conflict) {
+      throw new OrderOperationError(
+        "One of these serialized units is already assigned to another order.",
+        409,
+      );
+    }
+
+    const changes: Array<{
+      unit: (typeof units)[number];
+      link: (typeof links)[number] | null;
+      nextStockStatus: StockUnitStatus;
+      delta: -1 | 0 | 1;
+    }> = [];
+    for (const unit of units) {
+      const link = linksByUnit.get(unit.id);
+      if (input.action === "reserve") {
+        if (link?.status === "reserved") continue;
+        if (link) {
+          throw new OrderOperationError(
+            `Unit ${unit.code} already has a completed lifecycle on this line.`,
+            409,
+          );
+        }
+        if (unit.status !== "available") {
+          throw new OrderOperationError(
+            `Unit ${unit.code} is ${unit.status} and cannot be reserved.`,
+            409,
+          );
+        }
+        changes.push({
+          unit,
+          link: null,
+          nextStockStatus: "reserved",
+          delta: -1,
+        });
+        continue;
+      }
+      if (input.action === "release") {
+        if (!link && unit.status === "available") continue;
+        if (!link || link.status !== "reserved") {
+          throw new OrderOperationError(
+            `Unit ${unit.code} is not reserved on this order line.`,
+            409,
+          );
+        }
+        if (unit.status !== "reserved") {
+          throw new OrderOperationError(
+            `Unit ${unit.code} is ${unit.status}; resolve its stock state before releasing it.`,
+            409,
+          );
+        }
+        changes.push({
+          unit,
+          link,
+          nextStockStatus: "available",
+          delta: 1,
+        });
+        continue;
+      }
+      if (input.action === "issue") {
+        if (link?.status === "fulfilled") continue;
+        if (link?.status === "returned") {
+          throw new OrderOperationError(
+            `Unit ${unit.code} was already returned on this order line.`,
+            409,
+          );
+        }
+        const expectedStatus = link?.status === "reserved" ? "reserved" : "available";
+        if (unit.status !== expectedStatus) {
+          throw new OrderOperationError(
+            `Unit ${unit.code} is ${unit.status} and cannot be issued.`,
+            409,
+          );
+        }
+        changes.push({
+          unit,
+          link: link ?? null,
+          nextStockStatus: order.type === "sale" ? "consumed" : "in-use",
+          delta: unit.status === "available" ? -1 : 0,
+        });
+        continue;
+      }
+      if (link?.status === "returned") continue;
+      if (!link || link.status !== "fulfilled") {
+        throw new OrderOperationError(
+          `Unit ${unit.code} was not fulfilled on this order line.`,
+          409,
+        );
+      }
+      const expectedStatus = order.type === "sale" ? "consumed" : "in-use";
+      if (unit.status !== expectedStatus) {
+        throw new OrderOperationError(
+          `Unit ${unit.code} is ${unit.status}; resolve its stock state before returning it.`,
+          409,
+        );
+      }
+      changes.push({
+        unit,
+        link,
+        nextStockStatus: "available",
+        delta: 1,
+      });
+    }
+
+    const reservedRows = await transaction
+      .select({ id: orderLineUnits.id })
+      .from(orderLineUnits)
+      .where(
+        and(
+          eq(orderLineUnits.organizationId, organizationId),
+          eq(orderLineUnits.orderLineId, lineId),
+          eq(orderLineUnits.status, "reserved"),
+        ),
+      );
+    const reservedCount = reservedRows.length;
+    if (
+      input.action === "reserve" &&
+      changes.length >
+        line.orderedQuantity - line.fulfilledQuantity - reservedCount
+    ) {
+      throw new OrderOperationError(
+        "These reservations would exceed the open quantity on this line.",
+        409,
+      );
+    }
+    if (input.action === "issue") {
+      const reservationsBeingIssued = changes.filter(
+        (change) => change.link?.status === "reserved",
+      ).length;
+      const reservationsRemaining = reservedCount - reservationsBeingIssued;
+      if (
+        changes.length >
+        line.orderedQuantity - line.fulfilledQuantity - reservationsRemaining
+      ) {
+        throw new OrderOperationError(
+          "These units would exceed the unreserved quantity on this line.",
+          409,
+        );
+      }
+    }
+    if (
+      input.action === "return" &&
+      changes.length > line.fulfilledQuantity - line.returnedQuantity
+    ) {
+      throw new OrderOperationError(
+        "These units exceed the returnable quantity on this line.",
+        409,
+      );
+    }
+    if (!changes.length) return { changed: 0, movementIds: [] as string[] };
+
+    const changingUnitIds = changes.map((change) => change.unit.id);
+    const [activeAssignment, installation] = await Promise.all([
+      transaction
+        .select({ id: inventoryAssignments.id })
+        .from(inventoryAssignments)
+        .where(
+          and(
+            eq(inventoryAssignments.organizationId, organizationId),
+            inArray(inventoryAssignments.stockUnitId, changingUnitIds),
+            eq(inventoryAssignments.status, "active"),
+          ),
+        )
+        .limit(1),
+      transaction
+        .select({ id: assemblyBuildComponents.id })
+        .from(assemblyBuildComponents)
+        .where(
+          and(
+            eq(assemblyBuildComponents.organizationId, organizationId),
+            inArray(assemblyBuildComponents.componentUnitId, changingUnitIds),
+          ),
+        )
+        .limit(1),
+    ]);
+    if (activeAssignment.length) {
+      throw new OrderOperationError(
+        "One of these units has an active inventory assignment.",
+        409,
+      );
+    }
+    if (installation.length) {
+      throw new OrderOperationError(
+        "One of these units is installed in an assembly.",
+        409,
+      );
+    }
+
+    const totalDelta = changes.reduce((sum, change) => sum + change.delta, 0);
+    const finalBalance = resource.quantity + totalDelta;
+    if (finalBalance < 0) {
+      throw new OrderOperationError(
+        "This serialized action would make available stock negative.",
+        409,
+      );
+    }
+    let runningBalance = resource.quantity;
+    const movementIds: string[] = [];
+    for (const change of changes) {
+      const quantityBefore = runningBalance;
+      runningBalance += change.delta;
+      await transaction
+        .update(stockUnits)
+        .set({
+          status: change.nextStockStatus,
+          lastMovedAt: occurredAt,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(stockUnits.organizationId, organizationId),
+            eq(stockUnits.id, change.unit.id),
+          ),
+        );
+      if (input.action === "reserve") {
+        await transaction.insert(orderLineUnits).values({
+          organizationId,
+          orderLineId: lineId,
+          stockUnitId: change.unit.id,
+          status: "reserved",
+          reservedAt: occurredAt,
+          createdBy: actor,
+          updatedBy: actor,
+        });
+      } else if (input.action === "release") {
+        await transaction
+          .delete(orderLineUnits)
+          .where(
+            and(
+              eq(orderLineUnits.organizationId, organizationId),
+              eq(orderLineUnits.id, change.link!.id),
+            ),
+          );
+      } else if (input.action === "issue") {
+        if (change.link) {
+          await transaction
+            .update(orderLineUnits)
+            .set({
+              status: "fulfilled",
+              fulfilledAt: occurredAt,
+              updatedBy: actor,
+              updatedAt: new Date(),
+            })
+            .where(eq(orderLineUnits.id, change.link.id));
+        } else {
+          await transaction.insert(orderLineUnits).values({
+            organizationId,
+            orderLineId: lineId,
+            stockUnitId: change.unit.id,
+            status: "fulfilled",
+            reservedAt: occurredAt,
+            fulfilledAt: occurredAt,
+            createdBy: actor,
+            updatedBy: actor,
+          });
+        }
+      } else {
+        await transaction
+          .update(orderLineUnits)
+          .set({
+            status: "returned",
+            returnedAt: occurredAt,
+            updatedBy: actor,
+            updatedAt: new Date(),
+          })
+          .where(eq(orderLineUnits.id, change.link!.id));
+      }
+      const movementType =
+        input.action === "reserve"
+          ? "order-unit-reservation"
+          : input.action === "release"
+            ? "order-unit-release"
+            : input.action;
+      const [movement] = await transaction
+        .insert(stockMovements)
+        .values({
+          organizationId,
+          resourceId: resource.id,
+          unitId: change.unit.id,
+          orderLineId: line.id,
+          contactId: order.contactId,
+          delta: change.delta,
+          quantity: 1,
+          totalPriceCents:
+            input.action === "issue" && order.type === "sale" && line.unitPriceCents !== null
+              ? -line.unitPriceCents
+              : null,
+          priceCurrency:
+            input.action === "issue" && order.type === "sale" && line.unitPriceCents !== null
+              ? line.priceCurrency
+              : null,
+          balanceAfter: runningBalance,
+          type: movementType,
+          reason: `${input.action} ${change.unit.code} for ${order.reference ?? order.contactName}`.slice(0, 240),
+          note: input.note ?? "",
+          location: change.unit.location,
+          fromLocationResourceId: change.delta < 0 ? change.unit.locationResourceId : null,
+          toLocationResourceId: change.delta > 0 ? change.unit.locationResourceId : null,
+          occurredAt,
+          createdBy: actor,
+        })
+        .returning();
+      movementIds.push(movement.id);
+      if (change.delta < 0) {
+        await consumeStockCost(transaction, {
+          organizationId,
+          resourceId: resource.id,
+          movementId: movement.id,
+          unitId: change.unit.id,
+          quantity: 1,
+          quantityBefore,
+          fallbackUnitCostCents:
+            change.unit.acquisitionCostCents ?? resource.valueCents,
+          currency: resource.currency,
+          occurredAt,
+        });
+      } else if (change.delta > 0) {
+        await addInboundStockCost(transaction, {
+          organizationId,
+          resourceId: resource.id,
+          movementId: movement.id,
+          unitId: change.unit.id,
+          quantity: 1,
+          fallbackUnitCostCents:
+            change.unit.acquisitionCostCents ?? resource.valueCents,
+          currency: resource.currency,
+          occurredAt,
+          estimated: true,
+        });
+      }
+    }
+    await transaction
+      .update(resources)
+      .set({ quantity: finalBalance, updatedAt: new Date() })
+      .where(
+        and(
+          eq(resources.organizationId, organizationId),
+          eq(resources.id, resource.id),
+        ),
+      );
+    if (input.action === "issue" || input.action === "return") {
+      await transaction
+        .update(orderLines)
+        .set({
+          ...(input.action === "issue"
+            ? { fulfilledQuantity: line.fulfilledQuantity + changes.length }
+            : { returnedQuantity: line.returnedQuantity + changes.length }),
+          updatedAt: new Date(),
+        })
+        .where(eq(orderLines.id, line.id));
+      const currentLines = await transaction
+        .select({
+          orderedQuantity: orderLines.orderedQuantity,
+          fulfilledQuantity: orderLines.fulfilledQuantity,
+          returnedQuantity: orderLines.returnedQuantity,
+        })
+        .from(orderLines)
+        .where(
+          and(
+            eq(orderLines.organizationId, organizationId),
+            eq(orderLines.orderId, orderId),
+          ),
+        );
+      const status = deriveOrderStatus(
+        order.type,
+        order.status,
+        currentLines,
+        order.expectedAt,
+      );
+      await transaction
+        .update(orders)
+        .set({ status, updatedAt: new Date() })
+        .where(eq(orders.id, order.id));
+    }
+    const movementRows = await transaction
+      .select()
+      .from(stockMovements)
+      .where(inArray(stockMovements.id, movementIds));
+    await enqueueStockMovementWebhookEvents(transaction, movementRows);
+    return { changed: changes.length, movementIds };
+  });
+
+  return {
+    ...outcome,
+    order: await getOrder(organizationId, orderId),
+    units: await listOrderLineUnits(organizationId, orderId, lineId),
   };
 }

@@ -58,6 +58,11 @@
 
 :root {
   color-scheme: light;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --app-shell-header-height: calc(68px + var(--safe-area-top));
   --map-control-icon-filter: none;
   --font-inventory-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
@@ -67,6 +72,22 @@
 }
 
 @theme {
+  --text-xs: 1rem;
+  --text-xs--line-height: calc(1.25 / 1);
+  --text-sm: 1.125rem;
+  --text-sm--line-height: calc(1.5 / 1.125);
+  --text-base: 1.25rem;
+  --text-base--line-height: calc(1.75 / 1.25);
+  --text-lg: 1.375rem;
+  --text-lg--line-height: calc(2 / 1.375);
+  --text-xl: 1.5rem;
+  --text-xl--line-height: calc(2 / 1.5);
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: calc(2.25 / 1.75);
+  --text-3xl: 2.125rem;
+  --text-3xl--line-height: calc(2.5 / 2.125);
+  --text-4xl: 2.5rem;
+  --text-4xl--line-height: calc(2.75 / 2.5);
   --color-background: #f6f7f9;
   --color-foreground: #17191c;
   --color-surface: #ffffff;
@@ -75,6 +96,7 @@
   --color-surface-hover: #e9ebef;
   --color-border: #e4e7eb;
   --color-border-strong: #cfd3da;
+  --color-input-border: #aeb4bd;
   --color-muted: #5f6672;
   --color-muted-strong: #464c55;
   --color-sidebar-muted: #5f6672;
@@ -121,6 +143,7 @@
   --color-surface-hover: #161a20;
   --color-border: #191d24;
   --color-border-strong: #242b34;
+  --color-input-border: #3b4654;
   --color-muted: #aab2be;
   --color-muted-strong: #c7cdd6;
   --color-sidebar-muted: #c5ccd6;
@@ -165,6 +188,7 @@
     --color-surface-hover: #161a20;
     --color-border: #191d24;
     --color-border-strong: #242b34;
+    --color-input-border: #3b4654;
     --color-muted: #aab2be;
     --color-muted-strong: #c7cdd6;
     --color-sidebar-muted: #c5ccd6;
@@ -203,16 +227,75 @@
 }
 
 html {
+  min-height: 100%;
   background: var(--color-background);
+  overscroll-behavior-x: none;
+  scroll-padding-top: var(--app-shell-header-height);
   scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
+  min-width: 0;
+  min-height: 100dvh;
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-inventory-sans);
   text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
+}
+
+.grid > * {
+  min-width: 0;
+}
+
+.app-shell-header {
+  padding-top: var(--safe-area-top);
+  padding-right: max(1rem, var(--safe-area-right));
+  padding-left: max(1rem, var(--safe-area-left));
+}
+
+.app-shell-mobile-drawer {
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
+  padding-left: var(--safe-area-left);
+}
+
+.app-shell-main {
+  min-height: calc(100dvh - var(--app-shell-header-height));
+  padding-bottom: var(--safe-area-bottom);
+}
+
+.app-shell-main--read-only {
+  min-height: calc(100dvh - var(--app-shell-header-height) - 41px);
+}
+
+.safe-area-page {
+  padding-top: max(1.25rem, var(--safe-area-top));
+  padding-right: max(1.25rem, var(--safe-area-right));
+  padding-bottom: max(1.25rem, var(--safe-area-bottom));
+  padding-left: max(1.25rem, var(--safe-area-left));
+}
+
+@media (min-width: 640px) {
+  .app-shell-header {
+    padding-right: max(1.5rem, var(--safe-area-right));
+    padding-left: max(1.5rem, var(--safe-area-left));
+  }
+
+  .safe-area-page {
+    padding-top: max(1.75rem, var(--safe-area-top));
+    padding-right: max(2rem, var(--safe-area-right));
+    padding-bottom: max(1.75rem, var(--safe-area-bottom));
+    padding-left: max(2rem, var(--safe-area-left));
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-shell-header {
+    padding-right: 2rem;
+    padding-left: 2rem;
+  }
 }
 
 button,
@@ -220,6 +303,12 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+input,
+select,
+textarea {
+  --color-border: var(--color-input-border);
 }
 
 button,
@@ -452,6 +541,26 @@ button:not(:disabled),
 .mdx-editor-input > div:last-child {
   border-color: var(--color-border);
   background: var(--color-surface-subtle);
+}
+
+@media (max-width: 639px) {
+  .mdx-editor-input .mdxeditor-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mdx-editor-input .mdxeditor-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mdx-editor-input .mdxeditor-toolbar button,
+  .mdx-editor-input .mdxeditor-toolbar [role="button"] {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

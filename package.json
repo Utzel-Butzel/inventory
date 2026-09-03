@@ -16,7 +16,8 @@
     "test:ai-rate-limit": "node --experimental-strip-types --test tests/ai-rate-limit-policy.test.mjs tests/inventory-research-migration.test.mjs",
     "test:ai-prompts": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/ai-prompt-contract.test.mjs tests/inventory-research-contract.test.mjs",
     "test:ai-costs": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/ai-cost-estimates.test.mjs tests/ai-billing.test.mjs tests/ai-usage-migration.test.mjs",
-    "test:count": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/inventory-count-contract.test.mjs tests/replicate-count-contract.test.mjs tests/replicate-count-job.test.mjs",
+    "test:count": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/inventory-count-contract.test.mjs tests/inventory-count-benchmark.test.mjs tests/dense-component-count.test.mjs tests/replicate-count-contract.test.mjs tests/replicate-count-job.test.mjs",
+    "qa:count": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs scripts/benchmark-inventory-count.mjs",
     "test:recognition": "node --experimental-strip-types --test tests/inventory-recognition-contract.test.mjs tests/inventory-recognition-migration.test.mjs",
     "test:covers": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/cover-generation.test.mjs",
     "test:locations": "node --experimental-strip-types --test tests/spatial-containment.test.mjs tests/client-media-location.test.mjs",
@@ -117,5 +118,6 @@
     "pdf-lib": "^1.17.1",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3"
-  }
+  },
+  "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be"
 }

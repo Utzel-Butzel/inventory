@@ -54,9 +54,9 @@ type DefinitionDraft = {
 
 const endpoint = "/api/v1/custom-fields";
 const inputClass =
-  "mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-[13px] text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
+  "mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-[15px] text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
 const textAreaClass = `${inputClass} h-auto min-h-20 resize-y py-2.5 leading-5`;
-const labelClass = "block text-[11px] font-semibold text-muted-strong";
+const labelClass = "block text-[13px] font-semibold text-muted-strong";
 
 const fieldTypeOptions: Array<{ value: FieldType }> = [
   { value: "text" },
@@ -516,7 +516,7 @@ export function CustomFieldManager() {
               <h2 id="custom-fields-heading" className="text-lg font-semibold tracking-[-0.02em] text-foreground">
                 {t("settings:customFields.title")}
               </h2>
-              <p className="mt-0.5 text-[12px] text-muted">
+              <p className="mt-0.5 text-[14px] text-muted">
                 {t("settings:customFields.description")}
               </p>
             </div>
@@ -531,7 +531,7 @@ export function CustomFieldManager() {
       </div>
 
       {error ? (
-        <div role="alert" className="mb-4 flex items-start justify-between gap-4 rounded-xl border border-danger-border bg-danger-soft px-3.5 py-3 text-[12px] leading-5 text-danger">
+        <div role="alert" className="mb-4 flex items-start justify-between gap-4 rounded-xl border border-danger-border bg-danger-soft px-3.5 py-3 text-[14px] leading-5 text-danger">
           <span>{error}</span>
           <button
             type="button"
@@ -543,7 +543,7 @@ export function CustomFieldManager() {
         </div>
       ) : null}
       {notice ? (
-        <div role="status" className="mb-4 flex items-start justify-between gap-4 rounded-xl border border-success-border bg-success-soft px-3.5 py-3 text-[12px] leading-5 text-success">
+        <div role="status" className="mb-4 flex items-start justify-between gap-4 rounded-xl border border-success-border bg-success-soft px-3.5 py-3 text-[14px] leading-5 text-success">
           <span className="flex items-center gap-2"><Check className="size-4" aria-hidden="true" /> {notice}</span>
           <button
             type="button"
@@ -577,7 +577,7 @@ export function CustomFieldManager() {
               type="button"
               onClick={() => selectEntity(tab.value)}
               className={cn(
-                "flex h-10 items-center justify-center gap-2 rounded-lg text-[12px] font-semibold transition",
+                "flex h-10 items-center justify-center gap-2 rounded-lg text-[14px] font-semibold transition",
                 entityType === tab.value
                   ? "bg-brand-soft text-brand shadow-sm"
                   : "text-muted hover:bg-surface-hover hover:text-foreground",
@@ -593,7 +593,7 @@ export function CustomFieldManager() {
         <Card className="grid min-h-72 place-items-center text-muted">
           <div className="text-center">
             <LoaderCircle className="mx-auto size-5 animate-spin" aria-hidden="true" />
-            <p className="mt-2 text-[12px]">
+            <p className="mt-2 text-[14px]">
               {t("settings:customFields.loading")}
             </p>
           </div>
@@ -602,7 +602,7 @@ export function CustomFieldManager() {
         <div className="grid items-start gap-4 xl:grid-cols-[290px_minmax(0,1fr)]">
           <Card className="overflow-hidden xl:sticky xl:top-[88px]">
             <div className="border-b border-border px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
                 {t("settings:customFields.fieldCount", {
                   count: visibleDefinitions.length,
                 })}
@@ -632,8 +632,8 @@ export function CustomFieldManager() {
                       )}
                     </span>
                     <span className="min-w-0">
-                      <span className="block truncate text-[12px] font-semibold text-foreground">{definition.label}</span>
-                      <span className="mt-0.5 block truncate text-[10px] text-muted">
+                      <span className="block truncate text-[14px] font-semibold text-foreground">{definition.label}</span>
+                      <span className="mt-0.5 block truncate text-[12px] text-muted">
                         {definition.key} · {fieldTypeLabel(definition.fieldType, t)}
                       </span>
                     </span>
@@ -669,7 +669,7 @@ export function CustomFieldManager() {
                     ? t("settings:customFields.editTitle", { label: draft.label })
                     : t("settings:customFields.createTitle")}
                 </h3>
-                <p className="mt-1 text-[11px] leading-5 text-muted">
+                <p className="mt-1 text-[13px] leading-5 text-muted">
                   {t("settings:customFields.formDescription")}
                 </p>
               </div>
@@ -765,7 +765,7 @@ export function CustomFieldManager() {
                     className={inputClass}
                   />
                 </label>
-                <label className="flex items-center gap-3 self-end rounded-xl border border-border bg-surface-subtle px-3.5 py-3 text-[12px] font-medium text-muted-strong">
+                <label className="flex items-center gap-3 self-end rounded-xl border border-border bg-surface-subtle px-3.5 py-3 text-[14px] font-medium text-muted-strong">
                   <input
                     type="checkbox"
                     checked={draft.required}
@@ -778,7 +778,7 @@ export function CustomFieldManager() {
 
               {draft.fieldType === "number" ? (
                 <div className="rounded-xl border border-border bg-surface-subtle p-4">
-                  <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">
+                  <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.09em] text-muted">
                     {t("settings:customFields.numberConstraints")}
                   </p>
                   <div className="grid gap-3 sm:grid-cols-3">
@@ -806,10 +806,10 @@ export function CustomFieldManager() {
                 <div className="rounded-xl border border-border bg-surface-subtle p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.09em] text-muted">
                         {t("settings:customFields.options")}
                       </p>
-                      <p className="mt-1 text-[10px] text-muted">
+                      <p className="mt-1 text-[12px] text-muted">
                         {t("settings:customFields.optionsDescription")}
                       </p>
                     </div>
@@ -880,10 +880,10 @@ export function CustomFieldManager() {
                       <Link2 className="size-4" aria-hidden="true" />
                     </span>
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-brand">
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.09em] text-brand">
                         {t("settings:customFields.reference.title")}
                       </p>
-                      <p className="mt-1 text-[10px] leading-4 text-muted">
+                      <p className="mt-1 text-[12px] leading-4 text-muted">
                         {t("settings:customFields.reference.description")}
                       </p>
                     </div>
@@ -910,7 +910,7 @@ export function CustomFieldManager() {
                         </option>
                       </select>
                     </label>
-                    <label className="mt-[17px] flex h-10 items-center gap-3 rounded-xl border border-brand-border bg-surface px-3.5 text-[12px] font-medium text-muted-strong">
+                    <label className="mt-[17px] flex h-10 items-center gap-3 rounded-xl border border-brand-border bg-surface px-3.5 text-[14px] font-medium text-muted-strong">
                       <input
                         type="checkbox"
                         checked={draft.referenceMultiple}
@@ -940,7 +940,7 @@ export function CustomFieldManager() {
                           }))
                         }
                         className={cn(
-                          "h-8 rounded-lg border px-2.5 text-[10px] font-semibold transition",
+                          "h-8 rounded-lg border px-2.5 text-[12px] font-semibold transition",
                           !draft.referenceResourceTypes.length
                             ? "border-brand-border bg-brand-soft text-brand"
                             : "border-border bg-surface text-muted hover:bg-surface-hover",
@@ -965,7 +965,7 @@ export function CustomFieldManager() {
                               }))
                             }
                             className={cn(
-                              "h-8 rounded-lg border px-2.5 text-[10px] font-semibold transition",
+                              "h-8 rounded-lg border px-2.5 text-[12px] font-semibold transition",
                               active
                                 ? "border-brand-border bg-brand-soft text-brand"
                                 : "border-border bg-surface text-muted hover:bg-surface-hover",
@@ -1050,10 +1050,10 @@ export function CustomFieldManager() {
 
               <div className="rounded-xl border border-border bg-surface-subtle p-4">
                 <div className="mb-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.09em] text-muted">
                     {t("settings:customFields.applies.title")}
                   </p>
-                  <p className="mt-1 text-[10px] leading-4 text-muted">
+                  <p className="mt-1 text-[12px] leading-4 text-muted">
                     {t("settings:customFields.applies.description")}
                   </p>
                 </div>
@@ -1064,7 +1064,7 @@ export function CustomFieldManager() {
                   <button
                     type="button"
                     onClick={() => setDraft((current) => ({ ...current, resourceTypes: [] }))}
-                    className={cn("h-8 rounded-lg border px-2.5 text-[10px] font-semibold transition", !draft.resourceTypes.length ? "border-brand-border bg-brand-soft text-brand" : "border-border bg-surface text-muted hover:bg-surface-hover")}
+                    className={cn("h-8 rounded-lg border px-2.5 text-[12px] font-semibold transition", !draft.resourceTypes.length ? "border-brand-border bg-brand-soft text-brand" : "border-border bg-surface text-muted hover:bg-surface-hover")}
                   >
                     {t("settings:customFields.allTypes")}
                   </button>
@@ -1080,7 +1080,7 @@ export function CustomFieldManager() {
                             ? current.resourceTypes.filter((value) => value !== option.value)
                             : [...current.resourceTypes, option.value],
                         }))}
-                        className={cn("h-8 rounded-lg border px-2.5 text-[10px] font-semibold transition", active ? "border-brand-border bg-brand-soft text-brand" : "border-border bg-surface text-muted hover:bg-surface-hover")}
+                        className={cn("h-8 rounded-lg border px-2.5 text-[12px] font-semibold transition", active ? "border-brand-border bg-brand-soft text-brand" : "border-border bg-surface text-muted hover:bg-surface-hover")}
                       >
                         {option.label ??
                           t(`settings:customFields.resourceTypes.${option.value}`, {
@@ -1130,7 +1130,7 @@ export function CustomFieldManager() {
               </div>
 
               <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[10px] leading-4 text-muted">
+                <p className="text-[12px] leading-4 text-muted">
                   {draft.id
                     ? t("settings:customFields.editKeyHint")
                     : t("settings:customFields.createKeyHint")}

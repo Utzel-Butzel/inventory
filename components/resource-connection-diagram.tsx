@@ -818,7 +818,7 @@ export function ResourceConnectionDiagram({
                 {(view === "graph" || view === "list") && loading && model ? (
                   <LoaderCircle className="size-3.5 animate-spin text-muted" aria-hidden="true" />
                 ) : null}
-                <div className="flex min-h-8 max-w-full flex-wrap items-center overflow-hidden rounded-lg border border-border bg-surface text-[11px] font-semibold">
+                <div className="flex min-h-8 max-w-full flex-wrap items-center overflow-hidden rounded-lg border border-border bg-surface text-[13px] font-semibold">
                   <button
                     type="button"
                     onClick={() => { setView("graph"); setEditorSelection(null); }}
@@ -866,7 +866,7 @@ export function ResourceConnectionDiagram({
                   <>
                     {canViewStock ? (
                       <>
-                        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
+                        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[13px] font-semibold text-muted-strong">
                           <input
                             type="checkbox"
                             checked={showStock}
@@ -881,7 +881,7 @@ export function ResourceConnectionDiagram({
                             />
                           ) : null}
                         </label>
-                        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
+                        <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[13px] font-semibold text-muted-strong">
                           <input
                             type="checkbox"
                             checked={showPriceFlow}
@@ -902,7 +902,7 @@ export function ResourceConnectionDiagram({
                         </label>
                       </>
                     ) : null}
-                    <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
+                    <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[13px] font-semibold text-muted-strong">
                       <input
                         type="checkbox"
                         checked={showCostStructure}
@@ -923,7 +923,7 @@ export function ResourceConnectionDiagram({
                         />
                       ) : null}
                     </label>
-                    <label className="flex h-8 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong">
+                    <label className="flex h-8 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[13px] font-semibold text-muted-strong">
                       <span>{t("connectionDiagram.depth.label")}</span>
                       <select
                         value={depth}
@@ -1583,12 +1583,12 @@ function ListItem({
         <span className="block truncate text-xs font-semibold text-foreground">
           {name}
         </span>
-        <span className="mt-0.5 block truncate text-[10px] text-muted">
+        <span className="mt-0.5 block truncate text-[12px] text-muted">
           {subtitle}
         </span>
       </Link>
       {badge ? (
-        <Badge tone="brand" className="min-h-5 px-1.5 text-[9px]">
+        <Badge tone="brand" className="min-h-5 px-1.5 text-[11px]">
           {badge}
         </Badge>
       ) : null}
@@ -1619,7 +1619,7 @@ function LegendBadge({
   label: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[10px] font-semibold text-muted-strong">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-[12px] font-semibold text-muted-strong">
       <span
         className="size-2 rounded-full"
         style={{ backgroundColor: kindColor[kind] }}
@@ -1958,7 +1958,7 @@ function PositionedGraphNode({
           {item.node.resource.name}
         </span>
         <span
-          className={`mt-1 block truncate text-[10px] ${
+          className={`mt-1 block truncate text-[12px] ${
             isRoot
               ? "font-semibold uppercase tracking-wider text-info"
               : "text-muted"
@@ -2087,11 +2087,11 @@ function CostStructureSummary({
               <p className="text-xs font-semibold text-foreground">
                 {t("connectionDiagram.costStructure.summary.title")}
               </p>
-              <p className="mt-0.5 text-[10px] leading-4 text-muted">
+              <p className="mt-0.5 text-[12px] leading-4 text-muted">
                 {t("connectionDiagram.costStructure.summary.description")}
               </p>
             </div>
-            <span className="text-[10px] font-semibold text-muted">
+            <span className="text-[12px] font-semibold text-muted">
               {t("connectionDiagram.costStructure.summary.componentCount", {
                 count: item.directComponentCount,
                 value: number.format(item.directComponentCount),
@@ -2134,7 +2134,7 @@ function CostStructureSummary({
             />
           </dl>
           {notices.length ? (
-            <p className="mt-2 text-[10px] leading-4 text-warning">
+            <p className="mt-2 text-[12px] leading-4 text-warning">
               {notices.join(" · ")}
             </p>
           ) : null}
@@ -2157,7 +2157,7 @@ function CostSummaryValue({
 }) {
   return (
     <div className={cn("min-w-0 px-2.5 py-2", bordered && "border-l border-border")}>
-      <dt className="truncate text-[9px] font-semibold uppercase tracking-wide text-muted">
+      <dt className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted">
         {label}
       </dt>
       <dd
@@ -2222,14 +2222,14 @@ function CostStructureIndicator({
     >
       <span
         className={cn(
-          "block truncate text-[8px] font-semibold leading-3",
+          "block truncate text-[10px] font-semibold leading-3",
           unitPrice ? "text-warning" : "text-muted",
         )}
       >
         {primaryLabel}
       </span>
       {totalLabel ? (
-        <span className="block truncate text-[9px] font-bold leading-3 text-foreground">
+        <span className="block truncate text-[11px] font-bold leading-3 text-foreground">
           {totalLabel}
         </span>
       ) : null}
@@ -2318,7 +2318,7 @@ function PriceFlowIndicator({
           >
             <span
               className={cn(
-                "block truncate text-[8px] font-bold leading-3",
+                "block truncate text-[10px] font-bold leading-3",
                 direction.quantityClassName,
               )}
             >
@@ -2327,7 +2327,7 @@ function PriceFlowIndicator({
             </span>
             <span
               className={cn(
-                "block truncate text-[8px] font-semibold leading-3",
+                "block truncate text-[10px] font-semibold leading-3",
                 !hasPrice
                   ? "text-muted"
                   : direction.value.amountCents < 0
@@ -2372,7 +2372,7 @@ function StockIndicator({
   return (
     <span
       className={cn(
-        "absolute -left-2 -top-2 inline-flex max-w-[124px] flex-col items-start gap-0.5 rounded-lg px-2 py-1 text-[9px] font-bold leading-3 tabular-nums shadow-sm ring-1 ring-inset",
+        "absolute -left-2 -top-2 inline-flex max-w-[124px] flex-col items-start gap-0.5 rounded-lg px-2 py-1 text-[11px] font-bold leading-3 tabular-nums shadow-sm ring-1 ring-inset",
         stockTone[stock.status].badge,
       )}
       title={[onHandLabel, buildableLabel, statusLabel]

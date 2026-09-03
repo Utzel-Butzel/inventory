@@ -16,11 +16,12 @@ test("organization switching uses the scoped selection endpoint and clears clien
 });
 
 test("web organization routing makes the URL tenant context authoritative", async () => {
-  const [proxy, auth, layout, routing] = await Promise.all([
+  const [proxy, auth, layout, routing, login] = await Promise.all([
     source("proxy.ts"),
     source("lib/api-auth.ts"),
     source("app/(dashboard)/layout.tsx"),
     source("components/organization-routing.tsx"),
+    source("components/login-form.tsx"),
   ]);
 
   assert.match(proxy, /NextResponse\.rewrite/);
@@ -30,6 +31,11 @@ test("web organization routing makes the URL tenant context authoritative", asyn
   assert.match(layout, /organizationIdentity\.organization\.slug/);
   assert.match(routing, /OrganizationRoutingProvider/);
   assert.match(routing, /organizationPath\(organizationSlug, href\)/);
+  assert.match(routing, /const internalHref = stripOrganizationHref\(href\)/);
+  assert.match(routing, /internalPathname === "\/" \? "\/inventory"/);
+  assert.match(routing, /href=\{internalHref\}/);
+  assert.match(routing, /as=\{as \?\?/);
+  assert.match(login, /window\.location\.replace\(callbackUrl\)/);
 });
 
 test("organization settings use the list, create, and update contracts", async () => {

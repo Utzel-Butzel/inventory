@@ -6,6 +6,7 @@ import {
   defaultOrderStatus,
   deriveOrderStatus,
   orderCreateSchema,
+  orderLineUnitActionSchema,
 } from "../lib/order-contract.ts";
 
 const contactId = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
@@ -44,6 +45,20 @@ test("order statuses are derived from line progress", () => {
     { orderedQuantity: 1, fulfilledQuantity: 1, returnedQuantity: 0 },
   ];
   assert.equal(deriveOrderStatus("sale", "confirmed", lines), "fulfilled");
+  assert.equal(
+    deriveOrderStatus("sale", "fulfilled", [
+      { ...lines[0], returnedQuantity: 1 },
+      lines[1],
+    ]),
+    "partially-returned",
+  );
+  assert.equal(
+    deriveOrderStatus("sale", "partially-returned", [
+      { ...lines[0], returnedQuantity: 2 },
+      { ...lines[1], returnedQuantity: 1 },
+    ]),
+    "returned",
+  );
   assert.equal(deriveOrderStatus("loan", "reserved", lines), "issued");
   assert.equal(
     deriveOrderStatus("loan", "issued", [
@@ -61,6 +76,31 @@ test("order statuses are derived from line progress", () => {
       new Date("2026-09-03T00:00:00.000Z"),
     ),
     "overdue",
+  );
+});
+
+test("serialized unit actions require unique concrete stock units", () => {
+  const unitId = "3f2504e0-4f89-41d3-9a0c-0305e82c3304";
+  assert.equal(
+    orderLineUnitActionSchema.safeParse({
+      action: "reserve",
+      unitIds: [unitId],
+    }).success,
+    true,
+  );
+  assert.equal(
+    orderLineUnitActionSchema.safeParse({
+      action: "issue",
+      unitIds: [unitId, unitId],
+    }).success,
+    false,
+  );
+  assert.equal(
+    orderLineUnitActionSchema.safeParse({
+      action: "return",
+      unitIds: ["not-a-unit-id"],
+    }).success,
+    false,
   );
 });
 
@@ -90,5 +130,58 @@ test("the migration preserves purchase ids in shared physical tables", async () 
   assert.match(
     migration,
     /WHERE length\(btrim\("contact_name"\)\) = 0/,
+  );
+});
+
+test("serialized units have a tenant-safe order-line lifecycle", async () => {
+  const migration = await readFile(
+    new URL("../db/migrations/0059_order_line_units.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /CREATE TABLE "order_line_units"/);
+  assert.match(
+    migration,
+    /FOREIGN KEY \("organization_id", "order_line_id"\)[\s\S]*REFERENCES "order_lines" \("organization_id", "id"\)/,
+  );
+  assert.match(
+    migration,
+    /FOREIGN KEY \("organization_id", "stock_unit_id"\)[\s\S]*REFERENCES "stock_units" \("organization_id", "id"\)/,
+  );
+  assert.match(
+    migration,
+    /CREATE UNIQUE INDEX "order_line_units_active_stock_unit_unique"[\s\S]*WHERE "status" IN \('reserved', 'fulfilled'\)/,
+  );
+  assert.match(
+    migration,
+    /"type" = 'sale'[\s\S]*'partially-returned', 'returned'/,
+  );
+
+  const openApi = await readFile(
+    new URL("../public/openapi.yaml", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    openApi,
+    /\/orders\/\{orderId\}\/lines\/\{lineId\}\/units:/,
+  );
+  assert.match(openApi, /OrderLineUnitActionInput:/);
+  assert.match(openApi, /enum: \[reserve, release, issue, return\]/);
+
+  const stockService = await readFile(
+    new URL("../lib/stock.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    stockService,
+    /eq\(orderLineUnits\.stockUnitId, unit\.id\)[\s\S]*inArray\(orderLineUnits\.status, \["reserved", "fulfilled"\]\)/,
+  );
+
+  const resourceService = await readFile(
+    new URL("../lib/resources.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    resourceService,
+    /update\(orderLineUnits\)[\s\S]*orderLineId: collision\.id/,
   );
 });

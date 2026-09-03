@@ -385,7 +385,7 @@ export function ResourceStockSettings({ resourceId }: { resourceId: string }) {
                         placeholder="1000"
                         className={`${inputClass} pr-20`}
                       />
-                      <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-muted">
+                      <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[13px] text-muted">
                         {form.unitName || t("resource.unit")}
                       </span>
                     </div>

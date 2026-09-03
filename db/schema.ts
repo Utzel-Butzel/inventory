@@ -355,9 +355,18 @@ export const salesOrderStatuses = [
   "confirmed",
   "partially-fulfilled",
   "fulfilled",
+  "partially-returned",
+  "returned",
   "cancelled",
 ] as const;
 export type SalesOrderStatus = (typeof salesOrderStatuses)[number];
+
+export const orderLineUnitStatuses = [
+  "reserved",
+  "fulfilled",
+  "returned",
+] as const;
+export type OrderLineUnitStatus = (typeof orderLineUnitStatuses)[number];
 
 export const loanOrderStatuses = [
   "draft",
@@ -2403,7 +2412,7 @@ export const orders = pgTable(
     index("orders_contact_id_idx").on(table.organizationId, table.contactId),
     check(
       "orders_type_status_check",
-      sql`(${table.type} = 'purchase' and ${table.status} in ('draft', 'ordered', 'partially-received', 'received', 'cancelled')) or (${table.type} = 'sale' and ${table.status} in ('draft', 'confirmed', 'partially-fulfilled', 'fulfilled', 'cancelled')) or (${table.type} = 'loan' and ${table.status} in ('draft', 'reserved', 'partially-issued', 'issued', 'partially-returned', 'returned', 'overdue', 'cancelled'))`,
+      sql`(${table.type} = 'purchase' and ${table.status} in ('draft', 'ordered', 'partially-received', 'received', 'cancelled')) or (${table.type} = 'sale' and ${table.status} in ('draft', 'confirmed', 'partially-fulfilled', 'fulfilled', 'partially-returned', 'returned', 'cancelled')) or (${table.type} = 'loan' and ${table.status} in ('draft', 'reserved', 'partially-issued', 'issued', 'partially-returned', 'returned', 'overdue', 'cancelled'))`,
     ),
     check("orders_contact_name_nonempty", sql`length(btrim(${table.contactName})) > 0`),
   ],
@@ -2437,6 +2446,10 @@ export const orderLines = pgTable(
       .defaultNow(),
   },
   (table) => [
+    uniqueIndex("order_lines_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
     uniqueIndex("order_lines_order_resource_unique").on(
       table.orderId,
       table.resourceId,
@@ -2772,6 +2785,66 @@ export const stockUnits = pgTable(
     check(
       "stock_units_cost_fields_together",
       sql`(${table.acquisitionCostCents} is null and ${table.costCurrency} is null) or (${table.acquisitionCostCents} is not null and ${table.costCurrency} ~ '^[A-Z]{3}$')`,
+    ),
+  ],
+);
+
+export const orderLineUnits = pgTable(
+  "order_line_units",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderLineId: uuid("order_line_id").notNull(),
+    stockUnitId: uuid("stock_unit_id").notNull(),
+    status: varchar("status", { length: 16 })
+      .$type<OrderLineUnitStatus>()
+      .notNull()
+      .default("reserved"),
+    reservedAt: timestamp("reserved_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
+    returnedAt: timestamp("returned_at", { withTimezone: true }),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "order_line_units_organization_order_line_fk",
+      columns: [table.organizationId, table.orderLineId],
+      foreignColumns: [orderLines.organizationId, orderLines.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "order_line_units_organization_stock_unit_fk",
+      columns: [table.organizationId, table.stockUnitId],
+      foreignColumns: [stockUnits.organizationId, stockUnits.id],
+    }).onDelete("restrict"),
+    uniqueIndex("order_line_units_line_unit_unique").on(
+      table.organizationId,
+      table.orderLineId,
+      table.stockUnitId,
+    ),
+    uniqueIndex("order_line_units_active_stock_unit_unique")
+      .on(table.organizationId, table.stockUnitId)
+      .where(sql`${table.status} in ('reserved', 'fulfilled')`),
+    index("order_line_units_line_status_idx").on(
+      table.organizationId,
+      table.orderLineId,
+      table.status,
+    ),
+    check(
+      "order_line_units_status_check",
+      sql`${table.status} in ('reserved', 'fulfilled', 'returned')`,
+    ),
+    check(
+      "order_line_units_timestamps_check",
+      sql`(${table.status} = 'reserved' and ${table.fulfilledAt} is null and ${table.returnedAt} is null) or (${table.status} = 'fulfilled' and ${table.fulfilledAt} is not null and ${table.returnedAt} is null) or (${table.status} = 'returned' and ${table.fulfilledAt} is not null and ${table.returnedAt} is not null)`,
     ),
   ],
 );
@@ -4490,6 +4563,8 @@ export type OrderRecord = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
 export type OrderLineRecord = typeof orderLines.$inferSelect;
 export type NewOrderLine = typeof orderLines.$inferInsert;
+export type OrderLineUnitRecord = typeof orderLineUnits.$inferSelect;
+export type NewOrderLineUnit = typeof orderLineUnits.$inferInsert;
 export type PurchaseOrderRecord = OrderRecord;
 export type PurchaseOrderLineRecord = OrderLineRecord;
 export type PurchaseReceiptRecord = typeof purchaseReceipts.$inferSelect;

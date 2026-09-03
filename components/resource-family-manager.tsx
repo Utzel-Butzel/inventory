@@ -58,7 +58,7 @@ const emptyForm: CreateForm = { name: "", sku: "", barcode: "" };
 
 const inputClass =
   "mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-success focus:ring-4 focus:ring-success-border";
-const labelClass = "block text-[11px] font-semibold text-muted-strong";
+const labelClass = "block text-[13px] font-semibold text-muted-strong";
 
 type ResourceListResponse = {
   resources: ClientResource[];
@@ -471,7 +471,7 @@ export function ResourceFamilyManager({
                 <h3 className="text-xs font-semibold text-foreground">
                   {t("family.create.title")}
                 </h3>
-                <p className="mt-1 max-w-3xl text-[11px] leading-5 text-muted">
+                <p className="mt-1 max-w-3xl text-[13px] leading-5 text-muted">
                   {t("family.create.inheritanceHelp")}
                 </p>
               </div>
@@ -557,7 +557,7 @@ export function ResourceFamilyManager({
                 <h3 className="text-xs font-semibold text-foreground">
                   {t("family.connect.title")}
                 </h3>
-                <p className="mt-1 max-w-3xl text-[11px] leading-5 text-muted">
+                <p className="mt-1 max-w-3xl text-[13px] leading-5 text-muted">
                   {t("family.connect.help", { name: family?.primary.name })}
                 </p>
               </div>
@@ -633,7 +633,7 @@ export function ResourceFamilyManager({
           family.role === "variant" ? (
             <div className="grid divide-y divide-border lg:grid-cols-2 lg:divide-x lg:divide-y-0">
               <div className="p-4 sm:p-5">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                <p className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-muted">
                   {t("family.primaryItem")}
                 </p>
                 <FamilyMemberRow
@@ -645,7 +645,7 @@ export function ResourceFamilyManager({
                 />
               </div>
               <div className="p-4 sm:p-5">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                <p className="mb-2 text-[12px] font-semibold uppercase tracking-wider text-muted">
                   {t("family.siblings")}
                 </p>
                 {siblings.length ? (
@@ -688,7 +688,7 @@ export function ResourceFamilyManager({
                 <p className="text-xs font-semibold text-foreground">
                   {t("family.empty.title")}
                 </p>
-                <p className="mt-1 text-[11px] leading-5 text-muted">
+                <p className="mt-1 text-[13px] leading-5 text-muted">
                   {t("family.empty.description")}
                 </p>
               </div>
@@ -758,11 +758,11 @@ function FamilyMemberRow({
           ) : null}
         </div>
         {label ? (
-          <p className="mt-1 truncate text-[10px] font-medium text-brand">
+          <p className="mt-1 truncate text-[12px] font-medium text-brand">
             {label}
           </p>
         ) : null}
-        <p className="mt-1 truncate text-[10px] text-muted">
+        <p className="mt-1 truncate text-[12px] text-muted">
           {typeLabel} · {t(`family.tracking.${member.trackingMode}`)} ·{" "}
           {t("item.units", {
             count: member.quantity,
@@ -775,7 +775,7 @@ function FamilyMemberRow({
       <div className="flex shrink-0 items-center gap-1">
         <Link
           href={`/inventory/${member.id}`}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[11px] font-semibold text-muted-strong hover:border-border-strong hover:text-foreground"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[13px] font-semibold text-muted-strong hover:border-border-strong hover:text-foreground"
         >
           {t("family.actions.open")}
           <ArrowRight className="size-3" aria-hidden="true" />

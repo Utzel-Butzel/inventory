@@ -309,8 +309,8 @@ function CreateMenu({
         className={cn(
           "flex items-center justify-center rounded-xl bg-brand-solid font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover active:bg-brand-active",
           variant === "compact"
-            ? "size-9"
-            : "h-10 w-full gap-2 px-3 text-[13px]",
+            ? "size-11"
+            : "h-10 w-full gap-2 px-3 text-[15px]",
         )}
       >
         <Plus className="size-4" strokeWidth={2.2} aria-hidden="true" />
@@ -330,7 +330,7 @@ function CreateMenu({
           aria-label={t("actions.createMenu")}
         >
           {canCreateInventory ? (
-            <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
+            <p className="px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
               {t("actions.inventoryGroup")}
             </p>
           ) : null}
@@ -342,10 +342,10 @@ function CreateMenu({
             >
               <Plus className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
               <span className="min-w-0">
-                <span className="block text-[12px] font-semibold">
+                <span className="block text-[14px] font-semibold">
                   {t("actions.manualEntry")}
                 </span>
-                <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                <span className="mt-0.5 block text-[12px] leading-4 text-muted">
                   {t("actions.manualEntryDescription")}
                 </span>
               </span>
@@ -362,10 +362,10 @@ function CreateMenu({
                 aria-hidden="true"
               />
               <span className="min-w-0">
-                <span className="block text-[12px] font-semibold">
+                <span className="block text-[14px] font-semibold">
                   {t("actions.photoCapture")}
                 </span>
-                <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                <span className="mt-0.5 block text-[12px] leading-4 text-muted">
                   {t("actions.photoCaptureDescription")}
                 </span>
               </span>
@@ -377,7 +377,7 @@ function CreateMenu({
                 canCreateInventory && "mt-1 border-t border-border pt-1",
               )}
             >
-              <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
+              <p className="px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
                 {t("actions.operationsGroup")}
               </p>
               <Link
@@ -390,10 +390,10 @@ function CreateMenu({
                   aria-hidden="true"
                 />
                 <span className="min-w-0">
-                  <span className="block text-[12px] font-semibold">
+                  <span className="block text-[14px] font-semibold">
                     {t("actions.internalRequest")}
                   </span>
-                  <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                  <span className="mt-0.5 block text-[12px] leading-4 text-muted">
                     {t("actions.internalRequestDescription")}
                   </span>
                 </span>
@@ -502,7 +502,7 @@ function SidebarContent({
           className="flex items-center gap-2.5 rounded-lg text-foreground"
         >
           <BrandMark className="size-8 shrink-0" aria-hidden="true" />
-          <span className="text-[15px] font-semibold">
+          <span className="text-[17px] font-semibold">
             {t("brand")}
           </span>
         </Link>
@@ -523,7 +523,7 @@ function SidebarContent({
         className="scrollbar-thin mt-6 min-h-0 flex-1 overflow-y-auto px-3 pb-3"
         aria-label={t("navigation.mainLabel")}
       >
-        <p className="mb-2 px-2.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-sidebar-muted">
+        <p className="mb-2 px-2.5 text-[12px] font-semibold uppercase tracking-[0.13em] text-sidebar-muted">
           {t("sections.workspace")}
         </p>
         <div className="space-y-0.5">
@@ -561,7 +561,7 @@ function SidebarContent({
                 <div key={item.href} className="space-y-0.5">
                   <div
                     className={cn(
-                      "group flex h-10 items-center rounded-xl text-[13px] font-medium transition",
+                      "group flex h-11 items-center rounded-xl text-[15px] font-medium transition lg:h-10",
                       active && !hasChildren && "bg-brand-soft text-brand",
                       active && hasChildren && "text-brand",
                       !active &&
@@ -605,7 +605,7 @@ function SidebarContent({
                             : "actions.expandNavigationGroup",
                           { group: t(item.labelKey) },
                         )}
-                        className="mr-1 grid size-8 shrink-0 place-items-center rounded-lg text-current transition hover:bg-surface-hover"
+                        className="mr-1 grid size-11 shrink-0 place-items-center rounded-lg text-current transition hover:bg-surface-hover lg:size-8"
                       >
                         <ChevronDown
                           className={cn(
@@ -632,7 +632,7 @@ function SidebarContent({
                             onClick={onNavigate}
                             aria-current={childActive ? "page" : undefined}
                             className={cn(
-                              "flex min-h-8 items-center rounded-lg px-2 text-[12px] font-medium transition",
+                              "flex min-h-11 items-center rounded-lg px-2 text-[14px] font-medium transition lg:min-h-8",
                               childActive
                                 ? "bg-brand-soft text-brand"
                                 : "text-sidebar-muted hover:bg-surface-muted hover:text-foreground",
@@ -660,7 +660,7 @@ function SidebarContent({
               : undefined
           }
           className={cn(
-            "group mb-1 flex h-10 items-center gap-3 rounded-xl px-2.5 text-[13px] font-medium transition",
+            "group mb-1 flex h-11 items-center gap-3 rounded-xl px-2.5 text-[15px] font-medium transition lg:h-10",
             isPathActive(pathname, "/settings") || pathname === "/notifications"
               ? "bg-brand-soft text-brand"
               : "text-sidebar-muted-strong hover:bg-surface-muted hover:text-foreground",
@@ -678,24 +678,24 @@ function SidebarContent({
           {t("navigation.settings")}
         </Link>
         <div className="flex items-center gap-2.5 rounded-xl px-2 py-2">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft text-[10px] font-bold text-brand">
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft text-[12px] font-bold text-brand">
             {initials(user.name, user.email, t("user.generic"))}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[12px] font-semibold text-foreground">
+            <p className="truncate text-[14px] font-semibold text-foreground">
               {user.name || t("user.fallbackName")}
             </p>
-            <p className="truncate text-[10px] text-sidebar-muted">
+            <p className="truncate text-[12px] text-sidebar-muted">
               {user.email || t("user.signedIn")}
             </p>
-            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-brand">
+            <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-brand">
               {user.roleName}
             </p>
           </div>
           <button
             type="button"
             onClick={() => void handleSignOut()}
-            className="grid size-8 shrink-0 place-items-center rounded-lg text-sidebar-muted transition hover:bg-surface-muted hover:text-foreground"
+            className="grid size-11 shrink-0 place-items-center rounded-lg text-sidebar-muted transition hover:bg-surface-muted hover:text-foreground lg:size-8"
             aria-label={t("actions.signOut")}
             title={t("actions.signOut")}
           >
@@ -882,13 +882,13 @@ export function AppShell({
             role="dialog"
             aria-modal="true"
             aria-label={t("navigation.mainLabel")}
-            className="relative h-full w-[min(300px,86vw)] border-r border-border shadow-2xl"
+            className="app-shell-mobile-drawer relative h-full w-[min(320px,calc(100vw-3.5rem))] border-r border-border shadow-2xl"
           >
             <button
               ref={mobileCloseButtonRef}
               type="button"
               onClick={closeMobileNavigation}
-              className="absolute right-3 top-[18px] z-10 grid size-8 place-items-center rounded-lg text-muted hover:bg-surface-muted"
+              className="absolute right-3 top-[calc(12px+env(safe-area-inset-top))] z-10 grid size-11 place-items-center rounded-xl text-muted hover:bg-surface-muted"
               aria-label={t("actions.closeNavigation")}
             >
               <X className="size-4" aria-hidden="true" />
@@ -927,7 +927,7 @@ export function AppShell({
         ) : null}
         <header
           className={cn(
-            "sticky z-20 flex h-[68px] items-center border-b border-border bg-surface/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8",
+            "app-shell-header sticky z-20 flex h-[var(--app-shell-header-height)] items-center border-b border-border bg-surface/90 backdrop-blur-xl",
             organization.isReadOnly ? "top-11" : "top-0",
           )}
         >
@@ -935,7 +935,7 @@ export function AppShell({
             ref={mobileMenuTriggerRef}
             type="button"
             onClick={() => setMobileOpen(true)}
-            className="mr-3 grid size-9 place-items-center rounded-xl border border-border bg-surface text-muted shadow-sm lg:hidden"
+            className="mr-3 grid size-11 shrink-0 place-items-center rounded-xl border border-border bg-surface text-muted shadow-sm lg:hidden"
             aria-label={t("actions.openNavigation")}
           >
             <Menu className="size-[18px]" aria-hidden="true" />
@@ -946,7 +946,7 @@ export function AppShell({
             className="min-w-0 flex-1 overflow-hidden text-sm"
           >
             <ol className="flex min-w-0 items-center gap-2">
-              <li className="min-w-0 shrink">
+              <li className="hidden min-w-0 shrink sm:block">
                 <Link
                   href="/"
                   className="block max-w-24 truncate text-muted transition hover:text-foreground sm:max-w-40"
@@ -954,10 +954,16 @@ export function AppShell({
                   {organization.name}
                 </Link>
               </li>
-              <li aria-hidden="true">
+              <li className="hidden sm:block" aria-hidden="true">
                 <ChevronRight className="size-3.5 shrink-0 text-muted" />
               </li>
-              <li className={cn("min-w-0", !nestedPageName && "truncate")}>
+              <li
+                className={cn(
+                  "min-w-0",
+                  !nestedPageName && "truncate",
+                  nestedPageName && "hidden sm:block",
+                )}
+              >
                 {nestedPageName ? (
                   <Link
                     href={sectionHref}
@@ -975,12 +981,12 @@ export function AppShell({
                 )}
               </li>
               {resourceItemBreadcrumb ? (
-                <li aria-hidden="true">
+                <li className="hidden sm:block" aria-hidden="true">
                   <ChevronRight className="size-3.5 shrink-0 text-muted" />
                 </li>
               ) : null}
               {resourceItemBreadcrumb ? (
-                <li className="min-w-0 shrink">
+                <li className="hidden min-w-0 shrink sm:block">
                   <Link
                     href={resourceItemBreadcrumb.href}
                     title={resourceItemBreadcrumb.name}
@@ -991,7 +997,7 @@ export function AppShell({
                 </li>
               ) : null}
               {nestedPageName ? (
-                <li aria-hidden="true">
+                <li className="hidden sm:block" aria-hidden="true">
                   <ChevronRight className="size-3.5 shrink-0 text-muted" />
                 </li>
               ) : null}
@@ -1028,7 +1034,7 @@ export function AppShell({
                       event.currentTarget.form?.requestSubmit();
                     }
                   }}
-                  className="h-9 w-56 rounded-xl border border-border bg-surface-subtle pl-9 pr-10 text-[12px] text-foreground transition placeholder:text-muted hover:border-border-strong focus:w-64 focus:border-focus focus:bg-surface focus:outline-none focus:ring-3 focus:ring-focus/10"
+                  className="h-9 w-56 rounded-xl border border-border bg-surface-subtle pl-9 pr-10 text-[14px] text-foreground transition placeholder:text-muted hover:border-border-strong focus:w-64 focus:border-focus focus:bg-surface focus:outline-none focus:ring-3 focus:ring-focus/10"
                 />
                 <button
                   type="submit"
@@ -1052,7 +1058,7 @@ export function AppShell({
             role="status"
             className="sticky top-[68px] z-[19] border-b border-brand/20 bg-brand-soft/95 px-4 text-brand backdrop-blur-xl sm:px-6 lg:px-8"
           >
-            <div className="flex min-h-10 items-center gap-2.5 py-2 text-[12px]">
+            <div className="flex min-h-10 items-center gap-2.5 py-2 text-[14px]">
               <LockKeyhole
                 className="size-3.5 shrink-0"
                 strokeWidth={2.2}
@@ -1077,8 +1083,8 @@ export function AppShell({
 
         <main
           className={cn(
-            "min-h-[calc(100dvh-68px)]",
-            organization.isReadOnly && "min-h-[calc(100dvh-109px)]",
+            "app-shell-main",
+            organization.isReadOnly && "app-shell-main--read-only",
           )}
         >
           {children}

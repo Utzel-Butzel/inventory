@@ -281,10 +281,11 @@ struct ResourceDetailView: View {
     private var descriptionCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Beschreibung").font(.headline)
-            Text(current.description)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
+            MarkdownContentView(
+                markdown: current.description,
+                client: state.client,
+                media: current.media
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .inventoryCard()

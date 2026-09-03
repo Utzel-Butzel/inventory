@@ -578,7 +578,7 @@ export function InventoryMediaCapture({
               <h2 className="truncate text-sm font-semibold">
                 {t("media.capture.title")}
               </h2>
-              <p className="truncate text-[11px] text-white/60">
+              <p className="truncate text-[13px] text-white/60">
                 {mode === "document"
                   ? t("media.capture.documentHint")
                   : t("media.capture.cameraHint")}
@@ -703,7 +703,7 @@ export function InventoryMediaCapture({
                       style={{ width: `${Math.round((ocrProgress?.progress ?? 0) * 100)}%` }}
                     />
                   </div>
-                  <p className="mt-2 text-[11px] text-white/55">
+                  <p className="mt-2 text-[13px] text-white/55">
                     {t("media.capture.ocrLocal")}
                   </p>
                 </div>
@@ -732,7 +732,7 @@ export function InventoryMediaCapture({
                         alt={t("media.capture.page", { number: index + 1 })}
                         className="size-full object-cover"
                       />
-                      <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-bold">
+                      <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-bold">
                         {index + 1}
                       </span>
                       <button
@@ -759,7 +759,7 @@ export function InventoryMediaCapture({
                         key={filter}
                         type="button"
                         onClick={() => setDocumentFilter(filter)}
-                        className={`rounded-md px-2.5 py-1.5 text-[10px] font-semibold transition ${
+                        className={`rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition ${
                           documentFilter === filter
                             ? "bg-white text-slate-950"
                             : "text-white/65"
@@ -769,7 +769,7 @@ export function InventoryMediaCapture({
                       </button>
                     ))}
                   </div>
-                  <label className="flex min-h-9 items-center gap-2 text-[11px] font-medium text-white/70">
+                  <label className="flex min-h-9 items-center gap-2 text-[13px] font-medium text-white/70">
                     <input
                       type="checkbox"
                       checked={autoCapture}
@@ -857,7 +857,7 @@ export function InventoryMediaCapture({
                     type="button"
                     onClick={() => setMode(option.id)}
                     disabled={recording || Boolean(processing)}
-                    className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-[11px] font-bold transition ${
+                    className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-[13px] font-bold transition ${
                       mode === option.id
                         ? "bg-white text-slate-950"
                         : "text-white/65 hover:text-white"
@@ -871,7 +871,7 @@ export function InventoryMediaCapture({
               })}
             </div>
             {mode === "document" ? (
-              <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[10px] text-white/45">
+              <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[12px] text-white/45">
                 <FileText size={12} />
                 {t("media.capture.searchablePdf")}
               </p>

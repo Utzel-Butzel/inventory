@@ -29,7 +29,7 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
         aria-label={t("language.label")}
         className={
           compact
-            ? "h-full cursor-pointer appearance-none bg-transparent pl-1.5 pr-2.5 text-[11px] font-semibold uppercase outline-none"
+            ? "h-full cursor-pointer appearance-none bg-transparent pl-1.5 pr-2.5 text-[13px] font-semibold uppercase outline-none"
             : "h-full cursor-pointer appearance-none bg-transparent pl-2 pr-3 text-xs font-semibold outline-none"
         }
       >

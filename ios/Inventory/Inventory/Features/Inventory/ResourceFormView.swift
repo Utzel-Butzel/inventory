@@ -61,6 +61,7 @@ struct ResourceFormView: View {
     @State private var name: String
     @State private var slugs: [String]
     @State private var description: String
+    @State private var showDescriptionPreview = true
     @State private var type: InventoryResourceType
     @State private var status: InventoryResourceStatus
     @State private var sku: String
@@ -222,6 +223,19 @@ struct ResourceFormView: View {
                     }
                     TextField("Beschreibung", text: $description, axis: .vertical)
                         .lineLimit(3 ... 8)
+                    if !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        DisclosureGroup(
+                            "Markdown-Vorschau",
+                            isExpanded: $showDescriptionPreview
+                        ) {
+                            MarkdownContentView(
+                                markdown: description,
+                                client: state.client,
+                                media: currentMedia
+                            )
+                            .padding(.top, 8)
+                        }
+                    }
                 }
                 .disabled(createdResource != nil)
 

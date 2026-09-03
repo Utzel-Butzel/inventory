@@ -16,7 +16,7 @@ import type { PublicActionFlowView } from "@/lib/public-action-flows";
 
 const inputClass =
   "mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-focus focus:ring-4 focus:ring-focus/10";
-const labelClass = "block text-[13px] font-semibold text-muted-strong";
+const labelClass = "block text-[15px] font-semibold text-muted-strong";
 
 export function PublicActionFlow({ action }: { action: PublicActionFlowView }) {
   const { t } = useT("scanner");
@@ -173,7 +173,7 @@ export function PublicActionFlow({ action }: { action: PublicActionFlowView }) {
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-10">
-      <header className="mb-5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
+      <header className="mb-5 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.13em] text-muted">
         <span className="grid size-8 place-items-center rounded-xl bg-brand-soft text-brand">
           <PackageCheck className="size-4" aria-hidden="true" />
         </span>
@@ -185,13 +185,13 @@ export function PublicActionFlow({ action }: { action: PublicActionFlowView }) {
         className="overflow-hidden rounded-3xl border border-border bg-surface shadow-[var(--shadow-lg)]"
       >
         <div className="border-b border-border bg-[linear-gradient(135deg,var(--color-brand-soft),var(--color-surface))] p-5 sm:p-7">
-          <h1 className="text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-[28px]">
+          <h1 className="text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-[30px]">
             {action.name}
           </h1>
           {action.description ? (
             <p className="mt-2 text-sm leading-6 text-muted">{action.description}</p>
           ) : null}
-          <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-semibold">
+          <div className="mt-4 flex flex-wrap gap-2 text-[13px] font-semibold">
             <span className="rounded-full border border-border bg-surface px-3 py-1.5 text-muted-strong">
               {action.resourceName}
             </span>
@@ -448,7 +448,7 @@ export function PublicActionFlow({ action }: { action: PublicActionFlowView }) {
           </Button>
         </div>
 
-        <footer className="flex items-start gap-2 border-t border-border bg-surface-subtle px-5 py-4 text-[11px] leading-5 text-muted sm:px-7">
+        <footer className="flex items-start gap-2 border-t border-border bg-surface-subtle px-5 py-4 text-[13px] leading-5 text-muted sm:px-7">
           <LockKeyhole className="mt-0.5 size-3.5 shrink-0 text-brand" aria-hidden="true" />
           {t("publicAction.security")}
         </footer>

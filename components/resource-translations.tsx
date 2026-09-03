@@ -106,16 +106,16 @@ function TranslationFieldEditor({
     <div className="grid gap-3 py-4 text-xs sm:grid-cols-[130px_minmax(0,1fr)]">
       <div>
         <p className="font-semibold text-muted-strong">{field.label}</p>
-        <p className={`mt-1 text-[10px] font-semibold uppercase tracking-wide ${stateTone}`}>
+        <p className={`mt-1 text-[12px] font-semibold uppercase tracking-wide ${stateTone}`}>
           {t(`translations.status.${field.state}`)}
         </p>
         {field.origin === "manual" ? (
-          <p className="mt-1 text-[10px] text-muted">{t("translations.humanLocked")}</p>
+          <p className="mt-1 text-[12px] text-muted">{t("translations.humanLocked")}</p>
         ) : null}
       </div>
       <div className="grid gap-2 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-surface px-3 py-2.5">
-          <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-muted">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
             {sourceLanguageLabel}
           </p>
           <p className="max-h-32 overflow-auto whitespace-pre-wrap leading-5 text-muted">
@@ -123,7 +123,7 @@ function TranslationFieldEditor({
           </p>
         </div>
         <div className="rounded-lg border border-brand-border bg-brand-soft/50 px-3 py-2.5">
-          <label className="mb-1 block text-[9px] font-semibold uppercase tracking-wider text-brand">
+          <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-brand">
             {language.label}
           </label>
           <textarea
@@ -144,7 +144,7 @@ function TranslationFieldEditor({
                   translatedText: draft,
                 })
               }
-              className="inline-flex h-7 items-center gap-1.5 rounded-lg bg-brand-solid px-2.5 text-[10px] font-semibold text-on-brand disabled:opacity-40"
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg bg-brand-solid px-2.5 text-[12px] font-semibold text-on-brand disabled:opacity-40"
             >
               {busy ? (
                 <LoaderCircle className="size-3 animate-spin" />
@@ -164,7 +164,7 @@ function TranslationFieldEditor({
                       fieldKey: field.fieldKey,
                     })
                   }
-                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[10px] font-semibold text-muted-strong disabled:opacity-40"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-[12px] font-semibold text-muted-strong disabled:opacity-40"
                 >
                   <Languages className="size-3" />
                   {t("translations.actions.useAi")}
@@ -175,7 +175,7 @@ function TranslationFieldEditor({
           </div>
           {field.suggestion !== null ? (
             <div className="mt-3 rounded-lg border border-warning-border bg-warning-soft px-3 py-2.5">
-              <p className="text-[9px] font-semibold uppercase tracking-wider text-warning">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-warning">
                 {t("translations.suggestion")}
               </p>
               <p className="mt-1 whitespace-pre-wrap leading-5 text-muted-strong">
@@ -190,7 +190,7 @@ function TranslationFieldEditor({
                     fieldKey: field.fieldKey,
                   })
                 }
-                className="mt-2 inline-flex h-7 items-center gap-1.5 rounded-lg border border-warning-border bg-surface px-2.5 text-[10px] font-semibold text-warning disabled:opacity-40"
+                className="mt-2 inline-flex h-7 items-center gap-1.5 rounded-lg border border-warning-border bg-surface px-2.5 text-[12px] font-semibold text-warning disabled:opacity-40"
               >
                 <Check className="size-3" />
                 {t("translations.actions.acceptSuggestion")}
@@ -400,14 +400,14 @@ export function ResourceTranslations({
                 className="group rounded-xl border border-border bg-surface-subtle/60"
               >
                 <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5">
-                  <span className="rounded-lg bg-surface px-2 py-1 font-mono text-[11px] font-bold text-muted shadow-sm">
+                  <span className="rounded-lg bg-surface px-2 py-1 font-mono text-[13px] font-bold text-muted shadow-sm">
                     {language.code}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-semibold text-foreground">
                       {language.label}
                     </span>
-                    <span className="mt-0.5 block text-[11px] text-muted">
+                    <span className="mt-0.5 block text-[13px] text-muted">
                       {t("translations.progress", {
                         current: language.currentCount,
                         total: language.totalCount,
@@ -422,7 +422,7 @@ export function ResourceTranslations({
                     />
                   </span>
                   <span
-                    className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                    className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${
                       complete
                         ? "bg-success-soft text-success"
                         : failed

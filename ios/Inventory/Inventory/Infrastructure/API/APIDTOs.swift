@@ -868,6 +868,19 @@ public struct InternalRequestCreateLineRequest: Encodable, Equatable, Sendable {
         let normalizedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.note = normalizedNote?.isEmpty == false ? normalizedNote : nil
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case resourceId
+        case quantity
+        case note
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(resourceId.uuidString.lowercased(), forKey: .resourceId)
+        try container.encode(quantity, forKey: .quantity)
+        try container.encodeIfPresent(note, forKey: .note)
+    }
 }
 
 public struct InternalRequestCreateRequest: Encodable, Equatable, Sendable {
@@ -890,6 +903,26 @@ public struct InternalRequestCreateRequest: Encodable, Equatable, Sendable {
         let normalizedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.note = normalizedNote?.isEmpty == false ? normalizedNote : nil
         self.lines = lines
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case deliveryResourceId
+        case startsAt
+        case dueAt
+        case note
+        case lines
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(
+            deliveryResourceId?.uuidString.lowercased(),
+            forKey: .deliveryResourceId
+        )
+        try container.encode(startsAt, forKey: .startsAt)
+        try container.encode(dueAt, forKey: .dueAt)
+        try container.encodeIfPresent(note, forKey: .note)
+        try container.encode(lines, forKey: .lines)
     }
 }
 

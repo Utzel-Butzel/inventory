@@ -628,7 +628,7 @@ export function CsvImportExport({
                 <RotateCcw className="size-3.5" aria-hidden="true" /> {t("csv.reset")}
               </Button>
             ) : null}
-            <label className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border-strong bg-surface px-3 text-[13px] font-medium text-muted-strong shadow-sm transition hover:bg-surface-subtle">
+            <label className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border-strong bg-surface px-3 text-[15px] font-medium text-muted-strong shadow-sm transition hover:bg-surface-subtle">
               <Upload className="size-3.5" aria-hidden="true" />
               {selectedFile ? t("csv.replace") : t("csv.choose")}
               <input

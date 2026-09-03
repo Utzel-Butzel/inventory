@@ -102,9 +102,25 @@ export const orderLineMovementSchema = z
   })
   .strict();
 
+export const orderLineUnitActionSchema = z
+  .object({
+    action: z.enum(["reserve", "release", "issue", "return"]),
+    unitIds: z.array(z.string().uuid()).min(1).max(100),
+    occurredAt: z.string().datetime().optional(),
+    note: z.string().trim().max(20_000).optional(),
+  })
+  .strict()
+  .refine((value) => new Set(value.unitIds).size === value.unitIds.length, {
+    path: ["unitIds"],
+    message: "Each serialized unit may appear only once in an action.",
+  });
+
 export type OrderCreateRequest = z.infer<typeof orderCreateSchema>;
 export type OrderPatchRequest = z.infer<typeof orderPatchSchema>;
 export type OrderLineMovementRequest = z.infer<typeof orderLineMovementSchema>;
+export type OrderLineUnitActionRequest = z.infer<
+  typeof orderLineUnitActionSchema
+>;
 
 export function statusesForOrderType(type: OrderType): readonly string[] {
   if (type === "purchase") return purchaseOrderStatuses;
@@ -142,6 +158,18 @@ export function deriveOrderStatus(
 ): OrderStatus {
   if (current === "cancelled" || current === "draft") return current;
   if (type === "sale") {
+    const totalFulfilled = lines.reduce(
+      (total, line) => total + line.fulfilledQuantity,
+      0,
+    );
+    const totalReturned = lines.reduce(
+      (total, line) => total + line.returnedQuantity,
+      0,
+    );
+    if (totalFulfilled > 0 && totalReturned >= totalFulfilled) {
+      return "returned";
+    }
+    if (totalReturned > 0) return "partially-returned";
     if (lines.every((line) => line.fulfilledQuantity >= line.orderedQuantity)) {
       return "fulfilled";
     }

@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "user-glue-bottles-9",
+      "imagePath": "user-glue-bottles-9.jpg",
+      "imageSha256": "1c87145be4843e34f88ec5856ccf583571602edecf06a0edd54f122e80f1281f",
+      "itemHint": "small adhesive bottle",
+      "expectedCount": 9,
+      "allowedAbsoluteError": 0,
+      "source": {
+        "kind": "user-provided",
+        "permission": "Provided in the Stückzahlzählung test-setup request for use as a project test fixture",
+        "attribution": "Provided by the repository owner for inventory count testing"
+      }
+    },
+    {
+      "id": "wikimedia-vodka-bottles-3",
+      "imagePath": "wikimedia-vodka-bottles-3.jpg",
+      "imageSha256": "47caccdd9d604318cf31bcc8d49d7681e3cdda246d7fb1c46ed56bd1bc24db08",
+      "itemHint": "glass bottle",
+      "expectedCount": 3,
+      "allowedAbsoluteError": 0,
+      "source": {
+        "kind": "internet",
+        "pageUrl": "https://commons.wikimedia.org/wiki/File:Zubrowka-Bottles.jpg",
+        "license": "CC0 1.0 Universal",
+        "attribution": "Blaloc, via Wikimedia Commons"
+      }
+    },
+    {
+      "id": "generated-3d-print-parts-100",
+      "imagePath": "generated-3d-print-parts-100.png",
+      "imageSha256": "f9ca8b58503385067774ed28eec956a0f5e3d4614a6eb07d6bfaccdfe2a00d86",
+      "itemHint": "orange 3D-printed bracket",
+      "expectedCount": 100,
+      "allowedAbsoluteError": 0,
+      "source": {
+        "kind": "generated",
+        "generator": "OpenAI built-in image generation",
+        "promptPath": "GENERATED-FIXTURES.md",
+        "attribution": "Generated for the Open Inventory photo-count benchmark"
+      }
+    },
+    {
+      "id": "generated-3d-print-parts-130",
+      "imagePath": "generated-3d-print-parts-130.png",
+      "imageSha256": "cde3a316074b4c1d01ef058ed48811ee6da045e02d81a936f57865f616da67c2",
+      "itemHint": "orange 3D-printed bracket",
+      "expectedCount": 130,
+      "allowedAbsoluteError": 0,
+      "source": {
+        "kind": "generated",
+        "generator": "OpenAI built-in image generation",
+        "promptPath": "GENERATED-FIXTURES.md",
+        "attribution": "Generated for the Open Inventory photo-count benchmark"
+      }
+    }
+  ]
+}

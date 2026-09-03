@@ -55,6 +55,10 @@ import {
   countInventoryItemsWithReplicate,
 } from "@/lib/replicate-count";
 export {
+  countDenseRepeatedInventoryItems,
+  denseComponentCountModelLabel,
+} from "@/lib/dense-component-count";
+export {
   getReplicateCountOutcome,
   InventoryCountLocalizationError,
 } from "@/lib/replicate-count";

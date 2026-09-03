@@ -28,6 +28,9 @@
     "cancel": "Cancel",
     "cancelOrder": "Cancel order",
     "removeLine": "Remove {{name}}",
+    "manageUnits": "Serial numbers",
+    "reserve": "Reserve",
+    "release": "Release",
     "issue": "Issue",
     "return": "Return"
   },
@@ -44,7 +47,8 @@
     "quantity": "Quantity",
     "unitPrice": "Unit price",
     "lineNote": "Line note",
-    "movementQuantity": "Movement quantity"
+    "movementQuantity": "Movement quantity",
+    "availableUnit": "Available serial number"
   },
   "metrics": {
     "active": "Active orders",
@@ -74,7 +78,15 @@
   },
   "tracking": {
     "serialized": "Serialized",
-    "serializedHelp": "Continue issuing identified units directly from the inventory item."
+    "serializedHelp": "Serial numbers are managed directly on this order line."
+  },
+  "units": {
+    "availableTitle": "Available serial numbers",
+    "availableDescription": "Choose a concrete unit to reserve or issue immediately.",
+    "assignedTitle": "Units on this line",
+    "assignedDescription": "Reservation, fulfillment, and return remain traceable by serial number.",
+    "noAvailable": "No serial number is currently available.",
+    "noAssigned": "No serial number has been assigned to this line yet."
   },
   "empty": {
     "noInventory": "No matching inventory items found.",
@@ -89,13 +101,21 @@
     "created": "{{type}} created.",
     "issue": "Issued {{quantity}} × {{name}}.",
     "return": "Returned {{quantity}} × {{name}}.",
-    "cancelled": "Order cancelled."
+    "cancelled": "Order cancelled.",
+    "unit": {
+      "reserve": "Reserved {{code}}.",
+      "release": "Released {{code}} back to stock.",
+      "issue": "Issued {{code}}.",
+      "return": "Returned {{code}}."
+    }
   },
   "errors": {
     "load": "Orders could not be loaded.",
     "create": "The order could not be created.",
     "update": "The order could not be updated.",
     "movement": "The stock movement could not be recorded.",
+    "unitsLoad": "The serial numbers could not be loaded.",
+    "unitAction": "The serial number could not be updated.",
     "missingContactOrLines": "Choose a contact and add at least one line.",
     "invalidLines": "Check line quantities and prices.",
     "invalidMovementQuantity": "Enter a whole number between 1 and {{maximum}}."

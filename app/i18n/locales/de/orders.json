@@ -28,6 +28,9 @@
     "cancel": "Abbrechen",
     "cancelOrder": "Vorgang stornieren",
     "removeLine": "{{name}} entfernen",
+    "manageUnits": "Seriennummern",
+    "reserve": "Reservieren",
+    "release": "Freigeben",
     "issue": "Ausgeben",
     "return": "Zurücknehmen"
   },
@@ -44,7 +47,8 @@
     "quantity": "Menge",
     "unitPrice": "Stückpreis",
     "lineNote": "Positionsnotiz",
-    "movementQuantity": "Bewegungsmenge"
+    "movementQuantity": "Bewegungsmenge",
+    "availableUnit": "Verfügbare Seriennummer"
   },
   "metrics": {
     "active": "Aktive Vorgänge",
@@ -74,7 +78,15 @@
   },
   "tracking": {
     "serialized": "Serialisiert",
-    "serializedHelp": "Serialisierte Einheiten weiterhin direkt am Inventareintrag ausgeben."
+    "serializedHelp": "Seriennummern werden direkt an dieser Auftragsposition verwaltet."
+  },
+  "units": {
+    "availableTitle": "Verfügbare Seriennummern",
+    "availableDescription": "Wähle eine konkrete Einheit zum Reservieren oder direkten Ausgeben.",
+    "assignedTitle": "Einheiten dieser Position",
+    "assignedDescription": "Reservierung, Ausgabe und Rückgabe bleiben an der Seriennummer nachvollziehbar.",
+    "noAvailable": "Keine verfügbare Seriennummer vorhanden.",
+    "noAssigned": "Dieser Position ist noch keine Seriennummer zugeordnet."
   },
   "empty": {
     "noInventory": "Keine passenden Inventareinträge gefunden.",
@@ -89,13 +101,21 @@
     "created": "{{type}} wurde erstellt.",
     "issue": "{{quantity}} × {{name}} wurde ausgegeben.",
     "return": "{{quantity}} × {{name}} wurde zurückgenommen.",
-    "cancelled": "Vorgang wurde storniert."
+    "cancelled": "Vorgang wurde storniert.",
+    "unit": {
+      "reserve": "{{code}} wurde reserviert.",
+      "release": "{{code}} wurde wieder freigegeben.",
+      "issue": "{{code}} wurde ausgegeben.",
+      "return": "{{code}} wurde zurückgenommen."
+    }
   },
   "errors": {
     "load": "Vorgänge konnten nicht geladen werden.",
     "create": "Der Vorgang konnte nicht erstellt werden.",
     "update": "Der Vorgang konnte nicht aktualisiert werden.",
     "movement": "Die Bestandsbewegung konnte nicht gebucht werden.",
+    "unitsLoad": "Die Seriennummern konnten nicht geladen werden.",
+    "unitAction": "Die Seriennummer konnte nicht aktualisiert werden.",
     "missingContactOrLines": "Wähle einen Kontakt und füge mindestens eine Position hinzu.",
     "invalidLines": "Prüfe Mengen und Preise der Positionen.",
     "invalidMovementQuantity": "Gib eine ganze Menge zwischen 1 und {{maximum}} ein."

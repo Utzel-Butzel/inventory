@@ -52,6 +52,8 @@ type OrderLine = {
   fulfilledQuantity: number;
   returnedQuantity: number;
   openQuantity: number;
+  reservedQuantity: number;
+  openReservationQuantity: number;
   openReturnQuantity: number;
   unitPriceCents: number | null;
   priceCurrency: string | null;
@@ -60,6 +62,43 @@ type OrderLine = {
   note: string;
   trackingMode: "bulk" | "serialized";
   unitName: string;
+  units: OrderLineUnit[];
+};
+
+type OrderLineUnit = {
+  id: string;
+  stockUnitId: string;
+  code: string;
+  status: "reserved" | "fulfilled" | "returned";
+  stockStatus:
+    | "available"
+    | "reserved"
+    | "in-use"
+    | "maintenance"
+    | "consumed"
+    | "lost"
+    | "retired";
+  reservedAt: string;
+  fulfilledAt: string | null;
+  returnedAt: string | null;
+};
+
+type SerializedUnitPanel = {
+  line: {
+    id: string;
+    resourceId: string;
+    resourceName: string;
+    quantity: number;
+    fulfilledQuantity: number;
+    returnedQuantity: number;
+  };
+  availableUnits: Array<{
+    id: string;
+    code: string;
+    status: "available";
+    location: string | null;
+  }>;
+  assignments: OrderLineUnit[];
 };
 
 type Order = {
@@ -90,7 +129,7 @@ type DraftLine = {
 
 const inputClass =
   "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
-const labelClass = "block text-[11px] font-semibold text-muted-strong";
+const labelClass = "block text-[13px] font-semibold text-muted-strong";
 
 function randomId() {
   return crypto.randomUUID();
@@ -203,6 +242,13 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
   const [movementQuantities, setMovementQuantities] = useState<
     Record<string, string>
   >({});
+  const [unitPanelLineId, setUnitPanelLineId] = useState<string | null>(null);
+  const [unitPanel, setUnitPanel] = useState<SerializedUnitPanel | null>(null);
+  const [unitPanelLoading, setUnitPanelLoading] = useState(false);
+  const [selectedUnitIds, setSelectedUnitIds] = useState<
+    Record<string, string>
+  >({});
+  const [actingUnitKey, setActingUnitKey] = useState<string | null>(null);
   const createKey = useRef<string | null>(null);
   const movementKeys = useRef(new Map<string, string>());
 
@@ -423,6 +469,77 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
     }
   }
 
+  async function openUnitPanel(order: Order, line: OrderLine) {
+    if (unitPanelLineId === line.id) {
+      setUnitPanelLineId(null);
+      setUnitPanel(null);
+      return;
+    }
+    setUnitPanelLineId(line.id);
+    setUnitPanel(null);
+    setUnitPanelLoading(true);
+    setError(null);
+    try {
+      const payload = await fetchJson<SerializedUnitPanel>(
+        `/api/v1/orders/${order.id}/lines/${line.id}/units`,
+        { cache: "no-store" },
+      );
+      setUnitPanel(payload);
+      setSelectedUnitIds((current) => ({
+        ...current,
+        [line.id]: payload.availableUnits[0]?.id ?? "",
+      }));
+    } catch (unitError) {
+      setError(
+        unitError instanceof Error ? unitError.message : t("errors.unitsLoad"),
+      );
+    } finally {
+      setUnitPanelLoading(false);
+    }
+  }
+
+  async function applyUnitAction(
+    order: Order,
+    line: OrderLine,
+    action: "reserve" | "release" | "issue" | "return",
+    unitId: string,
+  ) {
+    if (!unitId) return;
+    const actionKey = `${line.id}:${unitId}:${action}`;
+    setActingUnitKey(actionKey);
+    setError(null);
+    setNotice(null);
+    try {
+      const payload = await fetchJson<{
+        changed: number;
+        units: SerializedUnitPanel;
+      }>(`/api/v1/orders/${order.id}/lines/${line.id}/units`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, unitIds: [unitId] }),
+      });
+      setUnitPanel(payload.units);
+      setSelectedUnitIds((current) => ({
+        ...current,
+        [line.id]: payload.units.availableUnits[0]?.id ?? "",
+      }));
+      await load(true);
+      const affected =
+        payload.units.assignments.find((unit) => unit.stockUnitId === unitId)
+          ?.code ??
+        payload.units.availableUnits.find((unit) => unit.id === unitId)?.code ??
+        unitPanel?.availableUnits.find((unit) => unit.id === unitId)?.code ??
+        unitId;
+      setNotice(t(`notices.unit.${action}`, { code: affected }));
+    } catch (unitError) {
+      setError(
+        unitError instanceof Error ? unitError.message : t("errors.unitAction"),
+      );
+    } finally {
+      setActingUnitKey(null);
+    }
+  }
+
   async function cancel(order: Order) {
     setError(null);
     try {
@@ -581,26 +698,169 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
                               ? ["confirmed", "partially-fulfilled"].includes(order.status)
                               : ["reserved", "partially-issued"].includes(order.status));
                           const canReturn =
-                            type === "loan" &&
                             line.openReturnQuantity > 0 &&
-                            ["partially-issued", "issued", "partially-returned", "overdue"].includes(order.status);
+                            (type === "sale"
+                              ? ["partially-fulfilled", "fulfilled", "partially-returned"].includes(order.status)
+                              : ["partially-issued", "issued", "partially-returned", "overdue"].includes(order.status));
+                          const canReserve =
+                            line.openReservationQuantity > 0 &&
+                            (type === "sale"
+                              ? ["confirmed", "partially-fulfilled"].includes(order.status)
+                              : ["reserved", "partially-issued"].includes(order.status));
                           const maximum = Math.max(
                             canIssue ? line.openQuantity : 0,
                             canReturn ? line.openReturnQuantity : 0,
                           );
+                          const unitPanelOpen = unitPanelLineId === line.id;
+                          const selectedUnitId = selectedUnitIds[line.id] ?? "";
                           return (
-                            <div key={line.id} className="grid gap-3 bg-surface px-4 py-4 sm:px-5 lg:grid-cols-[minmax(210px,1fr)_110px_110px_100px_minmax(220px,auto)] lg:items-center">
-                              <div className="min-w-0"><Link href={`/inventory/${line.resourceId}/stock`} className="truncate text-sm font-semibold text-foreground hover:text-brand">{line.resourceName}</Link><p className="mt-0.5 text-xs text-muted">{line.resourceSku || t("fields.noSku")} · {line.trackingMode === "serialized" ? t("tracking.serialized") : line.unitName}</p></div>
-                              <p className="text-xs text-muted"><span className="block text-[10px] font-semibold uppercase">{t("list.issued")}</span><strong className="text-sm text-foreground">{line.fulfilledQuantity} / {line.quantity}</strong></p>
-                              {type === "loan" ? <p className="text-xs text-muted"><span className="block text-[10px] font-semibold uppercase">{t("list.returned")}</span><strong className="text-sm text-foreground">{line.returnedQuantity} / {line.fulfilledQuantity}</strong></p> : <span />}
-                              {line.unitPriceCents !== null && line.priceCurrency ? <p className="text-sm font-semibold text-foreground">{new Intl.NumberFormat(locale, { style: "currency", currency: line.priceCurrency }).format(line.unitPriceCents / 100)}</p> : <span />}
-                              <div className="flex flex-wrap justify-end gap-2">
-                                {line.trackingMode === "serialized" && (canIssue || canReturn) ? <span className="text-xs text-warning">{t("tracking.serializedHelp")}</span> : null}
-                                {line.trackingMode === "bulk" && (canIssue || canReturn) ? <input aria-label={t("fields.movementQuantity")} type="number" min="1" max={maximum} step="1" value={movementQuantities[line.id] ?? ""} onChange={(event) => setMovementQuantities((current) => ({ ...current, [line.id]: event.target.value }))} placeholder={String(maximum)} className={`${inputClass} w-20`} /> : null}
-                                {line.trackingMode === "bulk" && canIssue ? <Button size="sm" variant="secondary" disabled={actingLineId === line.id} onClick={() => void move(order, line, "issue")}>{actingLineId === line.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <ArrowUpFromLine className="size-3.5" />}{t("actions.issue")}</Button> : null}
-                                {line.trackingMode === "bulk" && canReturn ? <Button size="sm" variant="secondary" disabled={actingLineId === line.id} onClick={() => void move(order, line, "return")}>{actingLineId === line.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}{t("actions.return")}</Button> : null}
-                                {!canIssue && !canReturn ? <Badge tone={line.openQuantity === 0 ? "success" : "neutral"}>{line.openQuantity === 0 ? t("list.complete") : t("list.pending")}</Badge> : null}
+                            <div key={line.id} className="bg-surface">
+                              <div className="grid gap-3 px-4 py-4 sm:px-5 lg:grid-cols-[minmax(210px,1fr)_110px_110px_100px_minmax(220px,auto)] lg:items-center">
+                                <div className="min-w-0">
+                                  <Link href={`/inventory/${line.resourceId}/stock`} className="truncate text-sm font-semibold text-foreground hover:text-brand">
+                                    {line.resourceName}
+                                  </Link>
+                                  <p className="mt-0.5 text-xs text-muted">
+                                    {line.resourceSku || t("fields.noSku")} · {line.trackingMode === "serialized" ? t("tracking.serialized") : line.unitName}
+                                  </p>
+                                  {line.trackingMode === "serialized" && line.units.length ? (
+                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                      {line.units.map((unit) => (
+                                        <Badge key={unit.id} tone={statusTone(unit.status)}>
+                                          {unit.code} · {t(`status.${unit.status}`)}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                                <p className="text-xs text-muted">
+                                  <span className="block text-[12px] font-semibold uppercase">{t("list.issued")}</span>
+                                  <strong className="text-sm text-foreground">{line.fulfilledQuantity} / {line.quantity}</strong>
+                                </p>
+                                <p className="text-xs text-muted">
+                                  <span className="block text-[12px] font-semibold uppercase">{t("list.returned")}</span>
+                                  <strong className="text-sm text-foreground">{line.returnedQuantity} / {line.fulfilledQuantity}</strong>
+                                </p>
+                                {line.unitPriceCents !== null && line.priceCurrency ? (
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {new Intl.NumberFormat(locale, { style: "currency", currency: line.priceCurrency }).format(line.unitPriceCents / 100)}
+                                  </p>
+                                ) : <span />}
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  {line.trackingMode === "serialized" ? (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      disabled={unitPanelLoading && unitPanelOpen}
+                                      onClick={() => void openUnitPanel(order, line)}
+                                    >
+                                      {unitPanelLoading && unitPanelOpen ? <LoaderCircle className="size-3.5 animate-spin" /> : <Package className="size-3.5" />}
+                                      {t("actions.manageUnits")}
+                                    </Button>
+                                  ) : null}
+                                  {line.trackingMode === "bulk" && (canIssue || canReturn) ? <input aria-label={t("fields.movementQuantity")} type="number" min="1" max={maximum} step="1" value={movementQuantities[line.id] ?? ""} onChange={(event) => setMovementQuantities((current) => ({ ...current, [line.id]: event.target.value }))} placeholder={String(maximum)} className={`${inputClass} w-20`} /> : null}
+                                  {line.trackingMode === "bulk" && canIssue ? <Button size="sm" variant="secondary" disabled={actingLineId === line.id} onClick={() => void move(order, line, "issue")}>{actingLineId === line.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <ArrowUpFromLine className="size-3.5" />}{t("actions.issue")}</Button> : null}
+                                  {line.trackingMode === "bulk" && canReturn ? <Button size="sm" variant="secondary" disabled={actingLineId === line.id} onClick={() => void move(order, line, "return")}>{actingLineId === line.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}{t("actions.return")}</Button> : null}
+                                  {line.trackingMode === "bulk" && !canIssue && !canReturn ? <Badge tone={line.openQuantity === 0 ? "success" : "neutral"}>{line.openQuantity === 0 ? t("list.complete") : t("list.pending")}</Badge> : null}
+                                </div>
                               </div>
+
+                              {unitPanelOpen ? (
+                                <div className="border-t border-border bg-surface-subtle px-4 py-4 sm:px-5">
+                                  {unitPanelLoading ? (
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                      <Skeleton className="h-28" />
+                                      <Skeleton className="h-28" />
+                                    </div>
+                                  ) : unitPanel?.line.id === line.id ? (
+                                    <div className="grid gap-4 lg:grid-cols-2">
+                                      <section className="rounded-xl border border-border bg-surface p-4">
+                                        <h3 className="text-sm font-semibold text-foreground">{t("units.availableTitle")}</h3>
+                                        <p className="mt-1 text-xs text-muted">{t("units.availableDescription")}</p>
+                                        {unitPanel.availableUnits.length ? (
+                                          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                                            <select
+                                              aria-label={t("fields.availableUnit")}
+                                              value={selectedUnitId}
+                                              onChange={(event) => setSelectedUnitIds((current) => ({ ...current, [line.id]: event.target.value }))}
+                                              className={`${inputClass} min-w-0 flex-1`}
+                                            >
+                                              {unitPanel.availableUnits.map((unit) => (
+                                                <option key={unit.id} value={unit.id}>
+                                                  {unit.code}{unit.location ? ` · ${unit.location}` : ""}
+                                                </option>
+                                              ))}
+                                            </select>
+                                            {canReserve ? (
+                                              <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                disabled={!selectedUnitId || actingUnitKey !== null}
+                                                onClick={() => void applyUnitAction(order, line, "reserve", selectedUnitId)}
+                                              >
+                                                {actingUnitKey === `${line.id}:${selectedUnitId}:reserve` ? <LoaderCircle className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                                                {t("actions.reserve")}
+                                              </Button>
+                                            ) : null}
+                                            {canIssue && line.openReservationQuantity > 0 ? (
+                                              <Button
+                                                size="sm"
+                                                disabled={!selectedUnitId || actingUnitKey !== null}
+                                                onClick={() => void applyUnitAction(order, line, "issue", selectedUnitId)}
+                                              >
+                                                {actingUnitKey === `${line.id}:${selectedUnitId}:issue` ? <LoaderCircle className="size-3.5 animate-spin" /> : <ArrowUpFromLine className="size-3.5" />}
+                                                {t("actions.issue")}
+                                              </Button>
+                                            ) : null}
+                                          </div>
+                                        ) : (
+                                          <p className="mt-3 text-sm text-muted">{t("units.noAvailable")}</p>
+                                        )}
+                                      </section>
+
+                                      <section className="rounded-xl border border-border bg-surface p-4">
+                                        <h3 className="text-sm font-semibold text-foreground">{t("units.assignedTitle")}</h3>
+                                        <p className="mt-1 text-xs text-muted">{t("units.assignedDescription")}</p>
+                                        {unitPanel.assignments.length ? (
+                                          <div className="mt-3 divide-y divide-border">
+                                            {unitPanel.assignments.map((unit) => (
+                                              <div key={unit.id} className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
+                                                <span className="min-w-0">
+                                                  <strong className="block truncate text-sm text-foreground">{unit.code}</strong>
+                                                  <span className="text-xs text-muted">{t(`status.${unit.status}`)}</span>
+                                                </span>
+                                                <span className="flex flex-wrap gap-2">
+                                                  {unit.status === "reserved" && canIssue ? (
+                                                    <Button size="sm" disabled={actingUnitKey !== null} onClick={() => void applyUnitAction(order, line, "issue", unit.stockUnitId)}>
+                                                      {actingUnitKey === `${line.id}:${unit.stockUnitId}:issue` ? <LoaderCircle className="size-3.5 animate-spin" /> : <ArrowUpFromLine className="size-3.5" />}
+                                                      {t("actions.issue")}
+                                                    </Button>
+                                                  ) : null}
+                                                  {unit.status === "reserved" ? (
+                                                    <Button size="sm" variant="ghost" disabled={actingUnitKey !== null} onClick={() => void applyUnitAction(order, line, "release", unit.stockUnitId)}>
+                                                      {actingUnitKey === `${line.id}:${unit.stockUnitId}:release` ? <LoaderCircle className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
+                                                      {t("actions.release")}
+                                                    </Button>
+                                                  ) : null}
+                                                  {unit.status === "fulfilled" && canReturn ? (
+                                                    <Button size="sm" variant="secondary" disabled={actingUnitKey !== null} onClick={() => void applyUnitAction(order, line, "return", unit.stockUnitId)}>
+                                                      {actingUnitKey === `${line.id}:${unit.stockUnitId}:return` ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
+                                                      {t("actions.return")}
+                                                    </Button>
+                                                  ) : null}
+                                                  {unit.status === "returned" ? <Badge tone="success">{t("status.returned")}</Badge> : null}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="mt-3 text-sm text-muted">{t("units.noAssigned")}</p>
+                                        )}
+                                      </section>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })}

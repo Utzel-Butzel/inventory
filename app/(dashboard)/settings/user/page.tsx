@@ -42,13 +42,13 @@ export default async function UserSettingsPage() {
               <h2 className="text-sm font-semibold text-foreground">
                 {t("user.appearance.title")}
               </h2>
-              <p className="mt-1 text-[13px] leading-5 text-muted">
+              <p className="mt-1 text-[15px] leading-5 text-muted">
                 {t("user.appearance.description")}
               </p>
             </div>
           </div>
           <div className="flex items-center justify-between gap-4 px-5 py-5 sm:px-6">
-            <p className="text-[13px] font-medium text-muted-strong">
+            <p className="text-[15px] font-medium text-muted-strong">
               {t("user.appearance.selectionLabel")}
             </p>
             <LocalizedThemeToggle />
@@ -64,14 +64,14 @@ export default async function UserSettingsPage() {
               <h2 className="text-sm font-semibold text-foreground">
                 {t("user.offline.title")}
               </h2>
-              <p className="mt-1 text-[13px] leading-5 text-muted">
+              <p className="mt-1 text-[15px] leading-5 text-muted">
                 {t("user.offline.description")}
               </p>
             </div>
           </div>
           <div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
             <div className="min-w-0">
-              <p className="pt-1 text-[13px] font-medium text-muted-strong">
+              <p className="pt-1 text-[15px] font-medium text-muted-strong">
                 {t("user.offline.selectionLabel")}
               </p>
               <p className="mt-1 max-w-xl text-xs leading-5 text-muted">
@@ -91,13 +91,13 @@ export default async function UserSettingsPage() {
               <h2 className="text-sm font-semibold text-foreground">
                 {t("user.developerMode.title")}
               </h2>
-              <p className="mt-1 text-[13px] leading-5 text-muted">
+              <p className="mt-1 text-[15px] leading-5 text-muted">
                 {t("user.developerMode.description")}
               </p>
             </div>
           </div>
           <div className="flex items-start justify-between gap-4 px-5 py-5 sm:px-6">
-            <p className="pt-1 text-[13px] font-medium text-muted-strong">
+            <p className="pt-1 text-[15px] font-medium text-muted-strong">
               {t("user.developerMode.selectionLabel")}
             </p>
             <DeveloperModeSetting
@@ -116,13 +116,13 @@ export default async function UserSettingsPage() {
               <h2 className="text-sm font-semibold text-foreground">
                 {t("user.pagination.title")}
               </h2>
-              <p className="mt-1 text-[13px] leading-5 text-muted">
+              <p className="mt-1 text-[15px] leading-5 text-muted">
                 {t("user.pagination.description")}
               </p>
             </div>
           </div>
           <div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-            <p className="pt-2 text-[13px] font-medium text-muted-strong">
+            <p className="pt-2 text-[15px] font-medium text-muted-strong">
               {t("user.pagination.selectionLabel")}
             </p>
             <InventoryPageSizeSetting
@@ -142,13 +142,13 @@ export default async function UserSettingsPage() {
               <h2 className="text-sm font-semibold text-foreground">
                 {t("user.language.title")}
               </h2>
-              <p className="mt-1 text-[13px] leading-5 text-muted">
+              <p className="mt-1 text-[15px] leading-5 text-muted">
                 {t("user.language.description")}
               </p>
             </div>
           </div>
           <div className="flex flex-col gap-2 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <p className="text-[13px] font-medium text-muted-strong">
+            <p className="text-[15px] font-medium text-muted-strong">
               {t("user.language.selectionLabel")}
             </p>
             <LanguageSwitcher />

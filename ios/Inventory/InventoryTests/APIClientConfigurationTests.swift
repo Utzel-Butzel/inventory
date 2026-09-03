@@ -2,6 +2,22 @@ import Foundation
 import XCTest
 @testable import Inventory
 
+private func requestBodyData(_ request: URLRequest) -> Data? {
+    if let body = request.httpBody { return body }
+    guard let stream = request.httpBodyStream else { return nil }
+
+    stream.open()
+    defer { stream.close() }
+    var data = Data()
+    var buffer = [UInt8](repeating: 0, count: 4_096)
+    while true {
+        let count = stream.read(&buffer, maxLength: buffer.count)
+        if count < 0 { return nil }
+        if count == 0 { return data }
+        data.append(contentsOf: buffer.prefix(count))
+    }
+}
+
 final class APIClientConfigurationTests: XCTestCase {
     func testReadOnlyCapabilitiesRemainUsable() {
         XCTAssertTrue(AppState.supportsInventory(scopes: ["read"]))
@@ -536,7 +552,7 @@ private final class InternalRequestsURLProtocol: URLProtocol, @unchecked Sendabl
     override func stopLoading() { }
 
     private func requestObject() -> [String: Any]? {
-        guard let body = request.httpBody else { return nil }
+        guard let body = requestBodyData(request) else { return nil }
         return try? JSONSerialization.jsonObject(with: body) as? [String: Any]
     }
 
@@ -664,7 +680,7 @@ private final class ResourceAssignmentsURLProtocol: URLProtocol, @unchecked Send
     override func stopLoading() { }
 
     private func requestObject() -> [String: Any]? {
-        guard let body = request.httpBody else { return nil }
+        guard let body = requestBodyData(request) else { return nil }
         return try? JSONSerialization.jsonObject(with: body) as? [String: Any]
     }
 
@@ -734,7 +750,7 @@ private final class FeatureParityURLProtocol: URLProtocol, @unchecked Sendable {
             )
         case ("PATCH", "/api/v1/notifications/preferences"):
             guard request.value(forHTTPHeaderField: "Content-Type") == "application/json",
-                  let requestBody = request.httpBody,
+                  let requestBody = requestBodyData(request),
                   let object = try? JSONSerialization.jsonObject(with: requestBody) as? [String: Any],
                   object["frequency"] as? String == "immediate",
                   object["timezone"] as? String == "Europe/Berlin",
@@ -750,7 +766,7 @@ private final class FeatureParityURLProtocol: URLProtocol, @unchecked Sendable {
             body = Data("{\"preference\":\(updatedPreference)}".utf8)
         case ("POST", "/api/v1/notifications/test"):
             guard request.value(forHTTPHeaderField: "Content-Type") == "application/json",
-                  let requestBody = request.httpBody,
+                  let requestBody = requestBodyData(request),
                   let object = try? JSONSerialization.jsonObject(with: requestBody) as? [String: Any],
                   object["channel"] as? String == "email" else {
                 fail()
@@ -771,7 +787,7 @@ private final class FeatureParityURLProtocol: URLProtocol, @unchecked Sendable {
             guard request.value(forHTTPHeaderField: "Content-Type") == "application/json",
                   request.value(forHTTPHeaderField: "Idempotency-Key")
                     == "44444444-4444-4444-8444-444444444444",
-                  let requestBody = request.httpBody,
+                  let requestBody = requestBodyData(request),
                   let object = try? JSONSerialization.jsonObject(with: requestBody) as? [String: Any],
                   object["status"] as? String == "returned" else {
                 fail()

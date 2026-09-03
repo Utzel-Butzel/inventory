@@ -91,7 +91,7 @@ export function OrganizationSwitcher({
   return (
     <div>
       <label className="block">
-        <span className="mb-1.5 block px-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-sidebar-muted">
+        <span className="mb-1.5 block px-1 text-[12px] font-semibold uppercase tracking-[0.13em] text-sidebar-muted">
           {t("organizations.label")}
         </span>
         <span className="relative flex h-11 items-center rounded-xl border border-border bg-surface px-2.5 shadow-sm transition focus-within:border-focus focus-within:ring-3 focus-within:ring-focus/10">
@@ -104,7 +104,7 @@ export function OrganizationSwitcher({
             onChange={(event) => void selectOrganization(event.target.value)}
             disabled={switching}
             aria-label={t("organizations.switcherLabel")}
-            className="h-full min-w-0 flex-1 appearance-none bg-transparent pl-2.5 pr-7 text-[12px] font-semibold text-foreground outline-none disabled:cursor-wait"
+            className="h-full min-w-0 flex-1 appearance-none bg-transparent pl-2.5 pr-7 text-[14px] font-semibold text-foreground outline-none disabled:cursor-wait"
           >
             {organizations.map((option) => (
               <option key={option.id} value={option.id}>
@@ -126,7 +126,7 @@ export function OrganizationSwitcher({
         </span>
       </label>
       {error ? (
-        <p className="mt-1.5 px-1 text-[10px] leading-4 text-danger" role="alert">
+        <p className="mt-1.5 px-1 text-[12px] leading-4 text-danger" role="alert">
           {error}
         </p>
       ) : null}

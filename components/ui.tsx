@@ -29,9 +29,9 @@ export function Button({
       "border-danger-border bg-surface text-danger shadow-sm hover:bg-danger-soft",
   };
   const sizes = {
-    sm: "h-8 gap-1.5 rounded-lg px-3 text-[13px] font-medium",
+    sm: "h-8 gap-1.5 rounded-lg px-3 text-[15px] font-medium",
     md: "h-10 gap-2 rounded-xl px-4 text-sm font-semibold",
-    lg: "h-12 gap-2 rounded-xl px-5 text-[15px] font-semibold",
+    lg: "h-12 gap-2 rounded-xl px-5 text-[17px] font-semibold",
   };
 
   return (
@@ -68,7 +68,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex min-h-6 items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-[0.01em]",
+        "inline-flex min-h-6 items-center rounded-full px-2.5 py-0.5 text-[13px] font-semibold tracking-[0.01em]",
         tones[tone],
         className,
       )}
@@ -126,7 +126,7 @@ export function EmptyState({
         {icon ?? <Inbox className="size-5" aria-hidden="true" />}
       </div>
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      <p className="mt-1.5 max-w-sm text-[13px] leading-5 text-muted">
+      <p className="mt-1.5 max-w-sm text-[15px] leading-5 text-muted">
         {description}
       </p>
       {action ? <div className="mt-4">{action}</div> : null}
