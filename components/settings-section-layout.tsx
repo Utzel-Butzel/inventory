@@ -11,7 +11,7 @@ export function SettingsSectionLayout({
   permissions: AppPermission[];
 }) {
   return (
-    <div className="min-h-[calc(100dvh-68px)] md:grid md:grid-cols-[248px_minmax(0,1fr)]">
+    <div className="min-h-[calc(100dvh-68px)] xl:grid xl:grid-cols-[248px_minmax(0,1fr)]">
       <SettingsNavigation
         isSuperAdmin={isSuperAdmin}
         permissions={permissions}

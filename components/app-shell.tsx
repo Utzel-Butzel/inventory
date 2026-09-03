@@ -7,9 +7,9 @@ import { useT } from "next-i18next/client";
 import {
   ArrowRight,
   Camera,
+  ChevronDown,
   ChevronRight,
   ClipboardList,
-  HandCoins,
   LayoutDashboard,
   LockKeyhole,
   LogOut,
@@ -19,7 +19,6 @@ import {
   Plus,
   Search,
   Settings,
-  UsersRound,
   Warehouse,
   X,
 } from "lucide-react";
@@ -64,14 +63,22 @@ type NavigationChild = {
   permission?: AppPermission;
 };
 
-const navigation: Array<{
+type NavigationItem = {
   labelKey: string;
   href: string;
   icon: typeof LayoutDashboard;
   permission?: AppPermission;
   activeHrefs?: string[];
   children?: NavigationChild[];
-}> = [
+};
+
+const navigation: NavigationItem[] = [
+  {
+    labelKey: "navigation.overview",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    permission: "inventory.read",
+  },
   {
     labelKey: "navigation.inventory",
     href: "/inventory",
@@ -113,11 +120,6 @@ const navigation: Array<{
         permission: "stock.read",
       },
       {
-        labelKey: "navigation.stockOrders",
-        href: "/stock/orders",
-        permission: "orders.read",
-      },
-      {
         labelKey: "navigation.stockScan",
         href: "/stock/scan",
         permission: "workflows.read",
@@ -125,19 +127,29 @@ const navigation: Array<{
     ],
   },
   {
-    labelKey: "navigation.contacts",
-    href: "/contacts",
-    icon: UsersRound,
-    permission: "contacts.read",
-  },
-  {
-    labelKey: "navigation.requests",
-    href: "/requests",
+    labelKey: "navigation.operations",
+    href: "/operations/purchases",
     icon: ClipboardList,
-    permission: "requests.read",
+    permission: "orders.read",
+    activeHrefs: ["/operations", "/requests", "/contacts"],
     children: [
       {
-        labelKey: "navigation.requestsOverview",
+        labelKey: "navigation.purchases",
+        href: "/operations/purchases",
+        permission: "orders.read",
+      },
+      {
+        labelKey: "navigation.sales",
+        href: "/operations/sales",
+        permission: "orders.read",
+      },
+      {
+        labelKey: "navigation.loans",
+        href: "/operations/loans",
+        permission: "orders.read",
+      },
+      {
+        labelKey: "navigation.requests",
         href: "/requests",
         permission: "requests.read",
       },
@@ -146,13 +158,12 @@ const navigation: Array<{
         href: "/requests/calendar",
         permission: "requests.read",
       },
+      {
+        labelKey: "navigation.contacts",
+        href: "/contacts",
+        permission: "contacts.read",
+      },
     ],
-  },
-  {
-    labelKey: "navigation.loans",
-    href: "/loans",
-    icon: HandCoins,
-    permission: "orders.read",
   },
   {
     labelKey: "navigation.locations",
@@ -173,34 +184,30 @@ const navigation: Array<{
       },
     ],
   },
-  {
-    labelKey: "navigation.statistics",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    permission: "inventory.read",
-  },
-  { labelKey: "navigation.settings", href: "/settings", icon: Settings },
 ];
 
 const pageNames: Record<string, string> = {
-  dashboard: "navigation.statistics",
+  dashboard: "navigation.overview",
   inventory: "navigation.inventory",
   favorites: "navigation.favorites",
-  contacts: "navigation.contacts",
   stock: "navigation.stock",
-  map: "navigation.map",
-  spaces: "navigation.rooms",
+  operations: "navigation.operations",
+  locations: "navigation.locations",
   batch: "actions.photoCapture",
   labels: "navigation.labels",
   duplicates: "navigation.duplicates",
   notifications: "navigation.notifications",
-  requests: "navigation.requests",
-  loans: "navigation.loans",
   settings: "navigation.settings",
 };
 
 function isPathActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function isNavigationItemActive(pathname: string, item: NavigationItem) {
+  return (item.activeHrefs ?? [item.href]).some((href) =>
+    isPathActive(pathname, href),
+  );
 }
 
 const settingsPageNames: Record<string, string> = {
@@ -220,6 +227,8 @@ const settingsPageNames: Record<string, string> = {
   webhooks: "settings.items.webhooks.label",
   api: "settings.items.api.label",
 };
+
+const SIDEBAR_EXPANDED_STORAGE_KEY = "open-inventory.sidebar.expanded";
 
 function initials(
   name: string | null | undefined,
@@ -321,6 +330,11 @@ function CreateMenu({
           aria-label={t("actions.createMenu")}
         >
           {canCreateInventory ? (
+            <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
+              {t("actions.inventoryGroup")}
+            </p>
+          ) : null}
+          {canCreateInventory ? (
             <Link
               href="/inventory/new"
               onClick={closeMenu}
@@ -358,24 +372,33 @@ function CreateMenu({
             </Link>
           ) : null}
           {canCreateRequest ? (
-            <Link
-              href="/requests"
-              onClick={closeMenu}
-              className="flex items-start gap-3 rounded-lg px-3 py-2.5 text-foreground transition hover:bg-surface-muted"
+            <div
+              className={cn(
+                canCreateInventory && "mt-1 border-t border-border pt-1",
+              )}
             >
-              <ClipboardList
-                className="mt-0.5 size-4 shrink-0 text-brand"
-                aria-hidden="true"
-              />
-              <span className="min-w-0">
-                <span className="block text-[12px] font-semibold">
-                  {t("actions.internalRequest")}
+              <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
+                {t("actions.operationsGroup")}
+              </p>
+              <Link
+                href="/requests"
+                onClick={closeMenu}
+                className="flex items-start gap-3 rounded-lg px-3 py-2.5 text-foreground transition hover:bg-surface-muted"
+              >
+                <ClipboardList
+                  className="mt-0.5 size-4 shrink-0 text-brand"
+                  aria-hidden="true"
+                />
+                <span className="min-w-0">
+                  <span className="block text-[12px] font-semibold">
+                    {t("actions.internalRequest")}
+                  </span>
+                  <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                    {t("actions.internalRequestDescription")}
+                  </span>
                 </span>
-                <span className="mt-0.5 block text-[10px] leading-4 text-muted">
-                  {t("actions.internalRequestDescription")}
-                </span>
-              </span>
-            </Link>
+              </Link>
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -399,6 +422,70 @@ function SidebarContent({
   showCreateMenu?: boolean;
 }) {
   const { t } = useT(["shell", "common"]);
+  const navigationIdPrefix = useId().replaceAll(":", "");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
+    () =>
+      new Set(
+        navigation
+          .filter(
+            (item) =>
+              item.children?.length && isNavigationItemActive(pathname, item),
+          )
+          .map((item) => item.href),
+      ),
+  );
+  const [restoredExpansion, setRestoredExpansion] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = window.sessionStorage.getItem(
+        SIDEBAR_EXPANDED_STORAGE_KEY,
+      );
+      if (stored) {
+        const restored = JSON.parse(stored);
+        if (Array.isArray(restored)) {
+          setExpandedGroups(
+            (current) =>
+              new Set([
+                ...current,
+                ...restored.filter((value): value is string =>
+                  navigation.some((item) => item.href === value),
+                ),
+              ]),
+          );
+        }
+      }
+    } catch {
+      // Keep the active group open when session storage is unavailable.
+    } finally {
+      setRestoredExpansion(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const activeGroup = navigation.find(
+      (item) =>
+        item.children?.length && isNavigationItemActive(pathname, item),
+    );
+    if (!activeGroup) return;
+    setExpandedGroups((current) => {
+      if (current.has(activeGroup.href)) return current;
+      return new Set([...current, activeGroup.href]);
+    });
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!restoredExpansion) return;
+    try {
+      window.sessionStorage.setItem(
+        SIDEBAR_EXPANDED_STORAGE_KEY,
+        JSON.stringify([...expandedGroups]),
+      );
+    } catch {
+      // Expansion persistence is optional.
+    }
+  }, [expandedGroups, restoredExpansion]);
+
   const handleSignOut = async () => {
     try {
       await disableOfflineModeBeforeSignOut();
@@ -441,57 +528,103 @@ function SidebarContent({
         </p>
         <div className="space-y-0.5">
           {navigation
-            .filter(
-              (item) =>
-                !item.permission || user.permissions.includes(item.permission),
-            )
-            .map((item) => {
-              const active = (item.activeHrefs ?? [item.href]).some((href) =>
-                isPathActive(pathname, href),
-              );
-              const visibleChildren = item.children?.filter(
+            .map((item) => ({
+              ...item,
+              visibleChildren: item.children?.filter(
                 (child) =>
                   !child.permission || user.permissions.includes(child.permission),
-              );
+              ),
+            }))
+            .filter(
+              (item) =>
+                !item.permission ||
+                user.permissions.includes(item.permission) ||
+                Boolean(item.visibleChildren?.length),
+            )
+            .map((item) => {
+              const active = isNavigationItemActive(pathname, item);
+              const visibleChildren = item.visibleChildren;
+              const hasChildren = Boolean(visibleChildren?.length);
+              const expanded = hasChildren && expandedGroups.has(item.href);
+              const canOpenDefault =
+                !item.permission || user.permissions.includes(item.permission);
+              const targetHref = canOpenDefault
+                ? item.href
+                : (visibleChildren?.[0]?.href ?? item.href);
+              const childrenId = `${navigationIdPrefix}-${item.labelKey.replaceAll(".", "-")}`;
+              const activeChildHref = visibleChildren
+                ?.filter((child) => isPathActive(pathname, child.href))
+                .sort((left, right) => right.href.length - left.href.length)[0]
+                ?.href;
               const Icon = item.icon;
               return (
-                <div key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={onNavigate}
-                    aria-current={
-                      active && !visibleChildren?.length ? "page" : undefined
-                    }
+                <div key={item.href} className="space-y-0.5">
+                  <div
                     className={cn(
-                      "group flex h-10 items-center gap-3 rounded-xl px-2.5 text-[13px] font-medium transition",
-                      active
-                        ? "bg-brand-soft text-brand"
-                        : "text-sidebar-muted-strong hover:bg-surface-muted hover:text-foreground",
+                      "group flex h-10 items-center rounded-xl text-[13px] font-medium transition",
+                      active && !hasChildren && "bg-brand-soft text-brand",
+                      active && hasChildren && "text-brand",
+                      !active &&
+                        "text-sidebar-muted-strong hover:bg-surface-muted hover:text-foreground",
                     )}
                   >
-                    <Icon
-                      className={cn(
-                        "size-[17px] shrink-0",
-                        active
-                          ? "text-brand"
-                          : "text-sidebar-muted group-hover:text-sidebar-muted-strong",
-                      )}
-                      strokeWidth={active ? 2.2 : 1.9}
-                      aria-hidden="true"
-                    />
-                    {t(item.labelKey)}
-                  </Link>
+                    <Link
+                      href={targetHref}
+                      onClick={onNavigate}
+                      aria-current={active && !hasChildren ? "page" : undefined}
+                      className="flex h-full min-w-0 flex-1 items-center gap-3 pl-2.5"
+                    >
+                      <Icon
+                        className={cn(
+                          "size-[17px] shrink-0",
+                          active
+                            ? "text-brand"
+                            : "text-sidebar-muted group-hover:text-sidebar-muted-strong",
+                        )}
+                        strokeWidth={active ? 2.2 : 1.9}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">{t(item.labelKey)}</span>
+                    </Link>
+                    {hasChildren ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedGroups((current) => {
+                            const next = new Set(current);
+                            if (next.has(item.href)) next.delete(item.href);
+                            else next.add(item.href);
+                            return next;
+                          })
+                        }
+                        aria-expanded={expanded}
+                        aria-controls={childrenId}
+                        aria-label={t(
+                          expanded
+                            ? "actions.collapseNavigationGroup"
+                            : "actions.expandNavigationGroup",
+                          { group: t(item.labelKey) },
+                        )}
+                        className="mr-1 grid size-8 shrink-0 place-items-center rounded-lg text-current transition hover:bg-surface-hover"
+                      >
+                        <ChevronDown
+                          className={cn(
+                            "size-3.5 transition-transform",
+                            expanded && "rotate-180",
+                          )}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    ) : null}
+                  </div>
 
-                  {active && visibleChildren?.length ? (
-                    <div className="ml-[18px] mt-1 space-y-0.5 border-l border-border pl-[18px]">
+                  {expanded && visibleChildren?.length ? (
+                    <div
+                      id={childrenId}
+                      className="ml-[18px] space-y-0.5 border-l border-border pl-[18px]"
+                    >
                       {visibleChildren.map((child) => {
-                        const childActive =
-                          isPathActive(pathname, child.href) &&
-                          !visibleChildren.some(
-                            (candidate) =>
-                              candidate.href !== child.href &&
-                              isPathActive(pathname, candidate.href),
-                          );
+                        const childActive = child.href === activeChildHref;
                         return (
                           <Link
                             key={child.href}
@@ -501,7 +634,7 @@ function SidebarContent({
                             className={cn(
                               "flex min-h-8 items-center rounded-lg px-2 text-[12px] font-medium transition",
                               childActive
-                                ? "text-brand"
+                                ? "bg-brand-soft text-brand"
                                 : "text-sidebar-muted hover:bg-surface-muted hover:text-foreground",
                             )}
                           >
@@ -518,6 +651,32 @@ function SidebarContent({
       </nav>
 
       <div className="border-t border-border p-3">
+        <Link
+          href="/settings"
+          onClick={onNavigate}
+          aria-current={
+            isPathActive(pathname, "/settings") || pathname === "/notifications"
+              ? "page"
+              : undefined
+          }
+          className={cn(
+            "group mb-1 flex h-10 items-center gap-3 rounded-xl px-2.5 text-[13px] font-medium transition",
+            isPathActive(pathname, "/settings") || pathname === "/notifications"
+              ? "bg-brand-soft text-brand"
+              : "text-sidebar-muted-strong hover:bg-surface-muted hover:text-foreground",
+          )}
+        >
+          <Settings
+            className={cn(
+              "size-[17px] shrink-0",
+              isPathActive(pathname, "/settings") || pathname === "/notifications"
+                ? "text-brand"
+                : "text-sidebar-muted group-hover:text-sidebar-muted-strong",
+            )}
+            aria-hidden="true"
+          />
+          {t("navigation.settings")}
+        </Link>
         <div className="flex items-center gap-2.5 rounded-xl px-2 py-2">
           <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft text-[10px] font-bold text-brand">
             {initials(user.name, user.email, t("user.generic"))}
@@ -573,15 +732,36 @@ export function AppShell({
   const mobileCloseButtonRef = useRef<HTMLButtonElement>(null);
   const pathSegments = scopedPathname.split("/").filter(Boolean);
   const section = pathSegments[0] ?? "inventory";
-  const pageName = t(pageNames[section] ?? "navigation.inventory");
+  const navigationSection =
+    section === "notifications"
+      ? "settings"
+      : ["contacts", "requests"].includes(section)
+        ? "operations"
+        : ["map", "spaces"].includes(section)
+          ? "locations"
+          : section;
+  const pageName = t(pageNames[navigationSection] ?? "navigation.inventory");
+  const sectionHref =
+    navigationSection === "operations"
+      ? "/operations/purchases"
+      : navigationSection === "locations"
+        ? "/map"
+        : `/${section}`;
   const settingsPageKey =
     section === "settings" && pathSegments[1]
       ? settingsPageNames[pathSegments[1]]
       : undefined;
-  const settingsPageName = settingsPageKey ? t(settingsPageKey) : undefined;
+  const settingsPageName =
+    section === "notifications"
+      ? t("navigation.notifications")
+      : settingsPageKey
+        ? t(settingsPageKey)
+        : undefined;
   const inventoryNestedPageName = (() => {
     if (section !== "inventory") return undefined;
-    if (pathSegments.length === 2 && pathSegments[1] !== "new") {
+    if (pathSegments.length === 2) {
+      if (pathSegments[1] === "favorites") return t("navigation.favorites");
+      if (pathSegments[1] === "new") return t("actions.new");
       return t("breadcrumb.details");
     }
     if (pathSegments.length !== 3) return undefined;
@@ -592,19 +772,35 @@ export function AppShell({
   const stockNestedPageName =
     section === "stock" && pathSegments[1]
       ? {
-          orders: t("navigation.stockOrders"),
           scan: t("navigation.stockScan"),
         }[pathSegments[1]]
       : undefined;
-  const requestNestedPageName =
-    section === "requests" && pathSegments[1] === "calendar"
-      ? t("navigation.reservationCalendar")
+  const operationsNestedPageName = (() => {
+    if (section === "contacts") return t("navigation.contacts");
+    if (section === "requests") {
+      return t(
+        pathSegments[1] === "calendar"
+          ? "navigation.reservationCalendar"
+          : "navigation.requests",
+      );
+    }
+    if (section !== "operations") return undefined;
+    return {
+      purchases: t("navigation.purchases"),
+      sales: t("navigation.sales"),
+      loans: t("navigation.loans"),
+    }[pathSegments[1] ?? "purchases"];
+  })();
+  const locationNestedPageName =
+    navigationSection === "locations"
+      ? t(section === "spaces" ? "navigation.rooms" : "navigation.map")
       : undefined;
   const nestedPageName =
     settingsPageName ??
     inventoryNestedPageName ??
     stockNestedPageName ??
-    requestNestedPageName;
+    operationsNestedPageName ??
+    locationNestedPageName;
   const isInventoryResourceSubpage =
     section === "inventory" &&
     pathSegments.length === 3 &&
@@ -764,7 +960,7 @@ export function AppShell({
               <li className={cn("min-w-0", !nestedPageName && "truncate")}>
                 {nestedPageName ? (
                   <Link
-                    href={`/${section}`}
+                    href={sectionHref}
                     className="font-semibold text-foreground transition hover:text-brand"
                   >
                     {pageName}

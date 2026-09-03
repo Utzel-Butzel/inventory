@@ -17,15 +17,17 @@
   },
   "navigation": {
     "mainLabel": "Main navigation",
-    "statistics": "Statistics",
+    "overview": "Overview",
     "inventory": "Inventory",
     "entries": "Items",
     "favorites": "Favorites",
     "contacts": "Contacts",
     "stock": "Stock",
     "stockOverview": "Overview",
-    "stockOrders": "Orders",
     "stockScan": "Scan",
+    "operations": "Operations",
+    "purchases": "Purchases",
+    "sales": "Sales",
     "locations": "Locations",
     "map": "Map",
     "rooms": "Rooms 3D",
@@ -33,7 +35,6 @@
     "duplicates": "Duplicates",
     "notifications": "Notifications",
     "requests": "Requests",
-    "requestsOverview": "Overview",
     "reservationCalendar": "Reservation calendar",
     "loans": "Loans",
     "settings": "Settings"
@@ -55,8 +56,10 @@
     "ai": "AI"
   },
   "actions": {
-    "new": "New",
-    "createMenu": "Create a new item",
+    "new": "Create",
+    "createMenu": "Open create menu",
+    "inventoryGroup": "Inventory",
+    "operationsGroup": "Operations",
     "manualEntry": "Enter manually",
     "manualEntryDescription": "Add the details yourself",
     "photoCapture": "Capture with photos",
@@ -65,7 +68,9 @@
     "internalRequestDescription": "Reserve inventory for a future time",
     "signOut": "Sign out",
     "openNavigation": "Open navigation",
-    "closeNavigation": "Close navigation"
+    "closeNavigation": "Close navigation",
+    "expandNavigationGroup": "Expand {{group}}",
+    "collapseNavigationGroup": "Collapse {{group}}"
   },
   "user": {
     "generic": "User",

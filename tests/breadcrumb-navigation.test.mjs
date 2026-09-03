@@ -25,7 +25,9 @@ test("inventory resource pages use one shell breadcrumb with linked ancestors", 
 
   assert.match(shell, /aria-label=\{t\("breadcrumb\.label"\)\}/);
   assert.match(shell, /href="\/"/);
-  assert.match(shell, /href=\{`\/\$\{section\}`\}/);
+  assert.match(shell, /href=\{sectionHref\}/);
+  assert.match(shell, /navigationSection === "operations"/);
+  assert.match(shell, /navigationSection === "locations"/);
   assert.match(shell, /aria-current="page"/);
   assert.match(shell, /t\("breadcrumb\.details"\)/);
   assert.match(shell, /t\("breadcrumb\.edit"\)/);

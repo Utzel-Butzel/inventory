@@ -56,6 +56,14 @@ test("organization path parsing recognizes slug and legacy UUID prefixes", () =>
   assert.equal(organizationIdFromPathname(uuidPathname), organizationId);
   assert.equal(stripOrganizationPathname(slugPathname), "/settings/organization");
   assert.equal(stripOrganizationPathname("/settings/organization"), "/settings/organization");
+  assert.equal(
+    stripOrganizationPathname(`/${organizationSlug}/operations/loans`),
+    "/operations/loans",
+  );
+  assert.equal(
+    stripOrganizationPathname(`/${organizationSlug}/contacts`),
+    "/contacts",
+  );
   assert.equal(isOrganizationPagePath(slugPathname), true);
   assert.equal(isOrganizationScopedPagePath(slugPathname), true);
   assert.equal(isOrganizationPagePath("/share/public-id"), false);

@@ -1,25 +1,13 @@
-import type { Metadata } from "next";
+import { permanentRedirect } from "next/navigation";
 
-import { OrdersManager } from "@/components/orders-manager";
-import { getT } from "@/lib/ui-i18n/server";
+import { getSessionIdentity } from "@/lib/api-auth";
+import { organizationPath } from "@/lib/organization-path";
 
-export const dynamic = "force-dynamic";
-
-export async function generateMetadata(): Promise<Metadata> {
-  const { t } = await getT("orders");
-
-  return {
-    title: t("metadata.title"),
-    description: t("metadata.description"),
-  };
-}
-
-export default async function OrdersPage() {
-  await getT("orders");
-
-  return (
-    <main className="mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <OrdersManager />
-    </main>
+export default async function LegacyStockOrdersPage() {
+  const identity = await getSessionIdentity();
+  permanentRedirect(
+    identity
+      ? organizationPath(identity.organization.slug, "/operations/purchases")
+      : "/login",
   );
 }

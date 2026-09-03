@@ -203,7 +203,7 @@ export function SettingsNavigation({
 
   return (
     <>
-      <aside className="hidden border-r border-border bg-surface md:block">
+      <aside className="hidden border-r border-border bg-surface xl:block">
         <div
           className={cn(
             "scrollbar-thin sticky overflow-y-auto px-4 py-7",
@@ -260,7 +260,7 @@ export function SettingsNavigation({
         </div>
       </aside>
 
-      <div className="border-b border-border bg-surface px-4 py-3 md:hidden">
+      <div className="border-b border-border bg-surface px-4 py-3 xl:hidden">
         <details className="group relative">
           <summary className="flex h-10 cursor-pointer list-none items-center justify-between rounded-xl border border-border bg-surface px-3 text-[13px] font-semibold text-foreground [&::-webkit-details-marker]:hidden">
             <span className="truncate">

@@ -17,15 +17,17 @@
   },
   "navigation": {
     "mainLabel": "Hauptnavigation",
-    "statistics": "Statistik",
+    "overview": "Übersicht",
     "inventory": "Inventar",
     "entries": "Einträge",
     "favorites": "Favoriten",
     "contacts": "Kontakte",
     "stock": "Bestand",
     "stockOverview": "Übersicht",
-    "stockOrders": "Vorgänge",
     "stockScan": "Scannen",
+    "operations": "Vorgänge",
+    "purchases": "Einkäufe",
+    "sales": "Verkäufe",
     "locations": "Orte",
     "map": "Karte",
     "rooms": "3D-Räume",
@@ -33,7 +35,6 @@
     "duplicates": "Duplikate",
     "notifications": "Benachrichtigungen",
     "requests": "Anfragen",
-    "requestsOverview": "Übersicht",
     "reservationCalendar": "Reservierungskalender",
     "loans": "Ausleihen",
     "settings": "Einstellungen"
@@ -55,8 +56,10 @@
     "ai": "KI"
   },
   "actions": {
-    "new": "Neu",
-    "createMenu": "Neuen Eintrag erstellen",
+    "new": "Erstellen",
+    "createMenu": "Erstellen-Menü öffnen",
+    "inventoryGroup": "Inventar",
+    "operationsGroup": "Vorgänge",
     "manualEntry": "Manuell erfassen",
     "manualEntryDescription": "Details selbst eingeben",
     "photoCapture": "Per Foto erfassen",
@@ -65,7 +68,9 @@
     "internalRequestDescription": "Inventar für einen späteren Zeitpunkt reservieren",
     "signOut": "Abmelden",
     "openNavigation": "Navigation öffnen",
-    "closeNavigation": "Navigation schließen"
+    "closeNavigation": "Navigation schließen",
+    "expandNavigationGroup": "{{group}} aufklappen",
+    "collapseNavigationGroup": "{{group}} zuklappen"
   },
   "user": {
     "generic": "Benutzer",

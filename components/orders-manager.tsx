@@ -130,13 +130,16 @@ function statusTone(status: string) {
   return "neutral" as const;
 }
 
-export function OrdersManager({ initialType = "purchase" }: { initialType?: OrderType }) {
+export function OrdersManager({ type = "purchase" }: { type?: OrderType }) {
   const { t } = useT("orders");
-  const [type, setType] = useState<OrderType>(initialType);
-  const tabs: Array<{ type: OrderType; icon: typeof Truck }> = [
-    { type: "purchase", icon: Truck },
-    { type: "sale", icon: ShoppingCart },
-    { type: "loan", icon: HandCoins },
+  const tabs: Array<{
+    type: OrderType;
+    href: string;
+    icon: typeof Truck;
+  }> = [
+    { type: "purchase", href: "/operations/purchases", icon: Truck },
+    { type: "sale", href: "/operations/sales", icon: ShoppingCart },
+    { type: "loan", href: "/operations/loans", icon: HandCoins },
   ];
 
   return (
@@ -145,10 +148,10 @@ export function OrdersManager({ initialType = "purchase" }: { initialType?: Orde
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
-            <button
+            <Link
               key={tab.type}
-              type="button"
-              onClick={() => setType(tab.type)}
+              href={tab.href}
+              aria-current={type === tab.type ? "page" : undefined}
               className={cn(
                 "inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition sm:flex-none",
                 type === tab.type
@@ -158,7 +161,7 @@ export function OrdersManager({ initialType = "purchase" }: { initialType?: Orde
             >
               <Icon className="size-4" aria-hidden="true" />
               {t(`types.${tab.type}`)}
-            </button>
+            </Link>
           );
         })}
       </Card>
