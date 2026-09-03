@@ -92,7 +92,7 @@ const defaultQuantityConfiguration: BomQuantityUnitConfiguration = {
 
 const inputClass =
   "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
-const labelClass = "block text-[13px] font-semibold text-muted-strong";
+const labelClass = "block text-[12px] font-semibold text-muted-strong";
 
 const actionIcons = {
   bom: Package,
@@ -780,7 +780,7 @@ export function ResourceConnectionEditorPanel({
                     <p className="text-xs font-semibold text-foreground">
                       {edgeConnectionLabel(connection, t)}
                     </p>
-                    <p className="mt-0.5 text-[12px] leading-4 text-muted">
+                    <p className="mt-0.5 text-[11px] leading-4 text-muted">
                       {t(
                         `connectionDiagram.editor.edge.descriptions.${connection.kind}`,
                       )}
@@ -883,7 +883,7 @@ export function ResourceConnectionEditorPanel({
                     : t("connectionDiagram.editor.actions.remove")}
                 </Button>
                 {isSibling ? (
-                  <p className="mt-2 text-[12px] leading-4 text-muted">
+                  <p className="mt-2 text-[11px] leading-4 text-muted">
                     {t("connectionDiagram.editor.edge.siblingHelp")}
                   </p>
                 ) : null}
@@ -926,7 +926,7 @@ export function ResourceConnectionEditorPanel({
         </div>
       ) : !action ? (
         <div className="space-y-2 p-4">
-          <p className="pb-1 text-[13px] leading-5 text-muted">
+          <p className="pb-1 text-[12px] leading-5 text-muted">
             {t("connectionDiagram.editor.chooseAction")}
           </p>
           {(
@@ -962,7 +962,7 @@ export function ResourceConnectionEditorPanel({
                   <span className="block text-xs font-semibold text-foreground">
                     {t(`connectionDiagram.editor.actions.${candidateAction}`)}
                   </span>
-                  <span className="mt-0.5 block text-[12px] leading-4 text-muted">
+                  <span className="mt-0.5 block text-[11px] leading-4 text-muted">
                     {disabled
                       ? t(
                           `connectionDiagram.editor.unavailable.${candidateAction}`,
@@ -984,7 +984,7 @@ export function ResourceConnectionEditorPanel({
               type="button"
               onClick={() => setCandidateMode("existing")}
               className={cn(
-                "h-8 flex-1 rounded-md px-2 text-[13px] font-semibold transition",
+                "h-8 flex-1 rounded-md px-2 text-[12px] font-semibold transition",
                 candidateMode === "existing"
                   ? "bg-surface text-foreground shadow-sm"
                   : "text-muted hover:text-foreground",
@@ -997,7 +997,7 @@ export function ResourceConnectionEditorPanel({
                 type="button"
                 onClick={() => setCandidateMode("new")}
                 className={cn(
-                  "h-8 flex-1 rounded-md px-2 text-[13px] font-semibold transition",
+                  "h-8 flex-1 rounded-md px-2 text-[12px] font-semibold transition",
                   candidateMode === "new"
                     ? "bg-surface text-foreground shadow-sm"
                     : "text-muted hover:text-foreground",
@@ -1057,7 +1057,7 @@ export function ResourceConnectionEditorPanel({
                   </label>
                 </>
               ) : (
-                <p className="rounded-lg bg-info-soft px-3 py-2 text-[12px] leading-4 text-info">
+                <p className="rounded-lg bg-info-soft px-3 py-2 text-[11px] leading-4 text-info">
                   {t("connectionDiagram.editor.newItemHelp")}
                 </p>
               )}
@@ -1101,7 +1101,7 @@ export function ResourceConnectionEditorPanel({
               </div>
               {quantityConfiguration.purchaseUnitName &&
               quantityConfiguration.purchaseUnitFactor ? (
-                <p className="text-[12px] leading-4 text-muted">
+                <p className="text-[11px] leading-4 text-muted">
                   {t("connectionDiagram.editor.purchaseUnitConversion", {
                     purchaseUnit: quantityConfiguration.purchaseUnitName,
                     count: quantityConfiguration.purchaseUnitFactor,
@@ -1194,7 +1194,7 @@ function EditorShell({
           <h3 className="truncate text-xs font-semibold text-foreground">
             {title}
           </h3>
-          <p className="mt-0.5 truncate text-[12px] text-muted">
+          <p className="mt-0.5 truncate text-[11px] text-muted">
             {description}
           </p>
         </div>
@@ -1222,7 +1222,7 @@ function EditorError({
 }) {
   const { t } = useT("resource");
   return (
-    <div className="flex items-start gap-2 border-b border-danger-border bg-danger-soft px-4 py-2.5 text-[13px] leading-4 text-danger">
+    <div className="flex items-start gap-2 border-b border-danger-border bg-danger-soft px-4 py-2.5 text-[12px] leading-4 text-danger">
       <span className="min-w-0 flex-1">{message}</span>
       <button
         type="button"

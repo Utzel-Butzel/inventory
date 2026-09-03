@@ -413,7 +413,7 @@ export function ImageUploadEditor({
                 <p className="text-xs font-semibold text-muted-strong">
                   {t("media.editor.crop")}
                 </p>
-                <p className="mt-0.5 text-[13px] text-muted">
+                <p className="mt-0.5 text-[12px] text-muted">
                   {t("media.editor.cropInstructions")}
                 </p>
               </div>
@@ -508,7 +508,7 @@ export function ImageUploadEditor({
               <label className="block text-xs font-semibold text-muted-strong">
                 <span className="flex items-center justify-between gap-3">
                   {t("media.editor.zoom")}
-                  <span className="font-mono text-[13px] font-normal text-muted">
+                  <span className="font-mono text-[12px] font-normal text-muted">
                     {zoom.toFixed(1)}×
                   </span>
                 </span>
@@ -526,7 +526,7 @@ export function ImageUploadEditor({
             </div>
 
             {crop ? (
-              <p className="mt-3 text-[13px] text-muted" aria-live="polite">
+              <p className="mt-3 text-[12px] text-muted" aria-live="polite">
                 {t("media.editor.outputSize", {
                   width: Math.max(1, Math.round(crop.width)),
                   height: Math.max(1, Math.round(crop.height)),

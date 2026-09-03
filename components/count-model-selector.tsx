@@ -124,7 +124,7 @@ export function CountModelSelector({
 
   return (
     <div className="mb-3 rounded-xl border border-brand-border bg-surface p-3">
-      <label htmlFor={selectId} className="block text-[13px] font-semibold text-muted-strong">
+      <label htmlFor={selectId} className="block text-[12px] font-semibold text-muted-strong">
         {t("models.counting")}
       </label>
       <select
@@ -144,7 +144,7 @@ export function CountModelSelector({
           </option>
         ))}
       </select>
-      <p id={descriptionId} className="mt-1 text-[12px] leading-4 text-muted">
+      <p id={descriptionId} className="mt-1 text-[11px] leading-4 text-muted">
         {preference.selectedModel?.description}
       </p>
     </div>

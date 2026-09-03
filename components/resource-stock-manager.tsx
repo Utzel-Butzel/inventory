@@ -1187,7 +1187,7 @@ export function ResourceStockManager({
             <h1 className="truncate text-2xl font-semibold tracking-[-0.035em] text-foreground sm:text-3xl">
               {stock.resource.name}
             </h1>
-            <span className="inline-flex h-6 items-center rounded-full bg-brand-soft px-2.5 text-[12px] font-bold uppercase tracking-[0.08em] text-brand">
+            <span className="inline-flex h-6 items-center rounded-full bg-brand-soft px-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-brand">
               {t(`resource.tracking.${stock.config.trackingMode}`)}
             </span>
           </div>
@@ -1234,7 +1234,7 @@ export function ResourceStockManager({
               title={t("resource.booking.title")}
               description={t("resource.booking.description")}
               trailing={
-                <span className="hidden text-[12px] font-semibold uppercase tracking-wider text-muted sm:block">
+                <span className="hidden text-[11px] font-semibold uppercase tracking-wider text-muted sm:block">
                   {t("resource.booking.available", {
                     quantity: numberFormat.format(currentQuantity),
                   })}
@@ -1303,7 +1303,7 @@ export function ResourceStockManager({
                       onChange={(event) => updateMovement("quantity", event.target.value)}
                       className={`${inputClass} ${purchaseUnitConfigured && direction === "in" ? "pr-24" : "pr-20"}`}
                     />
-                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[13px] text-muted">
+                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[12px] text-muted">
                       {enteredUnitName}
                     </span>
                   </div>
@@ -1328,7 +1328,7 @@ export function ResourceStockManager({
                   {purchaseUnitConfigured &&
                   direction === "in" &&
                   movementForm.quantityUnit === "purchase" ? (
-                    <span className="mt-1 block text-[11px] font-normal leading-4 text-muted">
+                    <span className="mt-1 block text-[10px] font-normal leading-4 text-muted">
                       {t("resource.booking.purchaseUnitConversion", {
                         quantity: numberFormat.format(
                           Number(movementForm.quantity || 0) * enteredUnitFactor,
@@ -1407,11 +1407,11 @@ export function ResourceStockManager({
                       placeholder="0.00"
                       className={`${inputClass} pr-14 tabular-nums`}
                     />
-                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[13px] text-muted">
+                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[12px] text-muted">
                       {stock.resource.currency}
                     </span>
                   </div>
-                  <span className="mt-1 block text-[11px] font-normal leading-4 text-muted">
+                  <span className="mt-1 block text-[10px] font-normal leading-4 text-muted">
                     {t("resource.booking.totalPriceHelp")}
                   </span>
                 </label>
@@ -1462,7 +1462,7 @@ export function ResourceStockManager({
               </div>
 
               {stock.config.trackingMode === "serialized" ? (
-                <div className="mt-4 flex items-start gap-2 rounded-xl border border-info-border bg-info-soft px-3.5 py-3 text-[13px] leading-4 text-info">
+                <div className="mt-4 flex items-start gap-2 rounded-xl border border-info-border bg-info-soft px-3.5 py-3 text-[12px] leading-4 text-info">
                   <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                   <span>
                     {t("resource.booking.serializedBeforeLink")} {" "}
@@ -1478,7 +1478,7 @@ export function ResourceStockManager({
               ) : null}
 
               <div className="mt-5 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[13px] text-muted">
+                <p className="text-[12px] text-muted">
                   {t("resource.booking.projectedBalance", {
                     quantity: numberFormat.format(
                       Math.max(
@@ -1536,7 +1536,7 @@ export function ResourceStockManager({
                 </div>
               </div>
               <div>
-                <p className="text-[12px] font-semibold uppercase tracking-wider text-muted">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                   {t("resource.metrics.minimum")}
                 </p>
                 <p
@@ -1548,7 +1548,7 @@ export function ResourceStockManager({
                 </p>
               </div>
               <div>
-                <p className="text-[12px] font-semibold uppercase tracking-wider text-muted">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                   {t("resource.metrics.incoming")}
                 </p>
                 <p className="mt-1 text-lg font-semibold text-foreground">
@@ -1592,7 +1592,7 @@ export function ResourceStockManager({
                       setHistoryFilter(event.target.value as typeof historyFilter)
                     }
                     aria-label={t("resource.movements.filterLabel")}
-                    className="h-8 appearance-none rounded-lg border border-border bg-surface pl-3 pr-8 text-[13px] font-medium text-muted outline-none hover:bg-surface-hover focus:border-focus"
+                    className="h-8 appearance-none rounded-lg border border-border bg-surface pl-3 pr-8 text-[12px] font-medium text-muted outline-none hover:bg-surface-hover focus:border-focus"
                   >
                     <option value="all">{t("resource.movements.filters.all")}</option>
                     <option value="in">{t("resource.movements.filters.in")}</option>
@@ -1606,7 +1606,7 @@ export function ResourceStockManager({
 
             {filteredMovements.length ? (
               <div>
-                <div className="hidden grid-cols-[90px_minmax(160px,1.25fr)_minmax(130px,1fr)_100px_120px_72px] gap-4 border-b border-border bg-surface-subtle px-6 py-2.5 text-[12px] font-semibold uppercase tracking-wider text-muted md:grid">
+                <div className="hidden grid-cols-[90px_minmax(160px,1.25fr)_minmax(130px,1fr)_100px_120px_72px] gap-4 border-b border-border bg-surface-subtle px-6 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted md:grid">
                   <span>{t("resource.movements.change")}</span>
                   <span>{t("resource.movements.reason")}</span>
                   <span>{t("resource.movements.locationUnit")}</span>
@@ -1648,7 +1648,7 @@ export function ResourceStockManager({
                             {positive ? "+" : ""}
                             {numberFormat.format(movement.delta)}
                           </span>
-                          <span className="text-[12px] text-muted md:hidden">
+                          <span className="text-[11px] text-muted md:hidden">
                             {formatDate(movement.occurredAt, locale, true)}
                           </span>
                         </div>
@@ -1662,7 +1662,7 @@ export function ResourceStockManager({
                                 { defaultValue: movement.type },
                               )}
                           </p>
-                          <p className="mt-0.5 truncate text-[12px] text-muted">
+                          <p className="mt-0.5 truncate text-[11px] text-muted">
                             {t(
                               movementLabelKeys[
                                 movement.type as MovementType
@@ -1674,7 +1674,7 @@ export function ResourceStockManager({
                             {movement.note ? ` · ${movement.note}` : ""}
                           </p>
                           {movement.contactId ? (
-                            <p className="mt-1 truncate text-[12px] font-medium text-brand">
+                            <p className="mt-1 truncate text-[11px] font-medium text-brand">
                               {t("resource.movements.contact")}: {" "}
                               {contactNameById.get(movement.contactId) ??
                                 t("resource.movements.unknownContact")}
@@ -1683,7 +1683,7 @@ export function ResourceStockManager({
                           {movement.totalPriceCents !== null &&
                           movement.totalPriceCents !== undefined &&
                           movement.priceCurrency ? (
-                            <p className="mt-1 text-[12px] font-semibold text-brand">
+                            <p className="mt-1 text-[11px] font-semibold text-brand">
                               {t("resource.movements.transactionPrice")}: {" "}
                               {formatMoney(
                                 movement.totalPriceCents,
@@ -1695,7 +1695,7 @@ export function ResourceStockManager({
                           {movement.costCents !== null &&
                           movement.costCents !== undefined &&
                           movement.costCurrency ? (
-                            <p className="mt-0.5 text-[11px] text-muted">
+                            <p className="mt-0.5 text-[10px] text-muted">
                               {t("resource.movements.inventoryCost")}: {" "}
                               {formatMoney(
                                 movement.costCents,
@@ -1708,7 +1708,7 @@ export function ResourceStockManager({
                             </p>
                           ) : null}
                         </div>
-                        <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted">
+                        <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-muted">
                           {movement.location ? (
                             <>
                               <MapPin className="size-3 shrink-0 text-muted" aria-hidden="true" />
@@ -1723,17 +1723,17 @@ export function ResourceStockManager({
                             <span className="text-muted">—</span>
                           )}
                         </div>
-                        <p className="text-[13px] text-muted md:font-semibold md:tabular-nums">
+                        <p className="text-[12px] text-muted md:font-semibold md:tabular-nums">
                           <span className="md:hidden">
                             {t("resource.movements.balance")}{" "}
                           </span>
                           {numberFormat.format(movement.balanceAfter)}
                         </p>
                         <div className="hidden md:block">
-                          <p className="text-[12px] text-muted">
+                          <p className="text-[11px] text-muted">
                             {formatDate(movement.occurredAt, locale)}
                           </p>
-                          <p className="mt-0.5 truncate text-[11px] text-muted">
+                          <p className="mt-0.5 truncate text-[10px] text-muted">
                             {movement.createdBy || t("resource.system")}
                           </p>
                         </div>
@@ -1917,7 +1917,7 @@ export function ResourceStockManager({
                                     }
                                     className={`${inputClass} pr-14 tabular-nums`}
                                   />
-                                  <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[13px] text-muted">
+                                  <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[12px] text-muted">
                                     {stock.resource.currency}
                                   </span>
                                 </div>
@@ -2023,7 +2023,7 @@ export function ResourceStockManager({
             value: numberFormat.format(stock.units.length),
           })}
           trailing={
-            <span className="hidden rounded-full bg-success-soft px-2.5 py-1 text-[12px] font-semibold text-success sm:inline-flex">
+            <span className="hidden rounded-full bg-success-soft px-2.5 py-1 text-[11px] font-semibold text-success sm:inline-flex">
               {t("resource.units.availableCount", {
                 count: stock.units.filter((unit) => unit.status === "available")
                   .length,
@@ -2050,7 +2050,7 @@ export function ResourceStockManager({
                   <h3 className="text-xs font-semibold text-foreground">
                     {t("resource.units.registerTitle")}
                   </h3>
-                  <p className="text-[12px] text-muted">
+                  <p className="text-[11px] text-muted">
                     {t("resource.units.registerDescription")}
                   </p>
                 </div>
@@ -2062,7 +2062,7 @@ export function ResourceStockManager({
                   onClick={() =>
                     setUnitCreateForm((current) => ({ ...current, idMode: "generated" }))
                   }
-                  className={`h-9 rounded-lg text-[13px] font-semibold transition ${
+                  className={`h-9 rounded-lg text-[12px] font-semibold transition ${
                     unitCreateForm.idMode === "generated"
                       ? "bg-surface text-brand shadow-sm"
                       : "text-muted"
@@ -2075,7 +2075,7 @@ export function ResourceStockManager({
                   onClick={() =>
                     setUnitCreateForm((current) => ({ ...current, idMode: "custom" }))
                   }
-                  className={`h-9 rounded-lg text-[13px] font-semibold transition ${
+                  className={`h-9 rounded-lg text-[12px] font-semibold transition ${
                     unitCreateForm.idMode === "custom"
                       ? "bg-surface text-brand shadow-sm"
                       : "text-muted"
@@ -2206,11 +2206,11 @@ export function ResourceStockManager({
                       placeholder="0.00"
                       className={`${inputClass} pr-14 tabular-nums`}
                     />
-                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[13px] text-muted">
+                    <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[12px] text-muted">
                       {stock.resource.currency}
                     </span>
                   </div>
-                  <span className="mt-1 block text-[11px] font-normal leading-4 text-muted">
+                  <span className="mt-1 block text-[10px] font-normal leading-4 text-muted">
                     {t("resource.units.acquisitionPriceHelp")}
                   </span>
                 </label>
@@ -2220,7 +2220,7 @@ export function ResourceStockManager({
                       <p className="text-xs font-semibold text-foreground">
                         {t("resource.units.customFields")}
                       </p>
-                      <p className="mt-0.5 text-[12px] leading-4 text-muted">
+                      <p className="mt-0.5 text-[11px] leading-4 text-muted">
                         {t("resource.units.customFieldsBatchHelp")}
                       </p>
                     </div>
@@ -2238,7 +2238,7 @@ export function ResourceStockManager({
                     />
                   </div>
                 ) : customFieldError ? (
-                  <p className="rounded-xl border border-warning-border bg-warning-soft px-3 py-2 text-[12px] leading-4 text-warning">
+                  <p className="rounded-xl border border-warning-border bg-warning-soft px-3 py-2 text-[11px] leading-4 text-warning">
                     {t("resource.units.customFieldsUnavailable")}
                   </p>
                 ) : null}
@@ -2255,7 +2255,7 @@ export function ResourceStockManager({
                       }))
                     }
                     spellCheck={false}
-                    className={`${inputClass} h-auto resize-y py-3 font-mono text-[13px] leading-5`}
+                    className={`${inputClass} h-auto resize-y py-3 font-mono text-[12px] leading-5`}
                   />
                 </label>
               </div>
@@ -2294,14 +2294,14 @@ export function ResourceStockManager({
                                   {unit.code}
                                 </p>
                                 <span
-                                  className={`inline-flex h-5 items-center rounded-full px-2 text-[11px] font-bold uppercase tracking-wide ${unitStatusClass(unit.status)}`}
+                                  className={`inline-flex h-5 items-center rounded-full px-2 text-[10px] font-bold uppercase tracking-wide ${unitStatusClass(unit.status)}`}
                                 >
                                   {t(statusLabelKeys[unit.status], {
                                     defaultValue: unit.status,
                                   })}
                                 </span>
                               </div>
-                              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted">
+                              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
                                 <span className="flex items-center gap-1">
                                   <MapPin className="size-3" aria-hidden="true" />
                                   {unit.location || t("resource.units.noLocation")}
@@ -2332,7 +2332,7 @@ export function ResourceStockManager({
                               {unit.installation ? (
                                 <Link
                                   href={`/inventory/${unit.installation.assemblyResourceId}/stock`}
-                                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-info-soft px-2.5 py-1.5 text-[12px] font-semibold text-info transition hover:bg-info-soft/80"
+                                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-info-soft px-2.5 py-1.5 text-[11px] font-semibold text-info transition hover:bg-info-soft/80"
                                 >
                                   <Layers3 className="size-3" aria-hidden="true" />
                                   {t("resource.units.installedIn", {
@@ -2356,7 +2356,7 @@ export function ResourceStockManager({
                                     .map(([key, value]) => (
                                       <span
                                         key={key}
-                                        className="rounded-md bg-surface-muted px-2 py-1 text-[11px] text-muted"
+                                        className="rounded-md bg-surface-muted px-2 py-1 text-[10px] text-muted"
                                       >
                                         {key}: {String(value)}
                                       </span>
@@ -2416,7 +2416,7 @@ export function ResourceStockManager({
                             onSubmit={saveUnit}
                             className="mt-4 rounded-xl border border-brand-border bg-brand-soft p-4"
                           >
-                            <div className="mb-3 flex items-start gap-2 rounded-lg bg-surface/80 px-3 py-2 text-[12px] leading-4 text-muted">
+                            <div className="mb-3 flex items-start gap-2 rounded-lg bg-surface/80 px-3 py-2 text-[11px] leading-4 text-muted">
                               <Info className="mt-0.5 size-3 shrink-0 text-brand" aria-hidden="true" />
                               {t("resource.units.editHelp")}
                             </div>
@@ -2522,11 +2522,11 @@ export function ResourceStockManager({
                                     placeholder="0.00"
                                     className={`${inputClass} pr-14 tabular-nums`}
                                   />
-                                  <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[13px] text-muted">
+                                  <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[12px] text-muted">
                                     {stock.resource.currency}
                                   </span>
                                 </div>
-                                <span className="mt-1 block text-[11px] font-normal leading-4 text-muted">
+                                <span className="mt-1 block text-[10px] font-normal leading-4 text-muted">
                                   {t("resource.units.transactionPriceHelp")}
                                 </span>
                               </label>
@@ -2564,7 +2564,7 @@ export function ResourceStockManager({
                                     <p className="text-xs font-semibold text-foreground">
                                       {t("resource.units.customFields")}
                                     </p>
-                                    <p className="mt-0.5 text-[12px] leading-4 text-muted">
+                                    <p className="mt-0.5 text-[11px] leading-4 text-muted">
                                       {t("resource.units.customFieldsEditHelp")}
                                     </p>
                                   </div>
@@ -2592,12 +2592,12 @@ export function ResourceStockManager({
                                     )
                                   }
                                   spellCheck={false}
-                                  className={`${inputClass} h-auto resize-y py-3 font-mono text-[13px] leading-5`}
+                                  className={`${inputClass} h-auto resize-y py-3 font-mono text-[12px] leading-5`}
                                 />
                               </label>
                             </div>
                             <div className="mt-4 flex flex-col-reverse gap-2 border-t border-brand-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-                              <p className="text-[11px] text-muted">
+                              <p className="text-[10px] text-muted">
                                 {t("resource.units.registeredUpdated", {
                                   registered: formatDate(unit.createdAt, locale, true),
                                   updated: formatDate(unit.updatedAt, locale, true),
@@ -2606,7 +2606,7 @@ export function ResourceStockManager({
                               <button
                                 type="submit"
                                 disabled={savingUnit}
-                                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand-solid px-3.5 text-[13px] font-semibold text-on-brand hover:bg-brand-hover disabled:opacity-50"
+                                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand-solid px-3.5 text-[12px] font-semibold text-on-brand hover:bg-brand-hover disabled:opacity-50"
                               >
                                 {savingUnit ? (
                                   <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
@@ -2676,13 +2676,13 @@ export function ResourceStockManager({
             </p>
             <div className="mt-5 grid grid-cols-3 gap-2 rounded-xl border border-border bg-surface-subtle p-3 text-center">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
                   {t("resource.confirm.before")}
                 </p>
                 <p className="mt-1 text-base font-semibold text-foreground">{currentQuantity}</p>
               </div>
               <div className="border-x border-border">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
                   {t("resource.confirm.change")}
                 </p>
                 <p className="mt-1 text-base font-semibold text-danger">
@@ -2690,7 +2690,7 @@ export function ResourceStockManager({
                 </p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">
                   {t("resource.confirm.after")}
                 </p>
                 <p className="mt-1 text-base font-semibold text-foreground">
@@ -2699,7 +2699,7 @@ export function ResourceStockManager({
               </div>
             </div>
             {currentQuantity + pendingMovement.delta <= minimum ? (
-              <div className="mt-4 flex items-start gap-2 rounded-xl border border-warning-border bg-warning-soft px-3.5 py-3 text-[13px] leading-4 text-warning">
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-warning-border bg-warning-soft px-3.5 py-3 text-[12px] leading-4 text-warning">
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                 {t("resource.confirm.minimumWarning", { minimum })}
               </div>

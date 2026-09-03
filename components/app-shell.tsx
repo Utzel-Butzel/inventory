@@ -310,7 +310,7 @@ function CreateMenu({
           "flex items-center justify-center rounded-xl bg-brand-solid font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover active:bg-brand-active",
           variant === "compact"
             ? "size-11"
-            : "h-10 w-full gap-2 px-3 text-[15px]",
+            : "h-10 w-full gap-2 px-3 text-[14px]",
         )}
       >
         <Plus className="size-4" strokeWidth={2.2} aria-hidden="true" />
@@ -330,7 +330,7 @@ function CreateMenu({
           aria-label={t("actions.createMenu")}
         >
           {canCreateInventory ? (
-            <p className="px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
+            <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
               {t("actions.inventoryGroup")}
             </p>
           ) : null}
@@ -342,10 +342,10 @@ function CreateMenu({
             >
               <Plus className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
               <span className="min-w-0">
-                <span className="block text-[14px] font-semibold">
+                <span className="block text-[13px] font-semibold">
                   {t("actions.manualEntry")}
                 </span>
-                <span className="mt-0.5 block text-[12px] leading-4 text-muted">
+                <span className="mt-0.5 block text-[11px] leading-4 text-muted">
                   {t("actions.manualEntryDescription")}
                 </span>
               </span>
@@ -362,10 +362,10 @@ function CreateMenu({
                 aria-hidden="true"
               />
               <span className="min-w-0">
-                <span className="block text-[14px] font-semibold">
+                <span className="block text-[13px] font-semibold">
                   {t("actions.photoCapture")}
                 </span>
-                <span className="mt-0.5 block text-[12px] leading-4 text-muted">
+                <span className="mt-0.5 block text-[11px] leading-4 text-muted">
                   {t("actions.photoCaptureDescription")}
                 </span>
               </span>
@@ -377,7 +377,7 @@ function CreateMenu({
                 canCreateInventory && "mt-1 border-t border-border pt-1",
               )}
             >
-              <p className="px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
+              <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
                 {t("actions.operationsGroup")}
               </p>
               <Link
@@ -390,10 +390,10 @@ function CreateMenu({
                   aria-hidden="true"
                 />
                 <span className="min-w-0">
-                  <span className="block text-[14px] font-semibold">
+                  <span className="block text-[13px] font-semibold">
                     {t("actions.internalRequest")}
                   </span>
-                  <span className="mt-0.5 block text-[12px] leading-4 text-muted">
+                  <span className="mt-0.5 block text-[11px] leading-4 text-muted">
                     {t("actions.internalRequestDescription")}
                   </span>
                 </span>
@@ -502,7 +502,7 @@ function SidebarContent({
           className="flex items-center gap-2.5 rounded-lg text-foreground"
         >
           <BrandMark className="size-8 shrink-0" aria-hidden="true" />
-          <span className="text-[17px] font-semibold">
+          <span className="text-[16px] font-semibold">
             {t("brand")}
           </span>
         </Link>
@@ -523,7 +523,7 @@ function SidebarContent({
         className="scrollbar-thin mt-6 min-h-0 flex-1 overflow-y-auto px-3 pb-3"
         aria-label={t("navigation.mainLabel")}
       >
-        <p className="mb-2 px-2.5 text-[12px] font-semibold uppercase tracking-[0.13em] text-sidebar-muted">
+        <p className="mb-2 px-2.5 text-[11px] font-semibold uppercase tracking-[0.13em] text-sidebar-muted">
           {t("sections.workspace")}
         </p>
         <div className="space-y-0.5">
@@ -561,7 +561,7 @@ function SidebarContent({
                 <div key={item.href} className="space-y-0.5">
                   <div
                     className={cn(
-                      "group flex h-11 items-center rounded-xl text-[15px] font-medium transition lg:h-10",
+                      "group flex h-11 items-center rounded-xl text-[14px] font-medium transition lg:h-10",
                       active && !hasChildren && "bg-brand-soft text-brand",
                       active && hasChildren && "text-brand",
                       !active &&
@@ -632,7 +632,7 @@ function SidebarContent({
                             onClick={onNavigate}
                             aria-current={childActive ? "page" : undefined}
                             className={cn(
-                              "flex min-h-11 items-center rounded-lg px-2 text-[14px] font-medium transition lg:min-h-8",
+                              "flex min-h-11 items-center rounded-lg px-2 text-[13px] font-medium transition lg:min-h-8",
                               childActive
                                 ? "bg-brand-soft text-brand"
                                 : "text-sidebar-muted hover:bg-surface-muted hover:text-foreground",
@@ -660,7 +660,7 @@ function SidebarContent({
               : undefined
           }
           className={cn(
-            "group mb-1 flex h-11 items-center gap-3 rounded-xl px-2.5 text-[15px] font-medium transition lg:h-10",
+            "group mb-1 flex h-11 items-center gap-3 rounded-xl px-2.5 text-[14px] font-medium transition lg:h-10",
             isPathActive(pathname, "/settings") || pathname === "/notifications"
               ? "bg-brand-soft text-brand"
               : "text-sidebar-muted-strong hover:bg-surface-muted hover:text-foreground",
@@ -678,17 +678,17 @@ function SidebarContent({
           {t("navigation.settings")}
         </Link>
         <div className="flex items-center gap-2.5 rounded-xl px-2 py-2">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft text-[12px] font-bold text-brand">
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand">
             {initials(user.name, user.email, t("user.generic"))}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[14px] font-semibold text-foreground">
+            <p className="truncate text-[13px] font-semibold text-foreground">
               {user.name || t("user.fallbackName")}
             </p>
-            <p className="truncate text-[12px] text-sidebar-muted">
+            <p className="truncate text-[11px] text-sidebar-muted">
               {user.email || t("user.signedIn")}
             </p>
-            <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-brand">
+            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-brand">
               {user.roleName}
             </p>
           </div>
@@ -1034,7 +1034,7 @@ export function AppShell({
                       event.currentTarget.form?.requestSubmit();
                     }
                   }}
-                  className="h-9 w-56 rounded-xl border border-border bg-surface-subtle pl-9 pr-10 text-[14px] text-foreground transition placeholder:text-muted hover:border-border-strong focus:w-64 focus:border-focus focus:bg-surface focus:outline-none focus:ring-3 focus:ring-focus/10"
+                  className="h-9 w-56 rounded-xl border border-border bg-surface-subtle pl-9 pr-10 text-[13px] text-foreground transition placeholder:text-muted hover:border-border-strong focus:w-64 focus:border-focus focus:bg-surface focus:outline-none focus:ring-3 focus:ring-focus/10"
                 />
                 <button
                   type="submit"
@@ -1058,7 +1058,7 @@ export function AppShell({
             role="status"
             className="sticky top-[68px] z-[19] border-b border-brand/20 bg-brand-soft/95 px-4 text-brand backdrop-blur-xl sm:px-6 lg:px-8"
           >
-            <div className="flex min-h-10 items-center gap-2.5 py-2 text-[14px]">
+            <div className="flex min-h-10 items-center gap-2.5 py-2 text-[13px]">
               <LockKeyhole
                 className="size-3.5 shrink-0"
                 strokeWidth={2.2}

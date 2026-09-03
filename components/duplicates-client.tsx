@@ -206,7 +206,7 @@ function ResourcePanel({ resource, side }: { resource: DuplicateResource; side: 
         <div className="mt-4 flex min-h-7 flex-wrap gap-1.5">
           {descriptors.length ? (
             descriptors.slice(0, 6).map((descriptor, index) => (
-              <span key={`${descriptor}-${index}`} className="inline-flex items-center gap-1 rounded-md bg-surface-muted px-2 py-1 text-[12px] font-medium text-muted">
+              <span key={`${descriptor}-${index}`} className="inline-flex items-center gap-1 rounded-md bg-surface-muted px-2 py-1 text-[11px] font-medium text-muted">
                 <Tag className="size-2.5" />
                 {descriptor}
               </span>
@@ -217,7 +217,7 @@ function ResourcePanel({ resource, side }: { resource: DuplicateResource; side: 
             </span>
           )}
           {descriptors.length > 6 ? (
-            <span className="rounded-md bg-surface-muted px-2 py-1 text-[12px] font-medium text-muted">+{descriptors.length - 6}</span>
+            <span className="rounded-md bg-surface-muted px-2 py-1 text-[11px] font-medium text-muted">+{descriptors.length - 6}</span>
           ) : null}
         </div>
       </div>
@@ -499,7 +499,7 @@ export function DuplicatesClient() {
                         className="group flex min-h-12 items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 text-left transition hover:border-brand-border hover:bg-brand-soft/50 disabled:opacity-50"
                       >
                         <span className="min-w-0">
-                          <span className="block text-[12px] font-semibold uppercase tracking-wider text-muted">
+                          <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted">
                             {t("duplicates.keepRecordA")}
                           </span>
                           <span className="block truncate text-sm font-semibold text-muted-strong">{pair.left.name}</span>
@@ -513,7 +513,7 @@ export function DuplicatesClient() {
                         className="group flex min-h-12 items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 text-left transition hover:border-brand-border hover:bg-brand-soft/50 disabled:opacity-50"
                       >
                         <span className="min-w-0">
-                          <span className="block text-[12px] font-semibold uppercase tracking-wider text-muted">
+                          <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted">
                             {t("duplicates.keepRecordB")}
                           </span>
                           <span className="block truncate text-sm font-semibold text-muted-strong">{pair.right.name}</span>

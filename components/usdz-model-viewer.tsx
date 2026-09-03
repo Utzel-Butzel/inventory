@@ -233,7 +233,7 @@ export function UsdzModelViewer({
           </div>
         ) : null}
         {status === "ready" ? (
-          <span className="pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1 text-[12px] font-semibold text-muted shadow-sm">
+          <span className="pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1 text-[11px] font-semibold text-muted shadow-sm">
             <Rotate3d className="size-3.5" aria-hidden="true" /> 3D
           </span>
         ) : null}
@@ -246,7 +246,7 @@ export function UsdzModelViewer({
           <a
             href={src}
             rel="ar"
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-border bg-brand-soft px-2.5 text-[13px] font-semibold text-brand"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-border bg-brand-soft px-2.5 text-[12px] font-semibold text-brand"
           >
             {/* Quick Look requires an image inside its rel=ar link. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -259,7 +259,7 @@ export function UsdzModelViewer({
           target="_blank"
           rel="noreferrer"
           download={name}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface-subtle px-2.5 text-[13px] font-semibold text-muted-strong transition hover:border-border-strong"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface-subtle px-2.5 text-[12px] font-semibold text-muted-strong transition hover:border-border-strong"
         >
           <Download className="size-3.5" aria-hidden="true" />
           {labels.download}

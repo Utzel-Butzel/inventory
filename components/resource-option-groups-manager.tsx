@@ -83,7 +83,7 @@ type ResourceListResponse = {
 
 const inputClass =
   "h-9 w-full rounded-lg border border-border bg-surface px-3 text-xs text-foreground outline-none transition placeholder:text-muted focus:border-success focus:ring-4 focus:ring-success-border";
-const labelClass = "block text-[13px] font-semibold text-muted-strong";
+const labelClass = "block text-[12px] font-semibold text-muted-strong";
 
 const localId = () => crypto.randomUUID();
 const emptyValue = (isDefault = false): DraftValue => ({
@@ -521,7 +521,7 @@ export function ResourceOptionGroupsManager({
 
                 {options.role === "primary" ? (
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface-subtle px-5 py-3 sm:px-6">
-                    <p className="text-[13px] text-muted">
+                    <p className="text-[12px] text-muted">
                       {options.groups.length
                         ? t("options.combinations", {
                             count: editing ? draftCombinationCount : options.combinationCount,
@@ -728,7 +728,7 @@ function OptionEditor({
   );
   return (
     <div className="space-y-4 p-4 sm:p-5">
-      <div className="rounded-xl border border-brand-border bg-brand-soft/35 px-4 py-3 text-[13px] leading-5 text-muted-strong">
+      <div className="rounded-xl border border-brand-border bg-brand-soft/35 px-4 py-3 text-[12px] leading-5 text-muted-strong">
         {t("options.editor.help")}
       </div>
       {draft.map((group, groupIndex) => (
@@ -775,7 +775,7 @@ function OptionEditor({
           <div className="mt-4 space-y-2">
             {group.values.map((value, valueIndex) => (
               <div key={value.localId} className="grid gap-2 rounded-lg bg-surface-subtle p-2 sm:grid-cols-[auto_1fr_0.65fr_1.25fr_auto] sm:items-center">
-                <label className="flex items-center gap-2 text-[13px] font-medium text-muted-strong">
+                <label className="flex items-center gap-2 text-[12px] font-medium text-muted-strong">
                   <input type="radio" name={`default-${group.localId}`} checked={value.isDefault} onChange={() => selectDefault(group.localId, value.localId)} />
                   {t("options.default")}
                 </label>
@@ -825,7 +825,7 @@ function OptionEditor({
                     ))}
                   </select>
                 ) : (
-                  <span className="px-2 text-[13px] text-muted">{t("options.editor.catalogOnly")}</span>
+                  <span className="px-2 text-[12px] text-muted">{t("options.editor.catalogOnly")}</span>
                 )}
                 <button
                   type="button"

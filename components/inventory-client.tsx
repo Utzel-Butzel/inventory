@@ -774,7 +774,7 @@ export function InventoryClient({
                 ? t("favorites.emptyTitle")
                 : t("empty.title")}
           </h2>
-          <p className="mt-1.5 max-w-sm text-[15px] leading-5 text-muted">
+          <p className="mt-1.5 max-w-sm text-[14px] leading-5 text-muted">
             {activeFilters
               ? t("empty.filteredDescription")
               : favoritesOnly
@@ -805,7 +805,7 @@ export function InventoryClient({
                     eager={resource.id === eagerCoverId}
                   />
                   <span
-                    className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[13px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}
+                    className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[12px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}
                   >
                     {statusLabel(resource.status)}
                   </span>
@@ -839,7 +839,7 @@ export function InventoryClient({
                       t("item.noDescription")}
                   </p>
                   {developerMode ? (
-                    <div className="mt-3 flex min-w-0 items-center gap-2 rounded-lg border border-brand-border bg-brand-soft/60 px-2.5 py-2 text-[12px] text-brand">
+                    <div className="mt-3 flex min-w-0 items-center gap-2 rounded-lg border border-brand-border bg-brand-soft/60 px-2.5 py-2 text-[11px] text-brand">
                       <CodeXml className="size-3.5 shrink-0" aria-hidden="true" />
                       <span className="shrink-0 font-semibold">GET</span>
                       <code className="truncate font-mono">
@@ -920,7 +920,7 @@ export function InventoryClient({
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-border bg-surface">
-          <div className="hidden grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] gap-4 border-b border-border bg-surface-subtle/80 px-4 py-3 text-[13px] font-semibold uppercase tracking-wider text-muted lg:grid">
+          <div className="hidden grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] gap-4 border-b border-border bg-surface-subtle/80 px-4 py-3 text-[12px] font-semibold uppercase tracking-wider text-muted lg:grid">
             <span>{t("table.item")}</span>
             <span>{t("table.status")}</span>
             <span>{t("table.sku")}</span>
@@ -962,7 +962,7 @@ export function InventoryClient({
                         })}
                       </div>
                       {developerMode ? (
-                        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[12px] text-brand">
+                        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-brand">
                           <CodeXml className="size-3 shrink-0" aria-hidden="true" />
                           <span className="shrink-0 font-semibold">GET</span>
                           <code className="truncate font-mono">
@@ -972,7 +972,7 @@ export function InventoryClient({
                       ) : null}
                     </div>
                   </div>
-                  <span className={`w-fit rounded-full px-2.5 py-1 text-[13px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
+                  <span className={`w-fit rounded-full px-2.5 py-1 text-[12px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
                     {statusLabel(resource.status)}
                   </span>
                   <span className="truncate font-mono text-xs text-muted">{resource.sku || "—"}</span>

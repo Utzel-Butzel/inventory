@@ -72,22 +72,22 @@
 }
 
 @theme {
-  --text-xs: 1rem;
-  --text-xs--line-height: calc(1.25 / 1);
-  --text-sm: 1.125rem;
-  --text-sm--line-height: calc(1.5 / 1.125);
-  --text-base: 1.25rem;
-  --text-base--line-height: calc(1.75 / 1.25);
-  --text-lg: 1.375rem;
-  --text-lg--line-height: calc(2 / 1.375);
-  --text-xl: 1.5rem;
-  --text-xl--line-height: calc(2 / 1.5);
-  --text-2xl: 1.75rem;
-  --text-2xl--line-height: calc(2.25 / 1.75);
-  --text-3xl: 2.125rem;
-  --text-3xl--line-height: calc(2.5 / 2.125);
-  --text-4xl: 2.5rem;
-  --text-4xl--line-height: calc(2.75 / 2.5);
+  --text-xs: 0.9375rem;
+  --text-xs--line-height: calc(1.1875 / 0.9375);
+  --text-sm: 1.0625rem;
+  --text-sm--line-height: calc(1.4375 / 1.0625);
+  --text-base: 1.1875rem;
+  --text-base--line-height: calc(1.6875 / 1.1875);
+  --text-lg: 1.3125rem;
+  --text-lg--line-height: calc(1.9375 / 1.3125);
+  --text-xl: 1.4375rem;
+  --text-xl--line-height: calc(1.9375 / 1.4375);
+  --text-2xl: 1.6875rem;
+  --text-2xl--line-height: calc(2.1875 / 1.6875);
+  --text-3xl: 2.0625rem;
+  --text-3xl--line-height: calc(2.4375 / 2.0625);
+  --text-4xl: 2.4375rem;
+  --text-4xl--line-height: calc(2.6875 / 2.4375);
   --color-background: #f6f7f9;
   --color-foreground: #17191c;
   --color-surface: #ffffff;

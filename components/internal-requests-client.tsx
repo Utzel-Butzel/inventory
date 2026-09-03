@@ -96,7 +96,7 @@ type DraftLine = {
 
 const inputClass =
   "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
-const labelClass = "block text-[13px] font-semibold text-muted-strong";
+const labelClass = "block text-[12px] font-semibold text-muted-strong";
 
 function localDateTime(date: Date) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
@@ -453,7 +453,7 @@ export function InternalRequestsClient() {
                         ) : deliveryResults.length ? deliveryResults.map((resource) => (
                           <button key={resource.id} type="button" onClick={() => { setDelivery(resource); setDeliveryQuery(""); }} className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-muted">
                             <span className="truncate font-medium text-foreground">{resource.name}</span>
-                            <span className="shrink-0 text-[12px] text-muted">{resource.type}</span>
+                            <span className="shrink-0 text-[11px] text-muted">{resource.type}</span>
                           </button>
                         )) : (
                           <p className="px-3 py-4 text-center text-xs text-muted">{t("form.noDeliveryResults")}</p>
@@ -473,7 +473,7 @@ export function InternalRequestsClient() {
             <aside className="space-y-3 rounded-2xl border border-border bg-surface-subtle/60 p-4">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">{t("form.items")}</h3>
-                <p className="mt-1 text-[13px] text-muted">{t("form.itemsDescription")}</p>
+                <p className="mt-1 text-[12px] text-muted">{t("form.itemsDescription")}</p>
               </div>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted" />
@@ -484,7 +484,7 @@ export function InternalRequestsClient() {
                   <div className="grid h-16 place-items-center"><LoaderCircle className="size-4 animate-spin text-muted" /></div>
                 ) : itemResults.map((resource) => (
                   <button key={resource.id} type="button" onClick={() => { setLines((current) => [...current, { resourceId: resource.id, name: resource.name, sku: resource.sku, quantity: "1", note: "" }]); setItemQuery(""); }} className="flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-surface-muted">
-                    <span className="min-w-0"><span className="block truncate text-xs font-semibold text-foreground">{resource.name}</span><span className="block truncate text-[12px] text-muted">{resource.sku || t("form.noSku")} · {number.format(resource.quantity)}</span></span>
+                    <span className="min-w-0"><span className="block truncate text-xs font-semibold text-foreground">{resource.name}</span><span className="block truncate text-[11px] text-muted">{resource.sku || t("form.noSku")} · {number.format(resource.quantity)}</span></span>
                     <Plus className="size-4 shrink-0 text-brand" />
                   </button>
                 ))}
@@ -494,7 +494,7 @@ export function InternalRequestsClient() {
                   {lines.map((line) => (
                     <div key={line.resourceId} className="rounded-xl border border-border bg-surface p-3">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0"><p className="truncate text-xs font-semibold text-foreground">{line.name}</p><p className="mt-0.5 text-[12px] text-muted">{line.sku || t("form.noSku")}</p></div>
+                        <div className="min-w-0"><p className="truncate text-xs font-semibold text-foreground">{line.name}</p><p className="mt-0.5 text-[11px] text-muted">{line.sku || t("form.noSku")}</p></div>
                         <button type="button" onClick={() => setLines((current) => current.filter((candidate) => candidate.resourceId !== line.resourceId))} className="rounded-lg p-1 text-muted hover:bg-danger-soft hover:text-danger" aria-label={t("form.removeItem", { name: line.name })}><Trash2 className="size-3.5" /></button>
                       </div>
                       <div className="mt-2 grid grid-cols-[80px_minmax(0,1fr)] gap-2">
@@ -555,8 +555,8 @@ export function InternalRequestsClient() {
                         {request.delivery ? <span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5" />{request.delivery.name}</span> : null}
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {request.lines.slice(0, 4).map((line) => <span key={line.id} className="rounded-lg bg-surface-muted px-2.5 py-1 text-[13px] font-medium text-muted-strong">{number.format(line.quantity)} × {line.resource.name}</span>)}
-                        {request.lines.length > 4 ? <span className="px-1 py-1 text-[13px] text-muted">+{request.lines.length - 4}</span> : null}
+                        {request.lines.slice(0, 4).map((line) => <span key={line.id} className="rounded-lg bg-surface-muted px-2.5 py-1 text-[12px] font-medium text-muted-strong">{number.format(line.quantity)} × {line.resource.name}</span>)}
+                        {request.lines.length > 4 ? <span className="px-1 py-1 text-[12px] text-muted">+{request.lines.length - 4}</span> : null}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -571,15 +571,15 @@ export function InternalRequestsClient() {
                       <div className="space-y-2">
                         {request.lines.map((line) => (
                           <div key={line.id} className="grid gap-2 rounded-xl border border-border bg-surface-subtle p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                            <div className="min-w-0"><p className="truncate text-sm font-semibold text-foreground">{line.resource.name}</p><p className="mt-0.5 text-[13px] text-muted">{line.resource.sku || t("form.noSku")} · {t(`tracking.${line.resource.trackingMode}`)}{line.note ? ` · ${line.note}` : ""}</p></div>
-                            <div className="text-left sm:text-right"><p className="text-sm font-semibold text-foreground">{number.format(line.quantity)}</p><p className="text-[12px] text-muted">{t("list.current", { count: line.resource.currentQuantity })}</p></div>
+                            <div className="min-w-0"><p className="truncate text-sm font-semibold text-foreground">{line.resource.name}</p><p className="mt-0.5 text-[12px] text-muted">{line.resource.sku || t("form.noSku")} · {t(`tracking.${line.resource.trackingMode}`)}{line.note ? ` · ${line.note}` : ""}</p></div>
+                            <div className="text-left sm:text-right"><p className="text-sm font-semibold text-foreground">{number.format(line.quantity)}</p><p className="text-[11px] text-muted">{t("list.current", { count: line.resource.currentQuantity })}</p></div>
                           </div>
                         ))}
                         {request.note ? <p className="whitespace-pre-wrap rounded-xl bg-surface-muted px-3 py-2 text-xs leading-5 text-muted-strong">{request.note}</p> : null}
                       </div>
                       <ol className="space-y-3 border-l border-border pl-4">
                         {request.events.map((event) => (
-                          <li key={event.id} className="relative text-xs"><span className="absolute -left-[21px] top-1 size-2 rounded-full bg-brand-solid" /><p className="font-semibold text-foreground">{t(`status.${event.type}`)}</p><p className="mt-0.5 text-[12px] text-muted">{formatDate(event.occurredAt)} · {event.actor}</p>{event.note ? <p className="mt-1 leading-5 text-muted-strong">{event.note}</p> : null}</li>
+                          <li key={event.id} className="relative text-xs"><span className="absolute -left-[21px] top-1 size-2 rounded-full bg-brand-solid" /><p className="font-semibold text-foreground">{t(`status.${event.type}`)}</p><p className="mt-0.5 text-[11px] text-muted">{formatDate(event.occurredAt)} · {event.actor}</p>{event.note ? <p className="mt-1 leading-5 text-muted-strong">{event.note}</p> : null}</li>
                         ))}
                       </ol>
                     </div>

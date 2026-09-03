@@ -399,7 +399,7 @@ export function ResourceShareButton({
                     </p>
                   </div>
                   {!loading && !loadError ? (
-                    <span className="shrink-0 rounded-full bg-surface-muted px-2.5 py-1 text-[13px] font-semibold text-muted-strong">
+                    <span className="shrink-0 rounded-full bg-surface-muted px-2.5 py-1 text-[12px] font-semibold text-muted-strong">
                       {shares.length}
                     </span>
                   ) : null}
@@ -451,10 +451,10 @@ export function ResourceShareButton({
                               <p className="truncate text-sm font-semibold text-foreground">
                                 {share.name}
                               </p>
-                              <p className="mt-1 truncate font-mono text-[12px] text-muted">
+                              <p className="mt-1 truncate font-mono text-[11px] text-muted">
                                 /share/{share.id}
                               </p>
-                              <p className="mt-1 text-[12px] text-muted">
+                              <p className="mt-1 text-[11px] text-muted">
                                 {t("details.share.created", {
                                   date: formatDate(share.createdAt, locale),
                                 })}

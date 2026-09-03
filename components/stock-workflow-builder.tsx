@@ -234,10 +234,10 @@ type WorkflowDraft = {
 type Notice = { tone: "success" | "error" | "info"; message: string };
 
 const inputClass =
-  "mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-[15px] text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
+  "mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-[14px] text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
 const textAreaClass =
-  "mt-1.5 min-h-20 w-full resize-y rounded-xl border border-border bg-surface px-3 py-2.5 text-[15px] leading-5 text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
-const labelClass = "block text-[13px] font-semibold text-muted-strong";
+  "mt-1.5 min-h-20 w-full resize-y rounded-xl border border-border bg-surface px-3 py-2.5 text-[14px] leading-5 text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
+const labelClass = "block text-[12px] font-semibold text-muted-strong";
 
 type StockUnitCustomFieldSelectProps = {
   fields: StockUnitCustomField[];
@@ -807,14 +807,14 @@ function FlowStep({
       ) : null}
       <span className="relative z-10 grid size-[38px] place-items-center rounded-xl border border-brand-border bg-brand-soft text-brand shadow-sm sm:size-[46px]">
         {icon}
-        <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-brand-solid text-[10px] font-bold text-on-brand ring-2 ring-background">
+        <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-brand-solid text-[9px] font-bold text-on-brand ring-2 ring-background">
           {number}
         </span>
       </span>
       <Card className="min-w-0 p-4 sm:p-5">
         <div className="mb-4">
-          <h2 className="text-[16px] font-semibold text-foreground">{title}</h2>
-          <p className="mt-1 text-[13px] leading-5 text-muted">{description}</p>
+          <h2 className="text-[15px] font-semibold text-foreground">{title}</h2>
+          <p className="mt-1 text-[12px] leading-5 text-muted">{description}</p>
         </div>
         {children}
       </Card>
@@ -862,7 +862,7 @@ function NoticeBanner({ notice }: { notice: Notice }) {
     <div
       role={notice.tone === "error" ? "alert" : "status"}
       className={cn(
-        "mb-4 flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-[14px] leading-5",
+        "mb-4 flex items-start gap-2.5 rounded-xl border px-3.5 py-3 text-[13px] leading-5",
         notice.tone === "success" && "border-success-border bg-success-soft text-success",
         notice.tone === "error" && "border-danger-border bg-danger-soft text-danger",
         notice.tone === "info" && "border-brand-border bg-brand-soft text-brand",
@@ -1453,11 +1453,11 @@ export function StockWorkflowBuilder({
       <div>
         <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.13em] text-muted">
+            <div className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.13em] text-muted">
               <Workflow className="size-3.5 text-brand" aria-hidden="true" />
               {t("workflows.header.eyebrow")}
             </div>
-            <h1 className="text-[30px] font-semibold tracking-[-0.04em] text-foreground sm:text-[34px]">
+            <h1 className="text-[29px] font-semibold tracking-[-0.04em] text-foreground sm:text-[33px]">
               {t("workflows.header.title")}
             </h1>
             <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted">
@@ -1487,10 +1487,10 @@ export function StockWorkflowBuilder({
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between border-b border-border px-4 py-4 sm:px-5">
             <div>
-              <h2 className="text-[16px] font-semibold text-foreground">
+              <h2 className="text-[15px] font-semibold text-foreground">
                 {t("workflows.sidebar.title")}
               </h2>
-              <p className="mt-0.5 text-[13px] text-muted">
+              <p className="mt-0.5 text-[12px] text-muted">
                 {t("workflows.sidebar.configured", {
                   count: workflows.length,
                   value: integer.format(workflows.length),
@@ -1523,7 +1523,7 @@ export function StockWorkflowBuilder({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-[15px] font-semibold text-foreground sm:text-sm">
+                        <span className="truncate text-[14px] font-semibold text-foreground sm:text-sm">
                           {workflow.name}
                         </span>
                         <Badge tone={workflow.enabled ? "success" : "neutral"}>
@@ -1535,11 +1535,11 @@ export function StockWorkflowBuilder({
                         </Badge>
                       </span>
                       {workflow.description ? (
-                        <span className="mt-1 block truncate text-[13px] text-muted">
+                        <span className="mt-1 block truncate text-[12px] text-muted">
                           {workflow.description}
                         </span>
                       ) : null}
-                      <span className="mt-1 block truncate text-[12px] text-muted">
+                      <span className="mt-1 block truncate text-[11px] text-muted">
                         {t("workflows.sidebar.resourceRevision", {
                           resource:
                             resource?.name ??
@@ -1548,7 +1548,7 @@ export function StockWorkflowBuilder({
                         })}
                       </span>
                     </span>
-                    <span className="inline-flex shrink-0 items-center gap-1.5 text-[14px] font-semibold text-muted-strong transition group-hover:text-brand">
+                    <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-semibold text-muted-strong transition group-hover:text-brand">
                       <span className="hidden sm:inline">
                         {t("workflows.sidebar.edit")}
                       </span>
@@ -1572,7 +1572,7 @@ export function StockWorkflowBuilder({
                 canManage ? (
                   <Link
                     href="/settings/action-flows/new"
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-transparent bg-brand-solid px-3 text-[15px] font-medium text-on-brand shadow-sm transition hover:bg-brand-hover"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-transparent bg-brand-solid px-3 text-[14px] font-medium text-on-brand shadow-sm transition hover:bg-brand-hover"
                   >
                     <Plus className="size-3.5" aria-hidden="true" />
                     {t("workflows.header.newTemplate")}
@@ -1582,7 +1582,7 @@ export function StockWorkflowBuilder({
             />
           )}
 
-          <div className="border-t border-border bg-surface-subtle px-4 py-3 text-[12px] leading-4 text-muted sm:px-5">
+          <div className="border-t border-border bg-surface-subtle px-4 py-3 text-[11px] leading-4 text-muted sm:px-5">
             <span className="inline-flex items-center gap-1.5 font-medium text-muted">
               <ShieldCheck className="size-3.5 text-brand" aria-hidden="true" />
               {t("workflows.sidebar.safeTitle")}
@@ -1601,7 +1601,7 @@ export function StockWorkflowBuilder({
         onClick={(event) => {
           if (!confirmDraftDiscard()) event.preventDefault();
         }}
-        className="mb-5 inline-flex items-center gap-1.5 text-[14px] font-semibold text-muted-strong transition hover:text-brand"
+        className="mb-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-strong transition hover:text-brand"
       >
         <ArrowLeft className="size-3.5" aria-hidden="true" />
         {t("workflows.editor.backToList")}
@@ -1609,11 +1609,11 @@ export function StockWorkflowBuilder({
 
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.13em] text-muted">
+          <div className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.13em] text-muted">
             <Workflow className="size-3.5 text-brand" aria-hidden="true" />
             {t("workflows.header.eyebrow")}
           </div>
-          <h1 className="text-[30px] font-semibold tracking-[-0.04em] text-foreground sm:text-[34px]">
+          <h1 className="text-[29px] font-semibold tracking-[-0.04em] text-foreground sm:text-[33px]">
             {t("workflows.header.title")}
           </h1>
           <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted">
@@ -1640,7 +1640,7 @@ export function StockWorkflowBuilder({
             action={
               <Link
                 href="/settings/action-flows"
-                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-[15px] font-medium text-foreground shadow-sm transition hover:bg-surface-subtle"
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-[14px] font-medium text-foreground shadow-sm transition hover:bg-surface-subtle"
               >
                 <ArrowLeft className="size-3.5" aria-hidden="true" />
                 {t("workflows.editor.backToList")}
@@ -1654,7 +1654,7 @@ export function StockWorkflowBuilder({
             <div className="flex flex-col gap-4 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="truncate text-[17px] font-semibold text-foreground">
+                  <h2 className="truncate text-[16px] font-semibold text-foreground">
                     {draft.id
                       ? draft.name || t("workflows.fallbacks.untitled")
                       : t("workflows.editor.newWorkflow")}
@@ -1665,7 +1665,7 @@ export function StockWorkflowBuilder({
                   {dirty ? <Badge tone="warning">{t("workflows.editor.unsaved")}</Badge> : null}
                   {!draft.id ? <Badge tone="brand">{t("workflows.editor.template")}</Badge> : null}
                 </div>
-                <p className="mt-1 text-[13px] text-muted">
+                <p className="mt-1 text-[12px] text-muted">
                   {draft.id
                     ? t("workflows.editor.revision", {
                         value: integer.format(draft.revision ?? 1),
@@ -1722,7 +1722,7 @@ export function StockWorkflowBuilder({
               <div className="flex flex-col gap-3 border-b border-danger-border bg-danger-soft px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <div className="flex items-start gap-2.5">
                   <AlertCircle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden="true" />
-                  <p className="text-[14px] leading-5 text-danger">
+                  <p className="text-[13px] leading-5 text-danger">
                     {t("workflows.editor.confirmDelete", { name: savedWorkflow.name })}
                   </p>
                 </div>
@@ -1752,8 +1752,8 @@ export function StockWorkflowBuilder({
               <div className="rounded-xl border border-border bg-surface-subtle px-3.5 py-3">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-[13px] font-semibold text-muted-strong">{t("workflows.editor.enabledLabel")}</p>
-                    <p className="mt-0.5 text-[12px] leading-4 text-muted">{t("workflows.editor.enabledDescription")}</p>
+                    <p className="text-[12px] font-semibold text-muted-strong">{t("workflows.editor.enabledLabel")}</p>
+                    <p className="mt-0.5 text-[11px] leading-4 text-muted">{t("workflows.editor.enabledDescription")}</p>
                   </div>
                   <Toggle
                     checked={draft.enabled}
@@ -1777,7 +1777,7 @@ export function StockWorkflowBuilder({
           </Card>
 
           {!canManage ? (
-            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-border bg-surface px-4 py-3.5 text-[14px] leading-5 text-muted shadow-[var(--shadow-sm)]">
+            <div className="mb-4 flex items-start gap-3 rounded-2xl border border-border bg-surface px-4 py-3.5 text-[13px] leading-5 text-muted shadow-[var(--shadow-sm)]">
               <Eye className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
               {t("workflows.editor.viewerDescription")}
             </div>
@@ -1796,8 +1796,8 @@ export function StockWorkflowBuilder({
                     <ScanLine className="size-[18px]" aria-hidden="true" />
                   </span>
                   <div>
-                    <p className="text-[14px] font-semibold text-foreground">{t("workflows.steps.trigger.event")}</p>
-                    <p className="mt-0.5 text-[12px] text-muted">{t("workflows.steps.trigger.eventDescription")}</p>
+                    <p className="text-[13px] font-semibold text-foreground">{t("workflows.steps.trigger.event")}</p>
+                    <p className="mt-0.5 text-[11px] text-muted">{t("workflows.steps.trigger.eventDescription")}</p>
                   </div>
                 </div>
                 <Badge tone="brand">{t("workflows.steps.trigger.badge")}</Badge>
@@ -1805,10 +1805,10 @@ export function StockWorkflowBuilder({
               <div className="mt-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
-                    <p className="text-[13px] font-semibold text-muted-strong">
+                    <p className="text-[12px] font-semibold text-muted-strong">
                       {t("workflows.steps.trigger.codeTypes")}
                     </p>
-                    <p className="mt-1 text-[12px] leading-4 text-muted">
+                    <p className="mt-1 text-[11px] leading-4 text-muted">
                       {t("workflows.steps.trigger.codeTypesDescription")}
                     </p>
                   </div>
@@ -1837,7 +1837,7 @@ export function StockWorkflowBuilder({
                         disabled={!editable}
                         onClick={() => toggleCodeType(codeType)}
                         className={cn(
-                          "flex min-h-10 items-center gap-2 rounded-xl border px-3 text-left text-[13px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
+                          "flex min-h-10 items-center gap-2 rounded-xl border px-3 text-left text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
                           selected
                             ? "border-brand-border bg-brand-soft text-brand-strong"
                             : "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground",
@@ -1859,7 +1859,7 @@ export function StockWorkflowBuilder({
                   })}
                 </div>
                 {!draft.codeTypes.length ? (
-                  <p className="mt-2 text-[13px] text-danger">
+                  <p className="mt-2 text-[12px] text-danger">
                     {t("workflows.validation.codeType")}
                   </p>
                 ) : null}
@@ -1896,10 +1896,10 @@ export function StockWorkflowBuilder({
                     <Link2 className="size-4" aria-hidden="true" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[14px] font-semibold text-foreground">
+                    <p className="text-[13px] font-semibold text-foreground">
                       {t("workflows.publicTrigger.title")}
                     </p>
-                    <p className="mt-1 text-[12px] leading-4 text-muted">
+                    <p className="mt-1 text-[11px] leading-4 text-muted">
                       {t("workflows.publicTrigger.description")}
                     </p>
                   </div>
@@ -1925,18 +1925,18 @@ export function StockWorkflowBuilder({
                             publicTriggerCode: event.target.value,
                           }))
                         }
-                        className={cn(textAreaClass, "min-h-20 font-mono text-[14px]")}
+                        className={cn(textAreaClass, "min-h-20 font-mono text-[13px]")}
                         placeholder={t("workflows.publicTrigger.fixedCodePlaceholder")}
                         disabled={!editable}
                       />
-                      <span className="mt-1 block text-[12px] leading-4 text-muted">
+                      <span className="mt-1 block text-[11px] leading-4 text-muted">
                         {t("workflows.publicTrigger.fixedCodeDescription")}
                       </span>
                     </label>
 
                     {publicTriggerPath && publicTriggerLive ? (
                       <div className="rounded-xl border border-success-border bg-success-soft p-3">
-                        <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-success">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-success">
                           {t("workflows.publicTrigger.live")}
                         </p>
                         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -1944,7 +1944,7 @@ export function StockWorkflowBuilder({
                             value={publicTriggerPath}
                             readOnly
                             aria-label={t("workflows.publicTrigger.url")}
-                            className={cn(inputClass, "mt-0 min-w-0 flex-1 font-mono text-[13px]")}
+                            className={cn(inputClass, "mt-0 min-w-0 flex-1 font-mono text-[12px]")}
                           />
                           <Button
                             type="button"
@@ -1963,14 +1963,14 @@ export function StockWorkflowBuilder({
                             href={publicTriggerPath}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-[13px] font-semibold text-muted-strong transition hover:border-border-strong hover:text-foreground"
+                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-[12px] font-semibold text-muted-strong transition hover:border-border-strong hover:text-foreground"
                           >
                             <ExternalLink className="size-3.5" aria-hidden="true" />
                             {t("workflows.publicTrigger.open")}
                           </a>
                         </div>
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-[12px] leading-4 text-success">
+                          <p className="text-[11px] leading-4 text-success">
                             {t("workflows.publicTrigger.security")}
                           </p>
                           <Button
@@ -1990,7 +1990,7 @@ export function StockWorkflowBuilder({
                         </div>
                       </div>
                     ) : (
-                      <p className="rounded-xl border border-dashed border-border px-3.5 py-3 text-[13px] leading-5 text-muted">
+                      <p className="rounded-xl border border-dashed border-border px-3.5 py-3 text-[12px] leading-5 text-muted">
                         {t("workflows.publicTrigger.saveToActivate")}
                       </p>
                     )}
@@ -2008,11 +2008,11 @@ export function StockWorkflowBuilder({
               <div className="mb-4 rounded-2xl border border-brand-border bg-[linear-gradient(135deg,var(--color-brand-soft),var(--color-surface))] p-3.5 sm:p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="flex items-center gap-2 text-[14px] font-semibold text-foreground">
+                    <p className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
                       <Sparkles className="size-4 text-brand" aria-hidden="true" />
                       {t("workflows.regexStudio.title")}
                     </p>
-                    <p className="mt-1 text-[12px] leading-4 text-muted">
+                    <p className="mt-1 text-[11px] leading-4 text-muted">
                       {t("workflows.regexStudio.description")}
                     </p>
                   </div>
@@ -2036,7 +2036,7 @@ export function StockWorkflowBuilder({
                         end: event.currentTarget.selectionEnd,
                       })
                     }
-                    className={cn(textAreaClass, "min-h-24 font-mono text-[14px]")}
+                    className={cn(textAreaClass, "min-h-24 font-mono text-[13px]")}
                     disabled={interactionBusy}
                   />
                 </label>
@@ -2074,7 +2074,7 @@ export function StockWorkflowBuilder({
                   </Button>
                 </div>
                 {selectedSampleValue ? (
-                  <p className="mt-2 break-all text-[12px] text-muted">
+                  <p className="mt-2 break-all text-[11px] text-muted">
                     {t("workflows.regexStudio.selected")}: {" "}
                     <code className="rounded bg-surface px-1.5 py-0.5 text-foreground">
                       {selectedSampleValue}
@@ -2082,12 +2082,12 @@ export function StockWorkflowBuilder({
                   </p>
                 ) : null}
                 {aiExplanation ? (
-                  <p className="mt-2 text-[13px] leading-5 text-success">
+                  <p className="mt-2 text-[12px] leading-5 text-success">
                     {aiExplanation}
                   </p>
                 ) : null}
                 {aiError ? (
-                  <p role="alert" className="mt-2 text-[13px] leading-5 text-danger">
+                  <p role="alert" className="mt-2 text-[12px] leading-5 text-danger">
                     {aiError}
                   </p>
                 ) : null}
@@ -2107,7 +2107,7 @@ export function StockWorkflowBuilder({
                     disabled={!editable}
                     aria-pressed={draft.extraction.mode === mode}
                     className={cn(
-                      "h-9 rounded-lg px-3 text-[13px] font-semibold transition disabled:cursor-not-allowed",
+                      "h-9 rounded-lg px-3 text-[12px] font-semibold transition disabled:cursor-not-allowed",
                       draft.extraction.mode === mode
                         ? "bg-surface text-brand-strong shadow-sm"
                         : "text-muted hover:text-foreground disabled:opacity-65",
@@ -2245,10 +2245,10 @@ export function StockWorkflowBuilder({
               <div className="mt-5 rounded-2xl border border-border bg-surface-subtle p-3.5 sm:p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="text-[14px] font-semibold text-foreground">
+                    <p className="text-[13px] font-semibold text-foreground">
                       {t("workflows.storage.identifierTitle")}
                     </p>
-                    <p className="mt-1 text-[12px] leading-4 text-muted">
+                    <p className="mt-1 text-[11px] leading-4 text-muted">
                       {t("workflows.storage.identifierDescription")}
                     </p>
                   </div>
@@ -2313,7 +2313,7 @@ export function StockWorkflowBuilder({
                   )}
                 </div>
                 {draft.identifierStorage === "custom-field" ? (
-                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-brand-border bg-brand-soft px-3 py-2.5 text-[13px] leading-5 text-brand-strong">
+                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-brand-border bg-brand-soft px-3 py-2.5 text-[12px] leading-5 text-brand-strong">
                     {selectedIdentifierCustomField ? (
                       <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                     ) : (
@@ -2335,13 +2335,13 @@ export function StockWorkflowBuilder({
                     </p>
                   </div>
                 ) : (
-                  <p className="mt-3 text-[12px] leading-4 text-muted">
+                  <p className="mt-3 text-[11px] leading-4 text-muted">
                     {draft.identifierStorage === "metadata"
                       ? t("workflows.storage.metadataHint")
                       : t("workflows.storage.executionHint")}
                   </p>
                 )}
-                <p className="mt-2 text-[12px] leading-4 text-muted">
+                <p className="mt-2 text-[11px] leading-4 text-muted">
                   {t("workflows.storage.inventoryItemScope")}
                 </p>
               </div>
@@ -2349,10 +2349,10 @@ export function StockWorkflowBuilder({
               <div className="mt-4 border-t border-border pt-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-[13px] font-semibold text-muted-strong">
+                    <p className="text-[12px] font-semibold text-muted-strong">
                       {t("workflows.storage.additionalFieldsTitle")}
                     </p>
-                    <p className="mt-0.5 text-[12px] leading-4 text-muted">
+                    <p className="mt-0.5 text-[11px] leading-4 text-muted">
                       {t("workflows.storage.additionalFieldsDescription")}
                     </p>
                   </div>
@@ -2628,7 +2628,7 @@ export function StockWorkflowBuilder({
               {resources.length ? (
                 <div>
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[13px] leading-5 text-muted">
+                    <p className="text-[12px] leading-5 text-muted">
                       {t("workflows.steps.target.searchDescription")}
                     </p>
                     <Badge tone="neutral">
@@ -2684,7 +2684,7 @@ export function StockWorkflowBuilder({
 
                   {draft.resourceIds.length > 1 ? (
                     <fieldset className="mt-4 rounded-xl border border-border bg-surface-subtle p-3.5">
-                      <legend className="px-1 text-[13px] font-semibold text-muted-strong">
+                      <legend className="px-1 text-[12px] font-semibold text-muted-strong">
                         {t("workflows.steps.target.executionMode")}
                       </legend>
                       <div className="mt-1 grid gap-2 sm:grid-cols-3">
@@ -2692,7 +2692,7 @@ export function StockWorkflowBuilder({
                           <label
                             key={mode}
                             className={cn(
-                              "flex cursor-pointer items-start gap-2 rounded-lg border bg-surface px-3 py-2.5 text-[13px]",
+                              "flex cursor-pointer items-start gap-2 rounded-lg border bg-surface px-3 py-2.5 text-[12px]",
                               draft.targetSelectionMode === mode
                                 ? "border-brand-border text-brand-strong"
                                 : "border-border text-muted-strong",
@@ -2716,7 +2716,7 @@ export function StockWorkflowBuilder({
                               <strong className="block font-semibold">
                                 {t(`workflows.steps.target.modes.${mode}.label`)}
                               </strong>
-                              <span className="mt-0.5 block text-[12px] leading-4 text-muted">
+                              <span className="mt-0.5 block text-[11px] leading-4 text-muted">
                                 {t(`workflows.steps.target.modes.${mode}.description`)}
                               </span>
                             </span>
@@ -2741,10 +2741,10 @@ export function StockWorkflowBuilder({
                         className="mt-0.5 size-4 accent-brand-solid"
                       />
                       <span>
-                        <strong className="block text-[13px] font-semibold text-muted-strong">
+                        <strong className="block text-[12px] font-semibold text-muted-strong">
                           {t("workflows.steps.target.allowVariants")}
                         </strong>
-                        <span className="mt-0.5 block text-[12px] leading-4 text-muted">
+                        <span className="mt-0.5 block text-[11px] leading-4 text-muted">
                           {t("workflows.steps.target.allowVariantsDescription")}
                         </span>
                       </span>
@@ -2752,7 +2752,7 @@ export function StockWorkflowBuilder({
                   ) : null}
                 </div>
               ) : (
-                <div className="flex flex-col gap-3 rounded-xl border border-warning-border bg-warning-soft p-3.5 text-[14px] leading-5 text-warning sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 rounded-xl border border-warning-border bg-warning-soft p-3.5 text-[13px] leading-5 text-warning sm:flex-row sm:items-center sm:justify-between">
                   <span>{t("workflows.steps.target.none")}</span>
                   <Link href="/inventory" className="inline-flex items-center gap-1 font-semibold text-brand hover:underline">
                     {t("workflows.steps.target.configure")} <ArrowRight className="size-3.5" aria-hidden="true" />
@@ -2762,7 +2762,7 @@ export function StockWorkflowBuilder({
               {selectedResources.length ? (
                 <div className="mt-3 flex items-center gap-3 rounded-xl border border-success-border bg-success-soft p-3">
                   <Check className="size-4 shrink-0 text-success" aria-hidden="true" />
-                  <p className="text-[13px] text-success">
+                  <p className="text-[12px] text-success">
                     {t("workflows.steps.target.selected", {
                       name: selectedResources.map((resource) => resource.name).join(", "),
                     })}
@@ -2782,10 +2782,10 @@ export function StockWorkflowBuilder({
                   <div key={field.uid} className="rounded-xl border border-border bg-surface-subtle p-3.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <span className="grid size-6 place-items-center rounded-md bg-brand-soft text-[12px] font-bold text-brand">
+                        <span className="grid size-6 place-items-center rounded-md bg-brand-soft text-[11px] font-bold text-brand">
                           {integer.format(fieldIndex + 1)}
                         </span>
-                        <p className="text-[14px] font-semibold text-muted-strong">{t("workflows.steps.inputs.selectField")}</p>
+                        <p className="text-[13px] font-semibold text-muted-strong">{t("workflows.steps.inputs.selectField")}</p>
                       </div>
                       {canManage ? (
                         <button
@@ -2909,7 +2909,7 @@ export function StockWorkflowBuilder({
                         />
                       </label>
                     </div>
-                    <label className="mt-3 flex items-center gap-2 text-[13px] font-medium text-muted-strong">
+                    <label className="mt-3 flex items-center gap-2 text-[12px] font-medium text-muted-strong">
                       <input
                         type="checkbox"
                         checked={field.required}
@@ -2923,7 +2923,7 @@ export function StockWorkflowBuilder({
                     {field.type === "select" || field.type === "radio" ? (
                     <div className="mt-4 border-t border-border pt-3">
                       <div className="mb-2 flex items-center justify-between gap-3">
-                        <p className="text-[12px] font-semibold uppercase tracking-[0.09em] text-muted">{t("workflows.steps.inputs.options")}</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-muted">{t("workflows.steps.inputs.options")}</p>
                         {canManage ? (
                           <button
                             type="button"
@@ -2951,7 +2951,7 @@ export function StockWorkflowBuilder({
                               }))
                             }
                             disabled={!editable}
-                            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[12px] font-semibold text-brand transition hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-brand transition hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Plus className="size-3" aria-hidden="true" /> {t("workflows.steps.inputs.addOption")}
                           </button>
@@ -3020,7 +3020,7 @@ export function StockWorkflowBuilder({
                 ))}
 
                 {draft.inputFields.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted">
+                  <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-[12px] text-muted">
                     {t("workflows.steps.inputs.none")}
                   </div>
                 ) : null}
@@ -3135,7 +3135,7 @@ export function StockWorkflowBuilder({
                       className={inputClass}
                       disabled={!editable}
                     />
-                    <span className="mt-1 block text-[12px] text-muted">
+                    <span className="mt-1 block text-[11px] text-muted">
                       Positiv zum Einbuchen, negativ zum Ausbuchen – z. B. +5.
                     </span>
                   </label>
@@ -3159,7 +3159,7 @@ export function StockWorkflowBuilder({
                       className={inputClass}
                       disabled={!editable}
                     />
-                    <span className="mt-1 block text-[12px] text-muted">
+                    <span className="mt-1 block text-[11px] text-muted">
                       Die Stückliste wird automatisch verbraucht.
                     </span>
                   </label>
@@ -3197,7 +3197,7 @@ export function StockWorkflowBuilder({
                         ))}
                     </select>
                   </label>
-                  <p className="mt-1.5 text-[12px] leading-4 text-muted">
+                  <p className="mt-1.5 text-[11px] leading-4 text-muted">
                     {draft.inputFields.some((field) => field.type === "number")
                       ? t("workflows.quantityInput.description")
                       : t("workflows.quantityInput.noNumberField")}
@@ -3210,8 +3210,8 @@ export function StockWorkflowBuilder({
                   <div className="rounded-xl border border-border bg-surface-subtle p-3.5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-[13px] font-semibold text-muted-strong">{t("workflows.steps.actions.createMissing")}</p>
-                        <p className="mt-1 text-[12px] leading-4 text-muted">{t("workflows.steps.actions.createMissingDescription")}</p>
+                        <p className="text-[12px] font-semibold text-muted-strong">{t("workflows.steps.actions.createMissing")}</p>
+                        <p className="mt-1 text-[11px] leading-4 text-muted">{t("workflows.steps.actions.createMissingDescription")}</p>
                       </div>
                       <Toggle
                         checked={draft.createMissingUnit}
@@ -3246,8 +3246,8 @@ export function StockWorkflowBuilder({
               <div className="mt-4 border-t border-border pt-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[13px] font-semibold text-muted-strong">{t("workflows.steps.actions.fixedTitle")}</p>
-                    <p className="mt-0.5 text-[12px] text-muted">{t("workflows.steps.actions.fixedDescription")}</p>
+                    <p className="text-[12px] font-semibold text-muted-strong">{t("workflows.steps.actions.fixedTitle")}</p>
+                    <p className="mt-0.5 text-[11px] text-muted">{t("workflows.steps.actions.fixedDescription")}</p>
                   </div>
                   {canManage ? (
                     <Button
@@ -3356,7 +3356,7 @@ export function StockWorkflowBuilder({
                         </label>
                       </div>
                       <div className="mt-2.5 flex items-center justify-between gap-3">
-                        <p className="text-[12px] text-muted">
+                        <p className="text-[11px] text-muted">
                           {t("workflows.steps.actions.visibleAs", {
                             value: visiblePropertyValue(property, t),
                           })}
@@ -3371,7 +3371,7 @@ export function StockWorkflowBuilder({
                               }))
                             }
                             disabled={!editable}
-                            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[12px] font-semibold text-danger transition hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-danger transition hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Trash2 className="size-3" aria-hidden="true" /> {t("workflows.steps.actions.remove")}
                           </button>
@@ -3380,7 +3380,7 @@ export function StockWorkflowBuilder({
                     </div>
                   ))}
                   {draft.fixedProperties.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-[13px] text-muted">{t("workflows.steps.actions.none")}</p>
+                    <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-[12px] text-muted">{t("workflows.steps.actions.none")}</p>
                   ) : null}
                 </div>
               </div>
@@ -3389,10 +3389,10 @@ export function StockWorkflowBuilder({
                   <Webhook className="size-4" aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-muted-strong">
+                  <p className="text-[12px] font-semibold text-muted-strong">
                     Webhook nach erfolgreicher Ausführung
                   </p>
-                  <p className="mt-0.5 text-[12px] text-muted">
+                  <p className="mt-0.5 text-[11px] text-muted">
                     Sendet ein signiertes Ereignis an abonnierte Integrations-Webhooks.
                   </p>
                 </div>
@@ -3427,8 +3427,8 @@ export function StockWorkflowBuilder({
                   <QrCode className="size-[18px]" aria-hidden="true" />
                 </span>
                 <div>
-                  <h2 className="text-[15px] font-semibold text-foreground">{t("workflows.preview.title")}</h2>
-                  <p className="mt-0.5 text-[12px] text-muted">{t("workflows.preview.description")}</p>
+                  <h2 className="text-[14px] font-semibold text-foreground">{t("workflows.preview.title")}</h2>
+                  <p className="mt-0.5 text-[11px] text-muted">{t("workflows.preview.description")}</p>
                 </div>
                 <Badge tone="neutral" className="ml-auto">{t("workflows.preview.noWrite")}</Badge>
               </div>
@@ -3440,7 +3440,7 @@ export function StockWorkflowBuilder({
                   <textarea
                     value={sampleScan}
                     onChange={(event) => setSampleScan(event.target.value)}
-                    className={cn(textAreaClass, "min-h-24 font-mono text-[14px]")}
+                    className={cn(textAreaClass, "min-h-24 font-mono text-[13px]")}
                     placeholder={t("workflows.preview.placeholder")}
                     disabled={interactionBusy}
                   />
@@ -3500,23 +3500,23 @@ export function StockWorkflowBuilder({
               </div>
 
               <div className="rounded-xl border border-border bg-surface-subtle p-4">
-                <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">{t("workflows.preview.result")}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">{t("workflows.preview.result")}</p>
                 {extractionResult.error ? (
-                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-danger-soft p-3 text-[13px] leading-5 text-danger">
+                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-danger-soft p-3 text-[12px] leading-5 text-danger">
                     <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
                     {extractionResult.error}
                   </div>
                 ) : (
                   <div className="mt-3 rounded-lg border border-success-border bg-success-soft p-3">
-                    <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-success">
+                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-success">
                       <CheckCircle2 className="size-3.5 text-success" aria-hidden="true" />
                       {draft.identifierPropertyKey || t("workflows.preview.identifier")}
                     </div>
-                    <p className="mt-1.5 break-all font-mono text-[15px] font-semibold text-success">{extractionResult.value}</p>
+                    <p className="mt-1.5 break-all font-mono text-[14px] font-semibold text-success">{extractionResult.value}</p>
                   </div>
                 )}
 
-                <div className="mt-4 space-y-2.5 text-[13px]">
+                <div className="mt-4 space-y-2.5 text-[12px]">
                   <div className="flex items-start justify-between gap-3">
                     <span className="text-muted">{t("workflows.preview.target")}</span>
                     <strong className="text-right font-semibold text-muted-strong">

@@ -36,7 +36,7 @@ const emptyForm: VariantForm = {
 
 const inputClass =
   "mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-success focus:ring-4 focus:ring-success-border";
-const labelClass = "block text-[13px] font-semibold text-muted-strong";
+const labelClass = "block text-[12px] font-semibold text-muted-strong";
 
 const money = (cents: number | null, currency: string, locale: string) =>
   cents === null
@@ -218,7 +218,7 @@ export function ResourceVariantsManager({
             </p>
           </div>
           {data ? (
-            <div className="flex gap-2 text-[13px] font-semibold">
+            <div className="flex gap-2 text-[12px] font-semibold">
               <span className="rounded-full bg-success-soft px-2.5 py-1 text-success">
                 {t("variants.allocated", { value: number.format(data.summary.allocatedQuantity) })}
               </span>
@@ -247,7 +247,7 @@ export function ResourceVariantsManager({
             {data?.variants.length ? (
               <div className="mt-5 overflow-x-auto rounded-xl border border-border">
                 <table className="w-full min-w-[720px] text-left text-xs">
-                  <thead className="bg-surface-subtle text-[12px] uppercase tracking-wide text-muted">
+                  <thead className="bg-surface-subtle text-[11px] uppercase tracking-wide text-muted">
                     <tr><th className="px-4 py-3">{t("variants.fields.name")}</th><th className="px-4 py-3">{t("variants.fields.sku")}</th><th className="px-4 py-3">{t("variants.fields.barcode")}</th><th className="px-4 py-3">{t("variants.fields.price")}</th><th className="px-4 py-3 text-right">{t("variants.fields.stock")}</th>{canEdit || canManageStock ? <th className="px-4 py-3" /> : null}</tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -281,7 +281,7 @@ export function ResourceVariantsManager({
                 <label className={labelClass}>{t("variants.stockChange", { name: stockVariant.name })}<input type="number" step="1" value={stockDelta} onChange={(event) => setStockDelta(event.target.value)} className={`${inputClass} w-40 bg-surface`} /></label>
                 <button type="button" disabled={saving} onClick={() => void bookStock()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-strong px-4 text-xs font-semibold text-on-strong"><Save className="size-3.5" /> {t("variants.actions.book")}</button>
                 <button type="button" onClick={() => setStockVariant(null)} className="h-10 px-3 text-xs font-semibold text-muted-strong">{t("variants.actions.cancel")}</button>
-                <p className="w-full text-[13px] text-brand">{t("variants.stockHelp")}</p>
+                <p className="w-full text-[12px] text-brand">{t("variants.stockHelp")}</p>
               </div>
             ) : null}
 

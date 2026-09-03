@@ -679,7 +679,7 @@ export function AccessManager() {
           aria-selected={activeView === "roles"}
           onClick={() => setActiveView("roles")}
           className={cn(
-            "inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-[15px] font-semibold transition",
+            "inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-[14px] font-semibold transition",
             activeView === "roles"
               ? "bg-brand-soft text-brand"
               : "text-muted-strong hover:bg-surface-muted hover:text-foreground",
@@ -694,7 +694,7 @@ export function AccessManager() {
           aria-selected={activeView === "rules"}
           onClick={() => setActiveView("rules")}
           className={cn(
-            "inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-[15px] font-semibold transition",
+            "inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-[14px] font-semibold transition",
             activeView === "rules"
               ? "bg-brand-soft text-brand"
               : "text-muted-strong hover:bg-surface-muted hover:text-foreground",
@@ -702,7 +702,7 @@ export function AccessManager() {
         >
           <ListChecks className="size-4" aria-hidden="true" />
           {t("access.tabs.rules")}
-          {!loading ? <span className="text-[13px] opacity-70">{rules.length}</span> : null}
+          {!loading ? <span className="text-[12px] opacity-70">{rules.length}</span> : null}
         </button>
       </div>
 
@@ -878,7 +878,7 @@ function SummaryItem({
         ) : (
           <p className="text-lg font-semibold tabular-nums text-foreground">{value}</p>
         )}
-        <p className="text-[13px] font-medium text-muted">{label}</p>
+        <p className="text-[12px] font-medium text-muted">{label}</p>
       </div>
     </div>
   );
@@ -953,24 +953,24 @@ function RoleRow({ role, onEdit }: { role: AccessRole; onEdit: () => void }) {
             {role.isSystem ? t("access.roles.builtIn") : t("access.roles.custom")}
           </Badge>
         </div>
-        <p className="mt-1 line-clamp-2 text-[15px] leading-5 text-muted">
+        <p className="mt-1 line-clamp-2 text-[14px] leading-5 text-muted">
           {role.description || t("access.roles.noDescription")}
         </p>
-        <p className="mt-2 font-mono text-[12px] text-muted">{role.key}</p>
+        <p className="mt-2 font-mono text-[11px] text-muted">{role.key}</p>
       </div>
       <div className="flex items-center justify-between gap-3 sm:justify-end">
         <div className="text-right">
           <p className="text-sm font-semibold tabular-nums text-foreground">
             {role.permissions.length}
           </p>
-          <p className="text-[12px] text-muted">{t("access.roles.permissions")}</p>
+          <p className="text-[11px] text-muted">{t("access.roles.permissions")}</p>
         </div>
         <div className="h-8 w-px bg-border" aria-hidden="true" />
         <div className="min-w-14 text-right">
           <p className="text-sm font-semibold tabular-nums text-foreground">
             {role.memberCount}
           </p>
-          <p className="text-[12px] text-muted">
+          <p className="text-[11px] text-muted">
             {t("access.roles.members", { count: role.memberCount })}
           </p>
         </div>
@@ -1029,7 +1029,7 @@ function RoleEditor({
     >
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand">
             {mode === "create" ? t("access.roles.newEyebrow") : t("access.roles.editEyebrow")}
           </p>
           <h3 className="mt-1 text-base font-semibold text-foreground">
@@ -1198,7 +1198,7 @@ function PermissionGrid({
                     defaultValue: group.label,
                   })}
                 </p>
-                <p className="mt-1 text-[12px] leading-4 text-muted">
+                <p className="mt-1 text-[11px] leading-4 text-muted">
                   {t(`access.permissionGroups.${translationSlug(group.key)}.description`, {
                     defaultValue: group.description,
                   })}
@@ -1236,7 +1236,7 @@ function PermissionGrid({
                           defaultValue: permission.label,
                         })}
                       </span>
-                      <span className="mt-0.5 block text-[12px] leading-4 text-muted">
+                      <span className="mt-0.5 block text-[11px] leading-4 text-muted">
                         {t(`access.permissions.${key}.description`, {
                           defaultValue: permission.description,
                         })}
@@ -1292,12 +1292,12 @@ function RuleRow({
               {rule.enabled ? t("access.rules.enabled") : t("access.rules.disabled")}
             </Badge>
             <Badge tone="brand">{role?.name ?? rule.roleKey}</Badge>
-            <span className="text-[12px] font-medium text-muted">
+            <span className="text-[11px] font-medium text-muted">
               {t("access.rules.priorityValue", { value: rule.priority })}
             </span>
           </div>
           {rule.description ? (
-            <p className="mt-1.5 text-[15px] leading-5 text-muted">{rule.description}</p>
+            <p className="mt-1.5 text-[14px] leading-5 text-muted">{rule.description}</p>
           ) : null}
 
           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -1306,7 +1306,7 @@ function RuleRow({
               return (
                 <span
                   key={permission}
-                  className="rounded-md bg-surface-muted px-2 py-1 text-[12px] font-semibold text-muted-strong"
+                  className="rounded-md bg-surface-muted px-2 py-1 text-[11px] font-semibold text-muted-strong"
                 >
                   {t(`access.permissions.${translationSlug(permission)}.label`, {
                     defaultValue: descriptor?.label ?? permission,
@@ -1316,7 +1316,7 @@ function RuleRow({
             })}
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
             <span className="font-semibold uppercase tracking-[0.1em]">
               {t("access.rules.when")}
             </span>
@@ -1479,7 +1479,7 @@ function RuleEditor({
 
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand">
             {mode === "create" ? t("access.rules.newEyebrow") : t("access.rules.editEyebrow")}
           </p>
           <h3 className="mt-1 text-base font-semibold text-foreground">
@@ -1598,7 +1598,7 @@ function RuleEditor({
                       defaultValue: descriptor?.label ?? permission,
                     })}
                   </span>
-                  <span className="mt-0.5 block text-[12px] leading-4 text-muted">
+                  <span className="mt-0.5 block text-[11px] leading-4 text-muted">
                     {t(`access.permissions.${translationSlug(permission)}.description`, {
                       defaultValue: descriptor?.description ?? permission,
                     })}
@@ -1645,10 +1645,10 @@ function RuleEditor({
                 key={index}
                 className="grid gap-2 rounded-xl border border-border bg-surface p-3 md:grid-cols-[34px_minmax(150px,1fr)_minmax(150px,0.8fr)_minmax(120px,0.6fr)_minmax(150px,1fr)_34px] md:items-end"
               >
-                <span className="grid size-8 place-items-center self-center rounded-lg bg-brand-soft text-[12px] font-bold text-brand">
+                <span className="grid size-8 place-items-center self-center rounded-lg bg-brand-soft text-[11px] font-bold text-brand">
                   {index === 0 ? t("access.rules.if") : t("access.rules.and")}
                 </span>
-                <label className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
                   {t("access.rules.field")}
                   <input
                     required
@@ -1660,7 +1660,7 @@ function RuleEditor({
                     className={`${inputClass} normal-case tracking-normal`}
                   />
                 </label>
-                <label className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
                   {t("access.rules.operator")}
                   <select
                     value={condition.operator}
@@ -1684,7 +1684,7 @@ function RuleEditor({
                   </div>
                 ) : (
                   <>
-                    <label className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
                       {t("access.rules.valueType")}
                       <select
                         value={condition.valueType}
@@ -1702,7 +1702,7 @@ function RuleEditor({
                         <option value="boolean">{t("access.rules.valueTypes.boolean")}</option>
                       </select>
                     </label>
-                    <label className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
                       {t("access.rules.value")}
                       {condition.valueType === "boolean" ? (
                         <select
@@ -1746,7 +1746,7 @@ function RuleEditor({
             );
           })}
         </div>
-        <p className="mt-2 flex items-center gap-1.5 text-[12px] text-muted">
+        <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted">
           <CirclePlus className="size-3" aria-hidden="true" />
           {t("access.rules.customFieldHint")}
         </p>

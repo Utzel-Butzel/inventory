@@ -516,13 +516,13 @@ export function InventoryCycleManager({
         <div className="rounded-2xl border border-border bg-surface-subtle/60 p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[12px] font-semibold uppercase tracking-wider text-muted">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                 {t("cycle.currentSchedule")}
               </p>
               <p className="mt-2 text-base font-semibold text-foreground">{status.label}</p>
-              <p className="mt-1 text-[13px] leading-4 text-muted">{status.detail}</p>
+              <p className="mt-1 text-[12px] leading-4 text-muted">{status.detail}</p>
             </div>
-            <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${status.tone}`}>
+            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.tone}`}>
               {cycle.policy?.enabled
                 ? t("cycle.state.active")
                 : t("cycle.state.inactive")}
@@ -530,13 +530,13 @@ export function InventoryCycleManager({
           </div>
         </div>
         <div className="rounded-2xl border border-border bg-surface p-4">
-          <p className="text-[12px] font-semibold uppercase tracking-wider text-muted">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
             {t("cycle.lastCompleted")}
           </p>
           <p className="mt-2 text-sm font-semibold text-foreground">
             {formatDate(lastCompletedAt, locale)}
           </p>
-          <p className="mt-1 text-[13px] text-muted">
+          <p className="mt-1 text-[12px] text-muted">
             {cycle.history.length
               ? t("cycle.recentCount", {
                   count: cycle.history.length,
@@ -579,7 +579,7 @@ export function InventoryCycleManager({
                     ? t("cycle.policy.enabled")
                     : t("cycle.policy.paused")}
                 </p>
-                <p className="mt-0.5 text-[12px] text-muted">
+                <p className="mt-0.5 text-[11px] text-muted">
                   {t("cycle.policy.pausedHelp")}
                 </p>
               </div>
@@ -595,7 +595,7 @@ export function InventoryCycleManager({
                     setCustomInterval(false);
                     setIntervalDays(String(days));
                   }}
-                  className={`h-9 rounded-xl border px-3 text-[13px] font-semibold transition disabled:opacity-50 ${
+                  className={`h-9 rounded-xl border px-3 text-[12px] font-semibold transition disabled:opacity-50 ${
                     !customInterval && parsedInterval === days
                       ? "border-success-border bg-success-soft text-success"
                       : "border-border bg-surface text-muted hover:border-border-strong"
@@ -611,7 +611,7 @@ export function InventoryCycleManager({
                 type="button"
                 disabled={!canEdit}
                 onClick={() => setCustomInterval(true)}
-                className={`h-9 rounded-xl border px-3 text-[13px] font-semibold transition disabled:opacity-50 ${
+                className={`h-9 rounded-xl border px-3 text-[12px] font-semibold transition disabled:opacity-50 ${
                   customInterval
                     ? "border-success-border bg-success-soft text-success"
                     : "border-border bg-surface text-muted hover:border-border-strong"
@@ -633,7 +633,7 @@ export function InventoryCycleManager({
                     onChange={(event) => setIntervalDays(event.target.value)}
                     className="h-9 w-28 rounded-xl border border-border bg-surface pl-3 pr-11 text-xs text-muted-strong outline-none focus:border-success focus:ring-4 focus:ring-success-border disabled:bg-surface-subtle"
                   />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-muted">
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted">
                     {t("cycle.policy.days")}
                   </span>
                 </label>
@@ -651,7 +651,7 @@ export function InventoryCycleManager({
               {t("cycle.actions.saveSchedule")}
             </Button>
           ) : (
-            <p className="text-[12px] leading-4 text-muted">
+            <p className="text-[11px] leading-4 text-muted">
               {t("cycle.policy.writeRequired")}
             </p>
           )}
@@ -666,7 +666,7 @@ export function InventoryCycleManager({
             </span>
             <div>
               <h3 className="text-xs font-semibold text-foreground">{t("cycle.count.title")}</h3>
-              <p className="mt-1 text-[13px] leading-4 text-muted">
+              <p className="mt-1 text-[12px] leading-4 text-muted">
                 {t("cycle.count.description")}
               </p>
             </div>
@@ -689,7 +689,7 @@ export function InventoryCycleManager({
         </div>
 
         {cycle.resource.trackingMode === "serialized" ? (
-          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-info-border bg-info-soft px-3.5 py-3 text-[13px] leading-4 text-info sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-info-border bg-info-soft px-3.5 py-3 text-[12px] leading-4 text-info sm:flex-row sm:items-center sm:justify-between">
             <span className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
               <span>
@@ -713,13 +713,13 @@ export function InventoryCycleManager({
             ) : null}
           </div>
         ) : !canEdit ? (
-          <p className="mt-4 rounded-xl bg-surface-subtle px-3.5 py-3 text-[13px] leading-4 text-muted">
+          <p className="mt-4 rounded-xl bg-surface-subtle px-3.5 py-3 text-[12px] leading-4 text-muted">
             {t("cycle.count.readOnly")}
           </p>
         ) : countOpen ? (
           <form onSubmit={submitCount} className="mt-5 rounded-2xl border border-success-border bg-success-soft/40 p-4">
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="block text-[13px] font-semibold text-muted">
+              <label className="block text-[12px] font-semibold text-muted">
                 {t("cycle.count.scope")}
                 <select
                   value={countTarget}
@@ -741,7 +741,7 @@ export function InventoryCycleManager({
                   ))}
                 </select>
               </label>
-              <label className="block text-[13px] font-semibold text-muted">
+              <label className="block text-[12px] font-semibold text-muted">
                 {t("cycle.count.countedQuantity")}
                 <input
                   type="number"
@@ -754,7 +754,7 @@ export function InventoryCycleManager({
                   className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs text-muted-strong outline-none focus:border-success focus:ring-4 focus:ring-success-border"
                 />
               </label>
-              <label className="block text-[13px] font-semibold text-muted">
+              <label className="block text-[12px] font-semibold text-muted">
                 {t("cycle.count.countedAt")}
                 <input
                   type="datetime-local"
@@ -764,7 +764,7 @@ export function InventoryCycleManager({
                   className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs text-muted-strong outline-none focus:border-success focus:ring-4 focus:ring-success-border"
                 />
               </label>
-              <label className="block text-[13px] font-semibold text-muted">
+              <label className="block text-[12px] font-semibold text-muted">
                 {t("cycle.count.note")} {" "}
                 <span className="font-normal text-muted">
                   ({t("cycle.optional")})
@@ -779,7 +779,7 @@ export function InventoryCycleManager({
               </label>
             </div>
             <div className="mt-4 flex flex-col gap-3 border-t border-success-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[12px] leading-4 text-muted">
+              <p className="text-[11px] leading-4 text-muted">
                 {t("cycle.count.expected", {
                   quantity: quantityLabel(
                     expectedQuantity,
@@ -805,7 +805,7 @@ export function InventoryCycleManager({
               </Button>
             </div>
             {countTarget === ENTIRE_INVENTORY && locations.some((location) => location.quantity > 0) ? (
-              <p className="mt-3 text-[12px] leading-4 text-muted">
+              <p className="mt-3 text-[11px] leading-4 text-muted">
                 {t("cycle.count.totalHelp")}
               </p>
             ) : null}
@@ -817,7 +817,7 @@ export function InventoryCycleManager({
         <div className="flex items-center gap-2 px-5 py-3.5 sm:px-6">
           <History className="size-3.5 text-muted" aria-hidden="true" />
           <h3 className="text-xs font-semibold text-muted-strong">{t("cycle.history.title")}</h3>
-          <span className="ml-auto text-[12px] text-muted">{numberFormat.format(cycle.history.length)}</span>
+          <span className="ml-auto text-[11px] text-muted">{numberFormat.format(cycle.history.length)}</span>
         </div>
         {cycle.history.length ? (
           <div className="divide-y divide-border border-t border-border">
@@ -844,7 +844,7 @@ export function InventoryCycleManager({
                             : t("cycle.targets.entireInventory"))}
                       </span>
                     </p>
-                    <p className="mt-1 truncate text-[12px] text-muted">
+                    <p className="mt-1 truncate text-[11px] text-muted">
                       {t("cycle.history.quantities", {
                         expected: numberFormat.format(count.expectedQuantity),
                         counted: numberFormat.format(count.countedQuantity),
@@ -853,7 +853,7 @@ export function InventoryCycleManager({
                     </p>
                   </div>
                   <span
-                    className={`w-fit rounded-lg px-2 py-1 text-[13px] font-bold tabular-nums ${
+                    className={`w-fit rounded-lg px-2 py-1 text-[12px] font-bold tabular-nums ${
                       count.variance > 0
                         ? "bg-success-soft text-success"
                         : count.variance < 0
@@ -864,10 +864,10 @@ export function InventoryCycleManager({
                     {count.variance > 0 ? "+" : ""}
                     {numberFormat.format(count.variance)}
                   </span>
-                  <div className="flex items-center gap-1.5 text-[12px] text-muted sm:block">
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted sm:block">
                     <Clock3 className="size-3 sm:hidden" aria-hidden="true" />
                     <p>{formatDate(count.countedAt, locale)}</p>
-                    <p className="mt-0.5 hidden truncate text-[11px] sm:block">
+                    <p className="mt-0.5 hidden truncate text-[10px] sm:block">
                       {count.createdBy || t("cycle.history.system")}
                     </p>
                   </div>
@@ -879,7 +879,7 @@ export function InventoryCycleManager({
           <div className="border-t border-border px-6 py-9 text-center">
             <ClipboardCheck className="mx-auto size-5 text-muted" aria-hidden="true" />
             <p className="mt-2 text-xs font-semibold text-muted">{t("cycle.history.emptyTitle")}</p>
-            <p className="mt-1 text-[12px] text-muted">
+            <p className="mt-1 text-[11px] text-muted">
               {t("cycle.history.emptyDescription")}
             </p>
           </div>

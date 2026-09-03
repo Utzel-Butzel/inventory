@@ -158,7 +158,7 @@ function InventoryQuickPreview({
       >
         <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border bg-surface/95 px-5 py-4 backdrop-blur">
           <div className="min-w-0">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
               {t("inventorySelect.preview.eyebrow")}
             </p>
             <h2 id={titleId} className="mt-1 truncate text-base font-semibold text-foreground">
@@ -199,7 +199,7 @@ function InventoryQuickPreview({
             </div>
           ) : null}
           {error ? (
-            <p className="rounded-xl border border-warning-border bg-warning-soft px-3 py-2 text-[13px] leading-5 text-warning">
+            <p className="rounded-xl border border-warning-border bg-warning-soft px-3 py-2 text-[12px] leading-5 text-warning">
               {t("inventorySelect.preview.partial")}
             </p>
           ) : null}
@@ -207,10 +207,10 @@ function InventoryQuickPreview({
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {fields.map((field) => (
               <div key={field.label} className="rounded-xl border border-border bg-surface-subtle px-3 py-2.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
                   {field.label}
                 </p>
-                <p className="mt-1 break-words text-[13px] font-medium text-foreground">
+                <p className="mt-1 break-words text-[12px] font-medium text-foreground">
                   {field.value}
                 </p>
               </div>
@@ -218,17 +218,17 @@ function InventoryQuickPreview({
           </div>
 
           <div className="rounded-xl border border-border px-3.5 py-3">
-            <p className="text-[12px] font-semibold text-muted-strong">
+            <p className="text-[11px] font-semibold text-muted-strong">
               {t("inventorySelect.preview.fields.description")}
             </p>
-            <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-5 text-muted">
+            <p className="mt-1.5 whitespace-pre-wrap text-[12px] leading-5 text-muted">
               {description?.trim() || t("inventorySelect.preview.noDescription")}
             </p>
           </div>
 
           <Link
             href={`/inventory/${item.id}`}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-[13px] font-semibold text-foreground transition hover:bg-surface-hover"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-[12px] font-semibold text-foreground transition hover:bg-surface-hover"
           >
             {t("inventorySelect.preview.openItem")}
             <ExternalLink className="size-3.5" aria-hidden="true" />
@@ -260,7 +260,7 @@ export function InventorySelect({
 
   return (
     <div className={className}>
-      <label className="block text-[13px] font-semibold text-muted-strong">
+      <label className="block text-[12px] font-semibold text-muted-strong">
         {label}
         <span className="relative mt-1.5 block">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
@@ -276,7 +276,7 @@ export function InventorySelect({
 
       <div className="mt-2 max-h-80 space-y-1 overflow-y-auto rounded-xl border border-border p-1.5">
         {searching ? (
-          <div className="flex min-h-20 items-center justify-center gap-2 text-[13px] text-muted">
+          <div className="flex min-h-20 items-center justify-center gap-2 text-[12px] text-muted">
             <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
             {searchingText}
           </div>
@@ -319,15 +319,15 @@ export function InventorySelect({
                     )}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-semibold">
+                    <span className="block truncate text-[12px] font-semibold">
                       {item.name}
                     </span>
-                    <span className="mt-0.5 block truncate text-[11px] text-muted">
+                    <span className="mt-0.5 block truncate text-[10px] text-muted">
                       {itemMeta?.(item) || item.sku || item.type || "—"}
                     </span>
                   </span>
                   {selected ? (
-                    <Badge tone="brand" className="min-h-5 shrink-0 px-1.5 text-[11px]">
+                    <Badge tone="brand" className="min-h-5 shrink-0 px-1.5 text-[10px]">
                       {selectedText}
                     </Badge>
                   ) : null}
@@ -346,7 +346,7 @@ export function InventorySelect({
             );
           })
         ) : (
-          <div className="flex min-h-20 items-center justify-center px-4 text-center text-[13px] leading-4 text-muted">
+          <div className="flex min-h-20 items-center justify-center px-4 text-center text-[12px] leading-4 text-muted">
             {emptyText}
           </div>
         )}

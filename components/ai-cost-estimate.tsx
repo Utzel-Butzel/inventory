@@ -132,7 +132,7 @@ export function EstimatedAiCost({
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-[12px] font-medium leading-4 text-muted ${className}`}
+      className={`inline-flex items-center gap-1.5 text-[11px] font-medium leading-4 text-muted ${className}`}
       title={t("aiCost.disclaimer")}
     >
       <CircleDollarSign className="size-3.5 shrink-0" aria-hidden="true" />

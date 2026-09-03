@@ -207,7 +207,7 @@ export function ImageModelSelector({
 
   return (
     <div className={className}>
-      <label htmlFor={selectId} className="block text-[13px] font-semibold text-muted">
+      <label htmlFor={selectId} className="block text-[12px] font-semibold text-muted">
         {label ?? t("models.image")}
       </label>
       <select
@@ -231,7 +231,7 @@ export function ImageModelSelector({
         ))}
       </select>
       {description ? (
-        <p id={descriptionId} className="mt-1 text-[12px] leading-4 text-muted">
+        <p id={descriptionId} className="mt-1 text-[11px] leading-4 text-muted">
           {description}
         </p>
       ) : null}

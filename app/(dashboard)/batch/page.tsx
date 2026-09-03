@@ -682,7 +682,7 @@ export default function BatchCapturePage() {
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               {t("header.inventory")}
             </Link>
-            <h1 className="text-2xl font-semibold sm:text-[30px]">
+            <h1 className="text-2xl font-semibold sm:text-[29px]">
               {t("header.title")}
             </h1>
           </div>
@@ -918,7 +918,7 @@ export default function BatchCapturePage() {
                         className="h-full w-full object-cover"
                       />
                       {index === 0 ? (
-                        <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[12px] font-semibold text-white backdrop-blur">
+                        <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur">
                           {t("photos.primary")}
                         </span>
                       ) : null}
@@ -975,7 +975,7 @@ export default function BatchCapturePage() {
                   {t("defaults.title")}
                 </h2>
               </div>
-              <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[13px] font-semibold text-muted">
+              <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[12px] font-semibold text-muted">
                 {t("defaults.optional")}
               </span>
             </div>
@@ -1151,7 +1151,7 @@ export default function BatchCapturePage() {
                     </label>
                     {transparentCover ? (
                       <fieldset className="mt-3 border-t border-border pt-3">
-                        <legend className="px-1 text-[12px] font-semibold uppercase tracking-wide text-muted">
+                        <legend className="px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
                           {t("defaults.transparencyMethod")}
                         </legend>
                         <div className="mt-2 grid gap-2">
@@ -1177,7 +1177,7 @@ export default function BatchCapturePage() {
                                         : "defaults.greenscreen",
                                     )}
                                   </span>
-                                  <span className="mt-0.5 block text-[13px] leading-4 text-muted">
+                                  <span className="mt-0.5 block text-[12px] leading-4 text-muted">
                                     {t(
                                       method === "difference-matting"
                                         ? "defaults.differenceMattingDescription"
@@ -1341,7 +1341,7 @@ export default function BatchCapturePage() {
                           {job.message}
                         </p>
                       ) : (
-                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-muted">
+                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-muted">
                           <span
                             className={
                               job.stage !== "creating" ? "text-success" : ""

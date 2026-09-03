@@ -84,8 +84,8 @@
     "workspace": "Arbeitsbereich"
   },
   "search": {
-    "label": "Inventar durchsuchen",
-    "placeholder": "Inventar durchsuchen…",
+    "label": "Suchen",
+    "placeholder": "Suchen...",
     "submit": "Inventarsuche absenden",
     "action": "Suchen"
   },

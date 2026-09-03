@@ -109,16 +109,16 @@ export function LoginForm({
               <LockKeyhole className="size-4" aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-brand">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand">
                 {t("demo.eyebrow")}
               </p>
               <h2
                 id="live-demo-title"
-                className="mt-1 text-[17px] font-semibold text-foreground"
+                className="mt-1 text-[16px] font-semibold text-foreground"
               >
                 {t("demo.title")}
               </h2>
-              <p className="mt-1 text-[15px] leading-5 text-muted">
+              <p className="mt-1 text-[14px] leading-5 text-muted">
                 {t("demo.description")}
               </p>
             </div>
@@ -143,7 +143,7 @@ export function LoginForm({
       ) : null}
 
       {demoEnabled && hasAccountProviders ? (
-        <div className="my-5 flex items-center gap-3 text-[13px] uppercase tracking-[0.12em] text-muted before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+        <div className="my-5 flex items-center gap-3 text-[12px] uppercase tracking-[0.12em] text-muted before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
           {t("demo.separator")}
         </div>
       ) : null}
@@ -153,7 +153,7 @@ export function LoginForm({
           <div>
             <label
               htmlFor="email"
-              className="mb-1.5 block text-[15px] font-medium text-muted-strong"
+              className="mb-1.5 block text-[14px] font-medium text-muted-strong"
             >
               {t("form.email.label")}
             </label>
@@ -174,7 +174,7 @@ export function LoginForm({
             <div className="mb-1.5 flex items-center justify-between">
               <label
                 htmlFor="password"
-                className="text-[15px] font-medium text-muted-strong"
+                className="text-[14px] font-medium text-muted-strong"
               >
                 {t("form.password.label")}
               </label>
@@ -228,7 +228,7 @@ export function LoginForm({
       {error ? (
         <div
           role="alert"
-          className="mt-4 rounded-xl border border-danger-border bg-danger-soft px-3.5 py-3 text-[15px] leading-5 text-danger"
+          className="mt-4 rounded-xl border border-danger-border bg-danger-soft px-3.5 py-3 text-[14px] leading-5 text-danger"
         >
           {t(error)}
         </div>
@@ -237,7 +237,7 @@ export function LoginForm({
       {externalProviders.length > 0 ? (
         <div className={passwordEnabled ? "mt-5" : undefined}>
           {passwordEnabled ? (
-            <div className="flex items-center gap-3 text-[13px] uppercase tracking-[0.12em] text-muted before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+            <div className="flex items-center gap-3 text-[12px] uppercase tracking-[0.12em] text-muted before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
               {t("form.separator")}
             </div>
           ) : null}
@@ -257,7 +257,7 @@ export function LoginForm({
                     aria-hidden="true"
                   />
                 ) : (
-                  <span className="grid size-5 place-items-center rounded-md bg-strong text-[12px] font-bold text-on-strong">
+                  <span className="grid size-5 place-items-center rounded-md bg-strong text-[11px] font-bold text-on-strong">
                     {t("form.ssoBadge")}
                   </span>
                 )}

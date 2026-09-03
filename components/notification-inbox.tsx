@@ -113,7 +113,7 @@ export function NotificationInbox() {
     <div className="mx-auto w-full max-w-[980px]">
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-brand">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-brand">
             {t("eyebrow")}
           </p>
           <h1 className="text-3xl font-semibold tracking-[-0.035em] text-foreground">
@@ -178,10 +178,10 @@ export function NotificationInbox() {
                       </h2>
                       {!notification.readAt ? <Badge tone="brand">{t("new")}</Badge> : null}
                     </div>
-                    <p className="mt-1 text-[15px] leading-5 text-muted-strong">
+                    <p className="mt-1 text-[14px] leading-5 text-muted-strong">
                       {notification.body}
                     </p>
-                    <p className="mt-2 text-[12px] text-muted">
+                    <p className="mt-2 text-[11px] text-muted">
                       {date.format(new Date(notification.createdAt))}
                     </p>
                   </div>

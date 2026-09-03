@@ -736,7 +736,7 @@ export function LabelDesigner({
       >
         <header className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
           <div>
-            <p className="text-[12px] font-semibold uppercase tracking-[0.17em] text-brand">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.17em] text-brand">
               {t("designer.eyebrow")}
             </p>
             <h2 id="label-designer-title" className="mt-1 text-lg font-semibold tracking-[-0.02em] text-foreground">
@@ -779,7 +779,7 @@ export function LabelDesigner({
 
         <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[250px_minmax(360px,1fr)_260px] lg:overflow-hidden">
           <aside className="border-b border-border p-5 lg:overflow-y-auto lg:border-b-0 lg:border-r">
-            <label className="block text-[13px] font-semibold text-muted">
+            <label className="block text-[12px] font-semibold text-muted">
               {t("designer.setupName")}
               <input
                 value={value.name}
@@ -795,7 +795,7 @@ export function LabelDesigner({
             </label>
             <div className="mt-4 grid grid-cols-2 gap-2">
               {(["widthMm", "heightMm"] as const).map((key) => (
-                <label key={key} className="block text-[13px] font-semibold text-muted">
+                <label key={key} className="block text-[12px] font-semibold text-muted">
                   {key === "widthMm"
                     ? t("designer.width")
                     : t("designer.height")}
@@ -818,7 +818,7 @@ export function LabelDesigner({
             </div>
 
             <div className="mt-6">
-              <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
                 {t("designer.elementsTitle")}
               </p>
               <div className="mt-2 space-y-1.5">
@@ -871,14 +871,14 @@ export function LabelDesigner({
 
           <main className="relative min-h-[500px] overflow-auto bg-surface-muted p-6 pt-40 subtle-grid sm:pt-28 lg:min-h-0">
             <div className="absolute left-3 right-3 top-3 z-40 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface/95 p-2 shadow-sm backdrop-blur">
-              <label className="flex min-w-0 items-center gap-2 text-[12px] font-semibold text-muted">
+              <label className="flex min-w-0 items-center gap-2 text-[11px] font-semibold text-muted">
                 <span className="hidden xl:inline">{t("designer.previewScenario")}</span>
                 <select
                   value={previewScenario}
                   onChange={(event) =>
                     setPreviewScenario(event.target.value as PreviewScenario)
                   }
-                  className="h-8 min-w-0 rounded-lg border border-border bg-surface px-2 text-[13px] text-foreground outline-none"
+                  className="h-8 min-w-0 rounded-lg border border-border bg-surface px-2 text-[12px] text-foreground outline-none"
                 >
                   <option value="current">{t("designer.previewScenarios.current")}</option>
                   <option value="stress">{t("designer.previewScenarios.stress")}</option>
@@ -891,7 +891,7 @@ export function LabelDesigner({
                 role="switch"
                 aria-checked={snapToGrid}
                 onClick={() => setSnapToGrid((enabled) => !enabled)}
-                className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[13px] font-semibold ${
+                className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12px] font-semibold ${
                   snapToGrid
                     ? "bg-brand-soft text-brand"
                     : "text-muted hover:bg-surface-hover"
@@ -900,13 +900,13 @@ export function LabelDesigner({
                 <Grid3X3 size={14} aria-hidden="true" />
                 {t("designer.grid")}
               </button>
-              <label className="flex items-center gap-1 text-[12px] font-semibold text-muted">
+              <label className="flex items-center gap-1 text-[11px] font-semibold text-muted">
                 <select
                   value={gridSizeMm}
                   onChange={(event) => setGridSizeMm(Number(event.target.value))}
                   aria-label={t("designer.gridSize")}
                   disabled={!snapToGrid}
-                  className="h-8 rounded-lg border border-border bg-surface px-2 text-[13px] text-foreground outline-none disabled:opacity-40"
+                  className="h-8 rounded-lg border border-border bg-surface px-2 text-[12px] text-foreground outline-none disabled:opacity-40"
                 >
                   {[0.5, 1, 2, 5].map((size) => (
                     <option key={size} value={size}>
@@ -922,7 +922,7 @@ export function LabelDesigner({
                     key={unit}
                     type="button"
                     onClick={() => setCoordinateUnit(unit)}
-                    className={`h-7 rounded-md px-2 text-[12px] font-semibold ${
+                    className={`h-7 rounded-md px-2 text-[11px] font-semibold ${
                       coordinateUnit === unit
                         ? "bg-brand-soft text-brand"
                         : "text-muted"
@@ -943,7 +943,7 @@ export function LabelDesigner({
                 >
                   <ZoomOut size={15} aria-hidden="true" />
                 </button>
-                <span className="min-w-12 text-center text-[12px] font-semibold tabular-nums text-muted-strong">
+                <span className="min-w-12 text-center text-[11px] font-semibold tabular-nums text-muted-strong">
                   {zoomPercent}%
                 </span>
                 <button
@@ -1010,7 +1010,7 @@ export function LabelDesigner({
                     >
                       {selectedType === element.type ? (
                         <>
-                          <span className="absolute -left-0.5 -top-6 inline-flex h-5 items-center gap-1 rounded bg-brand-solid px-1.5 text-[11px] font-semibold text-on-brand shadow-sm">
+                          <span className="absolute -left-0.5 -top-6 inline-flex h-5 items-center gap-1 rounded bg-brand-solid px-1.5 text-[10px] font-semibold text-on-brand shadow-sm">
                             <Grip size={9} aria-hidden="true" />
                             {t(
                               ELEMENT_OPTIONS.find(
@@ -1042,7 +1042,7 @@ export function LabelDesigner({
           </main>
 
           <aside className="border-t border-border p-5 lg:overflow-y-auto lg:border-l lg:border-t-0">
-            <p className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">
+            <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
               {t("designer.properties")}
             </p>
             {selected ? (
@@ -1077,7 +1077,7 @@ export function LabelDesigner({
                               ? 100 - selected.x
                               : 100 - selected.y;
                       return (
-                        <label key={key} className="block text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
+                        <label key={key} className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
                           {t(`designer.coordinates.${key}`)} ({coordinateUnit === "mm" ? "mm" : "%"})
                           <input
                             type="number"
@@ -1128,15 +1128,15 @@ export function LabelDesigner({
                         }}
                       />
                     </label>
-                    <p className="text-[12px] leading-4 text-muted">
+                    <p className="text-[11px] leading-4 text-muted">
                       {t("designer.backgroundHint")}
                     </p>
                     {backgroundError ? (
-                      <p role="alert" className="text-[13px] font-medium text-danger">
+                      <p role="alert" className="text-[12px] font-medium text-danger">
                         {backgroundError}
                       </p>
                     ) : null}
-                    <label className="block text-[13px] font-semibold text-muted">
+                    <label className="block text-[12px] font-semibold text-muted">
                       {t("designer.imageFit")}
                       <select
                         value={selected.fit ?? "cover"}
@@ -1151,7 +1151,7 @@ export function LabelDesigner({
                         <option value="contain">{t("designer.fitImage")}</option>
                       </select>
                     </label>
-                    <label className="block text-[13px] font-semibold text-muted">
+                    <label className="block text-[12px] font-semibold text-muted">
                       <span className="flex items-center justify-between gap-2">
                         {t("designer.backgroundOpacity")}
                         <output>{Math.round((selected.opacity ?? 1) * 100)}%</output>
@@ -1186,7 +1186,7 @@ export function LabelDesigner({
                 ) : null}
 
                 {selected.type === "image" ? (
-                  <label className="mt-4 block text-[13px] font-semibold text-muted">
+                  <label className="mt-4 block text-[12px] font-semibold text-muted">
                     {t("designer.imageFit")}
                     <select
                       value={selected.fit ?? "cover"}
@@ -1206,7 +1206,7 @@ export function LabelDesigner({
                         ["foregroundColor", "designer.qrForeground", "#000000"],
                         ["backgroundColor", "designer.qrBackground", "#ffffff"],
                       ] as const).map(([key, labelKey, fallback]) => (
-                        <label key={key} className="block text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">
+                        <label key={key} className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
                           {t(labelKey)}
                           <input
                             type="color"
@@ -1221,7 +1221,7 @@ export function LabelDesigner({
                         </label>
                       ))}
                     </div>
-                    <label className="block text-[13px] font-semibold text-muted">
+                    <label className="block text-[12px] font-semibold text-muted">
                       {t("designer.qrMargin")}
                       <select
                         value={(selected as QrElement).quietZoneModules ?? 0}
@@ -1241,7 +1241,7 @@ export function LabelDesigner({
                         ))}
                       </select>
                     </label>
-                    <p className="text-[12px] leading-4 text-muted">
+                    <p className="text-[11px] leading-4 text-muted">
                       {t("designer.qrColorHint")}
                     </p>
                   </div>
@@ -1249,7 +1249,7 @@ export function LabelDesigner({
 
                 {["name", "identifier", "url", "location"].includes(selected.type) ? (
                   <>
-                    <label className="mt-4 block text-[13px] font-semibold text-muted">
+                    <label className="mt-4 block text-[12px] font-semibold text-muted">
                       {t("designer.fontSize")}
                       <input
                         type="number"
@@ -1272,7 +1272,7 @@ export function LabelDesigner({
                         className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus"
                       />
                     </label>
-                    <label className="mt-4 block text-[13px] font-semibold text-muted">
+                    <label className="mt-4 block text-[12px] font-semibold text-muted">
                       {t("designer.fontFamily")}
                       <select
                         value={
@@ -1300,7 +1300,7 @@ export function LabelDesigner({
                         </option>
                       </select>
                     </label>
-                    <label className="mt-4 block text-[13px] font-semibold text-muted">
+                    <label className="mt-4 block text-[12px] font-semibold text-muted">
                       {t("designer.alignment")}
                       <select
                         value={(selected as TextElement).align ?? "left"}
@@ -1312,7 +1312,7 @@ export function LabelDesigner({
                         <option value="right">{t("designer.align.right")}</option>
                       </select>
                     </label>
-                    <label className="mt-4 block text-[13px] font-semibold text-muted">
+                    <label className="mt-4 block text-[12px] font-semibold text-muted">
                       {t("designer.textOverflow")}
                       <select
                         value={(selected as TextElement).textOverflow ?? "ellipsis"}
@@ -1332,7 +1332,7 @@ export function LabelDesigner({
                       </select>
                     </label>
                     {(selected as TextElement).textOverflow === "shrink" ? (
-                      <label className="mt-4 block text-[13px] font-semibold text-muted">
+                      <label className="mt-4 block text-[12px] font-semibold text-muted">
                         {t("designer.minimumFontSize")}
                         <input
                           type="number"
@@ -1357,7 +1357,7 @@ export function LabelDesigner({
                     ) : null}
                   </>
                 ) : null}
-                <p className="mt-5 text-[13px] leading-5 text-muted">
+                <p className="mt-5 text-[12px] leading-5 text-muted">
                   {t("designer.instructions")}
                 </p>
               </div>
@@ -1377,7 +1377,7 @@ export function LabelDesigner({
                 {t("designer.overlap")}
               </p>
             ) : !error ? (
-              <p className="text-[13px] text-muted">
+              <p className="text-[12px] text-muted">
                 {t("designer.previewNote")}
               </p>
             ) : null}

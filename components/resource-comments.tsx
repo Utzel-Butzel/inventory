@@ -349,7 +349,7 @@ export function CommentsThread({
                           <p className="truncate text-sm font-semibold text-foreground">
                             {comment.authorName}
                           </p>
-                          <p className="mt-0.5 text-[13px] text-muted">
+                          <p className="mt-0.5 text-[12px] text-muted">
                             <time dateTime={comment.createdAt}>
                               {dateFormatter.format(new Date(comment.createdAt))}
                             </time>

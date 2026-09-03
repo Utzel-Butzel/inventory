@@ -129,7 +129,7 @@ type DraftLine = {
 
 const inputClass =
   "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
-const labelClass = "block text-[13px] font-semibold text-muted-strong";
+const labelClass = "block text-[12px] font-semibold text-muted-strong";
 
 function randomId() {
   return crypto.randomUUID();
@@ -734,11 +734,11 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
                                   ) : null}
                                 </div>
                                 <p className="text-xs text-muted">
-                                  <span className="block text-[12px] font-semibold uppercase">{t("list.issued")}</span>
+                                  <span className="block text-[11px] font-semibold uppercase">{t("list.issued")}</span>
                                   <strong className="text-sm text-foreground">{line.fulfilledQuantity} / {line.quantity}</strong>
                                 </p>
                                 <p className="text-xs text-muted">
-                                  <span className="block text-[12px] font-semibold uppercase">{t("list.returned")}</span>
+                                  <span className="block text-[11px] font-semibold uppercase">{t("list.returned")}</span>
                                   <strong className="text-sm text-foreground">{line.returnedQuantity} / {line.fulfilledQuantity}</strong>
                                 </p>
                                 {line.unitPriceCents !== null && line.priceCurrency ? (

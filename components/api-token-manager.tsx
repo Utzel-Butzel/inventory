@@ -672,7 +672,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="truncate text-sm font-semibold text-foreground">{token.name}</h3>
                           {token.scopes.map((scope) => (
-                            <span key={scope} className="rounded-md bg-surface-muted px-2 py-0.5 font-mono text-[12px] font-semibold uppercase tracking-wide text-muted">{scope}</span>
+                            <span key={scope} className="rounded-md bg-surface-muted px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted">{scope}</span>
                           ))}
                         </div>
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">

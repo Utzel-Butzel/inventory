@@ -85,7 +85,7 @@ export default async function LoginPage({
           <header className="flex items-center justify-between gap-4 text-foreground">
             <div className="flex items-center gap-2.5">
               <BrandMark className="size-8 shrink-0" aria-hidden="true" />
-              <span className="text-[17px] font-semibold">
+              <span className="text-[16px] font-semibold">
                 {t("brand")}
               </span>
             </div>
@@ -97,10 +97,10 @@ export default async function LoginPage({
 
           <section className="flex flex-1 items-center justify-center py-12">
             <div className="w-full max-w-[400px]">
-              <h1 className="text-2xl font-semibold text-foreground sm:text-[30px]">
+              <h1 className="text-2xl font-semibold text-foreground sm:text-[29px]">
                 {t(demoHighlighted ? "hero.demoTitle" : "hero.title")}
               </h1>
-              <p className="mt-2 text-[17px] leading-6 text-muted">
+              <p className="mt-2 text-[16px] leading-6 text-muted">
                 {t(
                   demoHighlighted
                     ? "hero.demoDescription"

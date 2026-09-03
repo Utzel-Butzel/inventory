@@ -548,7 +548,7 @@ export function CodeScannerCamera({
             <span>{cameraError}</span>
           </div>
         ) : (
-          <p className="mt-2 text-[13px] leading-4 text-muted">
+          <p className="mt-2 text-[12px] leading-4 text-muted">
             {t("camera.privacy")}
           </p>
         )}
@@ -556,7 +556,7 @@ export function CodeScannerCamera({
 
       <div className="flex items-center gap-3" aria-hidden="true">
         <span className="h-px flex-1 bg-border" />
-        <span className="text-[12px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
           {t("camera.separator")}
         </span>
         <span className="h-px flex-1 bg-border" />
@@ -645,7 +645,7 @@ export function CodeScannerCamera({
                 {t("camera.manual.use")}
               </Button>
             </div>
-            <p className="mt-2 text-[13px] leading-4 text-muted">
+            <p className="mt-2 text-[12px] leading-4 text-muted">
               {t("camera.manual.help")}
             </p>
             {manualError ? (

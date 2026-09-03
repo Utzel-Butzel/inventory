@@ -708,7 +708,7 @@ export function WebhookManager() {
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-warning">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-warning">
                     {t("webhooks.secret.eyebrow")}
                   </p>
                   <h2
@@ -727,7 +727,7 @@ export function WebhookManager() {
                   <X className="size-4" aria-hidden="true" />
                 </button>
               </div>
-              <p className="mt-2 max-w-3xl text-[15px] leading-5 text-muted-strong">
+              <p className="mt-2 max-w-3xl text-[14px] leading-5 text-muted-strong">
                 {t("webhooks.secret.description")}
               </p>
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -797,7 +797,7 @@ export function WebhookManager() {
               </Badge>
             ) : null}
           </div>
-          <p className="mt-1 text-[15px] leading-5 text-muted">
+          <p className="mt-1 text-[14px] leading-5 text-muted">
             {t("webhooks.list.description")}
           </p>
         </div>
@@ -954,10 +954,10 @@ export function WebhookManager() {
                           className="mt-0.5 size-4 rounded border-border accent-[var(--color-brand-solid)]"
                         />
                         <span className="min-w-0">
-                          <span className="block text-[15px] font-semibold text-foreground">
+                          <span className="block text-[14px] font-semibold text-foreground">
                             {t(`webhooks.events.${eventType}.label`)}
                           </span>
-                          <span className="mt-0.5 block text-[13px] leading-4 text-muted">
+                          <span className="mt-0.5 block text-[12px] leading-4 text-muted">
                             {t(`webhooks.events.${eventType}.description`)}
                           </span>
                         </span>
@@ -969,7 +969,7 @@ export function WebhookManager() {
 
               <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border border-border bg-surface-subtle p-4">
                 <span>
-                  <span className="block text-[15px] font-semibold text-foreground">
+                  <span className="block text-[14px] font-semibold text-foreground">
                     {t("webhooks.form.enabled")}
                   </span>
                   <span className="mt-1 block text-xs leading-5 text-muted">
@@ -1060,7 +1060,7 @@ export function WebhookManager() {
                       </span>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-[17px] font-semibold text-foreground">
+                          <h3 className="text-[16px] font-semibold text-foreground">
                             {webhook.name}
                           </h3>
                           <Badge tone={webhook.enabled ? "success" : "neutral"}>
@@ -1110,7 +1110,7 @@ export function WebhookManager() {
 
                   <div className="mt-5 grid gap-2 sm:grid-cols-3">
                     <div className="rounded-xl bg-surface-subtle p-3">
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
                         {t("webhooks.health.lastSuccess")}
                       </p>
                       <p className="mt-1.5 text-xs font-medium text-foreground">
@@ -1122,7 +1122,7 @@ export function WebhookManager() {
                       </p>
                     </div>
                     <div className="rounded-xl bg-surface-subtle p-3">
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
                         {t("webhooks.health.lastFailure")}
                       </p>
                       <p className="mt-1.5 text-xs font-medium text-foreground">
@@ -1134,7 +1134,7 @@ export function WebhookManager() {
                       </p>
                     </div>
                     <div className="rounded-xl bg-surface-subtle p-3">
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
                         {t("webhooks.health.created")}
                       </p>
                       <p className="mt-1.5 text-xs font-medium text-foreground">
@@ -1253,7 +1253,7 @@ export function WebhookManager() {
                       <div>
                         <p
                           id={`webhook-confirm-title-${webhook.id}`}
-                          className="text-[15px] font-semibold text-foreground"
+                          className="text-[14px] font-semibold text-foreground"
                         >
                           {t(
                             confirming === "delete"
@@ -1360,7 +1360,7 @@ export function WebhookManager() {
                           className="mx-auto size-5 text-muted"
                           aria-hidden="true"
                         />
-                        <p className="mt-2 text-[15px] font-semibold text-foreground">
+                        <p className="mt-2 text-[14px] font-semibold text-foreground">
                           {t("webhooks.deliveries.emptyTitle")}
                         </p>
                         <p className="mt-1 text-xs text-muted">
@@ -1393,7 +1393,7 @@ export function WebhookManager() {
                                         : eventType || t("webhooks.deliveries.unknownEvent")}
                                   </span>
                                 </div>
-                                <span className="shrink-0 text-[13px] text-muted">
+                                <span className="shrink-0 text-[12px] text-muted">
                                   {formatDate(
                                     delivery.deliveredAt ?? delivery.createdAt,
                                     t("webhooks.health.unknown"),
@@ -1401,7 +1401,7 @@ export function WebhookManager() {
                                   )}
                                 </span>
                               </div>
-                              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-strong">
+                              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted-strong">
                                 <span>
                                   {t("webhooks.deliveries.httpStatus")}: {httpStatus ?? "—"}
                                 </span>
@@ -1424,7 +1424,7 @@ export function WebhookManager() {
                                 ) : null}
                               </div>
                               {delivery.error ? (
-                                <p className="mt-2 break-words rounded-lg bg-danger-soft px-2.5 py-2 text-[13px] leading-4 text-danger">
+                                <p className="mt-2 break-words rounded-lg bg-danger-soft px-2.5 py-2 text-[12px] leading-4 text-danger">
                                   {delivery.error}
                                 </p>
                               ) : null}

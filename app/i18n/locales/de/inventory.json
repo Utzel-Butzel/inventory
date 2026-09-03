@@ -246,7 +246,7 @@
     }
   },
   "search": {
-    "label": "Inventar durchsuchen",
+    "label": "Suchen",
     "placeholder": "Name, Slug, Beschreibung, SKU, Schlagwort oder Standort suchen…",
     "clear": "Suche leeren"
   },

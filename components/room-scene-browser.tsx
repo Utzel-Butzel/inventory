@@ -809,7 +809,7 @@ export function RoomSceneBrowser() {
     >
       <header className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground sm:text-[30px]">
+          <h1 className="text-2xl font-semibold text-foreground sm:text-[29px]">
             {t("rooms.title")}
           </h1>
           <p className="mt-1 text-sm text-muted">
@@ -883,7 +883,7 @@ export function RoomSceneBrowser() {
                   type="button"
                   onClick={() => selectFloor(floorIdentifier(floor.identifier, floor.index))}
                   className={cn(
-                    "shrink-0 rounded-xl px-3 py-2 text-[13px] font-semibold transition",
+                    "shrink-0 rounded-xl px-3 py-2 text-[12px] font-semibold transition",
                     selectedFloorIdentifier === floorIdentifier(floor.identifier, floor.index)
                       ? "bg-brand-solid text-on-brand"
                       : "bg-surface-muted text-muted hover:bg-surface-hover",
@@ -901,7 +901,7 @@ export function RoomSceneBrowser() {
           {selectedStructureId ? (
             <Link
               href={`/map?structure=${encodeURIComponent(selectedStructureId)}${selectedFloorIdentifier ? `&floor=${encodeURIComponent(selectedFloorIdentifier)}` : ""}`}
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-border px-3 text-[13px] font-semibold text-muted hover:bg-surface-hover"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-border px-3 text-[12px] font-semibold text-muted hover:bg-surface-hover"
             >
               <MapIcon className="size-3.5" aria-hidden="true" /> {t("rooms.structures.viewMap")}
             </Link>
@@ -912,7 +912,7 @@ export function RoomSceneBrowser() {
               onClick={() => setMapBackground(!mapBackgroundEnabled)}
               disabled={!hasLayoutMapAnchor}
               className={cn(
-                "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-[13px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
+                "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
                 mapBackgroundEnabled
                   ? "border-brand-border bg-brand-soft text-brand-strong"
                   : "border-border text-muted hover:bg-surface-hover",
@@ -931,7 +931,7 @@ export function RoomSceneBrowser() {
               type="button"
               onClick={layoutDrafts ? closeLayout : beginLayout}
               className={cn(
-                "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-[13px] font-semibold transition",
+                "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-[12px] font-semibold transition",
                 layoutDrafts
                   ? "border-brand-border bg-brand-soft text-brand-strong"
                   : "border-border text-muted hover:bg-surface-hover",
@@ -953,7 +953,7 @@ export function RoomSceneBrowser() {
 
       <div className="grid min-h-[680px] flex-1 overflow-hidden rounded-xl border border-border bg-surface lg:min-h-0 lg:grid-cols-[280px_minmax(0,1fr)_300px] lg:grid-rows-[minmax(0,1fr)]">
         <aside className="order-2 border-t border-border bg-surface-subtle p-3 lg:order-1 lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-t-0">
-          <p className="px-2 pb-2 pt-1 text-[12px] font-semibold uppercase tracking-[0.13em] text-muted">
+          <p className="px-2 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.13em] text-muted">
             {t("rooms.scans.title")}
           </p>
           <div className="space-y-1">
@@ -990,7 +990,7 @@ export function RoomSceneBrowser() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{scan.roomName}</span>
-                    <span className="mt-0.5 block text-[13px] text-muted">
+                    <span className="mt-0.5 block text-[12px] text-muted">
                       {t("rooms.scans.revision", {
                         revision: integer.format(scan.revision),
                         count: scan.placementCount,
@@ -998,7 +998,7 @@ export function RoomSceneBrowser() {
                       })}
                     </span>
                     {scan.coordinateSpaceId ? (
-                      <span className="mt-0.5 block truncate text-[11px] text-muted">
+                      <span className="mt-0.5 block truncate text-[10px] text-muted">
                         {t("rooms.scans.sharedFrame", {
                           id: scan.coordinateSpaceId.slice(0, 8),
                         })}
@@ -1081,7 +1081,7 @@ export function RoomSceneBrowser() {
                   <p className="text-xs font-semibold text-foreground">
                     {t("rooms.layout.title")}
                   </p>
-                  <p className="mt-0.5 text-[12px] text-muted">
+                  <p className="mt-0.5 text-[11px] text-muted">
                     {t("rooms.layout.description")}
                   </p>
                 </div>
@@ -1116,7 +1116,7 @@ export function RoomSceneBrowser() {
                   type="button"
                   onClick={() => adjustRoomLayout(selectedLayoutManifest.scan.id, (matrix) =>
                     rotateRoomTransform(matrix, -Math.PI / 36))}
-                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-border text-[12px] font-semibold text-muted hover:text-brand"
+                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-border text-[11px] font-semibold text-muted hover:text-brand"
                 >
                   <RotateCcw className="size-3.5" aria-hidden="true" /> -5°
                 </button>
@@ -1164,12 +1164,12 @@ export function RoomSceneBrowser() {
                   type="button"
                   onClick={() => adjustRoomLayout(selectedLayoutManifest.scan.id, (matrix) =>
                     rotateRoomTransform(matrix, Math.PI / 36))}
-                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-border text-[12px] font-semibold text-muted hover:text-brand"
+                  className="inline-flex h-9 items-center justify-center gap-1 rounded-xl border border-border text-[11px] font-semibold text-muted hover:text-brand"
                 >
                   +5° <RotateCcw className="size-3.5 scale-x-[-1]" aria-hidden="true" />
                 </button>
               </div>
-              <p className="mt-2 text-center text-[11px] text-muted">
+              <p className="mt-2 text-center text-[10px] text-muted">
                 {mapBackgroundEnabled
                   ? t("rooms.layout.mapStep")
                   : t("rooms.layout.step")}
@@ -1179,7 +1179,7 @@ export function RoomSceneBrowser() {
                   type="button"
                   onClick={closeLayout}
                   disabled={savingLayout}
-                  className="h-9 flex-1 rounded-xl border border-border text-[13px] font-semibold text-muted hover:bg-surface-hover disabled:opacity-50"
+                  className="h-9 flex-1 rounded-xl border border-border text-[12px] font-semibold text-muted hover:bg-surface-hover disabled:opacity-50"
                 >
                   {t("rooms.layout.cancel")}
                 </button>
@@ -1187,7 +1187,7 @@ export function RoomSceneBrowser() {
                   type="button"
                   onClick={() => void saveLayout()}
                   disabled={savingLayout}
-                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-solid text-[13px] font-semibold text-on-brand disabled:opacity-50"
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-brand-solid text-[12px] font-semibold text-on-brand disabled:opacity-50"
                 >
                   {savingLayout ? (
                     <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
@@ -1223,7 +1223,7 @@ export function RoomSceneBrowser() {
                   {visibleManifest?.room.name ?? t("rooms.scene.roomFallback")}
                 </h2>
                 {visibleManifest ? (
-                  <p className="mt-1 flex items-center gap-1.5 text-[13px] text-muted">
+                  <p className="mt-1 flex items-center gap-1.5 text-[12px] text-muted">
                     <CalendarClock className="size-3.5" aria-hidden="true" />
                     {formatDate(visibleManifest.scan.capturedAt, locale)}
                   </p>
@@ -1251,7 +1251,7 @@ export function RoomSceneBrowser() {
                       guideImageAsset
                     )
                   }
-                  className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-brand-solid px-3 text-[13px] font-semibold text-on-brand transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-brand-solid px-3 text-[12px] font-semibold text-on-brand transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {analyzingRoom ? (
                     <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
@@ -1291,20 +1291,20 @@ export function RoomSceneBrowser() {
               <section className="mb-2 rounded-xl border border-brand-border bg-brand-soft/45 p-3">
                 <div className="flex items-center gap-2">
                   <Sparkles className="size-3.5 shrink-0 text-brand" aria-hidden="true" />
-                  <h3 className="text-[13px] font-semibold text-foreground">
+                  <h3 className="text-[12px] font-semibold text-foreground">
                     {t("rooms.ai.title")}
                   </h3>
                 </div>
-                <p className="mt-2 text-[12px] leading-4 text-muted">
+                <p className="mt-2 text-[11px] leading-4 text-muted">
                   {roomAnalysis.summary}
                 </p>
 
                 {visibleSurfaceAppearances.length ? (
                   <div className="mt-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
                       {t("rooms.ai.finishes")}
                     </p>
-                    <p className="mt-1 text-[11px] leading-4 text-muted">
+                    <p className="mt-1 text-[10px] leading-4 text-muted">
                       {t("rooms.ai.finishReviewHint")}
                     </p>
                     <div className="mt-1.5 space-y-1">
@@ -1338,16 +1338,16 @@ export function RoomSceneBrowser() {
                                 aria-hidden="true"
                               />
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-[12px] font-semibold text-foreground">
+                                <span className="block truncate text-[11px] font-semibold text-foreground">
                                   {surfaceName} · {appearance.colorName}
                                 </span>
-                                <span className="block truncate text-[11px] text-muted">
+                                <span className="block truncate text-[10px] text-muted">
                                   {t(`rooms.ai.materials.${appearance.material}`)} · {t("rooms.ai.confidence", {
                                     value: integer.format(Math.round(appearance.confidence * 100)),
                                   })}
                                 </span>
                                 {windowDetails ? (
-                                  <span className="mt-0.5 block text-[11px] leading-4 text-muted-strong">
+                                  <span className="mt-0.5 block text-[10px] leading-4 text-muted-strong">
                                     {t(`rooms.ai.windowDetails.types.${windowDetails.type}`)} · {muntinLabel} · {t("rooms.ai.confidence", {
                                       value: integer.format(Math.round(windowDetails.confidence * 100)),
                                     })}
@@ -1365,7 +1365,7 @@ export function RoomSceneBrowser() {
                                     "accepted",
                                   )}
                                   disabled={Boolean(updatingAnalysisItemId)}
-                                  className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[11px] font-semibold text-success disabled:opacity-50"
+                                  className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[10px] font-semibold text-success disabled:opacity-50"
                                 >
                                   {updating ? (
                                     <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
@@ -1377,7 +1377,7 @@ export function RoomSceneBrowser() {
                                     : "rooms.ai.applyFinish")}
                                 </button>
                               ) : (
-                                <span className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[11px] font-semibold text-success">
+                                <span className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[10px] font-semibold text-success">
                                   <Check className="size-3" aria-hidden="true" />
                                   {t("rooms.ai.applied")}
                                 </span>
@@ -1405,10 +1405,10 @@ export function RoomSceneBrowser() {
                 ) : null}
 
                 <div className="mt-3 flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
                     {t("rooms.ai.suggestions")}
                   </p>
-                  <span className="text-[11px] text-muted">
+                  <span className="text-[10px] text-muted">
                     {integer.format(visibleSuggestions.length)}
                   </span>
                 </div>
@@ -1451,13 +1451,13 @@ export function RoomSceneBrowser() {
                               <PackageOpen className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
                             )}
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-[12px] font-semibold text-foreground">
+                              <p className="truncate text-[11px] font-semibold text-foreground">
                                 {suggestion.name}
                               </p>
-                              <p className="mt-0.5 text-[11px] leading-4 text-muted">
+                              <p className="mt-0.5 text-[10px] leading-4 text-muted">
                                 {suggestion.evidence}
                               </p>
-                              <p className="mt-1 text-[11px] font-medium text-muted-strong">
+                              <p className="mt-1 text-[10px] font-medium text-muted-strong">
                                 {suggestion.roomObjectId
                                   ? t("rooms.ai.grounded")
                                   : t(suggestion.estimatedPlacement
@@ -1465,7 +1465,7 @@ export function RoomSceneBrowser() {
                                     : "rooms.ai.estimatedAvailable")}
                               </p>
                               {suggestion.primitiveModel ? (
-                                <p className="mt-0.5 text-[11px] font-medium text-brand">
+                                <p className="mt-0.5 text-[10px] font-medium text-brand">
                                   {t("rooms.ai.generatedModel", {
                                     count: suggestion.primitiveModel.parts.length,
                                     value: integer.format(
@@ -1475,7 +1475,7 @@ export function RoomSceneBrowser() {
                                 </p>
                               ) : null}
                               {suggestion.roomObjectId || suggestion.estimatedPlacement ? (
-                                <p className="mt-0.5 text-[11px] text-brand">
+                                <p className="mt-0.5 text-[10px] text-brand">
                                   {t("rooms.ai.hoverPreview")}
                                 </p>
                               ) : null}
@@ -1483,7 +1483,7 @@ export function RoomSceneBrowser() {
                           </div>
                           {evidenceFrames.length ? (
                             <div className="mt-2 flex flex-wrap items-end gap-1.5 overflow-visible">
-                              <span className="mr-0.5 self-center text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+                              <span className="mr-0.5 self-center text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
                                 {t("rooms.ai.photos")}
                               </span>
                               {evidenceFrames.map((frame, frameIndex) => (
@@ -1508,7 +1508,7 @@ export function RoomSceneBrowser() {
                                   "accepted",
                                 )}
                                 disabled={Boolean(updatingAnalysisItemId)}
-                                className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[11px] font-semibold text-success disabled:opacity-50"
+                                className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[10px] font-semibold text-success disabled:opacity-50"
                               >
                                 {updating ? (
                                   <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
@@ -1522,7 +1522,7 @@ export function RoomSceneBrowser() {
                                   : "rooms.ai.acceptEstimate")}
                               </button>
                             ) : (
-                              <span className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[11px] font-semibold text-success">
+                              <span className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-lg bg-success-soft text-[10px] font-semibold text-success">
                                 <Check className="size-3" aria-hidden="true" />
                                 {t(!suggestion.roomObjectId && suggestion.estimatedPlacement
                                   ? "rooms.ai.estimateApplied"
@@ -1575,11 +1575,11 @@ export function RoomSceneBrowser() {
                     })}
                   </div>
                 ) : (
-                  <p className="mt-1.5 text-[12px] leading-4 text-muted">
+                  <p className="mt-1.5 text-[11px] leading-4 text-muted">
                     {t("rooms.ai.noSuggestions")}
                   </p>
                 )}
-                <p className="mt-2 text-[11px] leading-4 text-muted">
+                <p className="mt-2 text-[10px] leading-4 text-muted">
                   {t("rooms.ai.reviewHint")}
                 </p>
               </section>
@@ -1612,7 +1612,7 @@ export function RoomSceneBrowser() {
                         <span className="block truncate text-xs font-semibold text-foreground">
                           {placement.resource.name}
                         </span>
-                        <span className="mt-0.5 block truncate text-[12px] text-muted">
+                        <span className="mt-0.5 block truncate text-[11px] text-muted">
                           {t("rooms.placements.coordinates", {
                             coordinates: placement.position
                               .map((value) => coordinate.format(value))
@@ -1668,7 +1668,7 @@ function SelectedPlacementCard({ placement }: { placement: ClientRoomPlacement }
           <p className="truncate text-sm font-semibold text-foreground">
             {placement.resource.name}
           </p>
-          <p className="mt-0.5 text-[12px] text-muted">
+          <p className="mt-0.5 text-[11px] text-muted">
             {t("rooms.placements.accuracy", {
               value: percent.format(placement.confidence),
               method,

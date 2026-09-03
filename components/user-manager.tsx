@@ -252,7 +252,7 @@ export function UserManager() {
                 {t("users.title")}
               </h2>
               {!loading ? (
-                <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[13px] font-semibold text-muted">
+                <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[12px] font-semibold text-muted">
                   {t("users.activeCount", { count: activeCount })}
                 </span>
               ) : null}
@@ -418,14 +418,14 @@ export function UserManager() {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="truncate text-sm font-semibold text-foreground">{user.name}</h3>
-                          {isCurrent ? <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-brand">{t("users.you")}</span> : null}
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold ${user.isActive ? "bg-success-soft text-success" : "bg-surface-muted text-muted"}`}>
+                          {isCurrent ? <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand">{t("users.you")}</span> : null}
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${user.isActive ? "bg-success-soft text-success" : "bg-surface-muted text-muted"}`}>
                             {user.isActive ? <CheckCircle2 className="size-3" /> : <UserX className="size-3" />}
                             {user.isActive ? t("users.active") : t("users.disabled")}
                           </span>
                         </div>
                         <p className="mt-1 truncate text-sm text-muted">{user.email}</p>
-                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-muted">
+                        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-muted">
                           <span>{t("users.lastSignIn", { date: formatDate(user.lastLoginAt, t("users.never"), locale) })}</span>
                           <span>{t("users.added", { date: formatDate(user.createdAt, t("users.never"), locale) })}</span>
                         </div>
