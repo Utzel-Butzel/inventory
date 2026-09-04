@@ -28,6 +28,7 @@
   },
   "filters": {
     "search": "Search contacts…",
+    "clear": "Clear search",
     "role": "Filter by role",
     "all": "All roles"
   },
@@ -91,5 +92,15 @@
     "load": "Contacts could not be loaded.",
     "save": "Contact could not be saved.",
     "archive": "Contact could not be archived."
+  },
+  "validation": {
+    "nameRequired": "Enter a name.",
+    "roleRequired": "Select at least one role.",
+    "email": "Enter a valid email address.",
+    "website": "Enter a valid URL.",
+    "countryCode": "Use a two-letter country code, for example DE.",
+    "maxLength": "Maximum {{max}} characters.",
+    "tooManyTags": "Use no more than 50 tags.",
+    "tagsTooLong": "A tag can contain no more than 80 characters."
   }
 }

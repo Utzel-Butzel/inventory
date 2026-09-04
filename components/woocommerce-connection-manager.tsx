@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  CalendarDays,
   CheckCircle2,
   ExternalLink,
   KeyRound,
@@ -41,6 +42,7 @@ type WooCommerceSyncOverview = {
   issueOrders: number;
   recentOrders: Array<{
     orderId: number;
+    localOrderId: string | null;
     orderNumber: string;
     orderStatus: string;
     status: "succeeded" | "partial" | "failed";
@@ -244,7 +246,10 @@ export function WooCommerceConnectionManager() {
     }
   }
 
-  async function runStockSync(orderId?: number) {
+  async function runStockSync(input: {
+    orderId?: number;
+    window?: "last-7-days";
+  } = {}) {
     setRunningSync(true);
     setError(null);
     setNotice(null);
@@ -252,7 +257,7 @@ export function WooCommerceConnectionManager() {
       const response = await fetch("/api/v1/integrations/woocommerce/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderId ? { orderId } : {}),
+        body: JSON.stringify(input),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
@@ -260,11 +265,22 @@ export function WooCommerceConnectionManager() {
           getErrorMessage(payload, t("woocommerce.errors.runSync")),
         );
       }
-      const result = payload as { attempted: number; succeeded: number };
+      const result = payload as {
+        mode: "single-order" | "last-7-days" | "retry-issues";
+        attempted: number;
+        succeeded: number;
+      };
       await load(true);
-      setManualOrderId("");
+      if (input.orderId) setManualOrderId("");
       setNotice(
-        result.attempted === 0
+        result.mode === "last-7-days"
+          ? result.attempted === 0
+            ? t("woocommerce.notices.noRecentOrders")
+            : t("woocommerce.notices.recentImportRun", {
+                attempted: result.attempted,
+                succeeded: result.succeeded,
+              })
+          : result.attempted === 0
           ? t("woocommerce.notices.noSyncIssues")
           : t("woocommerce.notices.syncRun", {
               attempted: result.attempted,
@@ -664,6 +680,30 @@ export function WooCommerceConnectionManager() {
             <p>{t("woocommerce.stockSync.statusRule")}</p>
           </div>
 
+          <div className="border-t border-border px-5 py-5">
+            <h3 className="text-sm font-semibold text-foreground">
+              {t("woocommerce.stockSync.recentImportTitle")}
+            </h3>
+            <p className="mt-1 text-sm text-muted">
+              {t("woocommerce.stockSync.recentImportDescription")}
+            </p>
+            <Button
+              className="mt-3"
+              variant="secondary"
+              onClick={() =>
+                void runStockSync({ window: "last-7-days" })
+              }
+              disabled={runningSync}
+            >
+              {runningSync ? (
+                <LoaderCircle className="size-4 animate-spin" />
+              ) : (
+                <CalendarDays className="size-4" />
+              )}
+              {t("woocommerce.stockSync.importRecent")}
+            </Button>
+          </div>
+
           {connection.syncEnabled ? (
             <div className="border-t border-border px-5 py-5">
               <h3 className="text-sm font-semibold text-foreground">
@@ -691,7 +731,7 @@ export function WooCommerceConnectionManager() {
                       setError(t("woocommerce.errors.orderId"));
                       return;
                     }
-                    void runStockSync(orderId);
+                    void runStockSync({ orderId });
                   }}
                   disabled={runningSync || !manualOrderId.trim()}
                 >

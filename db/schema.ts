@@ -2429,6 +2429,7 @@ export const orderLines = pgTable(
     resourceId: uuid("resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "restrict" }),
+    variantId: uuid("variant_id"),
     orderedQuantity: integer("quantity").notNull(),
     fulfilledQuantity: integer("fulfilled_quantity").notNull().default(0),
     returnedQuantity: integer("returned_quantity").notNull().default(0),
@@ -2450,12 +2451,17 @@ export const orderLines = pgTable(
       table.organizationId,
       table.id,
     ),
-    uniqueIndex("order_lines_order_resource_unique").on(
+    index("order_lines_order_resource_idx").on(
       table.orderId,
       table.resourceId,
     ),
     index("order_lines_order_id_idx").on(table.orderId),
     index("order_lines_resource_id_idx").on(table.resourceId),
+    foreignKey({
+      name: "order_lines_variant_fk",
+      columns: [table.variantId, table.resourceId],
+      foreignColumns: [resourceVariants.id, resourceVariants.resourceId],
+    }).onDelete("restrict"),
     check(
       "order_lines_quantity_positive",
       sql`${table.orderedQuantity} > 0`,
@@ -4255,12 +4261,70 @@ export const wooCommerceConnections = pgTable(
   ],
 );
 
+export const wooCommerceCustomerLinks = pgTable(
+  "woocommerce_customer_links",
+  {
+    organizationId: organizationIdColumn(),
+    connectionId: uuid("connection_id").notNull(),
+    customerKey: varchar("customer_key", { length: 400 }).notNull(),
+    customerId: bigint("customer_id", { mode: "number" }),
+    email: varchar("email", { length: 320 }),
+    contactId: uuid("contact_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "woocommerce_customer_links_pk",
+      columns: [
+        table.organizationId,
+        table.connectionId,
+        table.customerKey,
+      ],
+    }),
+    foreignKey({
+      name: "woocommerce_customer_links_connection_fk",
+      columns: [table.organizationId, table.connectionId],
+      foreignColumns: [
+        wooCommerceConnections.organizationId,
+        wooCommerceConnections.id,
+      ],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "woocommerce_customer_links_contact_fk",
+      columns: [table.organizationId, table.contactId],
+      foreignColumns: [contacts.organizationId, contacts.id],
+    }).onDelete("cascade"),
+    index("woocommerce_customer_links_contact_idx").on(
+      table.organizationId,
+      table.contactId,
+    ),
+    uniqueIndex("woocommerce_customer_links_customer_id_unique")
+      .on(table.organizationId, table.connectionId, table.customerId)
+      .where(sql`${table.customerId} is not null`),
+    check(
+      "woocommerce_customer_links_customer_id_check",
+      sql`${table.customerId} is null or ${table.customerId} > 0`,
+    ),
+    check(
+      "woocommerce_customer_links_email_normalized_check",
+      sql`${table.email} is null or ${table.email} = lower(btrim(${table.email}))`,
+    ),
+  ],
+);
+
 export const wooCommerceOrderSyncs = pgTable(
   "woocommerce_order_syncs",
   {
     organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     connectionId: uuid("connection_id").notNull(),
+    contactId: uuid("contact_id"),
+    localOrderId: uuid("local_order_id"),
     orderId: bigint("order_id", { mode: "number" }).notNull(),
     orderNumber: varchar("order_number", { length: 80 }).notNull(),
     orderStatus: varchar("order_status", { length: 80 }).notNull(),
@@ -4288,10 +4352,27 @@ export const wooCommerceOrderSyncs = pgTable(
         wooCommerceConnections.id,
       ],
     }).onDelete("cascade"),
+    foreignKey({
+      name: "woocommerce_order_syncs_contact_fk",
+      columns: [table.organizationId, table.contactId],
+      foreignColumns: [contacts.organizationId, contacts.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "woocommerce_order_syncs_local_order_fk",
+      columns: [table.organizationId, table.localOrderId],
+      foreignColumns: [orders.organizationId, orders.id],
+    }).onDelete("restrict"),
     uniqueIndex("woocommerce_order_syncs_tenant_order_unique").on(
       table.organizationId,
       table.connectionId,
       table.orderId,
+    ),
+    uniqueIndex("woocommerce_order_syncs_local_order_unique")
+      .on(table.organizationId, table.connectionId, table.localOrderId)
+      .where(sql`${table.localOrderId} is not null`),
+    index("woocommerce_order_syncs_contact_idx").on(
+      table.organizationId,
+      table.contactId,
     ),
     index("woocommerce_order_syncs_connection_updated_idx").on(
       table.organizationId,
@@ -4327,6 +4408,7 @@ export const wooCommerceOrderLineSyncs = pgTable(
     lineItemId: bigint("line_item_id", { mode: "number" }).notNull(),
     resourceId: uuid("resource_id"),
     variantId: uuid("variant_id"),
+    localOrderLineId: uuid("local_order_line_id"),
     sku: varchar("sku", { length: 80 }).notNull().default(""),
     orderedQuantity: integer("ordered_quantity").notNull().default(0),
     refundedQuantity: integer("refunded_quantity").notNull().default(0),
@@ -4373,6 +4455,11 @@ export const wooCommerceOrderLineSyncs = pgTable(
       foreignColumns: [resources.organizationId, resources.id],
     }).onDelete("restrict"),
     foreignKey({
+      name: "woocommerce_order_line_syncs_local_line_fk",
+      columns: [table.organizationId, table.localOrderLineId],
+      foreignColumns: [orderLines.organizationId, orderLines.id],
+    }).onDelete("restrict"),
+    foreignKey({
       name: "woocommerce_order_line_syncs_variant_fk",
       columns: [table.variantId, table.resourceId],
       foreignColumns: [resourceVariants.id, resourceVariants.resourceId],
@@ -4381,6 +4468,13 @@ export const wooCommerceOrderLineSyncs = pgTable(
       table.organizationId,
       table.resourceId,
     ),
+    uniqueIndex("woocommerce_order_line_syncs_local_line_unique")
+      .on(
+        table.organizationId,
+        table.connectionId,
+        table.localOrderLineId,
+      )
+      .where(sql`${table.localOrderLineId} is not null`),
     index("woocommerce_order_line_syncs_issue_idx").on(
       table.organizationId,
       table.connectionId,
@@ -4482,6 +4576,89 @@ export const apiTokens = pgTable(
   ],
 );
 
+export const mcpRateLimitBuckets = pgTable(
+  "mcp_rate_limit_buckets",
+  {
+    organizationId: organizationIdColumn(),
+    bucketKey: varchar("bucket_key", { length: 64 }).notNull(),
+    principalHash: varchar("principal_hash", { length: 64 }).notNull(),
+    operation: varchar("operation", { length: 16 })
+      .$type<"request" | "read" | "write">()
+      .notNull(),
+    windowStartedAt: timestamp("window_started_at", { withTimezone: true })
+      .notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    requestCount: integer("request_count").notNull().default(1),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "mcp_rate_limit_buckets_pk",
+      columns: [table.organizationId, table.bucketKey],
+    }),
+    index("mcp_rate_limit_buckets_expiry_idx").on(table.expiresAt),
+    check(
+      "mcp_rate_limit_buckets_operation_check",
+      sql`${table.operation} in ('request', 'read', 'write')`,
+    ),
+    check(
+      "mcp_rate_limit_buckets_count_positive",
+      sql`${table.requestCount} > 0`,
+    ),
+  ],
+);
+
+export const mcpAuditEvents = pgTable(
+  "mcp_audit_events",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    requestId: uuid("request_id").notNull(),
+    tokenId: uuid("token_id").references(() => apiTokens.id, {
+      onDelete: "set null",
+    }),
+    userId: uuid("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    principalHash: varchar("principal_hash", { length: 64 }).notNull(),
+    toolName: varchar("tool_name", { length: 80 }).notNull(),
+    operation: varchar("operation", { length: 16 })
+      .$type<"read" | "write">()
+      .notNull(),
+    status: varchar("status", { length: 24 })
+      .$type<"success" | "error" | "rate_limited">()
+      .notNull(),
+    argumentsHash: varchar("arguments_hash", { length: 64 }).notNull(),
+    targetIds: uuid("target_ids").array().notNull().default([]),
+    durationMs: integer("duration_ms").notNull(),
+    errorCode: varchar("error_code", { length: 80 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("mcp_audit_events_org_created_idx").on(
+      table.organizationId,
+      table.createdAt,
+    ),
+    index("mcp_audit_events_token_created_idx").on(
+      table.tokenId,
+      table.createdAt,
+    ),
+    check(
+      "mcp_audit_events_operation_check",
+      sql`${table.operation} in ('read', 'write')`,
+    ),
+    check(
+      "mcp_audit_events_status_check",
+      sql`${table.status} in ('success', 'error', 'rate_limited')`,
+    ),
+    check("mcp_audit_events_duration_nonnegative", sql`${table.durationMs} >= 0`),
+  ],
+);
+
 export type ResourceRecord = typeof resources.$inferSelect;
 export type NewResource = typeof resources.$inferInsert;
 export type ContactRecord = typeof contacts.$inferSelect;
@@ -4504,6 +4681,7 @@ export type CustomFieldDefinitionRecord =
 export type LabelSetupRecord = typeof labelSetups.$inferSelect;
 export type MediaRecord = typeof media.$inferSelect;
 export type ApiTokenRecord = typeof apiTokens.$inferSelect;
+export type McpAuditEventRecord = typeof mcpAuditEvents.$inferSelect;
 export type OrganizationRecord = typeof organizations.$inferSelect;
 export type OrganizationMembershipRecord =
   typeof organizationMemberships.$inferSelect;

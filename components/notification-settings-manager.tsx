@@ -18,7 +18,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "next-i18next/client";
 
-import { Badge, Button, Card, Skeleton, cn } from "@/components/ui";
+import { Alert, Badge, Button, Card, Skeleton, cn } from "@/components/ui";
 import {
   pickNotificationPreferencePatch,
   type NotificationChannel,
@@ -351,8 +351,8 @@ export function NotificationSettingsManager() {
 
   return (
     <div className="space-y-5">
-      {error ? <p role="alert" className="rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}
-      {notice ? <p role="status" className="flex items-center gap-2 rounded-xl border border-success-border bg-success-soft px-4 py-3 text-sm text-success"><Check className="size-4" /> {notice}</p> : null}
+      {error ? <Alert tone="danger">{error}</Alert> : null}
+      {notice ? <Alert tone="success">{notice}</Alert> : null}
 
       <Card className="overflow-hidden">
         <div className="flex items-start gap-3 border-b border-border p-5 sm:p-6">

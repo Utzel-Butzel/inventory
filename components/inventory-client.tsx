@@ -2,6 +2,7 @@
 
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import { ResponsiveMediaImage } from "@/components/responsive-media-image";
+import { Alert } from "@/components/ui";
 import { useT } from "next-i18next/client";
 import {
   ArrowRight,
@@ -547,15 +548,11 @@ export function InventoryClient({
       </section>
 
       {error ? (
-        <div className="mb-5 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
-          {error}
-        </div>
+        <Alert tone="danger" className="mb-5">{error}</Alert>
       ) : null}
 
       {notice ? (
-        <div className="mb-5 rounded-xl border border-success-border bg-success-soft px-4 py-3 text-sm text-success">
-          {notice}
-        </div>
+        <Alert tone="success" className="mb-5">{notice}</Alert>
       ) : null}
 
       {selectionMode ? (

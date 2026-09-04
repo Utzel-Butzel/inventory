@@ -4,7 +4,6 @@ import { OrganizationLink as Link } from "@/components/organization-routing";
 import {
   AlertTriangle,
   CalendarClock,
-  Check,
   ChevronDown,
   ChevronUp,
   CircleCheck,
@@ -27,9 +26,28 @@ import {
   useRef,
   useState,
 } from "react";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { useT } from "next-i18next/client";
 
-import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
+import {
+  CurrencyInput,
+  Field,
+  Input,
+  NumberInput,
+  SearchInput,
+  Select,
+  Textarea,
+} from "@/components/form-controls";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  Skeleton,
+  cn,
+} from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 
 type PurchaseOrderStatus =
@@ -110,13 +128,14 @@ type StockOverviewEnvelope = {
   items?: StockPurchaseConfig[];
 };
 
-type OrderForm = {
+type PurchaseOrderForm = {
   reference: string;
   contactId: string;
   supplier: string;
   orderedAt: string;
   expectedAt: string;
   note: string;
+  lines: DraftLine[];
 };
 
 type ReceiptForm = {
@@ -142,10 +161,6 @@ type SupplierContact = {
   name: string;
   company: string | null;
 };
-
-const inputClass =
-  "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
-const labelClass = "block text-[12px] font-semibold text-muted-strong";
 
 const statusLabelKeys: Record<PurchaseOrderStatus, string> = {
   draft: "orders.status.draft",
@@ -232,7 +247,7 @@ function parsedCodes(value: string) {
     .filter(Boolean);
 }
 
-function newOrderForm(): OrderForm {
+function newOrderForm(lines: DraftLine[] = []): PurchaseOrderForm {
   return {
     reference: "",
     contactId: "",
@@ -240,6 +255,7 @@ function newOrderForm(): OrderForm {
     orderedAt: localDateTime(),
     expectedAt: "",
     note: "",
+    lines,
   };
 }
 
@@ -301,8 +317,6 @@ export function PurchaseOrdersManager({
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
-  const [orderForm, setOrderForm] = useState<OrderForm>(newOrderForm);
-  const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
   const [scopedResource, setScopedResource] = useState<ClientResource | null>(null);
   const [stockConfigs, setStockConfigs] = useState<
     Record<string, StockPurchaseConfig>
@@ -315,6 +329,24 @@ export function PurchaseOrdersManager({
   const [searchingItems, setSearchingItems] = useState(false);
   const [itemSearchOpen, setItemSearchOpen] = useState(false);
   const [receiptForm, setReceiptForm] = useState<ReceiptForm | null>(null);
+  const {
+    control,
+    formState: { errors: formErrors },
+    handleSubmit,
+    register,
+    reset,
+    setValue,
+  } = useForm<PurchaseOrderForm>({
+    defaultValues: newOrderForm(),
+    mode: "onBlur",
+  });
+  const {
+    append: appendLine,
+    fields: lineFields,
+    remove: removeLine,
+  } = useFieldArray({ control, name: "lines" });
+  const contactId = useWatch({ control, name: "contactId" });
+  const draftLines = useWatch({ control, name: "lines" });
   const createRequestRef = useRef<{ key: string; fingerprint: string } | null>(null);
   const receiptRequestRef = useRef<{ key: string; fingerprint: string } | null>(null);
 
@@ -404,10 +436,8 @@ export function PurchaseOrdersManager({
 
   useEffect(() => {
     if (!scopedResource || !stockConfigsLoaded || draftLines.length) return;
-    setDraftLines([
-      lineFromResource(scopedResource, stockConfigs[scopedResource.id]),
-    ]);
-  }, [draftLines.length, scopedResource, stockConfigs, stockConfigsLoaded]);
+    appendLine(lineFromResource(scopedResource, stockConfigs[scopedResource.id]));
+  }, [appendLine, draftLines.length, scopedResource, stockConfigs, stockConfigsLoaded]);
 
   useEffect(() => {
     if (resourceId) return;
@@ -493,51 +523,30 @@ export function PurchaseOrdersManager({
   }, [resourceId, scopedOrders]);
 
   function resetCreateForm() {
-    setOrderForm(newOrderForm());
-    setDraftLines(
+    reset(newOrderForm(
       scopedResource
         ? [lineFromResource(scopedResource, stockConfigs[scopedResource.id])]
         : [],
-    );
+    ));
     setItemQuery("");
     setItemResults([]);
   }
 
   function addDraftLine(resource: ClientResource) {
-    setDraftLines((current) => [
-      ...current,
-      lineFromResource(resource, stockConfigs[resource.id]),
-    ]);
+    appendLine(lineFromResource(resource, stockConfigs[resource.id]));
     setItemQuery("");
     setItemResults([]);
     setItemSearchOpen(false);
   }
 
-  function updateDraftLine(
-    resourceIdToUpdate: string,
-    values: Partial<
-      Pick<
-        DraftLine,
-        "orderedQuantity" | "expectedAt" | "note" | "unitPrice"
-      >
-    >,
-  ) {
-    setDraftLines((current) =>
-      current.map((line) =>
-        line.resourceId === resourceIdToUpdate ? { ...line, ...values } : line,
-      ),
-    );
-  }
-
-  async function createOrder(event: FormEvent) {
-    event.preventDefault();
+  async function createOrder(form: PurchaseOrderForm) {
     setError(null);
     setNotice(null);
-    if (!draftLines.length) {
+    if (!form.lines.length) {
       setError(t("orders.errors.addLine"));
       return;
     }
-    const invalidLine = draftLines.find((line) => {
+    const invalidLine = form.lines.find((line) => {
       const quantity = Number(line.orderedQuantity);
       return !Number.isInteger(quantity) || quantity < 1;
     });
@@ -547,14 +556,14 @@ export function PurchaseOrdersManager({
       );
       return;
     }
-    const invalidPriceLine = draftLines.find((line) =>
+    const invalidPriceLine = form.lines.find((line) =>
       Number.isNaN(moneyToCents(line.unitPrice)),
     );
     if (invalidPriceLine) {
       setError(t("orders.errors.validPrice", { name: invalidPriceLine.resourceName }));
       return;
     }
-    const orderedAt = toIsoDateTime(orderForm.orderedAt);
+    const orderedAt = toIsoDateTime(form.orderedAt);
     if (!orderedAt) {
       setError(t("orders.errors.validOrderDate"));
       return;
@@ -563,14 +572,14 @@ export function PurchaseOrdersManager({
     setCreating(true);
     try {
       const requestBody = {
-        reference: orderForm.reference.trim() || null,
-        contactId: orderForm.contactId || undefined,
-        supplier: orderForm.supplier.trim() || undefined,
+        reference: form.reference.trim() || null,
+        contactId: form.contactId || undefined,
+        supplier: form.supplier.trim() || undefined,
         status: "ordered" as const,
         orderedAt,
-        expectedAt: toIsoDate(orderForm.expectedAt),
-        note: orderForm.note.trim() || undefined,
-        lines: draftLines.map((line) => ({
+        expectedAt: toIsoDate(form.expectedAt),
+        note: form.note.trim() || undefined,
+        lines: form.lines.map((line) => ({
           resourceId: line.resourceId,
           ...(line.purchaseUnitName
             ? { purchaseQuantity: Number(line.orderedQuantity) }
@@ -792,16 +801,20 @@ export function PurchaseOrdersManager({
       </div>
 
       {error ? (
-        <div className="flex items-start justify-between gap-4 rounded-2xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
-          <span className="flex items-start gap-2"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> {error}</span>
-          <button type="button" onClick={() => setError(null)} aria-label={t("orders.actions.dismissError")}><X className="size-4" aria-hidden="true" /></button>
-        </div>
+        <Alert
+          tone="danger"
+          action={<IconButton size="sm" variant="danger-ghost" onClick={() => setError(null)} aria-label={t("orders.actions.dismissError")}><X className="size-4" aria-hidden="true" /></IconButton>}
+        >
+          {error}
+        </Alert>
       ) : null}
       {notice ? (
-        <div className="flex items-start justify-between gap-4 rounded-2xl border border-success-border bg-success-soft px-4 py-3 text-sm text-success">
-          <span className="flex items-center gap-2"><Check className="size-4 shrink-0" aria-hidden="true" /> {notice}</span>
-          <button type="button" onClick={() => setNotice(null)} aria-label={t("orders.actions.dismissMessage")}><X className="size-4" aria-hidden="true" /></button>
-        </div>
+        <Alert
+          tone="success"
+          action={<IconButton size="sm" variant="ghost" onClick={() => setNotice(null)} aria-label={t("orders.actions.dismissMessage")}><X className="size-4" aria-hidden="true" /></IconButton>}
+        >
+          {notice}
+        </Alert>
       ) : null}
 
       {!compact ? (
@@ -830,23 +843,21 @@ export function PurchaseOrdersManager({
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand"><ShoppingCart className="size-4" aria-hidden="true" /></span>
             <div><h2 className="text-sm font-semibold text-foreground">{t("orders.create.title")}</h2><p className="mt-0.5 text-[13px] text-muted">{t("orders.create.description")}</p></div>
           </div>
-          <form onSubmit={createOrder}>
+          <form onSubmit={(event) => void handleSubmit(createOrder)(event)} noValidate>
             <div className="grid gap-4 border-b border-border p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-4">
-              <label className={labelClass}>{t("orders.create.supplier")}<select value={orderForm.contactId} onChange={(event) => { const contact = supplierContacts.find((candidate) => candidate.id === event.target.value); setOrderForm((current) => ({ ...current, contactId: event.target.value, supplier: contact ? (contact.company ?? contact.name) : "" })); }} className={`${inputClass} mt-1.5`}><option value="">{t("orders.create.supplierManual")}</option>{supplierContacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.company ? `${contact.company} · ${contact.name}` : contact.name}</option>)}</select>{!orderForm.contactId ? <input value={orderForm.supplier} onChange={(event) => setOrderForm((current) => ({ ...current, supplier: event.target.value }))} placeholder={t("orders.create.supplierPlaceholder")} maxLength={240} className={`${inputClass} mt-2`} /> : null}</label>
-              <label className={labelClass}>{t("orders.create.reference")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input value={orderForm.reference} onChange={(event) => setOrderForm((current) => ({ ...current, reference: event.target.value }))} placeholder="PO-1048" maxLength={160} className={`${inputClass} mt-1.5`} /></label>
-              <label className={labelClass}>{t("orders.create.orderedAt")}<input type="datetime-local" required value={orderForm.orderedAt} onChange={(event) => setOrderForm((current) => ({ ...current, orderedAt: event.target.value }))} className={`${inputClass} mt-1.5`} /></label>
-              <label className={labelClass}>{t("orders.create.expectedArrival")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input type="date" min={dateInput()} value={orderForm.expectedAt} onChange={(event) => setOrderForm((current) => ({ ...current, expectedAt: event.target.value }))} className={`${inputClass} mt-1.5`} /></label>
-              <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>{t("orders.create.orderNote")} <span className="font-normal text-muted">· {t("orders.optional")}</span><textarea rows={2} value={orderForm.note} onChange={(event) => setOrderForm((current) => ({ ...current, note: event.target.value }))} maxLength={20000} placeholder={t("orders.create.orderNotePlaceholder")} className={`${inputClass} mt-1.5 h-auto resize-y py-3`} /></label>
+              <Field label={t("orders.create.supplier")} error={formErrors.supplier?.message}>
+                <Select {...register("contactId", { onChange: (event) => { const contact = supplierContacts.find((candidate) => candidate.id === event.target.value); setValue("supplier", contact ? (contact.company ?? contact.name) : "", { shouldDirty: true, shouldValidate: true }); } })}><option value="">{t("orders.create.supplierManual")}</option>{supplierContacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.company ? `${contact.company} · ${contact.name}` : contact.name}</option>)}</Select>
+                {!contactId ? <Input id="purchase-order-supplier-name" aria-label={t("orders.create.supplierPlaceholder")} {...register("supplier", { maxLength: { value: 240, message: t("orders.validation.maxLength", { max: 240 }) }, validate: (value) => value.trim().length > 0 || t("orders.validation.supplierRequired") })} placeholder={t("orders.create.supplierPlaceholder")} maxLength={240} className="mt-2" /> : null}
+              </Field>
+              <Field label={t("orders.create.reference")} error={formErrors.reference?.message} optionalLabel={t("orders.optional")}><Input {...register("reference", { maxLength: { value: 160, message: t("orders.validation.maxLength", { max: 160 }) } })} placeholder="PO-1048" maxLength={160} /></Field>
+              <Field label={t("orders.create.orderedAt")} error={formErrors.orderedAt?.message} required><Input type="datetime-local" {...register("orderedAt", { required: t("orders.validation.orderedAtRequired"), validate: (value) => Boolean(toIsoDateTime(value)) || t("orders.errors.validOrderDate") })} /></Field>
+              <Field label={t("orders.create.expectedArrival")} error={formErrors.expectedAt?.message} optionalLabel={t("orders.optional")}><Input type="date" min={dateInput()} {...register("expectedAt")} /></Field>
+              <Field label={t("orders.create.orderNote")} error={formErrors.note?.message} optionalLabel={t("orders.optional")} className="sm:col-span-2 lg:col-span-4"><Textarea rows={2} {...register("note", { maxLength: { value: 20_000, message: t("orders.validation.maxLength", { max: 20_000 }) } })} maxLength={20000} placeholder={t("orders.create.orderNotePlaceholder")} /></Field>
             </div>
 
             {!resourceId ? (
               <div className="relative border-b border-border p-4 sm:p-5">
-                <label className="relative block">
-                  <span className="sr-only">{t("orders.create.searchItemsLabel")}</span>
-                  <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
-                  <input value={itemQuery} onFocus={() => setItemSearchOpen(true)} onChange={(event) => { setItemQuery(event.target.value); setItemSearchOpen(true); }} placeholder={t("orders.create.searchItemsPlaceholder")} className={`${inputClass} pl-10 pr-10`} />
-                  {searchingItems ? <LoaderCircle className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-brand" aria-hidden="true" /> : null}
-                </label>
+                <SearchInput aria-label={t("orders.create.searchItemsLabel")} loading={searchingItems} value={itemQuery} onFocus={() => setItemSearchOpen(true)} onChange={(event) => { setItemQuery(event.target.value); setItemSearchOpen(true); }} placeholder={t("orders.create.searchItemsPlaceholder")} />
                 {itemSearchOpen && itemQuery.trim().length >= 2 ? (
                   <div className="absolute inset-x-4 top-[calc(100%-14px)] z-30 overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow-md)] sm:inset-x-5">
                     {itemResults.length ? <div className="max-h-72 overflow-y-auto p-1.5">{itemResults.map((resource) => <button key={resource.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => addDraftLine(resource)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-hover"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-muted text-muted"><Package className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-semibold text-foreground">{resource.name}</span><span className="mt-0.5 block truncate text-[11px] text-muted">{resource.sku || t("orders.noSku")} · {t("orders.create.available", { quantity: numberFormat.format(resource.quantity) })}</span></span><Plus className="size-4 text-brand" aria-hidden="true" /></button>)}</div> : <div className="px-4 py-5 text-center text-[13px] text-muted">{searchingItems ? t("orders.create.searching") : t("orders.create.noItemsFound")}</div>}
@@ -857,14 +868,14 @@ export function PurchaseOrdersManager({
 
             {draftLines.length ? (
               <div className="divide-y divide-border">
-                {draftLines.map((line) => (
-                  <div key={line.resourceId} className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(190px,1fr)_110px_140px_160px_minmax(160px,1fr)_auto] lg:items-start">
+                {lineFields.map((line, index) => (
+                  <div key={line.id} className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(190px,1fr)_110px_140px_160px_minmax(160px,1fr)_auto] lg:items-start">
                     <div className="flex min-w-0 items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted"><Package className="size-[18px]" aria-hidden="true" /></span><div className="min-w-0 pt-0.5"><Link href={`/inventory/${line.resourceId}`} className="block truncate text-[14px] font-semibold text-foreground hover:text-brand">{line.resourceName}</Link><p className="mt-1 truncate text-[11px] text-muted">{line.resourceSku || t("orders.noSku")}</p></div></div>
-                    <label className={labelClass}>{t("orders.create.orderQuantity")}<div className="relative"><input type="number" min="1" max="2000000000" step="1" required value={line.orderedQuantity} onChange={(event) => updateDraftLine(line.resourceId, { orderedQuantity: event.target.value })} className={`${inputClass} mt-1.5 pr-20 tabular-nums`} /><span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-muted">{line.purchaseUnitName ?? line.baseUnitName}</span></div>{line.purchaseUnitName ? <span className="mt-1 block text-[10px] font-normal text-muted">{t("orders.create.purchaseUnitConversion", { factor: numberFormat.format(line.purchaseUnitFactor), unit: line.baseUnitName })}</span> : null}</label>
-                    <label className={labelClass}>{t("orders.create.unitPrice")} <span className="font-normal text-muted">· {t("orders.optional")}</span><div className="relative"><input type="number" min="0" max="20000000" step="0.01" inputMode="decimal" value={line.unitPrice} onChange={(event) => updateDraftLine(line.resourceId, { unitPrice: event.target.value })} placeholder="0.00" className={`${inputClass} mt-1.5 pr-12 tabular-nums`} /><span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-muted">{line.priceCurrency}</span></div></label>
-                    <label className={labelClass}>{t("orders.create.lineEta")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input type="date" value={line.expectedAt} onChange={(event) => updateDraftLine(line.resourceId, { expectedAt: event.target.value })} className={`${inputClass} mt-1.5`} /></label>
-                    <label className={labelClass}>{t("orders.create.lineNote")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input value={line.note} onChange={(event) => updateDraftLine(line.resourceId, { note: event.target.value })} maxLength={20000} placeholder={t("orders.create.lineNotePlaceholder")} className={`${inputClass} mt-1.5`} /></label>
-                    {!resourceId ? <button type="button" onClick={() => setDraftLines((current) => current.filter((item) => item.resourceId !== line.resourceId))} className="grid size-9 place-items-center rounded-lg border border-danger-border bg-surface text-danger hover:bg-danger-soft lg:mt-[22px]" aria-label={t("orders.create.removeLine", { name: line.resourceName })}><X className="size-3.5" aria-hidden="true" /></button> : null}
+                    <Field label={t("orders.create.orderQuantity")} error={formErrors.lines?.[index]?.orderedQuantity?.message} required description={line.purchaseUnitName ? t("orders.create.purchaseUnitConversion", { factor: numberFormat.format(line.purchaseUnitFactor), unit: line.baseUnitName }) : undefined}><NumberInput min="1" max="2000000000" step="1" inputMode="numeric" {...register(`lines.${index}.orderedQuantity`, { required: t("orders.validation.quantityRequired"), validate: (value) => Number.isInteger(Number(value)) && Number(value) >= 1 || t("orders.validation.quantityInvalid") })} unit={line.purchaseUnitName ?? line.baseUnitName} className="pr-20 tabular-nums" /></Field>
+                    <Field label={t("orders.create.unitPrice")} error={formErrors.lines?.[index]?.unitPrice?.message} optionalLabel={t("orders.optional")}><CurrencyInput currency={line.priceCurrency} max="20000000" {...register(`lines.${index}.unitPrice`, { validate: (value) => !Number.isNaN(moneyToCents(value)) || t("orders.validation.priceInvalid") })} placeholder="0.00" className="tabular-nums" /></Field>
+                    <Field label={t("orders.create.lineEta")} error={formErrors.lines?.[index]?.expectedAt?.message} optionalLabel={t("orders.optional")}><Input type="date" {...register(`lines.${index}.expectedAt`)} /></Field>
+                    <Field label={t("orders.create.lineNote")} error={formErrors.lines?.[index]?.note?.message} optionalLabel={t("orders.optional")}><Input {...register(`lines.${index}.note`, { maxLength: { value: 20_000, message: t("orders.validation.maxLength", { max: 20_000 }) } })} maxLength={20000} placeholder={t("orders.create.lineNotePlaceholder")} /></Field>
+                    {!resourceId ? <IconButton size="sm" variant="danger" onClick={() => removeLine(index)} className="lg:mt-[22px]" aria-label={t("orders.create.removeLine", { name: line.resourceName })}><X className="size-3.5" aria-hidden="true" /></IconButton> : null}
                   </div>
                 ))}
               </div>
@@ -882,7 +893,7 @@ export function PurchaseOrdersManager({
 
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-border p-3 sm:p-4 xl:flex-row xl:items-center xl:justify-between">
-          <label className="relative min-w-0 flex-1 xl:max-w-md"><span className="sr-only">{t("orders.search.label")}</span><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("orders.search.placeholder")} className={`${inputClass} bg-surface-subtle pl-10 pr-10`} />{query ? <button type="button" onClick={() => setQuery("")} className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-muted hover:bg-surface-hover" aria-label={t("orders.search.clear")}><X className="size-3.5" aria-hidden="true" /></button> : null}</label>
+          <SearchInput containerClassName="min-w-0 flex-1 xl:max-w-md" aria-label={t("orders.search.label")} value={query} onChange={(event) => setQuery(event.target.value)} onClear={() => setQuery("")} clearLabel={t("orders.search.clear")} placeholder={t("orders.search.placeholder")} className="bg-surface-subtle" />
           <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-muted p-1 sm:flex">{(Object.keys(filterLabelKeys) as OrderFilter[]).map((value) => <button key={value} type="button" onClick={() => setFilter(value)} className={cn("inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition", filter === value ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground")}>{t(filterLabelKeys[value])} <span className={filter === value ? "text-brand" : "text-muted"}>{numberFormat.format(filterCounts[value])}</span></button>)}</div>
         </div>
 
@@ -932,12 +943,12 @@ export function PurchaseOrdersManager({
                                 <form onSubmit={receiveLine} className="border-t border-brand-border bg-brand-soft px-4 py-4 sm:px-5">
                                   <div className="mb-4 flex items-start gap-2 rounded-lg bg-surface/80 px-3 py-2.5 text-[11px] leading-4 text-muted"><PackageCheck className="mt-0.5 size-3.5 shrink-0 text-brand" aria-hidden="true" /><span>{t("orders.receipt.description", { name: receiptForm.resourceName })}</span></div>
                                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                                    <label className={labelClass}>{t("orders.receipt.quantity")}<div className="relative"><input type="number" min="1" max={receiptForm.maxQuantity} step="1" required value={receiptForm.quantity} onChange={(event) => setReceiptForm((current) => current ? { ...current, quantity: event.target.value } : current)} className={`${inputClass} mt-1.5 pr-20 tabular-nums`} /><span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-muted">{receiptForm.purchaseUnitName ?? receiptForm.baseUnitName}</span></div><span className="mt-1 block text-[10px] font-normal text-muted">{t("orders.receipt.maximum", { maximum: numberFormat.format(receiptForm.maxQuantity) })}{receiptForm.purchaseUnitName ? ` · ${t("orders.receipt.baseQuantity", { quantity: numberFormat.format(Number(receiptForm.quantity || 0) * receiptForm.purchaseUnitFactor), unit: receiptForm.baseUnitName })}` : ""}</span></label>
-                                    <label className={labelClass}>{t("orders.receipt.receivedAt")}<input type="datetime-local" required value={receiptForm.receivedAt} onChange={(event) => setReceiptForm((current) => current ? { ...current, receivedAt: event.target.value } : current)} className={`${inputClass} mt-1.5`} /></label>
-                                    <label className={labelClass}>{t("orders.receipt.location")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input value={receiptForm.location} maxLength={240} onChange={(event) => setReceiptForm((current) => current ? { ...current, location: event.target.value } : current)} placeholder={t("orders.receipt.locationPlaceholder")} className={`${inputClass} mt-1.5`} /></label>
-                                    <label className={labelClass}>{t("orders.receipt.note")} <span className="font-normal text-muted">· {t("orders.optional")}</span><input value={receiptForm.note} maxLength={20000} onChange={(event) => setReceiptForm((current) => current ? { ...current, note: event.target.value } : current)} placeholder={t("orders.receipt.notePlaceholder")} className={`${inputClass} mt-1.5`} /></label>
-                                    <label className={labelClass}>{t("orders.receipt.totalPrice")} <span className="font-normal text-muted">· {t("orders.optional")}</span><div className="relative"><input type="number" min="0" max="20000000" step="0.01" inputMode="decimal" value={receiptForm.totalPrice} onChange={(event) => setReceiptForm((current) => current ? { ...current, totalPrice: event.target.value } : current)} placeholder="0.00" className={`${inputClass} mt-1.5 pr-12 tabular-nums`} /><span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[11px] text-muted">{receiptForm.priceCurrency}</span></div></label>
-                                    {receiptForm.trackingMode === "serialized" ? <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>{t("orders.receipt.unitCodes")}<textarea rows={4} value={receiptForm.unitCodes} onChange={(event) => setReceiptForm((current) => current ? { ...current, unitCodes: event.target.value } : current)} placeholder={t("orders.receipt.unitCodesPlaceholder")} className={`${inputClass} mt-1.5 h-auto resize-y py-3 font-mono text-xs`} /><span className="mt-1 block text-[10px] font-normal text-muted">{t("orders.receipt.exactCodes", { count: (Number(receiptForm.quantity) || 0) * receiptForm.purchaseUnitFactor, value: numberFormat.format((Number(receiptForm.quantity) || 0) * receiptForm.purchaseUnitFactor) })}</span></label> : null}
+                                    <Field label={t("orders.receipt.quantity")} required description={`${t("orders.receipt.maximum", { maximum: numberFormat.format(receiptForm.maxQuantity) })}${receiptForm.purchaseUnitName ? ` · ${t("orders.receipt.baseQuantity", { quantity: numberFormat.format(Number(receiptForm.quantity || 0) * receiptForm.purchaseUnitFactor), unit: receiptForm.baseUnitName })}` : ""}`}><NumberInput min="1" max={receiptForm.maxQuantity} step="1" inputMode="numeric" value={receiptForm.quantity} onChange={(event) => setReceiptForm((current) => current ? { ...current, quantity: event.target.value } : current)} unit={receiptForm.purchaseUnitName ?? receiptForm.baseUnitName} className="pr-20 tabular-nums" /></Field>
+                                    <Field label={t("orders.receipt.receivedAt")} required><Input type="datetime-local" value={receiptForm.receivedAt} onChange={(event) => setReceiptForm((current) => current ? { ...current, receivedAt: event.target.value } : current)} /></Field>
+                                    <Field label={t("orders.receipt.location")} optionalLabel={t("orders.optional")}><Input value={receiptForm.location} maxLength={240} onChange={(event) => setReceiptForm((current) => current ? { ...current, location: event.target.value } : current)} placeholder={t("orders.receipt.locationPlaceholder")} /></Field>
+                                    <Field label={t("orders.receipt.note")} optionalLabel={t("orders.optional")}><Input value={receiptForm.note} maxLength={20000} onChange={(event) => setReceiptForm((current) => current ? { ...current, note: event.target.value } : current)} placeholder={t("orders.receipt.notePlaceholder")} /></Field>
+                                    <Field label={t("orders.receipt.totalPrice")} optionalLabel={t("orders.optional")}><CurrencyInput currency={receiptForm.priceCurrency} max="20000000" value={receiptForm.totalPrice} onChange={(event) => setReceiptForm((current) => current ? { ...current, totalPrice: event.target.value } : current)} placeholder="0.00" className="tabular-nums" /></Field>
+                                    {receiptForm.trackingMode === "serialized" ? <Field label={t("orders.receipt.unitCodes")} description={t("orders.receipt.exactCodes", { count: (Number(receiptForm.quantity) || 0) * receiptForm.purchaseUnitFactor, value: numberFormat.format((Number(receiptForm.quantity) || 0) * receiptForm.purchaseUnitFactor) })} className="sm:col-span-2 lg:col-span-4"><Textarea rows={4} value={receiptForm.unitCodes} onChange={(event) => setReceiptForm((current) => current ? { ...current, unitCodes: event.target.value } : current)} placeholder={t("orders.receipt.unitCodesPlaceholder")} className="font-mono text-xs" /></Field> : null}
                                   </div>
                                   <div className="mt-4 flex justify-end gap-2 border-t border-brand-border pt-4"><Button type="button" variant="ghost" size="sm" onClick={() => setReceiptForm(null)}>{t("orders.actions.cancel")}</Button><Button type="submit" size="sm" disabled={receiving}>{receiving ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <PackageCheck className="size-3.5" aria-hidden="true" />}{receiving ? t("orders.actions.receiving") : t("orders.actions.receiveIntoStock")}</Button></div>
                                 </form>

@@ -8,8 +8,29 @@ export const WOO_COMMERCE_STOCK_ACTIVE_ORDER_STATUSES = [
   "completed",
 ] as const;
 
+export const WOO_COMMERCE_RECENT_IMPORT_DAYS = 7;
+
 const nonNegativeInteger = z.number().int().nonnegative();
 const positiveInteger = z.number().int().positive();
+const wooCommerceDecimalSchema = z
+  .union([z.string().trim().min(1).max(80), z.number().finite()])
+  .transform(String);
+
+const wooCommerceAddressSchema = z
+  .object({
+    first_name: z.string().trim().max(2_000).catch(""),
+    last_name: z.string().trim().max(2_000).catch(""),
+    company: z.string().trim().max(2_000).catch(""),
+    address_1: z.string().trim().max(2_000).catch(""),
+    address_2: z.string().trim().max(2_000).catch(""),
+    city: z.string().trim().max(2_000).catch(""),
+    state: z.string().trim().max(2_000).catch(""),
+    postcode: z.string().trim().max(2_000).catch(""),
+    country: z.string().trim().max(2_000).catch(""),
+    email: z.string().trim().max(2_000).catch(""),
+    phone: z.string().trim().max(2_000).catch(""),
+  })
+  .passthrough();
 
 const wooCommerceMetaDataSchema = z
   .object({
@@ -25,6 +46,10 @@ export const wooCommerceOrderLineSchema = z
     variation_id: nonNegativeInteger,
     quantity: nonNegativeInteger,
     sku: z.string().trim().max(200).catch(""),
+    name: z.string().trim().max(2_000).catch(""),
+    price: wooCommerceDecimalSchema.optional(),
+    subtotal: wooCommerceDecimalSchema.optional(),
+    total: wooCommerceDecimalSchema.optional(),
   })
   .passthrough();
 
@@ -33,7 +58,16 @@ export const wooCommerceOrderSchema = z
     id: positiveInteger,
     number: z.union([z.string(), z.number()]).transform(String),
     status: z.string().trim().min(1).max(80),
+    customer_id: nonNegativeInteger.optional().catch(0),
+    currency: z.string().trim().toUpperCase().length(3).optional().catch("EUR"),
+    total: wooCommerceDecimalSchema.optional(),
+    payment_method: z.string().trim().max(240).optional().catch(""),
+    payment_method_title: z.string().trim().max(240).optional().catch(""),
+    customer_note: z.string().trim().max(20_000).optional().catch(""),
+    date_created_gmt: z.string().trim().max(64).nullable().optional(),
     date_modified_gmt: z.string().nullable().optional(),
+    billing: wooCommerceAddressSchema.optional(),
+    shipping: wooCommerceAddressSchema.optional(),
     line_items: z.array(wooCommerceOrderLineSchema),
   })
   .passthrough();
@@ -62,14 +96,98 @@ export const wooCommerceSyncPatchSchema = z
   })
   .strict();
 
-export const wooCommerceManualSyncSchema = z
-  .object({
-    orderId: positiveInteger.optional(),
-  })
-  .strict();
+export const wooCommerceManualSyncSchema = z.union([
+  z.object({ orderId: positiveInteger }).strict(),
+  z.object({ window: z.literal("last-7-days") }).strict(),
+  z.object({}).strict(),
+]);
+
+export function wooCommerceRecentImportWindow(now = new Date()) {
+  const before = new Date(now);
+  const after = new Date(
+    before.getTime() - WOO_COMMERCE_RECENT_IMPORT_DAYS * 24 * 60 * 60 * 1_000,
+  );
+  return {
+    after: after.toISOString(),
+    before: before.toISOString(),
+  };
+}
 
 export type WooCommerceOrder = z.infer<typeof wooCommerceOrderSchema>;
 export type WooCommerceRefund = z.infer<typeof wooCommerceRefundSchema>;
+
+export function wooCommerceCustomerIdentity(order: WooCommerceOrder) {
+  const customerId = order.customer_id && order.customer_id > 0
+    ? order.customer_id
+    : null;
+  const emailCandidate = order.billing?.email.trim().toLowerCase() || "";
+  const email =
+    emailCandidate.length <= 320 &&
+    /^[^\s@]+@[^\s@]+$/.test(emailCandidate)
+      ? emailCandidate
+      : null;
+  return {
+    customerId,
+    email,
+    key: customerId
+      ? `customer:${customerId}`
+      : email
+        ? `email:${email}`
+        : `order:${order.id}`,
+  };
+}
+
+export function parseWooCommerceMoneyToCents(
+  value: string | number | null | undefined,
+) {
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  if (!/^\d+(?:\.\d+)?$/.test(normalized)) return null;
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  const cents = Math.round(amount * 100);
+  return Number.isSafeInteger(cents) ? cents : null;
+}
+
+export function wooCommerceProjectedSalesStatus(input: {
+  wooStatus: string;
+  unresolved: boolean;
+  lines: Array<{
+    orderedQuantity: number;
+    fulfilledQuantity: number;
+    returnedQuantity: number;
+  }>;
+}) {
+  const totalFulfilled = input.lines.reduce(
+    (total, line) => total + line.fulfilledQuantity,
+    0,
+  );
+  const totalReturned = input.lines.reduce(
+    (total, line) => total + line.returnedQuantity,
+    0,
+  );
+  const active = (
+    WOO_COMMERCE_STOCK_ACTIVE_ORDER_STATUSES as readonly string[]
+  ).includes(input.wooStatus);
+
+  if (totalFulfilled > 0 && totalReturned >= totalFulfilled) return "returned";
+  if (totalReturned > 0) return "partially-returned";
+  if (!active) {
+    return input.wooStatus === "pending" ? "draft" : "cancelled";
+  }
+  if (input.unresolved) {
+    return totalFulfilled > 0 ? "partially-fulfilled" : "confirmed";
+  }
+  if (
+    input.lines.length > 0 &&
+    input.lines.every(
+      (line) => line.fulfilledQuantity >= line.orderedQuantity,
+    )
+  ) {
+    return "fulfilled";
+  }
+  return totalFulfilled > 0 ? "partially-fulfilled" : "confirmed";
+}
 
 export type WooCommerceLineTarget = {
   lineItemId: number;

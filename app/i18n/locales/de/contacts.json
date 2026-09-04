@@ -28,6 +28,7 @@
   },
   "filters": {
     "search": "Kontakte durchsuchen…",
+    "clear": "Suche leeren",
     "role": "Rolle filtern",
     "all": "Alle Rollen"
   },
@@ -91,5 +92,15 @@
     "load": "Kontakte konnten nicht geladen werden.",
     "save": "Kontakt konnte nicht gespeichert werden.",
     "archive": "Kontakt konnte nicht archiviert werden."
+  },
+  "validation": {
+    "nameRequired": "Gib einen Namen ein.",
+    "roleRequired": "Wähle mindestens eine Rolle aus.",
+    "email": "Gib eine gültige E-Mail-Adresse ein.",
+    "website": "Gib eine gültige URL ein.",
+    "countryCode": "Verwende einen zweistelligen Ländercode, zum Beispiel DE.",
+    "maxLength": "Maximal {{max}} Zeichen.",
+    "tooManyTags": "Verwende höchstens 50 Tags.",
+    "tagsTooLong": "Ein Tag darf höchstens 80 Zeichen lang sein."
   }
 }

@@ -1,12 +1,10 @@
 "use client";
 
 import {
-  AlertTriangle,
   CalendarClock,
   Check,
   ChevronDown,
   ChevronUp,
-  CircleCheck,
   LoaderCircle,
   MapPin,
   PackageCheck,
@@ -29,7 +27,7 @@ import {
   useState,
 } from "react";
 
-import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
+import { Alert, Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 
 type RequestStatus =
@@ -397,16 +395,10 @@ export function InternalRequestsClient() {
       </div>
 
       {error ? (
-        <div role="alert" className="flex items-start gap-2 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>{error}</span>
-        </div>
+        <Alert tone="danger">{error}</Alert>
       ) : null}
       {notice ? (
-        <div role="status" className="flex items-center gap-2 rounded-xl border border-success-border bg-success-soft px-4 py-3 text-sm text-success">
-          <CircleCheck className="size-4" aria-hidden="true" />
-          {notice}
-        </div>
+        <Alert tone="success">{notice}</Alert>
       ) : null}
 
       {createOpen ? (

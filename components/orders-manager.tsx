@@ -13,24 +13,42 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
-  Search,
   ShoppingCart,
   Truck,
   X,
 } from "lucide-react";
 import { useT } from "next-i18next/client";
 import {
-  type FormEvent,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 
+import {
+  CurrencyInput,
+  Field,
+  FormActions,
+  Input,
+  NumberInput,
+  SearchInput,
+  Select,
+  Textarea,
+} from "@/components/form-controls";
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import { PurchaseOrdersManager } from "@/components/purchase-orders-manager";
-import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  Skeleton,
+  cn,
+} from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 
 type OrderType = "purchase" | "sale" | "loan";
@@ -127,9 +145,14 @@ type DraftLine = {
   note: string;
 };
 
-const inputClass =
-  "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
-const labelClass = "block text-[12px] font-semibold text-muted-strong";
+type TradeOrderForm = {
+  contactId: string;
+  reference: string;
+  orderedAt: string;
+  expectedAt: string;
+  note: string;
+  lines: DraftLine[];
+};
 
 function randomId() {
   return crypto.randomUUID();
@@ -142,6 +165,19 @@ function localDateTime(value = new Date()) {
 
 function localDate(value = new Date()) {
   return localDateTime(value).slice(0, 10);
+}
+
+function tradeOrderDefaults(contactId = ""): TradeOrderForm {
+  const due = new Date();
+  due.setDate(due.getDate() + 7);
+  return {
+    contactId,
+    reference: "",
+    orderedAt: localDateTime(),
+    expectedAt: localDate(due),
+    note: "",
+    lines: [],
+  };
 }
 
 function iso(value: string) {
@@ -226,16 +262,6 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [contactId, setContactId] = useState("");
-  const [reference, setReference] = useState("");
-  const [orderedAt, setOrderedAt] = useState(localDateTime);
-  const [expectedAt, setExpectedAt] = useState(() => {
-    const due = new Date();
-    due.setDate(due.getDate() + 7);
-    return localDate(due);
-  });
-  const [note, setNote] = useState("");
-  const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
   const [itemQuery, setItemQuery] = useState("");
   const [itemResults, setItemResults] = useState<ClientResource[]>([]);
   const [searching, setSearching] = useState(false);
@@ -249,6 +275,24 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
     Record<string, string>
   >({});
   const [actingUnitKey, setActingUnitKey] = useState<string | null>(null);
+  const {
+    control,
+    formState: { errors: formErrors },
+    getValues,
+    handleSubmit,
+    register,
+    reset,
+    setValue,
+  } = useForm<TradeOrderForm>({
+    defaultValues: tradeOrderDefaults(),
+    mode: "onBlur",
+  });
+  const {
+    append: appendLine,
+    fields: lineFields,
+    remove: removeLine,
+  } = useFieldArray({ control, name: "lines" });
+  const draftLines = useWatch({ control, name: "lines" });
   const createKey = useRef<string | null>(null);
   const movementKeys = useRef(new Map<string, string>());
 
@@ -267,14 +311,16 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
       ]);
       setOrders(orderPayload.orders ?? []);
       setContacts(contactPayload.contacts ?? []);
-      setContactId((current) => current || contactPayload.contacts?.[0]?.id || "");
+      if (!getValues("contactId")) {
+        setValue("contactId", contactPayload.contacts?.[0]?.id ?? "");
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : t("errors.load"));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [t, type]);
+  }, [getValues, setValue, t, type]);
 
   useEffect(() => {
     void load();
@@ -329,54 +375,36 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
   }, [orders]);
 
   function resetForm() {
-    setReference("");
-    setOrderedAt(localDateTime());
-    const due = new Date();
-    due.setDate(due.getDate() + 7);
-    setExpectedAt(localDate(due));
-    setNote("");
-    setDraftLines([]);
+    reset(tradeOrderDefaults(getValues("contactId")));
     setItemQuery("");
     createKey.current = null;
   }
 
   function addItem(resource: ClientResource) {
-    setDraftLines((current) => [
-      ...current,
-      {
-        resourceId: resource.id,
-        resourceName: resource.name,
-        resourceSku: resource.sku,
-        quantity: "1",
-        unitPrice:
-          type === "sale" && resource.valueCents !== null
-            ? (resource.valueCents / 100).toFixed(2)
-            : "",
-        currency: resource.currency,
-        note: "",
-      },
-    ]);
+    appendLine({
+      resourceId: resource.id,
+      resourceName: resource.name,
+      resourceSku: resource.sku,
+      quantity: "1",
+      unitPrice:
+        type === "sale" && resource.valueCents !== null
+          ? (resource.valueCents / 100).toFixed(2)
+          : "",
+      currency: resource.currency,
+      note: "",
+    });
     setItemQuery("");
     setItemResults([]);
   }
 
-  function updateLine(resourceId: string, patch: Partial<DraftLine>) {
-    setDraftLines((current) =>
-      current.map((line) =>
-        line.resourceId === resourceId ? { ...line, ...patch } : line,
-      ),
-    );
-  }
-
-  async function create(event: FormEvent) {
-    event.preventDefault();
+  async function create(form: TradeOrderForm) {
     setError(null);
     setNotice(null);
-    if (!contactId || !draftLines.length) {
+    if (!form.contactId || !form.lines.length) {
       setError(t("errors.missingContactOrLines"));
       return;
     }
-    const lines = draftLines.map((line) => ({
+    const lines = form.lines.map((line) => ({
       resourceId: line.resourceId,
       quantity: Number(line.quantity),
       note: line.note || undefined,
@@ -401,11 +429,12 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
     }
     const payload = {
       type,
-      contactId,
-      reference: reference || null,
-      orderedAt: iso(orderedAt),
-      expectedAt: type === "loan" ? iso(`${expectedAt}T12:00:00`) : null,
-      note,
+      contactId: form.contactId,
+      reference: form.reference || null,
+      orderedAt: iso(form.orderedAt),
+      expectedAt:
+        type === "loan" ? iso(`${form.expectedAt}T12:00:00`) : null,
+      note: form.note,
       lines,
     };
     const body = JSON.stringify(payload);
@@ -585,14 +614,10 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
       </header>
 
       {error ? (
-        <div role="alert" className="rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
-          {error}
-        </div>
+        <Alert tone="danger">{error}</Alert>
       ) : null}
       {notice ? (
-        <div className="flex items-center gap-2 rounded-xl border border-success-border bg-success-soft px-4 py-3 text-sm text-success">
-          <Check className="size-4" /> {notice}
-        </div>
+        <Alert tone="success">{notice}</Alert>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -603,45 +628,36 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
 
       {formOpen ? (
         <Card className="overflow-visible p-0">
-          <form onSubmit={create}>
+          <form onSubmit={(event) => void handleSubmit(create)(event)} noValidate>
             <div className="grid gap-4 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-4 lg:p-5">
-              <label className={labelClass}>
-                {t("fields.contact")}
-                <select required value={contactId} onChange={(event) => setContactId(event.target.value)} className={`${inputClass} mt-1.5`}>
+              <Field label={t("fields.contact")} error={formErrors.contactId?.message} required>
+                <Select {...register("contactId", { required: t("validation.contactRequired") })}>
                   <option value="">{t("fields.chooseContact")}</option>
                   {contacts.map((contact) => (
                     <option key={contact.id} value={contact.id}>
                       {contact.company ? `${contact.company} · ${contact.name}` : contact.name}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label className={labelClass}>
-                {t("fields.reference")}
-                <input value={reference} onChange={(event) => setReference(event.target.value)} maxLength={160} placeholder={type === "sale" ? "SO-1001" : "LOAN-1001"} className={`${inputClass} mt-1.5`} />
-              </label>
-              <label className={labelClass}>
-                {t("fields.orderedAt")}
-                <input required type="datetime-local" value={orderedAt} onChange={(event) => setOrderedAt(event.target.value)} className={`${inputClass} mt-1.5`} />
-              </label>
+                </Select>
+              </Field>
+              <Field label={t("fields.reference")} error={formErrors.reference?.message}>
+                <Input {...register("reference", { maxLength: { value: 160, message: t("validation.maxLength", { max: 160 }) } })} maxLength={160} placeholder={type === "sale" ? "SO-1001" : "LOAN-1001"} />
+              </Field>
+              <Field label={t("fields.orderedAt")} error={formErrors.orderedAt?.message} required>
+                <Input type="datetime-local" {...register("orderedAt", { required: t("validation.orderedAtRequired") })} />
+              </Field>
               {type === "loan" ? (
-                <label className={labelClass}>
-                  {t("fields.dueAt")}
-                  <input required type="date" min={localDate()} value={expectedAt} onChange={(event) => setExpectedAt(event.target.value)} className={`${inputClass} mt-1.5`} />
-                </label>
+                <Field label={t("fields.dueAt")} error={formErrors.expectedAt?.message} required>
+                  <Input type="date" min={localDate()} {...register("expectedAt", { required: t("validation.dueAtRequired") })} />
+                </Field>
               ) : null}
-              <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>
-                {t("fields.note")}
-                <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} maxLength={20_000} className={`${inputClass} mt-1.5 h-auto py-3`} />
-              </label>
+              <Field label={t("fields.note")} error={formErrors.note?.message} className="sm:col-span-2 lg:col-span-4">
+                <Textarea {...register("note", { maxLength: { value: 20_000, message: t("validation.maxLength", { max: 20_000 }) } })} rows={2} maxLength={20_000} />
+              </Field>
             </div>
 
             <div className="relative border-b border-border p-4 lg:p-5">
-              <label className="relative block">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-                <input value={itemQuery} onChange={(event) => setItemQuery(event.target.value)} placeholder={t("fields.searchInventory")} className={`${inputClass} pl-9`} />
-                {searching ? <LoaderCircle className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-brand" /> : null}
-              </label>
+              <SearchInput aria-label={t("fields.searchInventory")} loading={searching} value={itemQuery} onChange={(event) => setItemQuery(event.target.value)} placeholder={t("fields.searchInventory")} />
               {itemQuery.trim().length >= 2 ? (
                 <div className="absolute inset-x-4 top-[calc(100%-14px)] z-20 max-h-64 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-lg lg:inset-x-5">
                   {itemResults.length ? itemResults.map((resource) => (
@@ -655,21 +671,21 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
             </div>
 
             <div className="divide-y divide-border">
-              {draftLines.map((line) => (
-                <div key={line.resourceId} className="grid gap-3 p-4 sm:grid-cols-[minmax(180px,1fr)_110px_140px_minmax(160px,1fr)_auto] sm:items-end lg:p-5">
+              {lineFields.map((line, index) => (
+                <div key={line.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(180px,1fr)_110px_140px_minmax(160px,1fr)_auto] sm:items-end lg:p-5">
                   <div className="min-w-0 self-center"><p className="truncate text-sm font-semibold text-foreground">{line.resourceName}</p><p className="truncate text-xs text-muted">{line.resourceSku || t("fields.noSku")}</p></div>
-                  <label className={labelClass}>{t("fields.quantity")}<input required type="number" min="1" step="1" value={line.quantity} onChange={(event) => updateLine(line.resourceId, { quantity: event.target.value })} className={`${inputClass} mt-1.5`} /></label>
-                  {type === "sale" ? <label className={labelClass}>{t("fields.unitPrice")}<div className="relative"><input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(line.resourceId, { unitPrice: event.target.value })} className={`${inputClass} mt-1.5 pr-12`} /><span className="absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-xs text-muted">{line.currency}</span></div></label> : <span />}
-                  <label className={labelClass}>{t("fields.lineNote")}<input value={line.note} onChange={(event) => updateLine(line.resourceId, { note: event.target.value })} className={`${inputClass} mt-1.5`} /></label>
-                  <button type="button" onClick={() => setDraftLines((current) => current.filter((item) => item.resourceId !== line.resourceId))} className="grid size-10 place-items-center rounded-xl border border-danger-border text-danger hover:bg-danger-soft" aria-label={t("actions.removeLine", { name: line.resourceName })}><X className="size-4" /></button>
+                  <Field label={t("fields.quantity")} error={formErrors.lines?.[index]?.quantity?.message} required><NumberInput min="1" step="1" inputMode="numeric" {...register(`lines.${index}.quantity`, { required: t("validation.quantityRequired"), validate: (value) => Number.isInteger(Number(value)) && Number(value) >= 1 || t("validation.quantityInvalid") })} /></Field>
+                  {type === "sale" ? <Field label={t("fields.unitPrice")} error={formErrors.lines?.[index]?.unitPrice?.message}><CurrencyInput currency={line.currency} {...register(`lines.${index}.unitPrice`, { validate: (value) => !value.trim() || Number.isFinite(Number(value.replace(",", "."))) && Number(value.replace(",", ".")) >= 0 || t("validation.priceInvalid") })} className="tabular-nums" /></Field> : <span />}
+                  <Field label={t("fields.lineNote")} error={formErrors.lines?.[index]?.note?.message}><Input {...register(`lines.${index}.note`, { maxLength: { value: 20_000, message: t("validation.maxLength", { max: 20_000 }) } })} /></Field>
+                  <IconButton variant="danger" onClick={() => removeLine(index)} aria-label={t("actions.removeLine", { name: line.resourceName })}><X className="size-4" /></IconButton>
                 </div>
               ))}
-              {!draftLines.length ? <EmptyState className="min-h-40" icon={<Package className="size-5" />} title={t("empty.linesTitle")} description={t("empty.linesDescription")} /> : null}
+              {!lineFields.length ? <EmptyState className="min-h-40" icon={<Package className="size-5" />} title={t("empty.linesTitle")} description={t("empty.linesDescription")} /> : null}
             </div>
-            <div className="flex justify-end gap-2 border-t border-border bg-surface-subtle p-4 lg:px-5">
+            <FormActions className="p-4 lg:px-5">
               <Button type="button" variant="ghost" onClick={() => { resetForm(); setFormOpen(false); }}>{t("actions.cancel")}</Button>
-              <Button type="submit" disabled={saving || !contacts.length || !draftLines.length}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{t("actions.create")}</Button>
-            </div>
+              <Button type="submit" disabled={saving || !contacts.length || !lineFields.length}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}{t("actions.create")}</Button>
+            </FormActions>
           </form>
         </Card>
       ) : null}
@@ -758,7 +774,7 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
                                       {t("actions.manageUnits")}
                                     </Button>
                                   ) : null}
-                                  {line.trackingMode === "bulk" && (canIssue || canReturn) ? <input aria-label={t("fields.movementQuantity")} type="number" min="1" max={maximum} step="1" value={movementQuantities[line.id] ?? ""} onChange={(event) => setMovementQuantities((current) => ({ ...current, [line.id]: event.target.value }))} placeholder={String(maximum)} className={`${inputClass} w-20`} /> : null}
+                                  {line.trackingMode === "bulk" && (canIssue || canReturn) ? <NumberInput aria-label={t("fields.movementQuantity")} min="1" max={maximum} step="1" inputMode="numeric" value={movementQuantities[line.id] ?? ""} onChange={(event) => setMovementQuantities((current) => ({ ...current, [line.id]: event.target.value }))} placeholder={String(maximum)} className="w-20" /> : null}
                                   {line.trackingMode === "bulk" && canIssue ? <Button size="sm" variant="secondary" disabled={actingLineId === line.id} onClick={() => void move(order, line, "issue")}>{actingLineId === line.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <ArrowUpFromLine className="size-3.5" />}{t("actions.issue")}</Button> : null}
                                   {line.trackingMode === "bulk" && canReturn ? <Button size="sm" variant="secondary" disabled={actingLineId === line.id} onClick={() => void move(order, line, "return")}>{actingLineId === line.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}{t("actions.return")}</Button> : null}
                                   {line.trackingMode === "bulk" && !canIssue && !canReturn ? <Badge tone={line.openQuantity === 0 ? "success" : "neutral"}>{line.openQuantity === 0 ? t("list.complete") : t("list.pending")}</Badge> : null}
@@ -779,18 +795,18 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
                                         <p className="mt-1 text-xs text-muted">{t("units.availableDescription")}</p>
                                         {unitPanel.availableUnits.length ? (
                                           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                                            <select
+                                            <Select
                                               aria-label={t("fields.availableUnit")}
                                               value={selectedUnitId}
                                               onChange={(event) => setSelectedUnitIds((current) => ({ ...current, [line.id]: event.target.value }))}
-                                              className={`${inputClass} min-w-0 flex-1`}
+                                              className="min-w-0 flex-1"
                                             >
                                               {unitPanel.availableUnits.map((unit) => (
                                                 <option key={unit.id} value={unit.id}>
                                                   {unit.code}{unit.location ? ` · ${unit.location}` : ""}
                                                 </option>
                                               ))}
-                                            </select>
+                                            </Select>
                                             {canReserve ? (
                                               <Button
                                                 size="sm"

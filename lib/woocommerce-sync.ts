@@ -2,14 +2,20 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
+  contactResources,
+  contacts,
+  orderLines,
+  orders,
   organizations,
   resources,
   resourceVariants,
+  stockMovements,
   wooCommerceConnections,
+  wooCommerceCustomerLinks,
   wooCommerceOrderLineSyncs,
   wooCommerceOrderSyncs,
   wooCommerceWebhookDeliveries,
@@ -25,11 +31,15 @@ import { bookStockMovement } from "@/lib/stock";
 import { validateWebhookTargetUrl } from "@/lib/webhook-contract";
 import {
   computeWooCommerceLineTargets,
+  parseWooCommerceMoneyToCents,
   verifyWooCommerceWebhookSignature,
+  wooCommerceCustomerIdentity,
   wooCommerceManualSyncSchema,
   wooCommerceMovementIdempotencyKey,
   wooCommerceOrderSchema,
   wooCommercePayloadHash,
+  wooCommerceProjectedSalesStatus,
+  wooCommerceRecentImportWindow,
   wooCommerceRefundSchema,
   type WooCommerceLineTarget,
   type WooCommerceOrder,
@@ -46,6 +56,8 @@ import {
 
 const ENCRYPTION_VARIABLE = "INTEGRATION_ENCRYPTION_KEY";
 const MANUAL_RETRY_LIMIT = 20;
+const RECENT_IMPORT_PAGE_SIZE = 100;
+const RECENT_IMPORT_MAX_PAGES = 50;
 const WEBHOOK_TOPICS = ["order.created", "order.updated"] as const;
 
 type WebhookTopic = (typeof WEBHOOK_TOPICS)[number];
@@ -346,6 +358,79 @@ async function fetchOrderBundle(
   return { order: order.data, refunds };
 }
 
+const wooCommerceOrderIdSchema = z
+  .object({ id: z.number().int().positive() })
+  .passthrough();
+
+function numericHeader(
+  headers: Record<string, string | string[] | undefined>,
+  name: string,
+) {
+  const header = headers[name];
+  const value = Number(Array.isArray(header) ? header[0] : header);
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+async function fetchRecentWooCommerceOrderIds(
+  connection: WooCommerceConnectionRecord,
+) {
+  const credentials = decryptWooCommerceCredentials(connection);
+  const window = wooCommerceRecentImportWindow();
+  const orderIds: number[] = [];
+  let page = 1;
+  let totalPages: number | null = null;
+
+  do {
+    const response = await requestWooCommerceApi<unknown>({
+      credentials,
+      path: "orders",
+      query: {
+        after: window.after,
+        before: window.before,
+        dates_are_gmt: true,
+        order: "asc",
+        orderby: "date",
+        per_page: RECENT_IMPORT_PAGE_SIZE,
+        page,
+        _fields: "id",
+      },
+    });
+    const parsed = z.array(wooCommerceOrderIdSchema).safeParse(response.payload);
+    if (!parsed.success) {
+      throw new WooCommerceConnectionError(
+        "WooCommerce returned an invalid recent-orders response.",
+      );
+    }
+    totalPages ??= numericHeader(response.headers, "x-wp-totalpages");
+    if (totalPages !== null && totalPages > RECENT_IMPORT_MAX_PAGES) {
+      throw new WooCommerceSyncError(
+        "The seven-day import contains more orders than Inventory can process safely in one run.",
+        409,
+      );
+    }
+    orderIds.push(...parsed.data.map((order) => order.id));
+
+    if (totalPages !== null) {
+      page += 1;
+    } else if (parsed.data.length === RECENT_IMPORT_PAGE_SIZE) {
+      page += 1;
+      if (page > RECENT_IMPORT_MAX_PAGES) {
+        throw new WooCommerceSyncError(
+          "The seven-day import contains more orders than Inventory can process safely in one run.",
+          409,
+        );
+      }
+    } else {
+      break;
+    }
+  } while (totalPages === null || page <= totalPages);
+
+  return {
+    orderIds: [...new Set(orderIds)],
+    ...window,
+  };
+}
+
 async function resolveSku(
   transaction: Transaction,
   organizationId: string,
@@ -399,6 +484,502 @@ async function resolveSku(
     mapping: { resourceId: itemRows[0]!.resourceId, variantId: null },
     error: null,
   };
+}
+
+const limited = (value: string | null | undefined, maximum: number) => {
+  const normalized = value?.trim();
+  return normalized ? normalized.slice(0, maximum) : null;
+};
+
+function wooCommerceContactSnapshot(order: WooCommerceOrder) {
+  const billing = order.billing;
+  const identity = wooCommerceCustomerIdentity(order);
+  const personalName = [billing?.first_name, billing?.last_name]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ");
+  const company = limited(billing?.company, 240);
+  const name = limited(
+    personalName ||
+      company ||
+      identity.email ||
+      `WooCommerce customer ${identity.customerId ?? `order ${order.number}`}`,
+    240,
+  )!;
+  const country = billing?.country.trim().toUpperCase() ?? "";
+  return {
+    identity,
+    name,
+    company,
+    email: identity.email,
+    phone: limited(billing?.phone, 80),
+    addressLine1: limited(billing?.address_1, 240),
+    addressLine2: limited(billing?.address_2, 240),
+    postalCode: limited(billing?.postcode, 32),
+    city: limited(billing?.city, 120),
+    state: limited(billing?.state, 120),
+    countryCode: /^[A-Z]{2}$/.test(country) ? country : null,
+  };
+}
+
+async function upsertWooCommerceContact(
+  transaction: Transaction,
+  options: {
+    organizationId: string;
+    connectionId: string;
+    order: WooCommerceOrder;
+    actor: string;
+  },
+) {
+  const snapshot = wooCommerceContactSnapshot(options.order);
+  const lockKey = [
+    "woocommerce-customer",
+    options.organizationId,
+    options.connectionId,
+    snapshot.identity.key,
+  ].join(":");
+  await transaction.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+  );
+
+  const [link] = await transaction
+    .select({ contactId: wooCommerceCustomerLinks.contactId })
+    .from(wooCommerceCustomerLinks)
+    .where(
+      and(
+        eq(wooCommerceCustomerLinks.organizationId, options.organizationId),
+        eq(wooCommerceCustomerLinks.connectionId, options.connectionId),
+        eq(wooCommerceCustomerLinks.customerKey, snapshot.identity.key),
+      ),
+    )
+    .limit(1);
+
+  let contact = link
+    ? (
+        await transaction
+          .select()
+          .from(contacts)
+          .where(
+            and(
+              eq(contacts.organizationId, options.organizationId),
+              eq(contacts.id, link.contactId),
+            ),
+          )
+          .limit(1)
+      )[0]
+    : null;
+
+  if (!contact && snapshot.email) {
+    const candidates = await transaction
+      .select()
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.organizationId, options.organizationId),
+          isNull(contacts.archivedAt),
+          sql`lower(btrim(${contacts.email})) = ${snapshot.email}`,
+        ),
+      )
+      .limit(2);
+    if (candidates.length === 1) contact = candidates[0]!;
+  }
+
+  const now = new Date();
+  if (contact) {
+    const [updated] = await transaction
+      .update(contacts)
+      .set({
+        name: snapshot.name,
+        company: snapshot.company ?? contact.company,
+        roles: Array.from(new Set([...contact.roles, "customer" as const])),
+        email: snapshot.email ?? contact.email,
+        phone: snapshot.phone ?? contact.phone,
+        addressLine1: snapshot.addressLine1 ?? contact.addressLine1,
+        addressLine2: snapshot.addressLine2 ?? contact.addressLine2,
+        postalCode: snapshot.postalCode ?? contact.postalCode,
+        city: snapshot.city ?? contact.city,
+        state: snapshot.state ?? contact.state,
+        countryCode: snapshot.countryCode ?? contact.countryCode,
+        tags: Array.from(new Set([...contact.tags, "woocommerce"])),
+        updatedBy: options.actor,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(contacts.organizationId, options.organizationId),
+          eq(contacts.id, contact.id),
+        ),
+      )
+      .returning();
+    contact = updated ?? contact;
+  } else {
+    const [created] = await transaction
+      .insert(contacts)
+      .values({
+        organizationId: options.organizationId,
+        name: snapshot.name,
+        company: snapshot.company,
+        roles: ["customer"],
+        email: snapshot.email,
+        phone: snapshot.phone,
+        addressLine1: snapshot.addressLine1,
+        addressLine2: snapshot.addressLine2,
+        postalCode: snapshot.postalCode,
+        city: snapshot.city,
+        state: snapshot.state,
+        countryCode: snapshot.countryCode,
+        tags: ["woocommerce"],
+        createdBy: options.actor,
+        updatedBy: options.actor,
+      })
+      .returning();
+    if (!created) {
+      throw new WooCommerceSyncError(
+        "The WooCommerce customer could not be created.",
+        409,
+      );
+    }
+    contact = created;
+  }
+
+  await transaction
+    .insert(wooCommerceCustomerLinks)
+    .values({
+      organizationId: options.organizationId,
+      connectionId: options.connectionId,
+      customerKey: snapshot.identity.key,
+      customerId: snapshot.identity.customerId,
+      email: snapshot.identity.email,
+      contactId: contact.id,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [
+        wooCommerceCustomerLinks.organizationId,
+        wooCommerceCustomerLinks.connectionId,
+        wooCommerceCustomerLinks.customerKey,
+      ],
+      set: {
+        customerId: snapshot.identity.customerId,
+        email: snapshot.identity.email,
+        contactId: contact.id,
+        updatedAt: now,
+      },
+    });
+  return contact;
+}
+
+function wooCommerceOrderNote(order: WooCommerceOrder) {
+  return [
+    `WooCommerce order ID: ${order.id}`,
+    order.payment_method_title || order.payment_method
+      ? `Payment: ${order.payment_method_title || order.payment_method}`
+      : null,
+    order.customer_note ? `Customer note:\n${order.customer_note}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, 20_000);
+}
+
+function wooCommerceOrderDate(order: WooCommerceOrder) {
+  const value = order.date_created_gmt?.trim();
+  if (!value) return null;
+  const parsed = new Date(`${value.replace(/Z$/, "")}Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function wooCommerceLinePrice(
+  order: WooCommerceOrder,
+  lineItemId: number,
+  quantity: number,
+) {
+  const source = order.line_items.find((line) => line.id === lineItemId);
+  if (!source || quantity <= 0) return null;
+  const total = parseWooCommerceMoneyToCents(source.total);
+  if (total !== null) return Math.round(total / quantity);
+  return parseWooCommerceMoneyToCents(source.price);
+}
+
+async function projectWooCommerceSalesOrder(options: {
+  organizationId: string;
+  connectionId: string;
+  order: WooCommerceOrder;
+}) {
+  return db.transaction(async (transaction) => {
+    const [syncOrder] = await transaction
+      .select()
+      .from(wooCommerceOrderSyncs)
+      .where(
+        and(
+          eq(wooCommerceOrderSyncs.organizationId, options.organizationId),
+          eq(wooCommerceOrderSyncs.connectionId, options.connectionId),
+          eq(wooCommerceOrderSyncs.orderId, options.order.id),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!syncOrder) {
+      throw new WooCommerceSyncError(
+        "The WooCommerce order has no synchronization state.",
+        409,
+      );
+    }
+
+    const actor = `woocommerce:${options.connectionId}`;
+    const contact = await upsertWooCommerceContact(transaction, {
+      organizationId: options.organizationId,
+      connectionId: options.connectionId,
+      order: options.order,
+      actor,
+    });
+    const orderedAt = wooCommerceOrderDate(options.order);
+    const orderValues = {
+      contactId: contact.id,
+      contactName: contact.company ?? contact.name,
+      reference: `WooCommerce #${options.order.number}`.slice(0, 160),
+      ...(orderedAt ? { orderedAt } : {}),
+      note: wooCommerceOrderNote(options.order),
+      updatedAt: new Date(),
+    };
+
+    let localOrder = syncOrder.localOrderId
+      ? (
+          await transaction
+            .select()
+            .from(orders)
+            .where(
+              and(
+                eq(orders.organizationId, options.organizationId),
+                eq(orders.id, syncOrder.localOrderId),
+              ),
+            )
+            .limit(1)
+        )[0]
+      : null;
+    if (localOrder && localOrder.type !== "sale") {
+      throw new WooCommerceSyncError(
+        "The linked Inventory order is not a sales order.",
+        409,
+      );
+    }
+    if (localOrder) {
+      const [updated] = await transaction
+        .update(orders)
+        .set(orderValues)
+        .where(
+          and(
+            eq(orders.organizationId, options.organizationId),
+            eq(orders.id, localOrder.id),
+          ),
+        )
+        .returning();
+      localOrder = updated ?? localOrder;
+    } else {
+      const [created] = await transaction
+        .insert(orders)
+        .values({
+          organizationId: options.organizationId,
+          type: "sale",
+          status: "confirmed",
+          orderedAt: orderedAt ?? new Date(),
+          ...orderValues,
+          createdBy: actor,
+        })
+        .returning();
+      if (!created) {
+        throw new WooCommerceSyncError(
+          "The Inventory sales order could not be created.",
+          409,
+        );
+      }
+      localOrder = created;
+    }
+
+    const syncLines = await transaction
+      .select()
+      .from(wooCommerceOrderLineSyncs)
+      .where(
+        and(
+          eq(
+            wooCommerceOrderLineSyncs.organizationId,
+            options.organizationId,
+          ),
+          eq(wooCommerceOrderLineSyncs.connectionId, options.connectionId),
+          eq(wooCommerceOrderLineSyncs.orderId, options.order.id),
+        ),
+      );
+    const sourceLines = new Map(
+      options.order.line_items.map((line) => [line.id, line]),
+    );
+
+    for (const syncLine of syncLines) {
+      if (!syncLine.resourceId) continue;
+      let localLine = syncLine.localOrderLineId
+        ? (
+            await transaction
+              .select()
+              .from(orderLines)
+              .where(
+                and(
+                  eq(orderLines.organizationId, options.organizationId),
+                  eq(orderLines.id, syncLine.localOrderLineId),
+                  eq(orderLines.orderId, localOrder.id),
+                ),
+              )
+              .limit(1)
+          )[0]
+        : null;
+      const sourceLine = sourceLines.get(syncLine.lineItemId);
+      const currentFulfilled = localLine?.fulfilledQuantity ?? 0;
+      const currentReturned = localLine?.returnedQuantity ?? 0;
+      const currentNet = currentFulfilled - currentReturned;
+      const appliedDelta = syncLine.appliedQuantity - currentNet;
+      const fulfilledQuantity =
+        currentFulfilled + Math.max(0, appliedDelta);
+      const returnedQuantity = currentReturned + Math.max(0, -appliedDelta);
+      const orderedQuantity = Math.max(
+        1,
+        syncLine.orderedQuantity,
+        fulfilledQuantity,
+      );
+      const unitPriceCents = wooCommerceLinePrice(
+        options.order,
+        syncLine.lineItemId,
+        Math.max(1, syncLine.orderedQuantity),
+      );
+      const currency = /^[A-Z]{3}$/.test(options.order.currency ?? "")
+        ? options.order.currency!
+        : "EUR";
+      const note = [
+        `WooCommerce line ID: ${syncLine.lineItemId}`,
+        sourceLine?.name ? `Product: ${sourceLine.name}` : null,
+        `SKU: ${syncLine.sku || "(missing)"}`,
+      ]
+        .filter(Boolean)
+        .join("\n")
+        .slice(0, 20_000);
+      const lineValues = {
+        resourceId: syncLine.resourceId,
+        variantId: syncLine.variantId,
+        orderedQuantity,
+        fulfilledQuantity,
+        returnedQuantity,
+        unitPriceCents,
+        priceCurrency: unitPriceCents === null ? null : currency,
+        note,
+        updatedAt: new Date(),
+      };
+
+      if (localLine) {
+        const [updated] = await transaction
+          .update(orderLines)
+          .set(lineValues)
+          .where(
+            and(
+              eq(orderLines.organizationId, options.organizationId),
+              eq(orderLines.id, localLine.id),
+            ),
+          )
+          .returning();
+        localLine = updated ?? localLine;
+      } else {
+        const [created] = await transaction
+          .insert(orderLines)
+          .values({
+            organizationId: options.organizationId,
+            orderId: localOrder.id,
+            ...lineValues,
+          })
+          .returning();
+        if (!created) {
+          throw new WooCommerceSyncError(
+            "An Inventory sales-order line could not be created.",
+            409,
+          );
+        }
+        localLine = created;
+      }
+
+      await transaction
+        .update(wooCommerceOrderLineSyncs)
+        .set({ localOrderLineId: localLine.id, updatedAt: new Date() })
+        .where(
+          and(
+            eq(
+              wooCommerceOrderLineSyncs.organizationId,
+              options.organizationId,
+            ),
+            eq(wooCommerceOrderLineSyncs.connectionId, options.connectionId),
+            eq(wooCommerceOrderLineSyncs.orderId, options.order.id),
+            eq(wooCommerceOrderLineSyncs.lineItemId, syncLine.lineItemId),
+          ),
+        );
+      await transaction
+        .insert(contactResources)
+        .values({
+          organizationId: options.organizationId,
+          contactId: contact.id,
+          resourceId: syncLine.resourceId,
+          createdBy: actor,
+        })
+        .onConflictDoNothing();
+      if (syncLine.lastMovementId) {
+        await transaction
+          .update(stockMovements)
+          .set({ contactId: contact.id, orderLineId: localLine.id })
+          .where(
+            and(
+              eq(stockMovements.organizationId, options.organizationId),
+              eq(stockMovements.id, syncLine.lastMovementId),
+            ),
+          );
+      }
+    }
+
+    const projectedLines = await transaction
+      .select({
+        orderedQuantity: orderLines.orderedQuantity,
+        fulfilledQuantity: orderLines.fulfilledQuantity,
+        returnedQuantity: orderLines.returnedQuantity,
+      })
+      .from(orderLines)
+      .where(
+        and(
+          eq(orderLines.organizationId, options.organizationId),
+          eq(orderLines.orderId, localOrder.id),
+        ),
+      );
+    const status = wooCommerceProjectedSalesStatus({
+      wooStatus: options.order.status,
+      unresolved: syncLines.some((line) => line.status !== "synced"),
+      lines: projectedLines,
+    });
+    await transaction
+      .update(orders)
+      .set({ status, updatedAt: new Date() })
+      .where(
+        and(
+          eq(orders.organizationId, options.organizationId),
+          eq(orders.id, localOrder.id),
+        ),
+      );
+    await transaction
+      .update(wooCommerceOrderSyncs)
+      .set({
+        contactId: contact.id,
+        localOrderId: localOrder.id,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(wooCommerceOrderSyncs.organizationId, options.organizationId),
+          eq(wooCommerceOrderSyncs.connectionId, options.connectionId),
+          eq(wooCommerceOrderSyncs.orderId, options.order.id),
+        ),
+      );
+    return { contactId: contact.id, localOrderId: localOrder.id };
+  });
 }
 
 function movementNote(order: WooCommerceOrder, line: WooCommerceLineTarget) {
@@ -612,7 +1193,7 @@ export async function reconcileWooCommerceOrder(options: {
         .onConflictDoNothing();
     }
   });
-  return db.transaction(async (transaction) => {
+  const reconciliation = await db.transaction(async (transaction) => {
     const now = new Date();
     await transaction
       .insert(wooCommerceOrderSyncs)
@@ -833,6 +1414,30 @@ export async function reconcileWooCommerceOrder(options: {
       errors,
     };
   });
+  try {
+    const projection = await projectWooCommerceSalesOrder({
+      organizationId: options.organizationId,
+      connectionId: options.connectionId,
+      order: options.order,
+    });
+    return { ...reconciliation, ...projection };
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? `Sales-order projection failed: ${error.message}`.slice(0, 8_000)
+        : "Sales-order projection failed.";
+    await db
+      .update(wooCommerceOrderSyncs)
+      .set({ status: "failed", lastError: message, updatedAt: new Date() })
+      .where(
+        and(
+          eq(wooCommerceOrderSyncs.organizationId, options.organizationId),
+          eq(wooCommerceOrderSyncs.connectionId, options.connectionId),
+          eq(wooCommerceOrderSyncs.orderId, options.order.id),
+        ),
+      );
+    throw error;
+  }
 }
 
 async function syncOrderById(
@@ -877,22 +1482,29 @@ export async function runManualWooCommerceSync(
       404,
     );
   }
-  const orderIds = input.orderId
-    ? [input.orderId]
-    : (
-        await db
-          .select({ orderId: wooCommerceOrderSyncs.orderId })
-          .from(wooCommerceOrderSyncs)
-          .where(
-            and(
-              eq(wooCommerceOrderSyncs.organizationId, organizationId),
-              eq(wooCommerceOrderSyncs.connectionId, connection.id),
-              ne(wooCommerceOrderSyncs.status, "succeeded"),
-            ),
-          )
-          .orderBy(desc(wooCommerceOrderSyncs.updatedAt))
-          .limit(MANUAL_RETRY_LIMIT)
-      ).map((row) => row.orderId);
+  const recentImport =
+    "window" in input && input.window === "last-7-days"
+      ? await fetchRecentWooCommerceOrderIds(connection)
+      : null;
+  const orderIds =
+    "orderId" in input
+      ? [input.orderId]
+      : recentImport
+        ? recentImport.orderIds
+        : (
+            await db
+              .select({ orderId: wooCommerceOrderSyncs.orderId })
+              .from(wooCommerceOrderSyncs)
+              .where(
+                and(
+                  eq(wooCommerceOrderSyncs.organizationId, organizationId),
+                  eq(wooCommerceOrderSyncs.connectionId, connection.id),
+                  ne(wooCommerceOrderSyncs.status, "succeeded"),
+                ),
+              )
+              .orderBy(desc(wooCommerceOrderSyncs.updatedAt))
+              .limit(MANUAL_RETRY_LIMIT)
+          ).map((row) => row.orderId);
   const results = [];
   for (const orderId of orderIds) {
     try {
@@ -922,6 +1534,13 @@ export async function runManualWooCommerceSync(
     }
   }
   return {
+    mode: "orderId" in input
+      ? ("single-order" as const)
+      : recentImport
+        ? ("last-7-days" as const)
+        : ("retry-issues" as const),
+    after: recentImport?.after ?? null,
+    before: recentImport?.before ?? null,
     attempted: orderIds.length,
     succeeded: results.filter((result) => result.status === "succeeded")
       .length,
@@ -984,6 +1603,7 @@ export async function getWooCommerceSyncOverview(
     issueOrders: Number(counts?.issueOrders ?? 0),
     recentOrders: recent.map((order) => ({
       orderId: order.orderId,
+      localOrderId: order.localOrderId,
       orderNumber: order.orderNumber,
       orderStatus: order.orderStatus,
       status: order.status,

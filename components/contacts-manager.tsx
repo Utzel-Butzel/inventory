@@ -9,7 +9,6 @@ import {
   MessageSquareText,
   Package,
   Plus,
-  Search,
   Truck,
   UserRound,
   UsersRound,
@@ -18,16 +17,33 @@ import {
 import { useT } from "next-i18next/client";
 import {
   Fragment,
-  type FormEvent,
   useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
+import { useController, useForm, useWatch } from "react-hook-form";
 
+import {
+  Field,
+  FormActions,
+  Input,
+  SearchInput,
+  Select,
+  Textarea,
+} from "@/components/form-controls";
 import { CommentsThread } from "@/components/resource-comments";
 import { OrganizationLink as Link } from "@/components/organization-routing";
-import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  Skeleton,
+  cn,
+} from "@/components/ui";
 import { fetchJson } from "@/lib/client-types";
 import type { ContactRole } from "@/lib/contact-contract";
 
@@ -85,10 +101,6 @@ type ContactForm = {
   notes: string;
 };
 
-const inputClass =
-  "h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none transition placeholder:text-muted hover:border-border-strong focus:border-focus focus:ring-3 focus:ring-focus/10 disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-muted";
-const labelClass = "block text-[12px] font-semibold text-muted-strong";
-
 function emptyForm(): ContactForm {
   return {
     name: "",
@@ -145,6 +157,16 @@ function address(contact: Contact) {
     .join(", ");
 }
 
+function isValidUrl(value: string) {
+  if (!value.trim()) return true;
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function ContactsManager({ canManage }: { canManage: boolean }) {
   const { t } = useT("contacts");
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -156,12 +178,34 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
   const [roleFilter, setRoleFilter] = useState<"all" | ContactRole>("all");
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<ContactForm>(emptyForm);
   const [selectedResources, setSelectedResources] = useState<LinkedResource[]>([]);
   const [resourceQuery, setResourceQuery] = useState("");
   const [resourceResults, setResourceResults] = useState<LinkedResource[]>([]);
   const [searchingResources, setSearchingResources] = useState(false);
   const [commentsContactId, setCommentsContactId] = useState<string | null>(null);
+  const {
+    control,
+    formState: { errors: formErrors },
+    handleSubmit,
+    register,
+    reset,
+  } = useForm<ContactForm>({
+    defaultValues: emptyForm(),
+    mode: "onBlur",
+  });
+  const {
+    field: rolesField,
+    fieldState: { error: rolesError },
+  } = useController({
+    control,
+    name: "roles",
+    rules: {
+      validate: (value) =>
+        value.length > 0 || t("validation.roleRequired"),
+    },
+  });
+  const formName = useWatch({ control, name: "name" });
+  const roles = rolesField.value;
 
   const loadContacts = useCallback(async () => {
     setLoading(true);
@@ -237,7 +281,7 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
 
   function openCreate() {
     setEditingId(null);
-    setForm(emptyForm());
+    reset(emptyForm());
     setSelectedResources([]);
     setResourceQuery("");
     setNotice(null);
@@ -246,7 +290,7 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
 
   function openEdit(contact: Contact) {
     setEditingId(contact.id);
-    setForm(formFromContact(contact));
+    reset(formFromContact(contact));
     setSelectedResources(contact.resources);
     setResourceQuery("");
     setNotice(null);
@@ -260,22 +304,16 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
     setError(null);
   }
 
-  function updateField<K extends keyof ContactForm>(key: K, value: ContactForm[K]) {
-    setForm((current) => ({ ...current, [key]: value }));
-  }
-
   function toggleRole(role: ContactRole) {
-    setForm((current) => {
-      const roles = current.roles.includes(role)
-        ? current.roles.filter((entry) => entry !== role)
-        : [...current.roles, role];
-      return roles.length ? { ...current, roles } : current;
-    });
+    const nextRoles = roles.includes(role)
+      ? roles.filter((entry) => entry !== role)
+      : [...roles, role];
+    if (!nextRoles.length) return;
+    rolesField.onChange(nextRoles);
+    rolesField.onBlur();
   }
 
-  async function saveContact(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!form.name.trim() || !form.roles.length) return;
+  async function saveContact(form: ContactForm) {
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -379,19 +417,15 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
       </div>
 
       {error ? (
-        <div role="alert" className="rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
-          {error}
-        </div>
+        <Alert tone="danger">{error}</Alert>
       ) : null}
       {notice ? (
-        <div role="status" className="rounded-xl border border-success-border bg-success-soft px-4 py-3 text-sm text-success">
-          {notice}
-        </div>
+        <Alert tone="success">{notice}</Alert>
       ) : null}
 
       {formOpen ? (
         <Card className="overflow-hidden">
-          <form onSubmit={saveContact}>
+          <form onSubmit={handleSubmit(saveContact)} noValidate>
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
                 <h2 className="text-base font-semibold text-foreground">
@@ -399,71 +433,94 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
                 </h2>
                 <p className="mt-0.5 text-xs text-muted">{t("form.description")}</p>
               </div>
-              <button type="button" onClick={closeForm} className="rounded-lg p-2 text-muted hover:bg-surface-muted hover:text-foreground" aria-label={t("actions.close")}>
+              <IconButton onClick={closeForm} size="sm" aria-label={t("actions.close")}>
                 <X className="size-4" aria-hidden="true" />
-              </button>
+              </IconButton>
             </div>
 
             <div className="space-y-6 p-5">
               <section className="grid gap-4 md:grid-cols-2">
-                <label className={labelClass}>
-                  {t("fields.name")} *
-                  <input className={cn(inputClass, "mt-1.5")} value={form.name} onChange={(event) => updateField("name", event.target.value)} required autoFocus />
-                </label>
-                <label className={labelClass}>
-                  {t("fields.company")}
-                  <input className={cn(inputClass, "mt-1.5")} value={form.company} onChange={(event) => updateField("company", event.target.value)} />
-                </label>
-                <div className="md:col-span-2">
-                  <span className={labelClass}>{t("fields.roles")} *</span>
+                <Field label={t("fields.name")} error={formErrors.name?.message} required>
+                  <Input
+                    {...register("name", {
+                      required: t("validation.nameRequired"),
+                      maxLength: {
+                        value: 240,
+                        message: t("validation.maxLength", { max: 240 }),
+                      },
+                    })}
+                    autoFocus
+                  />
+                </Field>
+                <Field label={t("fields.company")} error={formErrors.company?.message}>
+                  <Input
+                    {...register("company", {
+                      maxLength: {
+                        value: 240,
+                        message: t("validation.maxLength", { max: 240 }),
+                      },
+                    })}
+                  />
+                </Field>
+                <fieldset className="md:col-span-2">
+                  <legend className="block text-[12px] font-semibold text-muted-strong">
+                    {t("fields.roles")} <span className="text-danger" aria-hidden="true">*</span>
+                  </legend>
                   <div className="mt-1.5 flex flex-wrap gap-2">
                     {(["customer", "supplier"] as const).map((role) => (
-                      <button key={role} type="button" onClick={() => toggleRole(role)} aria-pressed={form.roles.includes(role)} className={cn("inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-medium transition", form.roles.includes(role) ? "border-brand-border bg-brand-soft text-brand" : "border-border bg-surface text-muted-strong hover:border-border-strong")}>
+                      <button key={role} type="button" onClick={() => toggleRole(role)} aria-pressed={roles.includes(role)} className={cn("inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-medium transition", roles.includes(role) ? "border-brand-border bg-brand-soft text-brand" : "border-border bg-surface text-muted-strong hover:border-border-strong")}>
                         {role === "customer" ? <UserRound className="size-4" /> : <Truck className="size-4" />}
                         {t(`roles.${role}`)}
                       </button>
                     ))}
                   </div>
-                </div>
-                <label className={labelClass}>
-                  {t("fields.email")}
-                  <input type="email" className={cn(inputClass, "mt-1.5")} value={form.email} onChange={(event) => updateField("email", event.target.value)} />
-                </label>
-                <label className={labelClass}>
-                  {t("fields.phone")}
-                  <input className={cn(inputClass, "mt-1.5")} value={form.phone} onChange={(event) => updateField("phone", event.target.value)} />
-                </label>
-                <label className={labelClass}>
-                  {t("fields.website")}
-                  <input type="url" className={cn(inputClass, "mt-1.5")} value={form.website} onChange={(event) => updateField("website", event.target.value)} placeholder="https://" />
-                </label>
-                <label className={labelClass}>
-                  {t("fields.taxId")}
-                  <input className={cn(inputClass, "mt-1.5")} value={form.taxId} onChange={(event) => updateField("taxId", event.target.value)} />
-                </label>
-                {form.roles.includes("customer") ? (
-                  <label className={labelClass}>
-                    {t("fields.customerNumber")}
-                    <input className={cn(inputClass, "mt-1.5")} value={form.customerNumber} onChange={(event) => updateField("customerNumber", event.target.value)} />
-                  </label>
+                  {rolesError ? <p className="mt-1.5 text-[12px] leading-4 text-danger" role="alert">{rolesError.message}</p> : null}
+                </fieldset>
+                <Field label={t("fields.email")} error={formErrors.email?.message}>
+                  <Input
+                    type="email"
+                    {...register("email", {
+                      maxLength: {
+                        value: 320,
+                        message: t("validation.maxLength", { max: 320 }),
+                      },
+                      pattern: {
+                        value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                        message: t("validation.email"),
+                      },
+                    })}
+                  />
+                </Field>
+                <Field label={t("fields.phone")} error={formErrors.phone?.message}>
+                  <Input {...register("phone", { maxLength: { value: 80, message: t("validation.maxLength", { max: 80 }) } })} />
+                </Field>
+                <Field label={t("fields.website")} error={formErrors.website?.message}>
+                  <Input type="url" {...register("website", { maxLength: { value: 2048, message: t("validation.maxLength", { max: 2048 }) }, validate: (value) => isValidUrl(value) || t("validation.website") })} placeholder="https://" />
+                </Field>
+                <Field label={t("fields.taxId")} error={formErrors.taxId?.message}>
+                  <Input {...register("taxId", { maxLength: { value: 80, message: t("validation.maxLength", { max: 80 }) } })} />
+                </Field>
+                {roles.includes("customer") ? (
+                  <Field label={t("fields.customerNumber")} error={formErrors.customerNumber?.message}>
+                    <Input {...register("customerNumber", { maxLength: { value: 80, message: t("validation.maxLength", { max: 80 }) } })} />
+                  </Field>
                 ) : null}
-                {form.roles.includes("supplier") ? (
-                  <label className={labelClass}>
-                    {t("fields.supplierNumber")}
-                    <input className={cn(inputClass, "mt-1.5")} value={form.supplierNumber} onChange={(event) => updateField("supplierNumber", event.target.value)} />
-                  </label>
+                {roles.includes("supplier") ? (
+                  <Field label={t("fields.supplierNumber")} error={formErrors.supplierNumber?.message}>
+                    <Input {...register("supplierNumber", { maxLength: { value: 80, message: t("validation.maxLength", { max: 80 }) } })} />
+                  </Field>
                 ) : null}
               </section>
 
               <section>
                 <h3 className="text-sm font-semibold text-foreground">{t("form.addressTitle")}</h3>
                 <div className="mt-3 grid gap-4 md:grid-cols-2">
-                  <label className={labelClass}>{t("fields.addressLine1")}<input className={cn(inputClass, "mt-1.5")} value={form.addressLine1} onChange={(event) => updateField("addressLine1", event.target.value)} /></label>
-                  <label className={labelClass}>{t("fields.addressLine2")}<input className={cn(inputClass, "mt-1.5")} value={form.addressLine2} onChange={(event) => updateField("addressLine2", event.target.value)} /></label>
-                  <label className={labelClass}>{t("fields.postalCode")}<input className={cn(inputClass, "mt-1.5")} value={form.postalCode} onChange={(event) => updateField("postalCode", event.target.value)} /></label>
-                  <label className={labelClass}>{t("fields.city")}<input className={cn(inputClass, "mt-1.5")} value={form.city} onChange={(event) => updateField("city", event.target.value)} /></label>
-                  <label className={labelClass}>{t("fields.state")}<input className={cn(inputClass, "mt-1.5")} value={form.state} onChange={(event) => updateField("state", event.target.value)} /></label>
-                  <label className={labelClass}>{t("fields.countryCode")}<input className={cn(inputClass, "mt-1.5 uppercase")} value={form.countryCode} onChange={(event) => updateField("countryCode", event.target.value.toUpperCase().slice(0, 2))} placeholder="DE" /></label>
+                  <Field label={t("fields.addressLine1")} error={formErrors.addressLine1?.message}><Input {...register("addressLine1", { maxLength: { value: 240, message: t("validation.maxLength", { max: 240 }) } })} /></Field>
+                  <Field label={t("fields.addressLine2")} error={formErrors.addressLine2?.message}><Input {...register("addressLine2", { maxLength: { value: 240, message: t("validation.maxLength", { max: 240 }) } })} /></Field>
+                  <Field label={t("fields.postalCode")} error={formErrors.postalCode?.message}><Input {...register("postalCode", { maxLength: { value: 32, message: t("validation.maxLength", { max: 32 }) } })} /></Field>
+                  <Field label={t("fields.city")} error={formErrors.city?.message}><Input {...register("city", { maxLength: { value: 120, message: t("validation.maxLength", { max: 120 }) } })} /></Field>
+                  <Field label={t("fields.state")} error={formErrors.state?.message}><Input {...register("state", { maxLength: { value: 120, message: t("validation.maxLength", { max: 120 }) } })} /></Field>
+                  <Field label={t("fields.countryCode")} error={formErrors.countryCode?.message}><Input className="uppercase" maxLength={2} {...register("countryCode", { pattern: { value: /^[A-Za-z]{2}$/, message: t("validation.countryCode") }, setValueAs: (value: string) => value.toUpperCase().slice(0, 2) })} placeholder="DE" /></Field>
                 </div>
               </section>
 
@@ -485,10 +542,14 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
                     ))}
                   </div>
                 ) : null}
-                <div className="relative mt-3">
-                  <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted" aria-hidden="true" />
-                  <input className={cn(inputClass, "pl-9")} value={resourceQuery} onChange={(event) => setResourceQuery(event.target.value)} placeholder={t("form.inventorySearch")} />
-                </div>
+                <SearchInput
+                  containerClassName="mt-3"
+                  loading={searchingResources}
+                  value={resourceQuery}
+                  onChange={(event) => setResourceQuery(event.target.value)}
+                  placeholder={t("form.inventorySearch")}
+                  aria-label={t("form.inventorySearch")}
+                />
                 <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-border">
                   {searchingResources ? (
                     <div className="flex items-center gap-2 px-3 py-4 text-xs text-muted"><LoaderCircle className="size-4 animate-spin" />{t("form.searchingInventory")}</div>
@@ -509,33 +570,38 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
               </section>
 
               <section className="grid gap-4 md:grid-cols-2">
-                <label className={labelClass}>{t("fields.tags")}<input className={cn(inputClass, "mt-1.5")} value={form.tags} onChange={(event) => updateField("tags", event.target.value)} placeholder={t("fields.tagsPlaceholder")} /></label>
-                <label className={cn(labelClass, "md:row-span-2")}>{t("fields.notes")}<textarea className={cn(inputClass, "mt-1.5 h-24 resize-y py-2.5")} value={form.notes} onChange={(event) => updateField("notes", event.target.value)} /></label>
+                <Field label={t("fields.tags")} error={formErrors.tags?.message}><Input {...register("tags", { validate: { count: (value) => value.split(",").filter((tag) => tag.trim()).length <= 50 || t("validation.tooManyTags"), length: (value) => value.split(",").every((tag) => tag.trim().length <= 80) || t("validation.tagsTooLong") } })} placeholder={t("fields.tagsPlaceholder")} /></Field>
+                <Field label={t("fields.notes")} error={formErrors.notes?.message} className="md:row-span-2"><Textarea {...register("notes", { maxLength: { value: 20000, message: t("validation.maxLength", { max: 20000 }) } })} /></Field>
               </section>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-border bg-surface-subtle px-5 py-4">
+            <FormActions>
               <Button type="button" variant="secondary" onClick={closeForm}>{t("actions.cancel")}</Button>
-              <Button type="submit" disabled={saving || !form.name.trim()}>
+              <Button type="submit" disabled={saving || !formName.trim()}>
                 {saving ? <LoaderCircle className="size-4 animate-spin" /> : null}
                 {t(editingId ? "actions.save" : "actions.create")}
               </Button>
-            </div>
+            </FormActions>
           </form>
         </Card>
       ) : null}
 
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted" aria-hidden="true" />
-            <input className={cn(inputClass, "pl-9")} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("filters.search")} aria-label={t("filters.search")} />
-          </div>
-          <select className={cn(inputClass, "sm:w-52")} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as "all" | ContactRole)} aria-label={t("filters.role")}>
+          <SearchInput
+            containerClassName="flex-1"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onClear={() => setQuery("")}
+            clearLabel={t("filters.clear")}
+            placeholder={t("filters.search")}
+            aria-label={t("filters.search")}
+          />
+          <Select className="sm:w-52" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as "all" | ContactRole)} aria-label={t("filters.role")}>
             <option value="all">{t("filters.all")}</option>
             <option value="customer">{t("roles.customer")}</option>
             <option value="supplier">{t("roles.supplier")}</option>
-          </select>
+          </Select>
         </div>
 
         {loading ? (
@@ -569,7 +635,7 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
                           <button type="button" onClick={() => { const closing = commentsContactId === contact.id; setCommentsContactId(closing ? null : contact.id); if (closing) void loadContacts(); }} className={cn("inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-muted hover:bg-surface-muted hover:text-foreground", commentsContactId === contact.id && "bg-brand-soft text-brand")} aria-expanded={commentsContactId === contact.id} aria-label={t("actions.commentsContact", { name: contact.name })}><MessageSquareText className="size-4" /><span className="text-xs font-semibold">{contact.commentCount}</span></button>
-                          {canManage ? <><button type="button" onClick={() => openEdit(contact)} className="rounded-lg p-2 text-muted hover:bg-surface-muted hover:text-foreground" aria-label={t("actions.editContact", { name: contact.name })}><Edit3 className="size-4" /></button><button type="button" onClick={() => void archiveContact(contact)} className="rounded-lg p-2 text-muted hover:bg-danger-soft hover:text-danger" aria-label={t("actions.archiveContact", { name: contact.name })}><Archive className="size-4" /></button></> : null}
+                          {canManage ? <><IconButton size="sm" onClick={() => openEdit(contact)} aria-label={t("actions.editContact", { name: contact.name })}><Edit3 className="size-4" /></IconButton><IconButton size="sm" variant="danger-ghost" onClick={() => void archiveContact(contact)} aria-label={t("actions.archiveContact", { name: contact.name })}><Archive className="size-4" /></IconButton></> : null}
                         </div>
                       </td>
                     </tr>

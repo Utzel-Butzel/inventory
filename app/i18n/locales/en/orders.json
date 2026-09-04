@@ -119,5 +119,14 @@
     "missingContactOrLines": "Choose a contact and add at least one line.",
     "invalidLines": "Check line quantities and prices.",
     "invalidMovementQuantity": "Enter a whole number between 1 and {{maximum}}."
+  },
+  "validation": {
+    "contactRequired": "Select a contact.",
+    "orderedAtRequired": "Enter the recorded date and time.",
+    "dueAtRequired": "Enter the return due date.",
+    "quantityRequired": "Enter a quantity.",
+    "quantityInvalid": "Quantity must be a whole number greater than zero.",
+    "priceInvalid": "Enter a valid non-negative price.",
+    "maxLength": "Maximum {{max}} characters."
   }
 }

@@ -22,7 +22,8 @@
 
 Open Inventory helps you catalog equipment, supplies, collections, rooms, and
 other physical assets. It combines flexible inventory records with auditable
-stock workflows, mobile capture, maps, optional AI, and a scoped REST API.
+stock workflows, mobile capture, maps, optional AI, a scoped REST API, and an
+opt-in Model Context Protocol (MCP) endpoint.
 
 Your data stays on infrastructure you control. The web app, API, migrations,
 and native iOS app live in this repository; the public website and product
@@ -253,6 +254,41 @@ Tokens can receive `read`, `write`, and `ai` scopes and can be revoked at any
 time. A running installation exposes the machine-readable contract at
 `/openapi.json`; set `WEBSITE_URL` to link the app to the separate website's
 interactive documentation.
+
+### Model Context Protocol (MCP)
+
+The built-in stateless MCP server lets trusted agents search inventory, read
+items and stock, list due counts, create or update items, and record stock
+movements or physical counts. It is disabled by default. Enable it and apply
+the database migration before connecting a client:
+
+```bash
+MCP_ENABLED=true npm run db:migrate
+```
+
+The endpoint is `https://your-inventory.example/mcp`. Configure the client with
+an Inventory API token from **Settings → API access** as the bearer credential.
+Do not add `X-Organization-ID`: MCP tokens are always pinned to the organization
+that issued them. Grant only the token scopes and role permissions the agent
+needs, and prefer a short expiry for external clients.
+
+Every request is authenticated anew. Reads and writes have independent durable
+rate limits, writes require an explicit confirmation argument, creation and
+ledger writes require UUID idempotency keys, and item updates require the last
+observed `updatedAt` value. The audit trail stores the tool, principal, result,
+targets, timing, and a hash of the arguments—never the raw arguments or token.
+
+`MCP_ALLOWED_HOSTS` defaults to the host in `AUTH_URL`. Browser-originated MCP
+requests are rejected unless their exact origins are present in
+`MCP_ALLOWED_ORIGINS`; normal server-to-server clients do not need that setting.
+Use `MCP_REQUEST_RATE_LIMIT_PER_MINUTE`, `MCP_READ_RATE_LIMIT_PER_MINUTE`, and
+`MCP_WRITE_RATE_LIMIT_PER_MINUTE` to adjust the defaults of 240, 120, and 30.
+Audit argument fingerprints are HMAC-protected with `AUTH_SECRET`; set a
+separate `MCP_AUDIT_HASH_SECRET` for independent key rotation.
+
+This bearer-token mode is intended for trusted, self-hosted clients. A public
+ChatGPT connector or marketplace distribution should add an OAuth 2.1/PKCE
+authorization layer instead of distributing long-lived Inventory tokens.
 
 - [OpenAPI specification](public/openapi.yaml)
 - [Native iOS app and setup guide](ios/Inventory/README.md)

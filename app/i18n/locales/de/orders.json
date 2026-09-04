@@ -119,5 +119,14 @@
     "missingContactOrLines": "Wähle einen Kontakt und füge mindestens eine Position hinzu.",
     "invalidLines": "Prüfe Mengen und Preise der Positionen.",
     "invalidMovementQuantity": "Gib eine ganze Menge zwischen 1 und {{maximum}} ein."
+  },
+  "validation": {
+    "contactRequired": "Wähle einen Kontakt aus.",
+    "orderedAtRequired": "Gib den Erfassungszeitpunkt an.",
+    "dueAtRequired": "Gib das Rückgabedatum an.",
+    "quantityRequired": "Gib eine Menge ein.",
+    "quantityInvalid": "Die Menge muss eine ganze Zahl größer als null sein.",
+    "priceInvalid": "Gib einen gültigen, nicht negativen Preis ein.",
+    "maxLength": "Maximal {{max}} Zeichen."
   }
 }

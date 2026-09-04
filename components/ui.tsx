@@ -1,14 +1,35 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 
-import { Inbox } from "lucide-react";
+import { AlertCircle, CircleCheck, Inbox, Info, TriangleAlert } from "lucide-react";
 
 export function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-ghost";
+
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
+  variant?: ButtonVariant;
   size?: "sm" | "md" | "lg";
+};
+
+const buttonVariantClasses: Record<ButtonVariant, string> = {
+  primary:
+    "border-transparent bg-brand-solid text-on-brand shadow-sm hover:bg-brand-hover active:bg-brand-active",
+  secondary:
+    "border-border bg-surface text-foreground shadow-sm hover:border-border-strong hover:bg-surface-subtle active:bg-surface-muted",
+  ghost:
+    "border-transparent bg-transparent text-muted-strong hover:bg-surface-muted hover:text-foreground",
+  danger:
+    "border-danger-border bg-surface text-danger shadow-sm hover:bg-danger-soft",
+  "danger-ghost":
+    "border-transparent bg-transparent text-muted hover:bg-danger-soft hover:text-danger",
+};
+
+const buttonSizeClasses = {
+  sm: "h-8 gap-1.5 rounded-lg px-3 text-[14px] font-medium",
+  md: "h-10 gap-2 rounded-xl px-4 text-sm font-semibold",
+  lg: "h-12 gap-2 rounded-xl px-5 text-[16px] font-semibold",
 };
 
 export function Button({
@@ -18,33 +39,108 @@ export function Button({
   type = "button",
   ...props
 }: ButtonProps) {
-  const variants = {
-    primary:
-      "border-transparent bg-brand-solid text-on-brand shadow-sm hover:bg-brand-hover active:bg-brand-active",
-    secondary:
-      "border-border bg-surface text-foreground shadow-sm hover:border-border-strong hover:bg-surface-subtle active:bg-surface-muted",
-    ghost:
-      "border-transparent bg-transparent text-muted-strong hover:bg-surface-muted hover:text-foreground",
-    danger:
-      "border-danger-border bg-surface text-danger shadow-sm hover:bg-danger-soft",
-  };
+  return (
+    <button
+      type={type}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center border transition duration-150 disabled:pointer-events-none disabled:opacity-50",
+        buttonVariantClasses[variant],
+        buttonSizeClasses[size],
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+type IconButtonProps = Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "aria-label"
+> & {
+  "aria-label": string;
+  size?: "sm" | "md" | "lg";
+  variant?: ButtonVariant;
+};
+
+export function IconButton({
+  className,
+  size = "md",
+  type = "button",
+  variant = "ghost",
+  ...props
+}: IconButtonProps) {
   const sizes = {
-    sm: "h-8 gap-1.5 rounded-lg px-3 text-[14px] font-medium",
-    md: "h-10 gap-2 rounded-xl px-4 text-sm font-semibold",
-    lg: "h-12 gap-2 rounded-xl px-5 text-[16px] font-semibold",
+    sm: "size-8 rounded-lg",
+    md: "size-10 rounded-xl",
+    lg: "size-12 rounded-xl",
   };
 
   return (
     <button
       type={type}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center border transition duration-150 disabled:pointer-events-none disabled:opacity-50",
-        variants[variant],
+        "inline-grid shrink-0 place-items-center border transition duration-150 disabled:pointer-events-none disabled:opacity-50",
+        buttonVariantClasses[variant],
         sizes[size],
         className,
       )}
       {...props}
     />
+  );
+}
+
+type AlertTone = "info" | "success" | "warning" | "danger";
+
+const alertToneClasses: Record<AlertTone, string> = {
+  info: "border-info-border bg-info-soft text-info",
+  success: "border-success-border bg-success-soft text-success",
+  warning: "border-warning-border bg-warning-soft text-warning",
+  danger: "border-danger-border bg-danger-soft text-danger",
+};
+
+const alertIcons = {
+  info: Info,
+  success: CircleCheck,
+  warning: TriangleAlert,
+  danger: AlertCircle,
+};
+
+type AlertProps = HTMLAttributes<HTMLDivElement> & {
+  action?: ReactNode;
+  icon?: ReactNode | false;
+  tone?: AlertTone;
+};
+
+export function Alert({
+  action,
+  children,
+  className,
+  icon,
+  role,
+  tone = "info",
+  ...props
+}: AlertProps) {
+  const DefaultIcon = alertIcons[tone];
+  const defaultRole = tone === "danger" || tone === "warning" ? "alert" : "status";
+
+  return (
+    <div
+      role={role ?? defaultRole}
+      className={cn(
+        "flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm",
+        alertToneClasses[tone],
+        className,
+      )}
+      {...props}
+    >
+      {icon === false ? null : (
+        <span className="mt-0.5 shrink-0" aria-hidden="true">
+          {icon ?? <DefaultIcon className="size-4" />}
+        </span>
+      )}
+      <div className="min-w-0 flex-1">{children}</div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
   );
 }
 

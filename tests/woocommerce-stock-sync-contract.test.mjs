@@ -8,10 +8,14 @@ import { parse as parseYaml } from "yaml";
 import {
   WOO_COMMERCE_STOCK_ACTIVE_ORDER_STATUSES,
   computeWooCommerceLineTargets,
+  parseWooCommerceMoneyToCents,
   verifyWooCommerceWebhookSignature,
+  wooCommerceCustomerIdentity,
   wooCommerceManualSyncSchema,
   wooCommerceMovementIdempotencyKey,
   wooCommerceOrderSchema,
+  wooCommerceProjectedSalesStatus,
+  wooCommerceRecentImportWindow,
   wooCommerceRefundSchema,
   wooCommerceSyncPatchSchema,
 } from "../lib/woocommerce-sync-contract.ts";
@@ -101,6 +105,75 @@ test("refund quantities are capped and cancelled orders restore all stock", () =
   );
 });
 
+test("WooCommerce customer identities prefer customer IDs and safely fall back", () => {
+  const registered = wooCommerceOrderSchema.parse({
+    id: 4815,
+    number: "4815",
+    status: "processing",
+    customer_id: 77,
+    billing: { email: " Daniel@example.COM ", first_name: "Daniel" },
+    line_items: [],
+  });
+  assert.deepEqual(wooCommerceCustomerIdentity(registered), {
+    customerId: 77,
+    email: "daniel@example.com",
+    key: "customer:77",
+  });
+
+  const guest = wooCommerceOrderSchema.parse({
+    id: 4816,
+    number: "4816",
+    status: "processing",
+    billing: { email: "guest@example.com" },
+    line_items: [],
+  });
+  assert.equal(wooCommerceCustomerIdentity(guest).key, "email:guest@example.com");
+
+  const anonymous = wooCommerceOrderSchema.parse({
+    id: 4817,
+    number: "4817",
+    status: "processing",
+    billing: { email: "not-an-email" },
+    line_items: [],
+  });
+  assert.equal(wooCommerceCustomerIdentity(anonymous).key, "order:4817");
+});
+
+test("WooCommerce monetary values and projected sales states are deterministic", () => {
+  assert.equal(parseWooCommerceMoneyToCents("49.95"), 4995);
+  assert.equal(parseWooCommerceMoneyToCents("12.345"), 1235);
+  assert.equal(parseWooCommerceMoneyToCents("not-money"), null);
+
+  assert.equal(
+    wooCommerceProjectedSalesStatus({
+      wooStatus: "processing",
+      unresolved: false,
+      lines: [
+        { orderedQuantity: 2, fulfilledQuantity: 2, returnedQuantity: 0 },
+      ],
+    }),
+    "fulfilled",
+  );
+  assert.equal(
+    wooCommerceProjectedSalesStatus({
+      wooStatus: "cancelled",
+      unresolved: false,
+      lines: [
+        { orderedQuantity: 2, fulfilledQuantity: 2, returnedQuantity: 2 },
+      ],
+    }),
+    "returned",
+  );
+  assert.equal(
+    wooCommerceProjectedSalesStatus({
+      wooStatus: "processing",
+      unresolved: true,
+      lines: [],
+    }),
+    "confirmed",
+  );
+});
+
 test("WooCommerce signatures authenticate the exact raw request bytes", () => {
   const body = '{"id":4815,"status":"processing"}';
   const secret = "wcsync_test_secret";
@@ -162,6 +235,31 @@ test("sync administration payloads are narrow and reject unsafe values", () => {
     wooCommerceManualSyncSchema.safeParse({ orderId: -1 }).success,
     false,
   );
+  assert.equal(
+    wooCommerceManualSyncSchema.safeParse({ window: "last-7-days" }).success,
+    true,
+  );
+  assert.equal(
+    wooCommerceManualSyncSchema.safeParse({ window: "last-30-days" }).success,
+    false,
+  );
+  assert.equal(
+    wooCommerceManualSyncSchema.safeParse({
+      orderId: 4815,
+      window: "last-7-days",
+    }).success,
+    false,
+  );
+});
+
+test("recent WooCommerce imports use an exact rolling seven-day window", () => {
+  assert.deepEqual(
+    wooCommerceRecentImportWindow(new Date("2026-09-04T12:00:00.000Z")),
+    {
+      after: "2026-08-28T12:00:00.000Z",
+      before: "2026-09-04T12:00:00.000Z",
+    },
+  );
 });
 
 test("the worker uses canonical Woo data, exact SKU mapping, locks, and idempotent ledgers", async () => {
@@ -181,6 +279,10 @@ test("the worker uses canonical Woo data, exact SKU mapping, locks, and idempote
   assert.match(worker, /bookResourceVariantMovement\(/);
   assert.match(worker, /wooCommerceMovementIdempotencyKey/);
   assert.match(worker, /transactionEffect:/);
+  assert.match(worker, /path: "orders"/);
+  assert.match(worker, /after: window\.after/);
+  assert.match(worker, /before: window\.before/);
+  assert.match(worker, /dates_are_gmt: true/);
   assert.match(variants, /stockMovementRequests/);
   assert.match(variants, /await transactionEffect\(transaction, movement\)/);
   assert.match(
@@ -193,6 +295,33 @@ test("the worker uses canonical Woo data, exact SKU mapping, locks, and idempote
   );
   assert.match(migration, /"revision" integer DEFAULT 0 NOT NULL/);
   assert.match(migration, /"applied_quantity" integer DEFAULT 0 NOT NULL/);
+});
+
+test("WooCommerce orders project idempotently into contacts and sales orders", async () => {
+  const [worker, migration, schema, ordersService] = await Promise.all([
+    source("lib/woocommerce-sync.ts"),
+    source("db/migrations/0061_woocommerce_sales_orders.sql"),
+    source("db/schema.ts"),
+    source("lib/orders.ts"),
+  ]);
+
+  assert.match(worker, /projectWooCommerceSalesOrder/);
+  assert.match(worker, /upsertWooCommerceContact/);
+  assert.match(worker, /pg_advisory_xact_lock/);
+  assert.match(worker, /wooCommerceCustomerLinks/);
+  assert.match(worker, /type: "sale"/);
+  assert.match(worker, /localOrderLineId/);
+  assert.match(worker, /orderLineId: localLine\.id/);
+  assert.match(migration, /CREATE TABLE "woocommerce_customer_links"/);
+  assert.match(migration, /ADD COLUMN "local_order_id" uuid/);
+  assert.match(migration, /ADD COLUMN "local_order_line_id" uuid/);
+  assert.match(migration, /ADD COLUMN "variant_id" uuid/);
+  assert.match(
+    migration,
+    /PRIMARY KEY \("organization_id", "connection_id", "customer_key"\)/,
+  );
+  assert.match(schema, /export const wooCommerceCustomerLinks/);
+  assert.match(ordersService, /coalesce\(\$\{resourceVariants\.sku\}/);
 });
 
 test("webhook processing verifies raw-body signatures before parsing JSON", async () => {
@@ -230,6 +359,7 @@ test("stock sync registers both order topics and is manageable in the settings U
   assert.match(manager, /method: "PATCH"/);
   assert.match(manager, /integrations\/woocommerce\/sync/);
   assert.match(manager, /retryIssues/);
+  assert.match(manager, /last-7-days/);
 });
 
 test("OpenAPI declares the public signed callback and admin reconciliation routes", async () => {

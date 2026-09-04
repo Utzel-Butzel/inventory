@@ -615,6 +615,14 @@
       "uniqueCodes": "Jeder angenommene Einheitscode muss eindeutig sein.",
       "receive": "Diese Lieferung konnte nicht angenommen werden."
     },
+    "validation": {
+      "supplierRequired": "Wähle einen Lieferanten aus oder gib einen Namen ein.",
+      "orderedAtRequired": "Gib den Bestellzeitpunkt an.",
+      "quantityRequired": "Gib eine Bestellmenge ein.",
+      "quantityInvalid": "Die Menge muss eine ganze Zahl größer als null sein.",
+      "priceInvalid": "Gib einen gültigen, nicht negativen Preis ein.",
+      "maxLength": "Maximal {{max}} Zeichen."
+    },
     "notices": {
       "created": "Bestellung erstellt.",
       "received_one": "{{value}} {{unit}} von {{name}} in den Bestand eingebucht.",

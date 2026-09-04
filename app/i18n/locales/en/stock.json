@@ -615,6 +615,14 @@
       "uniqueCodes": "Each received unit code must be unique.",
       "receive": "Unable to receive this delivery."
     },
+    "validation": {
+      "supplierRequired": "Select a supplier or enter a name.",
+      "orderedAtRequired": "Enter the order date and time.",
+      "quantityRequired": "Enter an order quantity.",
+      "quantityInvalid": "Quantity must be a whole number greater than zero.",
+      "priceInvalid": "Enter a valid non-negative price.",
+      "maxLength": "Maximum {{max}} characters."
+    },
     "notices": {
       "created": "Purchase order created.",
       "received_one": "Received {{value}} {{unit}} of {{name}} into stock.",

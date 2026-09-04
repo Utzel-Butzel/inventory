@@ -30,6 +30,7 @@
     "test:i18n": "node --experimental-strip-types --test tests/ui-i18n.test.mjs",
     "test:custom-fields": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/custom-field-contract.test.mjs",
     "test:access-control": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/access-control-contract.test.mjs tests/access-control-validators.test.mjs",
+    "test:mcp": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/mcp-contract.test.mjs",
     "test:public-sharing": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/public-share-contract.test.mjs",
     "test:scanner": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/barcode-scanner-contract.test.mjs",
     "test:document-scanner": "node --experimental-strip-types --test tests/document-scanner.test.mjs",
@@ -70,6 +71,7 @@
   "dependencies": {
     "@google/genai": "^1.42.0",
     "@mdxeditor/editor": "3.54.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@techstark/opencv-js": "^5.0.0-release.1",
     "@tesseract.js-data/deu": "^1.0.0",
     "@tesseract.js-data/eng": "^1.0.0",
@@ -92,6 +94,7 @@
     "postgres": "^3.4.7",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-hook-form": "^7.87.0",
     "react-i18next": "^17.0.11",
     "replicate": "^1.4.0",
     "sharp": "^0.35.3",

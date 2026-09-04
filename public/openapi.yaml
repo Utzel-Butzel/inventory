@@ -238,7 +238,7 @@ paths:
         "503": { description: Integration credential encryption is not configured }
     patch:
       tags: [Integrations]
-      summary: Enable or disable WooCommerce order stock sync
+      summary: Enable or disable WooCommerce order synchronization
       description: Creates or removes signed order.created and order.updated webhooks in WooCommerce. Enabling requires a public HTTPS AUTH_URL and a Consumer Key with write access.
       security: [{ adminSession: [] }]
       requestBody:
@@ -248,7 +248,7 @@ paths:
             schema: { $ref: "#/components/schemas/WooCommerceSyncPatch" }
       responses:
         "200":
-          description: Stock sync state updated
+          description: Order synchronization state updated
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WooCommerceConnectionStatusResponse" }
@@ -291,8 +291,8 @@ paths:
       - { $ref: "#/components/parameters/OrganizationId" }
     post:
       tags: [Integrations]
-      summary: Reconcile one WooCommerce order or retry orders with issues
-      description: Fetches canonical order and refund data from WooCommerce, maps exact item or variant SKUs, and writes idempotent issue or return stock movements. Omitting orderId retries up to 20 recorded orders with issues.
+      summary: Import recent WooCommerce orders, reconcile one order, or retry issues
+      description: Fetches canonical order and refund data from WooCommerce, projects the customer and sales order into Inventory, maps exact item or variant SKUs, and writes idempotent issue or return stock movements. Set window to last-7-days for a read-only WooCommerce import based on order creation time. Omitting both fields retries up to 20 recorded orders with issues.
       security: [{ adminSession: [] }]
       requestBody:
         required: false
@@ -348,7 +348,7 @@ paths:
         "200": { description: Delivery authenticated and reconciled, or safely recognized as a duplicate }
         "400": { description: Invalid JSON or unsupported topic }
         "401": { description: Invalid signature or unknown WooCommerce webhook ID }
-        "410": { description: Stock sync is disabled }
+        "410": { description: WooCommerce order synchronization is disabled }
         "413": { description: Payload exceeds one megabyte }
         "422": { description: Payload has no valid order ID }
         "502": { description: Canonical WooCommerce order retrieval failed and the delivery may be retried }
@@ -4504,10 +4504,20 @@ components:
       properties:
         syncEnabled: { type: boolean }
     WooCommerceManualSyncRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        orderId: { type: integer, minimum: 1 }
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [orderId]
+          properties:
+            orderId: { type: integer, minimum: 1 }
+        - type: object
+          additionalProperties: false
+          required: [window]
+          properties:
+            window: { type: string, const: last-7-days }
+        - type: object
+          additionalProperties: false
+          maxProperties: 0
     WooCommerceOrderLineIssue:
       type: object
       additionalProperties: false
@@ -4520,9 +4530,10 @@ components:
     WooCommerceOrderSync:
       type: object
       additionalProperties: false
-      required: [orderId, orderNumber, orderStatus, status, totalLines, syncedLines, lastError, updatedAt, issues]
+      required: [orderId, localOrderId, orderNumber, orderStatus, status, totalLines, syncedLines, lastError, updatedAt, issues]
       properties:
         orderId: { type: integer, minimum: 1 }
+        localOrderId: { type: [string, "null"], format: uuid }
         orderNumber: { type: string }
         orderStatus: { type: string }
         status: { type: string, enum: [succeeded, partial, failed] }
