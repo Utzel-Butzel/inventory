@@ -53,7 +53,8 @@
   "metrics": {
     "active": "Aktive Vorgänge",
     "open": "Offene Menge",
-    "overdue": "Überfällig"
+    "overdue": "Überfällig",
+    "readyShipments": "Versandbereit"
   },
   "status": {
     "draft": "Entwurf",
@@ -65,6 +66,11 @@
     "issued": "Ausgegeben",
     "partially-returned": "Teilweise zurückgegeben",
     "returned": "Zurückgegeben",
+    "ready": "Versandbereit",
+    "shipped": "Versandt",
+    "in_transit": "Unterwegs",
+    "delivered": "Zugestellt",
+    "exception": "Versandproblem",
     "overdue": "Überfällig",
     "cancelled": "Storniert"
   },
@@ -87,6 +93,54 @@
     "assignedDescription": "Reservierung, Ausgabe und Rückgabe bleiben an der Seriennummer nachvollziehbar.",
     "noAvailable": "Keine verfügbare Seriennummer vorhanden.",
     "noAssigned": "Dieser Position ist noch keine Seriennummer zugeordnet."
+  },
+  "shipments": {
+    "title": "Versand",
+    "description": "Pakete, Versanddienstleister, Sendungsnummern und Versandzeitpunkte für diesen Verkauf.",
+    "included": "In diesem Paket",
+    "quantity_one": "{{count}} Artikel",
+    "quantity_other": "{{count}} Artikel",
+    "createdAt": "erstellt {{date}}",
+    "shippedAt": "versandt {{date}}",
+    "deliveredAt": "zugestellt {{date}}",
+    "history_one": "{{count}} Verlaufseintrag",
+    "history_other": "{{count}} Verlaufseinträge",
+    "emptyReady": "Die ausgegebenen Positionen können jetzt einem Paket zugeordnet werden.",
+    "emptyUnfulfilled": "Noch keine ausgegebenen Positionen für den Versand verfügbar.",
+    "fields": {
+      "carrier": "Versanddienstleister",
+      "trackingNumber": "Sendungsnummer",
+      "service": "Versandprodukt",
+      "servicePlaceholder": "z. B. Paket",
+      "trackingUrl": "Eigener Tracking-Link",
+      "note": "Versandnotiz"
+    },
+    "carriers": {
+      "dhl": "DHL",
+      "dpd": "DPD",
+      "ups": "UPS",
+      "gls": "GLS",
+      "hermes": "Hermes",
+      "other": "Anderer Dienstleister"
+    },
+    "actions": {
+      "create": "Paket für {{count}} Artikel",
+      "close": "Paket schließen",
+      "saveReady": "Versandbereit speichern",
+      "markShipped": "Als versandt markieren",
+      "markInTransit": "Als unterwegs markieren",
+      "markDelivered": "Als zugestellt markieren"
+    },
+    "notices": {
+      "created": "Das Paket wurde versandbereit angelegt.",
+      "shipped": "Der Versandzeitpunkt wurde erfasst.",
+      "in_transit": "Die Sendung wurde als unterwegs markiert.",
+      "delivered": "Die Sendung wurde als zugestellt markiert."
+    },
+    "errors": {
+      "create": "Das Paket konnte nicht angelegt werden.",
+      "update": "Der Versandstatus konnte nicht aktualisiert werden."
+    }
   },
   "empty": {
     "noInventory": "Keine passenden Inventareinträge gefunden.",

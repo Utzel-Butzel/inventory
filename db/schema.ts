@@ -368,6 +368,18 @@ export const orderLineUnitStatuses = [
 ] as const;
 export type OrderLineUnitStatus = (typeof orderLineUnitStatuses)[number];
 
+export const shipmentStatuses = [
+  "draft",
+  "ready",
+  "shipped",
+  "in_transit",
+  "delivered",
+  "exception",
+  "returned",
+  "cancelled",
+] as const;
+export type ShipmentStatus = (typeof shipmentStatuses)[number];
+
 export const loanOrderStatuses = [
   "draft",
   "reserved",
@@ -2821,6 +2833,10 @@ export const orderLineUnits = pgTable(
       .defaultNow(),
   },
   (table) => [
+    uniqueIndex("order_line_units_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
     foreignKey({
       name: "order_line_units_organization_order_line_fk",
       columns: [table.organizationId, table.orderLineId],
@@ -2851,6 +2867,207 @@ export const orderLineUnits = pgTable(
     check(
       "order_line_units_timestamps_check",
       sql`(${table.status} = 'reserved' and ${table.fulfilledAt} is null and ${table.returnedAt} is null) or (${table.status} = 'fulfilled' and ${table.fulfilledAt} is not null and ${table.returnedAt} is null) or (${table.status} = 'returned' and ${table.fulfilledAt} is not null and ${table.returnedAt} is not null)`,
+    ),
+  ],
+);
+
+export const orderShipments = pgTable(
+  "order_shipments",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderId: uuid("order_id").notNull(),
+    carrierCode: varchar("carrier_code", { length: 40 }).notNull(),
+    service: varchar("service", { length: 120 }),
+    trackingNumber: varchar("tracking_number", { length: 180 }),
+    trackingUrl: varchar("tracking_url", { length: 2_048 }),
+    status: varchar("status", { length: 24 })
+      .$type<ShipmentStatus>()
+      .notNull()
+      .default("draft"),
+    shippedAt: timestamp("shipped_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    note: text("note").notNull().default(""),
+    idempotencyKey: uuid("idempotency_key").notNull(),
+    requestHash: varchar("request_hash", { length: 64 }).notNull(),
+    response: jsonb("response")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdBy: varchar("created_by", { length: 320 }),
+    updatedBy: varchar("updated_by", { length: 320 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("order_shipments_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    uniqueIndex("order_shipments_idempotency_key_unique").on(
+      table.organizationId,
+      table.idempotencyKey,
+    ),
+    uniqueIndex("order_shipments_tracking_unique")
+      .on(table.organizationId, table.carrierCode, table.trackingNumber)
+      .where(sql`${table.trackingNumber} is not null`),
+    foreignKey({
+      name: "order_shipments_organization_order_fk",
+      columns: [table.organizationId, table.orderId],
+      foreignColumns: [orders.organizationId, orders.id],
+    }).onDelete("cascade"),
+    index("order_shipments_order_status_idx").on(
+      table.organizationId,
+      table.orderId,
+      table.status,
+    ),
+    index("order_shipments_status_shipped_idx").on(
+      table.organizationId,
+      table.status,
+      table.shippedAt,
+    ),
+    check(
+      "order_shipments_status_check",
+      sql`${table.status} in ('draft', 'ready', 'shipped', 'in_transit', 'delivered', 'exception', 'returned', 'cancelled')`,
+    ),
+    check(
+      "order_shipments_carrier_code_check",
+      sql`${table.carrierCode} ~ '^[a-z0-9][a-z0-9_-]{0,39}$'`,
+    ),
+    check(
+      "order_shipments_tracking_number_nonempty",
+      sql`${table.trackingNumber} is null or length(btrim(${table.trackingNumber})) > 0`,
+    ),
+    check(
+      "order_shipments_shipped_timestamp_check",
+      sql`(${table.status} in ('draft', 'ready', 'cancelled') and ${table.shippedAt} is null) or (${table.status} in ('shipped', 'in_transit', 'delivered', 'exception', 'returned') and ${table.shippedAt} is not null)`,
+    ),
+    check(
+      "order_shipments_delivered_timestamp_check",
+      sql`${table.status} <> 'delivered' or ${table.deliveredAt} is not null`,
+    ),
+    check(
+      "order_shipments_timestamp_order_check",
+      sql`${table.deliveredAt} is null or ${table.shippedAt} is null or ${table.deliveredAt} >= ${table.shippedAt}`,
+    ),
+  ],
+);
+
+export const orderShipmentLines = pgTable(
+  "order_shipment_lines",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    shipmentId: uuid("shipment_id").notNull(),
+    orderLineId: uuid("order_line_id").notNull(),
+    quantity: integer("quantity").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("order_shipment_lines_organization_id_id_unique").on(
+      table.organizationId,
+      table.id,
+    ),
+    uniqueIndex("order_shipment_lines_shipment_order_line_unique").on(
+      table.organizationId,
+      table.shipmentId,
+      table.orderLineId,
+    ),
+    foreignKey({
+      name: "order_shipment_lines_organization_shipment_fk",
+      columns: [table.organizationId, table.shipmentId],
+      foreignColumns: [orderShipments.organizationId, orderShipments.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "order_shipment_lines_organization_order_line_fk",
+      columns: [table.organizationId, table.orderLineId],
+      foreignColumns: [orderLines.organizationId, orderLines.id],
+    }).onDelete("restrict"),
+    index("order_shipment_lines_order_line_idx").on(
+      table.organizationId,
+      table.orderLineId,
+    ),
+    check("order_shipment_lines_quantity_positive", sql`${table.quantity} > 0`),
+  ],
+);
+
+export const orderShipmentUnits = pgTable(
+  "order_shipment_units",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    shipmentLineId: uuid("shipment_line_id").notNull(),
+    orderLineUnitId: uuid("order_line_unit_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("order_shipment_units_line_unit_unique").on(
+      table.organizationId,
+      table.shipmentLineId,
+      table.orderLineUnitId,
+    ),
+    foreignKey({
+      name: "order_shipment_units_organization_shipment_line_fk",
+      columns: [table.organizationId, table.shipmentLineId],
+      foreignColumns: [orderShipmentLines.organizationId, orderShipmentLines.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "order_shipment_units_organization_order_line_unit_fk",
+      columns: [table.organizationId, table.orderLineUnitId],
+      foreignColumns: [orderLineUnits.organizationId, orderLineUnits.id],
+    }).onDelete("restrict"),
+    index("order_shipment_units_order_line_unit_idx").on(
+      table.organizationId,
+      table.orderLineUnitId,
+    ),
+  ],
+);
+
+export const orderShipmentEvents = pgTable(
+  "order_shipment_events",
+  {
+    organizationId: organizationIdColumn(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    shipmentId: uuid("shipment_id").notNull(),
+    fromStatus: varchar("from_status", { length: 24 }).$type<ShipmentStatus>(),
+    toStatus: varchar("to_status", { length: 24 })
+      .$type<ShipmentStatus>()
+      .notNull(),
+    note: text("note").notNull().default(""),
+    actor: varchar("actor", { length: 320 }),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      name: "order_shipment_events_organization_shipment_fk",
+      columns: [table.organizationId, table.shipmentId],
+      foreignColumns: [orderShipments.organizationId, orderShipments.id],
+    }).onDelete("cascade"),
+    index("order_shipment_events_shipment_occurred_idx").on(
+      table.organizationId,
+      table.shipmentId,
+      table.occurredAt,
+    ),
+    check(
+      "order_shipment_events_from_status_check",
+      sql`${table.fromStatus} is null or ${table.fromStatus} in ('draft', 'ready', 'shipped', 'in_transit', 'delivered', 'exception', 'returned', 'cancelled')`,
+    ),
+    check(
+      "order_shipment_events_to_status_check",
+      sql`${table.toStatus} in ('draft', 'ready', 'shipped', 'in_transit', 'delivered', 'exception', 'returned', 'cancelled')`,
     ),
   ],
 );

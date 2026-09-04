@@ -41,6 +41,10 @@ import {
   StockOperationError,
 } from "@/lib/stock";
 import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
+import {
+  loadShipmentsForOrders,
+  type ShipmentDto,
+} from "@/lib/shipments";
 
 type IdempotencyInput = { key: string; requestHash: string };
 
@@ -211,7 +215,11 @@ const lineDto = (line: OrderLineDtoInput) => {
   };
 };
 
-const orderDto = (order: OrderRecord, rows: OrderLineDtoInput[]) => {
+const orderDto = (
+  order: OrderRecord,
+  rows: OrderLineDtoInput[],
+  shipments: ShipmentDto[] = [],
+) => {
   const lines = rows.map(lineDto);
   const status =
     order.type === "loan" && order.status !== "cancelled" && order.status !== "draft"
@@ -236,6 +244,7 @@ const orderDto = (order: OrderRecord, rows: OrderLineDtoInput[]) => {
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
     lines,
+    shipments,
     totalQuantity: lines.reduce((total, line) => total + line.quantity, 0),
     totalFulfilled: lines.reduce(
       (total, line) => total + line.fulfilledQuantity,
@@ -373,13 +382,26 @@ export async function listOrders(
       rows.map((row) => row.id),
       transaction,
     );
+    const shipmentsByOrder = await loadShipmentsForOrders(
+      organizationId,
+      rows.map((row) => row.id),
+      transaction,
+    );
     const byOrder = new Map<string, OrderLineDtoInput[]>();
     for (const line of lineRows) {
       const current = byOrder.get(line.orderId) ?? [];
       current.push(line);
       byOrder.set(line.orderId, current);
     }
-    return { orders: rows.map((row) => orderDto(row, byOrder.get(row.id) ?? [])) };
+    return {
+      orders: rows.map((row) =>
+        orderDto(
+          row,
+          byOrder.get(row.id) ?? [],
+          shipmentsByOrder.get(row.id) ?? [],
+        ),
+      ),
+    };
   }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 
@@ -397,7 +419,12 @@ export async function getOrder(organizationId: string, orderId: string) {
       .limit(1);
     if (!order) return null;
     const lines = await loadOrderLines(organizationId, [orderId], transaction);
-    return orderDto(order, lines);
+    const shipmentsByOrder = await loadShipmentsForOrders(
+      organizationId,
+      [orderId],
+      transaction,
+    );
+    return orderDto(order, lines, shipmentsByOrder.get(orderId) ?? []);
   }, { isolationLevel: "repeatable read", accessMode: "read only" });
 }
 

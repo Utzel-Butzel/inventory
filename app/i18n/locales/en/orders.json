@@ -53,7 +53,8 @@
   "metrics": {
     "active": "Active orders",
     "open": "Open quantity",
-    "overdue": "Overdue"
+    "overdue": "Overdue",
+    "readyShipments": "Ready to ship"
   },
   "status": {
     "draft": "Draft",
@@ -65,6 +66,11 @@
     "issued": "Issued",
     "partially-returned": "Partially returned",
     "returned": "Returned",
+    "ready": "Ready to ship",
+    "shipped": "Shipped",
+    "in_transit": "In transit",
+    "delivered": "Delivered",
+    "exception": "Shipping exception",
     "overdue": "Overdue",
     "cancelled": "Cancelled"
   },
@@ -87,6 +93,54 @@
     "assignedDescription": "Reservation, fulfillment, and return remain traceable by serial number.",
     "noAvailable": "No serial number is currently available.",
     "noAssigned": "No serial number has been assigned to this line yet."
+  },
+  "shipments": {
+    "title": "Shipping",
+    "description": "Parcels, carriers, tracking numbers, and shipping timestamps for this sale.",
+    "included": "Included in this parcel",
+    "quantity_one": "{{count}} item",
+    "quantity_other": "{{count}} items",
+    "createdAt": "created {{date}}",
+    "shippedAt": "shipped {{date}}",
+    "deliveredAt": "delivered {{date}}",
+    "history_one": "{{count}} history entry",
+    "history_other": "{{count}} history entries",
+    "emptyReady": "The issued lines can now be assigned to a parcel.",
+    "emptyUnfulfilled": "No issued lines are available for shipping yet.",
+    "fields": {
+      "carrier": "Carrier",
+      "trackingNumber": "Tracking number",
+      "service": "Shipping service",
+      "servicePlaceholder": "e.g. parcel",
+      "trackingUrl": "Custom tracking link",
+      "note": "Shipping note"
+    },
+    "carriers": {
+      "dhl": "DHL",
+      "dpd": "DPD",
+      "ups": "UPS",
+      "gls": "GLS",
+      "hermes": "Hermes",
+      "other": "Other carrier"
+    },
+    "actions": {
+      "create": "Parcel for {{count}} items",
+      "close": "Close parcel",
+      "saveReady": "Save as ready",
+      "markShipped": "Mark as shipped",
+      "markInTransit": "Mark as in transit",
+      "markDelivered": "Mark as delivered"
+    },
+    "notices": {
+      "created": "The parcel was created as ready to ship.",
+      "shipped": "The shipping timestamp was recorded.",
+      "in_transit": "The shipment was marked as in transit.",
+      "delivered": "The shipment was marked as delivered."
+    },
+    "errors": {
+      "create": "The parcel could not be created.",
+      "update": "The shipment status could not be updated."
+    }
   },
   "empty": {
     "noInventory": "No matching inventory items found.",
