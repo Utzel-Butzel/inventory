@@ -144,6 +144,7 @@ export function roomLightingAnalysisState(
         color: item.colorHex,
         material: item.material,
         model: item.primitiveModel,
+        modelVariant: item.modelVariant,
         placement: item.estimatedPlacement,
       })),
   };

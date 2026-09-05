@@ -5,6 +5,7 @@ import {
 } from "@/lib/room-ai-analysis-contract";
 import { createEstimatedRoomObjectPlacement } from "@/lib/room-ai-estimated-placement";
 import type { RoomScene } from "@/lib/room-scene-contract";
+import { compatibleRoomFurnitureVariant } from "@/lib/room-furniture-catalog";
 
 const normalizedCategory = (value: string) => value.trim().toLocaleLowerCase();
 
@@ -117,6 +118,9 @@ export function buildRoomAiAnalysis(options: {
         imageEvidence,
         roomObjectId,
         primitiveModel: suggestion.primitiveModel,
+        modelVariant: suggestion.confidence >= .65 && imageEvidence.some(item => item.visibility === "clear" && item.confidence >= .65)
+          ? compatibleRoomFurnitureVariant(suggestion.modelVariant, candidate?.category ?? suggestion.roomPlanCategory ?? suggestion.category)
+          : null,
         estimatedPlacement: roomObjectId
           ? null
           : createEstimatedRoomObjectPlacement({

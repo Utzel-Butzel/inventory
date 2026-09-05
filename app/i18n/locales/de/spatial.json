@@ -267,7 +267,8 @@
         "fabric": "Stoff",
         "plastic": "Kunststoff",
         "other": "Anderes Material"
-      }
+      },
+      "catalogModel": "Bibliotheksmodell: {{name}}"
     },
     "layout": {
       "open": "Räume anordnen",
@@ -390,6 +391,10 @@
       "crouch": "Ducken",
       "throughWalls": "Durch Wände gehen",
       "speed": "Gehgeschwindigkeit"
+    },
+    "models": {
+      "loading": "Möbelmodelle werden geladen …",
+      "fallback": "Modellbibliothek nicht erreichbar. Vereinfachte Modelle werden angezeigt."
     }
   },
   "editor": {
@@ -420,7 +425,28 @@
       "table": "Tisch",
       "chair": "Stuhl",
       "sofa": "Sofa",
-      "bed": "Bett"
+      "bed": "Bett",
+      "sliding-wardrobe": "Schiebetürenschrank",
+      "cube-shelf": "Würfelregal",
+      "wall-shelf": "Wandregal",
+      "kitchen-cabinet": "Küchenunterschrank",
+      "round-table": "Runder Tisch",
+      "desk": "Schreibtisch",
+      "coffee-table": "Couchtisch",
+      "office-chair": "Bürostuhl",
+      "stool": "Hocker",
+      "bench": "Sitzbank",
+      "corner-sofa": "Ecksofa",
+      "armchair": "Sessel",
+      "single-bed": "Einzelbett",
+      "bunk-bed": "Etagenbett",
+      "refrigerator": "Kühlschrank",
+      "washer": "Waschmaschine",
+      "oven": "Backofen",
+      "dishwasher": "Geschirrspüler",
+      "toilet": "Toilette",
+      "sink": "Waschtisch",
+      "bathtub": "Badewanne"
     },
     "mapHint": "Raummitte auf der Karte anklicken oder den Marker verschieben. Anschließend den Grundriss ausrichten (0° = Norden). Die Vorschau zeigt die tatsächliche Raumkontur.",
     "latitude": "Breitengrad",
@@ -466,6 +492,10 @@
       "television": "Fernseher",
       "stairs": "Treppe",
       "fireplace": "Kamin"
-    }
+    },
+    "regenerate": "Aus ARKit-Daten neu erzeugen",
+    "regenerateHint": "Baut die Darstellung mit der aktuellen Modellbibliothek neu auf. Raummaße, Kartenposition, Möbelanpassungen und bestätigte KI-Vorschläge bleiben erhalten.",
+    "relatedModels": "Passende Modelle",
+    "regenerated": "Darstellung aus den Raumdaten neu erzeugt."
   }
 }

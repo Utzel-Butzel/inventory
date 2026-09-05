@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { roomObjectAppearanceSchema } from "@/lib/room-furniture-catalog";
+import { roomObjectAppearanceSchema, roomFurnitureVariantSchema } from "@/lib/room-furniture-catalog";
 import { spatialGeoreferenceSchema } from "@/lib/spatial-structure-contract";
 
 const finiteCoordinate = z.number().finite().min(-10_000).max(10_000);
@@ -86,6 +86,7 @@ export const roomObjectSchema = z.object({
   transform: spatialMatrix4Schema,
   confidence: z.enum(["low", "medium", "high"]),
   appearance: roomObjectAppearanceSchema.optional(),
+  generatedModel: z.object({ variant: roomFurnitureVariantSchema, libraryVersion: z.string().max(80) }).optional(),
 });
 
 export const roomSceneSchema = z
@@ -105,6 +106,7 @@ export const roomSceneSchema = z
     // Presentation anchor leaves the captured AR coordinate space untouched.
     mapAnchor: spatialGeoreferenceSchema.optional(),
     editedAt: z.iso.datetime({ offset: true }).optional(),
+    presentation: z.object({ libraryVersion: z.string().max(80), regeneratedAt: z.iso.datetime({ offset: true }), generation: z.number().int().positive() }).optional(),
   })
   .refine(
     ({ bounds }) => bounds.min.every((value, index) => value <= bounds.max[index]!),

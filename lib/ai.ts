@@ -3,6 +3,8 @@ import "server-only";
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
+import { roomFurnitureCatalog } from "@/lib/room-furniture-catalog";
+import { roomFurnitureReferenceImages } from "@/lib/room-furniture-reference-images";
 import { toFile } from "openai/uploads";
 import sharp from "sharp";
 import { z } from "zod";
@@ -42,7 +44,7 @@ import {
 } from "@/lib/inventory-recognition-contract";
 import {
   maximumRoomPhotoBatchSize,
-  roomAiDetectionSchema,
+  roomAiGenerationSchema,
   roomPhotoDetectionSchema,
   type RoomAiDetection,
   type RoomPhotoDetection,
@@ -744,6 +746,7 @@ Use the schema only.`,
   const analyzedPhotoIds = new Set(analyzedKeyframeIds);
   const consolidationContext = {
     ...sceneContext,
+    furnitureCatalog: roomFurnitureCatalog,
     roomPlanObjects: calibratedKeyframeIds.length
       ? sceneContext.roomPlanObjects
       : [],
@@ -751,6 +754,7 @@ Use the schema only.`,
       analyzedPhotoIds.has(keyframeId)
     ),
   };
+  const catalogReferences = await roomFurnitureReferenceImages(successfulBatches.flatMap(({ detections }) => detections.flatMap(detection => detection.objectSuggestions.map(item => item.roomPlanCategory ?? item.category))));
   const response = await openai.responses.parse(
     {
       model,
@@ -758,7 +762,7 @@ Use the schema only.`,
       ...reasoning,
       max_output_tokens: 24_000,
       text: {
-        format: zodTextFormat(roomAiDetectionSchema, "room_ai_analysis"),
+        format: zodTextFormat(roomAiGenerationSchema, "room_ai_analysis"),
       },
       input: [
         {
@@ -794,7 +798,11 @@ For objectSuggestions:
 - camera.imageRightDirection and camera.imageUpDirection describe the displayed upright photo axes and may be used to compare an evidence box with supplied object centers
 - photos[].projectedRoomPlanObjects gives each visible RoomPlan center and projected measured bounds in the same 0…1000 upright coordinate system as imageEvidence; the chosen id must agree with both the cited box position and its approximate visible extent
 - uncalibrated photos have camera=null: they support object detection, colors, and materials, but not exact position by themselves
-- create a recognizable primitiveModel from 6 to 24 boxes, cylinders, or spheres for every clear, sufficiently understood object; use null only when the visible shape is too ambiguous to model responsibly
+- modelVariant selects an existing Blender model from sceneContext.furnitureCatalog. Prefer a matching catalog model when the photo clearly supports its construction, and set primitiveModel=null in that case
+- choose modelVariant only within the matching RoomPlan category: use visible open shelves versus doors, drawer fronts, circular versus rectangular tops, caster bases, upholstery, mattress count and appliance fronts to distinguish models; size or a generic ARKit category alone cannot prove those details
+- return modelVariant=null for uncertain subtypes or custom objects; in that case create a recognizable primitiveModel from 6 to 24 boxes, cylinders, or spheres only when the visible shape supports it
+- the catalog is a visual approximation fitted to measured dimensions, not evidence of brand or exact furniture identity; never infer hidden features to force a catalog match
+- images labeled CATALOG REFERENCE ONLY are synthetic examples of available models, never scan evidence. They must not introduce detections, colors, objects or architectural facts; cite only real keyframeIds from the photo observations
 - an ungrounded primitiveModel is an explicitly movable size-and-placement estimate; model its visible proportions in a normalized box without inventing an exact room position
 - model the object's silhouette and construction, not its surrounding RoomPlan bounding box: a chair needs a seat, back, and supports; a table needs a top and supports; storage needs a body, front divisions or doors, and handles; sofas need a base, back, arms, and cushions; appliances need a body plus their characteristic front, opening, controls, or handles
 - primitiveModel uses a centered normalized bounding box where x is width/right, y is height/up, and z is depth/front; position and size are fractions of the matched RoomPlan object's measured width, height, and depth
@@ -815,6 +823,7 @@ Use the schema only and do not add facts that are not visible.`,
               type: "input_text",
               text: `sceneContext=${JSON.stringify(consolidationContext)}\nphotoObservations=${JSON.stringify(successfulBatches.flatMap(({ detections }) => detections))}`,
             },
+            ...catalogReferences,
             ...options.images.filter(image => analyzedPhotoIds.has(image.keyframeId)).slice(0, 4).flatMap(image => [
               { type: "input_text" as const, text: `Visual verification; keyframeId=${image.keyframeId}` },
               { type: "input_image" as const, image_url: image.dataUrl, detail: "low" as const },

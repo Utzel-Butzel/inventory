@@ -9,12 +9,14 @@ import {
   type SpatialVector3,
 } from "@/lib/room-scene-contract";
 import { roomObjectAppearanceSchema } from "@/lib/room-furniture-catalog";
+import { automaticRoomFurnitureVariant, roomFurnitureLibraryVersion } from "@/lib/room-furniture-catalog";
 import { spatialGeoreferenceSchema } from "@/lib/spatial-structure-contract";
 import { invertSpatialMatrix } from "@/lib/room-floor-layout";
 import { transformSpatialPoint } from "@/lib/spatial-georeference";
 
 const size = z.number().finite().min(0.8).max(50);
 export const roomEditSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("regenerate"), revision: z.number().int().positive() }).strict(),
   z
     .object({
       action: z.literal("object"),
@@ -67,6 +69,20 @@ export const manualRoomSchema = z
   })
   .strict();
 export type RoomEdit = z.infer<typeof roomEditSchema>;
+
+/** Rebuild presentation from the measured ARKit shell and object boxes, preserving edits and scan identity. */
+export function regenerateRoomPresentation(scene: RoomScene, now = new Date().toISOString()): RoomScene {
+  return roomSceneSchema.parse({
+    ...scene,
+    objects: scene.objects.map(object => {
+      const variant = automaticRoomFurnitureVariant(object.category, object.dimensions);
+      const measured = { ...object };
+      delete measured.generatedModel;
+      return { ...measured, ...(variant ? { generatedModel: { variant, libraryVersion: roomFurnitureLibraryVersion } } : {}) };
+    }),
+    presentation: { libraryVersion: roomFurnitureLibraryVersion, regeneratedAt: now, generation: (scene.presentation?.generation ?? 0) + 1 },
+  });
+}
 
 export function roomSceneCenterPosition(
   scene: RoomScene,

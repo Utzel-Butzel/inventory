@@ -267,7 +267,8 @@
         "fabric": "Fabric",
         "plastic": "Plastic",
         "other": "Other material"
-      }
+      },
+      "catalogModel": "Library model: {{name}}"
     },
     "layout": {
       "open": "Arrange rooms",
@@ -390,6 +391,10 @@
       "crouch": "Crouch",
       "throughWalls": "Walk through walls",
       "speed": "Walking speed"
+    },
+    "models": {
+      "loading": "Loading furniture models …",
+      "fallback": "Model library unavailable. Showing simplified models."
     }
   },
   "editor": {
@@ -420,7 +425,28 @@
       "table": "Table",
       "chair": "Chair",
       "sofa": "Sofa",
-      "bed": "Bed"
+      "bed": "Bed",
+      "sliding-wardrobe": "Sliding wardrobe",
+      "cube-shelf": "Cube shelving",
+      "wall-shelf": "Wall shelves",
+      "kitchen-cabinet": "Kitchen cabinet",
+      "round-table": "Round table",
+      "desk": "Desk",
+      "coffee-table": "Coffee table",
+      "office-chair": "Office chair",
+      "stool": "Stool",
+      "bench": "Bench",
+      "corner-sofa": "Corner sofa",
+      "armchair": "Armchair",
+      "single-bed": "Single bed",
+      "bunk-bed": "Bunk bed",
+      "refrigerator": "Refrigerator",
+      "washer": "Washing machine",
+      "oven": "Oven",
+      "dishwasher": "Dishwasher",
+      "toilet": "Toilet",
+      "sink": "Vanity sink",
+      "bathtub": "Bathtub"
     },
     "mapHint": "Click the room center on the map or drag the marker. Then adjust the heading (0° = north). The preview shows the actual room outline.",
     "latitude": "Latitude",
@@ -466,6 +492,10 @@
       "television": "Television",
       "stairs": "Stairs",
       "fireplace": "Fireplace"
-    }
+    },
+    "regenerate": "Regenerate from ARKit data",
+    "regenerateHint": "Rebuilds the view using the current model library. Room dimensions, map position, furniture edits and accepted AI suggestions are preserved.",
+    "relatedModels": "Matching models",
+    "regenerated": "View regenerated from the room data."
   }
 }

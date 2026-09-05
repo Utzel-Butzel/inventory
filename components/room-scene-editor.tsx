@@ -2,12 +2,9 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
-import { LoaderCircle, Save, SlidersHorizontal, X } from "lucide-react";
+import { LoaderCircle, Save, SlidersHorizontal, X, RefreshCw } from "lucide-react";
 import { type ClientRoomSceneManifest } from "@/lib/client-types";
-import {
-  roomFurnitureVariants,
-  type RoomFurnitureVariant,
-} from "@/lib/room-furniture-catalog";
+import { RoomFurniturePicker } from "@/components/room-furniture-picker";
 import {
   roomSceneSchema,
   type RoomObject,
@@ -211,8 +208,16 @@ export function RoomSceneEditor({
         <SlidersHorizontal className="size-4" />
         {t("editor.title")}
       </button>
+      {manifest.scan.scene.presentation ? <p role="status" className="px-3 pb-2 text-[11px] text-brand">{t("editor.regenerated")}</p> : null}
       {expanded ? (
         <div className="max-h-[60vh] space-y-3 overflow-y-auto px-3 pb-3">
+          <div className="rounded-lg border border-border bg-surface-muted p-2.5">
+            <button type="button" disabled={busy} onClick={() => void save({ action: "regenerate", revision })} className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-2 py-2 text-xs font-semibold text-foreground disabled:opacity-50">
+              {busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+              {t("editor.regenerate")}
+            </button>
+            <p className="mt-2 text-[11px] text-muted">{t("editor.regenerateHint")}</p>
+          </div>
           <div
             className="grid grid-cols-2 gap-1"
             role="group"
@@ -261,30 +266,19 @@ export function RoomSceneEditor({
               </label>
               {object ? (
                 <>
-                  <label className="block text-xs text-muted">
-                    {t("editor.model")}
-                    <select
-                      className={inputClass}
-                      value={object.appearance?.variant ?? ""}
-                      onChange={(e) =>
+                  <RoomFurniturePicker
+                      category={object.category}
+                      value={object.appearance?.variant ?? null}
+                      onChange={(variant) =>
                         changeObject({
                           ...object,
                           appearance: {
                             color: object.appearance?.color ?? null,
-                            variant: (e.target.value ||
-                              null) as RoomFurnitureVariant | null,
+                            variant,
                           },
                         })
                       }
-                    >
-                      <option value="">{t("editor.original")}</option>
-                      {roomFurnitureVariants.map((v) => (
-                        <option key={v} value={v}>
-                          {t(`editor.variants.${v}`)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    />
                   <label className="flex items-center justify-between text-xs text-muted">
                     {t("editor.color")}
                     <input

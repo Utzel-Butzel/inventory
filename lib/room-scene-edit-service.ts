@@ -6,6 +6,7 @@ import { resources, resourceSpatialPlacements, roomScans } from "@/db/schema";
 import {
   rectangularRoomScene,
   splitRoomScene,
+  regenerateRoomPresentation,
   type RoomEdit,
 } from "@/lib/room-scene-editor";
 import {
@@ -38,7 +39,9 @@ export async function editRoomScene(
     let scene = roomSceneSchema.parse(scan.scene);
     let newScanId: string | null = null;
     let analysis = scan.aiAnalysis;
-    if (edit.action === "object") {
+    if (edit.action === "regenerate") {
+      scene = regenerateRoomPresentation(scene);
+    } else if (edit.action === "object") {
       if (!scene.objects.some((o) => o.id === edit.objectId))
         throw new Error("object-not-found");
       scene.objects = scene.objects.map((o) =>
@@ -171,7 +174,7 @@ export async function editRoomScene(
         }
       }
     }
-    if (edit.action !== "anchor" && edit.action !== "add")
+    if (edit.action !== "anchor" && edit.action !== "add" && edit.action !== "regenerate")
       scene.editedAt = new Date().toISOString();
     await tx
       .update(roomScans)

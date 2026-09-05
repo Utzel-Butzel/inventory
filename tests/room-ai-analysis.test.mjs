@@ -678,7 +678,7 @@ test("keeps an accepted light-gray door finish free of the brown base texture", 
 test("reanalysis retains reviewed geometry, dismissed results and manual placement", async () => {
   const { mergeReviewedRoomAnalysis } = await import("../lib/room-ai-analysis.ts");
   const base = { schemaVersion:1, analyzedAt:"2026-09-05T10:00:00Z",model:"test",summary:"Room",analyzedKeyframeIds:[frameId],surfaceAppearances:[],objectSuggestions:[] };
-  const accepted = { id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name:"My cabinet",category:"storage",description:"",colorHex:null,material:"wood",confidence:0.9,evidence:"Photo",evidenceKeyframeIds:[frameId],imageEvidence:[{keyframeId:frameId,bounds:[100,100,500,900],visibility:"clear",confidence:0.9}],roomObjectId:scene.objects[0].id,primitiveModel:null,estimatedPlacement:null,status:"accepted" };
+  const accepted = { id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name:"My cabinet",modelVariant:"bookcase",category:"storage",description:"",colorHex:null,material:"wood",confidence:0.9,evidence:"Photo",evidenceKeyframeIds:[frameId],imageEvidence:[{keyframeId:frameId,bounds:[100,100,500,900],visibility:"clear",confidence:0.9}],roomObjectId:scene.objects[0].id,primitiveModel:null,estimatedPlacement:null,status:"accepted" };
   const dismissed = {...accepted,id:"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",name:"Reflection",roomObjectId:null,status:"dismissed",estimatedPlacement:{position:[1,0.5,1],rotationYDegrees:30,dimensions:[1,1,1]}};
   const next = {...base, objectSuggestions:[{...accepted,id:"cccccccc-cccc-4ccc-8ccc-cccccccccccc",name:"New model",status:"pending"}]};
   const result = mergeReviewedRoomAnalysis({...base,objectSuggestions:[accepted,dismissed]},next);

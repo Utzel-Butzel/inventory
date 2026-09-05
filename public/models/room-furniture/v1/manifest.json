@@ -1,0 +1,337 @@
+{
+  "version": 1,
+  "generator": "Blender MCP 1.9.1 / Blender 5.2.1 LTS",
+  "license": "Original project assets",
+  "models": [
+    {
+      "id": "wardrobe",
+      "category": "storage",
+      "dimensions": [
+        1.6,
+        2.2,
+        0.66
+      ],
+      "parts": 14,
+      "triangleEstimate": 2648
+    },
+    {
+      "id": "sliding-wardrobe",
+      "category": "storage",
+      "dimensions": [
+        2.0,
+        2.2,
+        0.689
+      ],
+      "parts": 12,
+      "triangleEstimate": 2352
+    },
+    {
+      "id": "bookcase",
+      "category": "storage",
+      "dimensions": [
+        1.2,
+        2.05,
+        0.34
+      ],
+      "parts": 12,
+      "triangleEstimate": 2352
+    },
+    {
+      "id": "cube-shelf",
+      "category": "storage",
+      "dimensions": [
+        1.45,
+        1.45,
+        0.37
+      ],
+      "parts": 11,
+      "triangleEstimate": 2156
+    },
+    {
+      "id": "shelving",
+      "category": "storage",
+      "dimensions": [
+        1.1,
+        1.9,
+        0.5
+      ],
+      "parts": 10,
+      "triangleEstimate": 1792
+    },
+    {
+      "id": "wall-shelf",
+      "category": "storage",
+      "dimensions": [
+        1.1,
+        0.817,
+        0.26
+      ],
+      "parts": 9,
+      "triangleEstimate": 1764
+    },
+    {
+      "id": "sideboard",
+      "category": "storage",
+      "dimensions": [
+        1.8,
+        0.802,
+        0.5
+      ],
+      "parts": 21,
+      "triangleEstimate": 3300
+    },
+    {
+      "id": "drawers",
+      "category": "storage",
+      "dimensions": [
+        0.85,
+        1.032,
+        0.525
+      ],
+      "parts": 25,
+      "triangleEstimate": 4036
+    },
+    {
+      "id": "kitchen-cabinet",
+      "category": "storage",
+      "dimensions": [
+        1.215,
+        0.919,
+        0.675
+      ],
+      "parts": 18,
+      "triangleEstimate": 2760
+    },
+    {
+      "id": "table",
+      "category": "table",
+      "dimensions": [
+        1.7,
+        0.735,
+        0.88
+      ],
+      "parts": 7,
+      "triangleEstimate": 700
+    },
+    {
+      "id": "round-table",
+      "category": "table",
+      "dimensions": [
+        1.1,
+        0.7495,
+        1.1
+      ],
+      "parts": 3,
+      "triangleEstimate": 732
+    },
+    {
+      "id": "desk",
+      "category": "table",
+      "dimensions": [
+        1.5,
+        0.725,
+        0.72
+      ],
+      "parts": 10,
+      "triangleEstimate": 1240
+    },
+    {
+      "id": "coffee-table",
+      "category": "table",
+      "dimensions": [
+        1.1,
+        0.395,
+        0.6
+      ],
+      "parts": 7,
+      "triangleEstimate": 700
+    },
+    {
+      "id": "chair",
+      "category": "chair",
+      "dimensions": [
+        0.46,
+        0.8555,
+        0.49
+      ],
+      "parts": 10,
+      "triangleEstimate": 952
+    },
+    {
+      "id": "office-chair",
+      "category": "chair",
+      "dimensions": [
+        0.642,
+        1.093,
+        0.61582
+      ],
+      "parts": 18,
+      "triangleEstimate": 2240
+    },
+    {
+      "id": "stool",
+      "category": "chair",
+      "dimensions": [
+        0.4,
+        0.428,
+        0.4
+      ],
+      "parts": 5,
+      "triangleEstimate": 308
+    },
+    {
+      "id": "bench",
+      "category": "chair",
+      "dimensions": [
+        1.2,
+        0.418,
+        0.38
+      ],
+      "parts": 5,
+      "triangleEstimate": 308
+    },
+    {
+      "id": "sofa",
+      "category": "sofa",
+      "dimensions": [
+        2.15,
+        0.848,
+        0.8455
+      ],
+      "parts": 18,
+      "triangleEstimate": 3236
+    },
+    {
+      "id": "corner-sofa",
+      "category": "sofa",
+      "dimensions": [
+        2.65,
+        0.878,
+        1.44
+      ],
+      "parts": 24,
+      "triangleEstimate": 3740
+    },
+    {
+      "id": "armchair",
+      "category": "chair",
+      "dimensions": [
+        0.88,
+        0.858,
+        0.80325
+      ],
+      "parts": 12,
+      "triangleEstimate": 2060
+    },
+    {
+      "id": "bed",
+      "category": "bed",
+      "dimensions": [
+        1.8,
+        1.08,
+        2.0992
+      ],
+      "parts": 10,
+      "triangleEstimate": 2048
+    },
+    {
+      "id": "single-bed",
+      "category": "bed",
+      "dimensions": [
+        0.95,
+        1.0,
+        2.0497
+      ],
+      "parts": 9,
+      "triangleEstimate": 1472
+    },
+    {
+      "id": "bunk-bed",
+      "category": "bed",
+      "dimensions": [
+        1.025,
+        2.0,
+        2.1287
+      ],
+      "parts": 23,
+      "triangleEstimate": 5268
+    },
+    {
+      "id": "refrigerator",
+      "category": "refrigerator",
+      "dimensions": [
+        0.7,
+        1.9,
+        0.76
+      ],
+      "parts": 5,
+      "triangleEstimate": 1076
+    },
+    {
+      "id": "washer",
+      "category": "washer-dryer",
+      "dimensions": [
+        0.6,
+        0.85,
+        0.6885
+      ],
+      "parts": 7,
+      "triangleEstimate": 2284
+    },
+    {
+      "id": "oven",
+      "category": "oven",
+      "dimensions": [
+        0.6,
+        0.6,
+        0.647
+      ],
+      "parts": 8,
+      "triangleEstimate": 1616
+    },
+    {
+      "id": "dishwasher",
+      "category": "dishwasher",
+      "dimensions": [
+        0.6,
+        0.84,
+        0.663
+      ],
+      "parts": 6,
+      "triangleEstimate": 1128
+    },
+    {
+      "id": "toilet",
+      "category": "toilet",
+      "dimensions": [
+        0.38,
+        0.7895,
+        0.6534
+      ],
+      "parts": 5,
+      "triangleEstimate": 2168
+    },
+    {
+      "id": "sink",
+      "category": "sink",
+      "dimensions": [
+        0.8,
+        0.971,
+        0.554
+      ],
+      "parts": 16,
+      "triangleEstimate": 3136
+    },
+    {
+      "id": "bathtub",
+      "category": "bathtub",
+      "dimensions": [
+        0.76,
+        0.733,
+        1.7
+      ],
+      "parts": 8,
+      "triangleEstimate": 1712
+    }
+  ]
+}

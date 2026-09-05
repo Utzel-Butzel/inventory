@@ -1505,7 +1505,7 @@ export function RoomSceneBrowser() {
                                     ? "rooms.ai.estimated"
                                     : "rooms.ai.estimatedAvailable")}
                               </p>
-                              {suggestion.primitiveModel ? (
+                              {suggestion.modelVariant ? <p className="mt-0.5 text-[10px] font-medium text-brand">{t("rooms.ai.catalogModel", { name: t(`editor.variants.${suggestion.modelVariant}`) })}</p> : suggestion.primitiveModel ? (
                                 <p className="mt-0.5 text-[10px] font-medium text-brand">
                                   {t("rooms.ai.generatedModel", {
                                     count: suggestion.primitiveModel.parts.length,
@@ -1557,7 +1557,7 @@ export function RoomSceneBrowser() {
                                   <Check className="size-3" aria-hidden="true" />
                                 )}
                                 {t(suggestion.roomObjectId
-                                  ? suggestion.primitiveModel
+                                  ? suggestion.modelVariant || suggestion.primitiveModel
                                     ? "rooms.ai.acceptModel"
                                     : "rooms.ai.accept"
                                   : "rooms.ai.acceptEstimate")}
@@ -1567,7 +1567,7 @@ export function RoomSceneBrowser() {
                                 <Check className="size-3" aria-hidden="true" />
                                 {t(!suggestion.roomObjectId && suggestion.estimatedPlacement
                                   ? "rooms.ai.estimateApplied"
-                                  : suggestion.primitiveModel
+                                  : suggestion.modelVariant || suggestion.primitiveModel
                                     ? "rooms.ai.modelApplied"
                                     : "rooms.ai.accepted")}
                               </span>

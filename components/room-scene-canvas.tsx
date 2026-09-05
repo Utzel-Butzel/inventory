@@ -61,6 +61,8 @@ import { roomLightingAnalysisState, roomRenderCacheKey, readRoomRenderCache, wri
 import { roomWalkBodyCollides, roomWalkPointOnFloor, type RoomWalkCollider } from "@/lib/room-walk-navigation";
 import { sceneFloorPolygons } from "@/lib/spatial-georeference";
 import { createRoomFloorGeometry } from "@/lib/room-floor-geometry";
+import { loadRoomFurnitureLibrary, isRoomFurnitureLibraryLoaded } from "@/lib/room-furniture-assets";
+import { roomFurnitureLibraryVersion } from "@/lib/room-furniture-catalog";
 import type { RoomLightMapBake } from "@/lib/room-lightmap-baker";
 import {
   azimuthDegrees,
@@ -902,6 +904,14 @@ export function RoomSceneCanvas({
   const [exposure, setExposure] = useState(1);
   const [fillBalance, setFillBalance] = useState(1);
   const [cachedLighting, setCachedLighting] = useState(false);
+  const [furnitureLibrary, setFurnitureLibrary] = useState<"loading" | "ready" | "fallback">("loading");
+  useEffect(() => {
+    if (furnitureLibrary !== "loading") return;
+    let cancelled = false;
+    void loadRoomFurnitureLibrary().then(() => { if (!cancelled) setFurnitureLibrary("ready"); }, () => { if (!cancelled) setFurnitureLibrary("fallback"); });
+    return () => { cancelled = true; };
+  }, [furnitureLibrary]);
+  useEffect(() => { if (manifest.scan.scene.presentation) setSceneMode("roomplan"); }, [manifest.scan.scene.presentation]);
   const exposureRef = useRef(exposure);
   const exposureCommandRef = useRef<(value: number) => void>(() => undefined);
   useEffect(() => { exposureRef.current = exposure; exposureCommandRef.current(exposure); }, [exposure]);
@@ -1060,7 +1070,12 @@ export function RoomSceneCanvas({
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
+    if (!host || furnitureLibrary === "loading") return;
+    // A development refresh can unload template modules. Never cache placeholder geometry as a Blender render.
+    if (furnitureLibrary === "ready" && !isRoomFurnitureLibraryLoaded()) {
+      setFurnitureLibrary("loading");
+      return;
+    }
     setRendererError(null);
     const progressiveLighting = lightingMode === "progressive";
     const rayTracedLighting =
@@ -1471,7 +1486,7 @@ export function RoomSceneCanvas({
       suggestion: RoomObjectSuggestion,
       category: string,
       dimensions: readonly [number, number, number],
-    ) => suggestion.primitiveModel && isRecognizableAiPrimitiveModel({
+    ) => !suggestion.modelVariant && suggestion.primitiveModel && isRecognizableAiPrimitiveModel({
       category,
       model: suggestion.primitiveModel,
     })
@@ -1482,6 +1497,8 @@ export function RoomSceneCanvas({
         })
       : createRoomObjectModel({
           category,
+          variant: suggestion.modelVariant,
+          color: suggestion.colorHex,
           dimensions,
           materials: {
             primary: finishForSuggestion(roomManifest, suggestion, category),
@@ -2339,7 +2356,8 @@ export function RoomSceneCanvas({
             )
           : createRoomObjectModel({
               category: item.category,
-              variant: item.appearance?.variant,
+              variant: item.appearance?.variant ?? item.generatedModel?.variant,
+              color: item.appearance?.color,
               dimensions,
               materials: {
                 primary: item.appearance?.color ? new THREE.MeshStandardMaterial({ color: item.appearance.color, roughness: 0.65 }) : finishForObject(roomManifest, item.id, item.category),
@@ -3957,7 +3975,7 @@ export function RoomSceneCanvas({
     let frameCacheGeneration = 0;
     let resumeRendering = () => undefined as void;
     const frameFingerprint = () => ({
-      version: "room-frame-v3", navigationMode, sceneMode, fillBalance,
+      version: "room-frame-v4", furnitureLibrary: furnitureLibrary === "ready" ? roomFurnitureLibraryVersion : "procedural", navigationMode, sceneMode, fillBalance,
       theme: usesDarkMode(),
       rooms: visibleManifests.map(item => ({ scene: { ...item.scan.scene, editedAt: undefined, mapAnchor: undefined }, analysis: roomLightingAnalysisState(item.scan.aiAnalysis), layout: layoutTransformForManifest(item), assets: item.scan.assets, placements: item.placements })),
       camera: { position: camera.position.toArray().map(n => Math.round(n * 1e6) / 1e6), quaternion: camera.quaternion.toArray().map(n => Math.round(n * 1e6) / 1e6), fov: camera.fov, aspect: camera.aspect },
@@ -4183,6 +4201,7 @@ export function RoomSceneCanvas({
             // to miss the cache.
             keyAzimuth: Math.round(bakeKeyAzimuth * 10) / 10,
             navigationMode, fillBalance,
+            furnitureLibrary: furnitureLibrary === "ready" ? roomFurnitureLibraryVersion : "procedural",
             version:
               42 +
               (bakeRoomOnly ? 1 : 0) +
@@ -4876,6 +4895,7 @@ export function RoomSceneCanvas({
   }, [
     bakeRoomOnly,
     fillBalance,
+    furnitureLibrary,
     integer,
     isLayoutEditing,
     lightingMode,
@@ -4899,6 +4919,8 @@ export function RoomSceneCanvas({
         mapBackground ? "bg-transparent" : "bg-surface-muted",
       )}
     >
+      {furnitureLibrary === "loading" ? <div role="status" className="absolute inset-0 z-20 flex items-center justify-center gap-2 bg-surface-muted text-sm text-muted"><LoaderCircle className="size-4 animate-spin" />{t("canvas.models.loading")}</div> : null}
+      {furnitureLibrary === "fallback" ? <p role="status" className="absolute bottom-12 left-3 z-20 rounded-lg bg-surface px-3 py-2 text-xs text-muted">{t("canvas.models.fallback")}</p> : null}
       {rendererError ? (
         <div className="absolute inset-0 z-10 grid place-items-center p-8 text-center text-sm text-muted">
           {rendererError}

@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { RoomFurnitureVariant } from "@/lib/room-furniture-catalog";
+import { automaticRoomFurnitureVariant, roomFurnitureCatalog } from "@/lib/room-furniture-catalog";
+import { createBlenderFurnitureModel } from "@/lib/room-furniture-assets";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
 import type {
@@ -724,6 +726,7 @@ export function createAiPrimitiveObjectModel({
 
 export function createRoomObjectModel({
   variant,
+  color,
   category,
   dimensions,
   materials,
@@ -732,7 +735,10 @@ export function createRoomObjectModel({
   dimensions: Vector3Tuple;
   materials: RoomObjectModelMaterials;
   variant?: RoomFurnitureVariant | null;
+  color?: string | null;
 }) {
+  const model = createBlenderFurnitureModel(variant ?? automaticRoomFurnitureVariant(category, dimensions), dimensions, color);
+  if (model) return model;
   const root = new THREE.Group();
   const content = new THREE.Group();
   root.add(content);
@@ -762,7 +768,7 @@ export function createRoomObjectModel({
     television: makeTelevision,
     stairs: makeStairs,
   };
-  const builder = builders[variant ?? category];
+  const builder = builders[variant ?? category] ?? builders[variant ? roomFurnitureCatalog[variant].category : category];
   if (builder) {
     builder(content, dimensions, materials);
   } else {

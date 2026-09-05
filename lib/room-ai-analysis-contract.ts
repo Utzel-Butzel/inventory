@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { roomFurnitureVariantSchema } from "@/lib/room-furniture-catalog";
 
 import {
   roomSurfaceCategorySchema,
@@ -167,6 +168,7 @@ export const detectedRoomObjectObservationSchema = detectedRoomObjectCoreSchema;
 export const detectedRoomObjectSuggestionSchema = detectedRoomObjectCoreSchema
   .extend({
     roomPlanObjectId: z.uuid().nullable(),
+    modelVariant: roomFurnitureVariantSchema.nullable().default(null),
     primitiveModel: detectedRoomPrimitiveModelSchema.nullable(),
   })
   .strict();
@@ -190,6 +192,11 @@ export const roomAiDetectionSchema = z
       .max(maximumRoomObjectSuggestions),
   })
   .strict();
+
+// All generated fields are required in strict Structured Outputs; persisted older analyses may omit the model.
+export const roomAiGenerationSchema = roomAiDetectionSchema.extend({
+  objectSuggestions: z.array(detectedRoomObjectSuggestionSchema.extend({ modelVariant: roomFurnitureVariantSchema.nullable() })).max(maximumRoomObjectSuggestions),
+}).strict();
 
 export const roomObjectSuggestionSchema = detectedRoomObjectSuggestionSchema
   .omit({ roomPlanCategory: true, roomPlanObjectId: true })
