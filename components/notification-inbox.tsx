@@ -1,5 +1,9 @@
 "use client";
 
+import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
+import { orderListItems } from "@/lib/list-view-contract";
+
+
 import { Bell, CheckCheck, Clock3, PackageMinus, ShieldAlert, Wrench } from "lucide-react";
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -33,7 +37,8 @@ export function NotificationInbox() {
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [unreadOnly, setUnreadOnly] = useState(false);
+  const list = useListView("notifications", { sort: "createdAt", direction: "desc", filters: { read: "all", category: "all" } });
+  const unreadOnly = list.config.filters.read === "unread";
   const [saving, setSaving] = useState(false);
 
   const date = useMemo(
@@ -46,7 +51,7 @@ export function NotificationInbox() {
     setError(null);
     try {
       const response = await fetch(
-        `/api/v1/notifications?limit=100${unreadOnly ? "&unreadOnly=true" : ""}`,
+        `/api/v1/notifications?limit=100`,
         { cache: "no-store" },
       );
       if (!response.ok) throw new Error(t("errors.load"));
@@ -61,7 +66,7 @@ export function NotificationInbox() {
     } finally {
       setLoading(false);
     }
-  }, [t, unreadOnly]);
+  }, [t]);
 
   useEffect(() => void load(), [load]);
 
@@ -109,6 +114,14 @@ export function NotificationInbox() {
     }
   }
 
+  const visibleNotifications = useMemo(() => orderListItems(notifications.filter((notification) => {
+    if (unreadOnly && notification.readAt) return false;
+    if (list.config.filters.read === "read" && !notification.readAt) return false;
+    if (list.config.filters.category !== "all" && list.config.filters.category !== notification.eventType) return false;
+    const query = list.config.query.trim().toLocaleLowerCase(locale);
+    return !query || [notification.title, notification.body].join(" ").toLocaleLowerCase(locale).includes(query);
+  }), list.config, { createdAt: (notification) => notification.createdAt, title: (notification) => notification.title }, locale), [notifications, unreadOnly, list.config, locale]);
+
   return (
     <div className="mx-auto w-full max-w-[980px]">
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -122,12 +135,6 @@ export function NotificationInbox() {
           <p className="mt-2 text-sm text-muted">{t("description")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => setUnreadOnly((current) => !current)}
-          >
-            {unreadOnly ? t("showAll") : t("showUnread")}
-          </Button>
           <Button
             variant="secondary"
             onClick={() => void markAllRead()}
@@ -146,6 +153,13 @@ export function NotificationInbox() {
         </div>
       ) : null}
 
+      <ListViewToolbar list={list} total={visibleNotifications.length} loadedOnly
+        sorts={["createdAt", "title"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
+        filters={[
+          { key: "read", label: t("common:listView.fields.read"), options: [{ value: "unread", label: t("showUnread") }, { value: "read", label: t("common:listView.readLabel") }] },
+          { key: "category", label: t("common:listView.fields.category"), options: Object.keys(icons).map((value) => ({ value, label: t("common:listView.events." + value) })) },
+        ]} />
+      <ListViewResults list={list}>
       <Card className="overflow-hidden">
         {loading ? (
           <div className="space-y-3 p-5">
@@ -153,18 +167,18 @@ export function NotificationInbox() {
               <Skeleton key={index} className="h-24" />
             ))}
           </div>
-        ) : notifications.length === 0 ? (
+        ) : visibleNotifications.length === 0 ? (
           <EmptyState
             icon={<Bell className="size-5" aria-hidden="true" />}
-            title={unreadOnly ? t("emptyUnreadTitle") : t("emptyTitle")}
-            description={unreadOnly ? t("emptyUnreadDescription") : t("emptyDescription")}
+            title={notifications.length ? t("common:listView.noResults") : unreadOnly ? t("emptyUnreadTitle") : t("emptyTitle")}
+            description={notifications.length ? t("common:listView.noResultsHint") : unreadOnly ? t("emptyUnreadDescription") : t("emptyDescription")}
           />
         ) : (
           <div className="divide-y divide-border">
-            {notifications.map((notification) => {
+            {visibleNotifications.map((notification) => {
               const Icon = icons[notification.eventType];
               const content = (
-                <div className="flex items-start gap-3 px-4 py-4 sm:px-5">
+                <div data-list-row className="flex items-start gap-3 px-4 py-4 sm:px-5">
                   <span className={cn(
                     "grid size-10 shrink-0 place-items-center rounded-xl",
                     notification.readAt ? "bg-surface-muted text-muted" : "bg-brand-soft text-brand",
@@ -210,6 +224,7 @@ export function NotificationInbox() {
           </div>
         )}
       </Card>
+      </ListViewResults>
     </div>
   );
 }

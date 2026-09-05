@@ -35,7 +35,10 @@ test("purchase receipts and assemblies retain their actual material costs", asyn
   const [orders, assemblies, stockUi, orderUi, assemblyUi] = await Promise.all([
     source("lib/purchase-orders.ts"),
     source("lib/assemblies.ts"),
-    source("components/resource-stock-manager.tsx"),
+    Promise.all([
+      source("components/resource-stock/booking.tsx"),
+      source("components/resource-stock/units.tsx"),
+    ]).then((parts) => parts.join("\n")),
     source("components/purchase-orders-manager.tsx"),
     source("components/assembly-manager.tsx"),
   ]);

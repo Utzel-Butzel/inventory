@@ -47,6 +47,7 @@ type RoomLayoutMapCanvasProps = {
   onSelectRoom: (scanId: string) => void;
   onChangeTransform: (scanId: string, transform: SpatialMatrix4) => void;
   backgroundOnly?: boolean;
+  editing?: boolean;
   onViewportChange?: (viewport: RoomMapViewport) => void;
 };
 
@@ -221,7 +222,7 @@ function mapCollection(props: RoomLayoutMapCanvasProps): FeatureCollection {
     footprint.id = `room:${manifest.scan.id}`;
     features.push(footprint);
 
-    if (!selected) continue;
+    if (!selected || props.editing === false) continue;
     const center = geographicPosition(geometry.center, geometry.anchor);
     const rotationHandle = geographicPosition(
       geometry.rotationHandle,
@@ -455,8 +456,9 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
           ? manifestAnchor(manifest, latestRef.current.fallbackGeoreference)
           : null;
         if (!scanId || !manifest || !anchor) return;
-        disableMapGesture(event);
         latestRef.current.onSelectRoom(scanId);
+        if (latestRef.current.editing === false) return;
+        disableMapGesture(event);
         interactionRef.current = {
           kind: "move",
           scanId,
@@ -475,7 +477,7 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
         const geometry = manifest
           ? roomMapGeometry(manifest, latestRef.current.fallbackGeoreference)
           : null;
-        if (!scanId || !manifest || !geometry) return;
+        if (!scanId || !manifest || !geometry || latestRef.current.editing === false) return;
         disableMapGesture(event);
         const pointer = geographicToLocalArkit(
           { longitude: event.lngLat.lng, latitude: event.lngLat.lat },
@@ -497,7 +499,7 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
 
     const onMove = (event: MapMouseEvent) => {
       const interaction = interactionRef.current;
-      if (!interaction) return;
+      if (!interaction || latestRef.current.editing === false) return;
       const pointer = geographicToLocalArkit(
         { longitude: event.lngLat.lng, latitude: event.lngLat.lat },
         interaction.anchor,

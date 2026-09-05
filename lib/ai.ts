@@ -620,7 +620,8 @@ For surfaceAppearances:
 
 For objectSuggestions:
 - find all clearly visible physical, inventory-worthy objects, including small tools, electronics, containers, cables, lamps, monitors, bottles, trays, rulers, papers, appliances, and accessories
-- do not stop after the largest furniture; target at least two distinct supported observations per information-rich photo when present
+- inspect both furniture and smaller objects, but never meet a count quota; omit uncertain instances and objects visible only in mirrors, screens, posters, or reflections
+- distinguish open shelving, cupboards with doors, drawer chests, and low sideboards; describe shelf count, door divisions, legs, and handles only where visible
 - each suggestion must describe exactly one physical instance; never use plural names, counts, or phrases such as "two glasses" or "multiple boxes"
 - return distinct physical instances separately with a separate tight imageEvidence box for each, but merge repeat views of the same instance within this batch
 - use specific names, colors, materials, distinguishing details, and location clues; never invent hidden objects
@@ -782,7 +783,9 @@ For objectSuggestions:
 - retain every distinct, supported physical instance across batches, including smaller items; do not collapse different chairs, boxes, screens, tools, or containers merely because their names match
 - each suggestion must remain singular and correspond to one imageEvidence region; split plural or counted observations into one suggestion per visible instance when their boxes can be distinguished
 - merge only repeat views of the same instance, using distinguishing details, location clues, and overlapping image evidence
-- aim for 12 to 36 suggestions when observations support that many and never stop after prominent furniture
+- the number of suggestions must follow the evidence, never a target count; prefer fewer well-supported instances over speculative duplicates
+- do not reconstruct objects in reflections or on displays as additional physical objects
+- preserve open space in shelves and between furniture legs; open shelving has thin panels and posts, not an opaque solid body
 - use the most specific useful name and explain the visible evidence briefly
 - roomPlanCategory must exactly copy a supplied RoomPlan category only when the suggestion clearly corresponds to it; otherwise return null
 - roomPlanObjectId must exactly copy one supplied RoomPlan object id only when category, measured dimensions, camera position/view/image-axis metadata, image bounds, and cross-photo evidence make that exact anchor plausible; use null when duplicate anchors remain ambiguous
@@ -812,6 +815,10 @@ Use the schema only and do not add facts that are not visible.`,
               type: "input_text",
               text: `sceneContext=${JSON.stringify(consolidationContext)}\nphotoObservations=${JSON.stringify(successfulBatches.flatMap(({ detections }) => detections))}`,
             },
+            ...options.images.filter(image => analyzedPhotoIds.has(image.keyframeId)).slice(0, 4).flatMap(image => [
+              { type: "input_text" as const, text: `Visual verification; keyframeId=${image.keyframeId}` },
+              { type: "input_image" as const, image_url: image.dataUrl, detail: "low" as const },
+            ]),
           ],
         },
       ],
@@ -826,7 +833,9 @@ Use the schema only and do not add facts that are not visible.`,
     ...parsed,
     objectSuggestions: parsed.objectSuggestions.map((suggestion) => {
       if (!suggestion.roomPlanObjectId) return suggestion;
-      const hasProjectedSupport = suggestion.imageEvidence.some((evidence) => {
+      let projectedChecks = 0;
+      let projectedMatches = 0;
+      suggestion.imageEvidence.forEach((evidence) => {
         if (
           !analyzedPhotoIds.has(evidence.keyframeId) ||
           !suggestion.evidenceKeyframeIds.includes(evidence.keyframeId)
@@ -840,13 +849,15 @@ Use the schema only and do not add facts that are not visible.`,
           ({ id }) => id === suggestion.roomPlanObjectId,
         );
         if (!projected) return false;
-        return roomObjectProjectionMatchesEvidence({
+        projectedChecks++;
+        if (roomObjectProjectionMatchesEvidence({
           imagePoint: projected.imagePoint,
           imageBounds: projected.imageBounds,
           evidenceBounds: evidence.bounds as [number, number, number, number],
           visibility: evidence.visibility,
-        });
+        })) projectedMatches++;
       });
+      const hasProjectedSupport = projectedMatches > 0 && projectedMatches >= Math.ceil(projectedChecks * 0.6);
       return hasProjectedSupport
         ? suggestion
         : { ...suggestion, roomPlanObjectId: null };

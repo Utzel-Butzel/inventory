@@ -1,5 +1,9 @@
 "use client";
 
+import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
+import { orderListItems } from "@/lib/list-view-contract";
+
+
 import {
   CalendarClock,
   ClockAlert,
@@ -8,7 +12,6 @@ import {
   LoaderCircle,
   PackageCheck,
   RefreshCw,
-  Search,
   Undo2,
   XCircle,
 } from "lucide-react";
@@ -70,8 +73,10 @@ export function LoansOverview() {
   const { t, i18n } = useT("loans");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const [data, setData] = useState<LoansResponse | null>(null);
-  const [filter, setFilter] = useState<LoanFilter>("active");
-  const [query, setQuery] = useState("");
+  const list = useListView("loans", { sort: "dueAt", filters: { status: "active" } });
+  const filter = list.config.filters.status ?? "all";
+  const setFilter = (value: string) => list.setFilter("status", value);
+  const query = list.config.query;
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,9 +119,9 @@ export function LoansOverview() {
 
   const visibleLoans = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase(locale);
-    return (data?.assignments ?? []).filter((loan) => {
+    return orderListItems((data?.assignments ?? []).filter((loan) => {
       const matchesFilter =
-        filter === "active"
+        filter === "all" ? true : filter === "active"
           ? loan.kind === "checkout" && loan.status === "active" && !loan.overdue
           : filter === "overdue"
             ? loan.overdue
@@ -137,8 +142,8 @@ export function LoansOverview() {
         .some((value) =>
           String(value).toLocaleLowerCase(locale).includes(normalizedQuery),
         );
-    });
-  }, [data, filter, locale, query]);
+    }), list.config, { name: (loan) => loan.resource.name, contactName: (loan) => loan.assignee.label, dueAt: (loan) => loan.dueAt, startsAt: (loan) => loan.startsAt, status: (loan) => loan.status }, locale);
+  }, [data, filter, locale, query, list.config]);
 
   const formatDate = (value: string | null) =>
     value
@@ -242,19 +247,11 @@ export function LoansOverview() {
         })}
       </div>
 
+      <ListViewToolbar list={list} total={visibleLoans.length} loadedOnly searchPlaceholder={t("search")}
+        sorts={["name", "contactName", "dueAt", "startsAt", "status"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
+        filters={[{ key: "status", label: t("common:listView.fields.status"), options: filters.map((item) => ({ value: item.key, label: t("filters." + item.key) })) }]} />
+      <ListViewResults list={list}>
       <Card className="overflow-hidden p-0">
-        <div className="border-b border-border p-4 sm:p-5">
-          <label className="relative block max-w-lg">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t("search")}
-              className="h-10 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-sm text-foreground outline-none transition focus:border-success focus:ring-4 focus:ring-success-border"
-            />
-          </label>
-        </div>
-
         {loading && !data ? (
           <div className="grid min-h-72 place-items-center text-muted">
             <LoaderCircle className="size-6 animate-spin" aria-label={t("loading")} />
@@ -262,7 +259,7 @@ export function LoansOverview() {
         ) : visibleLoans.length ? (
           <div className="divide-y divide-border">
             {visibleLoans.map((loan) => (
-              <article key={loan.id} className="flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <article data-list-row key={loan.id} className="flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link href={`/inventory/${loan.resource.id}`} className="font-semibold text-foreground hover:text-brand">
@@ -320,6 +317,7 @@ export function LoansOverview() {
           />
         )}
       </Card>
+      </ListViewResults>
     </div>
   );
 }

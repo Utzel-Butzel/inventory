@@ -1,5 +1,9 @@
 "use client";
 
+import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
+import { orderListItems } from "@/lib/list-view-contract";
+
+
 import {
   CalendarClock,
   Check,
@@ -140,8 +144,9 @@ export function InternalRequestsClient() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [filter, setFilter] = useState<RequestFilter>("active");
-  const [query, setQuery] = useState("");
+  const list = useListView("requests", { sort: "createdAt", direction: "desc", filters: { status: "active" } });
+  const filter = (list.config.filters.status ?? "all") as RequestFilter;
+  const query = list.config.query;
   const [createOpen, setCreateOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [acting, setActing] = useState<string | null>(null);
@@ -256,7 +261,7 @@ export function InternalRequestsClient() {
 
   const filteredRequests = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase(locale);
-    return requests.filter((request) => {
+    return orderListItems(requests.filter((request) => {
       if (!requestMatchesFilter(request, filter)) return false;
       if (!normalizedQuery) return true;
       return [
@@ -269,8 +274,8 @@ export function InternalRequestsClient() {
         .some((value) =>
           String(value).toLocaleLowerCase(locale).includes(normalizedQuery),
         );
-    });
-  }, [filter, locale, query, requests]);
+    }), list.config, { reference: (request) => request.reference, contactName: (request) => request.requester.name, dueAt: (request) => request.dueAt, startsAt: (request) => request.startsAt, createdAt: (request) => request.createdAt, status: (request) => request.status }, locale);
+  }, [filter, locale, query, requests, list.config]);
 
   const formatDate = (value: string, includeTime = true) =>
     new Intl.DateTimeFormat(locale, {
@@ -508,23 +513,12 @@ export function InternalRequestsClient() {
         </Card>
       ) : null}
 
+      <ListViewToolbar list={list} total={filteredRequests.length} loadedOnly searchPlaceholder={t("filters.search")}
+        actions={<Button size="sm" variant="secondary" onClick={() => void load(true)} disabled={refreshing}><RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />{t("actions.refresh")}</Button>}
+        sorts={["createdAt", "reference", "contactName", "dueAt", "startsAt", "status"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
+        filters={[{ key: "status", label: t("common:listView.fields.status"), options: ["active", "submitted", "approved", "rejected", "fulfilled", "cancelled"].map((value) => ({ value, label: t(value === "active" ? "filters.active" : "status." + value) })) }]} />
+      <ListViewResults list={list}>
       <Card className="overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <div className="relative min-w-0 flex-1 sm:max-w-sm">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("filters.search")} className={cn(inputClass, "pl-9")} />
-            </div>
-            <select value={filter} onChange={(event) => setFilter(event.target.value as RequestFilter)} className={cn(inputClass, "w-auto min-w-32")} aria-label={t("filters.label")}>
-              {(["active", "all", "submitted", "approved", "fulfilled", "rejected", "cancelled"] as const).map((value) => <option key={value} value={value}>{t(`filters.${value}`)}</option>)}
-            </select>
-          </div>
-          <Button variant="secondary" size="sm" onClick={() => void load(true)} disabled={refreshing}>
-            <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
-            {t("actions.refresh")}
-          </Button>
-        </div>
-
         {loading ? (
           <div className="space-y-3 p-5">{Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-32 w-full" />)}</div>
         ) : filteredRequests.length ? (
@@ -533,7 +527,7 @@ export function InternalRequestsClient() {
               const isExpanded = expanded.has(request.id);
               const isActing = acting?.startsWith(`${request.id}:`) ?? false;
               return (
-                <article key={request.id} className="px-4 py-5 sm:px-5">
+                <article data-list-row key={request.id} className="px-4 py-5 sm:px-5">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -584,6 +578,7 @@ export function InternalRequestsClient() {
           <EmptyState className="min-h-72" icon={<ShoppingBasket className="size-5" />} title={t("empty.title")} description={query || filter !== "active" ? t("empty.filtered") : t("empty.description")} />
         )}
       </Card>
+      </ListViewResults>
     </div>
   );
 }

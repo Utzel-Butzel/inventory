@@ -1,5 +1,8 @@
 "use client";
 
+import { CollectionViewToolbar, ListViewResults, useCollectionView } from "@/components/list-view";
+
+
 import {
   Braces,
   Check,
@@ -310,6 +313,11 @@ export function CustomFieldManager() {
         ),
     [definitions, entityType],
   );
+  const collection = useCollectionView("settings.custom-fields", visibleDefinitions, {
+    search: (item) => [item.label, item.key].join(" "),
+    sorts: [{ value: "default", label: t("common:listView.fields.default"), get: (item) => item.position }, { value: "name", label: t("common:listView.fields.name"), get: (item) => item.label }],
+    filters: [{ key: "type", label: t("common:listView.fields.type"), get: (item) => item.fieldType, options: [...new Set(definitions.map((item) => item.fieldType))].map((value) => ({ value, label: fieldTypeLabel(value, t) })) }],
+  });
   const availableResourceTypeKeys = useMemo(
     () => new Set(availableResourceTypes.map((option) => option.value)),
     [availableResourceTypes],
@@ -589,6 +597,7 @@ export function CustomFieldManager() {
         })}
       </div>
 
+      <CollectionViewToolbar collection={collection} />
       {loading ? (
         <Card className="grid min-h-72 place-items-center text-muted">
           <div className="text-center">
@@ -600,6 +609,7 @@ export function CustomFieldManager() {
         </Card>
       ) : (
         <div className="grid items-start gap-4 xl:grid-cols-[290px_minmax(0,1fr)]">
+          <ListViewResults list={collection.list}>
           <Card className="overflow-hidden xl:sticky xl:top-[88px]">
             <div className="border-b border-border px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
@@ -608,10 +618,11 @@ export function CustomFieldManager() {
                 })}
               </p>
             </div>
-            {visibleDefinitions.length ? (
+            {collection.visibleItems.length ? (
               <div className="divide-y divide-border">
-                {visibleDefinitions.map((definition) => (
+                {collection.visibleItems.map((definition) => (
                   <button
+                    data-list-row
                     key={definition.id}
                     type="button"
                     onClick={() => setDraft(definitionToDraft(definition))}
@@ -660,6 +671,7 @@ export function CustomFieldManager() {
               />
             )}
           </Card>
+          </ListViewResults>
 
           <Card className="overflow-hidden">
             <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">

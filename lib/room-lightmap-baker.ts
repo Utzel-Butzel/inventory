@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { roomRenderCacheKey, readRoomRenderCache, writeRoomRenderCache } from "@/lib/room-render-cache";
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
@@ -54,13 +55,7 @@ const lightMapCache = new Map<string, BakeCacheEntry>();
 const maximumCachedLightMaps = 2;
 
 export function createRoomLightMapCacheKey(value: unknown) {
-  const source = JSON.stringify(value);
-  let hash = 2_166_136_261;
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 16_777_619);
-  }
-  return `room-lightmap-v18-${(hash >>> 0).toString(36)}`;
+  return roomRenderCacheKey({ version: "lightmap-v19", value });
 }
 
 function cacheLightMap(key: string, entry: BakeCacheEntry) {
@@ -1423,8 +1418,9 @@ export async function createRoomLightMapBake({
   scene.updateMatrixWorld(true);
   onProgress?.(8);
 
-  const cached = lightMapCache.get(cacheKey);
-  if (cached && cached.width === resolution && cached.height === resolution) {
+  const cached = lightMapCache.get(cacheKey) ?? await readRoomRenderCache<BakeCacheEntry>(cacheKey);
+  if (cached && cached.width === resolution && cached.height === resolution && cached.data instanceof Float32Array && cached.directionData instanceof Float32Array && cached.data.length === resolution * resolution * 4 && cached.directionData.length === cached.data.length) {
+    cacheLightMap(cacheKey, cached);
     const texture = cachedTexture(
       cached.data,
       cached.width,
@@ -1627,12 +1623,9 @@ export async function createRoomLightMapBake({
       resolution,
       directionPixels,
     );
-    cacheLightMap(cacheKey, {
-      data: pixels,
-      directionData: directionPixels,
-      height: resolution,
-      width: resolution,
-    });
+    const entry = { data: pixels, directionData: directionPixels, height: resolution, width: resolution };
+    cacheLightMap(cacheKey, entry);
+    void writeRoomRenderCache(cacheKey, entry, pixels.byteLength + directionPixels.byteLength);
 
     tracer.dispose();
     positionTarget.dispose();

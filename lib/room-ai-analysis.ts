@@ -60,7 +60,7 @@ export function buildRoomAiAnalysis(options: {
           evidenceKeyframeIds,
         }];
       }),
-    objectSuggestions: options.detection.objectSuggestions.flatMap((suggestion, index) => {
+    objectSuggestions: [...options.detection.objectSuggestions].sort((a,b) => b.confidence - a.confidence).flatMap((suggestion, index) => {
       const evidenceKeyframeIds = suggestion.evidenceKeyframeIds.filter((id) =>
         allowedKeyframes.has(id)
       );
@@ -101,9 +101,8 @@ export function buildRoomAiAnalysis(options: {
             normalizedCategory(suggestion.roomPlanCategory)
         ? explicitCandidate
         : null;
-      const roomObjectId = candidate && !boundObjectIds.has(candidate.id)
-        ? candidate.id
-        : null;
+      if (candidate && boundObjectIds.has(candidate.id)) return [];
+      const roomObjectId = candidate?.id ?? null;
       if (roomObjectId) boundObjectIds.add(roomObjectId);
       return [{
         id: options.createId(),
@@ -129,5 +128,36 @@ export function buildRoomAiAnalysis(options: {
         status: "pending" as const,
       }];
     }),
+  });
+}
+
+function evidenceOverlap(left: readonly number[], right: readonly number[]) {
+  const area = (box: readonly number[]) => Math.max(0, box[2]! - box[0]!) * Math.max(0, box[3]! - box[1]!);
+  const intersection = Math.max(0, Math.min(left[2]!, right[2]!) - Math.max(left[0]!, right[0]!)) * Math.max(0, Math.min(left[3]!, right[3]!) - Math.max(left[1]!, right[1]!));
+  return intersection / Math.max(1, area(left) + area(right) - intersection);
+}
+
+/** Retain reviewed geometry and manual placement when the same scan is analyzed again. */
+export function mergeReviewedRoomAnalysis(previous: RoomAiAnalysis | null, next: RoomAiAnalysis): RoomAiAnalysis {
+  if (!previous) return next;
+  const reviewed = previous.objectSuggestions.filter(item => item.status !== "pending");
+  const used = new Set<string>();
+  const objects = next.objectSuggestions.map(item => {
+    const match = reviewed.find(old => !used.has(old.id) && (
+      (item.roomObjectId && old.roomObjectId === item.roomObjectId) ||
+      (!item.roomObjectId && !old.roomObjectId && normalizedCategory(item.category) === normalizedCategory(old.category) && item.imageEvidence.some(e => old.imageEvidence.some(o => o.keyframeId === e.keyframeId && evidenceOverlap(o.bounds, e.bounds) >= 0.65)))
+    ));
+    if (!match) return item;
+    used.add(match.id);
+    return match;
+  });
+  const retained = reviewed.filter(item => !used.has(item.id));
+  const reviewedSurfaces = previous.surfaceAppearances.filter(item => item.status !== "pending");
+  return roomAiAnalysisSchema.parse({ ...next,
+    surfaceAppearances: [
+      ...reviewedSurfaces,
+      ...next.surfaceAppearances.filter(item => !reviewedSurfaces.some(old => old.surfaceCategory === item.surfaceCategory)),
+    ],
+    objectSuggestions: [...retained, ...objects.filter(item => item.status !== "pending"), ...objects.filter(item => item.status === "pending")].slice(0, 48),
   });
 }

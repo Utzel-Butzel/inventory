@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { RoomCreateButton } from "@/components/room-create-button";
+import { RoomSceneEditor } from "@/components/room-scene-editor";
 import Image from "next/image";
 import {
   OrganizationLink as Link,
@@ -52,7 +54,7 @@ import {
   rotateRoomTransform,
   translateRoomTransform,
 } from "@/lib/room-floor-layout";
-import type { SpatialMatrix4 } from "@/lib/room-scene-contract";
+import type { RoomScene, SpatialMatrix4 } from "@/lib/room-scene-contract";
 import type {
   RoomAiAnalysis,
   RoomAiReviewStatus,
@@ -186,6 +188,9 @@ export function RoomSceneBrowser() {
   const [previewAnalysisSuggestionId, setPreviewAnalysisSuggestionId] = useState<string | null>(null);
   const [editingAnalysisSuggestionId, setEditingAnalysisSuggestionId] = useState<string | null>(null);
   const sceneRequestRef = useRef(0);
+  const [selectedRoomObjectId, setSelectedRoomObjectId] = useState<string | null>(null);
+  const [partitionPreview, setPartitionPreview] = useState<{ axis: "x" | "z"; position: number } | null>(null);
+  const [editorPreview, setEditorPreview] = useState<RoomScene | null>(null);
 
   const updateUrl = useCallback(
     (scanId: string | null, resourceId: string | null) => {
@@ -342,6 +347,8 @@ export function RoomSceneBrowser() {
   }, [selectedScanId, t]);
 
   const selectScan = (scanId: string) => {
+    setEditorPreview(null);
+    setSelectedRoomObjectId(null);
     setSelectedScanId(scanId);
     setSelectedResourceId(null);
     updateUrl(scanId, null);
@@ -485,6 +492,8 @@ export function RoomSceneBrowser() {
 
   useEffect(() => {
     setPreviewAnalysisSuggestionId(null);
+    setSelectedRoomObjectId(null);
+    setEditorPreview(null);
   }, [visibleManifest?.scan.id]);
 
   const beginLayout = () => {
@@ -763,6 +772,14 @@ export function RoomSceneBrowser() {
     }
   };
 
+  const onManualRoomCreated = async (scanId: string) => {
+    const result = await fetchJson<{ scans: ClientRoomScanSummary[] }>("/api/v1/room-scans", { cache: "no-store" });
+    setScans(result.scans);
+    setSelectedStructureId(null); setSelectedFloorIdentifier(null);
+    setSelectedScanId(scanId); setSelectedResourceId(null);
+    const params = new URLSearchParams(); params.set("room",scanId);
+    router.replace(organizationHref(`/spaces?${params.toString()}`), { scroll: false });
+  };
   if (loadingScans) {
     return (
       <div
@@ -788,6 +805,7 @@ export function RoomSceneBrowser() {
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted">
             {t("rooms.empty.description")}
           </p>
+          {!isReadOnly ? <div className="mt-5 flex justify-center"><RoomCreateButton onCreated={onManualRoomCreated} /></div> : null}
           {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
           <div className="mt-6 inline-flex items-center gap-2 rounded-xl bg-surface-muted px-4 py-2.5 text-xs font-semibold text-muted">
             <Smartphone className="size-4" aria-hidden="true" />
@@ -817,6 +835,7 @@ export function RoomSceneBrowser() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+          {!isReadOnly ? <RoomCreateButton onCreated={onManualRoomCreated} /> : null}
           <span>
             {t("rooms.stats.rooms", {
               count: scans.length,
@@ -1019,22 +1038,25 @@ export function RoomSceneBrowser() {
                 manifests={visibleManifests}
                 fallbackGeoreference={layoutMapFallbackGeoreference}
                 viewGeoreference={mapViewGeoreference}
-                selectedScanId={layoutRoomId}
-                onSelectRoom={setLayoutRoomId}
+                selectedScanId={layoutDrafts ? layoutRoomId : selectedScanId}
+                onSelectRoom={layoutDrafts ? setLayoutRoomId : selectScan}
+                editing={Boolean(layoutDrafts) && !isReadOnly}
                 onChangeTransform={(scanId, transform) => {
                   setLayoutDrafts((current) => current
                     ? { ...current, [scanId]: transform }
                     : current);
                 }}
-                backgroundOnly
                 onViewportChange={setMapViewport}
               />
             </div>
           ) : null}
-          {visibleManifest && !loadingScene ? (
+          {mapBackgroundEnabled && hasLayoutMapAnchor ? null : visibleManifest && !loadingScene ? (
             <div className="absolute inset-0 z-10">
               <RoomSceneCanvas
-                manifest={canvasManifest ?? visibleManifest}
+                manifest={editorPreview ? { ...(canvasManifest ?? visibleManifest), scan: { ...(canvasManifest ?? visibleManifest).scan, scene: editorPreview } } : canvasManifest ?? visibleManifest}
+                onSelectRoomObject={isReadOnly ? undefined : setSelectedRoomObjectId}
+                selectedRoomObjectId={selectedRoomObjectId}
+                partitionPreview={partitionPreview}
                 linkedManifests={canvasLinkedManifests}
                 selectedResourceId={selectedResourceId}
                 previewObjectSuggestionId={previewAnalysisSuggestionId}
@@ -1200,11 +1222,11 @@ export function RoomSceneBrowser() {
             </div>
           ) : null}
 
-          {selectedPlacement ? (
+          {selectedPlacement && !mapBackgroundEnabled ? (
             <SelectedPlacementCard placement={selectedPlacement} />
           ) : null}
 
-          {visibleManifest && !visiblePlacements.length ? (
+          {visibleManifest && !visiblePlacements.length && !mapBackgroundEnabled ? (
             <div className="absolute inset-x-4 bottom-14 mx-auto max-w-md rounded-xl border border-border bg-surface p-4 text-center shadow-lg">
               <MapPin className="mx-auto size-5 text-brand" aria-hidden="true" />
               <p className="mt-2 text-sm font-semibold text-foreground">{t("rooms.scene.noItemsTitle")}</p>
@@ -1216,6 +1238,25 @@ export function RoomSceneBrowser() {
         </section>
 
         <aside className="order-3 flex min-h-0 flex-col border-t border-border bg-surface lg:overflow-hidden lg:border-l lg:border-t-0">
+          {manifest && !isReadOnly ? <RoomSceneEditor
+            key={`${manifest.scan.id}:${manifest.scan.revision}`}
+            manifest={manifest}
+            selectedObjectId={selectedRoomObjectId}
+            onSelectObject={setSelectedRoomObjectId}
+            onPreview={setEditorPreview}
+            onPartitionPreview={setPartitionPreview}
+            onSaved={async (updated, newScanId) => {
+              setManifest(updated);
+              setEditorPreview(null);
+              const result = await fetchJson<{ scans: ClientRoomScanSummary[] }>("/api/v1/room-scans", { cache: "no-store" });
+              setScans(result.scans);
+              if (selectedStructureId) {
+                const result = await fetchJson<{ structure: ClientSpatialStructureDetail }>(`/api/v1/spatial-structures/${selectedStructureId}`, { cache: "no-store" });
+                setStructureDetail(result.structure);
+              }
+              if (newScanId) selectScan(newScanId);
+            }}
+          /> : null}
           <div className="border-b border-border p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">

@@ -62,7 +62,7 @@ test("the target migration adds multi-target and variation selection settings", 
 test("the target picker reuses the universal inventory select with quick preview", async () => {
   const [builder, inventorySelect] = await Promise.all([
     readFile(
-      new URL("../components/stock-workflow-builder.tsx", import.meta.url),
+      new URL("../components/stock-workflow/target-step.tsx", import.meta.url),
       "utf8",
     ),
     readFile(

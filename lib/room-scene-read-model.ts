@@ -115,7 +115,7 @@ export function assembleRoomSceneManifests(
     floorIdentifier: scan.floorIdentifier,
     floorIndex: scan.floorIndex,
     roomIdentifier: scan.roomIdentifier,
-    georeference: coordinateSpace?.georeference ?? null,
+    georeference: scan.scene.mapAnchor ?? coordinateSpace?.georeference ?? null,
     scan: {
       id: scan.id,
       structureId: scan.structureId,
@@ -124,7 +124,7 @@ export function assembleRoomSceneManifests(
       floorIdentifier: scan.floorIdentifier,
       floorIndex: scan.floorIndex,
       roomIdentifier: scan.roomIdentifier,
-      georeference: coordinateSpace?.georeference ?? null,
+      georeference: scan.scene.mapAnchor ?? coordinateSpace?.georeference ?? null,
       layoutTransform: scan.layoutTransform,
       revision: scan.revision,
       status: scan.status,

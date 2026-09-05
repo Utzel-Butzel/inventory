@@ -1,5 +1,7 @@
 "use client";
 
+import { CollectionViewToolbar, ListViewResults, useCollectionView } from "@/components/list-view";
+
 import {
   AlertTriangle,
   Building2,
@@ -48,6 +50,17 @@ function errorMessage(payload: unknown, fallback: string) {
 export function SuperadminOrganizationManager() {
   const { t } = useT("settings");
   const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const collection = useCollectionView("settings.system-organizations", organizations, {
+    search: (item) => [item.name, item.slug].join(" "),
+    sorts: [
+      { value: "name", label: t("common:listView.fields.name"), get: (item) => item.name },
+      { value: "slug", label: t("organizations.form.slug"), get: (item) => item.slug },
+    ],
+    filters: [{
+      key: "access", label: t("common:listView.permissions"), get: (item) => item.isReadOnly ? "readOnly" : "writable",
+      options: [{ value: "readOnly", label: t("superadminOrganizations.list.readOnly") }, { value: "writable", label: t("common:listView.writable") }],
+    }],
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -202,7 +215,7 @@ export function SuperadminOrganizationManager() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
-      <Card className="overflow-hidden">
+      <Card className="min-w-0">
         <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-sm">
@@ -264,6 +277,8 @@ export function SuperadminOrganizationManager() {
           </div>
         ) : null}
 
+        <div className="px-3 pt-3 sm:px-4"><CollectionViewToolbar collection={collection} /></div>
+        <ListViewResults list={collection.list}>
         <div className="p-3 sm:p-4">
           {loading ? (
             <div className="space-y-2">
@@ -296,10 +311,10 @@ export function SuperadminOrganizationManager() {
             />
           ) : (
             <div className="divide-y divide-border">
-              {organizations.map((organization) => {
+              {collection.visibleItems.map((organization) => {
                 const editing = editingId === organization.id;
                 return (
-                  <article key={organization.id} className="rounded-2xl px-3 py-4 transition hover:bg-surface-subtle sm:px-4">
+                  <article data-list-row key={organization.id} className="rounded-2xl px-3 py-4 transition hover:bg-surface-subtle sm:px-4">
                     {editing ? (
                       <form onSubmit={(event) => void updateOrganization(event, organization)}>
                         <label className="block">
@@ -394,6 +409,7 @@ export function SuperadminOrganizationManager() {
             </div>
           )}
         </div>
+        </ListViewResults>
       </Card>
 
       <Card className="h-fit overflow-hidden">

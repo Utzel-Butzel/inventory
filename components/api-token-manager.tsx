@@ -1,5 +1,8 @@
 "use client";
 
+import { CollectionViewToolbar, ListViewResults, useCollectionView } from "@/components/list-view";
+
+
 import {
   AlertTriangle,
   Check,
@@ -139,6 +142,14 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
   const imageModelPreference = useImageModelPreference();
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
   const [tokens, setTokens] = useState<ApiToken[]>([]);
+  const collection = useCollectionView("settings.api-tokens", tokens, {
+    search: (item) => [item.name, item.prefix].join(" "),
+    sorts: [
+      { value: "name", label: t("common:listView.fields.name"), get: (item) => item.name },
+      { value: "createdAt", label: t("common:listView.fields.createdAt"), get: (item) => item.createdAt }
+    ],
+    filters: [{ key: "scope", label: t("common:listView.permissions"), get: (item) => item.scopes, options: ["read", "write", "ai"].map((value) => ({ value, label: value })) }],
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -436,7 +447,7 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
       {isAdmin ? (
         <section
           aria-labelledby="api-access-heading"
-          className="overflow-hidden rounded-3xl border border-border/80 bg-surface shadow-[var(--shadow-md)]"
+          className="rounded-3xl border border-border/80 bg-surface shadow-[var(--shadow-md)]"
         >
         <div className="flex flex-col gap-4 border-b border-border/80 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">
@@ -644,6 +655,8 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
           </div>
         ) : null}
 
+        <div className="px-3 pt-3"><CollectionViewToolbar collection={collection} /></div>
+        <ListViewResults list={collection.list}>
         <div className="p-2 sm:p-3">
           {loading ? (
             <div className="space-y-2 p-2">
@@ -661,8 +674,8 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {tokens.map((token) => (
-                <div key={token.id} className="rounded-xl px-3 py-4 transition hover:bg-surface-subtle sm:px-4">
+              {collection.visibleItems.map((token) => (
+                <div data-list-row key={token.id} className="rounded-xl px-3 py-4 transition hover:bg-surface-subtle sm:px-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
                       <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-surface text-muted shadow-sm">
@@ -722,7 +735,8 @@ export function ApiTokenManager({ isAdmin }: { isAdmin: boolean }) {
             </div>
           )}
         </div>
-        </section>
+          </ListViewResults>
+      </section>
       ) : null}
     </div>
   );

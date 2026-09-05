@@ -225,6 +225,7 @@ export async function POST(request: Request, context: Context) {
       authorization.identity.organizationId,
       id,
       analysis,
+      { expectedRevision: authorization.scan.revision, preserveReviews: true },
     );
     if (!saved) {
       return Response.json(
@@ -233,10 +234,11 @@ export async function POST(request: Request, context: Context) {
       );
     }
     return Response.json(
-      { analysis },
+      { analysis: saved.aiAnalysis },
       { headers: paidAiRateLimitHeaders(limit) },
     );
   } catch (error) {
+    if (error instanceof Error && error.message === "room-analysis-revision-conflict") return Response.json({ error: "The scan changed during analysis. Please analyze it again." }, { status: 409 });
     if (error instanceof AiMonthlyBudgetExceededError) {
       return Response.json(aiBudgetErrorBody(error), {
         status: 429,

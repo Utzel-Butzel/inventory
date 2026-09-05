@@ -1,5 +1,9 @@
 "use client";
 
+import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
+import { orderListItems } from "@/lib/list-view-contract";
+
+
 import {
   AlertTriangle,
   ArrowRight,
@@ -233,6 +237,7 @@ export function DuplicatesClient() {
     () => new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }),
     [locale],
   );
+  const list = useListView("duplicates", { sort: "score", direction: "desc", filters: { type: "all" } });
   const [duplicates, setDuplicates] = useState<DuplicatePair[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -268,6 +273,13 @@ export function DuplicatesClient() {
   useEffect(() => {
     void loadDuplicates();
   }, [loadDuplicates]);
+
+  const visibleDuplicates = useMemo(() => orderListItems(duplicates.filter((pair) => {
+    const type = list.config.filters.type;
+    if (type !== "all" && pair.left.type !== type && pair.right.type !== type) return false;
+    const query = list.config.query.trim().toLocaleLowerCase(locale);
+    return !query || [pair.left.name, pair.right.name, pair.left.sku, pair.right.sku, pair.reason].join(" ").toLocaleLowerCase(locale).includes(query);
+  }), list.config, { name: (pair) => pair.left.name, score: (pair) => pair.score, updatedAt: (pair) => pair.left.updatedAt }, locale), [duplicates, list.config, locale]);
 
   function requestMerge(pair: DuplicatePair, keep: "left" | "right") {
     setError(null);
@@ -382,6 +394,10 @@ export function DuplicatesClient() {
         </div>
       ) : null}
 
+      <ListViewToolbar list={list} total={visibleDuplicates.length} loadedOnly
+        sorts={["score", "name", "updatedAt"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
+        filters={[{ key: "type", label: t("common:listView.fields.type"), options: [...new Set(duplicates.flatMap((pair) => [pair.left.type, pair.right.type]))].map((value) => ({ value, label: t("types." + value, { defaultValue: value }) })) }]} />
+      <ListViewResults list={list}>
       {loading ? (
         <div className="space-y-4" aria-label={t("duplicates.loadingMatches")}>
           {Array.from({ length: 2 }, (_, index) => (
@@ -394,28 +410,28 @@ export function DuplicatesClient() {
             </div>
           ))}
         </div>
-      ) : !error && duplicates.length === 0 ? (
+      ) : !error && visibleDuplicates.length === 0 ? (
         <div className="grid min-h-64 place-items-center rounded-xl border border-border bg-surface px-6 py-10 text-center">
           <div>
             <Check className="mx-auto size-6 text-success" />
             <h2 className="mt-3 text-base font-semibold text-foreground">
-              {t("duplicates.empty.title")}
+              {t(list.config.query || list.config.filters.type !== "all" ? "common:listView.noResults" : "duplicates.empty.title")}
             </h2>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted">
-              {t("duplicates.empty.description")}
+              {t(list.config.query || list.config.filters.type !== "all" ? "common:listView.noResultsHint" : "duplicates.empty.description")}
             </p>
           </div>
         </div>
       ) : (
         <div className="space-y-5">
-          {duplicates.map((pair, index) => {
+          {visibleDuplicates.map((pair, index) => {
             const key = pairKey(pair);
             const isConfirming = pendingMerge?.pairKey === key;
             const percent = Math.round(Math.min(1, Math.max(0, pair.score)) * 100);
 
             return (
               <article key={key} className="overflow-hidden rounded-xl border border-border bg-surface-subtle/70">
-                <header className="flex flex-col gap-3 border-b border-border bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <header data-list-row className="flex flex-col gap-3 border-b border-border bg-surface px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                   <div className="flex items-center gap-3">
                     <GitMerge className="size-4 shrink-0 text-muted" />
                     <div>
@@ -528,6 +544,7 @@ export function DuplicatesClient() {
           })}
         </div>
       )}
+      </ListViewResults>
     </section>
   );
 }

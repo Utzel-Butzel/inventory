@@ -1,5 +1,8 @@
 "use client";
 
+import { CollectionViewToolbar, ListViewResults, useCollectionView } from "@/components/list-view";
+
+
 import {
   Activity,
   Check,
@@ -166,6 +169,15 @@ export function WebhookManager() {
   const { t, i18n } = useT("settings");
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
+  const collection = useCollectionView("settings.webhooks", webhooks, {
+    search: (item) => [item.name, item.target].join(" "),
+    sorts: [
+      { value: "name", label: t("common:listView.fields.name"), get: (item) => item.name },
+      { value: "createdAt", label: t("common:listView.fields.createdAt"), get: (item) => item.createdAt },
+      { value: "updatedAt", label: t("common:listView.fields.updatedAt"), get: (item) => item.updatedAt }
+    ],
+    filters: [{ key: "status", label: t("common:listView.fields.status"), get: (item) => item.enabled ? "active" : "inactive", options: [{ value: "active", label: t("common:listView.active") }, { value: "inactive", label: t("common:listView.inactive") }] }],
+  });
   const [loading, setLoading] = useState(true);
   const [listLoadFailed, setListLoadFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -1015,6 +1027,8 @@ export function WebhookManager() {
         </Card>
       ) : null}
 
+      <CollectionViewToolbar collection={collection} />
+      <ListViewResults list={collection.list}>
       {loading ? (
         <div className="space-y-3" aria-label={t("webhooks.list.loading")}>
           {Array.from({ length: 2 }, (_, index) => (
@@ -1037,7 +1051,7 @@ export function WebhookManager() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {webhooks.map((webhook) => {
+          {collection.visibleItems.map((webhook) => {
             const deliveriesOpen = openDeliveries.includes(webhook.id);
             const webhookDeliveries = deliveries[webhook.id] ?? [];
             const deliveryLoading = deliveryLoadingIds.includes(webhook.id);
@@ -1045,7 +1059,7 @@ export function WebhookManager() {
               confirmAction?.id === webhook.id ? confirmAction.kind : null;
             return (
               <Card key={webhook.id} className="overflow-hidden">
-                <div className="p-5 sm:p-6">
+                <div data-list-row className="p-5 sm:p-6">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
                       <span
@@ -1472,6 +1486,7 @@ export function WebhookManager() {
           {t("webhooks.securityNote")}
         </p>
       </Card>
+      </ListViewResults>
     </div>
   );
 }

@@ -1,5 +1,9 @@
 "use client";
 
+import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
+import { orderListItems } from "@/lib/list-view-contract";
+
+
 import type { TFunction } from "i18next";
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import {
@@ -13,7 +17,6 @@ import {
   RefreshCw,
   Search,
   TrendingDown,
-  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "next-i18next/client";
@@ -372,8 +375,10 @@ export function StockOverview() {
   const [apiMetrics, setApiMetrics] = useState<StockMetrics>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<StockFilter>("all");
+  const list = useListView("stock", { filters: { status: "all", type: "all" } });
+  const query = list.config.query;
+  const filter = list.config.filters.status ?? "all";
+  const setFilter = (value: string) => list.setFilter("status", value);
   const [dueCounts, setDueCounts] = useState<DueInventoryCount[]>([]);
 
   const loadStock = useCallback(async (options?: { signal?: AbortSignal }) => {
@@ -462,7 +467,7 @@ export function StockOverview() {
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase(locale);
-    return items
+    return orderListItems(items
       .filter((item) =>
         filter === "all"
           ? true
@@ -471,6 +476,7 @@ export function StockOverview() {
             : itemState(item) === filter,
       )
       .filter((item) => {
+        if (list.config.filters.type !== "all" && list.config.filters.type !== item.type) return false;
         if (!normalizedQuery) return true;
         return [item.name, item.type, item.trackingMode, item.unitName]
           .join(" ")
@@ -484,8 +490,8 @@ export function StockOverview() {
         const leftDays = left.daysUntilStockout ?? Number.POSITIVE_INFINITY;
         const rightDays = right.daysUntilStockout ?? Number.POSITIVE_INFINITY;
         return leftDays - rightDays || left.name.localeCompare(right.name, locale);
-      });
-  }, [filter, items, locale, query]);
+      }), list.config, { default: (item) => ({ out: 0, low: 1, healthy: 2 }[itemState(item)]) * 1e9 + Math.min(item.daysUntilStockout ?? 1e8, 1e8), name: (item) => item.name, quantity: (item) => item.quantity, onOrder: (item) => item.onOrder, daysUntilStockout: (item) => item.daysUntilStockout, type: (item) => item.type }, locale);
+  }, [filter, items, locale, query, list.config]);
 
   const needsAttention = metrics.low + metrics.out;
 
@@ -667,66 +673,14 @@ export function StockOverview() {
             </Card>
           ) : null}
 
+          <ListViewToolbar list={list} total={filteredItems.length} searchPlaceholder={t("overview.search.placeholder")}
+            sorts={["default", "name", "quantity", "onOrder", "daysUntilStockout", "type"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
+            filters={[
+              { key: "status", label: t("common:listView.fields.status"), options: Object.entries(filterLabelKeys).map(([value, key]) => ({ value, label: t(key) })) },
+              { key: "type", label: t("common:listView.fields.type"), options: [...new Set(items.map((item) => item.type))].map((value) => ({ value, label: t("inventory:types." + value, { defaultValue: value }) })) },
+            ]} />
+          <ListViewResults list={list}>
           <Card className="overflow-hidden">
-            <div className="border-b border-border p-3 sm:p-4">
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <label className="relative min-w-0 flex-1 xl:max-w-md">
-                  <span className="sr-only">{t("overview.search.label")}</span>
-                  <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder={t("overview.search.placeholder")}
-                    className="h-10 w-full rounded-xl border border-border bg-surface-subtle pl-10 pr-10 text-[14px] text-foreground outline-none transition placeholder:text-muted focus:border-focus focus:bg-surface focus:ring-3 focus:ring-focus/10"
-                  />
-                  {query ? (
-                    <button
-                      type="button"
-                      onClick={() => setQuery("")}
-                      className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-muted transition hover:bg-surface-hover hover:text-muted-strong"
-                      aria-label={t("overview.search.clear")}
-                    >
-                      <X className="size-3.5" aria-hidden="true" />
-                    </button>
-                  ) : null}
-                </label>
-
-                <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-muted p-1 sm:flex">
-                  {(Object.keys(filterLabelKeys) as StockFilter[]).map((value) => {
-                    const count =
-                      value === "all"
-                        ? metrics.trackedItems
-                        : value === "incoming"
-                          ? metrics.incomingItems
-                        : value === "low"
-                          ? metrics.low
-                          : value === "out"
-                            ? metrics.out
-                            : metrics.healthy;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setFilter(value)}
-                        aria-pressed={filter === value}
-                        className={cn(
-                          "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition",
-                          filter === value
-                            ? "bg-surface text-foreground shadow-sm"
-                            : "text-muted hover:text-foreground",
-                        )}
-                      >
-                        {t(filterLabelKeys[value])}
-                        <span className={cn("tabular-nums", filter === value ? "text-brand" : "text-muted")}>
-                          {compactNumber.format(count)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
             {items.length === 0 ? (
               <EmptyState
                 icon={<Package className="size-5" aria-hidden="true" />}
@@ -751,7 +705,7 @@ export function StockOverview() {
                   <Button
                     variant="secondary"
                     onClick={() => {
-                      setQuery("");
+                      list.patch({ query: "" });
                       setFilter("all");
                     }}
                   >
@@ -977,6 +931,7 @@ export function StockOverview() {
               </div>
             ) : null}
           </Card>
+          </ListViewResults>
         </div>
       ) : null}
     </div>

@@ -1,5 +1,8 @@
 "use client";
 
+import { CollectionViewToolbar, ListViewResults, useCollectionView } from "@/components/list-view";
+
+
 import Link from "next/link";
 import { useT } from "next-i18next/client";
 import {
@@ -75,6 +78,14 @@ export function PublicShareManager() {
     [locale],
   );
   const [shares, setShares] = useState<PublicShareSummary[]>([]);
+  const collection = useCollectionView("settings.sharing", shares, {
+    search: (item) => [item.name, item.resourceName].join(" "),
+    sorts: [
+      { value: "name", label: t("common:listView.fields.name"), get: (item) => item.name },
+      { value: "createdAt", label: t("common:listView.fields.createdAt"), get: (item) => item.createdAt }
+    ],
+    filters: [{ key: "scope", label: t("common:listView.fields.type"), get: (item) => item.scope, options: [{ value: "inventory", label: t("settings:sharing.create.scopes.inventory") }, { value: "item", label: t("settings:sharing.create.scopes.item") }] }],
+  });
   const [definitions, setDefinitions] = useState<CustomFieldDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -657,6 +668,8 @@ export function PublicShareManager() {
           </p>
         ) : null}
 
+        <CollectionViewToolbar collection={collection} />
+        <ListViewResults list={collection.list}>
         <Card className="overflow-hidden">
           {loading ? (
             <div className="space-y-3 p-5" aria-label={t("settings:sharing.list.loading")}>
@@ -683,8 +696,8 @@ export function PublicShareManager() {
             />
           ) : (
             <div className="divide-y divide-border">
-              {shares.map((share) => (
-                <article key={share.id} className="p-4 sm:p-5">
+              {collection.visibleItems.map((share) => (
+                <article data-list-row key={share.id} className="p-4 sm:p-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                     <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
                       {share.scope === "inventory" ? (
@@ -787,6 +800,7 @@ export function PublicShareManager() {
             </div>
           )}
         </Card>
+        </ListViewResults>
       </section>
     </div>
   );

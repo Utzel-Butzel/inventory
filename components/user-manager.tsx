@@ -1,5 +1,8 @@
 "use client";
 
+import { CollectionViewToolbar, ListViewResults, useCollectionView } from "@/components/list-view";
+
+
 import {
   AlertTriangle,
   CheckCircle2,
@@ -83,6 +86,15 @@ export function UserManager() {
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [roles, setRoles] = useState<ManagedRole[]>(fallbackRoles);
+  const collection = useCollectionView("settings.users", users, {
+    search: (item) => [item.name, item.email].join(" "),
+    sorts: [
+      { value: "name", label: t("common:listView.fields.name"), get: (item) => item.name },
+      { value: "email", label: t("common:listView.fields.email"), get: (item) => item.email },
+      { value: "createdAt", label: t("common:listView.fields.createdAt"), get: (item) => item.createdAt }
+    ],
+    filters: [{ key: "role", label: t("common:listView.fields.role"), get: (item) => item.role, options: roles.map((role) => ({ value: role.key, label: role.name })) }, { key: "status", label: t("common:listView.fields.status"), get: (item) => item.isActive ? "active" : "inactive", options: [{ value: "active", label: t("common:listView.active") }, { value: "inactive", label: t("common:listView.inactive") }] }],
+  });
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -239,7 +251,7 @@ export function UserManager() {
   return (
     <section
       aria-labelledby="users-heading"
-      className="overflow-hidden rounded-3xl border border-border/80 bg-surface shadow-[var(--shadow-md)]"
+      className="rounded-3xl border border-border/80 bg-surface shadow-[var(--shadow-md)]"
     >
       <div className="flex flex-col gap-4 border-b border-border/80 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex items-start gap-3">
@@ -385,6 +397,8 @@ export function UserManager() {
         </div>
       ) : null}
 
+      <div className="px-3 pt-3"><CollectionViewToolbar collection={collection} /></div>
+      <ListViewResults list={collection.list}>
       <div className="p-2 sm:p-3">
         {loading ? (
           <div className="space-y-2 p-2">
@@ -405,11 +419,11 @@ export function UserManager() {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {users.map((user) => {
+            {collection.visibleItems.map((user) => {
               const isCurrent = user.id === currentUserId;
               const saving = savingId === user.id;
               return (
-                <article key={user.id} className={`rounded-2xl px-3 py-4 transition hover:bg-surface-subtle sm:px-4 ${user.isActive ? "" : "opacity-60"}`}>
+                <article data-list-row key={user.id} className={`rounded-2xl px-3 py-4 transition hover:bg-surface-subtle sm:px-4 ${user.isActive ? "" : "opacity-60"}`}>
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
                       <span className={`grid size-11 shrink-0 place-items-center rounded-full text-xs font-bold ${user.isActive ? "bg-brand-soft text-brand" : "bg-surface-hover text-muted"}`}>
@@ -484,6 +498,7 @@ export function UserManager() {
         </p>
       </div>
 
+      </ListViewResults>
       {resetUser ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-overlay p-4 backdrop-blur-sm" role="presentation">
           <form onSubmit={submitPasswordReset} className="w-full max-w-md rounded-3xl border border-border bg-surface p-6 shadow-2xl">

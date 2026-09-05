@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { RoomFurnitureVariant } from "@/lib/room-furniture-catalog";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
 import type {
@@ -335,6 +336,37 @@ function makeStorage(
     for (const z of [-depth * 0.34, depth * 0.34]) {
       box(root, materials.dark, [footSize, footHeight, footSize], [x, -height / 2 + footHeight / 2, z]);
     }
+  }
+}
+
+function makeShelves(root: THREE.Group, [w, h, d]: Vector3Tuple, materials: RoomObjectModelMaterials, open = false) {
+  const panel = Math.min(0.035, w * 0.045, h * 0.035);
+  const material = open ? materials.metal : materials.primary;
+  for (const x of [-w / 2 + panel / 2, w / 2 - panel / 2]) {
+    if (open) {
+      for (const z of [-d / 2 + panel / 2, d / 2 - panel / 2]) box(root, material, [panel, h, panel], [x, 0, z]);
+    } else box(root, material, [panel, h, d], [x, 0, 0]);
+  }
+  if (!open) box(root, materials.dark, [w - panel * 2, h, panel / 2], [0, 0, -d / 2 + panel / 4]);
+  const shelves = Math.max(2, Math.min(7, Math.round(h / 0.35)));
+  for (let i = 0; i <= shelves; i++) {
+    box(root, material, [w - panel * 2, panel, d - panel], [0, -h / 2 + panel / 2 + i * (h - panel) / shelves, 0]);
+  }
+  if (!open && w > 1.1) box(root, material, [panel, h - panel * 2, d - panel], [0, 0, 0]);
+}
+
+function makeDrawers(root: THREE.Group, [w, h, d]: Vector3Tuple, materials: RoomObjectModelMaterials) {
+  // Separate carcass panels keep the recess between fronts visible.
+  const p = Math.min(0.035, w * 0.04);
+  for (const x of [-w / 2 + p / 2, w / 2 - p / 2]) box(root, materials.primary, [p, h, d], [x, 0, 0]);
+  for (const y of [-h / 2 + p / 2, h / 2 - p / 2]) box(root, materials.primary, [w, p, d], [0, y, 0]);
+  box(root, materials.dark, [w - p * 2, h - p * 2, p], [0, 0, -d / 2 + p / 2]);
+  const count = Math.max(2, Math.min(6, Math.round(h / 0.25)));
+  const dh = (h - p * 2) / count;
+  for (let i = 0; i < count; i++) {
+    const y = -h / 2 + p + dh * (i + 0.5);
+    box(root, materials.light, [w - p * 2, dh - 0.009, p], [0, y, d / 2 - p / 2]);
+    box(root, materials.metal, [w * 0.26, 0.014, 0.022], [0, y + dh * 0.2, d / 2 + 0.011]);
   }
 }
 
@@ -691,6 +723,7 @@ export function createAiPrimitiveObjectModel({
 }
 
 export function createRoomObjectModel({
+  variant,
   category,
   dimensions,
   materials,
@@ -698,6 +731,7 @@ export function createRoomObjectModel({
   category: string;
   dimensions: Vector3Tuple;
   materials: RoomObjectModelMaterials;
+  variant?: RoomFurnitureVariant | null;
 }) {
   const root = new THREE.Group();
   const content = new THREE.Group();
@@ -707,6 +741,11 @@ export function createRoomObjectModel({
     (root: THREE.Group, dimensions: Vector3Tuple, materials: RoomObjectModelMaterials) => void
   > = {
     storage: makeStorage,
+    wardrobe: makeStorage,
+    sideboard: makeStorage,
+    drawers: makeDrawers,
+    bookcase: (root, size, material) => makeShelves(root, size, material),
+    shelving: (root, size, material) => makeShelves(root, size, material, true),
     table: makeTable,
     chair: makeChair,
     sofa: makeSofa,
@@ -723,7 +762,7 @@ export function createRoomObjectModel({
     television: makeTelevision,
     stairs: makeStairs,
   };
-  const builder = builders[category];
+  const builder = builders[variant ?? category];
   if (builder) {
     builder(content, dimensions, materials);
   } else {

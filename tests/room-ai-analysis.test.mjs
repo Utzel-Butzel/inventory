@@ -289,7 +289,7 @@ test("grounds explicit duplicate RoomPlan categories and keeps real evidence onl
     analysis.objectSuggestions[1].imageEvidence[0].bounds,
     [700, 300, 950, 920],
   );
-  assert.equal(analysis.objectSuggestions[2].roomObjectId, null);
+  assert.equal(analysis.objectSuggestions.length, 2, "duplicate anchor views must not become extra estimated furniture");
   assert.ok(analysis.objectSuggestions.every(({ status }) => status === "pending"));
 });
 
@@ -673,4 +673,16 @@ test("keeps an accepted light-gray door finish free of the brown base texture", 
   assert.equal(material.roughnessMap, paintRoughnessMap);
   assert.equal(material.color.getHexString().toUpperCase(), "D3D3D3");
   assert.equal(material.roughness, 0.84);
+});
+
+test("reanalysis retains reviewed geometry, dismissed results and manual placement", async () => {
+  const { mergeReviewedRoomAnalysis } = await import("../lib/room-ai-analysis.ts");
+  const base = { schemaVersion:1, analyzedAt:"2026-09-05T10:00:00Z",model:"test",summary:"Room",analyzedKeyframeIds:[frameId],surfaceAppearances:[],objectSuggestions:[] };
+  const accepted = { id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name:"My cabinet",category:"storage",description:"",colorHex:null,material:"wood",confidence:0.9,evidence:"Photo",evidenceKeyframeIds:[frameId],imageEvidence:[{keyframeId:frameId,bounds:[100,100,500,900],visibility:"clear",confidence:0.9}],roomObjectId:scene.objects[0].id,primitiveModel:null,estimatedPlacement:null,status:"accepted" };
+  const dismissed = {...accepted,id:"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",name:"Reflection",roomObjectId:null,status:"dismissed",estimatedPlacement:{position:[1,0.5,1],rotationYDegrees:30,dimensions:[1,1,1]}};
+  const next = {...base, objectSuggestions:[{...accepted,id:"cccccccc-cccc-4ccc-8ccc-cccccccccccc",name:"New model",status:"pending"}]};
+  const result = mergeReviewedRoomAnalysis({...base,objectSuggestions:[accepted,dismissed]},next);
+  assert.equal(result.objectSuggestions.length,2);
+  assert.deepEqual(result.objectSuggestions.find(o=>o.id===accepted.id),accepted);
+  assert.deepEqual(result.objectSuggestions.find(o=>o.id===dismissed.id),dismissed);
 });

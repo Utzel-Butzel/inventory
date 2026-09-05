@@ -1,5 +1,8 @@
 "use client";
 
+import { CollectionViewToolbar, ListViewResults, useCollectionView } from "@/components/list-view";
+
+
 import {
   Archive,
   Boxes,
@@ -73,6 +76,14 @@ const slug = (value: string) =>
 export function InventoryTypeManager() {
   const { t } = useT("settings");
   const [types, setTypes] = useState<InventoryType[]>([]);
+  const collection = useCollectionView("settings.inventory-types", types, {
+    search: (item) => [item.label, item.key, item.description].join(" "),
+    sorts: [
+      { value: "name", label: t("common:listView.fields.name"), get: (item) => item.label },
+      { value: "default", label: t("common:listView.fields.default"), get: (item) => item.position }
+    ],
+    filters: [{ key: "status", label: t("common:listView.fields.status"), get: (item) => item.archivedAt ? "inactive" : "active", options: [{ value: "active", label: t("common:listView.active") }, { value: "inactive", label: t("common:listView.inactive") }] }],
+  });
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -289,8 +300,10 @@ export function InventoryTypeManager() {
         </form>
       ) : null}
 
+      <div className="px-4 pt-4"><CollectionViewToolbar collection={collection} /></div>
+      <ListViewResults list={collection.list}>
       <div className="divide-y divide-border">
-        {types.map((type) => (
+        {collection.visibleItems.map((type) => (
           <TypeRow
             key={type.key}
             type={type}
@@ -299,6 +312,7 @@ export function InventoryTypeManager() {
           />
         ))}
       </div>
+      </ListViewResults>
     </Card>
   );
 }
@@ -318,7 +332,7 @@ function TypeRow({
   useEffect(() => setLabel(type.label), [type.label]);
 
   return (
-    <div className={`grid gap-3 px-5 py-4 sm:px-6 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center ${type.archivedAt ? "bg-surface-subtle opacity-65" : ""}`}>
+    <div data-list-row className={`grid gap-3 px-5 py-4 sm:px-6 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center ${type.archivedAt ? "bg-surface-subtle opacity-65" : ""}`}>
       <div className="flex min-w-0 items-center gap-3">
         <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: type.color }} />
         <div className="min-w-0 flex-1">

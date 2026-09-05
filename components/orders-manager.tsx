@@ -1,5 +1,15 @@
 "use client";
 
+import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
+import { orderListItems } from "@/lib/list-view-contract";
+
+
+import {
+  toIsoDateTime as iso,
+  dateInput as localDate,
+  localDateTime,
+} from "@/lib/client-formatters";
+
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -7,7 +17,6 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  ExternalLink,
   HandCoins,
   LoaderCircle,
   Package,
@@ -19,13 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { useT } from "next-i18next/client";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 
 import {
@@ -52,166 +55,20 @@ import {
 } from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 
-type OrderType = "purchase" | "sale" | "loan";
-type TradeOrderType = Exclude<OrderType, "purchase">;
-
-type ShipmentStatus =
-  | "draft"
-  | "ready"
-  | "shipped"
-  | "in_transit"
-  | "delivered"
-  | "exception"
-  | "returned"
-  | "cancelled";
-
-type Shipment = {
-  id: string;
-  orderId: string;
-  carrierCode: string;
-  service: string | null;
-  trackingNumber: string | null;
-  trackingUrl: string | null;
-  status: ShipmentStatus;
-  shippedAt: string | null;
-  deliveredAt: string | null;
-  note: string;
-  createdAt: string;
-  lines: Array<{
-    id: string;
-    orderLineId: string;
-    resourceId: string;
-    resourceName: string;
-    quantity: number;
-    units: Array<{
-      orderLineUnitId: string;
-      stockUnitId: string;
-      code: string;
-    }>;
-  }>;
-  events: Array<{
-    id: string;
-    fromStatus: ShipmentStatus | null;
-    toStatus: ShipmentStatus;
-    note: string;
-    actor: string | null;
-    occurredAt: string;
-  }>;
-  totalQuantity: number;
-};
-
-type Contact = {
-  id: string;
-  name: string;
-  company: string | null;
-  roles: Array<"customer" | "supplier">;
-};
-
-type OrderLine = {
-  id: string;
-  resourceId: string;
-  resourceName: string;
-  resourceSku: string | null;
-  quantity: number;
-  fulfilledQuantity: number;
-  returnedQuantity: number;
-  openQuantity: number;
-  reservedQuantity: number;
-  openReservationQuantity: number;
-  openReturnQuantity: number;
-  unitPriceCents: number | null;
-  priceCurrency: string | null;
-  totalPriceCents: number | null;
-  expectedAt: string | null;
-  note: string;
-  trackingMode: "bulk" | "serialized";
-  unitName: string;
-  units: OrderLineUnit[];
-};
-
-type OrderLineUnit = {
-  id: string;
-  stockUnitId: string;
-  code: string;
-  status: "reserved" | "fulfilled" | "returned";
-  stockStatus:
-    | "available"
-    | "reserved"
-    | "in-use"
-    | "maintenance"
-    | "consumed"
-    | "lost"
-    | "retired";
-  reservedAt: string;
-  fulfilledAt: string | null;
-  returnedAt: string | null;
-};
-
-type SerializedUnitPanel = {
-  line: {
-    id: string;
-    resourceId: string;
-    resourceName: string;
-    quantity: number;
-    fulfilledQuantity: number;
-    returnedQuantity: number;
-  };
-  availableUnits: Array<{
-    id: string;
-    code: string;
-    status: "available";
-    location: string | null;
-  }>;
-  assignments: OrderLineUnit[];
-};
-
-type Order = {
-  id: string;
-  type: OrderType;
-  contactId: string | null;
-  contactName: string;
-  reference: string | null;
-  status: string;
-  orderedAt: string;
-  expectedAt: string | null;
-  note: string;
-  lines: OrderLine[];
-  shipments: Shipment[];
-  totalQuantity: number;
-  totalFulfilled: number;
-  totalReturned: number;
-};
-
-type DraftLine = {
-  resourceId: string;
-  resourceName: string;
-  resourceSku: string | null;
-  quantity: string;
-  unitPrice: string;
-  currency: string;
-  note: string;
-};
-
-type TradeOrderForm = {
-  contactId: string;
-  reference: string;
-  orderedAt: string;
-  expectedAt: string;
-  note: string;
-  lines: DraftLine[];
-};
+import { formatDate, statusTone } from "./orders/presentation";
+import { SalesShipments } from "./orders/sales-shipments";
+import type {
+  Contact,
+  Order,
+  OrderLine,
+  OrderType,
+  SerializedUnitPanel,
+  TradeOrderForm,
+  TradeOrderType,
+} from "./orders/types";
 
 function randomId() {
   return crypto.randomUUID();
-}
-
-function localDateTime(value = new Date()) {
-  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
-}
-
-function localDate(value = new Date()) {
-  return localDateTime(value).slice(0, 10);
 }
 
 function tradeOrderDefaults(contactId = ""): TradeOrderForm {
@@ -227,41 +84,6 @@ function tradeOrderDefaults(contactId = ""): TradeOrderForm {
   };
 }
 
-function iso(value: string) {
-  if (!value) return undefined;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
-}
-
-function formatDate(value: string | null, locale: string) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(
-    new Date(value),
-  );
-}
-
-function formatDateTime(value: string | null, locale: string) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function statusTone(status: string) {
-  if (["fulfilled", "returned", "delivered"].includes(status)) {
-    return "success" as const;
-  }
-  if (status === "cancelled") return "danger" as const;
-  if (["overdue", "partially-returned", "exception"].includes(status)) {
-    return "warning" as const;
-  }
-  if (["confirmed", "reserved", "issued", "partially-issued", "partially-fulfilled", "ready", "shipped", "in_transit"].includes(status)) {
-    return "brand" as const;
-  }
-  return "neutral" as const;
-}
-
 export function OrdersManager({ type = "purchase" }: { type?: OrderType }) {
   const { t } = useT("orders");
   const tabs: Array<{
@@ -269,10 +91,10 @@ export function OrdersManager({ type = "purchase" }: { type?: OrderType }) {
     href: string;
     icon: typeof Truck;
   }> = [
-    { type: "purchase", href: "/operations/purchases", icon: Truck },
-    { type: "sale", href: "/operations/sales", icon: ShoppingCart },
-    { type: "loan", href: "/operations/loans", icon: HandCoins },
-  ];
+      { type: "purchase", href: "/operations/purchases", icon: Truck },
+      { type: "sale", href: "/operations/sales", icon: ShoppingCart },
+      { type: "loan", href: "/operations/loans", icon: HandCoins },
+    ];
 
   return (
     <div className="space-y-5">
@@ -309,6 +131,7 @@ export function OrdersManager({ type = "purchase" }: { type?: OrderType }) {
 function TradeOrdersManager({ type }: { type: TradeOrderType }) {
   const { t, i18n } = useT("orders");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "de";
+  const list = useListView("orders." + type, { sort: "orderedAt", direction: "desc", filters: { status: "all" } });
   const [orders, setOrders] = useState<Order[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -415,6 +238,14 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
       window.clearTimeout(timer);
     };
   }, [draftLines, itemQuery]);
+
+  const visibleOrders = useMemo(() => {
+    const query = list.config.query.trim().toLocaleLowerCase(locale);
+    return orderListItems(orders.filter((order) => {
+      if (list.config.filters.status !== "all" && order.status !== list.config.filters.status) return false;
+      return !query || [order.contactName, order.reference, order.note, ...order.lines.map((line) => line.resourceName)].filter(Boolean).join(" ").toLocaleLowerCase(locale).includes(query);
+    }), list.config, { contactName: (order) => order.contactName, reference: (order) => order.reference, orderedAt: (order) => order.orderedAt, expectedAt: (order) => order.expectedAt, status: (order) => order.status, quantity: (order) => order.totalQuantity }, locale);
+  }, [orders, list.config, locale]);
 
   const metrics = useMemo(() => {
     const active = orders.filter(
@@ -755,16 +586,20 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
         </Card>
       ) : null}
 
+      <ListViewToolbar list={list} total={visibleOrders.length} loadedOnly
+        sorts={["orderedAt", "expectedAt", "contactName", "reference", "status", "quantity"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
+        filters={[{ key: "status", label: t("common:listView.fields.status"), options: [...new Set(orders.map((order) => order.status))].map((value) => ({ value, label: t("status." + value) })) }]} />
+      <ListViewResults list={list}>
       <Card className="overflow-hidden p-0">
         {loading ? (
           <div className="space-y-3 p-5"><Skeleton className="h-24" /><Skeleton className="h-24" /></div>
-        ) : orders.length ? (
+        ) : visibleOrders.length ? (
           <div className="divide-y divide-border">
-            {orders.map((order) => {
-              const open = expanded.has(order.id) || orders.length <= 3;
+            {visibleOrders.map((order) => {
+              const open = expanded.has(order.id) || visibleOrders.length <= 3;
               return (
-                <article key={order.id}>
-                  <button type="button" onClick={() => setExpanded((current) => { const next = new Set(current); if (next.has(order.id)) next.delete(order.id); else next.add(order.id); return next; })} className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left hover:bg-surface-hover sm:px-5">
+                <article data-list-card key={order.id}>
+                  <button data-list-row type="button" onClick={() => setExpanded((current) => { const next = new Set(current); if (next.has(order.id)) next.delete(order.id); else next.add(order.id); return next; })} className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left hover:bg-surface-hover sm:px-5">
                     <span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><strong className="truncate text-sm text-foreground">{order.contactName}</strong><Badge tone={statusTone(order.status)}>{t(`status.${order.status}`)}</Badge></span><span className="mt-1 block text-xs text-muted">{order.reference || order.id.slice(0, 8)} · {formatDate(order.orderedAt, locale)}{order.expectedAt ? ` · ${t("list.due", { date: formatDate(order.expectedAt, locale) })}` : ""}</span></span>
                     <span className="flex shrink-0 items-center gap-3"><span className="text-xs text-muted">{t("list.progress", { fulfilled: order.totalFulfilled, total: order.totalQuantity })}</span>{open ? <ChevronUp className="size-4 text-muted" /> : <ChevronDown className="size-4 text-muted" />}</span>
                   </button>
@@ -966,394 +801,8 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
           <EmptyState className="min-h-72" icon={<ArrowDownToLine className="size-5" />} title={t(`empty.${type}Title`)} description={t(`empty.${type}Description`)} action={<Button variant="secondary" onClick={() => setFormOpen(true)}><Plus className="size-4" />{t("actions.new")}</Button>} />
         )}
       </Card>
+      </ListViewResults>
     </div>
-  );
-}
-
-function SalesShipments({
-  order,
-  locale,
-  onChanged,
-  reportError,
-  reportNotice,
-}: {
-  order: Order;
-  locale: string;
-  onChanged: () => Promise<void>;
-  reportError: (message: string | null) => void;
-  reportNotice: (message: string | null) => void;
-}) {
-  const { t } = useT("orders");
-  const [formOpen, setFormOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [actingShipmentId, setActingShipmentId] = useState<string | null>(null);
-  const [carrierCode, setCarrierCode] = useState("dhl");
-  const [service, setService] = useState("");
-  const [trackingNumber, setTrackingNumber] = useState("");
-  const [trackingUrl, setTrackingUrl] = useState("");
-  const [note, setNote] = useState("");
-  const createKey = useRef<string | null>(null);
-
-  const activeShipments = order.shipments.filter(
-    (shipment) => shipment.status !== "cancelled",
-  );
-  const packedByLine = new Map<string, number>();
-  const packedUnitIds = new Set<string>();
-  for (const shipment of activeShipments) {
-    for (const line of shipment.lines) {
-      packedByLine.set(
-        line.orderLineId,
-        (packedByLine.get(line.orderLineId) ?? 0) + line.quantity,
-      );
-      for (const unit of line.units) packedUnitIds.add(unit.stockUnitId);
-    }
-  }
-  const shippableLines = order.lines.flatMap<{
-    orderLineId: string;
-    name: string;
-    quantity: number;
-    unitIds?: string[];
-  }>((line) => {
-    const remaining = Math.max(
-      0,
-      line.fulfilledQuantity -
-        line.returnedQuantity -
-        (packedByLine.get(line.id) ?? 0),
-    );
-    if (!remaining) return [];
-    if (line.trackingMode === "serialized") {
-      const unitIds = line.units
-        .filter(
-          (unit) =>
-            unit.status === "fulfilled" && !packedUnitIds.has(unit.stockUnitId),
-        )
-        .slice(0, remaining)
-        .map((unit) => unit.stockUnitId);
-      return unitIds.length
-        ? [{ orderLineId: line.id, name: line.resourceName, quantity: unitIds.length, unitIds }]
-        : [];
-    }
-    return [{ orderLineId: line.id, name: line.resourceName, quantity: remaining }];
-  });
-  const shippableQuantity = shippableLines.reduce(
-    (total, line) => total + line.quantity,
-    0,
-  );
-
-  function resetForm() {
-    setCarrierCode("dhl");
-    setService("");
-    setTrackingNumber("");
-    setTrackingUrl("");
-    setNote("");
-    createKey.current = null;
-  }
-
-  async function createShipment() {
-    if (!trackingNumber.trim() || !shippableLines.length) return;
-    createKey.current ??= randomId();
-    setSaving(true);
-    reportError(null);
-    reportNotice(null);
-    try {
-      await fetchJson(`/api/v1/orders/${order.id}/shipments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": createKey.current,
-        },
-        body: JSON.stringify({
-          carrierCode,
-          service: service.trim() || undefined,
-          trackingNumber: trackingNumber.trim(),
-          trackingUrl: trackingUrl.trim() || undefined,
-          status: "ready",
-          note,
-          lines: shippableLines.map((line) => ({
-            orderLineId: line.orderLineId,
-            quantity: line.quantity,
-            ...(line.unitIds ? { unitIds: line.unitIds } : {}),
-          })),
-        }),
-      });
-      resetForm();
-      setFormOpen(false);
-      await onChanged();
-      reportNotice(t("shipments.notices.created"));
-    } catch (shipmentError) {
-      reportError(
-        shipmentError instanceof Error
-          ? shipmentError.message
-          : t("shipments.errors.create"),
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function updateStatus(shipment: Shipment, status: ShipmentStatus) {
-    setActingShipmentId(shipment.id);
-    reportError(null);
-    reportNotice(null);
-    try {
-      await fetchJson(`/api/v1/orders/${order.id}/shipments/${shipment.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      await onChanged();
-      reportNotice(t(`shipments.notices.${status}`));
-    } catch (shipmentError) {
-      reportError(
-        shipmentError instanceof Error
-          ? shipmentError.message
-          : t("shipments.errors.update"),
-      );
-    } finally {
-      setActingShipmentId(null);
-    }
-  }
-
-  return (
-    <section className="border-t border-border bg-surface-subtle px-4 py-4 sm:px-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Truck className="size-4 text-brand" aria-hidden="true" />
-            {t("shipments.title")}
-          </h3>
-          <p className="mt-1 text-xs leading-5 text-muted">
-            {t("shipments.description")}
-          </p>
-        </div>
-        {shippableQuantity > 0 && !["cancelled", "returned"].includes(order.status) ? (
-          <Button
-            size="sm"
-            variant={formOpen ? "ghost" : "secondary"}
-            onClick={() => setFormOpen((current) => !current)}
-          >
-            {formOpen ? <X className="size-3.5" /> : <Plus className="size-3.5" />}
-            {formOpen
-              ? t("shipments.actions.close")
-              : t("shipments.actions.create", { count: shippableQuantity })}
-          </Button>
-        ) : null}
-      </div>
-
-      {formOpen ? (
-        <Card className="mt-4 p-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label={t("shipments.fields.carrier")} required>
-              <Select value={carrierCode} onChange={(event) => setCarrierCode(event.target.value)}>
-                {(["dhl", "dpd", "ups", "gls", "hermes", "other"] as const).map(
-                  (carrier) => (
-                    <option key={carrier} value={carrier}>
-                      {t(`shipments.carriers.${carrier}`)}
-                    </option>
-                  ),
-                )}
-              </Select>
-            </Field>
-            <Field label={t("shipments.fields.trackingNumber")} required>
-              <Input
-                value={trackingNumber}
-                onChange={(event) => setTrackingNumber(event.target.value)}
-                maxLength={180}
-              />
-            </Field>
-            <Field label={t("shipments.fields.service")}>
-              <Input
-                value={service}
-                onChange={(event) => setService(event.target.value)}
-                maxLength={120}
-                placeholder={t("shipments.fields.servicePlaceholder")}
-              />
-            </Field>
-            <Field label={t("shipments.fields.trackingUrl")}>
-              <Input
-                type="url"
-                value={trackingUrl}
-                onChange={(event) => setTrackingUrl(event.target.value)}
-                maxLength={2048}
-                placeholder="https://…"
-              />
-            </Field>
-            <Field label={t("shipments.fields.note")} className="sm:col-span-2 lg:col-span-4">
-              <Textarea
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                rows={2}
-                maxLength={20_000}
-              />
-            </Field>
-          </div>
-          <div className="mt-4 rounded-xl border border-border bg-surface-subtle p-3">
-            <p className="text-xs font-semibold text-foreground">
-              {t("shipments.included")}
-            </p>
-            <ul className="mt-2 space-y-1 text-xs text-muted">
-              {shippableLines.map((line) => (
-                <li key={line.orderLineId}>
-                  {line.quantity} × {line.name}
-                  {line.unitIds?.length
-                    ? ` · ${line.unitIds
-                        .map(
-                          (unitId) =>
-                            order.lines
-                              .find((orderLine) => orderLine.id === line.orderLineId)
-                              ?.units.find((unit) => unit.stockUnitId === unitId)?.code ??
-                            unitId,
-                        )
-                        .join(", ")}`
-                    : ""}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <FormActions className="mt-4">
-            <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>
-              {t("actions.cancel")}
-            </Button>
-            <Button
-              type="button"
-              disabled={saving || !trackingNumber.trim()}
-              onClick={() => void createShipment()}
-            >
-              {saving ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
-              {t("shipments.actions.saveReady")}
-            </Button>
-          </FormActions>
-        </Card>
-      ) : null}
-
-      {order.shipments.length ? (
-        <div className="mt-4 grid gap-3">
-          {order.shipments.map((shipment) => (
-            <article key={shipment.id} className="rounded-xl border border-border bg-surface p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <strong className="text-sm text-foreground">
-                      {t(`shipments.carriers.${shipment.carrierCode}`, {
-                        defaultValue: shipment.carrierCode.toUpperCase(),
-                      })}
-                      {shipment.service ? ` · ${shipment.service}` : ""}
-                    </strong>
-                    <Badge tone={statusTone(shipment.status)}>
-                      {t(`status.${shipment.status}`)}
-                    </Badge>
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                    {shipment.trackingNumber ? (
-                      shipment.trackingUrl ? (
-                        <a
-                          href={shipment.trackingUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
-                        >
-                          {shipment.trackingNumber}
-                          <ExternalLink className="size-3" aria-hidden="true" />
-                        </a>
-                      ) : (
-                        <span>{shipment.trackingNumber}</span>
-                      )
-                    ) : null}
-                    <span>
-                      {t("shipments.quantity", { count: shipment.totalQuantity })}
-                    </span>
-                    <span>
-                      {shipment.shippedAt
-                        ? t("shipments.shippedAt", {
-                            date: formatDateTime(shipment.shippedAt, locale),
-                          })
-                        : t("shipments.createdAt", {
-                            date: formatDateTime(shipment.createdAt, locale),
-                          })}
-                    </span>
-                    {shipment.deliveredAt ? (
-                      <span>
-                        {t("shipments.deliveredAt", {
-                          date: formatDateTime(shipment.deliveredAt, locale),
-                        })}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {shipment.status === "ready" ? (
-                    <Button
-                      size="sm"
-                      disabled={actingShipmentId !== null}
-                      onClick={() => void updateStatus(shipment, "shipped")}
-                    >
-                      {actingShipmentId === shipment.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <Truck className="size-3.5" />}
-                      {t("shipments.actions.markShipped")}
-                    </Button>
-                  ) : null}
-                  {shipment.status === "shipped" ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={actingShipmentId !== null}
-                      onClick={() => void updateStatus(shipment, "in_transit")}
-                    >
-                      {actingShipmentId === shipment.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <Truck className="size-3.5" />}
-                      {t("shipments.actions.markInTransit")}
-                    </Button>
-                  ) : null}
-                  {["shipped", "in_transit", "exception"].includes(shipment.status) ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={actingShipmentId !== null}
-                      onClick={() => void updateStatus(shipment, "delivered")}
-                    >
-                      {actingShipmentId === shipment.id ? <LoaderCircle className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                      {t("shipments.actions.markDelivered")}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-              <ul className="mt-3 space-y-1 text-xs text-muted">
-                {shipment.lines.map((line) => (
-                  <li key={line.id}>
-                    {line.quantity} × {line.resourceName}
-                    {line.units.length
-                      ? ` · ${line.units.map((unit) => unit.code).join(", ")}`
-                      : ""}
-                  </li>
-                ))}
-              </ul>
-              {shipment.note ? (
-                <p className="mt-3 text-xs leading-5 text-muted">{shipment.note}</p>
-              ) : null}
-              {shipment.events.length ? (
-                <details className="mt-3 border-t border-border pt-3 text-xs text-muted">
-                  <summary className="cursor-pointer font-semibold text-foreground">
-                    {t("shipments.history", { count: shipment.events.length })}
-                  </summary>
-                  <ol className="mt-2 space-y-1.5">
-                    {[...shipment.events].reverse().map((event) => (
-                      <li key={event.id}>
-                        {formatDateTime(event.occurredAt, locale)} · {t(`status.${event.toStatus}`)}
-                        {event.note ? ` · ${event.note}` : ""}
-                      </li>
-                    ))}
-                  </ol>
-                </details>
-              ) : null}
-            </article>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-muted">
-          {shippableQuantity
-            ? t("shipments.emptyReady")
-            : t("shipments.emptyUnfulfilled")}
-        </p>
-      )}
-    </section>
   );
 }
 

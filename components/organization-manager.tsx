@@ -1,5 +1,7 @@
 "use client";
 
+import { CollectionViewToolbar, ListViewResults, useCollectionView } from "@/components/list-view";
+
 import {
   AlertTriangle,
   Building2,
@@ -71,6 +73,17 @@ export function OrganizationManager({
   const organizationHref = useOrganizationHref();
   const isReadOnly = useOrganizationReadOnly();
   const [organizations, setOrganizations] = useState<ManagedOrganization[]>([]);
+  const collection = useCollectionView("settings.organizations", organizations, {
+    search: (item) => [item.name, item.slug].join(" "),
+    sorts: [
+      { value: "name", label: t("common:listView.fields.name"), get: (item) => item.name },
+      { value: "slug", label: t("organizations.form.slug"), get: (item) => item.slug },
+    ],
+    filters: [{
+      key: "role", label: t("common:listView.fields.role"), get: (item) => item.role,
+      options: [...new Map(organizations.map((item) => [item.role, { value: item.role, label: item.roleName || roleFallback(item.role) }])).values()],
+    }],
+  });
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -242,7 +255,7 @@ export function OrganizationManager({
           "xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]",
       )}
     >
-      <Card className="overflow-hidden">
+      <Card className="min-w-0">
         <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-solid text-on-brand shadow-sm">
@@ -288,6 +301,8 @@ export function OrganizationManager({
           </div>
         ) : null}
 
+        <div className="px-3 pt-3 sm:px-4"><CollectionViewToolbar collection={collection} /></div>
+        <ListViewResults list={collection.list}>
         <div className="p-3 sm:p-4">
           {loading ? (
             <div className="space-y-2">
@@ -320,7 +335,7 @@ export function OrganizationManager({
             />
           ) : (
             <div className="divide-y divide-border">
-              {organizations.map((organization) => {
+              {collection.visibleItems.map((organization) => {
                 const active = organization.id === activeOrganizationId;
                 const editing = editingId === organization.id;
                 const canManage =
@@ -329,7 +344,7 @@ export function OrganizationManager({
                     (organization.role === "admin" ||
                       organization.role === "owner"));
                 return (
-                  <article key={organization.id} className="rounded-2xl px-3 py-4 transition hover:bg-surface-subtle sm:px-4">
+                  <article data-list-row key={organization.id} className="rounded-2xl px-3 py-4 transition hover:bg-surface-subtle sm:px-4">
                     {editing ? (
                       <form onSubmit={(event) => void updateOrganization(event, organization)}>
                         <label className="block">
@@ -430,6 +445,7 @@ export function OrganizationManager({
             </div>
           )}
         </div>
+        </ListViewResults>
       </Card>
 
       {!isReadOnly && canCreateOrganizations ? <Card className="h-fit overflow-hidden">

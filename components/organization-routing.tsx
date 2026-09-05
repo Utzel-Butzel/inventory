@@ -16,6 +16,7 @@ import {
 } from "@/lib/organization-path";
 
 type OrganizationRoutingContextValue = {
+  organizationId?: string;
   organizationSlug: string;
   isReadOnly: boolean;
   allowNegativeStock: boolean;
@@ -25,11 +26,13 @@ const OrganizationRoutingContext =
   createContext<OrganizationRoutingContextValue | null>(null);
 
 export function OrganizationRoutingProvider({
+  organizationId,
   organizationSlug,
   isReadOnly = false,
   allowNegativeStock = false,
   children,
 }: {
+  organizationId?: string;
   organizationSlug: string;
   isReadOnly?: boolean;
   allowNegativeStock?: boolean;
@@ -37,7 +40,7 @@ export function OrganizationRoutingProvider({
 }) {
   return (
     <OrganizationRoutingContext.Provider
-      value={{ organizationSlug, isReadOnly, allowNegativeStock }}
+      value={{ organizationId, organizationSlug, isReadOnly, allowNegativeStock }}
     >
       {children}
     </OrganizationRoutingContext.Provider>
@@ -56,6 +59,10 @@ function useOrganizationRouting() {
 
 export function useOrganizationSlug() {
   return useOrganizationRouting().organizationSlug;
+}
+
+export function useOrganizationId() {
+  return useOrganizationRouting().organizationId;
 }
 
 export function useOrganizationReadOnly() {

@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { ListViewCollection } from "@/lib/list-view-contract";
 import {
   bigint,
   boolean,
@@ -189,6 +190,18 @@ export const users = pgTable(
     ),
   ],
 );
+
+export const userListViews = pgTable("user_list_views", {
+  organizationId: organizationIdColumn(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  scope: varchar("scope", { length: 100 }).notNull(),
+  collection: jsonb("collection").$type<ListViewCollection>().notNull().default({ views: [], defaultId: null }),
+  revision: integer("revision").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.organizationId, table.userId, table.scope] }),
+  check("user_list_views_revision_check", sql`${table.revision} > 0`),
+]);
 
 export const organizationMemberships = pgTable(
   "organization_memberships",

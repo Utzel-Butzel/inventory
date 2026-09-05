@@ -3,6 +3,7 @@
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import { Alert } from "@/components/ui";
+import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
 import { useT } from "next-i18next/client";
 import {
   ArrowRight,
@@ -14,9 +15,7 @@ import {
   CircleUserRound,
   CodeXml,
   Columns3,
-  Grid2X2,
   Layers3,
-  List,
   ListChecks,
   LoaderCircle,
   MapPin,
@@ -25,9 +24,8 @@ import {
   Shirt,
   Star,
   Wrench,
-  X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 import {
@@ -39,7 +37,6 @@ import { markdownToPlainText } from "@/lib/simple-markdown";
 import { primaryResourceReference } from "@/lib/resource-slug-contract";
 
 type Pagination = { page: number; pageSize: number; total: number; pages: number };
-type View = "grid" | "table";
 type BatchForm = {
   status: string;
   type: string;
@@ -158,15 +155,23 @@ export function InventoryClient({
     total: 0,
     pages: 1,
   });
-  const [query, setQuery] = useState(normalizedInitialQuery);
+  const list = useListView(favoritesOnly ? "inventory.favorites" : "inventory", {
+    query: normalizedInitialQuery, sort: "updatedAt", direction: "desc",
+    layout: "grid", pageSize: normalizedInitialPageSize,
+    filters: { type: "all", status: "all", priority: "all" },
+    columns: ["name", "status", "sku", "location", "valueCents"],
+  });
+  const { patch } = list;
+  const query = list.config.query;
+  const type = list.config.filters.type ?? "all";
+  const status = list.config.filters.status ?? "all";
+  const priority = list.config.filters.priority ?? "all";
+  const pageSize = normalizeInventoryPageSize(list.config.pageSize);
+  const view = list.config.layout;
+  const { sort, direction } = list.config;
+  const setPageSize = (pageSize: InventoryPageSize) => patch({ pageSize });
   const [debouncedQuery, setDebouncedQuery] = useState(normalizedInitialQuery);
-  const [type, setType] = useState("all");
-  const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<InventoryPageSize>(
-    normalizedInitialPageSize,
-  );
-  const [view, setView] = useState<View>("grid");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -178,11 +183,14 @@ export function InventoryClient({
   const [batchSaving, setBatchSaving] = useState(false);
   const [favoriteSavingIds, setFavoriteSavingIds] = useState<string[]>([]);
 
+  const previousInitialQuery = useRef(normalizedInitialQuery);
   useEffect(() => {
-    setQuery(normalizedInitialQuery);
+    if (previousInitialQuery.current === normalizedInitialQuery) return;
+    previousInitialQuery.current = normalizedInitialQuery;
+    patch({ query: normalizedInitialQuery });
     setDebouncedQuery(normalizedInitialQuery);
     setPage(1);
-  }, [normalizedInitialQuery]);
+  }, [normalizedInitialQuery, patch]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -205,7 +213,10 @@ export function InventoryClient({
     return () => window.clearTimeout(timer);
   }, [query]);
 
+  useEffect(() => { setPage(1); }, [type, status, priority, sort, direction, pageSize]);
+  const loadGeneration = useRef(0);
   const loadResources = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     setLoading(true);
     setError(null);
     const search = new URLSearchParams({
@@ -213,6 +224,9 @@ export function InventoryClient({
       pageSize: String(pageSize),
       type,
       status,
+      priority,
+      sort,
+      direction,
       media: "cover",
     });
     if (debouncedQuery) search.set("q", debouncedQuery);
@@ -222,23 +236,21 @@ export function InventoryClient({
         resources: ClientResource[];
         pagination: Pagination;
       }>(`/api/v1/resources?${search}`);
+      if (generation !== loadGeneration.current) return;
       setResources(result.resources);
       setPagination(result.pagination);
     } catch {
-      setError(t("errors.load"));
+      if (generation === loadGeneration.current) setError(t("errors.load"));
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
-  }, [debouncedQuery, favoritesOnly, page, pageSize, status, t, type]);
+  }, [debouncedQuery, favoritesOnly, page, pageSize, priority, sort, direction, status, t, type]);
 
   useEffect(() => {
     void loadResources();
   }, [loadResources]);
 
-  const activeFilters = useMemo(
-    () => Number(type !== "all") + Number(status !== "all") + Number(Boolean(query)),
-    [query, status, type],
-  );
+  const activeFilters = Number(type !== "all") + Number(status !== "all") + Number(priority !== "all") + Number(Boolean(query));
   const typeOptions = useMemo<InventoryTypeOption[]>(
     () =>
       inventoryTypes.length
@@ -269,12 +281,7 @@ export function InventoryClient({
   const pageIsSelected =
     pageIds.length > 0 && pageIds.every((resourceId) => selectedSet.has(resourceId));
 
-  const clearFilters = () => {
-    setQuery("");
-    setType("all");
-    setStatus("all");
-    setPage(1);
-  };
+  const clearFilters = () => { list.resetFilters(); setPage(1); };
 
   const clearSelection = () => {
     setError(null);
@@ -418,134 +425,21 @@ export function InventoryClient({
         </h1>
       </div>
 
-      <section className="mb-5 rounded-xl border border-border bg-surface p-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <label className="relative min-w-0 flex-1">
-            <span className="sr-only">{t("search.label")}</span>
-            <Search
-              size={18}
-              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted"
-            />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t("search.placeholder")}
-              className="h-11 w-full rounded-xl border border-border bg-surface-subtle/70 pl-10 pr-10 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-success focus:bg-surface focus:ring-4 focus:ring-success-border"
-            />
-            {query ? (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-muted-strong"
-                aria-label={t("search.clear")}
-              >
-                <X size={15} />
-              </button>
-            ) : null}
-          </label>
-          <div className="grid grid-cols-2 gap-2 sm:flex">
-            <select
-              value={type}
-              onChange={(event) => {
-                setType(event.target.value);
-                setPage(1);
-              }}
-              className="h-11 rounded-xl border border-border bg-surface px-3 text-sm font-medium text-muted-strong outline-none focus:border-success focus:ring-4 focus:ring-success-border"
-              aria-label={t("filters.typeLabel")}
-            >
-              <option value="all">{t("filters.allTypes")}</option>
-              {typeOptions.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={status}
-              onChange={(event) => {
-                setStatus(event.target.value);
-                setPage(1);
-              }}
-              className="h-11 rounded-xl border border-border bg-surface px-3 text-sm font-medium text-muted-strong outline-none focus:border-success focus:ring-4 focus:ring-success-border"
-              aria-label={t("filters.statusLabel")}
-            >
-              <option value="all">{t("filters.allStatuses")}</option>
-              <option value="available">{t("statuses.available")}</option>
-              <option value="in-use">{t("statuses.in-use")}</option>
-              <option value="maintenance">{t("statuses.maintenance")}</option>
-              <option value="archived">{t("statuses.archived")}</option>
-            </select>
-          </div>
-          <div className="hidden h-7 w-px bg-surface-hover lg:block" />
-          <div className="flex items-center justify-between gap-2">
-            {activeFilters ? (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="px-2 text-xs font-semibold text-muted hover:text-foreground"
-              >
-                {t("filters.clearActive", {
-                  count: activeFilters,
-                  value: integer.format(activeFilters),
-                })}
-              </button>
-            ) : (
-              <span className="px-2 text-xs font-medium text-muted">
-                {t("filters.records", {
-                  count: pagination.total,
-                  value: integer.format(pagination.total),
-                })}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={toggleSelectionMode}
-              className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition ${
-                selectionMode
-                  ? "border-success-border bg-success-soft text-success"
-                  : "border-border bg-surface text-muted-strong hover:bg-surface-hover"
-              }`}
-              aria-label={
-                selectionMode
-                  ? t("batchSelection.finish")
-                  : t("batchSelection.start")
-              }
-              aria-pressed={selectionMode}
-            >
-              <ListChecks size={16} />
-              <span className="hidden sm:inline">
-                {selectionMode
-                  ? t("batchSelection.finish")
-                  : t("batchSelection.start")}
-              </span>
-            </button>
-            <div className="flex rounded-xl bg-surface-muted p-1">
-              <button
-                type="button"
-                onClick={() => setView("grid")}
-                className={`grid h-8 w-8 place-items-center rounded-lg transition ${
-                  view === "grid" ? "bg-surface text-foreground shadow-sm" : "text-muted"
-                }`}
-                aria-label={t("views.grid")}
-                aria-pressed={view === "grid"}
-              >
-                <Grid2X2 size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("table")}
-                className={`grid h-8 w-8 place-items-center rounded-lg transition ${
-                  view === "table" ? "bg-surface text-foreground shadow-sm" : "text-muted"
-                }`}
-                aria-label={t("views.table")}
-                aria-pressed={view === "table"}
-              >
-                <List size={17} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
+      <ListViewToolbar
+        list={list}
+        searchPlaceholder={t("search.placeholder")}
+        total={pagination.total}
+        layouts
+        pageSizes={INVENTORY_PAGE_SIZE_OPTIONS}
+        columns={["name", "status", "sku", "location", "valueCents"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
+        sorts={["updatedAt", "name", "type", "status", "sku", "location", "quantity", "valueCents", "priority", "createdAt"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
+        filters={[
+          { key: "type", label: t("filters.typeLabel"), options: typeOptions.map((option) => ({ value: option.key, label: option.label })) },
+          { key: "status", label: t("filters.statusLabel"), options: ["available", "in-use", "maintenance", "archived"].map((value) => ({ value, label: statusLabel(value) })) },
+          { key: "priority", label: t("batchSelection.fields.priority"), options: [1, 2, 3, 4, 5].map((value) => ({ value: String(value), label: t("batchSelection.priority", { value }) })) },
+        ]}
+        actions={<button type="button" onClick={toggleSelectionMode} aria-pressed={selectionMode} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-xs font-semibold text-muted-strong"><ListChecks size={15} />{selectionMode ? t("batchSelection.finish") : t("batchSelection.start")}</button>}
+      />
 
       {error ? (
         <Alert tone="danger" className="mb-5">{error}</Alert>
@@ -747,6 +641,7 @@ export function InventoryClient({
         </section>
       ) : null}
 
+      <ListViewResults list={list}>
       {loading ? (
         <div
           className={`grid gap-4 ${view === "grid" ? "sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "grid-cols-1"}`}
@@ -796,7 +691,7 @@ export function InventoryClient({
             const selected = selectedSet.has(resource.id);
             const content = (
               <>
-                <div className="relative aspect-square overflow-hidden bg-surface-muted">
+                <div data-list-image className="relative aspect-square overflow-hidden bg-surface-muted">
                   <ResourceVisual
                     resource={resource}
                     eager={resource.id === eagerCoverId}
@@ -916,21 +811,16 @@ export function InventoryClient({
           })}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-surface">
-          <div className="hidden grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] gap-4 border-b border-border bg-surface-subtle/80 px-4 py-3 text-[12px] font-semibold uppercase tracking-wider text-muted lg:grid">
-            <span>{t("table.item")}</span>
-            <span>{t("table.status")}</span>
-            <span>{t("table.sku")}</span>
-            <span>{t("table.location")}</span>
-            <span>{t("table.value")}</span>
+        <div className="overflow-x-auto rounded-xl border border-border bg-surface" style={{ "--list-min-width": `${324 + (list.config.columns.length - 1) * 116}px` } as React.CSSProperties}>
+          <div className="hidden gap-4 border-b border-border bg-surface-subtle/80 px-4 py-3 text-[12px] font-semibold uppercase tracking-wider text-muted lg:grid lg:min-w-[var(--list-min-width)]" style={{ gridTemplateColumns: list.config.columns.map((key) => key === "name" ? "minmax(240px,2fr)" : "minmax(100px,1fr)").join(" ") + " 36px" }}>
+            {list.config.columns.map((key) => <span key={key}>{t("common:listView.fields." + key)}</span>)}
             <span />
           </div>
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-border lg:min-w-[var(--list-min-width)]">
             {resources.map((resource) => {
               const selected = selectedSet.has(resource.id);
-              const content = (
-                <>
-                  <div className="flex min-w-0 items-center gap-3">
+              const cells: Record<string, React.ReactNode> = {
+                name: (<div className="flex min-w-0 items-center gap-3">
                     {selectionMode ? (
                       <span
                         className={`grid size-5 shrink-0 place-items-center rounded-md border ${
@@ -968,19 +858,15 @@ export function InventoryClient({
                         </div>
                       ) : null}
                     </div>
-                  </div>
-                  <span className={`w-fit rounded-full px-2.5 py-1 text-[12px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
-                    {statusLabel(resource.status)}
-                  </span>
-                  <span className="truncate font-mono text-xs text-muted">{resource.sku || "—"}</span>
-                  <span className="truncate text-xs text-muted">{resource.location || "—"}</span>
-                  <span className="text-xs font-semibold text-muted-strong">
-                    {formatValue(resource.valueCents, resource.currency, locale)}
-                  </span>
-                  <span className="hidden lg:block" />
-                </>
-              );
-              const rowClass = `group grid w-full gap-3 px-4 py-3 text-left transition lg:grid-cols-[minmax(280px,2fr)_140px_120px_minmax(160px,1fr)_110px_36px] lg:items-center lg:gap-4 ${
+                  </div>),
+                status: <span className={'w-fit rounded-full px-2.5 py-1 text-[12px] font-semibold ring-1 ring-inset ' + (statusStyles[resource.status] ?? statusStyles.archived)}>{statusLabel(resource.status)}</span>,
+                sku: <span className="truncate font-mono text-xs text-muted">{resource.sku || "—"}</span>,
+                location: <span className="truncate text-xs text-muted">{resource.location || "—"}</span>,
+                valueCents: <span className="text-xs font-semibold text-muted-strong">{formatValue(resource.valueCents, resource.currency, locale)}</span>,
+              };
+              const content = <>{list.config.columns.map((key) => <div key={key} className="min-w-0">{cells[key]}</div>)}<span className="hidden lg:block" /></>;
+              const rowStyle = { "--list-columns": list.config.columns.map((key) => key === "name" ? "minmax(240px,2fr)" : "minmax(100px,1fr)").join(" ") + " 36px" } as React.CSSProperties;
+              const rowClass = `group grid w-full gap-3 px-4 py-3 text-left transition lg:grid-cols-[var(--list-columns)] lg:items-center lg:gap-4 ${
                 selected ? "bg-success-soft/70" : "hover:bg-surface-subtle"
               }`;
               return selectionMode ? (
@@ -988,6 +874,8 @@ export function InventoryClient({
                   key={resource.id}
                   type="button"
                   onClick={() => toggleResourceSelection(resource.id)}
+                  data-list-row
+                  style={rowStyle}
                   className={rowClass}
                   aria-label={
                     selected
@@ -1002,7 +890,9 @@ export function InventoryClient({
                 <div key={resource.id} className="relative">
                   <Link
                     href={`/inventory/${primaryResourceReference(resource)}`}
-                    className={`${rowClass} pr-14`}
+                    data-list-row
+                    style={rowStyle}
+                    className={rowClass + " pr-14 lg:pr-4"}
                   >
                     {content}
                   </Link>
@@ -1037,6 +927,8 @@ export function InventoryClient({
           </div>
         </div>
       )}
+
+      </ListViewResults>
 
       {!loading && resources.length > 0 ? (
         <div className="mt-6 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">

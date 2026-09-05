@@ -51,6 +51,9 @@ export async function GET(request: Request) {
     query: url.searchParams.get("q") ?? undefined,
     type: url.searchParams.get("type") ?? undefined,
     status: url.searchParams.get("status") ?? undefined,
+    priority: url.searchParams.get("priority") ?? undefined,
+    sort: url.searchParams.get("sort") ?? undefined,
+    direction: url.searchParams.get("direction") ?? undefined,
     loanable: url.searchParams.get("loanable") === "true",
     page: Number.isFinite(page) ? page : 1,
     pageSize: Number.isFinite(pageSize)

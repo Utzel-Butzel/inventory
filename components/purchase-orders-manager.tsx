@@ -1,5 +1,19 @@
 "use client";
 
+import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
+import { orderListItems } from "@/lib/list-view-contract";
+
+
+import {
+  dateInput,
+  formatDate,
+  formatMoney,
+  localDateTime,
+  moneyToCents,
+  toIsoDate,
+  toIsoDateTime,
+} from "@/lib/client-formatters";
+
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import {
   AlertTriangle,
@@ -184,56 +198,6 @@ function statusTone(status: PurchaseOrderStatus) {
   return "neutral" as const;
 }
 
-function localDateTime(value: Date | string = new Date()) {
-  const date = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(date.getTime())) return "";
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
-}
-
-function dateInput(value: Date = new Date()) {
-  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 10);
-}
-
-function toIsoDateTime(value: string) {
-  if (!value) return undefined;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
-}
-
-function toIsoDate(value: string) {
-  if (!value) return undefined;
-  const date = new Date(`${value}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
-}
-
-function formatDate(value: string | null, locale: string, includeTime = false) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat(locale, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    ...(includeTime ? { hour: "2-digit", minute: "2-digit" } : {}),
-  }).format(date);
-}
-
-function formatMoney(cents: number, currency: string, locale: string) {
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-  }).format(cents / 100);
-}
-
-function moneyToCents(value: string) {
-  if (!value.trim()) return null;
-  const amount = Number(value.replace(",", "."));
-  if (!Number.isFinite(amount) || amount < 0) return Number.NaN;
-  return Math.round(amount * 100);
-}
-
 function normalizeOrders(payload: OrdersEnvelope | PurchaseOrder[]) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload.data)) return payload.data;
@@ -313,8 +277,9 @@ export function PurchaseOrdersManager({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const [filter, setFilter] = useState<OrderFilter>("active");
-  const [query, setQuery] = useState("");
+  const list = useListView(resourceId ? "purchases.resource" : "purchases", { sort: "orderedAt", direction: "desc", filters: { status: "active" } });
+  const filter = list.config.filters.status ?? "all";
+  const query = list.config.query;
   const [createOpen, setCreateOpen] = useState(false);
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [scopedResource, setScopedResource] = useState<ClientResource | null>(null);
@@ -484,7 +449,7 @@ export function PurchaseOrdersManager({
 
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase(locale);
-    return scopedOrders.filter((order) => {
+    return orderListItems(scopedOrders.filter((order) => {
       const matchesFilter =
         filter === "all"
           ? true
@@ -502,8 +467,8 @@ export function PurchaseOrdersManager({
         .join(" ")
         .toLocaleLowerCase(locale)
         .includes(normalizedQuery);
-    });
-  }, [filter, locale, query, scopedOrders]);
+    }), list.config, { reference: (order) => order.reference, contactName: (order) => order.supplier, orderedAt: (order) => order.orderedAt, expectedAt: (order) => order.expectedAt, status: (order) => order.status }, locale);
+  }, [filter, locale, query, scopedOrders, list.config]);
 
   const metrics = useMemo(() => {
     const activeOrders = scopedOrders.filter((order) => isActive(order.status));
@@ -770,12 +735,6 @@ export function PurchaseOrdersManager({
     });
   }
 
-  const filterCounts: Record<OrderFilter, number> = {
-    all: scopedOrders.length,
-    active: scopedOrders.filter((order) => isActive(order.status)).length,
-    received: scopedOrders.filter((order) => order.status === "received").length,
-    cancelled: scopedOrders.filter((order) => order.status === "cancelled").length,
-  };
 
   return (
     <div className="space-y-5">
@@ -891,12 +850,11 @@ export function PurchaseOrdersManager({
         </Card>
       ) : null}
 
+      <ListViewToolbar list={list} total={filteredOrders.length} loadedOnly searchPlaceholder={t("orders.search.placeholder")}
+        sorts={["orderedAt", "expectedAt", "reference", "contactName", "status"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
+        filters={[{ key: "status", label: t("common:listView.fields.status"), options: Object.entries(filterLabelKeys).map(([value, key]) => ({ value, label: t(key) })) }]} />
+      <ListViewResults list={list}>
       <Card className="overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-border p-3 sm:p-4 xl:flex-row xl:items-center xl:justify-between">
-          <SearchInput containerClassName="min-w-0 flex-1 xl:max-w-md" aria-label={t("orders.search.label")} value={query} onChange={(event) => setQuery(event.target.value)} onClear={() => setQuery("")} clearLabel={t("orders.search.clear")} placeholder={t("orders.search.placeholder")} className="bg-surface-subtle" />
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-muted p-1 sm:flex">{(Object.keys(filterLabelKeys) as OrderFilter[]).map((value) => <button key={value} type="button" onClick={() => setFilter(value)} className={cn("inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold transition", filter === value ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground")}>{t(filterLabelKeys[value])} <span className={filter === value ? "text-brand" : "text-muted"}>{numberFormat.format(filterCounts[value])}</span></button>)}</div>
-        </div>
-
         {loading ? (
           <div className="space-y-3 p-5"><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>
         ) : filteredOrders.length ? (
@@ -909,8 +867,8 @@ export function PurchaseOrdersManager({
               const progress = totalOrdered ? Math.min(100, (totalReceived / totalOrdered) * 100) : 0;
               const expanded = expandedOrders.has(order.id) || compact || filteredOrders.length <= 3;
               return (
-                <article key={order.id} className={cn("transition", isActive(order.status) && totalOpen > 0 && "bg-surface-subtle")}>
-                  <button type="button" onClick={() => toggleExpanded(order.id)} className="flex w-full flex-col gap-4 px-4 py-4 text-left sm:flex-row sm:items-start sm:justify-between sm:px-5">
+                <article data-list-card key={order.id} className={cn("transition", isActive(order.status) && totalOpen > 0 && "bg-surface-subtle")}>
+                  <button data-list-row type="button" onClick={() => toggleExpanded(order.id)} className="flex w-full flex-col gap-4 px-4 py-4 text-left sm:flex-row sm:items-start sm:justify-between sm:px-5">
                     <div className="flex min-w-0 items-start gap-3"><span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", order.status === "received" ? "bg-success-soft text-success" : order.status === "cancelled" ? "bg-danger-soft text-danger" : "bg-brand-soft text-brand")}>{order.status === "received" ? <CircleCheck className="size-[18px]" aria-hidden="true" /> : <Truck className="size-[18px]" aria-hidden="true" />}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-[14px] font-semibold text-foreground">{order.supplier || t("orders.list.supplierNotSet")}</h3><Badge tone={statusTone(order.status)}>{t(statusLabelKeys[order.status])}</Badge></div><p className="mt-1 text-[11px] text-muted">{order.reference || t("orders.list.orderFallback", { id: order.id.slice(0, 8) })} · {t("orders.list.orderedDate", { date: formatDate(order.orderedAt, locale) })}</p><div className="mt-3 h-1.5 w-52 max-w-full overflow-hidden rounded-full bg-border"><div className="h-full rounded-full bg-brand-solid transition-all" style={{ width: `${progress}%` }} /></div><p className="mt-1.5 text-[10px] text-muted">{t("orders.list.progress", { received: numberFormat.format(totalReceived), open: numberFormat.format(totalOpen), ordered: numberFormat.format(totalOrdered) })}</p></div></div>
                     <div className="flex items-center justify-between gap-4 pl-[52px] sm:justify-end sm:pl-0"><div className="text-right"><p className="text-[11px] font-medium text-muted">{order.expectedAt ? t("orders.list.expected", { date: formatDate(order.expectedAt, locale) }) : t("orders.list.noEta")}</p><p className="mt-1 text-[10px] text-muted">{t("orders.list.lines", { count: visibleLines.length, value: numberFormat.format(visibleLines.length) })}</p></div>{expanded ? <ChevronUp className="size-4 text-muted" aria-hidden="true" /> : <ChevronDown className="size-4 text-muted" aria-hidden="true" />}</div>
                   </button>
@@ -969,10 +927,11 @@ export function PurchaseOrdersManager({
             icon={scopedOrders.length ? <Search className="size-5" aria-hidden="true" /> : <Truck className="size-5" aria-hidden="true" />}
             title={scopedOrders.length ? t("orders.empty.noMatchesTitle") : resourceId ? t("orders.empty.noItemOrdersTitle") : t("orders.empty.noOrdersTitle")}
             description={scopedOrders.length ? t("orders.empty.noMatchesDescription") : t("orders.empty.noOrdersDescription")}
-            action={!scopedOrders.length ? <Button variant="secondary" onClick={() => setCreateOpen(true)}><Plus className="size-4" aria-hidden="true" /> {t("orders.actions.createFirstOrder")}</Button> : <Button variant="secondary" onClick={() => { setQuery(""); setFilter("active"); }}>{t("orders.actions.clearFilters")}</Button>}
+            action={!scopedOrders.length ? <Button variant="secondary" onClick={() => setCreateOpen(true)}><Plus className="size-4" aria-hidden="true" /> {t("orders.actions.createFirstOrder")}</Button> : <Button variant="secondary" onClick={() => { list.resetFilters(); }}>{t("orders.actions.clearFilters")}</Button>}
           />
         )}
       </Card>
+      </ListViewResults>
 
       {compact && metrics.openUnits > 0 ? (
         <div className="flex items-start gap-2 rounded-xl border border-brand-border bg-brand-soft px-3.5 py-3 text-[11px] leading-4 text-brand"><AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-brand" aria-hidden="true" /><span>{t("orders.inTransit", { count: metrics.openUnits, value: numberFormat.format(metrics.openUnits) })}</span></div>

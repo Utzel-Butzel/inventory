@@ -573,3 +573,8 @@ button:not(:disabled),
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Shared density for collection rows; forms and controls retain their touch targets. */
+.list-view-results[data-list-density="compact"] :is(td, [data-list-row]) { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.list-view-results[data-list-density="compact"] [data-list-card] { gap: 0.5rem; }
+.list-view-results[data-list-density="compact"] [data-list-image] { aspect-ratio: 2 / 1; }

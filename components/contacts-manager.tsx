@@ -1,5 +1,9 @@
 "use client";
 
+import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
+import { orderListItems } from "@/lib/list-view-contract";
+
+
 import {
   Archive,
   Building2,
@@ -29,7 +33,6 @@ import {
   FormActions,
   Input,
   SearchInput,
-  Select,
   Textarea,
 } from "@/components/form-controls";
 import { CommentsThread } from "@/components/resource-comments";
@@ -174,8 +177,9 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | ContactRole>("all");
+  const list = useListView("contacts", { sort: "name", filters: { role: "all" } });
+  const query = list.config.query;
+  const roleFilter = list.config.filters.role ?? "all";
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedResources, setSelectedResources] = useState<LinkedResource[]>([]);
@@ -255,8 +259,8 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
 
   const filteredContacts = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
-    return contacts.filter((contact) => {
-      if (roleFilter !== "all" && !contact.roles.includes(roleFilter)) return false;
+    return orderListItems(contacts.filter((contact) => {
+      if (roleFilter !== "all" && !contact.roles.includes(roleFilter as ContactRole)) return false;
       if (!normalized) return true;
       return [
         contact.name,
@@ -267,8 +271,8 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
         contact.supplierNumber,
         ...contact.tags,
       ].some((value) => value?.toLocaleLowerCase().includes(normalized));
-    });
-  }, [contacts, query, roleFilter]);
+    }), list.config, { name: (contact) => contact.name, company: (contact) => contact.company, email: (contact) => contact.email, movementCount: (contact) => contact.movementCount });
+  }, [contacts, query, roleFilter, list.config]);
 
   const stats = useMemo(
     () => ({
@@ -586,24 +590,11 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
         </Card>
       ) : null}
 
+      <ListViewToolbar list={list} total={filteredContacts.length} searchPlaceholder={t("filters.search")}
+        sorts={["name", "company", "email", "movementCount"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
+        filters={[{ key: "role", label: t("filters.role"), options: ["customer", "supplier"].map((value) => ({ value, label: t("roles." + value) })) }]} />
+      <ListViewResults list={list}>
       <Card className="overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row">
-          <SearchInput
-            containerClassName="flex-1"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onClear={() => setQuery("")}
-            clearLabel={t("filters.clear")}
-            placeholder={t("filters.search")}
-            aria-label={t("filters.search")}
-          />
-          <Select className="sm:w-52" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as "all" | ContactRole)} aria-label={t("filters.role")}>
-            <option value="all">{t("filters.all")}</option>
-            <option value="customer">{t("roles.customer")}</option>
-            <option value="supplier">{t("roles.supplier")}</option>
-          </Select>
-        </div>
-
         {loading ? (
           <div className="space-y-3 p-4">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-16 w-full" />)}</div>
         ) : filteredContacts.length ? (
@@ -655,6 +646,7 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
           <EmptyState icon={<UsersRound className="size-5" />} title={query || roleFilter !== "all" ? t("empty.filteredTitle") : t("empty.title")} description={query || roleFilter !== "all" ? t("empty.filteredDescription") : t("empty.description")} action={canManage && !query && roleFilter === "all" ? <Button onClick={openCreate}><Plus className="size-4" />{t("actions.new")}</Button> : undefined} />
         )}
       </Card>
+      </ListViewResults>
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
   type RoomAiAnalysis,
   type RoomAiReviewPatch,
 } from "@/lib/room-ai-analysis-contract";
+import { mergeReviewedRoomAnalysis } from "@/lib/room-ai-analysis";
 import { createEstimatedRoomObjectPlacement } from "@/lib/room-ai-estimated-placement";
 import type { RoomKeyframeInput } from "@/lib/room-keyframe-contract";
 import {
@@ -162,7 +163,7 @@ export async function listRoomScans(
       floorIdentifier: scan.floorIdentifier,
       floorIndex: scan.floorIndex,
       roomIdentifier: scan.roomIdentifier,
-      georeference: coordinateSpace?.georeference ?? null,
+      georeference: scan.scene.mapAnchor ?? coordinateSpace?.georeference ?? null,
       layoutTransform: scan.layoutTransform,
       revision: scan.revision,
       status: scan.status,
@@ -287,7 +288,7 @@ export async function getRoomScene(organizationId: string, scanId: string) {
     floorIdentifier: row.scan.floorIdentifier,
     floorIndex: row.scan.floorIndex,
     roomIdentifier: row.scan.roomIdentifier,
-    georeference: row.coordinateSpace?.georeference ?? null,
+    georeference: row.scan.scene.mapAnchor ?? row.coordinateSpace?.georeference ?? null,
     scan: {
       id: row.scan.id,
       structureId: row.scan.structureId,
@@ -296,7 +297,7 @@ export async function getRoomScene(organizationId: string, scanId: string) {
       floorIdentifier: row.scan.floorIdentifier,
       floorIndex: row.scan.floorIndex,
       roomIdentifier: row.scan.roomIdentifier,
-      georeference: row.coordinateSpace?.georeference ?? null,
+      georeference: row.scan.scene.mapAnchor ?? row.coordinateSpace?.georeference ?? null,
       layoutTransform: row.scan.layoutTransform,
       revision: row.scan.revision,
       status: row.scan.status,
@@ -494,19 +495,19 @@ export async function saveRoomAiAnalysis(
   organizationId: string,
   scanId: string,
   analysis: RoomAiAnalysis,
+  options: { expectedRevision?: number; preserveReviews?: boolean } = {},
 ) {
-  const validated = roomAiAnalysisSchema.parse(analysis);
-  const [scan] = await db
-    .update(roomScans)
-    .set({ aiAnalysis: validated, updatedAt: new Date() })
-    .where(
-      and(
-        eq(roomScans.organizationId, organizationId),
-        eq(roomScans.id, scanId),
-      ),
-    )
-    .returning({ id: roomScans.id, aiAnalysis: roomScans.aiAnalysis });
-  return scan ?? null;
+  return db.transaction(async tx => {
+    const [current] = await tx.select().from(roomScans).where(and(eq(roomScans.organizationId, organizationId), eq(roomScans.id, scanId))).for("update");
+    if (!current) return null;
+    if (options.expectedRevision !== undefined && current.revision !== options.expectedRevision) throw new Error("room-analysis-revision-conflict");
+    const previous = roomAiAnalysisSchema.safeParse(current.aiAnalysis);
+    const validated = roomAiAnalysisSchema.parse(options.preserveReviews
+      ? mergeReviewedRoomAnalysis(previous.success ? previous.data : null, analysis)
+      : analysis);
+    const [scan] = await tx.update(roomScans).set({ aiAnalysis: validated, updatedAt: new Date() }).where(and(eq(roomScans.organizationId, organizationId), eq(roomScans.id, scanId))).returning({ id: roomScans.id, aiAnalysis: roomScans.aiAnalysis });
+    return scan ?? null;
+  });
 }
 
 export async function updateRoomAiReviewStatus(

@@ -218,7 +218,7 @@ test("stock pages select a readable materialized configuration before booking", 
   const [options, switcher, stockManager, openapi] = await Promise.all([
     source("lib/resource-options.ts"),
     source("components/resource-stock-configuration-switcher.tsx"),
-    source("components/resource-stock-manager.tsx"),
+    source("components/resource-stock/booking.tsx"),
     source("public/openapi.yaml"),
   ]);
 

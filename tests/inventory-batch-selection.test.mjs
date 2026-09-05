@@ -10,7 +10,9 @@ test("the inventory list exposes selection in both views and uses the batch API"
 
   assert.match(inventory, /const MAX_BATCH_SELECTION = 100/);
   assert.match(inventory, /view === "grid"/);
-  assert.match(inventory, /view === "table"/);
+  const toolbar = await source("components/list-view.tsx");
+  assert.match(inventory, /<ListViewToolbar/);
+  assert.match(toolbar, /\["table", "grid"\]/);
   assert.match(inventory, /aria-pressed=\{selected\}/);
   assert.match(inventory, /togglePageSelection/);
   assert.match(inventory, /"\/api\/v1\/resources\/batch"/);

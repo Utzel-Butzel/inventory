@@ -856,6 +856,7 @@ export function AppShell({
     <InventoryBreadcrumbProvider setItem={setInventoryItemBreadcrumb}>
       <OfflineSupportProvider ownerKey={offlineOwnerKey}>
       <OrganizationRoutingProvider
+        organizationId={organization.id}
         organizationSlug={organization.slug}
         isReadOnly={organization.isReadOnly}
         allowNegativeStock={organization.allowNegativeStock}

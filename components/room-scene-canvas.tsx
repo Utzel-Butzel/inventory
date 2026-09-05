@@ -57,6 +57,10 @@ import type {
   RoomWindowDetails,
 } from "@/lib/room-ai-analysis-contract";
 import { estimatedRoomObjectModelCategory } from "@/lib/room-ai-estimated-placement";
+import { roomLightingAnalysisState, roomRenderCacheKey, readRoomRenderCache, writeRoomRenderCache } from "@/lib/room-render-cache";
+import { roomWalkBodyCollides, roomWalkPointOnFloor, type RoomWalkCollider } from "@/lib/room-walk-navigation";
+import { sceneFloorPolygons } from "@/lib/spatial-georeference";
+import { createRoomFloorGeometry } from "@/lib/room-floor-geometry";
 import type { RoomLightMapBake } from "@/lib/room-lightmap-baker";
 import {
   azimuthDegrees,
@@ -582,7 +586,7 @@ const keyframesForManifest = (manifest: ClientRoomSceneManifest) =>
 const photorealAsset = (
   manifest: ClientRoomSceneManifest,
   kind: RoomPhotorealAssetKind,
-) => manifest.scan.assets.find((asset) => String(asset.kind) === kind);
+) => manifest.scan.scene.editedAt ? undefined : manifest.scan.assets.find((asset) => String(asset.kind) === kind);
 
 function keyframeFrustumGeometry(frame: RoomCameraKeyframe) {
   const depth = 0.22;
@@ -799,6 +803,9 @@ export function RoomSceneCanvas({
   manifest,
   linkedManifests = emptyLinkedManifests,
   selectedResourceId,
+  selectedRoomObjectId = null,
+  partitionPreview = null,
+  onSelectRoomObject,
   previewObjectSuggestionId = null,
   editableObjectSuggestionId = null,
   onSelectResource,
@@ -811,6 +818,9 @@ export function RoomSceneCanvas({
   manifest: ClientRoomSceneManifest;
   linkedManifests?: ClientRoomSceneManifest[];
   selectedResourceId: string | null;
+  selectedRoomObjectId?: string | null;
+  partitionPreview?: { axis: "x" | "z"; position: number } | null;
+  onSelectRoomObject?: (objectId: string) => void;
   previewObjectSuggestionId?: string | null;
   editableObjectSuggestionId?: string | null;
   onSelectResource: (resourceId: string) => void;
@@ -828,6 +838,14 @@ export function RoomSceneCanvas({
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const hostRef = useRef<HTMLDivElement>(null);
+  const onSelectRoomObjectRef = useRef(onSelectRoomObject);
+  const selectedRoomObjectRef = useRef(selectedRoomObjectId);
+  const partitionRef = useRef(partitionPreview);
+  const partitionCommandRef = useRef<(value: typeof partitionPreview) => void>(() => undefined);
+  useEffect(() => { partitionRef.current = partitionPreview; partitionCommandRef.current(partitionPreview); }, [partitionPreview]);
+  const objectSelectionRef = useRef<(id: string | null) => void>(() => undefined);
+  useEffect(() => { onSelectRoomObjectRef.current = onSelectRoomObject; }, [onSelectRoomObject]);
+  useEffect(() => { selectedRoomObjectRef.current = selectedRoomObjectId; objectSelectionRef.current(selectedRoomObjectId); }, [selectedRoomObjectId]);
   const commandRef = useRef<(command: CameraCommand) => void>(() => undefined);
   const selectionCommandRef = useRef<(resourceId: string | null) => void>(
     () => undefined,
@@ -848,6 +866,9 @@ export function RoomSceneCanvas({
     (action: WalkAction, active: boolean) => void
   >(() => undefined);
   const walkThroughWallsRef = useRef(false);
+  const [walkSpeed, setWalkSpeed] = useState(1.6);
+  const walkSpeedRef = useRef(walkSpeed);
+  useEffect(() => { walkSpeedRef.current = walkSpeed; }, [walkSpeed]);
   const layoutSelectionCommandRef = useRef<(scanId: string | null) => void>(
     () => undefined,
   );
@@ -878,6 +899,12 @@ export function RoomSceneCanvas({
   const [sceneMode, setSceneMode] = useState<SceneMode>("roomplan");
   const [lightingMode, setLightingMode] = useState<LightingMode>("live");
   const [progressiveQuality, setProgressiveQuality] = useState(2);
+  const [exposure, setExposure] = useState(1);
+  const [fillBalance, setFillBalance] = useState(1);
+  const [cachedLighting, setCachedLighting] = useState(false);
+  const exposureRef = useRef(exposure);
+  const exposureCommandRef = useRef<(value: number) => void>(() => undefined);
+  useEffect(() => { exposureRef.current = exposure; exposureCommandRef.current(exposure); }, [exposure]);
   // Furniture belongs in the atlas: it is what casts the contact shadows the
   // cutaway is read for. The toggle keeps the faster shell-only bake available.
   const [bakeRoomOnly, setBakeRoomOnly] = useState(false);
@@ -924,6 +951,7 @@ export function RoomSceneCanvas({
   const selectLightingMode = (mode: LightingMode) => {
     if (mode === lightingMode) return;
     if (mode !== "live") setSceneMode("roomplan");
+    if (mode === "rendering") setNavigationMode("orbit");
     setLightingProgress(0);
     setLightingStatus(mode === "live" ? "idle" : "generating");
     setLightingMode(mode);
@@ -949,6 +977,7 @@ export function RoomSceneCanvas({
   }, [selectedResourceId]);
 
   useEffect(() => {
+    if (previewObjectSuggestionId) setLightingMode("live");
     previewSuggestionRef.current = previewObjectSuggestionId;
     suggestionPreviewCommandRef.current(previewObjectSuggestionId);
   }, [previewObjectSuggestionId]);
@@ -1075,6 +1104,9 @@ export function RoomSceneCanvas({
         : progressiveLighting
           ? 0.98
           : 0.9;
+    const baseExposure = renderer.toneMappingExposure;
+    renderer.toneMappingExposure = baseExposure * exposureRef.current;
+    exposureCommandRef.current = value => { renderer.toneMappingExposure = baseExposure * value; };
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = progressiveLighting
       ? THREE.PCFSoftShadowMap
@@ -1288,11 +1320,7 @@ export function RoomSceneCanvas({
       category: RoomSurface["category"],
       fallback: THREE.MeshStandardMaterial,
     ) => {
-      // The architectural viewer intentionally presents a consistent dark
-      // linoleum floor. Detected finishes remain authoritative for walls,
-      // doors, windows, and openings, but must not turn this floor back into
-      // the former brown wood material.
-      if (category === "floor") return floorMaterial;
+      // Accepted finishes also apply to the floor; the default remains linoleum.
       const appearance = roomManifest.scan.aiAnalysis?.surfaceAppearances.find(
         (candidate) =>
           candidate.status === "accepted" &&
@@ -1495,7 +1523,7 @@ export function RoomSceneCanvas({
     liveSun.shadow.radius = 4;
     liveSun.shadow.blurSamples = 16;
     liveSun.shadow.intensity = 0.96;
-    const liveFillLight = new THREE.DirectionalLight(0xc9ddf2, 0.28);
+    const liveFillLight = new THREE.DirectionalLight(0xe0e8f2, 0.28 * fillBalance);
     if (lightingMode === "live") {
       scene.add(
         liveSun,
@@ -1527,6 +1555,8 @@ export function RoomSceneCanvas({
     const estimatedSuggestionModels = new Map<string, THREE.Object3D>();
     const estimatedSuggestionMeshes: THREE.Object3D[] = [];
     const wallColliderMeshes: THREE.Mesh[] = [];
+    const furnitureColliders: THREE.Object3D[] = [];
+    const selectableFurniture: THREE.Object3D[] = [];
     const bakeOnlyObjects: THREE.Object3D[] = [];
     const floorReflectors: Reflector[] = [];
     const splatMaterials = new Set<THREE.ShaderMaterial>();
@@ -2176,7 +2206,7 @@ export function RoomSceneCanvas({
           architectureRoot.add(openingNode);
         } else {
           const dimensions = normalizedDimensions(surface.category, surface.dimensions);
-          const geometry = new THREE.BoxGeometry(...dimensions);
+          const geometry = createRoomFloorGeometry(surface);
           applyMetricSurfaceUvs(geometry, {
             textureRepeat: floorColorMap.repeat,
             tilesPerMetre: floorTextureTilesPerMetre,
@@ -2199,6 +2229,8 @@ export function RoomSceneCanvas({
 
           if (
             !rayTracedLighting &&
+            !surface.polygonCorners &&
+            surface.dimensions[1] < Math.min(surface.dimensions[0], surface.dimensions[2]) &&
             roomManifest.scan.id === manifest.scan.id
           ) {
             const reflectionWidth = Math.min(
@@ -2298,7 +2330,7 @@ export function RoomSceneCanvas({
           roomManifest,
           item.id,
         );
-        const objectModel = acceptedSuggestion
+        const objectModel = acceptedSuggestion && !item.appearance?.variant
           ? createSuggestionModel(
               roomManifest,
               acceptedSuggestion,
@@ -2307,10 +2339,11 @@ export function RoomSceneCanvas({
             )
           : createRoomObjectModel({
               category: item.category,
+              variant: item.appearance?.variant,
               dimensions,
               materials: {
-                primary: finishForObject(roomManifest, item.id, item.category),
-                light: objectLightMaterial,
+                primary: item.appearance?.color ? new THREE.MeshStandardMaterial({ color: item.appearance.color, roughness: 0.65 }) : finishForObject(roomManifest, item.id, item.category),
+                light: item.appearance?.color ? new THREE.MeshStandardMaterial({ color: item.appearance.color, roughness: 0.5 }) : objectLightMaterial,
                 dark: objectDarkMaterial,
                 metal: objectMetalMaterial,
                 glass: objectGlassMaterial,
@@ -2319,8 +2352,23 @@ export function RoomSceneCanvas({
                 warm: objectWarmMaterial,
               },
             });
+        if (acceptedSuggestion && !item.appearance?.variant && item.appearance?.color) {
+          const recolored = new Map<THREE.Material, THREE.Material>();
+          const tint = (material: THREE.Material) => {
+            if (!(material instanceof THREE.MeshStandardMaterial) || material.transparent || material.metalness > 0.5) return material;
+            let copy = recolored.get(material);
+            if (!copy) { copy = material.clone(); (copy as THREE.MeshStandardMaterial).color.set(item.appearance!.color!); recolored.set(material, copy); }
+            return copy;
+          };
+          objectModel.traverse(node => { if (node instanceof THREE.Mesh) node.material = Array.isArray(node.material) ? node.material.map(tint) : tint(node.material); });
+        }
         setMatrix(objectModel, item.transform);
+        objectModel.userData.roomCollisionDimensions = dimensions;
+        objectModel.userData.roomObjectId = item.id;
+        objectModel.userData.roomScanId = roomManifest.scan.id;
         modelRoot.add(objectModel);
+        furnitureColliders.push(objectModel);
+        if (roomManifest.scan.id === manifest.scan.id) selectableFurniture.push(objectModel);
 
         const previewSuggestion = roomManifest.scan.aiAnalysis?.objectSuggestions.find(
           (candidate) =>
@@ -2378,8 +2426,36 @@ export function RoomSceneCanvas({
       }
     }
 
+    const objectOutline = new THREE.BoxHelper(new THREE.Object3D(), 0x6366f1);
+    objectOutline.visible = false;
+    objectOutline.userData.roomLightMapExclude = true;
+    scene.add(objectOutline);
+    objectSelectionRef.current = (id) => {
+      const object = selectableFurniture.find(item => item.userData.roomObjectId === id);
+      objectOutline.visible = Boolean(object);
+      if (object) objectOutline.setFromObject(object);
+    };
+    objectSelectionRef.current(selectedRoomObjectRef.current);
+    const partitionPlane = new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false }));
+    partitionPlane.userData.roomLightMapExclude = true;
+    partitionPlane.userData.roomBakeHidden = true;
+    partitionPlane.visible = false;
+    roomPlanRoots.get(manifest.scan.id)?.add(partitionPlane);
+    partitionCommandRef.current = value => {
+      partitionPlane.visible = Boolean(value) && !rayTracedLighting;
+      if (!value) return;
+      const bounds = manifest.scan.scene.bounds;
+      const a = value.axis === "x" ? 0 : 2, other = a === 0 ? 2 : 0;
+      const middle = bounds.min.map((v,i) => (v + bounds.max[i]!) / 2);
+      middle[a] = value.position;
+      partitionPlane.position.set(middle[0]!,middle[1]!,middle[2]!);
+      partitionPlane.rotation.y = a === 0 ? Math.PI/2 : 0;
+      partitionPlane.scale.set(bounds.max[other] - bounds.min[other],bounds.max[1]-bounds.min[1],1);
+    };
+    partitionCommandRef.current(partitionRef.current);
     let activeSuggestionPreview: string | null = null;
     const applySuggestionPreview = (suggestionId: string | null) => {
+      if (rayTracedLighting || progressiveLighting) return;
       if (activeSuggestionPreview) {
         const previous = suggestionPreviews.get(activeSuggestionPreview);
         if (previous) {
@@ -3141,6 +3217,7 @@ export function RoomSceneCanvas({
         new THREE.Vector3(0, 0, 1),
         new THREE.Vector3(0, 1, 0),
       );
+      fillLight.intensity *= fillBalance;
       daylightAreaLights.push(fillLight);
 
       for (const object of [keyLight, ceiling, fillLight]) {
@@ -3535,7 +3612,7 @@ export function RoomSceneCanvas({
         bounceProbe = generatedProbe;
         scene.add(generatedProbe);
         skyLight.intensity = 0.32;
-        liveFillLight.intensity = 0.1;
+        liveFillLight.intensity = 0.1 * fillBalance;
         scene.environmentIntensity = 0.32;
       } catch {
         // Retain the original sky/sun/fill rig if cubemap readback is
@@ -3634,9 +3711,22 @@ export function RoomSceneCanvas({
     const crouchingEyeHeight = 1.02;
     const jumpVelocity = 3.25;
     const gravity = 9.81;
-    const collisionBoxes = wallColliderMeshes.map((mesh) =>
-      new THREE.Box3().setFromObject(mesh).expandByScalar(playerRadius),
+    const collisionShapes: RoomWalkCollider[] = [
+      ...wallColliderMeshes.map(mesh => {
+        mesh.geometry.computeBoundingBox();
+        return { inverse: mesh.matrixWorld.clone().invert().toArray(), min: mesh.geometry.boundingBox!.min.toArray(), max: mesh.geometry.boundingBox!.max.toArray() };
+      }),
+      ...furnitureColliders.map(object => {
+        const half = (object.userData.roomCollisionDimensions as number[]).map(n => n / 2);
+        return { inverse: object.matrixWorld.clone().invert().toArray(), min: half.map(n => -n) as [number,number,number], max: half as [number,number,number] };
+      }),
+    ];
+    const walkFloorPolygons = visibleManifests.flatMap(item => sceneFloorPolygons(item.scan.scene).map(polygon => polygon.map(point => new THREE.Vector3(...point).applyMatrix4(roomWorldDeltas.get(item.scan.id)!).applyMatrix4(webFromWorld).toArray())));
+    const walkBlocked = (position: THREE.Vector3, eyeHeight: number) => !walkThroughWallsRef.current && (
+      roomWalkBodyCollides(position.toArray(), eyeHeight, playerRadius, collisionShapes) ||
+      (walkFloorPolygons.length > 0 && !roomWalkPointOnFloor(position.toArray(), walkFloorPolygons))
     );
+    const walkVelocity = new THREE.Vector3();
     const walkFloorY = primaryBox.min.y;
     const pressedKeys = new Set<string>();
     const virtualKeys = new Set<string>();
@@ -3666,6 +3756,18 @@ export function RoomSceneCanvas({
         walkFloorY + standingEyeHeight,
         walkStart.z,
       );
+      // Search nearby floor points when a table or cabinet occupies the center.
+      if (walkBlocked(camera.position, standingEyeHeight)) {
+        const candidate = camera.position.clone();
+        let found = false;
+        for (let ring = 1; ring <= 30 && !found; ring++) {
+          for (let step = 0; step < 24; step++) {
+            candidate.set(walkStart.x + Math.cos(step * Math.PI / 12) * ring * 0.2, walkFloorY + standingEyeHeight, walkStart.z + Math.sin(step * Math.PI / 12) * ring * 0.2);
+            if (!walkBlocked(candidate, standingEyeHeight)) { camera.position.copy(candidate); found = true; break; }
+          }
+        }
+      }
+      walkVelocity.set(0,0,0);
       walkYaw = 0;
       walkPitch = 0;
       applyWalkRotation();
@@ -3809,11 +3911,10 @@ export function RoomSceneCanvas({
     const outputPass = new OutputPass();
     composer.addPass(outputPass);
 
-    // The cutaway drops whichever parts of the shell stand between the camera
-    // and the room. It runs only in Realistic orbit views: from inside a walk
-    // the outward test already keeps every wall, and Live is unchanged.
+    // Orbit views open the near walls so furniture stays visible. Walking
+    // retains the complete shell; baked lighting still captures every wall.
     const cutawayEnabled =
-      lightingMode === "realistic" && navigationMode === "orbit" && !mapBackground;
+      navigationMode === "orbit" && !mapBackground && lightingMode !== "progressive";
     const cutawayNormal = new THREE.Vector3();
     const cutawaySurfaceCenter = new THREE.Vector3();
     const cutawayToCamera = new THREE.Vector3();
@@ -3850,9 +3951,26 @@ export function RoomSceneCanvas({
       }
     };
 
+    type CachedRoomFrame = { data: Float32Array; width: number; height: number };
+    let cachedFrameTexture: THREE.DataTexture | null = null;
+    let finalFrameCacheKey: string | null = null;
+    let frameCacheGeneration = 0;
+    let resumeRendering = () => undefined as void;
+    const frameFingerprint = () => ({
+      version: "room-frame-v3", navigationMode, sceneMode, fillBalance,
+      theme: usesDarkMode(),
+      rooms: visibleManifests.map(item => ({ scene: { ...item.scan.scene, editedAt: undefined, mapAnchor: undefined }, analysis: roomLightingAnalysisState(item.scan.aiAnalysis), layout: layoutTransformForManifest(item), assets: item.scan.assets, placements: item.placements })),
+      camera: { position: camera.position.toArray().map(n => Math.round(n * 1e6) / 1e6), quaternion: camera.quaternion.toArray().map(n => Math.round(n * 1e6) / 1e6), fov: camera.fov, aspect: camera.aspect },
+      width: renderer.domElement.width, height: renderer.domElement.height,
+    });
+    setCachedLighting(false);
     let pathTracingReady = false;
     let pathTracingFailed = false;
     let pathTracingFinished = false;
+    exposureCommandRef.current = value => {
+      renderer.toneMappingExposure = baseExposure * value;
+      if (lightingMode === "rendering" && pathTracingFinished && pathTraceDenoiseQuad) pathTraceDenoiseQuad.render(renderer);
+    };
     let pathTracingStartedAt: number | null = null;
     let pathTracingLastStatusAt = 0;
     let lightMapActiveElapsed = 0;
@@ -3978,7 +4096,7 @@ export function RoomSceneCanvas({
       skyLight.intensity = 0;
       // A small ambient keeps the surfaces the atlas cannot receive — glass,
       // polished metal, splats — from reading as black cut-outs.
-      ambientFillLight.intensity = roomAmbientBounceFraction;
+      ambientFillLight.intensity = roomAmbientBounceFraction * fillBalance;
       enableStableFloorSheen(captureLocalReflectionProbe());
     };
     if (lightingMode === "live") {
@@ -4031,19 +4149,22 @@ export function RoomSceneCanvas({
       lightingMode === "rendering" ? 2_048 : realisticBakePreset.samples;
     const lightMapSampleFloor = realisticBakePreset.minimumSamples;
     const restartPathTracing = () => {
-      if (!pathTracer || !pathTracingReady) return;
-      pathTracer.updateCamera();
+      if (lightingMode !== "rendering" || disposed) return;
+      frameCacheGeneration++;
+      finalFrameCacheKey = null;
+      cachedFrameTexture?.dispose(); cachedFrameTexture = null;
+      pathTracer?.dispose(); pathTracer = null;
+      if (pathTraceDenoiseQuad) { pathTraceDenoiseQuad.material.dispose(); pathTraceDenoiseQuad.dispose(); pathTraceDenoiseQuad = null; }
+      pathTracingReady = false; pathTracingFinished = false;
       pathTracingStartedAt = null;
-      lightMapActiveElapsed = 0;
-      lightMapLastFrameAt = null;
-      pathTracingFinished = false;
-      setLightingProgress(14);
-      setLightingStatus("generating");
+      setCachedLighting(false); setLightingProgress(2); setLightingStatus("generating");
+      void initializePathTracer();
+      resumeRendering();
     };
     restartPathTracingForTheme = restartPathTracing;
     // Realistic mode renders from camera-independent lightmaps. Only the
     // one-off Rendering mode owns a view-space accumulation buffer.
-    const onControlsChange = () => undefined;
+    const onControlsChange = () => { if (lightingMode === "rendering") restartPathTracing(); };
     controls.addEventListener("change", onControlsChange);
 
     const initializePathTracer = async () => {
@@ -4057,19 +4178,20 @@ export function RoomSceneCanvas({
             createRoomLightMapCacheKey,
           } = await import("@/lib/room-lightmap-baker");
           if (disposed) return;
-          const cacheKey = createRoomLightMapCacheKey({
+          const cacheKey = await createRoomLightMapCacheKey({
             // The rig is part of the result, so a different key direction has
             // to miss the cache.
             keyAzimuth: Math.round(bakeKeyAzimuth * 10) / 10,
+            navigationMode, fillBalance,
             version:
-              40 +
+              42 +
               (bakeRoomOnly ? 1 : 0) +
               (slowHighQualityBake ? 2 : 0),
             rooms: visibleManifests.map((roomManifest) => ({
-              analysis: roomManifest.scan.aiAnalysis,
+              analysis: roomLightingAnalysisState(roomManifest.scan.aiAnalysis),
               id: roomManifest.scan.id,
               layoutTransform: layoutTransformForManifest(roomManifest),
-              scene: roomManifest.scan.scene,
+              scene: { ...roomManifest.scan.scene, editedAt: undefined, mapAnchor: undefined },
             })),
           });
           const bakeHiddenObjects: THREE.Object3D[] = [];
@@ -4114,6 +4236,7 @@ export function RoomSceneCanvas({
           pathTracingStartedAt = performance.now();
           setLightingProgress(bake.cached ? 100 : 20);
           if (bake.cached) {
+            setCachedLighting(true);
             pathTracingFinished = true;
             daylightAreaLights.forEach((light) => {
               light.intensity = 0;
@@ -4125,8 +4248,23 @@ export function RoomSceneCanvas({
           return;
         }
 
+        const generation = ++frameCacheGeneration;
+        const cacheKey = await roomRenderCacheKey(frameFingerprint());
+        const savedFrame = await readRoomRenderCache<CachedRoomFrame>(cacheKey);
+        if (disposed || generation !== frameCacheGeneration) return;
+        finalFrameCacheKey = cacheKey;
+        if (savedFrame && savedFrame.data instanceof Float32Array && savedFrame.width > 0 && savedFrame.height > 0 && savedFrame.data.length === savedFrame.width * savedFrame.height * 4) {
+          cachedFrameTexture = new THREE.DataTexture(savedFrame.data, savedFrame.width, savedFrame.height, THREE.RGBAFormat, THREE.FloatType);
+          cachedFrameTexture.colorSpace = THREE.LinearSRGBColorSpace;
+          cachedFrameTexture.needsUpdate = true;
+          pathTraceDenoiseQuad = new FullScreenQuad(createPathTraceDenoiseMaterial());
+          (pathTraceDenoiseQuad.material as THREE.ShaderMaterial).uniforms.map!.value = cachedFrameTexture;
+          pathTracingReady = true; pathTracingFinished = true;
+          setLightingProgress(100); setLightingStatus("ready"); setCachedLighting(true);
+          return;
+        }
         const { WebGLPathTracer } = await import("three-gpu-pathtracer");
-        if (disposed) return;
+        if (disposed || generation !== frameCacheGeneration) return;
 
         const tracer = new WebGLPathTracer(renderer);
         pathTracer = tracer;
@@ -4231,6 +4369,8 @@ export function RoomSceneCanvas({
     const onWindowBlur = () => {
       pressedKeys.clear();
       virtualKeys.clear();
+      walkVelocity.set(0,0,0);
+      jumpRequested = false;
     };
     const onMouseMove = (event: MouseEvent) => {
       if (
@@ -4249,6 +4389,8 @@ export function RoomSceneCanvas({
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("blur", onWindowBlur);
     document.addEventListener("mousemove", onMouseMove);
+    const onPointerLockChange = () => { if (document.pointerLockElement !== renderer.domElement) onWindowBlur(); };
+    document.addEventListener("pointerlockchange", onPointerLockChange);
 
     const raycaster = new THREE.Raycaster();
     raycaster.params.Line.threshold = 0.065;
@@ -4259,7 +4401,8 @@ export function RoomSceneCanvas({
       if (navigationMode === "walk") {
         renderer.domElement.focus({ preventScroll: true });
         if (event.pointerType === "mouse") {
-          void renderer.domElement.requestPointerLock?.();
+          try { const lock = renderer.domElement.requestPointerLock?.(); if (lock) void lock.catch(() => undefined); } catch { /* Drag look remains available. */ }
+          touchLook = { id: event.pointerId, x: event.clientX, y: event.clientY };
         } else {
           touchLook = { id: event.pointerId, x: event.clientX, y: event.clientY };
           renderer.domElement.setPointerCapture(event.pointerId);
@@ -4270,6 +4413,7 @@ export function RoomSceneCanvas({
     const onPointerMove = (event: PointerEvent) => {
       if (
         navigationMode !== "walk" ||
+        document.pointerLockElement === renderer.domElement ||
         !touchLook ||
         touchLook.id !== event.pointerId
       ) return;
@@ -4312,6 +4456,16 @@ export function RoomSceneCanvas({
           onSelectLayoutRoomRef.current?.(scanId);
         }
         return;
+      }
+      if (onSelectRoomObjectRef.current) {
+        const furnitureHit = raycaster.intersectObjects(selectableFurniture, true)[0];
+        let candidate: THREE.Object3D | null = furnitureHit?.object ?? null;
+        while (candidate && !candidate.userData.roomObjectId) candidate = candidate.parent;
+        if (typeof candidate?.userData.roomObjectId === "string") {
+          objectSelectionRef.current(candidate.userData.roomObjectId);
+          onSelectRoomObjectRef.current(candidate.userData.roomObjectId);
+          return;
+        }
       }
       const estimatedHit = raycaster
         .intersectObjects(estimatedSuggestionMeshes, true)
@@ -4370,9 +4524,13 @@ export function RoomSceneCanvas({
     renderer.domElement.addEventListener("pointerup", onPointerUp);
     renderer.domElement.addEventListener("pointercancel", onPointerUp);
 
+    let renderViewportSize = "";
     const resize = () => {
       const width = Math.max(1, host.clientWidth);
       const height = Math.max(1, host.clientHeight);
+      const nextSize = `${width}:${height}`;
+      const changed = renderViewportSize !== "" && renderViewportSize !== nextSize;
+      renderViewportSize = nextSize;
       renderer.setSize(width, height, false);
       composer.setSize(width, height);
       splatMaterials.forEach((material) => {
@@ -4381,7 +4539,7 @@ export function RoomSceneCanvas({
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       applyMapCamera();
-      if (pathTracer && pathTracingReady) restartPathTracing();
+      if (changed && lightingMode === "rendering") restartPathTracing();
     };
     const observer = new ResizeObserver(resize);
     observer.observe(host);
@@ -4398,7 +4556,7 @@ export function RoomSceneCanvas({
       const delta = Math.min(timer.getDelta(), 0.05);
       if (navigationMode === "walk") {
         const active = (key: string) => pressedKeys.has(key) || virtualKeys.has(key);
-        const crouching = active("shift") || active("control") || active("c");
+        const crouching = active("control") || active("c");
         currentEyeHeight = THREE.MathUtils.damp(
           currentEyeHeight,
           crouching ? crouchingEyeHeight : standingEyeHeight,
@@ -4422,30 +4580,26 @@ export function RoomSceneCanvas({
           Number(active("s") || active("arrowdown"));
         const sideAmount = Number(active("d") || active("arrowright")) -
           Number(active("a") || active("arrowleft"));
-        if (forwardAmount || sideAmount) {
-          const forward = new THREE.Vector3(-Math.sin(walkYaw), 0, -Math.cos(walkYaw));
-          const right = new THREE.Vector3(Math.cos(walkYaw), 0, -Math.sin(walkYaw));
-          const movement = forward
-            .multiplyScalar(forwardAmount)
-            .add(right.multiplyScalar(sideAmount))
-            .normalize()
-            .multiplyScalar(delta * 2.1);
-          const blocked = (position: THREE.Vector3) =>
-            !walkThroughWallsRef.current &&
-            collisionBoxes.some((bounds) => bounds.containsPoint(position));
+        const desired = new THREE.Vector3(
+          -Math.sin(walkYaw) * forwardAmount + Math.cos(walkYaw) * sideAmount,
+          0,
+          -Math.cos(walkYaw) * forwardAmount - Math.sin(walkYaw) * sideAmount,
+        );
+        if (desired.lengthSq() > 0) desired.normalize().multiplyScalar(walkSpeedRef.current * (crouching ? 0.5 : active("shift") ? 1.65 : 1));
+        walkVelocity.lerp(desired, 1 - Math.exp(-12 * delta));
+        const movement = walkVelocity.clone().multiplyScalar(delta);
+        // Small steps prevent tunneling through thin walls at low frame rates.
+        const steps = Math.max(1, Math.ceil(movement.length() / 0.06));
+        movement.divideScalar(steps);
+        for (let step = 0; step < steps; step++) {
           const candidate = camera.position.clone().add(movement);
           candidate.y = cameraHeight;
-          if (!blocked(candidate)) {
-            camera.position.copy(candidate);
-          } else {
-            const xOnly = camera.position.clone();
-            xOnly.x += movement.x;
-            xOnly.y = cameraHeight;
-            if (!blocked(xOnly)) camera.position.x = xOnly.x;
-            const zOnly = camera.position.clone();
-            zOnly.z += movement.z;
-            zOnly.y = cameraHeight;
-            if (!blocked(zOnly)) camera.position.z = zOnly.z;
+          if (!walkBlocked(candidate, currentEyeHeight)) camera.position.copy(candidate);
+          else {
+            const xOnly = camera.position.clone(); xOnly.x += movement.x; xOnly.y = cameraHeight;
+            if (!walkBlocked(xOnly, currentEyeHeight)) camera.position.x = xOnly.x;
+            const zOnly = camera.position.clone(); zOnly.z += movement.z; zOnly.y = cameraHeight;
+            if (!walkBlocked(zOnly, currentEyeHeight)) camera.position.z = zOnly.z;
           }
         }
         camera.position.y = cameraHeight;
@@ -4536,7 +4690,11 @@ export function RoomSceneCanvas({
           }
         }
         composer.render(delta);
+      } else if (cachedFrameTexture && pathTraceDenoiseQuad) {
+        pathTraceDenoiseQuad.render(renderer);
+        return;
       } else if (rayTracedLighting && pathTracingReady && pathTracer) {
+        if (pathTracingFinished && pathTraceDenoiseQuad) { pathTraceDenoiseQuad.render(renderer); return; }
         if (!pathTracingFinished) {
           pathTracingStartedAt ??= frameTimestamp;
           pathTracer.renderSample();
@@ -4565,6 +4723,14 @@ export function RoomSceneCanvas({
               pathTraceDenoiseQuad.render(renderer);
             }
             setLightingStatus("ready");
+            if (lightingMode === "rendering" && finalFrameCacheKey) {
+              const target = pathTracer.target;
+              const data = new Float32Array(target.width * target.height * 4);
+              try {
+                renderer.readRenderTargetPixels(target, 0, 0, target.width, target.height, data);
+                void writeRoomRenderCache(finalFrameCacheKey, { data, width: target.width, height: target.height }, data.byteLength);
+              } catch { /* GPU readback can be unavailable; the rendered view remains usable. */ }
+            }
             if (lightingMode === "rendering") return;
           }
         }
@@ -4582,6 +4748,7 @@ export function RoomSceneCanvas({
       }
       animationFrame = requestAnimationFrame(draw);
     };
+    resumeRendering = () => { cancelAnimationFrame(animationFrame); draw(); };
     draw();
 
     return () => {
@@ -4610,6 +4777,7 @@ export function RoomSceneCanvas({
       window.removeEventListener("blur", onWindowBlur);
       document.removeEventListener("visibilitychange", onBakeVisibilityChange);
       document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("pointerlockchange", onPointerLockChange);
       if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
       if (transformControls && transformHelper) {
         transformControls.detach();
@@ -4629,6 +4797,9 @@ export function RoomSceneCanvas({
       progressiveLightMap = null;
       progressiveLights.forEach((light) => light.shadow.dispose());
       floorReflectors.forEach((reflector) => reflector.dispose());
+      cachedFrameTexture?.dispose();
+      frameCacheGeneration++;
+      exposureCommandRef.current = () => undefined;
       pathTracer?.dispose();
       pathTracer = null;
       if (pathTraceDenoiseQuad) {
@@ -4691,6 +4862,8 @@ export function RoomSceneCanvas({
       renderer.domElement.remove();
       commandRef.current = () => undefined;
       selectionCommandRef.current = () => undefined;
+      objectSelectionRef.current = () => undefined;
+      partitionCommandRef.current = () => undefined;
       suggestionPreviewCommandRef.current = () => undefined;
       suggestionEditSelectionCommandRef.current = () => undefined;
       suggestionEditToolCommandRef.current = () => undefined;
@@ -4702,6 +4875,7 @@ export function RoomSceneCanvas({
     };
   }, [
     bakeRoomOnly,
+    fillBalance,
     integer,
     isLayoutEditing,
     lightingMode,
@@ -4791,6 +4965,12 @@ export function RoomSceneCanvas({
           ) : null}
         </div>
 
+        {!isLayoutEditing && !mapBackground ? <details className="pointer-events-auto max-w-xs rounded-xl border border-border bg-surface/95 p-2 text-xs text-muted shadow-sm">
+          <summary className="cursor-pointer font-semibold">{t("canvas.lighting.adjust")}</summary>
+          <label className="mt-2 flex items-center justify-between gap-3">{t("canvas.lighting.exposure")}<input type="range" min={0.4} max={1.8} step={0.05} value={exposure} onChange={e => setExposure(Number(e.target.value))} /></label>
+          {lightingMode !== "rendering" ? <label className="mt-2 flex items-center justify-between gap-3">{t("canvas.lighting.balance")}<input type="range" min={0.25} max={2} step={0.25} value={fillBalance} onChange={e => setFillBalance(Number(e.target.value))} /></label> : null}
+          <p className="mt-2 max-w-60 text-[10px]">{cachedLighting ? t("canvas.lighting.cached") : t("canvas.lighting.cacheHint")}</p>
+        </details> : null}
         {!isLayoutEditing && !mapBackground ? (
           <div
             className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-surface/92 p-1 shadow-sm backdrop-blur"
@@ -5056,8 +5236,7 @@ export function RoomSceneCanvas({
           {!isLayoutEditing && !mapBackground ? (
             <button
               type="button"
-              onClick={() => setNavigationMode((current) =>
-                current === "walk" ? "orbit" : "walk")}
+              onClick={() => { if (lightingMode === "rendering") setLightingMode("live"); setNavigationMode((current) => current === "walk" ? "orbit" : "walk"); }}
               disabled={lightingMode === "rendering"}
               className={cn(
                 "pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-[11px] font-semibold shadow-sm backdrop-blur transition disabled:cursor-not-allowed disabled:opacity-50",
@@ -5098,6 +5277,7 @@ export function RoomSceneCanvas({
             <Maximize2 className="size-4" aria-hidden="true" />
           </button>
         </div>
+        {!mapBackground && navigationMode === "walk" ? <label className="pointer-events-auto rounded-lg bg-surface/92 px-3 py-2 text-xs text-muted">{t("canvas.walk.speed")}<input className="ml-2 w-24 align-middle" type="range" min={0.6} max={3} step={0.1} value={walkSpeed} onChange={e => setWalkSpeed(Number(e.target.value))} /></label> : null}
         {!mapBackground && navigationMode === "walk" ? (
           <label className="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface/90 px-3 text-[11px] font-semibold text-muted shadow-sm backdrop-blur">
             <input

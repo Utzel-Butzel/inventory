@@ -153,6 +153,9 @@ export async function listResources(options: {
   query?: string;
   type?: string;
   status?: string;
+  priority?: string;
+  sort?: string;
+  direction?: string;
   loanable?: boolean;
   page?: number;
   pageSize?: number;
@@ -240,13 +243,26 @@ export async function listResources(options: {
     );
   }
 
+  if (options.priority && /^[1-5]$/.test(options.priority)) {
+    conditions.push(eq(resources.priority, Number(options.priority)));
+  }
+  const sortColumns = {
+    name: resources.name, type: resources.type, status: resources.status,
+    sku: resources.sku, location: resources.location, quantity: resources.quantity,
+    valueCents: resources.valueCents, priority: resources.priority,
+    createdAt: resources.createdAt, updatedAt: resources.updatedAt,
+  };
+  const sortColumn = options.sort && Object.hasOwn(sortColumns, options.sort)
+    ? sortColumns[options.sort as keyof typeof sortColumns] : resources.updatedAt;
+  const ordering = options.direction === "asc" ? asc(sortColumn) : desc(sortColumn);
+
   const where = conditions.length ? and(...conditions) : undefined;
   const [rows, totalRows] = await Promise.all([
     db
       .select()
       .from(resources)
       .where(where)
-      .orderBy(desc(resources.updatedAt))
+      .orderBy(ordering, asc(resources.id))
       .limit(pageSize)
       .offset((page - 1) * pageSize),
     db.select({ value: count() }).from(resources).where(where),

@@ -1,5 +1,8 @@
 "use client";
 
+import { CollectionViewToolbar, ListViewResults, useCollectionView } from "@/components/list-view";
+
+
 import {
   Archive,
   Check,
@@ -45,6 +48,11 @@ export function LanguageManager() {
   const aiCostEstimates = useAiCostEstimateCatalog();
   const translationCostEstimate = aiCostEstimates?.operations.translation;
   const [languages, setLanguages] = useState<ContentLanguage[]>([]);
+  const collection = useCollectionView("settings.languages", languages, {
+    search: (item) => [item.label, item.code].join(" "),
+    sorts: [{ value: "name", label: t("common:listView.fields.name"), get: (item) => item.label }, { value: "default", label: t("common:listView.fields.default"), get: (item) => item.position }],
+    filters: [{ key: "status", label: t("common:listView.fields.status"), get: (item) => item.archivedAt ? "inactive" : "active", options: [{ value: "active", label: t("common:listView.active") }, { value: "inactive", label: t("common:listView.inactive") }] }],
+  });
   const [draft, setDraft] = useState(emptyDraft);
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -313,14 +321,16 @@ export function LanguageManager() {
           </form>
         ) : null}
 
+        <div className="px-4 pt-4"><CollectionViewToolbar collection={collection} /></div>
+        <ListViewResults list={collection.list}>
         {loading && !languages.length ? (
           <div className="grid min-h-40 place-items-center text-muted">
             <LoaderCircle className="size-5 animate-spin" />
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {languages.map((language) => (
-              <div key={language.code} className="p-5 sm:p-6">
+            {collection.visibleItems.map((language) => (
+              <div data-list-row key={language.code} className="p-5 sm:p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
                   <div className="flex min-w-[170px] items-center gap-3 lg:pt-1.5">
                     <span className="rounded-lg bg-surface-muted px-2.5 py-1.5 font-mono text-xs font-bold text-muted-strong">
@@ -437,6 +447,7 @@ export function LanguageManager() {
             ))}
           </div>
         )}
+        </ListViewResults>
       </Card>
 
       <div className="rounded-2xl border border-brand-border bg-brand-soft/60 p-5 text-sm leading-6 text-brand">
