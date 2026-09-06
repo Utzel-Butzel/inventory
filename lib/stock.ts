@@ -42,7 +42,7 @@ import {
   type StockUnitRecord,
   type StockUnitStatus,
 } from "@/db/schema";
-import { db } from "@/lib/db";
+import { db, type DatabaseExecutor } from "@/lib/db";
 import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 import {
   CustomFieldError,
@@ -1619,6 +1619,7 @@ export async function bookStockMovement(
     transaction: StockTransaction,
     movement: StockMovementRecord,
   ) => Promise<void>,
+  executor: DatabaseExecutor = db,
 ) {
   const validateReplay = (existing: {
     resourceId: string;
@@ -1640,7 +1641,7 @@ export async function bookStockMovement(
   };
 
   try {
-    return await db.transaction(async (transaction) => {
+    return await executor.transaction(async (transaction) => {
       if (idempotency) {
         const [existing] = await transaction
           .select()
@@ -2005,7 +2006,7 @@ export async function bookStockMovement(
     // one global key, the losing transaction (including its ledger row and
     // quantity update) rolls back on the unique constraint, then replays here.
     if (idempotency) {
-      const [winner] = await db
+      const [winner] = await executor
         .select()
         .from(stockMovementRequests)
         .where(
@@ -2037,9 +2038,11 @@ export async function createStockUnits(
   resourceId: string,
   input: StockUnitCreateInput,
   actor: string,
+  executor: DatabaseExecutor = db,
+  plannedUnitIds?: string[],
 ) {
   try {
-    return await db.transaction(async (transaction) => {
+    return await executor.transaction(async (transaction) => {
       const [resource] = await transaction
         .select({
           id: resources.id,
@@ -2117,6 +2120,7 @@ export async function createStockUnits(
         .insert(stockUnits)
         .values(
           codes.map((code, index) => ({
+            id: plannedUnitIds?.[index],
             organizationId,
             resourceId,
             code,
@@ -2224,8 +2228,9 @@ export async function updateStockUnit(
   unitId: string,
   input: StockUnitPatchInput,
   actor: string,
+  executor: DatabaseExecutor = db,
 ) {
-  return db.transaction(async (transaction) => {
+  return executor.transaction(async (transaction) => {
     const [resource] = await transaction
       .select({
         id: resources.id,

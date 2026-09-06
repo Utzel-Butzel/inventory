@@ -28,7 +28,7 @@ import {
 } from "../lib/room-render-cache.ts";
 
 const packUrl = new URL(
-  "../public/models/room-furniture/v1/furniture.glb",
+  "../public/models/room-furniture/v2/furniture.glb",
   import.meta.url,
 );
 
@@ -62,8 +62,8 @@ test("Blender exports every catalog model with embedded PBR resources and bounde
   assert.equal(bytes.readUInt32LE(0), 0x46546c67);
   assert.equal(bytes.readUInt32LE(4), 2);
   assert.equal(bytes.readUInt32LE(8), bytes.length);
-  assert.ok(bytes.length < 5 * 1024 * 1024);
-  assert.equal(roomFurnitureVariants.length, 30);
+  assert.ok(bytes.length < 8 * 1024 * 1024);
+  assert.equal(roomFurnitureVariants.length, 42);
   const exported = document.nodes.filter((node) => node.extras?.variant);
   assert.deepEqual(
     exported.map((node) => node.extras.variant).sort(),
@@ -73,7 +73,7 @@ test("Blender exports every catalog model with embedded PBR resources and bounde
     assert.ok(roomFurnitureCatalog[variant]);
     const image = await readFile(
       new URL(
-        `../public/models/room-furniture/v1/${variant}.png`,
+        `../public/models/room-furniture/v2/${variant}.png`,
         import.meta.url,
       ),
     );
@@ -322,4 +322,37 @@ test("AI selects catalog models only for clear supported matching categories and
     before,
     await roomRenderCacheKey(roomLightingAnalysisState(analysis)),
   );
+});
+
+test("every catalog model is selectable by the AI contract in its matching category", () => {
+  const schema = zodTextFormat(roomAiGenerationSchema, "room_analysis").schema;
+  const variants = schema.properties.objectSuggestions.items.properties.modelVariant;
+  const encoded = JSON.stringify(variants);
+  for (const variant of roomFurnitureVariants) {
+    assert.ok(encoded.includes(`\"${variant}\"`), variant);
+    assert.equal(compatibleRoomFurnitureVariant(variant, roomFurnitureCatalog[variant].category), variant);
+    assert.equal(compatibleRoomFurnitureVariant(variant, "unknown"), null);
+  }
+});
+
+test("changing a furniture color preserves relief and the original metal / ceramic parts", () => {
+  for (const variant of roomFurnitureVariants) {
+    const template = gltf.scene.children.find(item => item.userData.variant === variant);
+    const tinted = instantiateRoomFurniture(template, [1,1,1], "#4499cc");
+    const originals = [], copies = [];
+    template.traverse(node => { if (node.isMesh) originals.push(node); });
+    tinted.traverse(node => { if (node.isMesh) copies.push(node); });
+    copies.forEach((node, index) => {
+      const material = node.material, original = originals[index].material;
+      assert.equal(material.roughness, original.roughness);
+      assert.equal(material.metalness, original.metalness);
+      if (original.userData.inventoryTintable) assert.equal(material.color.getHexString(), "4499cc");
+      else assert.equal(material.color.getHexString(), original.color.getHexString());
+    });
+  }
+  for (const material of document.materials.filter(item => ["wood", "fabric"].includes(item.extras?.inventoryFinish))) {
+    assert.ok(material.normalTexture, material.name);
+    assert.ok(material.pbrMetallicRoughness.metallicRoughnessTexture, material.name);
+    assert.ok(material.pbrMetallicRoughness.baseColorTexture, material.name);
+  }
 });

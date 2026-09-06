@@ -19,6 +19,7 @@ import {
 import { useT } from "next-i18next/client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { ActionChainRunner } from "@/components/action-chain-runner";
 import { CodeScannerCamera } from "@/components/code-scanner-camera";
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
@@ -38,6 +39,7 @@ type WorkflowOperation =
   | { type: "assembly-build"; quantity: number };
 
 type Workflow = {
+  hasActions: boolean;
   id: string;
   name: string;
   description: string | null;
@@ -139,6 +141,7 @@ type ExecuteResult = {
 };
 
 type StockScannerProps = {
+  initialWorkflowId?: string;
   canExecute: boolean;
 };
 
@@ -240,6 +243,7 @@ function normalizeWorkflow(value: unknown): Workflow | null {
         ? record.targetSelectionMode
         : "all",
     allowVariantSelection: asBoolean(record.allowVariantSelection),
+    hasActions: Array.isArray(record.actions) && record.actions.length > 0,
     operation:
       asRecord(record.operation)?.type === "stock-adjustment"
         ? {
@@ -626,10 +630,10 @@ function ScannerLoading() {
   );
 }
 
-export function StockScanner({ canExecute }: StockScannerProps) {
+export function StockScanner({ canExecute, initialWorkflowId = "" }: StockScannerProps) {
   const { t } = useT("scanner");
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState(initialWorkflowId);
   const [workflowsLoading, setWorkflowsLoading] = useState(true);
   const [workflowsError, setWorkflowsError] = useState<string | null>(null);
   const [phase, setPhase] = useState<ScannerPhase>("scan");
@@ -964,7 +968,7 @@ export function StockScanner({ canExecute }: StockScannerProps) {
                 ) : null}
               </Card>
 
-              {phase === "success" && result ? (
+              {selectedWorkflow?.hasActions ? <ActionChainRunner key={selectedWorkflow.id} workflowId={selectedWorkflow.id} canExecute={canExecute} onBusyChange={(busy) => setPhase(busy ? "executing" : "scan")} /> : phase === "success" && result ? (
                 <Card className="overflow-hidden border-success-border">
                   <div className="bg-success-soft px-5 py-6 sm:px-6">
                     <div className="flex items-start gap-3">

@@ -341,6 +341,11 @@ struct SettingsView: View {
 
             if let webSettingsURL, let apiDocumentationURL {
                 Section("Web") {
+                    if state.canManageWorkflows, let client = state.client, let organization = state.activeOrganization {
+                        Link(destination: client.serverURL.appendingPathComponent(organization.slug).appendingPathComponent("settings/action-flows")) {
+                            settingsRow(title: "Aktionsabläufe bearbeiten", subtitle: "Schritte, Varianten und Scan-Eingaben festlegen", systemImage: "list.bullet.rectangle")
+                        }
+                    }
                     Link(destination: webSettingsURL) {
                         settingsRow(
                             title: "Webverwaltung",

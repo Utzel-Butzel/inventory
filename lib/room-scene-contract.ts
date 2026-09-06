@@ -1,3 +1,4 @@
+import { roomSurfaceFinishSchema } from "@/lib/room-material-contract";
 import { z } from "zod";
 import { roomObjectAppearanceSchema, roomFurnitureVariantSchema } from "@/lib/room-furniture-catalog";
 import { spatialGeoreferenceSchema } from "@/lib/spatial-structure-contract";
@@ -54,6 +55,7 @@ export const roomSurfaceCategorySchema = z.enum([
 ]);
 
 export const roomSurfaceSchema = z.object({
+  appearance: roomSurfaceFinishSchema.nullable().optional(),
   id: z.uuid(),
   category: roomSurfaceCategorySchema,
   dimensions: dimensionsSchema,

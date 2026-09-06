@@ -147,6 +147,30 @@ struct UnifiedCameraView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, geometry.safeAreaInsets.top + 8)
 
+                    if mode == .scan, !scanActionWorkflows.isEmpty {
+                        Menu {
+                            Picker("Ablauf wählen", selection: $selectedScanActionWorkflowID) {
+                                Text("Inventarartikel suchen").tag(nil as UUID?)
+                                ForEach(scanActionWorkflows) { workflow in
+                                    Text(workflow.name).tag(Optional(workflow.id))
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: selectedScanActionWorkflow == nil ? "magnifyingglass" : "bolt.fill")
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(selectedScanActionWorkflow?.name ?? "Inventarartikel suchen").font(.subheadline.weight(.semibold))
+                                    Text("Ablauf wählen").font(.caption)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.down")
+                            }
+                            .foregroundStyle(.white).padding(14)
+                            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
+                        }
+                        .padding(.horizontal, 16).padding(.top, 10)
+                    }
+
                     if isIntakeMode, captureModel.mediaCount > 0 {
                         captureQuickBar
                             .padding(.horizontal, 16)
@@ -185,13 +209,13 @@ struct UnifiedCameraView: View {
             }
             configureCamera()
         }
-        .task {
+        .task(id: state.organizationContextIdentifier) {
             if let client = state.client {
                 await countModel.loadCountModels(using: client)
                 inventoryTypes = (try? await client.inventoryTypes().types) ?? []
-                scanActionWorkflows = (
+                scanActionWorkflows = state.canReadWorkflows ? (
                     try? await client.scanActionWorkflows().workflows.filter(\.enabled)
-                ) ?? []
+                ) ?? [] : []
                 if let selectedScanActionWorkflowID,
                    !scanActionWorkflows.contains(where: { $0.id == selectedScanActionWorkflowID }) {
                     self.selectedScanActionWorkflowID = nil
@@ -215,6 +239,9 @@ struct UnifiedCameraView: View {
             }
             lastCode = nil
             configureMode()
+        }
+        .onChange(of: selectedScanActionWorkflowID) { _, _ in
+            lastCode = nil
         }
         .onChange(of: recognitionModel.phase) { _, phase in
             guard mode == .recognize,
@@ -996,7 +1023,7 @@ struct UnifiedCameraView: View {
                     }
                     .pickerStyle(.menu)
                     if let selectedScanActionWorkflow {
-                        Text(selectedScanActionWorkflow.operation.summary)
+                        Text(selectedScanActionWorkflow.summary)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

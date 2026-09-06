@@ -15,7 +15,7 @@ import {
   type StockScanWorkflowRecord,
   type StockUnitRecord,
 } from "@/db/schema";
-import { db } from "@/lib/db";
+import { db, type DatabaseExecutor } from "@/lib/db";
 import { buildAssembly } from "@/lib/assemblies";
 import {
   listCustomFieldDefinitions,
@@ -94,6 +94,8 @@ export function scanWorkflowHttpError(error: unknown, fallback: string) {
 const workflowDto = (row: StockScanWorkflowRecord): ScanWorkflowDto => ({
   id: row.id,
   name: row.name,
+  actions: row.actions,
+  oncePerCode: row.oncePerCode,
   description: row.description,
   enabled: row.enabled,
   resourceId: row.resourceId,
@@ -171,6 +173,8 @@ const jsonRecord = (value: unknown) =>
 
 const assertWorkflowConfiguration = (workflow: StockScanWorkflowRecord) => {
   const parsed = scanWorkflowCreateSchema.safeParse({
+    actions: workflow.actions,
+    oncePerCode: workflow.oncePerCode,
     name: workflow.name,
     description: workflow.description,
     enabled: workflow.enabled,
@@ -229,9 +233,10 @@ export async function getScanWorkflowTargetGroups(
     StockScanWorkflowRecord,
     "resourceId" | "resourceIds" | "allowVariantSelection"
   >,
+  executor: DatabaseExecutor = db,
 ): Promise<ScanWorkflowTargetGroup[]> {
   const targetIds = configuredWorkflowTargetIds(workflow);
-  const baseRows = await db
+  const baseRows = await executor
     .select({
       id: resources.id,
       name: resources.name,
@@ -257,7 +262,7 @@ export async function getScanWorkflowTargetGroups(
   const variantsByPrimary = new Map<string, ScanWorkflowTargetOption[]>();
 
   if (workflow.allowVariantSelection) {
-    const memberships = await db
+    const memberships = await executor
       .select({
         primaryResourceId: resourceRelations.targetResourceId,
         variantResourceId: resourceRelations.sourceResourceId,
@@ -272,7 +277,7 @@ export async function getScanWorkflowTargetGroups(
       );
     const variantIds = memberships.map((membership) => membership.variantResourceId);
     const variantRows = variantIds.length
-      ? await db
+      ? await executor
           .select({
             id: resources.id,
             name: resources.name,
@@ -328,7 +333,7 @@ export async function getScanWorkflowTargetGroups(
   });
 }
 
-const selectWorkflowTargetIds = (
+export const selectWorkflowTargetIds = (
   workflow: Pick<StockScanWorkflowRecord, "targetSelectionMode">,
   groups: ScanWorkflowTargetGroup[],
   requestedResourceIds: string[] = [],
@@ -405,6 +410,7 @@ async function assertWorkflowStorageConfiguration(
       );
     }
   }
+  if (input.actions.length) return;
   const producesUnit =
     input.operation.type === "unit" ||
     (input.operation.type === "assembly-build" &&
@@ -496,14 +502,14 @@ export async function createScanWorkflow(
     throw new ScanWorkflowError("A selected inventory item does not exist.", 422);
   }
   for (const resource of targetResources) {
-    if (input.operation.type === "unit" && resource.trackingMode !== "serialized") {
+    if (!input.actions.length && input.operation.type === "unit" && resource.trackingMode !== "serialized") {
       throw new ScanWorkflowError(
         "Configure every selected inventory item for serialized stock tracking first.",
         409,
       );
     }
     if (
-      input.operation.type === "stock-adjustment" &&
+      !input.actions.length && input.operation.type === "stock-adjustment" &&
       resource.trackingMode === "serialized"
     ) {
       throw new ScanWorkflowError(
@@ -555,6 +561,8 @@ export async function updateScanWorkflow(
 
   const { revision, ...changes } = patch;
   const merged = scanWorkflowCreateSchema.safeParse({
+    actions: current.actions,
+    oncePerCode: current.oncePerCode,
     name: current.name,
     description: current.description,
     enabled: current.enabled,
@@ -620,7 +628,7 @@ export async function updateScanWorkflow(
     }
     for (const resource of targetResources) {
       if (
-        merged.data.operation.type === "unit" &&
+        !merged.data.actions.length && merged.data.operation.type === "unit" &&
         resource.trackingMode !== "serialized"
       ) {
         throw new ScanWorkflowError(
@@ -629,7 +637,7 @@ export async function updateScanWorkflow(
         );
       }
       if (
-        merged.data.operation.type === "stock-adjustment" &&
+        !merged.data.actions.length && merged.data.operation.type === "stock-adjustment" &&
         resource.trackingMode === "serialized"
       ) {
         throw new ScanWorkflowError(
@@ -871,7 +879,7 @@ const isEmptyInput = (value: unknown) =>
   value === undefined || value === null || value === "" ||
   (Array.isArray(value) && value.length === 0);
 
-const normalizeInputValue = (
+export const normalizeInputValue = (
   field: StockScanWorkflowRecord["inputFields"][number],
   value: unknown,
 ) => {
@@ -919,7 +927,7 @@ const normalizeInputValue = (
   return value;
 };
 
-const resolveWorkflowValues = (
+export const resolveWorkflowValues = (
   workflow: StockScanWorkflowRecord,
   identifier: string,
   scannedValue: string,
@@ -1109,6 +1117,12 @@ export async function resolveStockScan(
   const configuration = assertWorkflowConfiguration(workflow);
   assertScannedCodeType(workflow, codeType);
 
+  if (configuration.actions.length) throw new ScanWorkflowError(
+    "This flow uses an action chain. Load its runner configuration, then preview and confirm the complete chain.",
+    422,
+    { configurationUrl: `/api/v1/stock/scan-workflows/${workflow.id}/runner`, previewUrl: "/api/v1/stock/action-chains/preview", executeUrl: "/api/v1/stock/action-chains/execute" },
+  );
+
   const identifier = extractScanIdentifier(scannedValue, workflow.extraction);
   const targetGroups = await getScanWorkflowTargetGroups(
     organizationId,
@@ -1279,7 +1293,7 @@ type ExecutionIdempotency = {
   publicTriggerId?: string;
 };
 
-const assertPublicExecutionAccess = (
+export const assertPublicExecutionAccess = (
   workflow: StockScanWorkflowRecord,
   idempotency: ExecutionIdempotency,
 ) => {
@@ -1974,6 +1988,11 @@ export async function executeStockScan(
     )
     .limit(1);
   if (!workflow) throw new ScanWorkflowError("Workflow not found.", 404);
+  if (workflow.actions.length) {
+    const { runActionChain } = await import("@/lib/action-chain-engine");
+    const report = await runActionChain({ workflowId: input.workflowId, code: input.code, codeType: input.codeType, inputs: input.inputs, selectedResourceIds: input.selectedResourceIds, expectedPlanHash: input.expectedPlanHash }, organizationId, { actor, ...idempotency }, false);
+    return { response: jsonRecord(report), replayed: report.replayed ?? false };
+  }
   assertPublicExecutionAccess(workflow, idempotency);
   if (workflow.revision !== input.revision) {
     throw new ScanWorkflowError(

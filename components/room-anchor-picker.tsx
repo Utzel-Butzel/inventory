@@ -5,11 +5,12 @@ import {
   Marker,
   NavigationControl,
   type GeoJSONSource,
-} from "maplibre-gl";
+} from "@/lib/maplibre-runtime";
 import type { RoomScene, SpatialMatrix4 } from "@/lib/room-scene-contract";
 import { roomSceneFootprintToGeoJson } from "@/lib/spatial-georeference";
 import { roomSceneCenterPosition } from "@/lib/room-scene-editor";
 import { roomWorldDeltaTransform } from "@/lib/room-floor-layout";
+import { roomMapStyle } from "@/lib/room-map-style";
 export function RoomAnchorPicker({
   scene,
   layoutTransform,
@@ -36,9 +37,7 @@ export function RoomAnchorPicker({
     if (!host.current) return;
     const map = new Map({
       container: host.current,
-      style:
-        process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim() ||
-        "https://tiles.openfreemap.org/styles/liberty",
+      style: roomMapStyle(),
       center: [longitude ?? 10.4, latitude ?? 51.1],
       zoom: latitude === null ? 4 : 18,
     });

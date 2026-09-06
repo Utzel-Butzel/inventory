@@ -181,6 +181,11 @@ until configured in `.env`.
 
 See [`.env.example`](.env.example) for the complete, commented reference.
 
+MapLibre's worker and its shared module are copied from the installed package
+into `public/vendor/maplibre/<version>/` by the `predev` and `prebuild` hooks.
+Use `npm run dev` / `npm run build` (or their pnpm equivalents). When invoking
+Next.js directly, run `node scripts/prepare-maplibre-assets.mjs` first.
+
 ### Authentication providers
 
 Open Inventory uses Auth.js for browser sign-in and its own organization roles

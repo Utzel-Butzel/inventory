@@ -1,19 +1,23 @@
 "use client";
 
 import { AlertCircle, CheckCircle2, QrCode } from "lucide-react";
-import { type Dispatch, type SetStateAction, useMemo } from "react";
+import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
 
 import { Badge, Card, cn } from "@/components/ui";
+import { visibleFlowInputs } from "@/lib/action-chain-contract";
+import { legacyWorkflowActions } from "./chain-draft";
 
 import { inputClass, labelClass, textAreaClass, visiblePropertyValue } from "./fields";
 import type { StockItem, WorkflowStepProps } from "./types";
 import type { WorkflowSample } from "./use-workflow-sample";
 import { extractIdentifier } from "./validation";
+import { workflowVariantOptions } from "./variant-options";
 
 type WorkflowPreviewProps = Pick<WorkflowStepProps, "draft" | "t"> & {
   sample: WorkflowSample;
   interactionBusy: boolean;
   selectedResources: StockItem[];
+  resources: StockItem[];
   previewInputs: Record<string, string>;
   setPreviewInputs: Dispatch<SetStateAction<Record<string, string>>>;
 };
@@ -24,14 +28,24 @@ export function WorkflowPreview({
   sample,
   interactionBusy,
   selectedResources,
+  resources,
   previewInputs,
   setPreviewInputs,
 }: WorkflowPreviewProps) {
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  const previewTargets = selectedResources.map((target) => {
+    const options = workflowVariantOptions(draft, target, resources);
+    return { target, options, selected: options.find((option) => option.resourceId === selectedVariants[target.resourceId]) ?? options[0] };
+  });
   const { sampleScan, setSampleScan } = sample;
   const extractionResult = useMemo(
     () => extractIdentifier(sampleScan, draft.extraction, t),
     [draft.extraction, sampleScan, t],
   );
+  const visibleInputs = visibleFlowInputs(draft.inputFields, {
+    identifier: extractionResult.value ?? "", raw: sampleScan, results: {},
+    inputs: Object.fromEntries(draft.inputFields.filter((field) => previewInputs[field.uid] !== undefined && previewInputs[field.uid] !== "").map((field) => [field.key, field.type === "number" ? Number(previewInputs[field.uid]) : field.type === "checkbox" ? previewInputs[field.uid] === "true" : previewInputs[field.uid]])),
+  });
   return (
     <Card className="mt-4 overflow-hidden">
       <div className="border-b border-border bg-[linear-gradient(110deg,var(--color-brand-soft),var(--color-surface))] px-4 py-4 sm:px-5">
@@ -58,9 +72,22 @@ export function WorkflowPreview({
               disabled={interactionBusy}
             />
           </label>
+          {draft.allowVariantSelection ? previewTargets.map(({ target, options, selected }) => (
+            <label key={target.resourceId} className={cn(labelClass, "mt-4")}>
+              {t("workflows.steps.inputs.variants.optionsFor", { name: target.name })}
+              <select
+                className={inputClass}
+                value={selected.resourceId}
+                disabled={interactionBusy || options.length < 2}
+                onChange={(event) => setSelectedVariants((current) => ({ ...current, [target.resourceId]: event.target.value }))}
+              >
+                {options.map((option) => <option key={option.resourceId} value={option.resourceId}>{option.name}</option>)}
+              </select>
+            </label>
+          )) : null}
           {draft.inputFields.length ? (
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {draft.inputFields.map((field) => (
+              {visibleInputs.map((field) => (
                 <label key={field.uid} className={labelClass}>
                   {field.label || field.key || t("workflows.preview.inputFallback")}{field.required ? " *" : ""}
                   {field.type === "select" || field.type === "radio" ? (
@@ -134,27 +161,25 @@ export function WorkflowPreview({
               <span className="text-muted">{t("workflows.preview.target")}</span>
               <strong className="text-right font-semibold text-muted-strong">
                 {selectedResources.length
-                  ? selectedResources.map((resource) => resource.name).join(", ")
+                  ? previewTargets.map(({ selected }) => selected.name).join(", ")
                   : t("workflows.preview.notSelected")}
               </strong>
             </div>
-            <div className="flex items-start justify-between gap-3">
-              <span className="text-muted">Aktion</span>
-              <strong className="text-right font-semibold text-muted-strong">
-                {draft.operation.type === "stock-adjustment"
-                  ? `${draft.operation.delta > 0 ? "+" : ""}${draft.operation.delta} Bestand`
-                  : draft.operation.type === "assembly-build"
-                    ? `${draft.operation.quantity} × Baugruppe fertigstellen`
-                    : t(draft.createMissingUnit ? "workflows.preview.findOrCreate" : "workflows.preview.findExisting")}
-              </strong>
-            </div>
+            <ol className="space-y-2" aria-label={t("chain.actionList")}>
+              {legacyWorkflowActions(draft).map((action, index) => <li key={action.id} className="rounded-lg border border-border p-2">
+                <strong>{index + 1}. {action.label}</strong>
+                <p className="mt-1 text-muted">{t(`chain.types.${action.type}`)}{!action.enabled ? ` · ${t("chain.disabled")}` : action.when ? ` · ${t("chain.conditional")}` : ""}</p>
+                {"target" in action ? <p className="mt-1 text-muted">{action.target.source === "selected" ? t("chain.selectedTarget") : action.target.source === "resource" ? resources.find((item) => action.target.source === "resource" && item.resourceId === action.target.resourceId)?.name : t("chain.previousTarget")}</p> : null}
+              </li>)}
+            </ol>
+            <p className="text-xs leading-5 text-muted">{t("chain.editorPreviewHelp")}</p>
             {draft.fixedProperties.map((property) => (
               <div key={property.uid} className="flex items-start justify-between gap-3">
                 <span className="text-muted">{property.label || property.key}</span>
                 <strong className="text-right font-semibold text-muted-strong">{visiblePropertyValue(property, t)}</strong>
               </div>
             ))}
-            {draft.inputFields.map((field) => {
+            {visibleInputs.map((field) => {
               const option = field.options.find((item) => item.value === previewInputs[field.uid]);
               return (
                 <div key={field.uid} className="flex items-center justify-between gap-3">

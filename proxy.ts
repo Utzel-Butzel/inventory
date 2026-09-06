@@ -96,6 +96,19 @@ export function proxy(request: NextRequest) {
   // Rewrites of organization-scoped URLs pass through this proxy again with
   // the tenant header already attached. Avoid redirecting that internal route
   // back to its public URL, which would create a loop.
+  if (
+    isOrganizationPagePath(pathname) &&
+    routedOrganizationReference &&
+    isOrganizationReference(routedOrganizationReference)
+  ) {
+    const headers = routedHeaders(request, routedOrganizationReference);
+    headers.set(
+      ORIGINAL_PATH_HEADER,
+      `${organizationPath(routedOrganizationReference, pathname)}${request.nextUrl.search}`,
+    );
+    return NextResponse.next({ request: { headers } });
+  }
+
   if (isOrganizationPagePath(pathname) && !routedOrganizationReference) {
     const cookieOrganizationReference = request.cookies
       .get(ORGANIZATION_COOKIE)?.value;

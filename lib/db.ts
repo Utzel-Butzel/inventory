@@ -26,3 +26,5 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export const db = drizzle(sqlClient, { schema });
+export type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type DatabaseExecutor = typeof db | DatabaseTransaction;

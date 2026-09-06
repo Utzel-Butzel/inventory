@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { ChainAction } from "@/lib/action-chain-contract";
 import type { ListViewCollection } from "@/lib/list-view-contract";
 import {
   bigint,
@@ -3537,6 +3538,8 @@ export const stockScanWorkflows = pgTable(
     organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 160 }).notNull(),
+    actions: jsonb("actions").$type<ChainAction[]>().notNull().default([]),
+    oncePerCode: boolean("once_per_code").notNull().default(false),
     description: text("description").notNull().default(""),
     enabled: boolean("enabled").notNull().default(true),
     resourceId: uuid("resource_id")
@@ -3613,6 +3616,7 @@ export const stockScanWorkflows = pgTable(
       table.publicTriggerId,
     ),
     check("stock_scan_workflows_revision_positive", sql`${table.revision} > 0`),
+    check("stock_scan_workflows_actions_array", sql`jsonb_typeof(${table.actions}) = 'array'`),
     check(
       "stock_scan_workflows_code_types_nonempty",
       sql`cardinality(${table.codeTypes}) > 0`,
@@ -3666,6 +3670,7 @@ export const stockScanExecutions = pgTable(
     organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     idempotencyKey: uuid("idempotency_key").notNull(),
+    deduplicationKey: varchar("deduplication_key", { length: 64 }),
     workflowId: uuid("workflow_id").references(() => stockScanWorkflows.id, {
       onDelete: "set null",
     }),
@@ -3696,6 +3701,7 @@ export const stockScanExecutions = pgTable(
       table.idempotencyKey,
     ),
     index("stock_scan_executions_workflow_id_idx").on(table.workflowId),
+    uniqueIndex("stock_scan_executions_deduplication_unique").on(table.organizationId, table.deduplicationKey).where(sql`${table.deduplicationKey} is not null`),
     index("stock_scan_executions_resource_id_idx").on(table.resourceId),
     index("stock_scan_executions_unit_id_idx").on(table.unitId),
     check(

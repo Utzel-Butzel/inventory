@@ -1,3 +1,4 @@
+import { roomMaterialSchema } from "@/lib/room-material-contract";
 import { z } from "zod";
 import { roomFurnitureVariantSchema } from "@/lib/room-furniture-catalog";
 
@@ -10,21 +11,7 @@ export const maximumRoomAnalysisKeyframes = 24;
 export const maximumRoomObjectSuggestions = 48;
 export const maximumRoomPhotoBatchSize = 8;
 
-export const roomMaterialSchema = z.enum([
-  "paint",
-  "plaster",
-  "concrete",
-  "wood",
-  "laminate",
-  "carpet",
-  "tile",
-  "stone",
-  "metal",
-  "glass",
-  "fabric",
-  "plastic",
-  "other",
-]);
+export { roomMaterialSchema } from "@/lib/room-material-contract";
 
 export const roomWindowTypeSchema = z.enum([
   "fixed",

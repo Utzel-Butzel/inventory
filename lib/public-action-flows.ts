@@ -11,6 +11,7 @@ import {
 } from "@/lib/scan-workflows";
 
 export type PublicActionFlowView = {
+  hasActions: boolean;
   triggerId: string;
   name: string;
   description: string;
@@ -41,6 +42,7 @@ const publicActionFlowDto = (
   targetGroups: ScanWorkflowTargetGroup[],
 ): PublicActionFlowView => ({
   triggerId: workflow.publicTriggerId,
+  hasActions: workflow.actions.length > 0,
   name: workflow.name,
   description: workflow.description,
   resourceName,

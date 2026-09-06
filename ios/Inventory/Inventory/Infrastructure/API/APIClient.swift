@@ -792,6 +792,28 @@ public final class APIClient: Sendable {
         return try await execute(request)
     }
 
+    public func prepareActionChain(workflowID: UUID, code: String, codeType: String?) async throws -> ActionChainConfiguration {
+        let url = try makeAPIURL(path: ["stock", "scan-workflows", workflowID.uuidString.lowercased(), "runner"])
+        let body = ActionChainPrepareRequest(code: code, codeType: codeType)
+        let request = try await jsonRequest(url: url, method: "POST", body: body)
+        let response: ActionChainConfigurationResponse = try await execute(request)
+        return response.workflow
+    }
+
+    public func previewActionChain(_ body: ActionChainRunRequest) async throws -> ActionChainReport {
+        let url = try makeAPIURL(path: ["stock", "action-chains", "preview"])
+        let request = try await jsonRequest(url: url, method: "POST", body: body)
+        return try await execute(request)
+    }
+
+    public func executeActionChain(_ body: ActionChainRunRequest, idempotencyKey: UUID) async throws -> ActionChainReport {
+        guard body.expectedPlanHash?.count == 64 else { throw APIClientError.invalidRequest("Bitte den Ablauf zuerst prüfen.") }
+        let url = try makeAPIURL(path: ["stock", "action-chains", "execute"])
+        var request = try await jsonRequest(url: url, method: "POST", body: body)
+        setIdempotencyKey(idempotencyKey, on: &request)
+        return try await execute(request)
+    }
+
     public func resolveScanAction(
         workflowID: UUID,
         code: String,

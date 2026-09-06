@@ -1,9 +1,10 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useT } from "next-i18next/client";
 import { LoaderCircle, Save, SlidersHorizontal, X, RefreshCw } from "lucide-react";
 import { type ClientRoomSceneManifest } from "@/lib/client-types";
+import { RoomSurfaceEditor } from "@/components/room-surface-editor";
 import { RoomFurniturePicker } from "@/components/room-furniture-picker";
 import {
   roomSceneSchema,
@@ -22,7 +23,7 @@ const AnchorPicker = dynamic(
 );
 const inputClass =
   "w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-foreground";
-type Tab = "furniture" | "map" | "rooms" | "scan";
+type Tab = "architecture" | "furniture" | "map" | "rooms" | "scan";
 export function RoomSceneEditor({
   manifest,
   selectedObjectId,
@@ -30,6 +31,8 @@ export function RoomSceneEditor({
   onPreview,
   onPartitionPreview,
   onSaved,
+  mapSetupRequest = 0,
+  onMapSaved,
 }: {
   manifest: ClientRoomSceneManifest;
   selectedObjectId: string | null;
@@ -42,9 +45,12 @@ export function RoomSceneEditor({
     manifest: ClientRoomSceneManifest,
     newScanId: string | null,
   ) => Promise<void>;
+  mapSetupRequest?: number;
+  onMapSaved?: () => void;
 }) {
   const { t } = useT("spatial");
   const [open, setOpen] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("furniture");
   const [draft, setDraft] = useState<RoomObject | null>(null);
   const [busy, setBusy] = useState(false);
@@ -77,6 +83,12 @@ export function RoomSceneEditor({
     onPreview(null);
     if (selectedObjectId) setTab("furniture");
   }, [selectedObjectId, onPreview]);
+  useEffect(() => {
+    if (!mapSetupRequest) return;
+    setOpen(true);
+    setTab("map");
+    editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [mapSetupRequest]);
   useEffect(() => {
     if (tab !== "rooms" || !(open || selectedObjectId)) {
       onPartitionPreview?.(null);
@@ -135,6 +147,7 @@ export function RoomSceneEditor({
       if (!response.ok) throw new Error(payload.error ?? "edit-failed");
       cancel();
       await onSaved(payload.scene, payload.newScanId);
+      if (edit.action === "anchor") onMapSaved?.();
       setNotice(t("editor.saved"));
     } catch (e) {
       setError(
@@ -192,7 +205,7 @@ export function RoomSceneEditor({
   );
   const expanded = open || Boolean(selectedObjectId);
   return (
-    <div className="shrink-0 border-b border-border">
+    <div ref={editorRef} className="shrink-0 border-b border-border">
       <button
         type="button"
         className="flex w-full items-center gap-2 p-3 text-sm font-semibold text-foreground"
@@ -210,7 +223,7 @@ export function RoomSceneEditor({
       </button>
       {manifest.scan.scene.presentation ? <p role="status" className="px-3 pb-2 text-[11px] text-brand">{t("editor.regenerated")}</p> : null}
       {expanded ? (
-        <div className="max-h-[60vh] space-y-3 overflow-y-auto px-3 pb-3">
+        <div className="space-y-3 px-3 pb-3">
           <div className="rounded-lg border border-border bg-surface-muted p-2.5">
             <button type="button" disabled={busy} onClick={() => void save({ action: "regenerate", revision })} className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-2 py-2 text-xs font-semibold text-foreground disabled:opacity-50">
               {busy ? <LoaderCircle className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
@@ -223,7 +236,7 @@ export function RoomSceneEditor({
             role="group"
             aria-label={t("editor.title")}
           >
-            {(["furniture", "map", "rooms", "scan"] as Tab[]).map((key) => (
+            {(["furniture", "architecture", "map", "rooms", "scan"] as Tab[]).map((key) => (
               <button
                 type="button"
                 key={key}
@@ -239,6 +252,7 @@ export function RoomSceneEditor({
               </button>
             ))}
           </div>
+          {tab === "architecture" ? <RoomSurfaceEditor key={`${manifest.scan.id}:${revision}`} manifest={manifest} busy={busy} onPreview={onPreview} onSave={save} /> : null}
           {tab === "furniture" ? (
             <>
               <p className="text-xs text-muted">{t("editor.furnitureHint")}</p>

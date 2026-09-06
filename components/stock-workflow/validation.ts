@@ -1,8 +1,38 @@
+import { actionChainReferenceErrors, chainActionsSchema } from "@/lib/action-chain-contract";
 import { extractScanRegexValue, scanRegexValidationError } from "@/lib/scan-regex";
 import type { TFunction } from "i18next";
-import type { WorkflowDraft } from "./types";
+import type { StockItem, WorkflowDraft } from "./types";
+
+export function workflowTargetIssues(draft: WorkflowDraft, resources: StockItem[]) {
+  if (draft.actions?.length) return [];
+  const usesUnitStorage =
+    draft.identifierStorage !== "execution" ||
+    [...draft.extractedFields, ...draft.fixedProperties, ...draft.inputFields]
+      .some((field) => field.storage !== "execution");
+  return resources.flatMap((resource) => {
+    if (!draft.resourceIds.includes(resource.resourceId)) return [];
+    const serialized = resource.trackingMode === "serialized";
+    if (!serialized && (draft.operation.type === "unit" ||
+      (draft.operation.type === "assembly-build" && usesUnitStorage))) {
+      return [{ resource, messageKey: "workflows.validation.serializedTarget" }];
+    }
+    if (draft.operation.type === "stock-adjustment" && serialized) {
+      return [{ resource, messageKey: "workflows.validation.bulkTarget" }];
+    }
+    if (draft.operation.type === "stock-adjustment" && usesUnitStorage) {
+      return [{ resource, messageKey: "workflows.validation.executionStorage" }];
+    }
+    return [];
+  });
+}
 
 export function validateDraft(draft: WorkflowDraft, t: TFunction) {
+  if (draft.actions?.length) {
+    const parsed = chainActionsSchema.safeParse(draft.actions);
+    if (!parsed.success) return parsed.error.issues[0]?.message ?? t("chain.invalid");
+    const [referenceError] = actionChainReferenceErrors(draft.actions, draft.inputFields.map((field) => field.key));
+    if (referenceError) return referenceError;
+  }
   if (!draft.name.trim()) return t("workflows.validation.name");
   if (!draft.resourceIds.length) return t("workflows.validation.resource");
   if (!draft.codeTypes.length) return t("workflows.validation.codeType");
@@ -115,7 +145,7 @@ export function validateDraft(draft: WorkflowDraft, t: TFunction) {
       optionValues.add(option.value.trim());
     }
   }
-  if (draft.quantityInputKey) {
+  if (draft.quantityInputKey && !draft.actions?.length) {
     const quantityField = draft.inputFields.find(
       (field) => field.key.trim() === draft.quantityInputKey,
     );
@@ -201,4 +231,3 @@ export function extractIdentifier(
       error: t("workflows.extractionErrors.queryEmpty", { parameter: parameter || "?" }),
     };
 }
-

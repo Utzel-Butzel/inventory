@@ -28,10 +28,10 @@ export const roomKeyLightCameraSeparationDegrees = 28;
 export const roomKeyToFillRatio = 3;
 
 /** Warm daylight key, roughly 5200 K sunlight after atmospheric warming. */
-export const roomKeyLightColor = 0xffd9b0;
+export const roomKeyLightColor = 0xffe8d2;
 
 /** Cool sky fill, the complementary bounce that keeps corners from blocking up. */
-export const roomFillLightColor = 0xc9dcf5;
+export const roomFillLightColor = 0xe4edfa;
 
 /**
  * Irradiance (lux-like, matching THREE.DirectionalLight.intensity) of the key.

@@ -8,7 +8,9 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "predev": "node scripts/prepare-maplibre-assets.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/prepare-maplibre-assets.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ignore-pattern .next",
@@ -34,6 +36,7 @@
     "test:public-sharing": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/public-share-contract.test.mjs",
     "test:scanner": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/barcode-scanner-contract.test.mjs",
     "test:document-scanner": "node --experimental-strip-types --test tests/document-scanner.test.mjs",
+    "test:action-chains": "node --experimental-transform-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/action-chain-contract.test.mjs tests/action-chain-integration.test.mjs",
     "test:action-flows": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/action-flow-contract.test.mjs tests/workflow-draft.test.mjs tests/webhook-contract.test.mjs",
     "test:notifications": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/notification-policy.test.mjs",
     "test:requests": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/internal-request-contract.test.mjs",
@@ -47,7 +50,7 @@
     "test:exports": "node --experimental-strip-types --test tests/inventory-export.test.mjs",
     "qa:exports": "node --experimental-strip-types scripts/generate-sample-inventory-exports.mjs",
     "test:spatial-georeference": "node --experimental-strip-types --test tests/spatial-georeference.test.mjs tests/spatial-map-features.test.mjs",
-    "test:room-scenes": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/room-furniture-library.test.mjs tests/room-scene-editor.test.mjs tests/room-ai-analysis.test.mjs tests/room-floor-layout.test.mjs tests/room-keyframe-contract.test.mjs tests/room-scene-contract.test.mjs tests/room-scan-upload-policy.test.mjs tests/room-scene-read-model.test.mjs tests/room-scene-visualization.test.mjs tests/spatial-structure-contract.test.mjs",
+    "test:room-scenes": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/room-furniture-library.test.mjs tests/room-lighting-rig.test.mjs tests/room-lighting-scene.test.mjs tests/room-pathtracer-compatibility.test.mjs tests/room-scene-materials.test.mjs tests/room-surface-editor.test.mjs tests/room-scene-editor.test.mjs tests/room-ai-analysis.test.mjs tests/room-floor-layout.test.mjs tests/room-keyframe-contract.test.mjs tests/room-scene-contract.test.mjs tests/room-scan-upload-policy.test.mjs tests/room-scene-read-model.test.mjs tests/room-scene-visualization.test.mjs tests/spatial-structure-contract.test.mjs",
     "test:resource-media": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/resource-media-contract.test.mjs tests/media-image.test.mjs tests/object-capture-presentation.test.mjs tests/usdz-package.test.mjs",
     "test:variants": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/resource-variant-contract.test.mjs tests/variant-stock-invariant.test.mjs tests/label-barcode.test.mjs tests/first-class-resource-variant-contract.test.mjs",
     "test:connections": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/resource-connection-diagram.test.mjs",

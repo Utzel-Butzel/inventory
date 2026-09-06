@@ -14,11 +14,13 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function StockScanPage() {
+export default async function StockScanPage({ searchParams }: { searchParams: Promise<{ workflow?: string }> }) {
   const identity = await getSessionIdentity();
+  const { workflow } = await searchParams;
 
   return (
     <StockScanner
+      initialWorkflowId={workflow}
       canExecute={Boolean(identity?.permissions.includes("workflows.manage"))}
     />
   );

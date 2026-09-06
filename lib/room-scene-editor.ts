@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   identitySpatialMatrix,
   roomSceneSchema,
+  roomSurfaceSchema,
   spatialMatrix4Schema,
   type RoomScene,
   type RoomSurface,
@@ -16,6 +17,7 @@ import { transformSpatialPoint } from "@/lib/spatial-georeference";
 
 const size = z.number().finite().min(0.8).max(50);
 export const roomEditSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("surface"), revision: z.number().int().positive(), surface: roomSurfaceSchema }).strict(),
   z.object({ action: z.literal("regenerate"), revision: z.number().int().positive() }).strict(),
   z
     .object({

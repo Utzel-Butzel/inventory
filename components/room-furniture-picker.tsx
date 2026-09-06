@@ -53,7 +53,7 @@ export function RoomFurniturePicker({
             {t("editor.relatedModels")}
           </summary>
           <div
-            className="mt-2 grid max-h-64 grid-cols-3 gap-1.5 overflow-y-auto"
+            className="mt-2 grid grid-cols-3 gap-1.5"
             role="group"
             aria-label={t("editor.relatedModels")}
           >
@@ -66,7 +66,7 @@ export function RoomFurniturePicker({
                 className={`rounded-lg border p-1 text-[10px] leading-tight ${value === variant ? "border-brand bg-brand-soft text-brand-strong" : "border-border bg-surface text-muted hover:border-brand"}`}
               >
                 <Image
-                  src={`/models/room-furniture/v1/${variant}.png`}
+                  src={`/models/room-furniture/v2/${variant}.png`}
                   alt=""
                   width={96}
                   height={96}

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useT } from "next-i18next/client";
 
+import { ActionChainRunner } from "@/components/action-chain-runner";
 import { Button, cn } from "@/components/ui";
 import type { PublicActionFlowView } from "@/lib/public-action-flows";
 
@@ -148,6 +149,8 @@ export function PublicActionFlow({ action }: { action: PublicActionFlowView }) {
       setSubmitting(false);
     }
   };
+
+  if (action.hasActions) return <ActionChainRunner publicTriggerId={action.triggerId} />;
 
   if (completed) {
     return (

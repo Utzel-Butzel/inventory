@@ -15,14 +15,14 @@ import {
   type Map as MapLibreMap,
   type MapLayerMouseEvent,
   type MapMouseEvent,
-  type MapOptions,
   Map as MapLibre,
   NavigationControl,
-} from "maplibre-gl";
+} from "@/lib/maplibre-runtime";
 import { useT } from "next-i18next/client";
 import { useEffect, useMemo, useRef } from "react";
 
 import type { ClientRoomSceneManifest } from "@/lib/client-types";
+import { roomMapStyle } from "@/lib/room-map-style";
 import {
   roomWorldDeltaTransform,
   rotateRoomTransform,
@@ -96,34 +96,6 @@ type DragInteraction =
       startAngle: number;
       transform: SpatialMatrix4;
     };
-
-const MAPBOX_ACCESS_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN?.trim();
-
-function mapboxTileUrl(style: string) {
-  return `https://api.mapbox.com/styles/v1/mapbox/${style}/tiles/512/{z}/{x}/{y}?access_token=${encodeURIComponent(MAPBOX_ACCESS_TOKEN ?? "")}`;
-}
-
-const STREET_STYLE: MapOptions["style"] = MAPBOX_ACCESS_TOKEN
-  ? {
-      version: 8,
-      sources: {
-        "mapbox-streets": {
-          type: "raster",
-          tiles: [mapboxTileUrl("streets-v12")],
-          tileSize: 512,
-          attribution: "© Mapbox © OpenStreetMap",
-        },
-      },
-      layers: [
-        {
-          id: "mapbox-streets",
-          type: "raster",
-          source: "mapbox-streets",
-        },
-      ],
-    }
-  : process.env.NEXT_PUBLIC_MAP_STYLE_URL?.trim()
-    || "https://tiles.openfreemap.org/styles/liberty";
 
 const sourceId = "room-layout-map";
 const layerIds = {
@@ -361,7 +333,7 @@ export function RoomLayoutMapCanvas(props: RoomLayoutMapCanvasProps) {
     if (!containerRef.current || mapRef.current) return;
     const map = new MapLibre({
       container: containerRef.current,
-      style: STREET_STYLE,
+      style: roomMapStyle(),
       center: [13.7373, 51.0504],
       zoom: 18,
       maxZoom: 22,

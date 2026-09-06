@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { actionConditionsSchema, actionChainReferenceErrors, chainActionsSchema, type ChainAction, type ActionConditions } from "@/lib/action-chain-contract";
 
 import { scanCodeTypes } from "@/lib/scan-code-types";
 import {
@@ -57,6 +58,7 @@ export const scanWorkflowPropertyKeySchema = z
   .trim()
   .min(1)
   .max(80)
+  .refine((value) => !["__proto__", "constructor", "prototype"].includes(value), "This property key is reserved.")
   .refine(
     (value) => [...value].every((character) => propertyKeyCharacters.includes(character)),
     "Property keys may only contain letters, numbers, underscore, dash, and dot.",
@@ -150,6 +152,7 @@ export const scanWorkflowSelectOptionSchema = z
 
 export const scanWorkflowInputFieldSchema = z
   .object({
+    visibleWhen: actionConditionsSchema.nullable().optional().default(null),
     key: scanWorkflowPropertyKeySchema,
     label: z.string().trim().min(1).max(120),
     required: z.boolean(),
@@ -258,15 +261,30 @@ const workflowEditableShape = {
 
 const validateWorkflowPropertyKeys = (
   value: {
+    actions: ChainAction[];
     identifierPropertyKey: string;
     extractedFields: Array<{ key: string }>;
     fixedProperties: Array<{ key: string }>;
-    inputFields: Array<{ key: string; type?: string; required: boolean }>;
+    inputFields: Array<{ key: string; type?: string; required: boolean; visibleWhen?: ActionConditions | null }>;
     operation: ScanWorkflowOperation;
     quantityInputKey: string | null;
   },
   context: z.RefinementCtx,
 ) => {
+  for (const message of actionChainReferenceErrors(value.actions, value.inputFields.map((field) => field.key))) {
+    context.addIssue({ code: "custom", path: ["actions"], message });
+  }
+  const earlierInputs = new Set<string>();
+  for (const field of value.inputFields) {
+    for (const rule of field.visibleWhen?.rules ?? []) {
+      for (const operand of [rule.left, rule.right]) {
+        if (operand?.source === "result" || (operand?.source === "input" && !earlierInputs.has(operand.key))) {
+          context.addIssue({ code: "custom", path: ["inputFields"], message: "Input visibility can only depend on the scan or earlier inputs." });
+        }
+      }
+    }
+    earlierInputs.add(field.key);
+  }
   const keys = [
     value.identifierPropertyKey,
     ...value.extractedFields.map((field) => field.key),
@@ -280,7 +298,7 @@ const validateWorkflowPropertyKeys = (
         "The identifier, fixed properties, and input fields must use distinct property keys.",
     });
   }
-  if (value.quantityInputKey) {
+  if (value.quantityInputKey && !value.actions.length) {
     const quantityField = value.inputFields.find(
       (field) => field.key === value.quantityInputKey,
     );
@@ -306,6 +324,8 @@ const validateWorkflowPropertyKeys = (
 
 export const scanWorkflowCreateSchema = z
   .object({
+    actions: chainActionsSchema.optional().default([]),
+    oncePerCode: z.boolean().optional().default(false),
     name: workflowEditableShape.name,
     description: workflowEditableShape.description.optional().default(""),
     enabled: workflowEditableShape.enabled.optional().default(true),
@@ -353,6 +373,8 @@ export const scanWorkflowCreateSchema = z
 
 export const scanWorkflowPatchSchema = z
   .object({
+    actions: chainActionsSchema.optional(),
+    oncePerCode: z.boolean().optional(),
     revision: z.number().int().min(1),
     name: workflowEditableShape.name.optional(),
     description: workflowEditableShape.description.optional(),
@@ -404,6 +426,7 @@ export const stockScanResolveSchema = z
 
 export const stockScanExecuteSchema = z
   .object({
+    expectedPlanHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     workflowId: z.string().uuid(),
     revision: z.number().int().min(1),
     code: z.string().trim().min(1).max(scanWorkflowLimits.scannedValue),

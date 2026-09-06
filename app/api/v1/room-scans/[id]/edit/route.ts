@@ -67,6 +67,9 @@ export async function PATCH(
       "split-missing-floor",
       "invalid-transform",
       "object-not-found",
+      "surface-not-found",
+      "surface-category-changed",
+      "surface-too-small",
       "scan-not-found",
     ];
     if (!expected.includes(code)) console.error("Room editing failed", error);

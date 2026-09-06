@@ -72,7 +72,7 @@ export function instantiateRoomFurniture(
         ) {
           material.color.set(color);
           // Tint uses the existing grain/weave as relief, keeping metal and ceramics intact.
-          if (material.map) material.color.multiplyScalar(1.15);
+          // v2 uses neutral albedo maps; no brown tint or exposure compensation.
         }
         materials.set(original, material);
       }

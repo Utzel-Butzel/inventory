@@ -71,6 +71,8 @@ final class AppState: ObservableObject {
     var canDeleteInventory: Bool { allows("inventory.delete", legacyScope: "write") }
     var canReadStock: Bool { allows("stock.read", legacyScope: "read") }
     var canManageStock: Bool { allows("stock.manage", legacyScope: "write") }
+    var canReadWorkflows: Bool { allows("workflows.read", legacyScope: "read") }
+    var canManageWorkflows: Bool { allows("workflows.manage", legacyScope: "write") }
     var canReadAssignments: Bool { allows("assignments.read", legacyScope: "read") }
     var canManageAssignments: Bool { allows("assignments.manage", legacyScope: "write") }
     var canReadRequests: Bool { allows("requests.read", legacyScope: "read") }

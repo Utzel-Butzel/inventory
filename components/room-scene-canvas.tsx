@@ -31,8 +31,6 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib.js";
-import { ProgressiveLightMap } from "three/examples/jsm/misc/ProgressiveLightMap.js";
-import { Reflector } from "three/examples/jsm/objects/Reflector.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
@@ -64,16 +62,9 @@ import { createRoomFloorGeometry } from "@/lib/room-floor-geometry";
 import { loadRoomFurnitureLibrary, isRoomFurnitureLibraryLoaded } from "@/lib/room-furniture-assets";
 import { roomFurnitureLibraryVersion } from "@/lib/room-furniture-catalog";
 import type { RoomLightMapBake } from "@/lib/room-lightmap-baker";
-import {
-  azimuthDegrees,
-  roomAmbientBounceFraction,
-  roomFillLightColor,
-  roomFillRadianceForKey,
-  roomKeyLightColor,
-  roomKeyPanelPlacement,
-  roomKeyRadianceForPanel,
-  resolveRoomKeyAzimuth,
-} from "@/lib/room-lighting-rig";
+import { configureRoomPathTracer, roomPathTracerSettled } from "@/lib/room-pathtracer-compatibility";
+import { roomAmbientBounceFraction } from "@/lib/room-lighting-rig";
+import { createRoomLiveLighting, createRoomLightingRig, roomDisplayExposure, roomDisplayToneMapping, roomLightingVersion, roomReflectionIntensity } from "@/lib/room-lighting-scene";
 import type { SpatialMatrix4 } from "@/lib/room-scene-contract";
 import {
   applyMetricSurfaceUvs,
@@ -500,81 +491,6 @@ function setMatrix(object: THREE.Object3D, values: number[]) {
   object.matrixAutoUpdate = false;
   object.matrix.fromArray(values);
   object.matrixWorldNeedsUpdate = true;
-}
-
-function linoleumReflectionShader(
-  textureWidth: number,
-  textureHeight: number,
-  opacity: number,
-) {
-  return {
-    name: "LinoleumPlanarReflection",
-    uniforms: {
-      color: { value: new THREE.Color(0x353a3d) },
-      opacity: { value: opacity },
-      tDiffuse: { value: null },
-      texelSize: {
-        value: new THREE.Vector2(1 / textureWidth, 1 / textureHeight),
-      },
-      textureMatrix: { value: new THREE.Matrix4() },
-    },
-    vertexShader: /* glsl */ `
-      uniform mat4 textureMatrix;
-      varying vec4 vUv;
-
-      #include <common>
-      #include <logdepthbuf_pars_vertex>
-
-      void main() {
-        vUv = textureMatrix * vec4(position, 1.0);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        #include <logdepthbuf_vertex>
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      uniform vec3 color;
-      uniform float opacity;
-      uniform sampler2D tDiffuse;
-      uniform vec2 texelSize;
-      varying vec4 vUv;
-
-      #include <logdepthbuf_pars_fragment>
-
-      void main() {
-        #include <logdepthbuf_fragment>
-
-        vec2 uv = vUv.xy / max(vUv.w, 0.00001);
-        vec2 blur = texelSize * 2.25;
-        vec3 reflection = texture2D(tDiffuse, uv).rgb * 0.28;
-        reflection += texture2D(tDiffuse, uv + vec2( blur.x, 0.0)).rgb * 0.12;
-        reflection += texture2D(tDiffuse, uv + vec2(-blur.x, 0.0)).rgb * 0.12;
-        reflection += texture2D(tDiffuse, uv + vec2(0.0,  blur.y)).rgb * 0.12;
-        reflection += texture2D(tDiffuse, uv + vec2(0.0, -blur.y)).rgb * 0.12;
-        reflection += texture2D(tDiffuse, uv + vec2( blur.x,  blur.y)).rgb * 0.06;
-        reflection += texture2D(tDiffuse, uv + vec2(-blur.x,  blur.y)).rgb * 0.06;
-        reflection += texture2D(tDiffuse, uv + vec2( blur.x, -blur.y)).rgb * 0.06;
-        reflection += texture2D(tDiffuse, uv + vec2(-blur.x, -blur.y)).rgb * 0.06;
-        reflection = mix(reflection, color, 0.04);
-
-        // A constant-alpha mirror layer obscures the diffuse lightmap and its
-        // contact shadows. Let only the brighter reflected energy contribute;
-        // dark reflections remain almost transparent so baked and progressive
-        // floor shadows retain their contrast beneath the specular layer.
-        float reflectionLuminance = dot(
-          reflection,
-          vec3(0.2126, 0.7152, 0.0722)
-        );
-        float reflectionAlpha = opacity * mix(
-          0.12,
-          1.0,
-          smoothstep(0.05, 0.72, reflectionLuminance)
-        );
-        gl_FragColor = vec4(reflection, reflectionAlpha);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }
-    `,
-  };
 }
 
 type RoomSceneAsset = ClientRoomSceneManifest["scan"]["assets"][number];
@@ -1079,7 +995,8 @@ export function RoomSceneCanvas({
     setRendererError(null);
     const progressiveLighting = lightingMode === "progressive";
     const rayTracedLighting =
-      lightingMode === "realistic" || lightingMode === "rendering";
+      lightingMode !== "live";
+    const bakedLighting = lightingMode === "realistic" || progressiveLighting;
 
     let renderer: THREE.WebGLRenderer;
     try {
@@ -1103,23 +1020,9 @@ export function RoomSceneCanvas({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(initialScenePalette.background, mapBackground ? 0 : 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // Realistic uses the Khronos neutral transform. AgX's filmic toe is what
-    // was closing up the corners of a baked interior and pulling the colour out
-    // of them; neutral keeps mid-tones and hue while still rolling off the
-    // window highlight. Rendering keeps AgX, Live keeps ACES.
-    renderer.toneMapping = lightingMode === "realistic"
-      ? THREE.NeutralToneMapping
-      : rayTracedLighting
-        ? THREE.AgXToneMapping
-        : THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = lightingMode === "realistic"
-      ? 1
-      : rayTracedLighting
-        ? 1.12
-        : progressiveLighting
-          ? 0.98
-          : 0.9;
-    const baseExposure = renderer.toneMappingExposure;
+    // One display transform/exposure for every solver, including cached frames.
+    renderer.toneMapping = roomDisplayToneMapping;
+    const baseExposure = roomDisplayExposure;
     renderer.toneMappingExposure = baseExposure * exposureRef.current;
     exposureCommandRef.current = value => { renderer.toneMappingExposure = baseExposure * value; };
     renderer.shadowMap.enabled = true;
@@ -1143,16 +1046,14 @@ export function RoomSceneCanvas({
 
     const scene = new THREE.Scene();
     let disposed = false;
-    if (rayTracedLighting) {
+    if (!mapBackground) {
       scene.background = new THREE.Color(initialScenePalette.background);
     }
-    const sceneFog = new THREE.Fog(initialScenePalette.background, 18, 55);
-    scene.fog = mapBackground ? null : sceneFog;
     const roomEnvironment = new RoomEnvironment();
     const environmentGenerator = new THREE.PMREMGenerator(renderer);
     const environmentTarget = environmentGenerator.fromScene(roomEnvironment, 0.035);
     scene.environment = environmentTarget.texture;
-    scene.environmentIntensity = 0.4;
+    scene.environmentIntensity = roomReflectionIntensity;
     roomEnvironment.dispose();
     environmentGenerator.dispose();
 
@@ -1332,17 +1233,17 @@ export function RoomSceneCanvas({
     };
     const finishForSurface = (
       roomManifest: ClientRoomSceneManifest,
-      category: RoomSurface["category"],
+      surface: RoomSurface,
       fallback: THREE.MeshStandardMaterial,
     ) => {
       // Accepted finishes also apply to the floor; the default remains linoleum.
-      const appearance = roomManifest.scan.aiAnalysis?.surfaceAppearances.find(
+      const appearance = surface.appearance ?? roomManifest.scan.aiAnalysis?.surfaceAppearances.find(
         (candidate) =>
           candidate.status === "accepted" &&
-          candidate.surfaceCategory === category,
+          candidate.surfaceCategory === surface.category,
       );
       if (!appearance) return fallback;
-      const key = `${roomManifest.scan.id}:surface:${category}`;
+      const key = `${roomManifest.scan.id}:surface:${surface.id}`;
       const cached = aiMaterials.get(key);
       if (cached) return cached;
       const material = applyDetectedRoomFinish(
@@ -1527,32 +1428,7 @@ export function RoomSceneCanvas({
     controls.maxPolarAngle = Math.PI * 0.495;
     controls.screenSpacePanning = true;
 
-    // Live keeps the original, intentionally simple architectural rig: cool
-    // sky, warm ground bounce, one soft sun, and one quiet cool fill. The
-    // ray-traced modes disable these and use their scene-wide softbox instead.
-    const skyLight = new THREE.HemisphereLight(0xdcecff, 0x6c5847, 0.62);
-    scene.add(skyLight);
-    const liveSun = new THREE.DirectionalLight(0xffe7c7, 2.35);
-    liveSun.castShadow = true;
-    liveSun.shadow.mapSize.set(2048, 2048);
-    liveSun.shadow.bias = -0.00008;
-    liveSun.shadow.normalBias = 0.006;
-    liveSun.shadow.radius = 4;
-    liveSun.shadow.blurSamples = 16;
-    liveSun.shadow.intensity = 0.96;
-    const liveFillLight = new THREE.DirectionalLight(0xe0e8f2, 0.28 * fillBalance);
-    if (lightingMode === "live") {
-      scene.add(
-        liveSun,
-        liveSun.target,
-        liveFillLight,
-        liveFillLight.target,
-      );
-    }
-    // Realistic mode enables this only after the softbox bake. Keeping the
-    // fill out of the path tracer preserves physically traced occlusion while
-    // the finished raster view receives neutral, orientation-independent fill.
-    const ambientFillLight = new THREE.AmbientLight(0xf4f1eb, 0);
+    const ambientFillLight = new THREE.AmbientLight(0xffffff, roomAmbientBounceFraction * fillBalance);
     scene.add(ambientFillLight);
 
     const webRoot = new THREE.Group();
@@ -1561,7 +1437,6 @@ export function RoomSceneCanvas({
     const assetAbortController = new AbortController();
     const roomPlanRoots = new Map<string, THREE.Object3D>();
     const roomArchitectureRoots = new Map<string, THREE.Object3D>();
-    const reflectiveFloorMeshes: THREE.Mesh[] = [];
     const roomWorldRoots = new Map<string, THREE.Group>();
     const roomWorldDeltas = new Map<string, THREE.Matrix4>();
     const capturedRoomTransforms = new Map<string, THREE.Matrix4>();
@@ -1575,14 +1450,9 @@ export function RoomSceneCanvas({
     const furnitureColliders: THREE.Object3D[] = [];
     const selectableFurniture: THREE.Object3D[] = [];
     const bakeOnlyObjects: THREE.Object3D[] = [];
-    const floorReflectors: Reflector[] = [];
     const splatMaterials = new Set<THREE.ShaderMaterial>();
-    let progressiveLightMap: ProgressiveLightMap | null = null;
-    const progressiveLights: THREE.DirectionalLight[] = [];
-    let progressiveLightMapSamples = 0;
-    const progressiveLightMapSampleTarget =
-      progressiveQualityPreset.sampleTarget;
     let pathTracer: GpuPathTracer | null = null;
+    const retiredPathTracers = new Set<Promise<void>>();
     let lightMapBake: RoomLightMapBake | null = null;
     let pathTraceDenoiseQuad: FullScreenQuad | null = null;
     let restartPathTracingForTheme: () => void = () => undefined;
@@ -2162,7 +2032,7 @@ export function RoomSceneCanvas({
           const wallNode = makeWallNode(
             surface,
             aperturesByWall.get(surface.id) ?? [],
-            finishForSurface(roomManifest, "wall", wallMaterial),
+            finishForSurface(roomManifest, surface, wallMaterial),
             roomCenterInModel,
           );
           // The cutaway hides whichever parts of the shell stand between the
@@ -2177,7 +2047,7 @@ export function RoomSceneCanvas({
         } else if (surface.category === "door") {
           const doorNode = makeDoorNode(
             surface,
-            finishForSurface(roomManifest, "door", doorMaterial),
+            finishForSurface(roomManifest, surface, doorMaterial),
           );
           // Apertures sit in the plane of their wall, so the same outward test
           // takes them out of the cutaway together with it.
@@ -2197,7 +2067,7 @@ export function RoomSceneCanvas({
           const windowNode = makeWindowNode(
             surface,
             windowMaterial,
-            finishForSurface(roomManifest, "window", windowFrameMaterial),
+            finishForSurface(roomManifest, surface, windowFrameMaterial),
             acceptedWindowAppearance?.windowDetails ?? null,
           );
           // The bake rig puts the sun outside the largest window so daylight
@@ -2213,7 +2083,7 @@ export function RoomSceneCanvas({
         } else if (surface.category === "opening") {
           const openingNode = makeOpeningNode(
             surface,
-            finishForSurface(roomManifest, "opening", openingMaterial),
+            finishForSurface(roomManifest, surface, openingMaterial),
           );
           openingNode.userData.roomWallOutward = [
             0,
@@ -2222,7 +2092,6 @@ export function RoomSceneCanvas({
           ];
           architectureRoot.add(openingNode);
         } else {
-          const dimensions = normalizedDimensions(surface.category, surface.dimensions);
           const geometry = createRoomFloorGeometry(surface);
           applyMetricSurfaceUvs(geometry, {
             textureRepeat: floorColorMap.repeat,
@@ -2230,7 +2099,7 @@ export function RoomSceneCanvas({
           });
           const material = finishForSurface(
             roomManifest,
-            "floor",
+            surface,
             floorMaterial,
           );
           const mesh = new THREE.Mesh(geometry, material);
@@ -2242,102 +2111,8 @@ export function RoomSceneCanvas({
           setMatrix(mesh, surface.transform);
           architectureRoot.add(mesh);
           // Smooth linoleum receives the stable room reflection probe.
-          if (material.roughness <= 0.8) reflectiveFloorMeshes.push(mesh);
 
-          if (
-            !rayTracedLighting &&
-            !surface.polygonCorners &&
-            surface.dimensions[1] < Math.min(surface.dimensions[0], surface.dimensions[2]) &&
-            roomManifest.scan.id === manifest.scan.id
-          ) {
-            const reflectionWidth = Math.min(
-              1024,
-              Math.max(512, Math.round(host.clientWidth * 0.65)),
-            );
-            const reflectionHeight = Math.min(
-              1024,
-              Math.max(512, Math.round(host.clientHeight * 0.65)),
-            );
-            const reflector = new Reflector(
-              new THREE.PlaneGeometry(dimensions[0], dimensions[2]),
-              {
-                clipBias: 0.002,
-                color: 0x353a3d,
-                multisample: 2,
-                shader: linoleumReflectionShader(
-                  reflectionWidth,
-                  reflectionHeight,
-                  progressiveLighting ? 0.06 : 0.035,
-                ),
-                textureHeight: reflectionHeight,
-                textureWidth: reflectionWidth,
-              },
-            );
-            const reflectionMatrix = new THREE.Matrix4().fromArray(
-              surface.transform,
-            );
-            const reflectionNormal = new THREE.Vector3(0, 1, 0)
-              .transformDirection(reflectionMatrix);
-            const reflectionOrigin = new THREE.Vector3().setFromMatrixPosition(
-              reflectionMatrix,
-            );
-            const roomwardDirection = roomCenterInModel
-              .clone()
-              .sub(reflectionOrigin);
-            const roomwardSign =
-              reflectionNormal.dot(roomwardDirection) >= 0 ? 1 : -1;
-            reflectionMatrix.multiply(
-              new THREE.Matrix4().makeTranslation(
-                0,
-                roomwardSign * (dimensions[1] * 0.5 + 0.0025),
-                0,
-              ),
-            );
-            // PlaneGeometry lies in XY with a +Z normal. Rotate it into the
-            // floor's local XZ plane and face the side selected above.
-            reflectionMatrix.multiply(
-              new THREE.Matrix4().makeRotationX(
-                roomwardSign > 0 ? -Math.PI / 2 : Math.PI / 2,
-              ),
-            );
-            setMatrix(reflector, reflectionMatrix.toArray());
-            reflector.renderOrder = 5_000;
-            const reflectorMaterial = reflector.material as THREE.ShaderMaterial;
-            reflectorMaterial.transparent = true;
-            reflectorMaterial.depthWrite = false;
-            reflectorMaterial.polygonOffset = true;
-            reflectorMaterial.polygonOffsetFactor = -1;
-            reflectorMaterial.polygonOffsetUnits = -1;
-            const renderReflection = reflector.onBeforeRender.bind(reflector);
-            reflector.onBeforeRender = (
-              activeRenderer,
-              activeScene,
-              activeCamera,
-              activeGeometry,
-              activeMaterial,
-              activeGroup,
-            ) => {
-              // The virtual reflection camera sits below this plane. Hide the
-              // thick RoomPlan floor box only for that off-screen pass so it
-              // cannot occlude all furniture before the reflected rays reach it.
-              const floorVisible = mesh.visible;
-              mesh.visible = false;
-              try {
-                renderReflection(
-                  activeRenderer,
-                  activeScene,
-                  activeCamera,
-                  activeGeometry,
-                  activeMaterial,
-                  activeGroup,
-                );
-              } finally {
-                mesh.visible = floorVisible;
-              }
-            };
-            architectureRoot.add(reflector);
-            floorReflectors.push(reflector);
-          }
+
         }
       }
 
@@ -3063,609 +2838,26 @@ export function RoomSceneCanvas({
       manifest.scan.scene.webFromWorld,
     );
 
-    const daylightAreaLights: THREE.RectAreaLight[] = [];
-    let jitterProgressiveLights = () => undefined;
-
-    if (lightingMode === "live") {
-      liveSun.position
-        .copy(center)
-        .add(new THREE.Vector3(radius * 1.25, radius * 2.4, radius * 1.15));
-      liveSun.target.position.copy(center);
-      liveFillLight.position
-        .copy(center)
-        .add(new THREE.Vector3(-radius * 1.6, radius * 1.1, -radius * 0.9));
-      liveFillLight.target.position.copy(center);
-
-      // Fit the one directional shadow map tightly to the visible room. This
-      // is the original Live setup: predictable, inexpensive, and free of the
-      // overlapping gradients produced by the later multi-window light rig.
-      liveSun.updateMatrixWorld(true);
-      liveSun.target.updateMatrixWorld(true);
-      const shadowCamera = liveSun.shadow.camera;
-      shadowCamera.position.copy(liveSun.position);
-      shadowCamera.lookAt(liveSun.target.position);
-      shadowCamera.updateMatrixWorld(true);
-      const lightSpaceBounds = new THREE.Box3().makeEmpty();
-      for (const x of [box.min.x, box.max.x]) {
-        for (const y of [box.min.y, box.max.y]) {
-          for (const z of [box.min.z, box.max.z]) {
-            lightSpaceBounds.expandByPoint(
-              new THREE.Vector3(x, y, z).applyMatrix4(
-                shadowCamera.matrixWorldInverse,
-              ),
-            );
-          }
-        }
-      }
-      const shadowMargin = THREE.MathUtils.clamp(radius * 0.08, 0.3, 1.25);
-      shadowCamera.left = lightSpaceBounds.min.x - shadowMargin;
-      shadowCamera.right = lightSpaceBounds.max.x + shadowMargin;
-      shadowCamera.bottom = lightSpaceBounds.min.y - shadowMargin;
-      shadowCamera.top = lightSpaceBounds.max.y + shadowMargin;
-      shadowCamera.near = Math.max(
-        0.1,
-        -lightSpaceBounds.max.z - shadowMargin,
-      );
-      shadowCamera.far = Math.max(
-        shadowCamera.near + 1,
-        -lightSpaceBounds.min.z + shadowMargin,
-      );
-      shadowCamera.updateProjectionMatrix();
-
-      const shadowWorldSize = Math.max(
-        shadowCamera.right - shadowCamera.left,
-        shadowCamera.top - shadowCamera.bottom,
-      );
-      const shadowWorldUnitsPerTexel =
-        shadowWorldSize / liveSun.shadow.mapSize.x;
-      liveSun.shadow.radius = THREE.MathUtils.clamp(
-        0.055 / shadowWorldUnitsPerTexel,
-        2.5,
-        7,
-      );
-      liveSun.shadow.normalBias = THREE.MathUtils.clamp(
-        shadowWorldUnitsPerTexel * 0.75,
-        0.0025,
-        0.018,
-      );
-    }
-
-    // The camera's default orbit azimuth. The key is placed away from it so
-    // the cutaway keeps a lit side and a shaded side instead of flattening.
-    const defaultCameraAzimuth = azimuthDegrees(1.25, 1.35);
-    let bakeKeyAzimuth = defaultCameraAzimuth;
-
-    if (lightingMode === "realistic") {
-      scene.updateMatrixWorld(true);
-      // Light should arrive from the side the room's own daylight comes from,
-      // so take the key's azimuth from the largest window.
-      let widestWindowArea = 0;
-      let windowAzimuth: number | null = null;
-      for (const root of roomArchitectureRoots.values()) {
-        root.traverse((object) => {
-          const area = Number(object.userData.roomWindowArea) || 0;
-          if (area <= widestWindowArea) return;
-          const outward = object
-            .getWorldPosition(new THREE.Vector3())
-            .sub(center);
-          outward.y = 0;
-          if (outward.lengthSq() < 1e-6) return;
-          widestWindowArea = area;
-          windowAzimuth = azimuthDegrees(outward.x, outward.z);
-        });
-      }
-      bakeKeyAzimuth = resolveRoomKeyAzimuth({
-        cameraAzimuth: defaultCameraAzimuth,
-        windowAzimuth,
-      });
-
-      // The key: one warm source on a diagonal, 46 degrees above the horizon,
-      // hung under the ceiling so the sealed shell cannot block it.
-      const ceilingHeight = box.max.y;
-      const keyPlacement = roomKeyPanelPlacement({
-        ceilingClearance: ceilingHeight - 0.16,
-        centerHeight: center.y,
-        maximumHorizontal: Math.max(Math.min(size.x, size.z) * 0.42, 0.4),
-      });
-      const keyAzimuthRadians = (bakeKeyAzimuth * Math.PI) / 180;
-      const keyPosition = new THREE.Vector3(
-        center.x + Math.sin(keyAzimuthRadians) * keyPlacement.horizontal,
-        center.y + keyPlacement.rise,
-        center.z + Math.cos(keyAzimuthRadians) * keyPlacement.horizontal,
-      );
-      // Panel size is what sets penumbra width. A source spanning most of the
-      // room subtends a huge solid angle and smears every contact shadow, so
-      // keep it compact enough to leave shadows legible.
-      const keyWidth = Math.max(Math.min(size.x, size.z) * 0.26, 0.75);
-      const keyLight = new THREE.RectAreaLight(
-        roomKeyLightColor,
-        roomKeyRadianceForPanel({
-          distance: keyPlacement.distance,
-          height: keyWidth,
-          width: keyWidth,
-        }),
-        keyWidth,
-        keyWidth,
-      );
-      keyLight.position.copy(keyPosition);
-      // RectAreaLight emits along local -Z, so point local +Z back at the panel
-      // to send its light toward the room.
-      keyLight.quaternion.setFromUnitVectors(
-        new THREE.Vector3(0, 0, 1),
-        keyPosition.clone().sub(center).normalize(),
-      );
-      daylightAreaLights.push(keyLight);
-
-      // A sealed room needs its ceiling before the bake can be trusted: it is
-      // what stops daylight escaping upward and what returns the bounce that
-      // fills the upper corners. The camera never sees it, so it exists only
-      // for the tracer.
-      const ceilingMaterial = new THREE.MeshStandardMaterial({
-        color: 0xf2efe9,
-        metalness: 0,
-        roughness: 0.95,
-        side: THREE.DoubleSide,
-      });
-      const ceiling = new THREE.Mesh(
-        new THREE.BoxGeometry(size.x + 0.4, 0.08, size.z + 0.4),
-        ceilingMaterial,
-      );
-      ceiling.position.set(center.x, ceilingHeight + 0.04, center.z);
-      ceiling.userData.roomLightMapExclude = true;
-
-      // The fill is a broad, cool source hung just under that ceiling. Sizing
-      // it from the room and solving its radiance for the target ratio keeps
-      // the key-to-fill balance the same in a cupboard and in a hall.
-      const fillWidth = Math.max(size.x * 0.86, 1);
-      const fillDepth = Math.max(size.z * 0.86, 1);
-      const fillDistance = Math.max(ceilingHeight - box.min.y, 1);
-      const fillLight = new THREE.RectAreaLight(
-        roomFillLightColor,
-        roomFillRadianceForKey({
-          distance: fillDistance,
-          height: fillDepth,
-          width: fillWidth,
-        }),
-        fillWidth,
-        fillDepth,
-      );
-      fillLight.position.set(center.x, ceilingHeight - 0.06, center.z);
-      // RectAreaLight emits along local -Z; aim it at the floor.
-      fillLight.quaternion.setFromUnitVectors(
-        new THREE.Vector3(0, 0, 1),
-        new THREE.Vector3(0, 1, 0),
-      );
-      fillLight.intensity *= fillBalance;
-      daylightAreaLights.push(fillLight);
-
-      for (const object of [keyLight, ceiling, fillLight]) {
-        object.visible = false;
-        scene.add(object);
-        bakeOnlyObjects.push(object);
-      }
-      scene.updateMatrixWorld(true);
-    }
-
-    if (lightingMode === "rendering") {
-      const softbox = new THREE.RectAreaLight(
-        0xfff8ef,
-        7,
-        Math.max(1.5, size.x * 0.62),
-        Math.max(1.5, size.z * 0.62),
-      );
-      softbox.position.set(
-        center.x,
-        box.max.y + Math.max(0.9, size.y * 0.32),
-        center.z,
-      );
-      // RectAreaLight emits along local -Z. A moderately sized overhead source
-      // keeps the overview evenly lit while retaining legible penumbrae.
-      softbox.quaternion.setFromUnitVectors(
-        new THREE.Vector3(0, 0, 1),
-        new THREE.Vector3(0, 1, 0),
-      );
-      scene.add(softbox);
-      daylightAreaLights.push(softbox);
-    }
-
-    if (progressiveLighting) {
-      const geometryUsage = new Map<THREE.BufferGeometry, number>();
-      scene.traverse((object) => {
-        if (!(object instanceof THREE.Mesh)) return;
-        geometryUsage.set(
-          object.geometry,
-          (geometryUsage.get(object.geometry) ?? 0) + 1,
-        );
-      });
-      const replacedGeometryUsage = new Map<THREE.BufferGeometry, number>();
-      const temporaryUvs: Array<{
-        geometry: THREE.BufferGeometry;
-        uv: THREE.BufferAttribute | THREE.InterleavedBufferAttribute;
-      }> = [];
-      const progressiveMeshes: THREE.Mesh[] = [];
-
-      for (const root of roomPlanRoots.values()) {
-        root.traverse((object) => {
-          if (!(object instanceof THREE.Mesh) || !object.visible) return;
-          const material = object.material;
-          if (
-            Array.isArray(material) ||
-            material.transparent ||
-            material.opacity < 0.999 ||
-            !(
-              material instanceof THREE.MeshStandardMaterial ||
-              material instanceof THREE.MeshPhongMaterial ||
-              material instanceof THREE.MeshLambertMaterial
-            )
-          ) {
-            return;
-          }
-          const sourceGeometry = object.geometry;
-          if (
-            !sourceGeometry.getAttribute("uv") ||
-            !sourceGeometry.getAttribute("normal")
-          ) {
-            return;
-          }
-
-          // ProgressiveLightMap copies uv0 into uv1. RoomPlan boxes reuse the
-          // same uv0 square on every side, which would make unrelated faces
-          // overwrite one another. Give every triangle unique temporary UVs,
-          // let the addon copy those into uv1, then restore the texture UVs.
-          const geometry = sourceGeometry.index
-            ? sourceGeometry.toNonIndexed()
-            : sourceGeometry.clone();
-          const originalUv = geometry.getAttribute("uv").clone();
-          const position = geometry.getAttribute("position");
-          const triangleCount = Math.floor(position.count / 3);
-          if (triangleCount > 2) {
-            const columns = Math.ceil(Math.sqrt(triangleCount));
-            const rows = Math.ceil(triangleCount / columns);
-            const margin = 0.08;
-            const atlasUv = new Float32Array(position.count * 2);
-            for (let triangle = 0; triangle < triangleCount; triangle += 1) {
-              const column = triangle % columns;
-              const row = Math.floor(triangle / columns);
-              const uvOffset = triangle * 6;
-              atlasUv[uvOffset] = (column + margin) / columns;
-              atlasUv[uvOffset + 1] = (row + margin) / rows;
-              atlasUv[uvOffset + 2] = (column + 1 - margin) / columns;
-              atlasUv[uvOffset + 3] = (row + margin) / rows;
-              atlasUv[uvOffset + 4] = (column + margin) / columns;
-              atlasUv[uvOffset + 5] = (row + 1 - margin) / rows;
-            }
-            geometry.setAttribute(
-              "uv",
-              new THREE.BufferAttribute(atlasUv, 2),
-            );
-          }
-          object.geometry = geometry;
-          temporaryUvs.push({ geometry, uv: originalUv });
-          progressiveMeshes.push(object);
-          replacedGeometryUsage.set(
-            sourceGeometry,
-            (replacedGeometryUsage.get(sourceGeometry) ?? 0) + 1,
-          );
-        });
-      }
-
-      for (const [geometry, replacements] of replacedGeometryUsage) {
-        if (replacements === geometryUsage.get(geometry)) geometry.dispose();
-      }
-
-      if (progressiveMeshes.length > 0) {
-        const lightCount = progressiveQualityPreset.lightCount;
-        const progressiveShadowResolution = Math.min(
-          progressiveQualityPreset.shadowResolution,
-          renderer.capabilities.maxTextureSize,
-        );
-        const progressiveAtlasResolution = Math.min(
-          progressiveQualityPreset.atlasResolution,
-          renderer.capabilities.maxTextureSize,
-        );
-        const shadowExtent = Math.max(radius * 1.08, 1.5);
-        const lightTarget = new THREE.Object3D();
-        lightTarget.position.copy(center);
-        lightTarget.updateMatrixWorld(true);
-        for (let index = 0; index < lightCount; index += 1) {
-          const light = new THREE.DirectionalLight(
-            0xfff2df,
-            Math.PI / lightCount,
-          );
-          light.target = lightTarget;
-          light.castShadow = true;
-          light.shadow.mapSize.set(
-            progressiveShadowResolution,
-            progressiveShadowResolution,
-          );
-          light.shadow.bias = -0.00004;
-          light.shadow.normalBias = THREE.MathUtils.clamp(
-            radius / 1400,
-            0.0015,
-            0.007,
-          );
-          light.shadow.camera.left = -shadowExtent;
-          light.shadow.camera.right = shadowExtent;
-          light.shadow.camera.bottom = -shadowExtent;
-          light.shadow.camera.top = shadowExtent;
-          light.shadow.camera.near = 0.08;
-          light.shadow.camera.far = Math.max(12, radius * 8);
-          light.shadow.camera.updateProjectionMatrix();
-          progressiveLights.push(light);
-        }
-
-        progressiveLightMap = new ProgressiveLightMap(
-          renderer,
-          progressiveAtlasResolution,
-        );
-        progressiveLightMap.addObjectsToLightMap([
-          ...progressiveLights,
-          ...progressiveMeshes,
-        ]);
-        for (const { geometry, uv } of temporaryUvs) {
-          geometry.setAttribute("uv", uv);
-          geometry.getAttribute("uv").needsUpdate = true;
-        }
-        for (const mesh of progressiveMeshes) {
-          const material = mesh.material;
-          if (Array.isArray(material)) continue;
-          if (
-            material instanceof THREE.MeshStandardMaterial ||
-            material instanceof THREE.MeshPhongMaterial ||
-            material instanceof THREE.MeshLambertMaterial
-          ) {
-            material.lightMapIntensity = 1.18;
-            material.needsUpdate = true;
-          }
-        }
-
-        const keyDirection = new THREE.Vector3(1.25, 2.4, 1.15).normalize();
-        const keyTangent = new THREE.Vector3()
-          .crossVectors(keyDirection, new THREE.Vector3(0, 1, 0))
-          .normalize();
-        const keyBitangent = new THREE.Vector3()
-          .crossVectors(keyDirection, keyTangent)
-          .normalize();
-        jitterProgressiveLights = () => {
-          for (let index = 0; index < progressiveLights.length; index += 1) {
-            const sequence =
-              progressiveLightMapSamples * progressiveLights.length + index;
-            const sampleX = textureNoise(sequence + 1, index + 3, 71);
-            const sampleY = textureNoise(sequence + 5, index + 11, 97);
-            const light = progressiveLights[index]!;
-            if (sequence % 8 === 0) {
-              // One eighth of the samples cover the upper hemisphere. This is
-              // not multi-bounce GI, but it creates a stable occluded sky-fill
-              // layer while preserving stronger furniture-shadow contrast.
-              const height = THREE.MathUtils.lerp(0.18, 1, sampleY);
-              const horizontal = Math.sqrt(Math.max(0, 1 - height * height));
-              const azimuth = sampleX * Math.PI * 2;
-              light.position.copy(center).addScaledVector(
-                new THREE.Vector3(
-                  Math.cos(azimuth) * horizontal,
-                  height,
-                  Math.sin(azimuth) * horizontal,
-                ),
-                radius * 3,
-              );
-              light.color.setHex(0xdcecff);
-            } else {
-              // Jitter the main source over a compact virtual softbox. The
-              // accumulated visibility produces smooth but readable shadows.
-              const diskRadius = Math.sqrt(sampleX) * radius * 0.21;
-              const angle = sampleY * Math.PI * 2;
-              light.position
-                .copy(center)
-                .addScaledVector(keyDirection, radius * 3)
-                .addScaledVector(
-                  keyTangent,
-                  Math.cos(angle) * diskRadius,
-                )
-                .addScaledVector(
-                  keyBitangent,
-                  Math.sin(angle) * diskRadius,
-                );
-              light.color.setHex(0xfff2df);
-            }
-            light.updateMatrixWorld(true);
-            light.shadow.needsUpdate = true;
-          }
-        };
-      } else {
-        setLightingProgress(100);
-        setLightingStatus("ready");
+    if (lightingMode === "live") scene.add(createRoomLiveLighting(fillBalance));
+    for (const roomManifest of rayTracedLighting ? visibleManifests : []) {
+      const rig = createRoomLightingRig(roomManifest.scan.scene, fillBalance);
+      roomPlanRoots.get(roomManifest.scan.id)!.add(rig.group);
+      // Each room gets its own ceiling, following its measured floor polygon.
+      // Only the bake sees it; orbit views remain open above.
+      for (const surface of roomManifest.scan.scene.surfaces.filter(s => s.category === "floor")) {
+        const ceiling = new THREE.Mesh(createRoomFloorGeometry(surface), new THREE.MeshStandardMaterial({
+          color: 0xe5e3df, roughness: 0.95, side: THREE.DoubleSide,
+        }));
+        setMatrix(ceiling, surface.transform);
+        ceiling.matrix.elements[13] += roomManifest.scan.scene.bounds.max[1] - roomManifest.scan.scene.bounds.min[1];
+        ceiling.visible = false;
+        ceiling.userData.roomLightMapExclude = true;
+        roomPlanRoots.get(roomManifest.scan.id)!.add(ceiling);
+        bakeOnlyObjects.push(ceiling);
       }
     }
-
-    // Bake the already-lit room into a compact irradiance probe. This captures
-    // the directional colour of light reflected by the floor, walls, and large
-    // objects, then reduces the cubemap to nine spherical-harmonic coefficients.
-    // Unlike an ordinary ambient light, the result can make upward-facing areas
-    // warmer than walls facing the open sky, with no per-frame cubemap cost.
-    let bounceProbe: THREE.LightProbe | null = null;
-    const bakeDiffuseBounce = () => {
-      const probeResolution = 32;
-      const bounceTarget = new THREE.WebGLCubeRenderTarget(probeResolution, {
-        format: THREE.RGBAFormat,
-        type: THREE.UnsignedByteType,
-        generateMipmaps: false,
-        minFilter: THREE.LinearFilter,
-      });
-      const probeCamera = new THREE.CubeCamera(
-        Math.max(0.04, radius / 500),
-        Math.max(20, radius * 6),
-        bounceTarget,
-      );
-      probeCamera.position.copy(center);
-      probeCamera.position.y = THREE.MathUtils.clamp(
-        box.min.y + Math.min(1.45, size.y * 0.55),
-        box.min.y + 0.2,
-        box.max.y - 0.2,
-      );
-
-      const previousClearColor = renderer.getClearColor(new THREE.Color());
-      const previousClearAlpha = renderer.getClearAlpha();
-      const previousToneMapping = renderer.toneMapping;
-      const previousFog = scene.fog;
-      const previousKeyframeVisibility = keyframeRoot.visible;
-      const markerVisibility = markerMeshes.map((marker) => marker.visible);
-
-      // Black outside the room prevents the light probe from baking the light
-      // or dark application theme into the model. Fog, overlays, and tone
-      // mapping are presentation effects and should not become indirect light.
-      renderer.setClearColor(0x000000, 1);
-      renderer.toneMapping = THREE.NoToneMapping;
-      scene.fog = null;
-      keyframeRoot.visible = false;
-      markerMeshes.forEach((marker) => {
-        marker.visible = false;
-      });
-
-      try {
-        try {
-          probeCamera.update(renderer, scene);
-        } finally {
-          renderer.setClearColor(previousClearColor, previousClearAlpha);
-          renderer.toneMapping = previousToneMapping;
-          scene.fog = previousFog;
-          keyframeRoot.visible = previousKeyframeVisibility;
-          markerMeshes.forEach((marker, index) => {
-            marker.visible = markerVisibility[index] ?? true;
-          });
-        }
-
-        // A synchronous read is appropriate for this tiny one-time bake and
-        // avoids an asynchronous WebGL readback surviving React Strict Mode's
-        // development-only effect cleanup. The coordinate mapping mirrors
-        // Three.js's LightProbeGenerator for WebGL cube render targets.
-        const sh = new THREE.SphericalHarmonics3();
-        const coefficients = sh.coefficients;
-        const pixels = new Uint8Array(
-          probeResolution * probeResolution * 4,
-        );
-        const direction = new THREE.Vector3();
-        const coordinate = new THREE.Vector3();
-        const basis = new Array<number>(9).fill(0);
-        const pixelSize = 2 / probeResolution;
-        const coordinateFlip =
-          renderer.coordinateSystem === THREE.WebGLCoordinateSystem ? -1 : 1;
-        let totalWeight = 0;
-        let capturedEnergy = 0;
-
-        for (let face = 0; face < 6; face += 1) {
-          renderer.readRenderTargetPixels(
-            bounceTarget,
-            0,
-            0,
-            probeResolution,
-            probeResolution,
-            pixels,
-            face,
-          );
-          for (let index = 0; index < pixels.length; index += 4) {
-            const red = (pixels[index] ?? 0) / 255;
-            const green = (pixels[index + 1] ?? 0) / 255;
-            const blue = (pixels[index + 2] ?? 0) / 255;
-            capturedEnergy += red + green + blue;
-
-            const pixelIndex = index / 4;
-            const column =
-              (1 - (pixelIndex % probeResolution + 0.5) * pixelSize) *
-              coordinateFlip;
-            const row =
-              1 -
-              (Math.floor(pixelIndex / probeResolution) + 0.5) * pixelSize;
-            switch (face) {
-              case 0:
-                coordinate.set(
-                  -coordinateFlip,
-                  row,
-                  column * coordinateFlip,
-                );
-                break;
-              case 1:
-                coordinate.set(
-                  coordinateFlip,
-                  row,
-                  -column * coordinateFlip,
-                );
-                break;
-              case 2:
-                coordinate.set(column, 1, -row);
-                break;
-              case 3:
-                coordinate.set(column, -1, row);
-                break;
-              case 4:
-                coordinate.set(column, row, 1);
-                break;
-              default:
-                coordinate.set(-column, row, -1);
-            }
-
-            const lengthSquared = coordinate.lengthSq();
-            const weight = 4 / (Math.sqrt(lengthSquared) * lengthSquared);
-            totalWeight += weight;
-            direction.copy(coordinate).normalize();
-            THREE.SphericalHarmonics3.getBasisAt(direction, basis);
-            for (let coefficient = 0; coefficient < 9; coefficient += 1) {
-              coefficients[coefficient]!.x +=
-                basis[coefficient]! * red * weight;
-              coefficients[coefficient]!.y +=
-                basis[coefficient]! * green * weight;
-              coefficients[coefficient]!.z +=
-                basis[coefficient]! * blue * weight;
-            }
-          }
-        }
-
-        if (capturedEnergy <= 0.001) return;
-        const normalization = (4 * Math.PI) / totalWeight;
-        coefficients.forEach((coefficient) => {
-          coefficient.multiplyScalar(normalization);
-        });
-        const generatedProbe = new THREE.LightProbe(sh, 0.68);
-
-        // Match the original Live balance after the one-time probe capture.
-        bounceProbe = generatedProbe;
-        scene.add(generatedProbe);
-        skyLight.intensity = 0.32;
-        liveFillLight.intensity = 0.1 * fillBalance;
-        scene.environmentIntensity = 0.32;
-      } catch {
-        // Retain the original sky/sun/fill rig if cubemap readback is
-        // unavailable on a particular GPU.
-      } finally {
-        bounceTarget.dispose();
-      }
-    };
-    if (lightingMode === "live") {
-      bakeDiffuseBounce();
-    } else if (lightingMode === "realistic") {
-      // Realistic hides its whole rig from the raster pass, which would leave
-      // the room black for the length of the bake. A hemisphere preview keeps
-      // the cutaway readable and navigable meanwhile; the path tracer ignores
-      // hemisphere and ambient lights, so none of this reaches the atlas.
-      // applyFinishedLighting swaps it for the baked presentation.
-      skyLight.intensity = 0.5;
-      ambientFillLight.intensity = 0.12;
-      scene.environment = environmentTarget.texture;
-      scene.environmentIntensity = 0.3;
-    } else if (rayTracedLighting) {
-      // Rendering gets its fill from the traced bounces of the overhead
-      // softbox, so it starts with nothing else.
-      skyLight.intensity = 0;
-      ambientFillLight.intensity = 0;
-      scene.environment = null;
-      scene.environmentIntensity = 0;
-    } else {
-      // ProgressiveLightMap owns the direct diffuse lighting. Retain only a
-      // quiet sky/environment layer for unwrapped transparent materials and
-      // view-dependent reflections.
-      skyLight.intensity = 0.1;
-      ambientFillLight.intensity = 0;
-      scene.environmentIntensity = 0.08;
-    }
+    scene.updateMatrixWorld(true);
+    scene.environmentIntensity = roomReflectionIntensity;
 
     const gridSize = Math.max(10, Math.ceil(Math.max(size.x, size.z) * 1.8));
     const createGrid = (darkMode: boolean) => {
@@ -3701,7 +2893,6 @@ export function RoomSceneCanvas({
       const darkMode = usesDarkMode();
       const palette = sceneThemePalettes[darkMode ? "dark" : "light"];
       renderer.setClearColor(palette.background, mapBackground ? 0 : 1);
-      sceneFog.color.setHex(palette.background);
       if (scene.background instanceof THREE.Color) {
         scene.background.setHex(palette.background);
         pathTracer?.updateEnvironment();
@@ -3897,7 +3088,7 @@ export function RoomSceneCanvas({
     composer.addPass(new RenderPass(scene, camera));
     const ambientOcclusionPass = new GTAOPass(scene, camera, 1, 1);
     ambientOcclusionPass.enabled =
-      lightingMode === "live" || progressiveLighting;
+      lightingMode === "live";
     ambientOcclusionPass.output = GTAOPass.OUTPUT.Default;
     ambientOcclusionPass.blendIntensity = lightingMode === "live"
       ? 0.72
@@ -3908,7 +3099,7 @@ export function RoomSceneCanvas({
       box.clone().expandByScalar(THREE.MathUtils.clamp(radius * 0.05, 0.2, 0.8)),
     );
     ambientOcclusionPass.updateGtaoMaterial({
-      radius: THREE.MathUtils.clamp(radius * 0.045, 0.18, 0.5),
+      radius: 0.22,
       distanceExponent: 1.5,
       thickness: 0.82,
       distanceFallOff: 1,
@@ -3932,7 +3123,7 @@ export function RoomSceneCanvas({
     // Orbit views open the near walls so furniture stays visible. Walking
     // retains the complete shell; baked lighting still captures every wall.
     const cutawayEnabled =
-      navigationMode === "orbit" && !mapBackground && lightingMode !== "progressive";
+      navigationMode === "orbit" && !mapBackground;
     const cutawayNormal = new THREE.Vector3();
     const cutawaySurfaceCenter = new THREE.Vector3();
     const cutawayToCamera = new THREE.Vector3();
@@ -3950,7 +3141,7 @@ export function RoomSceneCanvas({
     // applied first leaves the room open on two sides, lets the fill escape and
     // drops the bounce those walls owe the rest of the room. Wait for the bake
     // to capture the scene, then cut away.
-    let sceneCapturedForBake = lightingMode !== "realistic";
+    let sceneCapturedForBake = !bakedLighting;
     const updateCutaway = () => {
       if (!cutawayEnabled || !sceneCapturedForBake) return;
       for (const { node, outward } of cutawayNodes) {
@@ -3975,7 +3166,7 @@ export function RoomSceneCanvas({
     let frameCacheGeneration = 0;
     let resumeRendering = () => undefined as void;
     const frameFingerprint = () => ({
-      version: "room-frame-v4", furnitureLibrary: furnitureLibrary === "ready" ? roomFurnitureLibraryVersion : "procedural", navigationMode, sceneMode, fillBalance,
+      version: "room-frame-v6", lighting: roomLightingVersion, furnitureLibrary: furnitureLibrary === "ready" ? roomFurnitureLibraryVersion : "procedural", navigationMode, sceneMode, fillBalance,
       theme: usesDarkMode(),
       rooms: visibleManifests.map(item => ({ scene: { ...item.scan.scene, editedAt: undefined, mapAnchor: undefined }, analysis: roomLightingAnalysisState(item.scan.aiAnalysis), layout: layoutTransformForManifest(item), assets: item.scan.assets, placements: item.placements })),
       camera: { position: camera.position.toArray().map(n => Math.round(n * 1e6) / 1e6), quaternion: camera.quaternion.toArray().map(n => Math.round(n * 1e6) / 1e6), fov: camera.fov, aspect: camera.aspect },
@@ -3993,135 +3184,11 @@ export function RoomSceneCanvas({
     let pathTracingLastStatusAt = 0;
     let lightMapActiveElapsed = 0;
     let lightMapLastFrameAt: number | null = null;
-    let roomReflectionTarget: THREE.WebGLRenderTarget | null = null;
-    // Realistic has no planar mirror on the floor — Live gets one from a
-    // Reflector — so its sealed linoleum has to read as reflective from the
-    // probe alone. Tightening both lobes only here keeps Live's floor, which
-    // already composites a real reflection, from doubling up.
-    const floorGloss = lightingMode === "realistic"
-      ? { clearcoat: 0.6, clearcoatRoughness: 0.12, envMapIntensity: 1.15, roughness: 0.34 }
-      : { clearcoat: 0.38, clearcoatRoughness: 0.22, envMapIntensity: 1, roughness: 0.5 };
-    const enableStableFloorSheen = (environmentMap: THREE.Texture) => {
-      for (const mesh of reflectiveFloorMeshes) {
-        const materials = Array.isArray(mesh.material)
-          ? mesh.material
-          : [mesh.material];
-        for (const material of materials) {
-          if (!(material instanceof THREE.MeshStandardMaterial)) continue;
-          // An explicit room probe makes the reflection visible together with
-          // the baked diffuse atlas without applying an environment to walls.
-          material.envMap = environmentMap;
-          material.roughness = Math.min(material.roughness, floorGloss.roughness);
-          // A broken-up normal scatters the reflection into noise, which is
-          // what stops a floor reading as a reflective surface at all.
-          material.normalScale.setScalar(Math.min(material.normalScale.x, 0.06));
-          material.envMapIntensity = floorGloss.envMapIntensity;
-          if (material instanceof THREE.MeshPhysicalMaterial) {
-            material.clearcoat = floorGloss.clearcoat;
-            material.clearcoatRoughness = floorGloss.clearcoatRoughness;
-          }
-          material.needsUpdate = true;
-        }
-      }
-    };
-    const captureLocalReflectionProbe = () => {
-      // 128 px per face could not resolve the window or a wall corner, so the
-      // floor mirrored an indistinct smear. This is captured once, so the extra
-      // resolution costs nothing at steady state.
-      const cubeTarget = new THREE.WebGLCubeRenderTarget(256, {
-        colorSpace: THREE.LinearSRGBColorSpace,
-        generateMipmaps: true,
-        magFilter: THREE.LinearFilter,
-        minFilter: THREE.LinearMipmapLinearFilter,
-        type: THREE.HalfFloatType,
-      });
-      const cubeCamera = new THREE.CubeCamera(
-        Math.max(0.03, radius / 500),
-        Math.max(20, radius * 8),
-        cubeTarget,
-      );
-      const probeCenter = primaryBox.getCenter(new THREE.Vector3());
-      const probeSize = primaryBox.getSize(new THREE.Vector3());
-      cubeCamera.position.set(
-        probeCenter.x,
-        primaryBox.min.y + THREE.MathUtils.clamp(
-          probeSize.y * 0.48,
-          0.9,
-          1.55,
-        ),
-        probeCenter.z,
-      );
-      scene.add(cubeCamera);
-
-      const hiddenDuringCapture = [
-        keyframeRoot,
-        photoPose,
-        ...floorReflectors,
-        ...markerMeshes.filter((object) => object instanceof THREE.Group),
-        ...(transformHelper ? [transformHelper] : []),
-      ];
-      const hiddenVisibility = hiddenDuringCapture.map((object) => object.visible);
-      const previousTarget = renderer.getRenderTarget();
-      const previousToneMapping = renderer.toneMapping;
-      const previousBackground = scene.background;
-      const previousEnvironment = scene.environment;
-      const previousEnvironmentIntensity = scene.environmentIntensity;
-      const previousXr = renderer.xr.enabled;
-      try {
-        hiddenDuringCapture.forEach((object) => {
-          object.visible = false;
-        });
-        scene.background = new THREE.Color(0xdce8f2);
-        scene.environment = null;
-        scene.environmentIntensity = 0;
-        renderer.toneMapping = THREE.NoToneMapping;
-        renderer.xr.enabled = false;
-        cubeCamera.update(renderer, scene);
-
-        const generator = new THREE.PMREMGenerator(renderer);
-        try {
-          const generated = generator.fromCubemap(cubeTarget.texture);
-          roomReflectionTarget?.dispose();
-          roomReflectionTarget = generated;
-          return generated.texture;
-        } finally {
-          generator.dispose();
-        }
-      } catch {
-        return environmentTarget.texture;
-      } finally {
-        hiddenDuringCapture.forEach((object, index) => {
-          object.visible = hiddenVisibility[index] ?? false;
-        });
-        renderer.setRenderTarget(previousTarget);
-        renderer.toneMapping = previousToneMapping;
-        renderer.xr.enabled = previousXr;
-        scene.background = previousBackground;
-        scene.environment = previousEnvironment;
-        scene.environmentIntensity = previousEnvironmentIntensity;
-        scene.remove(cubeCamera);
-        cubeTarget.dispose();
-      }
-    };
     const applyFinishedLighting = () => {
-      // The atlas owns every diffuse bounce in the room, so the environment is
-      // kept purely for reflections: lightmapped materials scale its irradiance
-      // term to zero and keep only its specular one. Restoring a flat ambient
-      // here instead is what used to give the finished bake its washed-out,
-      // evenly lit look.
       scene.environment = environmentTarget.texture;
-      scene.environmentIntensity = 0.34;
-      skyLight.intensity = 0;
-      // A small ambient keeps the surfaces the atlas cannot receive — glass,
-      // polished metal, splats — from reading as black cut-outs.
+      scene.environmentIntensity = roomReflectionIntensity;
       ambientFillLight.intensity = roomAmbientBounceFraction * fillBalance;
-      enableStableFloorSheen(captureLocalReflectionProbe());
     };
-    if (lightingMode === "live") {
-      // Capture the furnished room once. This adds stable, softly blurred
-      // object reflections without the edge popping of screen-space mirrors.
-      enableStableFloorSheen(captureLocalReflectionProbe());
-    }
     const onBakeVisibilityChange = () => {
       // Break the active-time interval whenever the page is hidden or shown so
       // background throttling can never consume the five-minute bake budget.
@@ -4133,7 +3200,13 @@ export function RoomSceneCanvas({
     // tolerance is the mean relative change the atlas may still show between
     // two checks eight samples apart, which is well above the Monte Carlo
     // noise floor at these counts and below what survives the denoiser.
-    const realisticBakePreset = slowHighQualityBake
+    const realisticBakePreset = progressiveLighting ? {
+      bounces: 5, convergenceTolerance: 0.025, denoisePasses: 3,
+      duration: 25_000, minimumSamples: 12,
+      resolution: Math.min(progressiveQualityPreset.atlasResolution, 1024),
+      samples: Math.max(24, Math.round(progressiveQualityPreset.sampleTarget / 3)),
+      transmissiveBounces: 4,
+    } : slowHighQualityBake
       ? {
           bounces: 8,
           convergenceTolerance: 0.003,
@@ -4162,7 +3235,7 @@ export function RoomSceneCanvas({
           transmissiveBounces: 4,
         };
     const pathTracingDuration =
-      lightingMode === "rendering" ? 10_000 : realisticBakePreset.duration;
+      lightingMode === "rendering" ? 20_000 : realisticBakePreset.duration;
     const pathTracingSampleTarget =
       lightingMode === "rendering" ? 2_048 : realisticBakePreset.samples;
     const lightMapSampleFloor = realisticBakePreset.minimumSamples;
@@ -4171,7 +3244,10 @@ export function RoomSceneCanvas({
       frameCacheGeneration++;
       finalFrameCacheKey = null;
       cachedFrameTexture?.dispose(); cachedFrameTexture = null;
-      pathTracer?.dispose(); pathTracer = null;
+      const previousTracer = pathTracer; pathTracer = null;
+      const retirement = roomPathTracerSettled(previousTracer).then(() => previousTracer?.dispose());
+      retiredPathTracers.add(retirement);
+      void retirement.finally(() => retiredPathTracers.delete(retirement));
       if (pathTraceDenoiseQuad) { pathTraceDenoiseQuad.material.dispose(); pathTraceDenoiseQuad.dispose(); pathTraceDenoiseQuad = null; }
       pathTracingReady = false; pathTracingFinished = false;
       pathTracingStartedAt = null;
@@ -4190,7 +3266,7 @@ export function RoomSceneCanvas({
       setLightingProgress(2);
       try {
         if (disposed) return;
-        if (lightingMode === "realistic") {
+        if (bakedLighting) {
           const {
             createRoomLightMapBake,
             createRoomLightMapCacheKey,
@@ -4199,11 +3275,11 @@ export function RoomSceneCanvas({
           const cacheKey = await createRoomLightMapCacheKey({
             // The rig is part of the result, so a different key direction has
             // to miss the cache.
-            keyAzimuth: Math.round(bakeKeyAzimuth * 10) / 10,
+            lighting: roomLightingVersion, quality: progressiveLighting ? progressiveQualityPreset.id : "realistic",
             navigationMode, fillBalance,
             furnitureLibrary: furnitureLibrary === "ready" ? roomFurnitureLibraryVersion : "procedural",
             version:
-              42 +
+              50 +
               (bakeRoomOnly ? 1 : 0) +
               (slowHighQualityBake ? 2 : 0),
             rooms: visibleManifests.map((roomManifest) => ({
@@ -4232,6 +3308,7 @@ export function RoomSceneCanvas({
               if (!disposed) setLightingProgress(progress);
             },
             renderer,
+            signal: assetAbortController.signal,
             resolution: Math.min(
               realisticBakePreset.resolution,
               renderer.capabilities.maxTextureSize,
@@ -4257,10 +3334,7 @@ export function RoomSceneCanvas({
           if (bake.cached) {
             setCachedLighting(true);
             pathTracingFinished = true;
-            daylightAreaLights.forEach((light) => {
-              light.intensity = 0;
-            });
-            // Add neutral ambient fill and the local floor reflection probe.
+            // Restore the raster view using the completed shared lightmap.
             applyFinishedLighting();
             setLightingStatus("ready");
           }
@@ -4286,6 +3360,7 @@ export function RoomSceneCanvas({
         if (disposed || generation !== frameCacheGeneration) return;
 
         const tracer = new WebGLPathTracer(renderer);
+        configureRoomPathTracer(tracer);
         pathTracer = tracer;
         tracer.bounces = lightingMode === "rendering" ? 10 : 8;
         tracer.transmissiveBounces = 4;
@@ -4327,6 +3402,7 @@ export function RoomSceneCanvas({
         pathTracingStartedAt = performance.now();
         setLightingProgress(14);
       } catch (error) {
+        if (disposed) return;
         pathTracingFailed = true;
         // Nothing is baking any more, so the cutaway must not stay disabled.
         sceneCapturedForBake = true;
@@ -4628,7 +3704,7 @@ export function RoomSceneCanvas({
       updateCutaway();
 
       if (
-        lightingMode === "realistic" &&
+        bakedLighting &&
         pathTracingReady &&
         lightMapBake
       ) {
@@ -4671,41 +3747,11 @@ export function RoomSceneCanvas({
           if (finished) {
             lightMapBake.finish();
             pathTracingFinished = true;
-            daylightAreaLights.forEach((light) => {
-              light.intensity = 0;
-            });
             // Lightmaps contain direct and bounced diffuse irradiance. The
             // finished-lighting helper preserves that result while restoring
             // restrained exterior fill and view-dependent reflections.
             applyFinishedLighting();
             setLightingStatus("ready");
-          }
-        }
-        composer.render(delta);
-      } else if (progressiveLighting && progressiveLightMap) {
-        if (progressiveLightMapSamples < progressiveLightMapSampleTarget) {
-          jitterProgressiveLights();
-          progressiveLightMap.update(
-            camera,
-            progressiveLightMapSamples + 1,
-            true,
-          );
-          progressiveLightMapSamples += 1;
-          const finished =
-            progressiveLightMapSamples >= progressiveLightMapSampleTarget;
-          if (finished || progressiveLightMapSamples % 3 === 0) {
-            const progress = Math.min(
-              100,
-              Math.round(
-                (progressiveLightMapSamples / progressiveLightMapSampleTarget) *
-                  100,
-              ),
-            );
-            setLightingProgress(progress);
-            if (finished) {
-              enableStableFloorSheen(captureLocalReflectionProbe());
-              setLightingStatus("ready");
-            }
           }
         }
         composer.render(delta);
@@ -4715,9 +3761,9 @@ export function RoomSceneCanvas({
       } else if (rayTracedLighting && pathTracingReady && pathTracer) {
         if (pathTracingFinished && pathTraceDenoiseQuad) { pathTraceDenoiseQuad.render(renderer); return; }
         if (!pathTracingFinished) {
-          pathTracingStartedAt ??= frameTimestamp;
           pathTracer.renderSample();
-          const elapsed = frameTimestamp - pathTracingStartedAt;
+          if (pathTracer.samples > 0) pathTracingStartedAt ??= frameTimestamp;
+          const elapsed = pathTracingStartedAt === null ? 0 : frameTimestamp - pathTracingStartedAt;
           const tracingProgress = Math.min(
             100,
             14 + Math.max(
@@ -4726,11 +3772,11 @@ export function RoomSceneCanvas({
             ) * 86,
           );
           const finished =
-            elapsed >= pathTracingDuration ||
+            (elapsed >= pathTracingDuration && pathTracer.samples >= 32) ||
             pathTracer.samples >= pathTracingSampleTarget;
           if (finished || frameTimestamp - pathTracingLastStatusAt >= 200) {
             pathTracingLastStatusAt = frameTimestamp;
-            setLightingProgress(finished ? 100 : Math.round(tracingProgress));
+            setLightingProgress(finished ? 100 : Math.min(99, Math.round(tracingProgress)));
           }
           if (finished) {
             pathTracingFinished = true;
@@ -4810,75 +3856,72 @@ export function RoomSceneCanvas({
       }
       controls.removeEventListener("change", onControlsChange);
       controls.dispose();
-      lightMapBake?.dispose();
-      lightMapBake = null;
-      progressiveLightMap?.dispose();
-      progressiveLightMap = null;
-      progressiveLights.forEach((light) => light.shadow.dispose());
-      floorReflectors.forEach((reflector) => reflector.dispose());
-      cachedFrameTexture?.dispose();
       frameCacheGeneration++;
       exposureCommandRef.current = () => undefined;
-      pathTracer?.dispose();
-      pathTracer = null;
-      if (pathTraceDenoiseQuad) {
-        pathTraceDenoiseQuad.material.dispose();
-        pathTraceDenoiseQuad.dispose();
-        pathTraceDenoiseQuad = null;
-      }
-      const materials = new Set<THREE.Material>([
-        wallMaterial,
-        floorMaterial,
-        doorMaterial,
-        trimMaterial,
-        windowFrameMaterial,
-        hardwareMaterial,
-        windowMaterial,
-        openingMaterial,
-        objectLightMaterial,
-        objectDarkMaterial,
-        objectMetalMaterial,
-        objectGlassMaterial,
-        objectCeramicMaterial,
-        objectWaterMaterial,
-        objectWarmMaterial,
-        ...objectMaterials.values(),
-      ]);
-      const textures = new Set<THREE.Texture>(materialTextures);
-      scene.traverse((object) => {
-        if (
-          object instanceof THREE.Mesh ||
-          object instanceof THREE.LineSegments ||
-          object instanceof THREE.Points
-        ) {
-          object.geometry.dispose();
-          const meshMaterials = Array.isArray(object.material)
-            ? object.material
-            : [object.material];
-          meshMaterials.forEach((material) => {
-            materials.add(material);
-            Object.values(material).forEach((value) => {
-              if (value instanceof THREE.Texture) textures.add(value);
-            });
-          });
-        }
-      });
-      materials.forEach((material) => material.dispose());
-      textures.forEach((texture) => texture.dispose());
-      photoBitmap?.close();
-      if (bounceProbe) scene.remove(bounceProbe);
-      roomReflectionTarget?.dispose();
-      environmentTarget.dispose();
-      timer.dispose();
-      ambientOcclusionPass.dispose();
-      ambientOcclusionPass.gtaoMaterial.dispose();
-      ambientOcclusionPass.blendMaterial.dispose();
-      outputPass.dispose();
-      composer.dispose();
-      liveSun.shadow.dispose();
-      renderer.dispose();
-      renderer.forceContextLoss();
       renderer.domElement.remove();
+      // Stop interaction immediately, release GPU resources after pending
+      // shader compilation; rapid edits must not invalidate compileAsync.
+      void Promise.allSettled([roomPathTracerSettled(pathTracer), lightMapBake?.settled, ...retiredPathTracers]).then(() => {
+        lightMapBake?.dispose();
+        lightMapBake = null;
+        cachedFrameTexture?.dispose();
+        pathTracer?.dispose();
+        pathTracer = null;
+        if (pathTraceDenoiseQuad) {
+          pathTraceDenoiseQuad.material.dispose();
+          pathTraceDenoiseQuad.dispose();
+          pathTraceDenoiseQuad = null;
+        }
+        const materials = new Set<THREE.Material>([
+          wallMaterial,
+          floorMaterial,
+          doorMaterial,
+          trimMaterial,
+          windowFrameMaterial,
+          hardwareMaterial,
+          windowMaterial,
+          openingMaterial,
+          objectLightMaterial,
+          objectDarkMaterial,
+          objectMetalMaterial,
+          objectGlassMaterial,
+          objectCeramicMaterial,
+          objectWaterMaterial,
+          objectWarmMaterial,
+          ...objectMaterials.values(),
+        ]);
+        const textures = new Set<THREE.Texture>(materialTextures);
+        scene.traverse((object) => {
+          if (
+            object instanceof THREE.Mesh ||
+            object instanceof THREE.LineSegments ||
+            object instanceof THREE.Points
+          ) {
+            object.geometry.dispose();
+            const meshMaterials = Array.isArray(object.material)
+              ? object.material
+              : [object.material];
+            meshMaterials.forEach((material) => {
+              materials.add(material);
+              Object.values(material).forEach((value) => {
+                if (value instanceof THREE.Texture) textures.add(value);
+              });
+            });
+          }
+        });
+        materials.forEach((material) => material.dispose());
+        textures.forEach((texture) => texture.dispose());
+        photoBitmap?.close();
+        environmentTarget.dispose();
+        timer.dispose();
+        ambientOcclusionPass.dispose();
+        ambientOcclusionPass.gtaoMaterial.dispose();
+        ambientOcclusionPass.blendMaterial.dispose();
+        outputPass.dispose();
+        composer.dispose();
+        renderer.dispose();
+        renderer.forceContextLoss();
+      });
       commandRef.current = () => undefined;
       selectionCommandRef.current = () => undefined;
       objectSelectionRef.current = () => undefined;

@@ -181,6 +181,7 @@ export function RoomSceneBrowser() {
   const [layoutDrafts, setLayoutDrafts] = useState<Record<string, SpatialMatrix4> | null>(null);
   const [layoutRoomId, setLayoutRoomId] = useState<string | null>(null);
   const [mapBackgroundEnabled, setMapBackgroundEnabled] = useState(false);
+  const [mapSetupRequest, setMapSetupRequest] = useState(0);
   const [mapViewport, setMapViewport] = useState<RoomMapViewport | null>(null);
   const [savingLayout, setSavingLayout] = useState(false);
   const [analyzingRoom, setAnalyzingRoom] = useState(false);
@@ -445,13 +446,22 @@ export function RoomSceneBrowser() {
   );
   const effectiveTransforms = useMemo(() => {
     const transforms = new Map(automaticLayout.transforms);
+    if (mapBackgroundEnabled) {
+      // A real map position takes precedence over the side-by-side 3D overview.
+      for (const item of floorManifests) {
+        if (item.scan.georeference ?? item.georeference) {
+          transforms.set(item.scan.id,
+            item.scan.layoutTransform ?? item.scan.scene.worldFromModel);
+        }
+      }
+    }
     if (layoutDrafts) {
       for (const [scanId, transform] of Object.entries(layoutDrafts)) {
         transforms.set(scanId, transform);
       }
     }
     return transforms;
-  }, [automaticLayout, layoutDrafts]);
+  }, [automaticLayout, floorManifests, layoutDrafts, mapBackgroundEnabled]);
   const layoutMapFallbackGeoreference = structureDetail?.georeference ?? null;
   const hasLayoutMapAnchor = floorManifests.some(
     (item) => Boolean(item.scan.georeference ?? item.georeference),
@@ -494,6 +504,7 @@ export function RoomSceneBrowser() {
     setPreviewAnalysisSuggestionId(null);
     setSelectedRoomObjectId(null);
     setEditorPreview(null);
+    setMapSetupRequest(0);
   }, [visibleManifest?.scan.id]);
 
   const beginLayout = () => {
@@ -928,8 +939,16 @@ export function RoomSceneBrowser() {
           {floorManifests.length ? (
             <button
               type="button"
-              onClick={() => setMapBackground(!mapBackgroundEnabled)}
-              disabled={!hasLayoutMapAnchor}
+              onClick={() => {
+                if (hasLayoutMapAnchor) {
+                  setMapBackground(!mapBackgroundEnabled);
+                } else {
+                  setSelectedRoomObjectId(null);
+                  setEditorPreview(null);
+                  setMapSetupRequest((request) => request + 1);
+                }
+              }}
+              disabled={!hasLayoutMapAnchor && isReadOnly}
               className={cn(
                 "inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50",
                 mapBackgroundEnabled
@@ -938,11 +957,11 @@ export function RoomSceneBrowser() {
               )}
               title={hasLayoutMapAnchor
                 ? t("rooms.layout.mapBackgroundHint")
-                : t("rooms.layout.mapUnavailable")}
+                : t(isReadOnly ? "rooms.layout.mapUnavailable" : "rooms.layout.mapSetupHint")}
               aria-pressed={mapBackgroundEnabled}
             >
               <MapIcon className="size-3.5" aria-hidden="true" />
-              {t("rooms.layout.mapBackground")}
+              {t(hasLayoutMapAnchor ? "rooms.layout.mapBackground" : "rooms.layout.mapSetup")}
             </button>
           ) : null}
           {floorManifests.length ? (
@@ -1237,11 +1256,18 @@ export function RoomSceneBrowser() {
           ) : null}
         </section>
 
-        <aside className="order-3 flex min-h-0 flex-col border-t border-border bg-surface lg:overflow-hidden lg:border-l lg:border-t-0">
+        <aside className="scrollbar-thin order-3 min-h-0 border-t border-border bg-surface lg:overflow-y-auto lg:border-l lg:border-t-0">
           {manifest && !isReadOnly ? <RoomSceneEditor
             key={`${manifest.scan.id}:${manifest.scan.revision}`}
             manifest={manifest}
             selectedObjectId={selectedRoomObjectId}
+            mapSetupRequest={mapSetupRequest}
+            onMapSaved={() => {
+              setMapSetupRequest(0);
+              setMapViewport(null);
+              setLayoutDrafts(null);
+              setMapBackgroundEnabled(true);
+            }}
             onSelectObject={setSelectedRoomObjectId}
             onPreview={setEditorPreview}
             onPartitionPreview={setPartitionPreview}
@@ -1327,7 +1353,7 @@ export function RoomSceneBrowser() {
             </label>
           </div>
 
-          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-2">
+          <div className="p-2">
             {roomAnalysis ? (
               <section className="mb-2 rounded-xl border border-brand-border bg-brand-soft/45 p-3">
                 <div className="flex items-center gap-2">

@@ -1,3 +1,4 @@
+import { configureRoomPathTracer, roomPathTracerSettled } from "@/lib/room-pathtracer-compatibility";
 import * as THREE from "three";
 import { roomRenderCacheKey, readRoomRenderCache, writeRoomRenderCache } from "@/lib/room-render-cache";
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
@@ -33,6 +34,7 @@ type UnwrappedReceiver = {
 
 export type RoomLightMapBake = {
   readonly cached: boolean;
+  readonly settled: Promise<void>;
   /** True once added samples stop changing the atlas beyond the noise floor. */
   readonly converged: boolean;
   readonly samples: number;
@@ -55,7 +57,7 @@ const lightMapCache = new Map<string, BakeCacheEntry>();
 const maximumCachedLightMaps = 2;
 
 export function createRoomLightMapCacheKey(value: unknown) {
-  return roomRenderCacheKey({ version: "lightmap-v19", value });
+  return roomRenderCacheKey({ version: "lightmap-v20", value });
 }
 
 function cacheLightMap(key: string, entry: BakeCacheEntry) {
@@ -1312,9 +1314,15 @@ function configureLightMappedMaterial(
       lightMapInclude,
       directionalLightMapChunk,
     );
+    // The atlas already contains direct diffuse energy. Keep the same lights
+    // for specular highlights and for furniture excluded by "Bake room only".
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <lights_fragment_end>",
+      "#include <lights_fragment_end>\n reflectedLight.directDiffuse = vec3(0.0);",
+    );
   };
   material.customProgramCacheKey = () =>
-    `${previousProgramCacheKey()}|room-directional-lightmap-v4`;
+    `${previousProgramCacheKey()}|room-directional-lightmap-v5`;
 }
 
 function applyLightMap(
@@ -1380,6 +1388,7 @@ export async function createRoomLightMapBake({
   roots,
   scene,
   transmissiveBounces = 4,
+  signal,
 }: {
   /**
    * Objects made visible only while the tracer snapshots the scene. The room
@@ -1387,6 +1396,7 @@ export async function createRoomLightMapBake({
    * they light and occlude the atlas without ever reaching the raster pass.
    */
   bakeOnlyObjects?: Iterable<THREE.Object3D>;
+  signal?: AbortSignal;
   /**
    * Objects hidden only while the tracer snapshots the scene. Clear glazing
    * belongs here: it transmits nearly everything, but as geometry it costs a
@@ -1407,6 +1417,8 @@ export async function createRoomLightMapBake({
   transmissiveBounces?: number;
 }): Promise<RoomLightMapBake> {
   onProgress?.(2);
+  const { WebGLPathTracer } = await import("three-gpu-pathtracer");
+  signal?.throwIfAborted();
   scene.updateMatrixWorld(true);
   const receivers = collectReceivers(roots);
   const unwrapped = await unwrapReceiverGeometry(
@@ -1414,11 +1426,19 @@ export async function createRoomLightMapBake({
     resolution,
     lightMapChartPaddingTexels,
   );
+  if (signal?.aborted) {
+    for (const receiver of unwrapped) receiver.geometry.dispose();
+    signal.throwIfAborted();
+  }
   for (const receiver of unwrapped) receiver.mesh.geometry = receiver.geometry;
   scene.updateMatrixWorld(true);
   onProgress?.(8);
 
   const cached = lightMapCache.get(cacheKey) ?? await readRoomRenderCache<BakeCacheEntry>(cacheKey);
+  if (signal?.aborted) {
+    for (const receiver of unwrapped) receiver.geometry.dispose();
+    signal.throwIfAborted();
+  }
   if (cached && cached.width === resolution && cached.height === resolution && cached.data instanceof Float32Array && cached.directionData instanceof Float32Array && cached.data.length === resolution * resolution * 4 && cached.directionData.length === cached.data.length) {
     cacheLightMap(cacheKey, cached);
     const texture = cachedTexture(
@@ -1437,6 +1457,7 @@ export async function createRoomLightMapBake({
     onProgress?.(100);
     return {
       cached: true,
+      settled: Promise.resolve(),
       converged: true,
       samples: Number.POSITIVE_INFINITY,
       dispose: () => {
@@ -1473,8 +1494,8 @@ export async function createRoomLightMapBake({
   );
   onProgress?.(12);
 
-  const { WebGLPathTracer } = await import("three-gpu-pathtracer");
   const tracer = new WebGLPathTracer(renderer);
+  configureRoomPathTracer(tracer);
   tracer.bounces = bounces;
   tracer.transmissiveBounces = transmissiveBounces;
   // Match the interactive Rendering reference so the two modes differ by
@@ -1639,6 +1660,7 @@ export async function createRoomLightMapBake({
 
   return {
     cached: false,
+    get settled() { return roomPathTracerSettled(tracer); },
     get converged() {
       return converged;
     },

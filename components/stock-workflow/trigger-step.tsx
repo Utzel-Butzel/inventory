@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { CodeScannerCamera } from "@/components/code-scanner-camera";
+import { ScanCodeTypeIcon } from "@/components/scan-code-type-icon";
 import { Badge, Button, cn } from "@/components/ui";
 import {
   scanCodeTypeLabels,
@@ -127,21 +128,30 @@ export function WorkflowTriggerStep({
                 disabled={!editable}
                 onClick={() => toggleCodeType(codeType)}
                 className={cn(
-                  "flex min-h-10 items-center gap-2 rounded-xl border px-3 text-left text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
+                  "flex min-h-20 flex-col items-start justify-between gap-2 rounded-xl border p-2.5 text-left text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 sm:p-3",
                   selected
                     ? "border-brand-border bg-brand-soft text-brand-strong"
                     : "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground",
                 )}
               >
-                <span
-                  className={cn(
-                    "grid size-4 shrink-0 place-items-center rounded border",
-                    selected
-                      ? "border-brand-solid bg-brand-solid text-on-brand"
-                      : "border-border-strong",
-                  )}
-                >
-                  {selected ? <Check className="size-3" aria-hidden="true" /> : null}
+                <span className="flex w-full items-start justify-between gap-1.5">
+                  <ScanCodeTypeIcon
+                    codeType={codeType}
+                    className={cn(
+                      "h-8 shrink-0",
+                      ["qr_code", "data_matrix", "aztec"].includes(codeType) ? "w-8" : "w-12",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "grid size-4 shrink-0 place-items-center rounded border",
+                      selected
+                        ? "border-brand-solid bg-brand-solid text-on-brand"
+                        : "border-border-strong",
+                    )}
+                  >
+                    {selected ? <Check className="size-3" aria-hidden="true" /> : null}
+                  </span>
                 </span>
                 {scanCodeTypeLabels[codeType]}
               </button>

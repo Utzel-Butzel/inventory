@@ -31,17 +31,42 @@ export const roomFurnitureVariantSchema = z.enum([
   "toilet",
   "sink",
   "bathtub",
+  "nightstand",
+  "tv-console",
+  "glass-cabinet",
+  "shoe-cabinet",
+  "kitchen-island",
+  "oval-table",
+  "nesting-tables",
+  "bar-stool",
+  "lounge-chair",
+  "chaise-sofa",
+  "upholstered-bed",
+  "daybed",
 ]);
 export type RoomFurnitureVariant = z.infer<typeof roomFurnitureVariantSchema>;
 export const roomFurnitureVariants = roomFurnitureVariantSchema.options;
-export const roomFurnitureLibraryVersion = "blender-furniture-v1";
+export const roomFurnitureLibraryVersion = "blender-furniture-v2";
+export const roomFurnitureAssetDirectory = "/models/room-furniture/v2";
 export const roomFurnitureLibraryUrl =
-  "/models/room-furniture/v1/furniture.glb";
+  "/models/room-furniture/v2/furniture.glb";
 
 export const roomFurnitureCatalog: Record<
   RoomFurnitureVariant,
   { category: string; description: string }
 > = {
+  "nightstand": { category: "storage", description: "Compact bedside cabinet with stacked drawers and a raised walnut top" },
+  "tv-console": { category: "storage", description: "Wide low media console on legs with fluted wooden doors" },
+  "glass-cabinet": { category: "storage", description: "Tall display cabinet with glass doors, dark frames and visible shelves" },
+  "shoe-cabinet": { category: "storage", description: "Shallow shoe cabinet with stacked ventilated fronts" },
+  "kitchen-island": { category: "table", description: "Freestanding kitchen island with cupboards and an overhanging stone worktop" },
+  "oval-table": { category: "table", description: "Oval wooden dining table on two substantial pedestals" },
+  "nesting-tables": { category: "table", description: "Two overlapping round coffee tables at different heights" },
+  "bar-stool": { category: "chair", description: "Tall upholstered bar stool with backrest and metal footrest" },
+  "lounge-chair": { category: "chair", description: "Padded lounge armchair with exposed walnut arms and an angled frame" },
+  "chaise-sofa": { category: "sofa", description: "Sofa with a right-hand extended chaise, viewed from the front" },
+  "upholstered-bed": { category: "bed", description: "Double bed with channel-tufted fabric headboard and upholstered rails" },
+  "daybed": { category: "bed", description: "Narrow daybed with a long padded side bolster and raised ends" },
   wardrobe: {
     category: "storage",
     description: "Tall closed cabinet with hinged doors",
@@ -177,7 +202,7 @@ export function roomFurnitureCategory(category: string) {
     "washing machine": "washer-dryer",
     washbasin: "sink",
   };
-  return aliases[value] ?? value;
+  return roomFurnitureCatalog[value as RoomFurnitureVariant]?.category ?? aliases[value] ?? value;
 }
 
 /** ARKit measures geometry; dimensions alone cannot prove doors, shelves or upholstery. */

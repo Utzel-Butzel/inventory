@@ -4,7 +4,9 @@ import { Layers3, Plus, Trash2, X } from "lucide-react";
 
 import { Button, cn } from "@/components/ui";
 
+import { ChainConditionsEditor } from "./chain-value";
 import { localId } from "./draft";
+import { WorkflowVariantInput } from "./variant-input";
 import {
   FlowStep,
   StockUnitCustomFieldSelect,
@@ -17,12 +19,14 @@ import type {
   DraftOption,
   InputType,
   StockUnitCustomField,
+  StockItem,
   WorkflowStepProps,
 } from "./types";
 
 type WorkflowInputsStepProps = WorkflowStepProps & {
   canManage: boolean;
   stockUnitCustomFields: StockUnitCustomField[];
+  resources: StockItem[];
 };
 
 export function WorkflowInputsStep({
@@ -33,11 +37,12 @@ export function WorkflowInputsStep({
   t,
   integer,
   stockUnitCustomFields,
+  resources,
 }: WorkflowInputsStepProps) {
   const updateInput = (
     uid: string,
     patch: Partial<
-      Pick<DraftInput, "key" | "label" | "required" | "type" | "storage" | "placeholder">
+      Pick<DraftInput, "key" | "label" | "required" | "type" | "storage" | "placeholder" | "visibleWhen">
     >,
   ) => {
     setDraft((current) => {
@@ -87,6 +92,7 @@ export function WorkflowInputsStep({
       description={t("workflows.steps.inputs.description")}
     >
       <div className="space-y-3">
+        <WorkflowVariantInput draft={draft} setDraft={setDraft} editable={editable} t={t} resources={resources} />
         {draft.inputFields.map((field, fieldIndex) => (
           <div key={field.uid} className="rounded-xl border border-border bg-surface-subtle p-3.5">
             <div className="flex items-start justify-between gap-3">
@@ -211,6 +217,13 @@ export function WorkflowInputsStep({
               {t("workflows.steps.inputs.required")}
             </label>
 
+            <div className="mt-3"><ChainConditionsEditor
+              label={t("chain.showConditionally")}
+              value={field.visibleWhen ?? null}
+              onChange={(visibleWhen) => updateInput(field.uid, { visibleWhen })}
+              inputs={draft.inputFields.slice(0, fieldIndex)} previous={[]} resources={resources} disabled={!editable}
+            /></div>
+
             {field.type === "select" || field.type === "radio" ? (
               <div className="mt-4 border-t border-border pt-3">
                 <div className="mb-2 flex items-center justify-between gap-3">
@@ -310,7 +323,7 @@ export function WorkflowInputsStep({
           </div>
         ))}
 
-        {draft.inputFields.length === 0 ? (
+        {draft.inputFields.length === 0 && !draft.allowVariantSelection ? (
           <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-[12px] text-muted">
             {t("workflows.steps.inputs.none")}
           </div>

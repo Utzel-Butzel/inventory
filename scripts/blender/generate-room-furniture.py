@@ -1,12 +1,12 @@
 """Original furniture library, authored via Blender MCP. Logical axes: X/Y-up/Z-front.
 Run from the project root: node scripts/blender/mcp-client.mjs scripts/blender/generate-room-furniture.py
-No downloaded or third-party furniture assets are used.
+No downloaded or third-party furniture assets are used. Neutral albedo and separate normal/roughness textures preserve editable colours.
 """
 import bpy, math, json, random
 from pathlib import Path
 from mathutils import Vector
 
-OUT = Path(INVENTORY_PROJECT_DIR) / 'public/models/room-furniture/v1'
+OUT = Path(INVENTORY_PROJECT_DIR) / 'public/models/room-furniture/v2'
 OUT.mkdir(parents=True, exist_ok=True)
 collection = bpy.data.collections.get('Inventory Furniture')
 if collection:
@@ -15,46 +15,64 @@ else:
     collection = bpy.data.collections.new('Inventory Furniture')
     bpy.context.scene.collection.children.link(collection)
 
-def texture(name, fabric=False):
-    image = bpy.data.images.new(name, width=256, height=256)
-    rng = random.Random(52 if fabric else 71)
-    pixels = []
-    for y in range(256):
-        for x in range(256):
+def texture_set(name, fabric=False):
+    # Neutral albedo, tangent-space normal and roughness are separate packed maps.
+    resolution=512
+    rng=random.Random(52 if fabric else 71)
+    heights=[]
+    for y in range(resolution):
+        for x in range(resolution):
             if fabric:
-                v = .78 + .09 * math.sin(x * math.pi / 2) * math.cos(y * math.pi / 2) + rng.random() * .06
+                v=.5+.18*math.sin(x*math.pi/3)*math.cos(y*math.pi/3)+rng.random()*.08
             else:
-                grain = math.sin(x * .18 + math.sin(y * .028) * 2) + .4 * math.sin(x * .74 + math.sin(y * .014) * 4)
-                v = .80 + grain * .065 + rng.random() * .025
-            pixels.extend([v, v, v, 1])
-    image.pixels = pixels
-    image.pack()
-    return image
+                v=.5+.12*math.sin(x*.65+math.sin(y*.019)*2.4)+.06*math.sin(x*1.73+math.sin(y*.01)*4.5)+rng.random()*.08
+            heights.append(v)
+    maps=[]
+    for kind in ['albedo','normal','roughness']:
+        image=bpy.data.images.new(name+' '+kind,width=resolution,height=resolution)
+        if kind!='albedo': image.colorspace_settings.name='Non-Color'
+        pixels=[]
+        for y in range(resolution):
+            for x in range(resolution):
+                v=heights[y*resolution+x]
+                if kind=='normal':
+                    dx=heights[y*resolution+(x+1)%resolution]-heights[y*resolution+(x-1)%resolution]
+                    dy=heights[((y+1)%resolution)*resolution+x]-heights[((y-1)%resolution)*resolution+x]
+                    n=Vector((-dx*.65,-dy*.65,1)).normalized()
+                    pixels.extend([n.x*.5+.5,n.y*.5+.5,n.z*.5+.5,1])
+                else:
+                    value=.85+.15*v if kind=='albedo' else .75+.25*v
+                    pixels.extend([value,value,value,1])
+        image.pixels=pixels; image.pack(); maps.append(image)
+    return maps
 
-wood_texture, fabric_texture = texture('Oak grain'), texture('Woven fabric', True)
+wood_maps=texture_set('Oak grain')
+fabric_maps=texture_set('Woven fabric',True)
 def mat(name, rgb, rough=.6, metallic=0, weave=None, tint=False):
-    material = bpy.data.materials.new(name)
-    material.diffuse_color = (*rgb, 1)
-    material.use_nodes = True
-    material['inventoryTintable'] = tint
-    material['inventoryFinish'] = 'fabric' if weave == 'fabric' else 'wood' if weave else name
-    bsdf = material.node_tree.nodes.get('Principled BSDF')
-    bsdf.inputs['Base Color'].default_value = (*rgb, 1)
-    bsdf.inputs['Roughness'].default_value = rough
-    bsdf.inputs['Metallic'].default_value = metallic
+    material=bpy.data.materials.new(name); material.diffuse_color=(*rgb,1); material.use_nodes=True
+    material['inventoryTintable']=tint
+    material['inventoryFinish']='fabric' if weave=='fabric' else 'wood' if weave else name
+    nodes=material.node_tree.nodes; links=material.node_tree.links
+    bsdf=nodes.get('Principled BSDF')
+    bsdf.inputs['Base Color'].default_value=(*rgb,1)
+    bsdf.inputs['Roughness'].default_value=rough; bsdf.inputs['Metallic'].default_value=metallic
     if weave:
-        tex = material.node_tree.nodes.new('ShaderNodeTexImage')
-        tex.image = fabric_texture if weave == 'fabric' else wood_texture
-        # Bake the base colour into the small shared image: portable glTF PBR.
-        coloured = tex.image.copy()
-        coloured.name = name + ' texture'
-        values = list(coloured.pixels)
-        for i in range(0,len(values),4):
-            for a in range(3): values[i+a] *= rgb[a]
-        coloured.pixels = values
-        coloured.pack()
-        tex.image = coloured
-        material.node_tree.links.new(tex.outputs['Color'], bsdf.inputs['Base Color'])
+        maps=fabric_maps if weave=='fabric' else wood_maps
+        tex=nodes.new('ShaderNodeTexImage'); tex.image=maps[0]
+        mix=nodes.new('ShaderNodeMix'); mix.data_type='RGBA'; mix.blend_type='MULTIPLY'
+        mix.inputs[0].default_value=1
+        mix.inputs[7].default_value=(*rgb,1)
+        links.new(tex.outputs['Color'],mix.inputs[6]); links.new(mix.outputs[2],bsdf.inputs['Base Color'])
+        normal_tex=nodes.new('ShaderNodeTexImage'); normal_tex.image=maps[1]
+        normal=nodes.new('ShaderNodeNormalMap'); normal.inputs['Strength'].default_value=.4 if weave=='fabric' else .25
+        links.new(normal_tex.outputs['Color'],normal.inputs['Color']); links.new(normal.outputs['Normal'],bsdf.inputs['Normal'])
+        rough_tex=nodes.new('ShaderNodeTexImage'); rough_tex.image=maps[2]
+        multiply=nodes.new('ShaderNodeMath'); multiply.operation='MULTIPLY'; multiply.inputs[1].default_value=rough
+        links.new(rough_tex.outputs['Color'],multiply.inputs[0]); links.new(multiply.outputs[0],bsdf.inputs['Roughness'])
+        if weave=='fabric': bsdf.inputs['Sheen Weight'].default_value=.35
+        else:
+            bsdf.inputs['Coat Weight'].default_value=.18
+            bsdf.inputs['Coat Roughness'].default_value=.35
     return material
 
 oak=mat('Oak',(.64,.44,.25),.5,weave='wood',tint=True)
@@ -91,6 +109,16 @@ def box(name, size, pos, material=oak, bevel=.006):
         bpy.ops.object.modifier_apply(modifier=modifier.name)
         modifier=obj.modifiers.new('Weighted corner normals','WEIGHTED_NORMAL')
         bpy.ops.object.modifier_apply(modifier=modifier.name)
+    # Project metric UVs after beveling; default cube UVs stretch one coarse
+    # patch across a tabletop and make fine oak grain look like painted waves.
+    uv_layer=obj.data.uv_layers.active or obj.data.uv_layers.new(name='UVMap')
+    for face in obj.data.polygons:
+        normal_axis=max(range(3),key=lambda axis:abs(face.normal[axis]))
+        axes=[axis for axis in range(3) if axis!=normal_axis]
+        axes.sort(key=lambda axis:obj.dimensions[axis])
+        for loop_index in face.loop_indices:
+            coordinate=obj.data.vertices[obj.data.loops[loop_index].vertex_index].co
+            uv_layer.data[loop_index].uv=(coordinate[axes[0]]*2,coordinate[axes[1]]*2)
     return obj
 
 def cylinder(name,radius,height,pos,material=steel,axis='y',vertices=24):
@@ -289,6 +317,77 @@ def bathroom(w,h,d,variant):
         cylinder('Bath tap',.02,.15,(w*.43,h+.075,-d*.32),chrome)
         cylinder('Bath spout',.018,.16,(w*.35,h+.145,-d*.32),chrome,'x')
 
+def premium(w,h,d,variant):
+    if variant in ['nightstand','tv-console','shoe-cabinet','glass-cabinet']:
+        if variant=='glass-cabinet':
+            cabinet(w,h,d,'bookcase')
+            for x in [-w*.25,w*.25]:
+                for edge in [-1,1]: box('Glazed door stile',(.035,h-.12,.035),(x+edge*(w*.25-.035),h/2+.025,d/2+.018),black)
+                for y in [.08,h-.03]: box('Glazed door rail',(w*.48,.035,.035),(x,y,d/2+.018),black)
+                handle(x+w*.16,h*.48,d/2+.03,.08)
+            # Thin clear dielectric panes, not opaque dark blocks.
+            clear=mat('Cabinet glazing',(.91,.96,.98),.08)
+            clear.node_tree.nodes.get('Principled BSDF').inputs['Transmission Weight'].default_value=.96
+            for x in [-w*.25,w*.25]: box('Clear glass door',(w*.43,h-.18,.004),(x,h/2+.025,d/2+.014),clear,0)
+        elif variant=='nightstand':
+            cabinet(w,h,d,'drawers')
+            box('Raised top lip',(w,.018,d),(0,h+.015,0),walnut,.008)
+        elif variant=='tv-console':
+            cabinet(w,h,d,'sideboard')
+            for i in range(34): box('Fluted oak front',(.016,h-.16,.012),(-w*.47+i*w*.94/33,(h+.09)/2,d/2+.028),walnut,.005)
+        else:
+            cabinet(w,h,d,'drawers')
+            for i in range(3): box('Ventilation gap',(w*.8,.009,.008),(0,.23+i*.27,d/2+.018),black,.002)
+    elif variant=='kitchen-island':
+        cabinet(w,h-.04,d*.78,'sideboard')
+        box('Stone island worktop',(w+.08,.045,d),(0,h-.02,d*.06),ceramic,.012)
+        for x in [-w*.43,w*.43]: bar('Breakfast bar support',(x,h-.1,d*.1),(x,h-.07,d*.42),.018,black)
+    elif variant=='oval-table':
+        top=cylinder('Oval solid oak top',.5,.05,(0,h-.025,0),oak,vertices=64)
+        top.scale.x=w; top.scale.y=d
+        for x in [-w*.28,w*.28]:
+            cylinder('Pedestal column',.095,h-.07,(x,(h-.07)/2,0),walnut)
+            box('Pedestal foot',(.44,.035,d*.72),(x,.018,0),walnut,.017)
+    elif variant=='nesting-tables':
+        for i,(x,y,z,r) in enumerate([(-w*.2,h,-d*.12,w*.31),(w*.23,h*.7,d*.19,w*.24)]):
+            cylinder('Nested round top',r,.03,(x,y-.015,z),oak if i==0 else walnut,vertices=48)
+            for angle in [0,math.tau/3,2*math.tau/3]:
+                px,pz=x+math.cos(angle)*r*.7,z+math.sin(angle)*r*.7
+                bar('Slender steel leg',(px,.015,pz),(px,y-.03,pz),.013,black)
+    elif variant=='bar-stool':
+        sh=h*.75
+        legs(w,d,sh,material=walnut,r=.019)
+        box('Upholstered bar seat',(w,.08,d),(0,sh,0),fabric,.034)
+        box('Curved padded back',(w*.92,h-sh-.04,.07),(0,(h+sh)/2,-d*.40),fabric,.03)
+        for x in [-w*.37,w*.37]: bar('Back support',(x,sh,-d*.36),(x,h-.04,-d*.4),.016,walnut)
+        for z in [-d*.36,d*.36]: bar('Footrest',(-w*.4,.28,z),(w*.4,.28,z),.013,chrome)
+    elif variant=='lounge-chair':
+        sofa(w,h,d,'armchair')
+        for x in [-w*.48,w*.48]:
+            box('Sculpted walnut arm',(.065,.045,d*.74),(x,h*.68,.02),walnut,.02)
+            bar('Angled exposed frame',(x,.05,d*.36),(x,h*.67,-d*.28),.025,walnut)
+    elif variant=='chaise-sofa':
+        sofa(w,h,d*.65,'sofa')
+        box('Extended chaise',(w*.42,.25,d*.65),(w*.25,.24,d*.44),fabric,.06)
+        box('Chaise cushion',(w*.40,.14,d*.62),(w*.25,.43,d*.44),soft,.05)
+        for x in [w*.08,w*.42]: cylinder('Chaise foot',.023,.13,(x,.065,d*.7),black)
+    elif variant=='upholstered-bed':
+        bed(w,h,d,'bed')
+        for x in [-w*.49,w*.49]: box('Padded bed rail',(.08,.27,d*.96),(x,.25,0),fabric,.03)
+        for i in range(9): box('Channel headboard',(w/9-.012,h,.10),(-w/2+w*(i+.5)/9,h/2,-d*.51),fabric,.035)
+    elif variant=='daybed':
+        bed(w,h,d,'single-bed')
+        box('Daybed rear bolster',(.10,h*.55,d*.94),(-w*.48,h*.7,0),fabric,.04)
+        for z in [-d*.48,d*.48]: box('Daybed end',(w,.42,.09),(0,.6,z),fabric,.04)
+
+PREMIUM_SPECS=[
+ ('nightstand','storage',(.52,.58,.43)),('tv-console','storage',(2.0,.55,.42)),
+ ('glass-cabinet','storage',(.95,1.95,.38)),('shoe-cabinet','storage',(.8,1.05,.3)),
+ ('kitchen-island','table',(1.8,.93,.92)),('oval-table','table',(1.9,.76,1.0)),('nesting-tables','table',(1.1,.43,.72)),
+ ('bar-stool','chair',(.46,1.05,.48)),('lounge-chair','chair',(.83,.84,.88)),
+ ('chaise-sofa','sofa',(2.6,.9,1.6)),('upholstered-bed','bed',(1.9,1.2,2.14)),('daybed','bed',(.92,.9,2.06)),
+]
+
 SPECS=[
  ('wardrobe','storage',(1.6,2.2,.6)),('sliding-wardrobe','storage',(2,2.2,.65)),
  ('bookcase','storage',(1.2,2.05,.34)),('cube-shelf','storage',(1.45,1.45,.37)),
@@ -301,11 +400,13 @@ SPECS=[
  ('refrigerator','refrigerator',(.7,1.9,.7)),('washer','washer-dryer',(.6,.85,.6)),('oven','oven',(.6,.6,.58)),('dishwasher','dishwasher',(.6,.84,.6)),
  ('toilet','toilet',(.38,.78,.66)),('sink','sink',(.8,.84,.49)),('bathtub','bathtub',(.76,.57,1.7)),
 ]
+SPECS += PREMIUM_SPECS
 roots=[]; manifest=[]
 for variant,category,(w,h,d) in SPECS:
     root=bpy.data.objects.new(variant,None); collection.objects.link(root)
     root['variant']=variant; root['category']=category
-    if category=='storage': cabinet(w,h,d,variant)
+    if variant in [item[0] for item in PREMIUM_SPECS]: premium(w,h,d,variant)
+    elif category=='storage': cabinet(w,h,d,variant)
     elif category=='table': table(w,h,d,variant)
     elif variant in ['sofa','corner-sofa','armchair']: sofa(w,h,d,variant)
     elif category=='chair': seat(w,h,d,variant)
@@ -327,5 +428,5 @@ bpy.ops.object.select_all(action='DESELECT')
 for obj in collection.objects: obj.select_set(True)
 bpy.context.view_layer.objects.active=roots[0]
 bpy.ops.export_scene.gltf(filepath=str(OUT/'furniture.glb'),export_format='GLB',use_selection=True,export_extras=True,export_cameras=False,export_lights=False,export_apply=True,export_yup=True)
-(OUT/'manifest.json').write_text(json.dumps({'version':1,'generator':'Blender MCP 1.9.1 / Blender '+bpy.app.version_string,'license':'Original project assets','models':manifest},indent=2)+'\n')
+(OUT/'manifest.json').write_text(json.dumps({'version':2,'generator':'Blender MCP 1.9.1 / Blender '+bpy.app.version_string,'license':'Original project assets','models':manifest},indent=2)+'\n')
 print(json.dumps({'models':len(roots),'bytes':(OUT/'furniture.glb').stat().st_size,'output':str(OUT)},indent=2))

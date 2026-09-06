@@ -278,8 +278,10 @@
       "room": "Room to arrange",
       "automatic": "Restore automatic side-by-side layout",
       "mapAutomatic": "Restore captured map alignment",
-      "mapBackground": "Use Mapbox map as background",
-      "mapBackgroundHint": "Show the georeferenced map beneath the 3D scene.",
+      "mapBackground": "Map background",
+      "mapBackgroundHint": "Show rooms on the map. Uses Mapbox when configured, otherwise the available basemap.",
+      "mapSetup": "Set map position",
+      "mapSetupHint": "Place and orient the room on the map. Saving activates the map background.",
       "mapHint": "Drag a room to move it. Drag the orange handle to rotate it.",
       "mapUnavailable": "A geographic anchor is required for the map background.",
       "mapCanvas": "Map background beneath the 3D room view",
@@ -328,13 +330,13 @@
     "lighting": {
       "label": "Lighting quality",
       "live": "Live",
-      "liveDescription": "Interactive lighting with the previous room-light setup.",
+      "liveDescription": "Fast daylight preview with consistent material colors and contact shadows.",
       "progressive": "Progressive",
-      "progressiveDescription": "Accumulate a texture-space light map from jittered soft-light samples while the room remains interactive.",
+      "progressiveDescription": "Precompute room lighting with fewer rays, using the same materials and light colors as the realistic view.",
       "progressiveBaking": "Accumulating progressive light map… {{progress}}%",
       "progressiveReady": "Progressive light map ready",
       "progressiveQuality": "Progressive quality",
-      "progressiveQualityDescription": "Higher settings use larger light and shadow maps with more accumulated lighting samples.",
+      "progressiveQualityDescription": "Higher settings accumulate more lighting samples for smoother shadows.",
       "progressiveQualityLevels": {
         "fast": "Fast",
         "balanced": "Balanced",
@@ -342,9 +344,9 @@
         "ultra": "Ultra"
       },
       "realistic": "Realistic",
-      "realisticDescription": "Bake a ray-traced view with physically traced window shadows and indirect light.",
+      "realisticDescription": "Compute light and shadows for each room with indirect bounces while preserving material colors and finishes.",
       "rendering": "Rendering",
-      "renderingDescription": "Path-trace the current camera for up to 10 seconds with multi-bounce light.",
+      "renderingDescription": "Path-trace the current camera for about 20 seconds with multi-bounce light; slower devices may take longer.",
       "baking": "Baking ray-traced global illumination and shadows… {{progress}}%",
       "baked": "Baked global illumination and shadows ready",
       "roomOnly": "Bake room only",
@@ -403,7 +405,8 @@
       "furniture": "Furniture",
       "map": "Map location",
       "rooms": "Rooms",
-      "scan": "Update scan"
+      "scan": "Update scan",
+      "architecture": "Walls & openings"
     },
     "saved": "Changes saved.",
     "save": "Save",
@@ -446,7 +449,19 @@
       "dishwasher": "Dishwasher",
       "toilet": "Toilet",
       "sink": "Vanity sink",
-      "bathtub": "Bathtub"
+      "bathtub": "Bathtub",
+      "nightstand": "Nightstand",
+      "tv-console": "TV console",
+      "glass-cabinet": "Display cabinet",
+      "shoe-cabinet": "Shoe cabinet",
+      "kitchen-island": "Kitchen island",
+      "oval-table": "Oval dining table",
+      "nesting-tables": "Nesting tables",
+      "bar-stool": "Bar stool",
+      "lounge-chair": "Lounge chair",
+      "chaise-sofa": "Right chaise sofa",
+      "upholstered-bed": "Upholstered bed",
+      "daybed": "Daybed"
     },
     "mapHint": "Click the room center on the map or drag the marker. Then adjust the heading (0° = north). The preview shows the actual room outline.",
     "latitude": "Latitude",
@@ -473,7 +488,10 @@
       "split-crosses-furniture": "The partition intersects furniture. Move the line.",
       "split-missing-floor": "Both rooms must retain a floor surface.",
       "invalid-transform": "This geometry cannot be split here.",
-      "object-not-found": "This furniture is no longer in the scan."
+      "object-not-found": "This furniture is no longer in the scan.",
+      "surface-not-found": "These dimensions or this position are invalid.",
+      "surface-category-changed": "These dimensions or this position are invalid.",
+      "surface-too-small": "These dimensions or this position are invalid."
     },
     "categories": {
       "storage": "Cabinet / shelves",
@@ -496,6 +514,18 @@
     "regenerate": "Regenerate from ARKit data",
     "regenerateHint": "Rebuilds the view using the current model library. Room dimensions, map position, furniture edits and accepted AI suggestions are preserved.",
     "relatedModels": "Matching models",
-    "regenerated": "View regenerated from the room data."
+    "regenerated": "View regenerated from the room data.",
+    "architecture": {
+      "hint": "Edit dimensions, position and material. Doors and windows move with their wall. X/Y/Z are scan coordinates; Y is height.",
+      "surface": "Surface",
+      "width": "Width (m)",
+      "height": "Height / length (m)",
+      "thickness": "Thickness (m)",
+      "material": "Material",
+      "roughness": "Roughness (0 glossy – 1 matte)",
+      "windowHint": "Color and material apply to the window frame. Glazing remains transparent.",
+      "resetFinish": "Use detected / original finish",
+      "invalid": "These dimensions or this position are invalid."
+    }
   }
 }

@@ -12,6 +12,7 @@ import { Badge, cn } from "@/components/ui";
 
 import { FlowStep } from "./fields";
 import type { StockItem, WorkflowStepProps } from "./types";
+import { workflowTargetIssues } from "./validation";
 
 type WorkflowTargetStepProps = WorkflowStepProps & {
   resources: StockItem[];
@@ -33,11 +34,7 @@ export function WorkflowTargetStep({
   targetQuery,
   setTargetQuery,
 }: WorkflowTargetStepProps) {
-  const selectedResourcesHaveVariants = selectedResources.some((resource) =>
-    resources.some(
-      (candidate) => candidate.variantOfResourceId === resource.resourceId,
-    ),
-  );
+  const targetIssues = workflowTargetIssues(draft, resources);
   const targetItems = useMemo(() => {
     const normalizedQuery = targetQuery.trim().toLocaleLowerCase(locale);
     return resources
@@ -197,30 +194,6 @@ export function WorkflowTargetStep({
             </fieldset>
           ) : null}
 
-          {selectedResourcesHaveVariants ? (
-            <label className="mt-3 flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3.5">
-              <input
-                type="checkbox"
-                checked={draft.allowVariantSelection}
-                disabled={!editable}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    allowVariantSelection: event.target.checked,
-                  }))
-                }
-                className="mt-0.5 size-4 accent-brand-solid"
-              />
-              <span>
-                <strong className="block text-[12px] font-semibold text-muted-strong">
-                  {t("workflows.steps.target.allowVariants")}
-                </strong>
-                <span className="mt-0.5 block text-[11px] leading-4 text-muted">
-                  {t("workflows.steps.target.allowVariantsDescription")}
-                </span>
-              </span>
-            </label>
-          ) : null}
         </div>
       ) : (
         <div className="flex flex-col gap-3 rounded-xl border border-warning-border bg-warning-soft p-3.5 text-[13px] leading-5 text-warning sm:flex-row sm:items-center sm:justify-between">
@@ -230,7 +203,18 @@ export function WorkflowTargetStep({
           </Link>
         </div>
       )}
-      {selectedResources.length ? (
+      {targetIssues.map(({ resource, messageKey }) => (
+        <div key={resource.resourceId} role="alert" className="mt-3 rounded-xl border border-warning-border bg-warning-soft p-3 text-[13px] leading-5 text-warning">
+          <p>{t(messageKey, { name: resource.name })}</p>
+          {messageKey !== "workflows.validation.executionStorage" ? (
+            <Link href={`/inventory/${resource.resourceId}/stock/settings`} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 font-semibold hover:underline">
+              {t("workflows.steps.target.openStockSettings", { name: resource.name })}
+              <ArrowRight className="size-3.5" aria-hidden="true" />
+            </Link>
+          ) : null}
+        </div>
+      ))}
+      {selectedResources.length && !targetIssues.length ? (
         <div className="mt-3 flex items-center gap-3 rounded-xl border border-success-border bg-success-soft p-3">
           <Check className="size-4 shrink-0 text-success" aria-hidden="true" />
           <p className="text-[12px] text-success">

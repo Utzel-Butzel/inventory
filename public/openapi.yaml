@@ -2814,6 +2814,162 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/StockOverviewItem" }
+  /stock/scan-workflows/{workflowId}/runner:
+    parameters:
+      - &a1
+        $ref: "#/components/parameters/OrganizationId"
+      - name: workflowId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: &a3
+        - Scan workflows
+      summary: Load targets, variants and conditional inputs for an action chain
+      responses: &a4
+        "200":
+          description: "Runner configuration in workflow: id, name, description,
+            extraction, codeTypes, inputFields, targetSelectionMode, fixedCode,
+            action summaries and targetGroups"
+        "404":
+          description: Flow unavailable or has no action chain
+  /stock/action-chains/preview:
+    parameters: &a2
+      - *a1
+    post:
+      tags:
+        - Scan workflows
+      summary: Preview all actions without committing changes
+      description: Requires workflows.read. Runs the complete chain and rolls it back,
+        returning planHash. Conditions and component selections are evaluated in
+        order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionChainRunInput"
+      responses:
+        "200":
+          description: Reviewed plan or previously completed execution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionChainRunReport"
+        "404":
+          description: Flow or target unavailable
+        "409":
+          description: Stale preview, stock conflict or idempotency mismatch
+        "422":
+          description: Invalid input or failed action, with actionId in details
+  /stock/action-chains/execute:
+    parameters: *a2
+    post:
+      tags:
+        - Scan workflows
+      summary: Confirm all actions in one transaction
+      description: Requires workflows.manage, an Idempotency-Key UUID and the exact
+        reviewed inputs with expectedPlanHash. Stale plans return 409. Stock,
+        units, manufacturing records, audit and webhook outbox commit together.
+        oncePerCode also deduplicates workflow + identifier + selected target set.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionChainRunInput"
+      responses:
+        "200":
+          description: Idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionChainRunReport"
+        "201":
+          description: All actions committed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionChainRunReport"
+        "404":
+          description: Flow or target unavailable
+        "409":
+          description: Stale preview, stock conflict or idempotency mismatch
+        "422":
+          description: Invalid input or failed action, with actionId in details
+  /public/action-flows/{triggerId}/chain:
+    servers:
+      - url: /api
+    parameters:
+      - name: triggerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: *a3
+      summary: Load targets, variants and conditional inputs for an action chain
+      responses: *a4
+      security: []
+  /public/action-flows/{triggerId}/chain/{mode}:
+    servers:
+      - url: /api
+    parameters:
+      - name: triggerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: mode
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+            - preview
+            - execute
+    post:
+      tags:
+        - Scan workflows
+      summary: Preview or confirm an enabled public action chain
+      description: Same-origin, rate-limited public endpoint. The trigger must remain
+        enabled. The configured fixed code overrides submitted code. Preview does
+        not need an Idempotency-Key; execute requires a UUID key and
+        expectedPlanHash. All actions roll back on failure.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionChainRunInput"
+      responses:
+        "200":
+          description: Idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionChainRunReport"
+        "201":
+          description: All actions committed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionChainRunReport"
+        "404":
+          description: Flow or target unavailable
+        "409":
+          description: Stale preview, stock conflict or idempotency mismatch
+        "422":
+          description: Invalid input or failed action, with actionId in details
+      security: []
   /stock/scan-workflows:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -6755,11 +6911,671 @@ components:
         value: { type: string, minLength: 1, maxLength: 120 }
         label: { type: string, minLength: 1, maxLength: 120 }
         color: { type: string, minLength: 1, maxLength: 32 }
+    ActionChainValue:
+      oneOf:
+        - type: object
+          properties:
+            source:
+              type: string
+              const: literal
+            value:
+              anyOf:
+                - type: string
+                  maxLength: 20000
+                - type: number
+                - type: boolean
+                - type: "null"
+          required:
+            - source
+            - value
+          additionalProperties: false
+        - type: object
+          properties:
+            source:
+              type: string
+              const: scan
+            field:
+              type: string
+              enum:
+                - identifier
+                - raw
+          required:
+            - source
+            - field
+          additionalProperties: false
+        - type: object
+          properties:
+            source:
+              type: string
+              const: input
+            key:
+              type: string
+              pattern: ^[A-Za-z0-9_.-]{1,80}$
+          required:
+            - source
+            - key
+          additionalProperties: false
+        - type: object
+          properties:
+            source:
+              type: string
+              const: result
+            actionId:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,80}$
+            path:
+              type: string
+              pattern: ^(resourceId|unitId|code|found|status|quantity|metadata\.[A-Za-z0-9_.-]{1,80}|customFields\.[A-Za-z0-9_.-]{1,80})$
+          required:
+            - source
+            - actionId
+            - path
+          additionalProperties: false
+    ActionChainConditions:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+            - all
+            - any
+        rules:
+          minItems: 1
+          maxItems: 8
+          type: array
+          items:
+            type: object
+            properties:
+              left:
+                $ref: "#/components/schemas/ActionChainValue"
+              operator:
+                type: string
+                enum:
+                  - equals
+                  - not-equals
+                  - exists
+                  - missing
+                  - gt
+                  - gte
+                  - lt
+                  - lte
+              right:
+                $ref: "#/components/schemas/ActionChainValue"
+            required:
+              - left
+              - operator
+            additionalProperties: false
+      required:
+        - mode
+        - rules
+      additionalProperties: false
+    ActionChainTarget:
+      oneOf:
+        - type: object
+          properties:
+            source:
+              type: string
+              const: selected
+          required:
+            - source
+          additionalProperties: false
+        - type: object
+          properties:
+            source:
+              type: string
+              const: resource
+            resourceId:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          required:
+            - source
+            - resourceId
+          additionalProperties: false
+        - type: object
+          properties:
+            source:
+              type: string
+              const: result
+            actionId:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,80}$
+          required:
+            - source
+            - actionId
+          additionalProperties: false
+    ActionChainAction:
+      oneOf:
+        - type: object
+          properties:
+            id:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,80}$
+            label:
+              type: string
+              minLength: 1
+              maxLength: 160
+            enabled:
+              default: true
+              type: boolean
+            when:
+              default: null
+              anyOf:
+                - $ref: "#/components/schemas/ActionChainConditions"
+                - type: "null"
+            target:
+              $ref: "#/components/schemas/ActionChainTarget"
+            code:
+              $ref: "#/components/schemas/ActionChainValue"
+              default:
+                source: scan
+                field: identifier
+            type:
+              type: string
+              const: find-unit
+            allowMissing:
+              default: false
+              type: boolean
+          required:
+            - id
+            - label
+            - target
+            - type
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,80}$
+            label:
+              type: string
+              minLength: 1
+              maxLength: 160
+            enabled:
+              default: true
+              type: boolean
+            when:
+              default: null
+              anyOf:
+                - $ref: "#/components/schemas/ActionChainConditions"
+                - type: "null"
+            target:
+              $ref: "#/components/schemas/ActionChainTarget"
+            code:
+              $ref: "#/components/schemas/ActionChainValue"
+              default:
+                source: scan
+                field: identifier
+            properties:
+              default: []
+              maxItems: 24
+              type: array
+              items:
+                type: object
+                properties:
+                  key:
+                    type: string
+                    pattern: ^[A-Za-z0-9_.-]{1,80}$
+                  storage:
+                    type: string
+                    enum:
+                      - metadata
+                      - custom-field
+                  value:
+                    $ref: "#/components/schemas/ActionChainValue"
+                required:
+                  - key
+                  - storage
+                  - value
+                additionalProperties: false
+            applyFlowValues:
+              default: false
+              type: boolean
+            type:
+              type: string
+              const: unit
+            mode:
+              type: string
+              enum:
+                - create
+                - update
+                - upsert
+            status:
+              default: null
+              anyOf:
+                - type: string
+                  enum:
+                    - available
+                    - reserved
+                    - in-use
+                    - maintenance
+                    - consumed
+                    - lost
+                    - retired
+                - type: "null"
+          required:
+            - id
+            - label
+            - target
+            - type
+            - mode
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,80}$
+            label:
+              type: string
+              minLength: 1
+              maxLength: 160
+            enabled:
+              default: true
+              type: boolean
+            when:
+              default: null
+              anyOf:
+                - $ref: "#/components/schemas/ActionChainConditions"
+                - type: "null"
+            target:
+              $ref: "#/components/schemas/ActionChainTarget"
+            code:
+              $ref: "#/components/schemas/ActionChainValue"
+              default:
+                source: scan
+                field: identifier
+            properties:
+              default: []
+              maxItems: 24
+              type: array
+              items:
+                type: object
+                properties:
+                  key:
+                    type: string
+                    pattern: ^[A-Za-z0-9_.-]{1,80}$
+                  storage:
+                    type: string
+                    enum:
+                      - metadata
+                      - custom-field
+                  value:
+                    $ref: "#/components/schemas/ActionChainValue"
+                required:
+                  - key
+                  - storage
+                  - value
+                additionalProperties: false
+            applyFlowValues:
+              default: false
+              type: boolean
+            type:
+              type: string
+              const: assembly-build
+            quantity:
+              $ref: "#/components/schemas/ActionChainValue"
+            components:
+              default: []
+              maxItems: 40
+              type: array
+              items:
+                type: object
+                properties:
+                  slotKey:
+                    type: string
+                    pattern: ^[A-Za-z0-9_-]{1,80}$
+                  resource:
+                    $ref: "#/components/schemas/ActionChainValue"
+                  unitFromAction:
+                    type: string
+                    pattern: ^[A-Za-z0-9_-]{1,80}$
+                  choice:
+                    type: object
+                    properties:
+                      inputKey:
+                        type: string
+                        pattern: ^[A-Za-z0-9_.-]{1,80}$
+                      resources:
+                        type: object
+                        propertyNames:
+                          type: string
+                          minLength: 1
+                          maxLength: 120
+                        additionalProperties:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    required:
+                      - inputKey
+                      - resources
+                    additionalProperties: false
+                required:
+                  - slotKey
+                additionalProperties: false
+          required:
+            - id
+            - label
+            - target
+            - type
+            - quantity
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,80}$
+            label:
+              type: string
+              minLength: 1
+              maxLength: 160
+            enabled:
+              default: true
+              type: boolean
+            when:
+              default: null
+              anyOf:
+                - $ref: "#/components/schemas/ActionChainConditions"
+                - type: "null"
+            type:
+              type: string
+              const: stock-adjustment
+            target:
+              $ref: "#/components/schemas/ActionChainTarget"
+            delta:
+              $ref: "#/components/schemas/ActionChainValue"
+            factor:
+              default: 1
+              anyOf:
+                - type: number
+                  const: 1
+                - type: number
+                  const: -1
+          required:
+            - id
+            - label
+            - type
+            - target
+            - delta
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,80}$
+            label:
+              type: string
+              minLength: 1
+              maxLength: 160
+            enabled:
+              default: true
+              type: boolean
+            when:
+              default: null
+              anyOf:
+                - $ref: "#/components/schemas/ActionChainConditions"
+                - type: "null"
+            target:
+              $ref: "#/components/schemas/ActionChainTarget"
+            code:
+              $ref: "#/components/schemas/ActionChainValue"
+              default:
+                source: scan
+                field: identifier
+            type:
+              type: string
+              const: set-location
+            location:
+              $ref: "#/components/schemas/ActionChainValue"
+            structured:
+              default: true
+              type: boolean
+          required:
+            - id
+            - label
+            - target
+            - type
+            - location
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,80}$
+            label:
+              type: string
+              minLength: 1
+              maxLength: 160
+            enabled:
+              default: true
+              type: boolean
+            when:
+              default: null
+              anyOf:
+                - $ref: "#/components/schemas/ActionChainConditions"
+                - type: "null"
+            type:
+              type: string
+              const: assert
+            check:
+              $ref: "#/components/schemas/ActionChainConditions"
+            message:
+              type: string
+              minLength: 1
+              maxLength: 500
+          required:
+            - id
+            - label
+            - type
+            - check
+            - message
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type: string
+              pattern: ^[A-Za-z0-9_-]{1,80}$
+            label:
+              type: string
+              minLength: 1
+              maxLength: 160
+            enabled:
+              default: true
+              type: boolean
+            when:
+              default: null
+              anyOf:
+                - $ref: "#/components/schemas/ActionChainConditions"
+                - type: "null"
+            type:
+              type: string
+              const: webhook
+            eventName:
+              type: string
+              minLength: 1
+              maxLength: 120
+            properties:
+              default: []
+              maxItems: 24
+              type: array
+              items:
+                type: object
+                properties:
+                  key:
+                    type: string
+                    pattern: ^[A-Za-z0-9_-]{1,80}$
+                  value:
+                    $ref: "#/components/schemas/ActionChainValue"
+                required:
+                  - key
+                  - value
+                additionalProperties: false
+          required:
+            - id
+            - label
+            - type
+            - eventName
+          additionalProperties: false
+    ActionChainRunInput:
+      type: object
+      properties:
+        workflowId:
+          type: string
+          format: uuid
+          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        code:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        codeType:
+          type: [string, "null"]
+          enum: [qr_code, data_matrix, aztec, pdf417, code_128, code_93, code_39, codabar, ean_13, ean_8, upc_a, upc_e, itf, null]
+        selectedResourceIds:
+          default: []
+          maxItems: 24
+          type: array
+          items:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        inputs:
+          default: {}
+          type: object
+          propertyNames:
+            type: string
+            maxLength: 80
+          additionalProperties:
+            anyOf:
+              - type: string
+                maxLength: 20000
+              - type: number
+              - type: boolean
+              - maxItems: 12
+                type: array
+                items:
+                  type: string
+                  maxLength: 2048
+        expectedPlanHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+      required:
+        - workflowId
+        - code
+      additionalProperties: false
+    ActionChainRunReport:
+      type: object
+      properties:
+        workflowId:
+          type: string
+          format: uuid
+          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        revision:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        identifier:
+          type: string
+        planHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        replayed:
+          type: boolean
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+              type:
+                type: string
+              skipped:
+                type: boolean
+              target:
+                anyOf:
+                  - type: string
+                  - type: "null"
+              eventName:
+                type: string
+              code:
+                type: string
+              quantityBefore:
+                type: integer
+                minimum: -9007199254740991
+                maximum: 9007199254740991
+              quantityAfter:
+                type: integer
+                minimum: -9007199254740991
+                maximum: 9007199254740991
+              statusBefore:
+                anyOf:
+                  - type: string
+                  - type: "null"
+              statusAfter:
+                anyOf:
+                  - type: string
+                  - type: "null"
+              locationBefore:
+                anyOf:
+                  - type: string
+                  - type: "null"
+              locationAfter:
+                anyOf:
+                  - type: string
+                  - type: "null"
+              metadata:
+                type: object
+                propertyNames:
+                  type: string
+                additionalProperties: {}
+              customFields:
+                type: object
+                propertyNames:
+                  type: string
+                additionalProperties: {}
+              components:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    quantity:
+                      type: integer
+                      minimum: -9007199254740991
+                      maximum: 9007199254740991
+                    codes:
+                      type: array
+                      items:
+                        type: string
+                  required:
+                    - name
+                    - quantity
+                    - codes
+            required:
+              - id
+              - label
+              - type
+              - skipped
+              - target
+      required:
+        - workflowId
+        - revision
+        - identifier
+        - planHash
+        - steps
     ScanWorkflowInputField:
       type: object
       required: [key, label, required]
       additionalProperties: false
       properties:
+        visibleWhen:
+          anyOf:
+            - $ref: "#/components/schemas/ActionChainConditions"
+            - type: "null"
+          description: May depend only on scan values and earlier visible inputs. Hidden
+            values are ignored, including required fields.
         key: { type: string, minLength: 1, maxLength: 80, pattern: "^[A-Za-z0-9_.-]+$" }
         label: { type: string, minLength: 1, maxLength: 120 }
         required: { type: boolean }
@@ -6778,6 +7594,19 @@ components:
       type: object
       required: [name, resourceId, extraction, identifierPropertyKey]
       properties:
+        actions:
+          type: array
+          maxItems: 24
+          default: []
+          description: Ordered action list. Empty preserves the legacy operation. Results
+            may reference only earlier actions. At least one action must be enabled.
+          items:
+            $ref: "#/components/schemas/ActionChainAction"
+        oncePerCode:
+          type: boolean
+          default: false
+          description: Deduplicate workflow + extracted identifier + selected target set,
+            even with a new execution key.
         name: { type: string, minLength: 1, maxLength: 160 }
         description: { type: string, maxLength: 5000, default: "" }
         enabled: { type: boolean, default: true }
@@ -6834,6 +7663,19 @@ components:
       additionalProperties: false
       description: Current revision plus at least one writable ScanWorkflowInput property.
       properties:
+        actions:
+          type: array
+          maxItems: 24
+          default: []
+          description: Ordered action list. Empty preserves the legacy operation. Results
+            may reference only earlier actions. At least one action must be enabled.
+          items:
+            $ref: "#/components/schemas/ActionChainAction"
+        oncePerCode:
+          type: boolean
+          default: false
+          description: Deduplicate workflow + extracted identifier + selected target set,
+            even with a new execution key.
         revision: { type: integer, minimum: 1 }
         name: { type: string, minLength: 1, maxLength: 160 }
         description: { type: string, maxLength: 5000 }
@@ -7054,6 +7896,10 @@ components:
       required: [workflowId, revision, code, expectedResourceUpdatedAt, expectedUnitId, expectedUnitUpdatedAt]
       additionalProperties: false
       properties:
+        expectedPlanHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+          description: Required for action chains. Prefer the dedicated action-chains endpoints.
         workflowId: { type: string, format: uuid }
         revision: { type: integer, minimum: 1 }
         code: { type: string, minLength: 1, maxLength: 2048 }

@@ -1,4 +1,5 @@
 import type { InventorySelectItem } from "@/components/inventory-select";
+import type { ChainAction, ActionConditions } from "@/lib/action-chain-contract";
 import type { ScanCodeType } from "@/lib/scan-code-types";
 import type { TFunction } from "i18next";
 import type { Dispatch, SetStateAction } from "react";
@@ -61,6 +62,7 @@ export type InputOption = {
 };
 
 export type InputField = {
+  visibleWhen?: ActionConditions | null;
   key: string;
   label: string;
   required: boolean;
@@ -71,6 +73,8 @@ export type InputField = {
 };
 
 export type WorkflowPayload = {
+  actions: ChainAction[];
+  oncePerCode: boolean;
   name: string;
   description: string;
   enabled: boolean;

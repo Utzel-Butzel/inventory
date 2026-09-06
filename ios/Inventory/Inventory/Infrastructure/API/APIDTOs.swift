@@ -1059,6 +1059,11 @@ public struct ScanActionWorkflowListResponse: Codable, Equatable, Sendable {
 }
 
 public struct ScanActionWorkflow: Codable, Equatable, Identifiable, Sendable {
+    public var actions: [ActionChainSummary]? = nil
+    public var hasActionChain: Bool { !(actions ?? []).isEmpty }
+    public var summary: String {
+        hasActionChain ? "\((actions ?? []).filter { $0.enabled != false }.count) Schritte · vor dem Ausführen prüfen" : operation.summary
+    }
     public let id: UUID
     public let name: String
     public let description: String
@@ -1096,6 +1101,7 @@ public struct ScanActionOption: Codable, Equatable, Identifiable, Sendable {
 }
 
 public struct ScanActionInputField: Codable, Equatable, Identifiable, Sendable {
+    public var visibleWhen: ActionChainConditions? = nil
     public let key: String
     public let label: String
     public let type: String?

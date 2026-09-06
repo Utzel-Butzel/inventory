@@ -1,4 +1,5 @@
 import "server-only";
+import { applyRoomSurfaceEdit } from "@/lib/room-surface-editor";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -53,6 +54,8 @@ export async function editRoomScene(
             }
           : o,
       );
+    } else if (edit.action === "surface") {
+      scene = applyRoomSurfaceEdit(scene, edit.surface);
     } else if (edit.action === "anchor") {
       scene.mapAnchor = edit.anchor;
     } else if (edit.action === "replace") {

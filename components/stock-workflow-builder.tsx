@@ -61,7 +61,7 @@ import type {
   WorkflowRecord,
 } from "./stock-workflow/types";
 import { useWorkflowSample } from "./stock-workflow/use-workflow-sample";
-import { validateDraft } from "./stock-workflow/validation";
+import { validateDraft, workflowTargetIssues } from "./stock-workflow/validation";
 
 type StockWorkflowBuilderProps = {
   canManage: boolean;
@@ -222,6 +222,16 @@ export function StockWorkflowBuilder({
     setSaving(true);
     setNotice(null);
     try {
+      // Settings may have been corrected in another tab while this draft stayed open.
+      const currentResources = stockItemsFromResponse(
+        await fetchJson<unknown>("/api/v1/stock", { cache: "no-store" }),
+      );
+      setResources(currentResources);
+      const [targetIssue] = workflowTargetIssues(nextDraft, currentResources);
+      if (targetIssue) {
+        setNotice({ tone: "error", message: t(targetIssue.messageKey, { name: targetIssue.resource.name }) });
+        return null;
+      }
       const payload = draftToPayload(nextDraft);
       const endpoint = nextDraft.id
         ? `/api/v1/stock/scan-workflows/${nextDraft.id}`
@@ -788,6 +798,7 @@ export function StockWorkflowBuilder({
             />
 
             <WorkflowInputsStep
+              resources={resources}
               draft={draft}
               setDraft={setDraft}
               editable={editable}
@@ -798,6 +809,7 @@ export function StockWorkflowBuilder({
             />
 
             <WorkflowActionsStep
+              resources={resources}
               draft={draft}
               setDraft={setDraft}
               editable={editable}
@@ -809,6 +821,7 @@ export function StockWorkflowBuilder({
           </div>
 
           <WorkflowPreview
+            resources={resources}
             draft={draft}
             t={t}
             sample={sample}
@@ -817,6 +830,7 @@ export function StockWorkflowBuilder({
             previewInputs={previewInputs}
             setPreviewInputs={setPreviewInputs}
           />
+          {draft.id && !dirty && draft.enabled ? <Link className="mt-4 inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-semibold" href={`/stock/scan?workflow=${encodeURIComponent(draft.id)}`}><Eye className="size-4" />{t("chain.openRunner")}</Link> : null}
         </div>
       )}
     </div>

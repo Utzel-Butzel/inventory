@@ -10,7 +10,7 @@ import {
   Map as MapLibre,
   Marker,
   NavigationControl,
-} from "maplibre-gl";
+} from "@/lib/maplibre-runtime";
 import type { Feature, FeatureCollection, Geometry, Point, Polygon } from "geojson";
 import { useT } from "next-i18next/client";
 import { useEffect, useRef } from "react";

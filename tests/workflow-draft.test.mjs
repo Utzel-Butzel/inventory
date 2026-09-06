@@ -13,6 +13,7 @@ import {
 import {
   extractIdentifier,
   validateDraft,
+  workflowTargetIssues,
 } from "../components/stock-workflow/validation.ts";
 import {
   stockItemsFromResponse,
@@ -20,10 +21,68 @@ import {
   workflowFromResponse,
   workflowsFromResponse,
 } from "../components/stock-workflow/responses.ts";
+import { workflowVariantOptions } from "../components/stock-workflow/variant-options.ts";
 
 const t = (key) => key;
 const resourceId = "4b277830-d4f3-42b6-9d13-f70801f32e76";
 const makeDraft = () => templateDraft(t, resourceId);
+
+test("scan variant selection persists independently of metadata input fields", () => {
+  const draft = makeDraft();
+  draft.allowVariantSelection = true;
+  draft.inputFields = [];
+  const payload = draftToPayload(draft);
+  assert.equal(payload.allowVariantSelection, true);
+  assert.deepEqual(payload.inputFields, []);
+  const saved = { ...payload, id: "workflow-id", publicTriggerId: "public-id", revision: 1 };
+  assert.equal(workflowToDraft(saved).allowVariantSelection, true);
+  const disabled = { ...draft, allowVariantSelection: false };
+  assert.notEqual(payloadSignature(disabled), payloadSignature(draft));
+});
+
+test("variant preview uses only direct product variants and matches runtime fallback", () => {
+  const draft = { ...makeDraft(), allowVariantSelection: true };
+  const primary = { resourceId, name: "OpenPaper 7", trackingMode: "serialized" };
+  const black = { ...primary, resourceId: "black", name: "Black", variantOfResourceId: resourceId };
+  const white = { ...black, resourceId: "white", name: "White" };
+  const unrelated = { ...black, resourceId: "other", variantOfResourceId: "other-primary" };
+  const resources = [white, primary, unrelated, black];
+  const before = structuredClone(resources);
+  assert.deepEqual(workflowVariantOptions(draft, primary, resources), [black, white]);
+  assert.deepEqual(workflowVariantOptions({ allowVariantSelection: false }, primary, resources), [primary]);
+  assert.deepEqual(workflowVariantOptions(draft, primary, [primary, unrelated]), [primary]);
+  assert.deepEqual(workflowVariantOptions(draft, primary, [primary, black]), [black]);
+  assert.deepEqual(resources, before);
+});
+
+test("assembly fields require serialized output and accept corrected stock settings", () => {
+  const draft = makeDraft();
+  const before = structuredClone(draft);
+  const target = { resourceId, name: "OpenPaper 7", trackingMode: "bulk" };
+  assert.equal(workflowTargetIssues(draft, [target])[0].messageKey, "workflows.validation.serializedTarget");
+  assert.deepEqual(workflowTargetIssues(draft, [{ ...target, trackingMode: "serialized" }]), []);
+  assert.deepEqual(draft, before);
+  assert.deepEqual(workflowTargetIssues(draft, [{ ...target, resourceId: "unselected" }]), []);
+});
+
+test("execution-only bulk builds remain supported, but unit actions always require serialization", () => {
+  const draft = makeDraft();
+  const target = { resourceId, name: "OpenPaper 7", trackingMode: "bulk" };
+  draft.identifierStorage = "execution";
+  draft.fixedProperties.forEach((field) => { field.storage = "execution"; });
+  draft.inputFields.forEach((field) => { field.storage = "execution"; });
+  assert.deepEqual(workflowTargetIssues(draft, [target]), []);
+  draft.operation = { type: "unit" };
+  assert.equal(workflowTargetIssues(draft, [target])[0].messageKey, "workflows.validation.serializedTarget");
+});
+
+test("quantity adjustments reject unit storage and serialized stock", () => {
+  const draft = makeDraft();
+  draft.operation = { type: "stock-adjustment", delta: 1 };
+  const target = { resourceId, name: "OpenPaper 7", trackingMode: "bulk" };
+  assert.equal(workflowTargetIssues(draft, [target])[0].messageKey, "workflows.validation.executionStorage");
+  assert.equal(workflowTargetIssues(draft, [{ ...target, trackingMode: "serialized" }])[0].messageKey, "workflows.validation.bulkTarget");
+});
 
 test("saved workflows round trip without persisting editor-only identifiers", () => {
   const draft = makeDraft();

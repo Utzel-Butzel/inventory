@@ -1,4 +1,5 @@
 import { scanCodeTypes } from "@/lib/scan-code-types";
+import { legacyWorkflowActions } from "@/components/stock-workflow/chain-draft";
 import type { TFunction } from "i18next";
 import type {
   DraftExtraction,
@@ -16,6 +17,8 @@ export function localId(prefix: string) {
 
 export function templateDraft(t: TFunction, resourceId = ""): WorkflowDraft {
   return {
+    actions: [],
+    oncePerCode: true,
     id: null,
     name: t("workflows.template.name"),
     description: t("workflows.template.description"),
@@ -122,6 +125,8 @@ export function workflowToDraft(workflow: WorkflowRecord): WorkflowDraft {
   const extraction = workflow.extraction;
   return {
     ...workflow,
+    actions: workflow.actions ?? [],
+    oncePerCode: workflow.oncePerCode ?? false,
     id: workflow.id,
     resourceIds: workflow.resourceIds?.length
       ? workflow.resourceIds
@@ -170,6 +175,8 @@ export function draftToPayload(draft: WorkflowDraft): WorkflowPayload {
   const extraction = extractionFromDraft(draft.extraction);
 
   return {
+    actions: legacyWorkflowActions(draft),
+    oncePerCode: draft.oncePerCode,
     name: draft.name.trim(),
     description: draft.description.trim(),
     enabled: draft.enabled,
@@ -199,7 +206,8 @@ export function draftToPayload(draft: WorkflowDraft): WorkflowPayload {
       value: value.trim(),
       storage,
     })),
-    inputFields: draft.inputFields.map(({ key, label, required, type, storage, placeholder, options }) => ({
+    inputFields: draft.inputFields.map(({ key, label, required, type, storage, placeholder, options, visibleWhen }) => ({
+      visibleWhen: visibleWhen ?? null,
       key: key.trim(),
       label: label.trim(),
       required,

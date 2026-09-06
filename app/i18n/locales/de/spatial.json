@@ -278,8 +278,10 @@
       "room": "Raum zum Anordnen",
       "automatic": "Automatische Anordnung nebeneinander wiederherstellen",
       "mapAutomatic": "Erfasste Kartenausrichtung wiederherstellen",
-      "mapBackground": "Mapbox-Karte als Hintergrund verwenden",
-      "mapBackgroundHint": "Die georeferenzierte Karte unter der 3D-Szene anzeigen.",
+      "mapBackground": "Kartenhintergrund",
+      "mapBackgroundHint": "Räume auf der Karte anzeigen. Verwendet Mapbox, wenn eingerichtet, sonst die verfügbare Basiskarte.",
+      "mapSetup": "Kartenposition festlegen",
+      "mapSetupHint": "Raum auf der Karte platzieren und ausrichten. Nach dem Speichern wird der Kartenhintergrund aktiviert.",
       "mapHint": "Ziehe einen Raum zum Verschieben. Ziehe den orangefarbenen Griff zum Drehen.",
       "mapUnavailable": "Für den Kartenhintergrund wird eine geografische Verankerung benötigt.",
       "mapCanvas": "Kartenhintergrund unter der 3D-Raumansicht",
@@ -328,13 +330,13 @@
     "lighting": {
       "label": "Beleuchtungsqualität",
       "live": "Live",
-      "liveDescription": "Interaktive Beleuchtung mit der bisherigen Raumbeleuchtung.",
+      "liveDescription": "Schnelle Tageslicht-Vorschau mit einheitlichen Materialfarben und Kontaktschatten.",
       "progressive": "Progressiv",
-      "progressiveDescription": "Eine Lightmap im Texturraum aus leicht versetzten Softlight-Samples aufbauen, während der Raum interaktiv bleibt.",
+      "progressiveDescription": "Die Raumbeleuchtung mit weniger Strahlen vorab berechnen. Materialien und Lichtfarben entsprechen der realistischen Ansicht.",
       "progressiveBaking": "Progressive Lightmap wird aufgebaut… {{progress}} %",
       "progressiveReady": "Progressive Lightmap ist bereit",
       "progressiveQuality": "Progressive Qualität",
-      "progressiveQualityDescription": "Höhere Stufen verwenden größere Licht- und Schattenkarten sowie mehr akkumulierte Licht-Samples.",
+      "progressiveQualityDescription": "Höhere Stufen berechnen mehr Licht-Samples für ruhigere Schatten.",
       "progressiveQualityLevels": {
         "fast": "Schnell",
         "balanced": "Ausgewogen",
@@ -342,9 +344,9 @@
         "ultra": "Ultra"
       },
       "realistic": "Realistisch",
-      "realisticDescription": "Eine Raytracing-Ansicht mit physikalisch berechneten Fensterschatten und indirektem Licht backen.",
+      "realisticDescription": "Licht und Schatten für jeden Raum mit indirekten Reflexionen berechnen. Materialfarben und Oberflächen bleiben erhalten.",
       "rendering": "Rendering",
-      "renderingDescription": "Die aktuelle Kamera bis zu 10 Sekunden mit Mehrfachreflexionen per Raytracing rendern.",
+      "renderingDescription": "Die aktuelle Kamera etwa 20 Sekunden mit Mehrfachreflexionen per Raytracing rendern; auf langsamen Geräten länger.",
       "baking": "Globale Beleuchtung und Schatten werden per Raytracing gebacken… {{progress}} %",
       "baked": "Gebakene globale Beleuchtung und Schatten sind bereit",
       "roomOnly": "Nur Raum backen",
@@ -403,7 +405,8 @@
       "furniture": "Möbel",
       "map": "Kartenposition",
       "rooms": "Räume",
-      "scan": "Scan aktualisieren"
+      "scan": "Scan aktualisieren",
+      "architecture": "Wände & Öffnungen"
     },
     "saved": "Änderungen gespeichert.",
     "save": "Speichern",
@@ -446,7 +449,19 @@
       "dishwasher": "Geschirrspüler",
       "toilet": "Toilette",
       "sink": "Waschtisch",
-      "bathtub": "Badewanne"
+      "bathtub": "Badewanne",
+      "nightstand": "Nachttisch",
+      "tv-console": "TV-Board",
+      "glass-cabinet": "Vitrine",
+      "shoe-cabinet": "Schuhschrank",
+      "kitchen-island": "Kücheninsel",
+      "oval-table": "Ovaler Esstisch",
+      "nesting-tables": "Satztische",
+      "bar-stool": "Barhocker",
+      "lounge-chair": "Lounge-Sessel",
+      "chaise-sofa": "Sofa mit Recamiere rechts",
+      "upholstered-bed": "Polsterbett",
+      "daybed": "Tagesbett"
     },
     "mapHint": "Raummitte auf der Karte anklicken oder den Marker verschieben. Anschließend den Grundriss ausrichten (0° = Norden). Die Vorschau zeigt die tatsächliche Raumkontur.",
     "latitude": "Breitengrad",
@@ -473,7 +488,10 @@
       "split-crosses-furniture": "Die Trennlinie schneidet ein Möbel. Bitte die Linie verschieben.",
       "split-missing-floor": "Die Trennung muss in beiden Räumen eine Bodenfläche erhalten.",
       "invalid-transform": "Die Geometrie kann an dieser Stelle nicht geteilt werden.",
-      "object-not-found": "Dieses Möbel ist nicht mehr im Scan vorhanden."
+      "object-not-found": "Dieses Möbel ist nicht mehr im Scan vorhanden.",
+      "surface-not-found": "Diese Maße oder Position sind ungültig.",
+      "surface-category-changed": "Diese Maße oder Position sind ungültig.",
+      "surface-too-small": "Diese Maße oder Position sind ungültig."
     },
     "categories": {
       "storage": "Schrank / Regal",
@@ -496,6 +514,18 @@
     "regenerate": "Aus ARKit-Daten neu erzeugen",
     "regenerateHint": "Baut die Darstellung mit der aktuellen Modellbibliothek neu auf. Raummaße, Kartenposition, Möbelanpassungen und bestätigte KI-Vorschläge bleiben erhalten.",
     "relatedModels": "Passende Modelle",
-    "regenerated": "Darstellung aus den Raumdaten neu erzeugt."
+    "regenerated": "Darstellung aus den Raumdaten neu erzeugt.",
+    "architecture": {
+      "hint": "Ändere Maße, Position und Material. Türen und Fenster bewegen sich mit ihrer Wand. X/Y/Z beziehen sich auf den Scan; Y ist die Höhe.",
+      "surface": "Bauteil",
+      "width": "Breite (m)",
+      "height": "Höhe / Länge (m)",
+      "thickness": "Stärke (m)",
+      "material": "Material",
+      "roughness": "Rauheit (0 glänzend – 1 matt)",
+      "windowHint": "Farbe und Material gelten für den Fensterrahmen. Die Verglasung bleibt transparent.",
+      "resetFinish": "Erkanntes / ursprüngliches Material verwenden",
+      "invalid": "Diese Maße oder Position sind ungültig."
+    }
   }
 }

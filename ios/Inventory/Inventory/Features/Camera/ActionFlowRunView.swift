@@ -10,6 +10,11 @@ struct ActionFlowRunView: View {
     let code: String
     let codeType: String?
 
+    @State private var chainConfiguration: ActionChainConfiguration?
+    @State private var chainReview = ActionChainReview()
+    @State private var selectedTargets: [UUID: UUID] = [:]
+    @State private var pinnedContext: String?
+    @State private var uploadedValues: [String: ScanActionInputValue] = [:]
     @State private var resolution: ScanActionResolution?
     @State private var textInputs: [String: String] = [:]
     @State private var checkboxInputs: [String: Bool] = [:]
@@ -32,6 +37,8 @@ struct ActionFlowRunView: View {
                         ProgressView("Aktion wird vorbereitet …")
                             .frame(maxWidth: .infinity, minHeight: 180)
                             .inventoryCard()
+                    } else if let chainConfiguration {
+                        chainContents(chainConfiguration)
                     } else if let result {
                         successCard(result)
                     } else if let resolution {
@@ -42,18 +49,28 @@ struct ActionFlowRunView: View {
                         failureCard
                     }
                 }
+                .frame(maxWidth: 680)
                 .padding(20)
+                .frame(maxWidth: .infinity)
             }
             .background(InventoryTheme.canvas)
             .navigationTitle(workflow.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(result == nil ? "Abbrechen" : "Fertig") { dismiss() }
+                    Button(chainReview.completed ? "Nächster Scan" : result == nil ? "Abbrechen" : "Fertig") { dismiss() }
+                        .disabled(executing || chainReview.confirmationUncertain)
                 }
             }
         }
+        .interactiveDismissDisabled(executing || chainReview.confirmationUncertain)
         .task { await loadResolution() }
+        .onChange(of: state.organizationContextIdentifier) { _, _ in dismiss() }
+        .onChange(of: textInputs) { _, _ in chainReview.invalidate() }
+        .onChange(of: checkboxInputs) { _, _ in chainReview.invalidate() }
+        .onChange(of: selectedTargets) { _, _ in
+            chainReview.invalidate(); uploadedValues = [:]; uploadKeys = [:]
+        }
         .fileImporter(
             isPresented: $showFileImporter,
             allowedContentTypes: [.data, .content],
@@ -63,9 +80,164 @@ struct ActionFlowRunView: View {
             switch outcome {
             case .success(let urls):
                 fileInputs[key] = Array(urls.prefix(12))
+                uploadedValues[key] = nil; uploadKeys[key] = nil; chainReview.invalidate()
                 errorMessage = nil
             case .failure(let error):
                 errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func chainContents(_ configuration: ActionChainConfiguration) -> some View {
+        if let report = chainReview.report {
+            ActionChainReportCard(report: report, completed: chainReview.completed)
+            if chainReview.completed {
+                Button("Nächsten Code scannen") { dismiss() }
+                    .buttonStyle(.borderedProminent).tint(InventoryTheme.ink)
+                    .frame(minHeight: 48)
+            } else {
+                VStack(spacing: 12) {
+                    Text("Alle Schritte werden gemeinsam ausgeführt. Wenn ein Schritt fehlschlägt, wird nichts gebucht.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    chainError
+                    Button {
+                        Task { await confirmChain() }
+                    } label: {
+                        HStack {
+                            if executing { ProgressView().tint(.white) }
+                            Text(chainReview.confirmationUncertain ? "Bestätigung erneut senden" : "Alle Änderungen bestätigen")
+                        }.frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(.borderedProminent).tint(InventoryTheme.ink)
+                    .disabled(executing || !state.canManageWorkflows)
+                    Button("Angaben ändern") { chainReview.invalidate(); errorMessage = nil }
+                        .disabled(executing || chainReview.confirmationUncertain)
+                    if !state.canManageWorkflows { Label("Du kannst diesen Ablauf nur ansehen.", systemImage: "lock.fill").font(.footnote) }
+                }.inventoryCard()
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Code erkannt", systemImage: "qrcode.viewfinder").font(.headline)
+                Text(configuration.identifier).font(.body.monospaced()).textSelection(.enabled)
+                Text("Wähle die passenden Angaben. Im nächsten Schritt prüfst du alle Änderungen.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                DisclosureGroup("\(configuration.actions.filter { $0.enabled != false }.count) Schritte im Ablauf") {
+                    ForEach(configuration.actions.filter { $0.enabled != false }) { action in
+                        Label(action.label, systemImage: "circle").font(.subheadline)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
+                    }
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).inventoryCard()
+            targetFields(configuration).disabled(executing)
+            inputFields(visibleChainFields(configuration)).disabled(executing)
+            VStack(spacing: 12) {
+                chainError
+                Button {
+                    Task { await previewChain(configuration) }
+                } label: {
+                    HStack {
+                        if executing { ProgressView().tint(.white) }
+                        Text(executing ? "Ablauf wird geprüft …" : "Alle Aktionen prüfen")
+                    }.frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent).tint(InventoryTheme.ink).disabled(executing)
+                Text("Dabei wird noch kein Bestand verändert.").font(.footnote).foregroundStyle(.secondary)
+            }.inventoryCard()
+        }
+    }
+
+    @ViewBuilder private var chainError: some View {
+        if let errorMessage {
+            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline).foregroundStyle(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
+
+    private func targetFields(_ configuration: ActionChainConfiguration) -> some View {
+        ForEach(configuration.targetGroups) { group in
+            VStack(alignment: .leading, spacing: 12) {
+                if configuration.targetSelectionMode == "all" {
+                    Text(group.name).font(.headline)
+                } else {
+                    Button {
+                        if configuration.targetSelectionMode == "radio" {
+                            selectedTargets = group.options.first.map { [group.id: $0.id] } ?? [:]
+                        } else if selectedTargets[group.id] != nil { selectedTargets[group.id] = nil }
+                        else { selectedTargets[group.id] = group.options.first?.id }
+                    } label: {
+                        Label(group.name, systemImage: selectedTargets[group.id] == nil ? "circle" : "checkmark.circle.fill")
+                            .font(.headline).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }.buttonStyle(.plain)
+                    .accessibilityAddTraits(selectedTargets[group.id] == nil ? [] : [.isSelected])
+                }
+                if selectedTargets[group.id] != nil && group.options.count > 1 {
+                    Picker("Variante", selection: Binding(
+                        get: { selectedTargets[group.id] },
+                        set: { selectedTargets[group.id] = $0 }
+                    )) {
+                        ForEach(group.options) { option in Text(option.name).tag(Optional(option.id)) }
+                    }.pickerStyle(.menu).frame(minHeight: 44)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).inventoryCard()
+        }
+    }
+
+    private func visibleChainFields(_ configuration: ActionChainConfiguration) -> [ScanActionInputField] {
+        var values: [String: ActionChainJSON] = [:]
+        for field in configuration.inputFields {
+            let raw = textInputs[field.key, default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
+            if field.resolvedType == "checkbox" { values[field.key] = .bool(checkboxInputs[field.key, default: false]) }
+            else if field.resolvedType == "number", let number = Double(raw.replacingOccurrences(of: ",", with: ".")), number.isFinite { values[field.key] = .number(number) }
+            else if field.resolvedType == "media", !photoInputs[field.key, default: []].isEmpty { values[field.key] = .array([.string("selected")]) }
+            else if field.resolvedType == "file", !fileInputs[field.key, default: []].isEmpty { values[field.key] = .array([.string("selected")]) }
+            else if !raw.isEmpty { values[field.key] = .string(raw) }
+        }
+        return configuration.visibleFields(raw: code, inputs: values)
+    }
+
+    @MainActor private func previewChain(_ configuration: ActionChainConfiguration) async {
+        guard let client = state.client, pinnedContext == state.organizationContextIdentifier else { return }
+        let fields = visibleChainFields(configuration)
+        errorMessage = nil
+        let selected = configuration.targetGroups.compactMap { selectedTargets[$0.id] }
+        guard let uploadTarget = selected.first else { errorMessage = "Bitte mindestens ein Produkt auswählen."; return }
+        guard validate(fields: fields) else { return }
+        for field in fields where field.resolvedType == "number" {
+            let raw = textInputs[field.key, default: ""].trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
+            if !raw.isEmpty && !(Double(raw)?.isFinite ?? false) { errorMessage = "Bitte bei \(field.label) eine gültige Zahl eingeben."; return }
+        }
+        executing = true
+        defer { executing = false }
+        do {
+            var inputs = try await encodedInputs(fields: fields, client: client, resourceID: uploadTarget)
+            for field in fields where field.resolvedType == "checkbox" { inputs[field.key] = .boolean(checkboxInputs[field.key, default: false]) }
+            let request = ActionChainRunRequest(workflowId: configuration.id, code: code, codeType: codeType, selectedResourceIds: selected, inputs: inputs)
+            let report = try await client.previewActionChain(request)
+            guard pinnedContext == state.organizationContextIdentifier else { return }
+            chainReview.reviewed(report, request: request)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    @MainActor private func confirmChain() async {
+        guard state.canManageWorkflows, let client = state.client, let request = chainReview.request,
+              pinnedContext == state.organizationContextIdentifier, !executing else { return }
+        executing = true; errorMessage = nil
+        defer { executing = false }
+        do {
+            let report = try await client.executeActionChain(request, idempotencyKey: chainReview.key)
+            guard pinnedContext == state.organizationContextIdentifier else { return }
+            chainReview.report = report; chainReview.completed = true; chainReview.confirmationUncertain = false
+        } catch {
+            if let status = (error as? APIClientError)?.statusCode, (400..<500).contains(status) {
+                chainReview.confirmationUncertain = false
+                chainReview.invalidate()
+                errorMessage = status == 409 ? "Die Angaben oder der Bestand haben sich geändert. Bitte den Ablauf erneut prüfen." : error.localizedDescription
+            } else {
+                chainReview.confirmationUncertain = true
+                errorMessage = "Die Bestätigung ist noch unklar. Bitte erneut senden; dieselbe Buchung wird dabei nicht doppelt ausgeführt."
             }
         }
     }
@@ -228,7 +400,7 @@ struct ActionFlowRunView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(InventoryTheme.ink)
-            .disabled(executing)
+            .disabled(executing || !state.canManageWorkflows)
         }
         .inventoryCard()
     }
@@ -283,6 +455,15 @@ struct ActionFlowRunView: View {
         loading = true
         errorMessage = nil
         do {
+            pinnedContext = state.organizationContextIdentifier
+            if workflow.hasActionChain {
+                let configuration = try await client.prepareActionChain(workflowID: workflow.id, code: code, codeType: codeType)
+                guard pinnedContext == state.organizationContextIdentifier else { return }
+                chainConfiguration = configuration
+                selectedTargets = configuration.defaultSelection
+                loading = false
+                return
+            }
             resolution = try await client.resolveScanAction(
                 workflowID: workflow.id,
                 code: code,
@@ -298,8 +479,8 @@ struct ActionFlowRunView: View {
 
     @MainActor
     private func execute(_ value: ScanActionResolution) async {
-        guard let client = state.client else {
-            errorMessage = "Keine Verbindung zum Inventarserver."
+        guard state.canManageWorkflows, let client = state.client, pinnedContext == state.organizationContextIdentifier else {
+            errorMessage = "Du hast keine Berechtigung, diesen Ablauf auszuführen."
             return
         }
         errorMessage = nil
@@ -354,6 +535,7 @@ struct ActionFlowRunView: View {
         for field in fields {
             switch field.resolvedType {
             case "media":
+                if let uploaded = uploadedValues[field.key] { values[field.key] = uploaded; continue }
                 let uploads = try await temporaryPhotoUploads(photoInputs[field.key, default: []])
                 defer { uploads.forEach { try? FileManager.default.removeItem(at: $0.fileURL) } }
                 if !uploads.isEmpty {
@@ -365,8 +547,10 @@ struct ActionFlowRunView: View {
                     values[field.key] = .identifiers(
                         response.uploaded.map { $0.id.uuidString.lowercased() }
                     )
+                    uploadedValues[field.key] = values[field.key]
                 }
             case "file":
+                if let uploaded = uploadedValues[field.key] { values[field.key] = uploaded; continue }
                 let uploads = try temporaryFileUploads(fileInputs[field.key, default: []])
                 defer { uploads.forEach { try? FileManager.default.removeItem(at: $0.fileURL) } }
                 if !uploads.isEmpty {
@@ -378,6 +562,7 @@ struct ActionFlowRunView: View {
                     values[field.key] = .identifiers(
                         response.uploaded.map { $0.id.uuidString.lowercased() }
                     )
+                    uploadedValues[field.key] = values[field.key]
                 }
             case "number":
                 let raw = textInputs[field.key, default: ""]
@@ -400,7 +585,7 @@ struct ActionFlowRunView: View {
     ) async throws -> [MediaUploadFile] {
         var files: [MediaUploadFile] = []
         for item in items {
-            guard let data = try await item.loadTransferable(type: Data.self) else { continue }
+            guard let data = try await item.loadTransferable(type: Data.self) else { throw APIClientError.invalidUpload("Ein Foto konnte nicht geladen werden. Bitte erneut auswählen.") }
             let contentType = item.supportedContentTypes.first ?? .jpeg
             let fileExtension = contentType.preferredFilenameExtension ?? "jpg"
             let url = FileManager.default.temporaryDirectory
@@ -457,7 +642,7 @@ struct ActionFlowRunView: View {
     private func photoBinding(for key: String) -> Binding<[PhotosPickerItem]> {
         Binding(
             get: { photoInputs[key, default: []] },
-            set: { photoInputs[key] = $0 }
+            set: { photoInputs[key] = $0; uploadedValues[key] = nil; uploadKeys[key] = nil; chainReview.invalidate() }
         )
     }
 }

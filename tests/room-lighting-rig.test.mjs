@@ -93,8 +93,8 @@ test("sizes the fill so it lands at the requested ratio below the key", () => {
 
 test("measures the key against the floor, not the beam", () => {
   // A light 46 degrees up delivers noticeably less than its beam figure.
-  assert.ok(roomKeyFloorIrradiance() < 0.75 * 15);
-  assert.ok(roomKeyFloorIrradiance() > 0.65 * 15);
+  assert.ok(roomKeyFloorIrradiance() < 0.75 * roomKeyLightIrradiance);
+  assert.ok(roomKeyFloorIrradiance() > 0.65 * roomKeyLightIrradiance);
 });
 
 test("sizes the key panel to deliver the rig's irradiance", () => {

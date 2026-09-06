@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   roomFurnitureReferenceVariants,
+  roomFurnitureAssetDirectory,
   type RoomFurnitureVariant,
 } from "@/lib/room-furniture-catalog";
 
@@ -19,9 +20,7 @@ export async function roomFurnitureReferenceImages(
           path.join(
             process.cwd(),
             "public",
-            "models",
-            "room-furniture",
-            "v1",
+            roomFurnitureAssetDirectory.slice(1),
             `${variant}.png`,
           ),
         )

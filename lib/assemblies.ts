@@ -35,7 +35,7 @@ import {
   type StockTrackingMode,
   type StockUnitRecord,
 } from "@/db/schema";
-import { db } from "@/lib/db";
+import { db, type DatabaseExecutor } from "@/lib/db";
 import {
   BOM_WRITE_LOCK_ID,
   VARIANT_FAMILY_WRITE_LOCK_ID,
@@ -2065,6 +2065,8 @@ export async function buildAssembly(
   actor: string,
   idempotency: IdempotencyInput,
   authorize: (resource: ResourceRecord) => boolean | Promise<boolean>,
+  executor: DatabaseExecutor = db,
+  plannedIds?: { buildId: string; outputUnitIds: string[] },
 ) {
   let lockedResourcesAuthorized = false;
 
@@ -2083,7 +2085,7 @@ export async function buildAssembly(
   };
 
   try {
-    return await db.transaction(async (transaction) => {
+    return await executor.transaction(async (transaction) => {
       // Builds and recipe writes share one lock order: BOM graph first, then
       // resource rows. The effective inherited recipe therefore cannot change
       // between resolution and stock consumption.
@@ -2296,6 +2298,7 @@ export async function buildAssembly(
       const [build] = await transaction
         .insert(assemblyBuilds)
         .values({
+          id: plannedIds?.buildId,
           organizationId,
           assemblyResourceId,
           quantity: input.quantity,
@@ -2336,7 +2339,8 @@ export async function buildAssembly(
         outputUnits = await transaction
           .insert(stockUnits)
           .values(
-            outputCodes.map((code) => ({
+            outputCodes.map((code, index) => ({
+              id: plannedIds?.outputUnitIds[index],
               organizationId,
               resourceId: assemblyResourceId,
               code,
@@ -2780,7 +2784,7 @@ export async function buildAssembly(
     });
   } catch (error) {
     if (lockedResourcesAuthorized) {
-      const [winner] = await db
+      const [winner] = await executor
         .select()
         .from(assemblyBuilds)
         .where(
