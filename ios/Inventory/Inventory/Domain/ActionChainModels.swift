@@ -71,11 +71,18 @@ public struct ActionChainConditions: Codable, Equatable, Sendable {
             let left = rule.left.resolve(identifier: identifier, raw: raw, inputs: inputs)
             let right = rule.right?.resolve(identifier: identifier, raw: raw, inputs: inputs)
             let present = left != nil && left != .null && left != .string("")
+            let equal: Bool
+            switch (left, right) {
+            case (.array, .array), (.object, .object):
+                // The server compares collections by identity, not by their contents.
+                equal = rule.left.source == "input" && rule.right?.source == "input" && rule.left.key == rule.right?.key
+            default: equal = left == right
+            }
             switch rule.operator {
             case "exists": return present
             case "missing": return !present
-            case "equals": return left != nil && right != nil && left == right
-            case "not-equals": return left != nil && right != nil && left != right
+            case "equals": return left != nil && right != nil && equal
+            case "not-equals": return left != nil && right != nil && !equal
             case "gt", "gte", "lt", "lte":
                 guard case .number(let lhs) = left, case .number(let rhs) = right else { return false }
                 switch rule.operator {

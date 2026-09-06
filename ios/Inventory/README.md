@@ -18,6 +18,12 @@ WebRTC is not required for app-to-server uploads.
 - Automatic retry with backoff and end-to-end idempotency for every queued stage
 - Inventory search, authenticated image loading, details, and manual editing
 - One-tap stock receipts plus confirmed stock issues from a scanned item
+- Native action chains: choose a flow directly in the scanner, scan, select a
+  product variant, answer conditional inputs, review every step and confirm once
+- Exact serialized component selection, stock/status/location changes and webhook
+  steps use the same atomic server execution as the web app
+- Retained confirmation keys for safe retries, stale-preview handling, and a
+  next-scan button that keeps the selected flow
 - Camera-based part counting with confidence, manual correction, and reviewed stock +/-
 - Camera-based object recognition with ranked matches to existing inventory items
 - Email/password login with a device token stored in Keychain
@@ -44,6 +50,27 @@ Use HTTPS for devices. Plain HTTP is accepted only for `localhost`, loopback,
 and `.local` development hosts; bearer tokens are never sent over public HTTP.
 The Simulator can build and exercise API/UI behavior,
 but camera and scanner acceptance must be done on a physical iPhone.
+
+## Action flows
+
+In **Scanner**, use **Ablauf wählen** above the camera to select a saved flow.
+Scan its code, choose the product/variant and fill in the displayed inputs. Tap
+**Alle Aktionen prüfen**, review the list of stock changes and components, then
+**Alle Änderungen bestätigen**. **Nächsten Code scannen** returns to the same
+flow. Hidden inputs are excluded, and read-only accounts can review but cannot
+confirm. After an uncertain connection result, retry keeps the exact request
+and execution key. Photo/file uploads are reused while reviewing the same target.
+
+**Einstellungen → Web → Aktionsabläufe bearbeiten** opens the existing web
+editor for the current organization. Flow authoring stays in that editor; the
+scan, input, review and confirmation screens are native SwiftUI. The installable
+web app uses the same web editor and runner as the browser.
+
+The app and server update must be released together. New chains require the
+action-chain migration and the authenticated `POST /stock/scan-workflows/{id}/runner`
+preparation endpoint, which returns the identifier using the server's exact
+extraction rules. Legacy workflows without an action list retain their existing
+native execution path.
 
 ## Spatial rooms
 

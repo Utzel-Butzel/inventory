@@ -396,7 +396,7 @@
     },
     "models": {
       "loading": "Möbelmodelle werden geladen …",
-      "fallback": "Modellbibliothek nicht erreichbar. Vereinfachte Modelle werden angezeigt."
+      "fallback": "Modellbibliothek konnte nicht geladen werden. Vereinfachte Modelle werden angezeigt."
     }
   },
   "editor": {

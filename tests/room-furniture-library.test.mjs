@@ -118,6 +118,59 @@ const gltf = await new GLTFLoader().parseAsync(
   "",
 );
 
+test("furniture downloads can finish after the former 15-second deadline", async (t) => {
+  const library = await import("../lib/room-furniture-assets.ts?slow-download");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.mock.method(AbortSignal, "timeout", (milliseconds) => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new DOMException("Timed out", "TimeoutError")), milliseconds);
+    return controller.signal;
+  });
+  const fetchMock = t.mock.method(globalThis, "fetch", async (_url, { signal }) => ({
+    ok: true,
+    arrayBuffer: () => new Promise((resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      setTimeout(() => resolve(Uint8Array.from(rebuilt).buffer), 20_000);
+    }),
+  }));
+  const pending = library.loadRoomFurnitureLibrary();
+  assert.equal(library.loadRoomFurnitureLibrary(), pending);
+  assert.equal(library.isRoomFurnitureLibraryLoaded(), false);
+  await Promise.resolve();
+  t.mock.timers.tick(20_000);
+  await pending;
+  assert.equal(library.isRoomFurnitureLibraryLoaded(), true);
+  for (const variant of roomFurnitureVariants) {
+    assert.ok(library.createBlenderFurnitureModel(variant, [1, 1, 1]), variant);
+  }
+  await library.loadRoomFurnitureLibrary();
+  assert.equal(fetchMock.mock.callCount(), 1, "reuse the completed library");
+});
+
+test("failed furniture loads can be retried without leaving a partial library", async (t) => {
+  const scenarios = [
+    ["http", async () => new Response(null, { status: 503 }), /furniture-library-unavailable:503/],
+    ["network", async () => { throw new TypeError("Failed to fetch"); }, /Failed to fetch/],
+    ["timeout", async () => ({ ok: true, arrayBuffer: async () => { throw new DOMException("Timed out", "TimeoutError"); } }), /Timed out/],
+    ["invalid-file", async () => new Response("<html>Bad gateway</html>"), /JSON/],
+    ["missing-model", async () => new Response(JSON.stringify({ asset: { version: "2.0" }, scenes: [{ nodes: [] }] })), /furniture-model-missing/],
+  ];
+  for (const [name, failedFetch, expectedError] of scenarios) {
+    await t.test(name, async (t) => {
+      const library = await import(`../lib/room-furniture-assets.ts?retry-${name}`);
+      const fetchMock = t.mock.method(globalThis, "fetch", failedFetch);
+      await assert.rejects(library.loadRoomFurnitureLibrary(), expectedError);
+      assert.equal(library.isRoomFurnitureLibraryLoaded(), false);
+      assert.equal(library.createBlenderFurnitureModel("chair", [1, 1, 1]), null);
+      fetchMock.mock.mockImplementation(async () => new Response(rebuilt));
+      await library.loadRoomFurnitureLibrary();
+      assert.equal(library.isRoomFurnitureLibraryLoaded(), true);
+      assert.ok(library.createBlenderFurnitureModel("chair", [1, 1, 1]));
+      assert.equal(fetchMock.mock.callCount(), 2);
+    });
+  }
+});
+
 test("all Blender models fit ARKit extents without sharing disposable geometry or materials", () => {
   for (const variant of roomFurnitureVariants) {
     const template = gltf.scene.children.find(

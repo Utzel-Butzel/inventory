@@ -99,6 +99,8 @@ struct UnifiedCameraView: View {
     @State private var showCreateForm = false
     @State private var scannerErrorMessage: String?
     @State private var scanActionWorkflows: [ScanActionWorkflow] = []
+    @State private var actionFlowsLoading = false
+    @State private var actionFlowsLoadFailed = false
     @State private var selectedScanActionWorkflowID: UUID?
     @State private var pendingActionScan: PendingActionScan?
     @State private var lookupTask: Task<Void, Never>?
@@ -147,7 +149,7 @@ struct UnifiedCameraView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, geometry.safeAreaInsets.top + 8)
 
-                    if mode == .scan, !scanActionWorkflows.isEmpty {
+                    if mode == .scan, state.canReadWorkflows {
                         Menu {
                             Picker("Ablauf wählen", selection: $selectedScanActionWorkflowID) {
                                 Text("Inventarartikel suchen").tag(nil as UUID?)
@@ -155,12 +157,17 @@ struct UnifiedCameraView: View {
                                     Text(workflow.name).tag(Optional(workflow.id))
                                 }
                             }
+                            if actionFlowsLoadFailed || scanActionWorkflows.isEmpty {
+                                Button("Abläufe erneut laden", systemImage: "arrow.clockwise") {
+                                    Task { await loadActionFlows() }
+                                }
+                            }
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: selectedScanActionWorkflow == nil ? "magnifyingglass" : "bolt.fill")
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(selectedScanActionWorkflow?.name ?? "Inventarartikel suchen").font(.subheadline.weight(.semibold))
-                                    Text("Ablauf wählen").font(.caption)
+                                    Text(actionFlowsLoading ? "Abläufe werden geladen …" : actionFlowsLoadFailed ? "Abläufe konnten nicht geladen werden" : scanActionWorkflows.isEmpty ? "Keine aktiven Abläufe vorhanden" : "Ablauf wählen").font(.caption)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.down")
@@ -168,6 +175,7 @@ struct UnifiedCameraView: View {
                             .foregroundStyle(.white).padding(14)
                             .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
                         }
+                        .disabled(actionFlowsLoading)
                         .padding(.horizontal, 16).padding(.top, 10)
                     }
 
@@ -213,15 +221,9 @@ struct UnifiedCameraView: View {
             if let client = state.client {
                 await countModel.loadCountModels(using: client)
                 inventoryTypes = (try? await client.inventoryTypes().types) ?? []
-                scanActionWorkflows = state.canReadWorkflows ? (
-                    try? await client.scanActionWorkflows().workflows.filter(\.enabled)
-                ) ?? [] : []
-                if let selectedScanActionWorkflowID,
-                   !scanActionWorkflows.contains(where: { $0.id == selectedScanActionWorkflowID }) {
-                    self.selectedScanActionWorkflowID = nil
-                }
             }
         }
+        .task(id: state.organizationContextIdentifier) { await loadActionFlows() }
         .task(id: camera.isRecordingVideo) {
             recordingSeconds = 0
             while camera.isRecordingVideo, !Task.isCancelled {
@@ -2249,6 +2251,29 @@ struct UnifiedCameraView: View {
         isResolvingCode = false
         camera.scanningEnabled = shouldScanCodes
         camera.start()
+    }
+
+    @MainActor private func loadActionFlows() async {
+        let context = state.organizationContextIdentifier
+        let previousSelection = selectedScanActionWorkflowID
+        scanActionWorkflows = []
+        selectedScanActionWorkflowID = nil
+        actionFlowsLoadFailed = false
+        actionFlowsLoading = false
+        guard state.canReadWorkflows, let client = state.client else { return }
+        actionFlowsLoading = true
+        defer { if context == state.organizationContextIdentifier { actionFlowsLoading = false } }
+        do {
+            let workflows = try await client.scanActionWorkflows().workflows.filter(\.enabled)
+            guard !Task.isCancelled, context == state.organizationContextIdentifier else { return }
+            scanActionWorkflows = workflows
+            if let previousSelection, workflows.contains(where: { $0.id == previousSelection }) {
+                selectedScanActionWorkflowID = previousSelection
+            }
+        } catch {
+            guard !Task.isCancelled, context == state.organizationContextIdentifier else { return }
+            actionFlowsLoadFailed = true
+        }
     }
 
     private var selectedScanActionWorkflow: ScanActionWorkflow? {

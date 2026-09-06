@@ -2835,6 +2835,27 @@ paths:
             action summaries and targetGroups"
         "404":
           description: Flow unavailable or has no action chain
+    post:
+      tags: [Scan workflows]
+      summary: Prepare a native scan and return the server-extracted identifier
+      description: Requires workflows.read. Returns the runner configuration plus identifier. Validates the code type and extraction rules without changing stock or requiring form inputs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code: { type: string, minLength: 1, maxLength: 2048 }
+                codeType:
+                  type: [string, "null"]
+                  enum: [qr_code, data_matrix, aztec, pdf417, code_128, code_93, code_39, codabar, ean_13, ean_8, upc_a, upc_e, itf, null]
+      responses:
+        "200": { description: Runner configuration including the extracted identifier }
+        "404": { description: Flow unavailable }
+        "422": { description: Invalid code type or code does not match extraction rules }
   /stock/action-chains/preview:
     parameters: &a2
       - *a1

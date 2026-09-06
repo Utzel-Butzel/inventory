@@ -31,6 +31,14 @@ Ein Fehler rollt sämtliche Bestandsänderungen, Einheitenänderungen, Fertigung
 
 Dateianhänge werden wie bisher vor der Bestandsprüfung hochgeladen; sie gehören nicht zur Bestandstransaktion. Öffentliche Ablauflinks unterstützen weiterhin keine Dateiuploads. Ein wiederholtes Webhook-Zustellungsereignis wird unabhängig von der Bestandstransaktion über die vorhandene Zustellungsverwaltung behandelt.
 
+## In der iPhone-App
+
+Öffne den Scanner und tippe oben auf **Ablauf wählen**. Wähle deinen Ablauf, scanne die Platine und wähle anschließend die Produktvariante und gegebenenfalls die Farbe. Die App zeigt nur die Eingaben, deren Bedingungen erfüllt sind. Mit **Alle Aktionen prüfen** siehst du jeden Schritt einzeln, einschließlich der verbauten Komponenten. Mit **Alle Änderungen bestätigen** führst du den Ablauf aus. **Nächsten Code scannen** behält den gewählten Ablauf bei.
+
+Bei einer unklaren Bestätigung nach einem Verbindungsfehler tippe auf **Bestätigung erneut senden**. Die App verwendet dieselbe Anfrage und denselben Ausführungsschlüssel. Nutzer mit Leserechten können prüfen, aber keine Änderungen bestätigen.
+
+Unter **Einstellungen → Web → Aktionsabläufe bearbeiten** öffnest du den Webeditor deiner ausgewählten Organisation, um Schritte, Varianten und Eingaben zu bearbeiten. Für die native Ausführung müssen die neue App-Version und die aktualisierte Server-Version installiert sein.
+
 ## Bedingungen und Werte
 
 Werte können fest eingestellt sein, aus dem Scan, einer Scan-Eingabe oder einem früheren Aktionsergebnis stammen. Bedingungen unterstützen gleich/ungleich, vorhanden/fehlend und Zahlenvergleiche; mehrere Bedingungen können mit „alle“ oder „mindestens eine“ verknüpft werden.
@@ -45,7 +53,7 @@ Eine Fertigung mit Menge größer 1 erzeugt bei serialisiertem Bestand die Kennu
 
 Bestehende Abläufe ohne `actions` behalten ihre bisherige Ausführung. Der neue Editor übernimmt die alte Hauptaktion und einen bisherigen Webhook beim Speichern in die Aktionsliste. API-Clients verwenden für diese Abläufe die neuen Endpunkte:
 
-1. `GET /api/v1/stock/scan-workflows/{workflowId}/runner` liefert Ziele, Varianten und Eingaben.
+1. `GET /api/v1/stock/scan-workflows/{workflowId}/runner` liefert Ziele, Varianten und Eingaben. Native Clients können denselben Pfad mit `POST` und `{ "code": "PCB-123", "codeType": "qr_code" }` aufrufen; dann enthält die Antwort zusätzlich die vom Server extrahierte `identifier`-Kennung für Eingabebedingungen.
 2. `POST /api/v1/stock/action-chains/preview` erhält `workflowId`, `code`, optional `codeType`, `selectedResourceIds` und `inputs`. Die Antwort enthält `planHash` und die Liste aller geprüften Schritte.
 3. `POST /api/v1/stock/action-chains/execute` erhält dieselben Angaben plus `expectedPlanHash`. Im Header steht eine neue UUID als `Idempotency-Key`. Bei einer Wiederholung derselben Anfrage bleibt dieser Schlüssel unverändert.
 

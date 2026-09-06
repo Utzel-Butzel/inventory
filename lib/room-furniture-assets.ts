@@ -15,9 +15,13 @@ export function isRoomFurnitureLibraryLoaded() {
 export function loadRoomFurnitureLibrary() {
   loading ??= (async () => {
     const response = await fetch(roomFurnitureLibraryUrl, {
-      signal: AbortSignal.timeout(15_000),
+      // The embedded library is ~7 MB and shares bandwidth with scan assets.
+      // Allow slow connections to finish downloading the response body too.
+      signal: AbortSignal.timeout(60_000),
     });
-    if (!response.ok) throw new Error("furniture-library-unavailable");
+    if (!response.ok) {
+      throw new Error(`furniture-library-unavailable:${response.status}`);
+    }
     const gltf = await new GLTFLoader().parseAsync(
       await response.arrayBuffer(),
       "",

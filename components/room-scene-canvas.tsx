@@ -824,7 +824,14 @@ export function RoomSceneCanvas({
   useEffect(() => {
     if (furnitureLibrary !== "loading") return;
     let cancelled = false;
-    void loadRoomFurnitureLibrary().then(() => { if (!cancelled) setFurnitureLibrary("ready"); }, () => { if (!cancelled) setFurnitureLibrary("fallback"); });
+    void loadRoomFurnitureLibrary().then(
+      () => { if (!cancelled) setFurnitureLibrary("ready"); },
+      (error) => {
+        if (cancelled) return;
+        console.warn("Room furniture library could not be loaded.", error);
+        setFurnitureLibrary("fallback");
+      },
+    );
     return () => { cancelled = true; };
   }, [furnitureLibrary]);
   useEffect(() => { if (manifest.scan.scene.presentation) setSceneMode("roomplan"); }, [manifest.scan.scene.presentation]);
@@ -3963,7 +3970,18 @@ export function RoomSceneCanvas({
       )}
     >
       {furnitureLibrary === "loading" ? <div role="status" className="absolute inset-0 z-20 flex items-center justify-center gap-2 bg-surface-muted text-sm text-muted"><LoaderCircle className="size-4 animate-spin" />{t("canvas.models.loading")}</div> : null}
-      {furnitureLibrary === "fallback" ? <p role="status" className="absolute bottom-12 left-3 z-20 rounded-lg bg-surface px-3 py-2 text-xs text-muted">{t("canvas.models.fallback")}</p> : null}
+      {furnitureLibrary === "fallback" ? (
+        <div className="absolute bottom-12 left-3 right-3 z-20 flex w-fit max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 rounded-lg bg-surface px-3 py-2 text-xs text-muted">
+          <p role="status">{t("canvas.models.fallback")}</p>
+          <button
+            type="button"
+            className="rounded-sm font-medium text-foreground underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2"
+            onClick={() => setFurnitureLibrary("loading")}
+          >
+            {t("common:actions.retry")}
+          </button>
+        </div>
+      ) : null}
       {rendererError ? (
         <div className="absolute inset-0 z-10 grid place-items-center p-8 text-center text-sm text-muted">
           {rendererError}

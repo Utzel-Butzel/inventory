@@ -396,7 +396,7 @@
     },
     "models": {
       "loading": "Loading furniture models …",
-      "fallback": "Model library unavailable. Showing simplified models."
+      "fallback": "Model library could not be loaded. Showing simplified models."
     }
   },
   "editor": {

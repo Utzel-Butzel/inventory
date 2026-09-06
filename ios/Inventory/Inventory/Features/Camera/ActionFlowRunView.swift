@@ -566,6 +566,7 @@ struct ActionFlowRunView: View {
                 }
             case "number":
                 let raw = textInputs[field.key, default: ""]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
                     .replacingOccurrences(of: ",", with: ".")
                 if !raw.isEmpty, let number = Double(raw) {
                     values[field.key] = .number(number)
