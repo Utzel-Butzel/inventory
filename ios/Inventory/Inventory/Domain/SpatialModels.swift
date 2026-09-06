@@ -220,7 +220,7 @@ public struct SpatialRoomKeyframe: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-public struct SpatialRoomKeyframeDraft: Equatable, Sendable {
+public struct SpatialRoomKeyframeDraft: Codable, Equatable, Sendable {
     public let metadata: SpatialRoomKeyframe
     public let imageURL: URL
 
@@ -365,13 +365,13 @@ public struct SpatialRoomPlacement: Codable, Equatable, Identifiable, Sendable {
     public let updatedAt: Date
 }
 
-public struct SpatialRoomScanDraft: Sendable {
+public struct SpatialRoomScanDraft: Codable, Sendable {
     public let id: UUID
     public let roomName: String
     public let scene: SpatialRoomScene
     public let capturedAt: Date
     public let deviceModel: String
-    public let worldMapURL: URL
+    public let worldMapURL: URL?
     public let modelURL: URL
     public let guideImageURL: URL?
     public let structureID: UUID?
@@ -390,7 +390,7 @@ public struct SpatialRoomScanDraft: Sendable {
         scene: SpatialRoomScene,
         capturedAt: Date,
         deviceModel: String,
-        worldMapURL: URL,
+        worldMapURL: URL?,
         modelURL: URL,
         guideImageURL: URL?,
         structureID: UUID? = nil,
@@ -423,10 +423,11 @@ public struct SpatialRoomScanDraft: Sendable {
     }
 
     public func removeLocalArtifacts() {
-        let directory = worldMapURL.deletingLastPathComponent().standardizedFileURL
+        let directory = modelURL.deletingLastPathComponent().standardizedFileURL
         let expectedName = "inventory-room-scan-\(id.uuidString)"
         guard directory.lastPathComponent == expectedName,
               modelURL.deletingLastPathComponent().standardizedFileURL == directory,
+              worldMapURL == nil || worldMapURL?.deletingLastPathComponent().standardizedFileURL == directory,
               (
                   guideImageURL == nil ||
                   guideImageURL?.deletingLastPathComponent().standardizedFileURL == directory
@@ -442,6 +443,29 @@ public struct SpatialRoomScanDraft: Sendable {
             return
         }
         try? FileManager.default.removeItem(at: directory)
+    }
+
+    /// Rebase after copying into Application Support, or after iOS changes
+    /// the application's container URL during an update/restore.
+    func relocated(to directory: URL) -> Self {
+        Self(
+            id: id, roomName: roomName, scene: scene, capturedAt: capturedAt,
+            deviceModel: deviceModel,
+            worldMapURL: worldMapURL.map { directory.appendingPathComponent($0.lastPathComponent) },
+            modelURL: directory.appendingPathComponent(modelURL.lastPathComponent),
+            guideImageURL: guideImageURL.map { directory.appendingPathComponent($0.lastPathComponent) },
+            structureID: structureID, structureName: structureName,
+            floorIdentifier: floorIdentifier, floorIndex: floorIndex,
+            roomIdentifier: roomIdentifier, coordinateSpaceID: coordinateSpaceID,
+            georeference: georeference,
+            structureModelURL: structureModelURL.map { directory.appendingPathComponent($0.lastPathComponent) },
+            keyframes: keyframes.map {
+                SpatialRoomKeyframeDraft(
+                    metadata: $0.metadata,
+                    imageURL: directory.appendingPathComponent("keyframes").appendingPathComponent($0.imageURL.lastPathComponent)
+                )
+            }
+        )
     }
 }
 

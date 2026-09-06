@@ -260,6 +260,11 @@ public final class APIClient: Sendable {
         let url = try makeAPIURL(path: ["room-scans"])
         var request = try await authorizedRequest(url: url, method: "POST")
         request.timeoutInterval = 300
+        let bodySize = try body.fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        guard let bodySize, bodySize > 0 else {
+            throw APIClientError.invalidUpload("Die Raumscan-Datei fehlt oder ist leer.")
+        }
+        request.setValue(String(bodySize), forHTTPHeaderField: "Content-Length")
         request.setValue(
             "multipart/form-data; boundary=\(body.boundary)",
             forHTTPHeaderField: "Content-Type"

@@ -1,7 +1,7 @@
 import RoomPlan
 import SwiftUI
 
-struct SpatialRoomAppendSeed: Equatable, Sendable {
+struct SpatialRoomAppendSeed: Codable, Equatable, Sendable {
     let structureID: UUID
     let structureName: String
     let suggestedFloorIdentifier: String
@@ -10,7 +10,7 @@ struct SpatialRoomAppendSeed: Equatable, Sendable {
     let existingCoordinateSpaceIDs: Set<UUID>
 }
 
-enum SpatialRoomScanMode: Equatable, Sendable {
+enum SpatialRoomScanMode: Codable, Equatable, Sendable {
     case newStructure
     case appendToStructure(SpatialRoomAppendSeed)
     case replaceRoom(SpatialRoomScanSummary)
@@ -188,13 +188,15 @@ struct SpatialRoomsView: View {
     @State private var hasLoaded = false
     @State private var errorMessage: String?
     @State private var presentation: RoomScanPresentation?
+    @State private var pendingScans: [SpatialPendingScan] = []
+    @State private var loadGeneration = UUID()
 
     var body: some View {
         NavigationStack {
             Group {
                 if loading && !hasLoaded {
                     ProgressView("3D-Räume werden geladen …")
-                } else if scans.isEmpty {
+                } else if scans.isEmpty && pendingScans.isEmpty {
                     emptyState
                 } else {
                     roomList
@@ -213,13 +215,21 @@ struct SpatialRoomsView: View {
                 }
             }
             .refreshable { await loadScans() }
-            .task(id: state.client?.contextIdentifier) { await loadScans() }
+            .task(id: state.client?.contextIdentifier) {
+                pendingScans = []
+                scans = []
+                hasLoaded = false
+                await loadScans()
+            }
             .sheet(item: $presentation) { presentation in
-                RoomScanFlowView(mode: presentation.mode) {
+                RoomScanFlowView(mode: presentation.mode, pendingScan: presentation.pendingScan) {
                     self.presentation = nil
                     Task { await loadScans() }
                 }
                 .environmentObject(state)
+            }
+            .onChange(of: presentation == nil) { _, closed in
+                if closed { Task { await loadScans() } }
             }
             .alert(
                 "3D-Räume konnten nicht geladen werden",
@@ -258,6 +268,23 @@ struct SpatialRoomsView: View {
 
     private var roomList: some View {
         List {
+            if !pendingScans.isEmpty && state.canManageSpatial {
+                Section("Gespeicherte Uploads") {
+                    ForEach(pendingScans) { pending in
+                        Button {
+                            presentation = RoomScanPresentation(mode: pending.mode, pendingScan: pending)
+                        } label: {
+                            Label {
+                                VStack(alignment: .leading) {
+                                    Text(pending.title)
+                                    Text("\(pending.uploadedScanIDs.count) von \(pending.drafts.count) übertragen · Upload fortsetzen")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            } icon: { Image(systemName: "icloud.and.arrow.up") }
+                        }
+                    }
+                }
+            }
             ForEach(scanLibrary.structures) { structure in
                 structureSection(structure)
             }
@@ -346,18 +373,26 @@ struct SpatialRoomsView: View {
 
     @MainActor
     private func loadScans() async {
-        guard !loading, let client = state.client else { return }
+        guard let client = state.client else { return }
+        let generation = UUID()
+        loadGeneration = generation
         loading = true
         defer {
-            loading = false
-            hasLoaded = true
+            if loadGeneration == generation {
+                loading = false
+                hasLoaded = true
+            }
         }
         do {
-            scans = try await client.listRoomScans().scans
+            pendingScans = try SpatialScanDraftStore(contextIdentifier: client.contextIdentifier).load()
+            let response = try await client.listRoomScans()
+            guard loadGeneration == generation, state.client?.contextIdentifier == client.contextIdentifier else { return }
+            scans = response.scans
             errorMessage = nil
         } catch is CancellationError {
             return
         } catch {
+            guard loadGeneration == generation, state.client?.contextIdentifier == client.contextIdentifier else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -366,12 +401,14 @@ struct SpatialRoomsView: View {
 private struct RoomScanPresentation: Identifiable {
     let id = UUID()
     let mode: SpatialRoomScanMode
+    var pendingScan: SpatialPendingScan? = nil
 }
 
 private struct RoomScanFlowView: View {
     enum Phase {
         case details
         case scanning
+        case paused
         case processing
         case betweenRooms
         case finalizing
@@ -381,6 +418,7 @@ private struct RoomScanFlowView: View {
 
     @EnvironmentObject private var state: AppState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     let mode: SpatialRoomScanMode
     let onSaved: () -> Void
 
@@ -392,6 +430,12 @@ private struct RoomScanFlowView: View {
     @State private var phase: Phase = .details
     @State private var finishCommand = RoomCaptureFinishCommand.idle
     @State private var resumeRequest = 0
+    @State private var discardRequest = 0
+    @State private var showsExitOptions = false
+    @State private var saveForLater = false
+    @State private var pendingScanID = UUID()
+    @State private var uploadedScanIDs: Set<UUID> = []
+    @State private var draftContextIdentifier: String?
     @State private var hint = "Bewege das iPhone langsam entlang aller Wände und Möbel."
     @State private var drafts: [SpatialRoomScanDraft] = []
     @State private var createdRoomResourceIDs: [UUID: UUID] = [:]
@@ -407,12 +451,21 @@ private struct RoomScanFlowView: View {
     @State private var waitsForGeoreferencedStart = false
     @State private var georeferenceStartTask: Task<Void, Never>?
 
-    init(mode: SpatialRoomScanMode, onSaved: @escaping () -> Void) {
+    init(mode: SpatialRoomScanMode, pendingScan: SpatialPendingScan? = nil, onSaved: @escaping () -> Void) {
         self.mode = mode
         self.onSaved = onSaved
         let identity = SpatialRoomCaptureIdentity(mode: mode)
         _structureID = State(initialValue: identity.structureID)
         _coordinateSpaceID = State(initialValue: identity.coordinateSpaceID)
+        if let pendingScan {
+            _draftContextIdentifier = State(initialValue: pendingScan.contextIdentifier)
+            _pendingScanID = State(initialValue: pendingScan.id)
+            _drafts = State(initialValue: pendingScan.drafts)
+            _createdRoomResourceIDs = State(initialValue: pendingScan.roomResourceIDs)
+            _uploadedScanIDs = State(initialValue: pendingScan.uploadedScanIDs)
+            _uploadProgress = State(initialValue: pendingScan.uploadedScanIDs.count)
+            _phase = State(initialValue: .uploading)
+        }
 
         switch mode {
         case .newStructure:
@@ -434,6 +487,13 @@ private struct RoomScanFlowView: View {
             _roomName = State(initialValue: scan.roomName)
             _georeferenceEnabled = State(initialValue: scan.georeference != nil)
         }
+        if let draft = pendingScan?.drafts.first {
+            _structureName = State(initialValue: draft.structureName ?? draft.roomName)
+            _floorIdentifier = State(initialValue: draft.floorIdentifier ?? "EG")
+            _floorIndex = State(initialValue: draft.floorIndex ?? 0)
+            _roomName = State(initialValue: draft.roomName)
+            _georeferenceEnabled = State(initialValue: false)
+        }
     }
 
     var body: some View {
@@ -442,7 +502,7 @@ private struct RoomScanFlowView: View {
                 switch phase {
                 case .details:
                     details
-                case .scanning, .processing, .betweenRooms, .finalizing:
+                case .scanning, .paused, .processing, .betweenRooms, .finalizing:
                     scanner
                 case .uploading:
                     statusView(
@@ -469,9 +529,33 @@ private struct RoomScanFlowView: View {
             .toolbar {
                 if phase != .complete {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Abbrechen") { discardAndDismiss() }
+                        Button("Schließen") {
+                            if phase == .details { discardAndDismiss() }
+                            else { showsExitOptions = true }
+                        }
                     }
                 }
+            }
+            .interactiveDismissDisabled(phase != .details && phase != .complete)
+            .confirmationDialog("Scan beenden?", isPresented: $showsExitOptions, titleVisibility: .visible) {
+                if phase == .scanning || phase == .paused || (phase == .betweenRooms && capturedRoomCount > 0) {
+                    Button("Stand speichern · später hochladen") {
+                        finishCurrentRoom(finalizesStructure: true, saveLocally: true)
+                    }
+                }
+                if phase == .scanning || phase == .paused {
+                    Button("Aktuellen Raum verwerfen", role: .destructive) {
+                        discardRequest += 1
+                        phase = .scanning
+                    }
+                }
+                if !drafts.isEmpty {
+                    Button("Upload später fortsetzen") { keepDraftsAndDismiss() }
+                }
+                Button("Lokalen Scan verwerfen", role: .destructive) { discardAndDismiss() }
+                Button("Weiter scannen", role: .cancel) {}
+            } message: {
+                Text("Gespeicherte Uploads bleiben auf diesem iPhone verfügbar. Bereits hochgeladene Räume bleiben erhalten.")
             }
             .alert(
                 "Raumscan fehlgeschlagen",
@@ -490,13 +574,18 @@ private struct RoomScanFlowView: View {
                 Text(errorMessage ?? "Unbekannter Fehler")
             }
             .onDisappear {
+                uploadTask?.cancel()
                 georeferenceStartTask?.cancel()
                 locationService.stopGeoreferenceCapture()
             }
             .task {
+                if draftContextIdentifier == nil { draftContextIdentifier = state.client?.contextIdentifier }
                 if georeferenceEnabled, georeferenceObservation == nil {
                     locationService.requestCurrentGeoreference()
                 }
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase != .active && phase == .scanning { phase = .paused }
             }
             .onChange(of: georeferenceObservation) { _, observation in
                 guard waitsForGeoreferencedStart, observation != nil else { return }
@@ -546,7 +635,7 @@ private struct RoomScanFlowView: View {
     private var detailsExplanation: String {
         switch mode {
         case .newStructure:
-            "Scanne alle verbundenen Räume nacheinander. Türen und Übergänge bleiben dabei im selben AR-Koordinatensystem."
+            "Scanne einen oder mehrere Räume. Du kannst jederzeit pausieren oder den bisherigen Stand speichern. Für weitere Räume bleibt die gemeinsame Kamerasitzung geöffnet."
         case .appendToStructure:
             "Die Struktur bleibt erhalten. Wähle die vorhandene oder eine neue Etage und scanne die neuen Räume in einem frischen AR-Koordinatensystem."
         case .replaceRoom:
@@ -580,7 +669,7 @@ private struct RoomScanFlowView: View {
     private var completionMessage: String {
         switch mode {
         case .newStructure:
-            "Die Räume sind verbunden. Beim Platzieren erkennt die AR-Kamera den aktuellen Raum automatisch."
+            "Der erfasste Stand ist gespeichert. Du kannst weitere Räume hinzufügen oder einzelne Räume neu scannen."
         case .appendToStructure:
             "Die neuen Räume gehören jetzt zur bestehenden Struktur und können räumlich verwendet werden."
         case .replaceRoom:
@@ -705,6 +794,8 @@ private struct RoomScanFlowView: View {
             RoomCaptureControllerView(
                 finishCommand: finishCommand,
                 resumeRequest: resumeRequest,
+                discardRequest: discardRequest,
+                isPaused: phase == .paused,
                 currentRoomName: roomName,
                 batch: captureBatch,
                 onHint: { hint = $0 },
@@ -719,18 +810,22 @@ private struct RoomScanFlowView: View {
                 },
                 onRoomCaptured: { count in
                     capturedRoomCount = count
-                    roomName = ""
+                    roomName = mode.replacedScan?.roomName ?? ""
                     phase = .betweenRooms
-                    hint = "Bleibe in der gemeinsamen AR-Sitzung und gehe durch den Übergang in den nächsten Raum."
+                    hint = count > 0
+                        ? "Bisherige Räume sind übernommen. Du kannst jetzt speichern oder weiter scannen."
+                        : "Du kannst den Raum erneut beginnen oder den Scan schließen."
                 },
                 onResult: { result in
                     switch result {
                     case .success(let scanDrafts):
                         locationService.stopGeoreferenceCapture()
                         drafts = scanDrafts
-                        startUpload()
+                        phase = .uploading
+                        if saveForLater { keepDraftsAndDismiss() }
+                        else { startUpload() }
                     case .failure(let error):
-                        restartCaptureBatch()
+                        saveForLater = false
                         errorMessage = error.localizedDescription
                     }
                 }
@@ -767,7 +862,8 @@ private struct RoomScanFlowView: View {
                 Group {
                     if phase == .betweenRooms {
                     VStack(spacing: 12) {
-                        Text("Wie heißt der nächste Raum?")
+                        if mode.supportsMultipleRooms || capturedRoomCount == 0 {
+                        Text(capturedRoomCount == 0 ? "Raum beginnen" : "Wie heißt der nächste Raum?")
                             .font(.headline)
                         TextField("Zum Beispiel Lager", text: $roomName)
                             .textInputAutocapitalization(.words)
@@ -776,14 +872,21 @@ private struct RoomScanFlowView: View {
                         Button {
                             resumeRequest += 1
                             phase = .scanning
-                            hint = "Gehe durch die Tür und scanne den nächsten Raum vollständig."
+                            hint = "Bewege das iPhone langsam entlang der Wände und Möbel."
                         } label: {
-                            Label("Nächsten Raum scannen", systemImage: "arrow.right")
+                            Label(capturedRoomCount == 0 ? "Raum scannen" : "Nächsten Raum scannen", systemImage: "arrow.right")
                                 .frame(maxWidth: .infinity)
                                 .frame(minHeight: 48)
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(roomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                        if capturedRoomCount > 0 {
+                            Button(capturedRoomCount == 1 ? "Raum speichern" : "\(capturedRoomCount) Räume speichern") {
+                                finishCurrentRoom(finalizesStructure: true)
+                            }
+                            .buttonStyle(.bordered)
+                        }
                     }
                     .padding(16)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
@@ -797,12 +900,26 @@ private struct RoomScanFlowView: View {
                         .padding(.horizontal, 22)
                         .frame(minHeight: 52)
                         .background(.white.opacity(0.9), in: Capsule())
+                    } else if phase == .paused {
+                        VStack(spacing: 12) {
+                            Text("Scan pausiert").font(.headline)
+                            Text("Im selben Raum fortsetzen. Zum Schließen den bisherigen Stand speichern.")
+                                .font(.caption).multilineTextAlignment(.center)
+                            Button("Scan fortsetzen", systemImage: "play.fill") { phase = .scanning }
+                                .buttonStyle(.borderedProminent)
+                            Button("Bisherigen Stand hochladen") {
+                                finishCurrentRoom(finalizesStructure: true)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .padding(16)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
                     } else if mode.supportsMultipleRooms {
                         VStack(spacing: 10) {
                             Button {
                                 finishCurrentRoom(finalizesStructure: false)
                             } label: {
-                                Label("Raum fertig · weiter", systemImage: "door.left.hand.open")
+                                Label("Raum übernehmen · weiter", systemImage: "door.left.hand.open")
                                     .frame(maxWidth: .infinity)
                                     .frame(minHeight: 48)
                             }
@@ -812,7 +929,7 @@ private struct RoomScanFlowView: View {
                             Button {
                                 finishCurrentRoom(finalizesStructure: true)
                             } label: {
-                                Label("Letzten Raum & Struktur abschließen", systemImage: "checkmark")
+                                Label("Bisherigen Stand hochladen", systemImage: "icloud.and.arrow.up")
                                     .frame(maxWidth: .infinity)
                                     .frame(minHeight: 50)
                             }
@@ -830,6 +947,11 @@ private struct RoomScanFlowView: View {
                     }
                 }
                 .padding(.bottom, 24)
+                if phase == .scanning {
+                    Button("Pausieren", systemImage: "pause.fill") { phase = .paused }
+                        .buttonStyle(.bordered).tint(.white)
+                        .padding(.bottom, 12)
+                }
             }
             .padding(.horizontal, 16)
         }
@@ -854,7 +976,14 @@ private struct RoomScanFlowView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 22)
             if progress {
-                ProgressView().padding(.top, 4)
+                if uploadTask != nil {
+                    ProgressView().padding(.top, 4)
+                } else {
+                    Button("Upload fortsetzen") { startUpload() }
+                        .buttonStyle(.borderedProminent)
+                }
+                Button("Später hochladen") { keepDraftsAndDismiss() }
+                    .buttonStyle(.bordered)
             } else {
                 Button("Fertig") { onSaved() }
                     .buttonStyle(.borderedProminent)
@@ -867,10 +996,17 @@ private struct RoomScanFlowView: View {
 
     @MainActor
     private func uploadDrafts() async {
-        guard state.canManageSpatial, !drafts.isEmpty, let client = state.client else { return }
+        defer { uploadTask = nil }
+        guard state.canManageSpatial, !drafts.isEmpty, let client = state.client,
+              client.contextIdentifier == draftContextIdentifier else {
+            errorMessage = "Zum Hochladen melde dich wieder mit dem ursprünglichen Konto und der ursprünglichen Organisation an."
+            return
+        }
         phase = .uploading
-        uploadProgress = 0
+        errorMessage = nil
+        uploadProgress = uploadedScanIDs.count
         do {
+            try persistDrafts()
             if !mode.supportsMultipleRooms, drafts.count != 1 {
                 throw APIClientError.invalidUpload(
                     "Beim Neu-Scannen darf genau ein Raumstand erzeugt werden."
@@ -878,6 +1014,7 @@ private struct RoomScanFlowView: View {
             }
             for (index, draft) in drafts.enumerated() {
                 try Task.checkCancellation()
+                if uploadedScanIDs.contains(draft.id) { continue }
                 let roomResourceID: UUID
                 if let existingRoomResourceID = mode.existingRoomResourceID(
                     forDraftAt: index
@@ -889,19 +1026,25 @@ private struct RoomScanFlowView: View {
                     let room = try await client.createResource(
                         ResourceCreateRequest(
                             name: draft.roomName,
-                            description: "Mit RoomPlan erfasster 3D-Raum in \(structureName), \(floorIdentifier).",
+                            description: "Mit RoomPlan erfasster 3D-Raum in \(draft.structureName ?? draft.roomName), \(draft.floorIdentifier ?? "EG").",
                             type: .place,
                             location: draft.roomName
                         ),
                         idempotencyKey: draft.id
                     )
+                    try Task.checkCancellation()
                     createdRoomResourceIDs[draft.id] = room.id
+                    try persistDrafts()
                     roomResourceID = room.id
                 }
                 _ = try await client.uploadRoomScan(draft, roomResourceID: roomResourceID)
-                uploadProgress = index + 1
+                try Task.checkCancellation()
+                uploadedScanIDs.insert(draft.id)
+                uploadProgress = uploadedScanIDs.count
+                try persistDrafts()
             }
-            drafts.forEach { $0.removeLocalArtifacts() }
+            try draftStore().remove(id: pendingScanID)
+            drafts = []
             phase = .complete
             errorMessage = nil
         } catch is CancellationError {
@@ -914,8 +1057,40 @@ private struct RoomScanFlowView: View {
 
     @MainActor
     private func startUpload() {
-        uploadTask?.cancel()
+        guard uploadTask == nil else { return }
         uploadTask = Task { await uploadDrafts() }
+    }
+
+    private func draftStore() throws -> SpatialScanDraftStore {
+        guard let draftContextIdentifier else {
+            throw APIClientError.invalidUpload("Die Anmeldung für diesen Scan fehlt.")
+        }
+        return try SpatialScanDraftStore(contextIdentifier: draftContextIdentifier)
+    }
+
+    @MainActor
+    private func persistDrafts() throws {
+        let originals = drafts
+        let saved = try draftStore().save(SpatialPendingScan(
+            id: pendingScanID, contextIdentifier: draftContextIdentifier ?? "", mode: mode, drafts: drafts,
+            roomResourceIDs: createdRoomResourceIDs, uploadedScanIDs: uploadedScanIDs
+        ))
+        drafts = saved.drafts
+        for (original, stored) in zip(originals, saved.drafts) where original.modelURL != stored.modelURL {
+            original.removeLocalArtifacts()
+        }
+    }
+
+    @MainActor
+    private func keepDraftsAndDismiss() {
+        uploadTask?.cancel()
+        do {
+            try persistDrafts()
+            dismiss()
+        } catch {
+            saveForLater = false
+            errorMessage = "Der Scan konnte nicht auf diesem iPhone gespeichert werden: \(error.localizedDescription)"
+        }
     }
 
     @MainActor
@@ -924,6 +1099,12 @@ private struct RoomScanFlowView: View {
         uploadTask = nil
         georeferenceStartTask?.cancel()
         georeferenceStartTask = nil
+        do {
+            if draftContextIdentifier != nil { try draftStore().remove(id: pendingScanID) }
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
         drafts.forEach { $0.removeLocalArtifacts() }
         drafts.removeAll()
         locationService.stopGeoreferenceCapture()
@@ -1014,29 +1195,12 @@ private struct RoomScanFlowView: View {
     }
 
     @MainActor
-    private func finishCurrentRoom(finalizesStructure: Bool) {
+    private func finishCurrentRoom(finalizesStructure: Bool, saveLocally: Bool = false) {
+        saveForLater = saveLocally
         finishCommand = RoomCaptureFinishCommand(
             sequence: finishCommand.sequence + 1,
             finalizesStructure: finalizesStructure
         )
     }
 
-    @MainActor
-    private func restartCaptureBatch() {
-        drafts.forEach { $0.removeLocalArtifacts() }
-        drafts.removeAll()
-        capturedRoomCount = 0
-        finishCommand = .idle
-        resumeRequest = 0
-        let previousCoordinateSpaceID = coordinateSpaceID
-        repeat {
-            coordinateSpaceID = UUID()
-        } while coordinateSpaceID == previousCoordinateSpaceID ||
-            mode.existingCoordinateSpaceIDs.contains(coordinateSpaceID)
-        scanSessionID = UUID()
-        phase = .details
-        if georeferenceEnabled {
-            locationService.requestCurrentGeoreference()
-        }
-    }
 }

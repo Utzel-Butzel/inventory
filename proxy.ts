@@ -147,6 +147,8 @@ export const config = {
     "/notifications/:path*",
     "/requests/:path*",
     "/settings/:path*",
-    "/:organizationId/:path*",
+    // API handlers authenticate independently. Running uploads through Proxy
+    // truncates their multipart bodies at Next.js's default 10 MB buffer limit.
+    "/((?!api(?:/|$)|_next(?:/|$)).*)",
   ],
 };

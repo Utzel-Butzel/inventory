@@ -32,6 +32,9 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
     private var captureView: RoomCaptureView!
     private var lastFinishRequest = 0
     private var lastResumeRequest = 0
+    private var lastDiscardRequest = 0
+    private var isPaused = false
+    private var discardingCurrentRoom = false
     private var finishing = false
     private var finalizingBatch = false
     private var pendingRoomName = ""
@@ -93,7 +96,7 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
     }
 
     private func startCaptureIfNeeded() {
-        guard isVisible, !finishing, !captureRunning else { return }
+        guard isVisible, !finishing, !captureRunning, !isPaused, !discardingCurrentRoom else { return }
         var configuration = RoomCaptureSession.Configuration()
         configuration.isCoachingEnabled = true
         captureView.captureSession.run(configuration: configuration)
@@ -119,6 +122,7 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         captureRunning = false
         finishing = false
         finalizingBatch = false
+        discardingCurrentRoom = false
         processingGeneration = UUID()
         georeferenceCaptureTask?.cancel()
         georeferenceCaptureTask = nil
@@ -154,10 +158,59 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         startCaptureIfNeeded()
     }
 
+    func setPaused(_ paused: Bool) {
+        guard paused != isPaused, !finishing else { return }
+        isPaused = paused
+        if paused {
+            arSession.pause()
+            keyframeCaptureTask?.cancel()
+            keyframeCaptureTask = nil
+            onHint?("Scan pausiert. Zum Fortsetzen bleibe im selben Raum.")
+        } else if captureRunning, let configuration = arSession.configuration {
+            // Keep RoomPlan's capture session and its geometry alive. Calling
+            // captureSession.run here would start a new room detection pass.
+            arSession.run(configuration)
+            scheduleKeyframeCapture()
+            onHint?("Scan fortgesetzt. Bewege das iPhone langsam im selben Raum.")
+        }
+    }
+
+    func requestDiscardCurrentRoom(_ request: Int) {
+        guard request != lastDiscardRequest else { return }
+        lastDiscardRequest = request
+        guard isVisible, captureRunning, !finishing else { return }
+        setPaused(false)
+        captureRunning = false
+        keyframeCaptureTask?.cancel()
+        keyframeCaptureTask = nil
+        keyframeEncodingTask?.cancel()
+        keyframeEncodingTask = nil
+        keyframeEncodingToken = UUID()
+        keyframeRoomGeneration = UUID()
+        currentRoomKeyframes.forEach { try? FileManager.default.removeItem(at: $0.imageURL) }
+        currentRoomKeyframes = []
+        currentRoomKeyframeBytes = 0
+        // Wait for the discarded pass to end before allowing another one;
+        // otherwise its late callback could be mistaken for the next room.
+        discardingCurrentRoom = true
+        onProcessing?()
+        captureView.captureSession.stop(pauseARSession: false)
+    }
+
     func requestFinish(_ command: RoomCaptureFinishCommand) {
         guard command.sequence != lastFinishRequest else { return }
         lastFinishRequest = command.sequence
-        guard isVisible, captureRunning, !finishing else { return }
+        guard isVisible, !finishing, !discardingCurrentRoom else { return }
+        if !captureRunning, command.finalizesStructure, !records.isEmpty {
+            finishing = true
+            finalizingBatch = true
+            processingGeneration = UUID()
+            onProcessing?()
+            finalizeRecords()
+            return
+        }
+        guard captureRunning else { return }
+        setPaused(false)
 
         let normalizedName = currentRoomName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedName.isEmpty else {
@@ -169,11 +222,6 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
             onHint?("Die Raumortung startet noch. Bewege das iPhone kurz weiter.")
             return
         }
-        guard frame.worldMappingStatus == .mapped else {
-            onHint?("Für eine zuverlässige Wiedererkennung bitte noch weitere Raumseiten scannen.")
-            return
-        }
-
         finishing = true
         finalizingBatch = command.finalizesStructure
         pendingRoomName = String(normalizedName.prefix(240))
@@ -195,6 +243,11 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         shouldPresent roomDataForProcessing: CapturedRoomData,
         error: Error?
     ) -> Bool {
+        if isVisible, discardingCurrentRoom {
+            discardingCurrentRoom = false
+            onRoomCaptured?(records.count)
+            return false
+        }
         guard isVisible, finishing else { return false }
         if let error {
             reportFailure(error)
@@ -207,6 +260,10 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         guard isVisible, finishing else { return }
         if let error {
             reportFailure(error)
+            return
+        }
+        guard !processedResult.walls.isEmpty || !processedResult.floors.isEmpty || !processedResult.objects.isEmpty else {
+            reportFailure(APIClientError.invalidUpload("Noch keine Raumgeometrie erkannt. Erfasse mindestens eine Wand oder ein Möbelstück und versuche es erneut."))
             return
         }
 
@@ -226,30 +283,35 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         captureRunning = false
 
         if finalizingBatch {
-            let generation = processingGeneration
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                do {
-                    let drafts = try await self.makeBatchDrafts()
-                    guard self.isCurrentProcessing(generation) else {
-                        drafts.forEach { $0.removeLocalArtifacts() }
-                        return
-                    }
-                    self.arSession.pause()
-                    self.finishing = false
-                    self.finalizingBatch = false
-                    self.processingGeneration = UUID()
-                    self.records.removeAll()
-                    self.workingDirectories.removeAll()
-                    self.onResult?(.success(drafts))
-                } catch {
-                    self.reportFailure(error)
-                }
-            }
+            finalizeRecords()
         } else {
             finishing = false
             processingGeneration = UUID()
             onRoomCaptured?(records.count)
+        }
+    }
+
+    private func finalizeRecords() {
+        let generation = processingGeneration
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let drafts = try await self.makeBatchDrafts()
+                guard self.isCurrentProcessing(generation) else {
+                    drafts.forEach { $0.removeLocalArtifacts() }
+                    return
+                }
+                self.arSession.pause()
+                self.finishing = false
+                self.finalizingBatch = false
+                self.processingGeneration = UUID()
+                self.records.removeAll()
+                self.workingDirectories.removeAll()
+                self.onResult?(.success(drafts))
+            } catch {
+                guard self.isCurrentProcessing(generation) else { return }
+                self.reportFailure(error)
+            }
         }
     }
 
@@ -259,18 +321,22 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         guard let batch, !records.isEmpty else {
             throw SpatialCaptureError.structureUnavailable
         }
-        let worldMapData = try await currentWorldMapData()
+        // Partial geometry is valuable even if ARKit has not mapped enough of
+        // the room to export a localization map yet.
+        let worldMapData = try? await currentWorldMapData()
+        guard isVisible, finishing else { throw CancellationError() }
 
         let structure: CapturedStructure?
         if records.count > 1 {
-            // StructureBuilder is also RoomPlan's compatibility check for the
-            // captured rooms. Never group the drafts under one coordinateSpaceId
-            // when it rejects their relative locations.
-            structure = try await StructureBuilder(options: [.beautifyObjects])
+            // Incomplete rooms may not form a valid CapturedStructure yet.
+            // Keep each room usable; a rejected merge must get separate space
+            // IDs so no consumer treats it as a verified connected layout.
+            structure = try? await StructureBuilder(options: [.beautifyObjects])
                 .capturedStructure(from: records.map(\.room))
         } else {
             structure = nil
         }
+        guard isVisible, finishing else { throw CancellationError() }
 
         let structureSourceURL: URL?
         if let structure {
@@ -309,8 +375,12 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
 
                 let modelURL = directory.appendingPathComponent("room.usdz")
                 try room.export(to: modelURL, exportOptions: .mesh)
-                let worldMapURL = directory.appendingPathComponent("room.arworldmap")
-                try worldMapData.write(to: worldMapURL, options: .atomic)
+                var worldMapURL: URL?
+                if let worldMapData {
+                    let url = directory.appendingPathComponent("room.arworldmap")
+                    try worldMapData.write(to: url, options: .atomic)
+                    worldMapURL = url
+                }
 
                 var guideURL: URL?
                 if let source = record.guideImageURL,
@@ -368,7 +438,7 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
                         floorIdentifier: batch.floorIdentifier,
                         floorIndex: batch.floorIndex,
                         roomIdentifier: room.identifier.uuidString.lowercased(),
-                        coordinateSpaceID: batch.coordinateSpaceID,
+                        coordinateSpaceID: records.count > 1 && structure == nil ? UUID() : batch.coordinateSpaceID,
                         georeference: frozenGeoreference,
                         structureModelURL: structureModelURL,
                         keyframes: keyframes
@@ -686,7 +756,19 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         finishing = false
         finalizingBatch = false
         processingGeneration = UUID()
-        cleanupTemporaryFiles()
+        // Preserve successfully processed rooms so an export failure never
+        // forces the user to scan the whole structure again.
+        currentRoomKeyframes.forEach { try? FileManager.default.removeItem(at: $0.imageURL) }
+        currentRoomKeyframes = []
+        currentRoomKeyframeBytes = 0
+        keyframeRoomGeneration = UUID()
+        if let pendingGuideImageURL {
+            try? FileManager.default.removeItem(at: pendingGuideImageURL)
+            self.pendingGuideImageURL = nil
+        }
+        workingDirectories.forEach { try? FileManager.default.removeItem(at: $0) }
+        workingDirectories = []
+        onRoomCaptured?(records.count)
         onResult?(.failure(error))
     }
 
@@ -742,6 +824,8 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
 struct RoomCaptureControllerView: UIViewControllerRepresentable {
     let finishCommand: RoomCaptureFinishCommand
     let resumeRequest: Int
+    let discardRequest: Int
+    let isPaused: Bool
     let currentRoomName: String
     let batch: SpatialRoomCaptureBatch
     let onHint: (String) -> Void
@@ -767,6 +851,8 @@ struct RoomCaptureControllerView: UIViewControllerRepresentable {
         uiViewController.onRoomCaptured = onRoomCaptured
         uiViewController.onResult = onResult
         uiViewController.update(currentRoomName: currentRoomName, batch: batch)
+        uiViewController.setPaused(isPaused)
+        uiViewController.requestDiscardCurrentRoom(discardRequest)
         uiViewController.requestResume(resumeRequest)
         uiViewController.requestFinish(finishCommand)
     }

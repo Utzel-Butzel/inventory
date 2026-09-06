@@ -58,7 +58,9 @@ const assetFields: Array<{
     field: "worldMap",
     kind: "world_map",
     fallbackMimeType: roomScanAssetMimeTypes.world_map,
-    required: true,
+    // A partial RoomPlan capture is still useful as a 3D scene even when ARKit
+    // cannot yet provide a map. AR placement already handles missing maps.
+    required: false,
   },
   {
     field: "model",
@@ -125,8 +127,15 @@ export async function POST(request: Request) {
   let form: FormData;
   try {
     form = await request.formData();
-  } catch {
-    return Response.json({ error: "Invalid multipart room scan upload." }, { status: 400 });
+  } catch (error) {
+    console.warn("Room scan multipart parsing failed", {
+      declaredBytes: declaredLength.bytes,
+      reason: error instanceof Error ? error.message : "Unknown parser error",
+    });
+    return Response.json({
+      code: "ROOM_SCAN_MULTIPART_INVALID",
+      error: "Der Raumscan-Upload ist unvollständig oder beschädigt angekommen. Bitte erneut hochladen. Bei wiederholtem Fehler muss das Upload-Limit des Servers geprüft werden.",
+    }, { status: 400 });
   }
 
   const identifiers = identifiersSchema.safeParse({

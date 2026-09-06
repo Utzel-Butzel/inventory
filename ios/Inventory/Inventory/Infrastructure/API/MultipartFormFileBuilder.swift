@@ -295,9 +295,11 @@ enum MultipartFormFileBuilder {
             }
 
             var assets: [(field: String, url: URL, mimeType: String)] = [
-                ("worldMap", draft.worldMapURL, "application/vnd.apple.arkit.world-map"),
                 ("model", draft.modelURL, "model/vnd.usdz+zip"),
             ]
+            if let worldMapURL = draft.worldMapURL {
+                assets.append(("worldMap", worldMapURL, "application/vnd.apple.arkit.world-map"))
+            }
             if let guideImageURL = draft.guideImageURL {
                 assets.append(("guideImage", guideImageURL, "image/jpeg"))
             }
