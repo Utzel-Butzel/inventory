@@ -133,5 +133,12 @@
     "emptyTitle": "Keine Fertigungen erfasst",
     "emptyDescription": "Abgeschlossene Fertigungen erscheinen hier mit ihrem Komponentenprotokoll.",
     "openStock": "Bestandshistorie öffnen"
+  },
+  "output": {
+    "label": "Fertigartikel / Zielvariante",
+    "choose": "Zielvariante wählen",
+    "unassigned": "{{name}} – unzugeordneter Bestand",
+    "help": "Die Stückliste der gewählten Variante wird verwendet. Der Fertigbestand wird ausschließlich diesem Artikel gutgeschrieben.",
+    "retry": "Erneut laden"
   }
 }

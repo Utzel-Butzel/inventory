@@ -153,7 +153,7 @@ test("organization-scoped identifiers and replay keys remain reusable", async ()
     read("../app/api/v1/resources/[id]/media/route.ts"),
   ]);
 
-  assert.match(identifiers, /resourceVariants\.organizationId/);
+  assert.doesNotMatch(identifiers, /resourceVariants/);
   assert.match(identifiers, /resources\.organizationId/);
   assert.match(
     mediaRoute,

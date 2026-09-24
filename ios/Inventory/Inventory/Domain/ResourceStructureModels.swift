@@ -31,7 +31,6 @@ public struct ResourceFamilyResponse: Codable, Equatable, Sendable {
     public let currentResourceId: UUID
     public let primary: ResourceFamilyMember
     public let variants: [ResourceFamilyMember]
-    public let legacyVariantCount: Int
     public let optionGroupCount: Int
     public let summary: ResourceFamilySummary
 }

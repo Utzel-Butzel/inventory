@@ -17,6 +17,7 @@ import {
 import { useT } from "next-i18next/client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { FamilyStockSummary } from "@/components/family-stock-summary";
 import { AssemblyManager } from "@/components/assembly-manager";
 import { StockLocationsManager } from "@/components/stock-locations-manager";
 import { fetchJson } from "@/lib/client-types";
@@ -283,6 +284,7 @@ export function ResourceStockManager({
 
       <div>
         <div className="space-y-5">
+          {stock.family ? <FamilyStockSummary family={stock.family} /> : null}
           <StockBooking
             stock={stock}
             t={t}
@@ -301,7 +303,9 @@ export function ResourceStockManager({
                 </span>
                 <div>
                   <p className="text-xs font-medium text-muted">
-                    {t("resource.metrics.available")}
+                    {stock.family?.variants.length && stock.family.primary.id === resourceId
+                      ? t("resource.metrics.unassigned")
+                      : t("resource.metrics.available")}
                   </p>
                   <p className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-foreground">
                     {quantityLabel(currentQuantity, unitName, numberFormat, t)}

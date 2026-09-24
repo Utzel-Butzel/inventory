@@ -3,17 +3,18 @@ import XCTest
 @testable import Inventory
 
 final class ResourceLookupResponseTests: XCTestCase {
-    func testDecodesVariantBarcodeContext() throws {
+    func testDecodesVariantAsIndependentResource() throws {
         let json = """
         {
           "resource": {
             "id": "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
-            "name": "T-Shirt",
+            "name": "T-Shirt Blue / Large",
             "description": "",
             "type": "clothing",
             "status": "available",
-            "sku": null,
-            "quantity": 7,
+            "sku": "SHIRT-BLU-L",
+            "barcode": "4006381333931",
+            "quantity": 4,
             "location": null,
             "serialNumber": null,
             "valueCents": null,
@@ -33,22 +34,7 @@ final class ResourceLookupResponseTests: XCTestCase {
             "media": [],
             "cover": null
           },
-          "variant": {
-            "id": "4F2504E0-4F89-41D3-9A0C-0305E82C3302",
-            "resourceId": "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
-            "name": "Blue / Large",
-            "sku": "SHIRT-BLU-L",
-            "barcode": "4006381333931",
-            "priceCents": 2499,
-            "currency": "EUR",
-            "quantity": 4,
-            "position": 0,
-            "createdBy": null,
-            "updatedBy": null,
-            "createdAt": "2026-08-13T10:00:00.000Z",
-            "updatedAt": "2026-08-13T10:00:00.000Z"
-          },
-          "matchedBy": "variantBarcode"
+          "matchedBy": "barcode"
         }
         """.data(using: .utf8)!
 
@@ -67,8 +53,9 @@ final class ResourceLookupResponseTests: XCTestCase {
             return date
         }
         let decoded = try decoder.decode(ResourceLookupResponse.self, from: json)
-        XCTAssertEqual(decoded.matchedBy, .variantBarcode)
-        XCTAssertEqual(decoded.variant?.name, "Blue / Large")
-        XCTAssertEqual(decoded.variant?.barcode, "4006381333931")
+        XCTAssertEqual(decoded.matchedBy, .barcode)
+        XCTAssertEqual(decoded.resource.name, "T-Shirt Blue / Large")
+        XCTAssertEqual(decoded.resource.barcode, "4006381333931")
+        XCTAssertEqual(decoded.resource.quantity, 4)
     }
 }

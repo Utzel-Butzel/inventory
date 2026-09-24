@@ -195,7 +195,7 @@ export async function runActionChain(input: ChainRunInput, organizationId: strin
                   }
                   const serialized = settings.find((setting) => setting.resourceId === resourceId)?.trackingMode === "serialized";
                   if (!serialized && (Object.keys(metadata).length || Object.keys(customFields).length)) throw new ScanWorkflowError("Eigenschaften einzelner Geräte benötigen serialisierten Fertigbestand.", 422);
-                  const built = await buildAssembly(organizationId, resourceId, { quantity, ...(serialized ? { outputUnitCodes: quantity === 1 ? [code] : Array.from({ length: quantity }, (_, i) => `${code}-${i + 1}`) } : {}), outputUnitMetadata: metadata, outputUnitCustomFields: customFields, componentResourceSelections, componentUnitIds, note: `${workflow.name}: ${action.label}` }, identity.actor, { key: randomUUID(), requestHash }, () => true, tx, {
+                  const built = await buildAssembly(organizationId, resourceId, { outputResourceId: resourceId, quantity, ...(serialized ? { outputUnitCodes: quantity === 1 ? [code] : Array.from({ length: quantity }, (_, i) => `${code}-${i + 1}`) } : {}), outputUnitMetadata: metadata, outputUnitCustomFields: customFields, componentResourceSelections, componentUnitIds, note: `${workflow.name}: ${action.label}` }, identity.actor, { key: randomUUID(), requestHash }, () => true, tx, {
                     buildId: plannedId(planHash, selectedId, action.id, "build", 0),
                     outputUnitIds: Array.from({ length: quantity }, (_, i) => plannedId(planHash, selectedId, action.id, "unit", i)),
                   });

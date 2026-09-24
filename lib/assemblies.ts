@@ -41,10 +41,6 @@ import {
   VARIANT_FAMILY_WRITE_LOCK_ID,
 } from "@/lib/inventory-locks";
 import {
-  allocatedVariantQuantity,
-  assertVariantAllocationFits,
-} from "@/lib/variant-stock-invariant";
-import {
   enqueueStockMovementWebhookEvents,
   enqueueWebhookEvent,
 } from "@/lib/webhooks";
@@ -78,6 +74,7 @@ export type BomComponentInput = {
 };
 
 export type AssemblyBuildInput = {
+  outputResourceId?: string;
   quantity: number;
   occurredAt?: Date;
   location?: string | null;
@@ -2068,6 +2065,7 @@ export async function buildAssembly(
   executor: DatabaseExecutor = db,
   plannedIds?: { buildId: string; outputUnitIds: string[] },
 ) {
+  const requestedResourceId = assemblyResourceId;
   let lockedResourcesAuthorized = false;
 
   const validateReplay = (existing: AssemblyBuildRecord) => {
@@ -2095,6 +2093,87 @@ export async function buildAssembly(
       await transaction.execute(
         sql`select pg_advisory_xact_lock(${VARIANT_FAMILY_WRITE_LOCK_ID})`,
       );
+      // Resolve the output while family membership and recipes are locked.
+      const [requested] = await transaction
+        .select()
+        .from(resources)
+        .where(
+          and(
+            eq(resources.organizationId, organizationId),
+            eq(resources.id, requestedResourceId),
+          ),
+        )
+        .limit(1);
+      if (!requested) throw new AssemblyOperationError("Not found", 404);
+      if (!(await authorize(requested)))
+        throw new AssemblyOperationError("You cannot build this item.", 403);
+      const children = await transaction
+        .select({ id: resourceRelations.sourceResourceId })
+        .from(resourceRelations)
+        .where(
+          and(
+            eq(resourceRelations.organizationId, organizationId),
+            eq(resourceRelations.targetResourceId, requestedResourceId),
+            eq(resourceRelations.relationTypeKey, "variant_of"),
+          ),
+        );
+      if (input.outputResourceId) {
+        if (
+          input.outputResourceId !== requestedResourceId &&
+          !children.some((child) => child.id === input.outputResourceId)
+        ) {
+          throw new AssemblyOperationError(
+            "The output must be this item or one of its direct variants.",
+            422,
+          );
+        }
+        assemblyResourceId = input.outputResourceId;
+      } else if (children.length) {
+        if (!Object.keys(input.componentResourceSelections ?? {}).length) {
+          throw new AssemblyOperationError(
+            "Choose an output variant, or explicitly choose the primary item for unassigned stock.",
+            422,
+          );
+        }
+        const parentRecipe = await resolveEffectiveBomRecipe(
+          transaction,
+          organizationId,
+          requestedResourceId,
+        );
+        const selectedRecipe = await resolveBuildComponentSelections(
+          transaction,
+          organizationId,
+          parentRecipe.lines,
+          input.componentResourceSelections,
+        );
+        const signature = (lines: EffectiveBomLine[]) =>
+          JSON.stringify(
+            lines
+              .map((line) => [
+                line.slotKey,
+                line.componentResourceId,
+                line.quantityPerAssembly,
+                line.quantityUnit,
+              ])
+              .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+          );
+        const matches: string[] = [];
+        for (const child of children) {
+          const recipe = await resolveEffectiveBomRecipe(
+            transaction,
+            organizationId,
+            child.id,
+          );
+          if (signature(recipe.lines) === signature(selectedRecipe))
+            matches.push(child.id);
+        }
+        if (matches.length !== 1)
+          throw new AssemblyOperationError(
+            "The component selection does not identify exactly one output variant. Choose the output variant explicitly.",
+            422,
+          );
+        assemblyResourceId = matches[0];
+      }
       const effectiveRecipe = await resolveEffectiveBomRecipe(
         transaction,
         organizationId,
@@ -2109,6 +2188,7 @@ export async function buildAssembly(
 
       const resourceIds = Array.from(
         new Set([
+          requestedResourceId,
           assemblyResourceId,
           ...initialBom.map((line) => line.componentResourceId),
         ]),
@@ -2392,16 +2472,8 @@ export async function buildAssembly(
           );
         }
         const mode = modeByResource.get(line.componentResourceId) ?? "bulk";
-        if (!organization.allowNegativeStock) {
-          const variantAllocation = await allocatedVariantQuantity(
-            transaction,
-            line.componentResourceId,
-          );
-          assertVariantAllocationFits(
-            balanceAfter,
-            variantAllocation,
-            (message) => new AssemblyOperationError(message, 409),
-          );
+        if (!organization.allowNegativeStock && balanceAfter < 0) {
+          throw new AssemblyOperationError("This operation would make stock negative.", 409);
         }
 
         if (mode === "serialized") {

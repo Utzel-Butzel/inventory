@@ -20,7 +20,6 @@ import {
   organizationMemberships,
   organizations,
   resourceLendingSettings,
-  resourceVariants,
   resources,
   stockMovementRequests,
   stockMovements,
@@ -36,10 +35,6 @@ import { db } from "@/lib/db";
 import { isLoanOverdue, loanWindowDurationDays } from "@/lib/lending-contract";
 import { lendingSettingsDto } from "@/lib/resource-lending";
 import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
-import {
-  allocatedVariantQuantity,
-  assertVariantAllocationFits,
-} from "@/lib/variant-stock-invariant";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -530,7 +525,7 @@ async function assertReservationAvailability(
   startsAt: Date,
   dueAt: Date,
 ) {
-  const [appliedRows, overlappingRows, approvedRows, variantRows] =
+  const [appliedRows, overlappingRows, approvedRows] =
     await Promise.all([
       transaction
         .select({
@@ -583,23 +578,11 @@ async function assertReservationAvailability(
             gt(internalRequests.dueAt, startsAt),
           ),
         ),
-      transaction
-        .select({
-          value: sql<number>`coalesce(sum(${resourceVariants.quantity}), 0)::int`,
-        })
-        .from(resourceVariants)
-        .where(
-          and(
-            eq(resourceVariants.organizationId, organizationId),
-            eq(resourceVariants.resourceId, resource.id),
-          ),
-        ),
     ]);
 
   const capacity =
     resource.quantity +
-    Number(appliedRows[0]?.value ?? 0) -
-    Number(variantRows[0]?.value ?? 0);
+    Number(appliedRows[0]?.value ?? 0);
   const allocated =
     Number(overlappingRows[0]?.value ?? 0) +
     Number(approvedRows[0]?.value ?? 0);
@@ -880,16 +863,8 @@ export async function createInventoryAssignment(
           409,
         );
       }
-      if (input.kind !== "reservation" && !resource.allowNegativeStock) {
-        const variantAllocation = await allocatedVariantQuantity(
-          transaction,
-          resourceId,
-        );
-        assertVariantAllocationFits(
-          balanceAfter,
-          variantAllocation,
-          (message) => new InventoryAssignmentError(message, 409),
-        );
+      if (input.kind !== "reservation" && !resource.allowNegativeStock && balanceAfter < 0) {
+        throw new InventoryAssignmentError("This operation would make stock negative.", 409);
       }
       if (input.kind !== "reservation") {
         await transaction
@@ -1290,16 +1265,8 @@ export async function activateInventoryReservation(
       const balanceAfter = assignment.stockApplied
         ? resource.quantity
         : resource.quantity - assignment.quantity;
-      if (!resource.allowNegativeStock && !assignment.stockApplied) {
-        const variantAllocation = await allocatedVariantQuantity(
-          transaction,
-          resource.id,
-        );
-        assertVariantAllocationFits(
-          balanceAfter,
-          variantAllocation,
-          (message) => new InventoryAssignmentError(message, 409),
-        );
+      if (!resource.allowNegativeStock && !assignment.stockApplied && balanceAfter < 0) {
+        throw new InventoryAssignmentError("This operation would make stock negative.", 409);
       }
 
       const now = new Date();

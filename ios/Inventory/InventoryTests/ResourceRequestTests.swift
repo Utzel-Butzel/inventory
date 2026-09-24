@@ -134,7 +134,7 @@ final class ResourceRequestTests: XCTestCase {
 
     func testResourceFamilyDecodesServerContract() throws {
         let data = Data(
-            #"{"role":"variant","currentResourceId":"11111111-1111-1111-1111-111111111111","primary":{"id":"22222222-2222-2222-2222-222222222222","name":"Akkuschrauber","type":"tool","status":"available","sku":"TOOL-1","barcode":null,"quantity":3,"trackingMode":"bulk","updatedAt":"2026-08-21T10:00:00Z","overriddenFields":[]},"variants":[{"id":"11111111-1111-1111-1111-111111111111","name":"Akkuschrauber 18 V","type":"tool","status":"available","sku":"TOOL-18","barcode":"4006381333931","quantity":2,"trackingMode":"serialized","updatedAt":"2026-08-21T11:00:00Z","overriddenFields":["name"]}],"legacyVariantCount":0,"optionGroupCount":0,"summary":{"totalQuantity":5,"primaryQuantity":3,"variantQuantity":2,"variantCount":1,"serializedVariantCount":1}}"#.utf8
+            #"{"role":"variant","currentResourceId":"11111111-1111-1111-1111-111111111111","primary":{"id":"22222222-2222-2222-2222-222222222222","name":"Akkuschrauber","type":"tool","status":"available","sku":"TOOL-1","barcode":null,"quantity":3,"trackingMode":"bulk","updatedAt":"2026-08-21T10:00:00Z","overriddenFields":[]},"variants":[{"id":"11111111-1111-1111-1111-111111111111","name":"Akkuschrauber 18 V","type":"tool","status":"available","sku":"TOOL-18","barcode":"4006381333931","quantity":2,"trackingMode":"serialized","updatedAt":"2026-08-21T11:00:00Z","overriddenFields":["name"]}],"optionGroupCount":0,"summary":{"totalQuantity":5,"primaryQuantity":3,"variantQuantity":2,"variantCount":1,"serializedVariantCount":1}}"#.utf8
         )
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601

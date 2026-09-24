@@ -49,16 +49,14 @@ import {
   validateCustomFieldValues,
 } from "@/lib/custom-fields";
 import type { CustomFieldValues } from "@/lib/custom-field-contract";
-import {
-  allocatedVariantQuantity,
-  assertVariantAllocationFits,
-} from "@/lib/variant-stock-invariant";
 import { violatesNegativeStockPolicy } from "@/lib/negative-stock-policy";
 import {
   addInboundStockCost,
   consumeStockCost,
   splitCents,
 } from "@/lib/stock-costing";
+import { getResourceFamily } from "@/lib/resource-families";
+import type { ResourceRecord } from "@/db/schema";
 import { MAX_STOCK_QUANTITY } from "@/lib/stock-quantity-units";
 
 const FORECAST_WINDOW_DAYS = 30;
@@ -201,13 +199,6 @@ const movementDto = (row: StockMovementRecord) => ({
   occurredAt: row.occurredAt.toISOString(),
   createdAt: row.createdAt.toISOString(),
   createdBy: row.createdBy,
-  ...(row.variantId
-    ? {
-        variantId: row.variantId,
-        variantDelta: row.variantDelta,
-        variantBalanceAfter: row.variantBalanceAfter,
-      }
-    : {}),
   ...(row.unitId ? { unitId: row.unitId } : {}),
   ...(row.assemblyBuildId ? { assemblyBuildId: row.assemblyBuildId } : {}),
   ...(row.purchaseReceiptId ? { purchaseReceiptId: row.purchaseReceiptId } : {}),
@@ -401,6 +392,7 @@ const usageSince = (now: Date) =>
 export async function getStockDetail(
   organizationId: string,
   resourceId: string,
+  options: { authorize?: (resource: ResourceRecord) => boolean | Promise<boolean> } = {},
 ) {
   return db.transaction(async (transaction) => {
   const now = new Date();
@@ -593,8 +585,10 @@ export async function getStockDetail(
         },
       ]),
   );
+  const family = await getResourceFamily(organizationId, resourceId, options, transaction);
   return {
     resource,
+    family,
     config,
     forecast: calculateForecast(
       resource.quantity,
@@ -876,7 +870,6 @@ const editableMovementTypes = new Set([
 function assertManualMovementEditable(movement: StockMovementRecord) {
   if (
     !editableMovementTypes.has(movement.type) ||
-    movement.variantId ||
     movement.unitId ||
     movement.assemblyBuildId ||
     movement.purchaseReceiptId ||
@@ -1078,17 +1071,6 @@ async function validateCorrectedStockQuantity(
     throw new StockOperationError(
       `This correction exceeds the supported stock range of -${MAX_STOCK_QUANTITY} to ${MAX_STOCK_QUANTITY}.`,
       409,
-    );
-  }
-  if (!input.allowNegativeStock && input.quantityAfter >= 0) {
-    const variantAllocation = await allocatedVariantQuantity(
-      transaction,
-      input.resourceId,
-    );
-    assertVariantAllocationFits(
-      input.quantityAfter,
-      variantAllocation,
-      (message) => new StockOperationError(message, 409),
     );
   }
 }
@@ -1491,16 +1473,6 @@ export async function updateStockConfig(
             409,
           );
         }
-        const variantAllocation = await allocatedVariantQuantity(
-          transaction,
-          resourceId,
-        );
-        if (variantAllocation > 0) {
-          throw new StockOperationError(
-            "Move all variant stock to zero before enabling serialized tracking.",
-            409,
-          );
-        }
         if (Number(existingUnits ?? 0) > 0) {
           throw new StockOperationError(
             "This item already has serialized units and cannot be converted again.",
@@ -1844,17 +1816,6 @@ export async function bookStockMovement(
         throw new StockOperationError(
           `This booking exceeds the supported stock range of -${MAX_STOCK_QUANTITY} to ${MAX_STOCK_QUANTITY}.`,
           409,
-        );
-      }
-      if (!resource.allowNegativeStock && balanceAfter >= 0) {
-        const variantAllocation = await allocatedVariantQuantity(
-          transaction,
-          resourceId,
-        );
-        assertVariantAllocationFits(
-          balanceAfter,
-          variantAllocation,
-          (message) => new StockOperationError(message, 409),
         );
       }
 

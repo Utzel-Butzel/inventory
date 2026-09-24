@@ -469,26 +469,6 @@ test("generic relationship UI keeps variant_of inside the family panel", async (
   );
 });
 
-test("legacy bulk variants stay hidden by default and cannot be newly created here", async () => {
-  const [page, legacyManager] = await Promise.all([
-    source("app/(dashboard)/inventory/[id]/page.tsx"),
-    source("components/resource-variants-manager.tsx"),
-  ]);
-
-  assert.match(
-    page,
-    /<ResourceVariantsManager[\s\S]*hideWhenEmpty[\s\S]*allowCreate=\{false\}/,
-  );
-  assert.match(
-    legacyManager,
-    /hideWhenEmpty[\s\S]*!loading[\s\S]*!error[\s\S]*data\?\.variants\.length[\s\S]*return null/,
-  );
-  assert.match(
-    legacyManager,
-    /canEdit && allowCreate && !formOpen/,
-  );
-});
-
 test("the default first-class variant form asks only for identity fields", async () => {
   const manager = await source("components/resource-family-manager.tsx");
 

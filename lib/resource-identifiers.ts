@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, eq, ne } from "drizzle-orm";
 
-import { resources, resourceVariants } from "@/db/schema";
+import { resources } from "@/db/schema";
 import { db } from "@/lib/db";
 
 type ResourceIdentifiers = {
@@ -30,19 +30,6 @@ export async function assertResourceIdentifiersAvailable(
   if (identifiers.sku) {
     checks.push(
       db
-        .select({ id: resourceVariants.id })
-        .from(resourceVariants)
-        .where(
-          and(
-            eq(resourceVariants.organizationId, organizationId),
-            eq(resourceVariants.sku, identifiers.sku),
-          ),
-        )
-        .limit(1)
-        .then((rows) => {
-          if (rows[0]) throw new ResourceIdentifierConflictError("sku");
-        }),
-      db
         .select({ id: resources.id })
         .from(resources)
         .where(
@@ -65,19 +52,6 @@ export async function assertResourceIdentifiersAvailable(
   }
   if (identifiers.barcode) {
     checks.push(
-      db
-        .select({ id: resourceVariants.id })
-        .from(resourceVariants)
-        .where(
-          and(
-            eq(resourceVariants.organizationId, organizationId),
-            eq(resourceVariants.barcode, identifiers.barcode),
-          ),
-        )
-        .limit(1)
-        .then((rows) => {
-          if (rows[0]) throw new ResourceIdentifierConflictError("barcode");
-        }),
       db
         .select({ id: resources.id })
         .from(resources)

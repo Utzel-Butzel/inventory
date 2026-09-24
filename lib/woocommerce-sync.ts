@@ -12,7 +12,6 @@ import {
   orders,
   organizations,
   resources,
-  resourceVariants,
   stockMovements,
   wooCommerceConnections,
   wooCommerceCustomerLinks,
@@ -25,7 +24,6 @@ import {
 import { db } from "@/lib/db";
 import { hashIdempotentPayload } from "@/lib/idempotency";
 import { organizationAllowsWorkerSideEffects } from "@/lib/organization-read-only";
-import { bookResourceVariantMovement } from "@/lib/resource-variants";
 import { decryptSecret, encryptSecret } from "@/lib/secret-encryption";
 import { bookStockMovement } from "@/lib/stock";
 import { validateWebhookTargetUrl } from "@/lib/webhook-contract";
@@ -455,33 +453,17 @@ async function resolveSku(
       ),
     )
     .limit(2);
-  const variantRows = await transaction
-    .select({
-      resourceId: resourceVariants.resourceId,
-      variantId: resourceVariants.id,
-    })
-    .from(resourceVariants)
-    .where(
-      and(
-        eq(resourceVariants.organizationId, organizationId),
-        eq(resourceVariants.sku, sku),
-      ),
-    )
-    .limit(2);
-  if (itemRows.length + variantRows.length !== 1) {
+  if (itemRows.length !== 1) {
     return {
       mapping: null,
       error:
-        itemRows.length + variantRows.length === 0
+        itemRows.length === 0
           ? `No Inventory item or variant uses SKU ${sku}.`
           : `SKU ${sku} is ambiguous in Inventory.`,
     };
   }
-  if (variantRows[0]) {
-    return { mapping: variantRows[0], error: null };
-  }
   return {
-    mapping: { resourceId: itemRows[0]!.resourceId, variantId: null },
+    mapping: { resourceId: itemRows[0]!.resourceId },
     error: null,
   };
 }
@@ -861,7 +843,6 @@ async function projectWooCommerceSalesOrder(options: {
         .slice(0, 20_000);
       const lineValues = {
         resourceId: syncLine.resourceId,
-        variantId: syncLine.variantId,
         orderedQuantity,
         fulfilledQuantity,
         returnedQuantity,
@@ -992,7 +973,7 @@ async function applyLineTarget(options: {
   order: WooCommerceOrder;
   line: WooCommerceLineTarget;
   existing: WooCommerceOrderLineSyncRecord | null;
-  mapping: { resourceId: string; variantId: string | null };
+  mapping: { resourceId: string };
   transactionEffect: (
     transaction: Transaction,
     movementId: string,
@@ -1007,7 +988,6 @@ async function applyLineTarget(options: {
     orderId: options.order.id,
     lineItemId: options.line.lineItemId,
     resourceId: options.mapping.resourceId,
-    variantId: options.mapping.variantId,
     revision,
     targetQuantity: options.line.targetQuantity,
   });
@@ -1027,24 +1007,10 @@ async function applyLineTarget(options: {
     orderId: options.order.id,
     lineItemId: options.line.lineItemId,
     resourceId: options.mapping.resourceId,
-    variantId: options.mapping.variantId,
     revision,
     targetQuantity: options.line.targetQuantity,
   });
   const actor = `woocommerce:${options.connectionId}`;
-  if (options.mapping.variantId) {
-    const result = await bookResourceVariantMovement(
-      options.organizationId,
-      options.mapping.resourceId,
-      options.mapping.variantId,
-      input,
-      actor,
-      { key: idempotencyKey, requestHash },
-      (transaction, movement) =>
-        options.transactionEffect(transaction, movement.id),
-    );
-    return { movementId: result.movement.id, moved: true };
-  }
   const result = await bookStockMovement(
     options.organizationId,
     options.mapping.resourceId,
@@ -1077,7 +1043,7 @@ async function saveLineState(
     orderId: number;
     line: WooCommerceLineTarget;
     existing: WooCommerceOrderLineSyncRecord | null;
-    mapping: { resourceId: string; variantId: string | null } | null;
+    mapping: { resourceId: string } | null;
     status: "synced" | "unmapped" | "error";
     error: string | null;
     movementId?: string | null;
@@ -1094,7 +1060,6 @@ async function saveLineState(
       orderId: options.orderId,
       lineItemId: options.line.lineItemId,
       resourceId: options.mapping?.resourceId ?? null,
-      variantId: options.mapping?.variantId ?? null,
       sku: options.line.sku.slice(0, 80),
       orderedQuantity: options.line.orderedQuantity,
       refundedQuantity: options.line.refundedQuantity,
@@ -1117,7 +1082,6 @@ async function saveLineState(
       ],
       set: {
         resourceId: options.mapping?.resourceId ?? null,
-        variantId: options.mapping?.variantId ?? null,
         sku: options.line.sku.slice(0, 80),
         orderedQuantity: options.line.orderedQuantity,
         refundedQuantity: options.line.refundedQuantity,
@@ -1278,7 +1242,6 @@ export async function reconcileWooCommerceOrder(options: {
         ? {
             mapping: {
               resourceId: existing.resourceId,
-              variantId: existing.variantId,
             },
             error: null,
           }

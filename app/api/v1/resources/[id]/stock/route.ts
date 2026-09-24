@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { requireResourcePermission } from "@/lib/api-auth";
+import { canAccessResource, requireResourcePermission } from "@/lib/api-auth";
+import { resourceFamilyHttpError } from "@/lib/resource-families";
 import { getStockDetail } from "@/lib/stock";
 
 type Context = { params: Promise<{ id: string }> };
@@ -23,13 +24,21 @@ export async function GET(request: Request, context: Context) {
     const detail = await getStockDetail(
       authorization.identity.organizationId,
       id,
+      {
+        authorize: (resource) =>
+          canAccessResource(authorization.identity, "stock.read", resource),
+      },
     );
     if (!detail) return Response.json({ error: "Not found" }, { status: 404 });
     return Response.json(detail);
-  } catch {
+  } catch (error) {
+    const failure = resourceFamilyHttpError(
+      error,
+      "Unable to load stock for this item.",
+    );
     return Response.json(
-      { error: "Unable to load stock for this item." },
-      { status: 500 },
+      { error: failure.message },
+      { status: failure.status },
     );
   }
 }

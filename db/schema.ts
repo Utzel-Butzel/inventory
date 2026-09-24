@@ -1128,70 +1128,6 @@ export const internalRequestEvents = pgTable(
   ],
 );
 
-/**
- * Optional sellable/stocked choices that belong to one inventory item.
- *
- * The resource quantity remains the canonical total used by all existing stock
- * code. Variant quantities allocate part of that total; stock that has not been
- * allocated to a variant remains available on the parent item. Variants are
- * deliberately bulk-only so identified-unit tracking keeps its established,
- * resource-level ownership model.
- */
-export const resourceVariants = pgTable(
-  "resource_variants",
-  {
-    organizationId: organizationIdColumn(),
-    id: uuid("id").defaultRandom().primaryKey(),
-    resourceId: uuid("resource_id")
-      .notNull()
-      .references(() => resources.id, { onDelete: "cascade" }),
-    name: varchar("name", { length: 240 }).notNull(),
-    sku: varchar("sku", { length: 80 }),
-    barcode: varchar("barcode", { length: 180 }),
-    priceCents: integer("price_cents"),
-    currency: varchar("currency", { length: 3 }).notNull().default("EUR"),
-    quantity: integer("quantity").notNull().default(0),
-    position: integer("position").notNull().default(0),
-    createdBy: varchar("created_by", { length: 320 }),
-    updatedBy: varchar("updated_by", { length: 320 }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => [
-    foreignKey({
-      name: "resource_variants_organization_resource_fk",
-      columns: [table.organizationId, table.resourceId],
-      foreignColumns: [resources.organizationId, resources.id],
-    }).onDelete("cascade"),
-    uniqueIndex("resource_variants_resource_name_unique").on(
-      table.resourceId,
-      table.name,
-    ),
-    uniqueIndex("resource_variants_id_resource_unique").on(
-      table.id,
-      table.resourceId,
-    ),
-    index("resource_variants_resource_position_idx").on(
-      table.resourceId,
-      table.position,
-    ),
-    uniqueIndex("resource_variants_sku_unique")
-      .on(table.organizationId, table.sku)
-      .where(sql`${table.sku} is not null`),
-    uniqueIndex("resource_variants_barcode_unique")
-      .on(table.organizationId, table.barcode)
-      .where(sql`${table.barcode} is not null`),
-    check("resource_variants_name_nonempty", sql`length(btrim(${table.name})) > 0`),
-    check("resource_variants_price_nonnegative", sql`${table.priceCents} is null or ${table.priceCents} >= 0`),
-    check("resource_variants_position_nonnegative", sql`${table.position} >= 0`),
-    check("resource_variants_currency_format", sql`${table.currency} ~ '^[A-Z]{3}$'`),
-  ],
-);
-
 export const resourceTranslations = pgTable(
   "resource_translations",
   {
@@ -2455,7 +2391,6 @@ export const orderLines = pgTable(
     resourceId: uuid("resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "restrict" }),
-    variantId: uuid("variant_id"),
     orderedQuantity: integer("quantity").notNull(),
     fulfilledQuantity: integer("fulfilled_quantity").notNull().default(0),
     returnedQuantity: integer("returned_quantity").notNull().default(0),
@@ -2483,11 +2418,6 @@ export const orderLines = pgTable(
     ),
     index("order_lines_order_id_idx").on(table.orderId),
     index("order_lines_resource_id_idx").on(table.resourceId),
-    foreignKey({
-      name: "order_lines_variant_fk",
-      columns: [table.variantId, table.resourceId],
-      foreignColumns: [resourceVariants.id, resourceVariants.resourceId],
-    }).onDelete("restrict"),
     check(
       "order_lines_quantity_positive",
       sql`${table.orderedQuantity} > 0`,
@@ -3094,9 +3024,6 @@ export const stockMovements = pgTable(
     resourceId: uuid("resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "cascade" }),
-    variantId: uuid("variant_id"),
-    variantDelta: integer("variant_delta"),
-    variantBalanceAfter: integer("variant_balance_after"),
     unitId: uuid("unit_id").references(() => stockUnits.id, {
       onDelete: "set null",
     }),
@@ -3154,12 +3081,6 @@ export const stockMovements = pgTable(
       foreignColumns: [contacts.organizationId, contacts.id],
     }),
     index("stock_movements_resource_id_idx").on(table.resourceId),
-    index("stock_movements_variant_id_idx").on(table.variantId),
-    foreignKey({
-      name: "stock_movements_variant_resource_fk",
-      columns: [table.variantId, table.resourceId],
-      foreignColumns: [resourceVariants.id, resourceVariants.resourceId],
-    }).onDelete("restrict"),
     index("stock_movements_resource_occurred_idx").on(
       table.resourceId,
       table.occurredAt,
@@ -3191,10 +3112,6 @@ export const stockMovements = pgTable(
     check(
       "stock_movements_cost_fields_together",
       sql`(${table.costCents} is null and ${table.costCurrency} is null) or (${table.costCents} is not null and ${table.costCurrency} ~ '^[A-Z]{3}$')`,
-    ),
-    check(
-      "stock_movements_variant_fields_consistent",
-      sql`(${table.variantId} is null and ${table.variantDelta} is null and ${table.variantBalanceAfter} is null) or (${table.variantId} is not null and ${table.variantDelta} is not null and ${table.variantBalanceAfter} is not null)`,
     ),
   ],
 );
@@ -4643,7 +4560,6 @@ export const wooCommerceOrderLineSyncs = pgTable(
     orderId: bigint("order_id", { mode: "number" }).notNull(),
     lineItemId: bigint("line_item_id", { mode: "number" }).notNull(),
     resourceId: uuid("resource_id"),
-    variantId: uuid("variant_id"),
     localOrderLineId: uuid("local_order_line_id"),
     sku: varchar("sku", { length: 80 }).notNull().default(""),
     orderedQuantity: integer("ordered_quantity").notNull().default(0),
@@ -4695,11 +4611,6 @@ export const wooCommerceOrderLineSyncs = pgTable(
       columns: [table.organizationId, table.localOrderLineId],
       foreignColumns: [orderLines.organizationId, orderLines.id],
     }).onDelete("restrict"),
-    foreignKey({
-      name: "woocommerce_order_line_syncs_variant_fk",
-      columns: [table.variantId, table.resourceId],
-      foreignColumns: [resourceVariants.id, resourceVariants.resourceId],
-    }).onDelete("restrict"),
     index("woocommerce_order_line_syncs_resource_idx").on(
       table.organizationId,
       table.resourceId,
@@ -4723,10 +4634,6 @@ export const wooCommerceOrderLineSyncs = pgTable(
     check(
       "woocommerce_order_line_syncs_quantities_check",
       sql`${table.orderedQuantity} >= 0 and ${table.refundedQuantity} >= 0 and ${table.appliedQuantity} >= 0 and ${table.revision} >= 0`,
-    ),
-    check(
-      "woocommerce_order_line_syncs_mapping_check",
-      sql`(${table.resourceId} is null and ${table.variantId} is null) or ${table.resourceId} is not null`,
     ),
   ],
 );
@@ -4905,8 +4812,6 @@ export type ResourceSlugRecord = typeof resourceSlugs.$inferSelect;
 export type ResourceFavoriteRecord = typeof resourceFavorites.$inferSelect;
 export type ResourceCommentRecord = typeof resourceComments.$inferSelect;
 export type NewResourceComment = typeof resourceComments.$inferInsert;
-export type ResourceVariantRecord = typeof resourceVariants.$inferSelect;
-export type NewResourceVariant = typeof resourceVariants.$inferInsert;
 export type TranslationLanguageRecord =
   typeof translationLanguages.$inferSelect;
 export type ResourceTranslationRecord = typeof resourceTranslations.$inferSelect;

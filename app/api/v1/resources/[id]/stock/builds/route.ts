@@ -20,6 +20,7 @@ type Context = { params: Promise<{ id: string }> };
 
 const buildSchema = z
   .object({
+    outputResourceId: z.string().uuid().optional(),
     quantity: z.number().int().min(1).max(1_000),
     occurredAt: z.string().datetime().optional(),
     location: z.string().trim().max(240).nullable().optional(),

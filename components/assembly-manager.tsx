@@ -365,7 +365,7 @@ function SectionHeading({
   );
 }
 
-export function AssemblyManager({
+function AssemblyResourceManager({
   resourceId,
   mode = "full",
   onStockChanged,
@@ -842,6 +842,7 @@ export function AssemblyManager({
     setNotice(null);
     try {
       const requestBody = {
+        outputResourceId: resourceId,
         quantity: buildQuantity,
         occurredAt,
         location: buildForm.location.trim() || undefined,
@@ -877,6 +878,7 @@ export function AssemblyManager({
       });
       await Promise.all([loadBom(true), loadBuilds(true)]);
       onStockChanged?.();
+      window.dispatchEvent(new Event("resource-family-changed"));
       setNotice(t("assembly:notices.built", { count: buildQuantity, name: bom.resource.name }));
     } catch (buildError) {
       setError(
@@ -1689,6 +1691,120 @@ export function AssemblyManager({
             </div>
           ) : null}
         </Card>
+      ) : null}
+    </div>
+  );
+}
+
+type AssemblyFamily = {
+  role: "primary" | "variant";
+  primary: { id: string; name: string };
+  variants: Array<{ id: string; name: string; status: string }>;
+};
+
+/** Select the finished article before loading its recipe and stock controls. */
+export function AssemblyManager(props: {
+  resourceId: string;
+  mode?: AssemblyMode;
+  onStockChanged?: () => void;
+  hideWhenEmpty?: boolean;
+}) {
+  const { t } = useT("assembly");
+  const [loaded, setLoaded] = useState<{
+    id: string;
+    family: AssemblyFamily;
+  } | null>(null);
+  const [output, setOutput] = useState<{
+    primaryId: string;
+    id: string;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    if (props.mode === "bom") return;
+    const controller = new AbortController();
+    const load = () => {
+      setError(null);
+      void fetchJson<AssemblyFamily>(
+        `/api/v1/resources/${props.resourceId}/family`,
+        { signal: controller.signal, cache: "no-store" },
+      )
+        .then((family) => {
+          if (!controller.signal.aborted)
+            setLoaded({ id: props.resourceId, family });
+        })
+        .catch((cause) => {
+          if (!controller.signal.aborted)
+            setError(
+              cause instanceof Error ? cause.message : t("errors.loadBom"),
+            );
+        });
+    };
+    load();
+    window.addEventListener("resource-family-changed", load);
+    return () => {
+      controller.abort();
+      window.removeEventListener("resource-family-changed", load);
+    };
+  }, [props.resourceId, props.mode, t, retry]);
+  if (props.mode === "bom") return <AssemblyResourceManager {...props} />;
+  if (error)
+    return (
+      <Card className="p-4">
+        <p role="alert">{error}</p>
+        <Button onClick={() => setRetry((value) => value + 1)}>
+          {t("output.retry")}
+        </Button>
+      </Card>
+    );
+  if (loaded?.id !== props.resourceId)
+    return <Skeleton className="h-28 w-full" />;
+  const family = loaded.family;
+  if (family.role !== "primary" || !family.variants.length)
+    return <AssemblyResourceManager key={props.resourceId} {...props} />;
+  const selected =
+    output?.primaryId === props.resourceId &&
+    (output.id === props.resourceId ||
+      family.variants.some(
+        (variant) => variant.id === output.id && variant.status !== "archived",
+      ))
+      ? output.id
+      : "";
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <label className={labelClass}>
+          {t("output.label")}
+          <select
+            className={`${inputClass} mt-1.5`}
+            value={selected}
+            onChange={(event) =>
+              setOutput({ primaryId: props.resourceId, id: event.target.value })
+            }
+          >
+            <option value="">{t("output.choose")}</option>
+            {family.variants
+              .filter((variant) => variant.status !== "archived")
+              .map((variant) => (
+                <option key={variant.id} value={variant.id}>
+                  {variant.name}
+                </option>
+              ))}
+            <option value={props.resourceId}>
+              {t("output.unassigned", { name: family.primary.name })}
+            </option>
+          </select>
+        </label>
+        <p className="mt-2 text-xs text-muted">{t("output.help")}</p>
+      </Card>
+      {selected ? (
+        <AssemblyResourceManager
+          key={selected}
+          {...props}
+          resourceId={selected}
+        />
+      ) : props.mode !== "build" ? (
+        <AssemblyResourceManager {...props} mode="bom" />
       ) : null}
     </div>
   );

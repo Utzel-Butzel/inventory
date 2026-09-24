@@ -1018,38 +1018,17 @@ public enum ResourceCodeMatch: String, Codable, CaseIterable, Sendable {
     case sku
     case barcode
     case serialNumber
-    case variantSku
-    case variantBarcode
-}
-
-public struct ResourceVariantDTO: Codable, Equatable, Sendable {
-    public let id: UUID
-    public let resourceId: UUID
-    public let name: String
-    public let sku: String?
-    public let barcode: String?
-    public let priceCents: Int?
-    public let currency: String
-    public let quantity: Int
-    public let position: Int
-    public let createdBy: String?
-    public let updatedBy: String?
-    public let createdAt: Date
-    public let updatedAt: Date
 }
 
 public struct ResourceLookupResponse: Codable, Equatable, Sendable {
     public let resource: InventoryResource
-    public let variant: ResourceVariantDTO?
     public let matchedBy: ResourceCodeMatch
 
     public init(
         resource: InventoryResource,
-        variant: ResourceVariantDTO? = nil,
         matchedBy: ResourceCodeMatch
     ) {
         self.resource = resource
-        self.variant = variant
         self.matchedBy = matchedBy
     }
 }

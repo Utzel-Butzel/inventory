@@ -247,7 +247,8 @@
       "runway": "Runway",
       "estimated": "Estimated {{date}}",
       "noStockout": "No stockout forecast",
-      "daysShort": "{{value}} d"
+      "daysShort": "{{value}} d",
+      "unassigned": "Unassigned stock"
     },
     "booking": {
       "title": "Book a movement",

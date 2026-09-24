@@ -24,16 +24,6 @@ struct ResourceFamilyView: View {
                 List {
                     summarySection(family)
                     membersSection(family)
-                    if family.legacyVariantCount > 0 {
-                        Section {
-                            Label(
-                                "Zusätzlich existieren \(family.legacyVariantCount) ältere Varianten.",
-                                systemImage: "exclamationmark.triangle"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                        }
-                    }
                     actionSection(family)
                 }
                 .refreshable { await load() }

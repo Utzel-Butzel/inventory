@@ -64,7 +64,7 @@ const writableHeaders = [
 
 // Export-only data is accepted so a CSV produced by this app remains a valid
 // import source. It is deliberately ignored while new parent items are created.
-const readOnlyHeaders = ["id", "created_at", "updated_at", "variants"] as const;
+const readOnlyHeaders = ["id", "created_at", "updated_at"] as const;
 const supportedHeaders = new Set<string>([
   ...writableHeaders,
   ...readOnlyHeaders,

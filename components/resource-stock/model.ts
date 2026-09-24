@@ -26,7 +26,6 @@ export function isManualMovement(movement: StockMovement) {
   return (
     editableMovementTypes.has(movement.type as MovementType) &&
     !movement.unitId &&
-    !movement.variantId &&
     !movement.assemblyBuildId &&
     !movement.purchaseReceiptId &&
     !movement.fromLocationResourceId &&
@@ -139,6 +138,7 @@ export function normalizeStock(payload: StockApiResponse, t: TFunction): StockDa
   const source = payload.stock ?? payload.data ?? payload;
   if (!source.resource) throw new Error(t("resource.errors.missingResource"));
   return {
+    family: source.family ?? null,
     resource: {
       ...source.resource,
       type: source.resource.type ?? "other",

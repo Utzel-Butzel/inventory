@@ -24,6 +24,11 @@ import {
 import { Badge, Button, Card, Skeleton } from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 
+import {
+  FamilyStockSummary,
+  type FamilyStock,
+} from "@/components/family-stock-summary";
+
 type FamilyRole = "standalone" | "primary" | "variant";
 
 type ResourceFamilyMember = {
@@ -40,11 +45,11 @@ type ResourceFamilyMember = {
 };
 
 type ResourceFamilyResponse = {
+  summary: FamilyStock["summary"];
   role: FamilyRole;
   currentResourceId: string;
   primary: ResourceFamilyMember;
   variants: ResourceFamilyMember[];
-  legacyVariantCount: number;
   optionGroupCount: number;
 };
 
@@ -372,14 +377,6 @@ export function ResourceFamilyManager({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 pl-12 sm:pl-0">
-            {family?.role !== "variant" && family?.legacyVariantCount ? (
-              <Badge tone="warning">
-                {t("family.legacyCount", {
-                  count: family.legacyVariantCount,
-                  value: number.format(family.legacyVariantCount),
-                })}
-              </Badge>
-            ) : null}
             {family && family.variants.length ? (
               <Badge>
                 {t("family.variantCount", {
@@ -621,6 +618,11 @@ export function ResourceFamilyManager({
           </form>
         ) : null}
 
+        {family && !loading ? (
+          <div className="px-4 pb-4">
+            <FamilyStockSummary family={family} showVariants={false} />
+          </div>
+        ) : null}
         {loading ? (
           <div
             className="space-y-2 p-4 sm:px-5"

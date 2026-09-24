@@ -47,7 +47,6 @@ const supportedHeaders = new Set([
   "notes",
   "created_at",
   "updated_at",
-  "variants",
 ]);
 
 const resourceTypes = new Set([

@@ -22,7 +22,6 @@ import {
   inventoryAssignments,
   resourceLendingSettings,
   resources,
-  resourceVariants,
   stockLocationBalances,
   stockMovements,
   stockSettings,
@@ -541,7 +540,7 @@ async function availabilityForWindow(
         inArray(resources.id, uniqueIds),
       ),
     );
-  const [activeTotals, overlappingAssignments, variantTotals] =
+  const [activeTotals, overlappingAssignments] =
     await Promise.all([
       transaction
         .select({
@@ -574,19 +573,6 @@ async function availabilityForWindow(
           ),
         )
         .groupBy(inventoryAssignments.resourceId),
-      transaction
-        .select({
-          resourceId: resourceVariants.resourceId,
-          quantity: sql<number>`coalesce(sum(${resourceVariants.quantity}), 0)::int`,
-        })
-        .from(resourceVariants)
-        .where(
-          and(
-            eq(resourceVariants.organizationId, organizationId),
-            inArray(resourceVariants.resourceId, uniqueIds),
-          ),
-        )
-        .groupBy(resourceVariants.resourceId),
     ]);
 
   const approvedConditions = [
@@ -618,13 +604,11 @@ async function availabilityForWindow(
   const activeByResource = totals(activeTotals);
   const assignmentsByResource = totals(overlappingAssignments);
   const approvedByResource = totals(approvedTotals);
-  const variantsByResource = totals(variantTotals);
   return new Map(
     resourceRows.map((resource) => {
       const capacity =
         resource.quantity +
-        (activeByResource.get(resource.id) ?? 0) -
-        (variantsByResource.get(resource.id) ?? 0);
+        (activeByResource.get(resource.id) ?? 0);
       const allocated =
         (assignmentsByResource.get(resource.id) ?? 0) +
         (approvedByResource.get(resource.id) ?? 0);
@@ -740,22 +724,6 @@ async function fulfillApprovedRequest(
     );
   }
   const resourceById = new Map(resourceRows.map((resource) => [resource.id, resource]));
-  const variantRows = await transaction
-    .select({
-      resourceId: resourceVariants.resourceId,
-      quantity: sql<number>`coalesce(sum(${resourceVariants.quantity}), 0)::int`,
-    })
-    .from(resourceVariants)
-    .where(
-      and(
-        eq(resourceVariants.organizationId, organizationId),
-        inArray(resourceVariants.resourceId, resourceIds),
-      ),
-    )
-    .groupBy(resourceVariants.resourceId);
-  const variants = new Map(
-    variantRows.map((row) => [row.resourceId, Number(row.quantity ?? 0)]),
-  );
   const recipient = assignmentRecipient(request);
   const now = new Date();
   const allMovements: Array<typeof stockMovements.$inferSelect> = [];
@@ -763,7 +731,7 @@ async function fulfillApprovedRequest(
   for (const line of lines) {
     const resource = resourceById.get(line.resourceId);
     if (!resource) throw new InternalRequestError("Inventory item not found.", 409);
-    const allocatable = resource.quantity - (variants.get(resource.id) ?? 0);
+    const allocatable = resource.quantity;
     if (line.quantity > allocatable) {
       throw new InternalRequestError(
         `${resource.name} has only ${Math.max(0, allocatable)} available now; ${line.quantity} were requested.`,

@@ -27,7 +27,6 @@ export const INVENTORY_EXPORT_HEADERS = [
   "created_at",
   "updated_at",
   "barcode",
-  "variants",
 ] as const;
 
 export type InventoryExportHeader = (typeof INVENTORY_EXPORT_HEADERS)[number];
@@ -82,21 +81,6 @@ export type InventoryExportResource = {
   notes: string;
   createdAt: Date;
   updatedAt: Date;
-  variants?: InventoryExportVariant[];
-};
-
-export type InventoryExportVariant = {
-  id: string;
-  resourceId: string;
-  name: string;
-  sku: string | null;
-  barcode: string | null;
-  priceCents: number | null;
-  currency: string;
-  quantity: number;
-  position: number;
-  createdAt: Date | string;
-  updatedAt: Date | string;
 };
 
 const localeCopy = {
@@ -118,7 +102,6 @@ const localeCopy = {
       quantity: "Menge",
       location: "Standort",
       value: "Wert",
-      variants: "Varianten",
       updated: "Aktualisiert",
     },
   },
@@ -140,7 +123,6 @@ const localeCopy = {
       quantity: "Quantity",
       location: "Location",
       value: "Value",
-      variants: "Variants",
       updated: "Updated",
     },
   },
@@ -177,7 +159,6 @@ export function inventoryExportRow(
     created_at: resource.createdAt,
     updated_at: resource.updatedAt,
     barcode: resource.barcode,
-    variants: stringifyJson(resource.variants ?? []),
   };
 }
 
@@ -234,7 +215,6 @@ const columnWidths: Record<InventoryExportHeader, number> = {
   created_at: 21,
   updated_at: 21,
   barcode: 22,
-  variants: 45,
 };
 
 const xlsxValue = (value: InventoryExportCell) => value ?? "";
@@ -244,7 +224,6 @@ export async function buildInventoryXlsx(
   options: {
     generatedAt?: Date;
     locale?: InventoryExportLocale;
-    variants?: InventoryExportVariant[];
   } = {},
 ) {
   const generatedAt = options.generatedAt ?? new Date();
@@ -407,9 +386,6 @@ export async function buildInventoryXlsx(
   columnFor("gps_altitude").numFmt = "0.00";
   columnFor("created_at").numFmt = "yyyy-mm-dd hh:mm:ss";
   columnFor("updated_at").numFmt = "yyyy-mm-dd hh:mm:ss";
-  // Variant rows have their own structured sheet. Retain the raw JSON for
-  // lossless parity with CSV while keeping the primary sheet usable.
-  columnFor("variants").hidden = true;
   worksheet.autoFilter = {
     from: { row: headerRowNumber, column: 1 },
     to: { row: lastDataRow, column: INVENTORY_EXPORT_HEADERS.length },
@@ -418,98 +394,6 @@ export async function buildInventoryXlsx(
   worksheet.pageSetup.printArea = `A1:${finalColumn}${lastDataRow}`;
   worksheet.headerFooter.oddFooter =
     `&L${copy.spreadsheetTitle}&C${copy.page} &P ${copy.of} &N&R&D`;
-
-  if (options.variants?.length) {
-    const variantSheetName = locale === "de" ? "Varianten" : "Variants";
-    const variantSheet = workbook.addWorksheet(variantSheetName, {
-      properties: { defaultRowHeight: 18 },
-      views: [
-        {
-          state: "frozen",
-          xSplit: 2,
-          ySplit: 1,
-          topLeftCell: "C2",
-          activeCell: "A2",
-          showGridLines: false,
-        },
-      ],
-    });
-    const variantHeaders = [
-      "resource_id",
-      "variant_id",
-      "name",
-      "sku",
-      "barcode",
-      "quantity",
-      "price_cents",
-      "currency",
-      "position",
-      "created_at",
-      "updated_at",
-    ] as const;
-    variantSheet.addRow([...variantHeaders]);
-    for (const variant of options.variants) {
-      variantSheet.addRow([
-        variant.resourceId,
-        variant.id,
-        variant.name,
-        variant.sku ?? "",
-        variant.barcode ?? "",
-        variant.quantity,
-        variant.priceCents ?? "",
-        variant.currency,
-        variant.position,
-        variant.createdAt instanceof Date
-          ? variant.createdAt
-          : new Date(variant.createdAt),
-        variant.updatedAt instanceof Date
-          ? variant.updatedAt
-          : new Date(variant.updatedAt),
-      ]);
-    }
-    const variantHeader = variantSheet.getRow(1);
-    variantHeader.height = 24;
-    variantHeader.eachCell((cell) => {
-      cell.font = {
-        name: "Aptos",
-        size: 10,
-        bold: true,
-        color: { argb: "FFFFFFFF" },
-      };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FF246B7A" },
-      };
-      cell.alignment = { vertical: "middle" };
-    });
-    variantSheet.columns.forEach((column, index) => {
-      column.width = [38, 38, 28, 18, 22, 12, 14, 10, 10, 21, 21][index];
-      column.font = { name: "Aptos", size: 9 };
-      column.alignment = { vertical: "top" };
-    });
-    variantSheet.getColumn(6).numFmt = "#,##0";
-    variantSheet.getColumn(7).numFmt = "#,##0";
-    variantSheet.getColumn(9).numFmt = "0";
-    variantSheet.getColumn(10).numFmt = "yyyy-mm-dd hh:mm:ss";
-    variantSheet.getColumn(11).numFmt = "yyyy-mm-dd hh:mm:ss";
-    for (const columnNumber of [1, 2, 4, 5]) {
-      variantSheet.getColumn(columnNumber).numFmt = "@";
-    }
-    variantSheet.autoFilter = {
-      from: { row: 1, column: 1 },
-      to: { row: Math.max(2, options.variants.length + 1), column: variantHeaders.length },
-    };
-    variantSheet.pageSetup = {
-      orientation: "landscape",
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 0,
-      paperSize: 9,
-      printTitlesRow: "1:1",
-      printArea: `A1:K${options.variants.length + 1}`,
-    };
-  }
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
@@ -534,63 +418,26 @@ const formatMoney = (
 ) => `${formatNumber(cents / 100, locale)} ${normalizePdfText(currency)}`;
 
 const pdfColumns = [
-  { key: "name", width: 128, align: "left" as const },
+  { key: "name", width: 180, align: "left" as const },
   { key: "sku", width: 72, align: "left" as const },
   { key: "type", width: 58, align: "left" as const },
   { key: "status", width: 64, align: "left" as const },
   { key: "quantity", width: 44, align: "right" as const },
-  { key: "location", width: 112, align: "left" as const },
+  { key: "location", width: 164, align: "left" as const },
   { key: "value", width: 88, align: "right" as const },
-  { key: "variants", width: 104, align: "left" as const },
   { key: "updated", width: 88, align: "left" as const },
 ] as const;
 
 type PdfColumnKey = (typeof pdfColumns)[number]["key"];
 type PdfRow = Record<PdfColumnKey, string>;
 
-type CompactVariant = {
-  name?: unknown;
-  priceCents?: unknown;
-  currency?: unknown;
-  quantity?: unknown;
-};
-
-const parseRowVariants = (row: InventoryExportRow): CompactVariant[] => {
-  try {
-    const value = JSON.parse(String(row.variants ?? "[]")) as unknown;
-    return Array.isArray(value) ? (value as CompactVariant[]) : [];
-  } catch {
-    return [];
-  }
-};
-
 const rowValueContributions = (row: InventoryExportRow) => {
-  const parentCurrency = normalizePdfText(row.currency) || "EUR";
-  const parentPrice = typeof row.value_cents === "number" ? row.value_cents : 0;
-  const totalQuantity = typeof row.quantity === "number" ? row.quantity : 0;
-  const variants = parseRowVariants(row);
-  const totals = new Map<string, number>();
-  let allocatedQuantity = 0;
-  for (const variant of variants) {
-    const quantity = Number(variant.quantity);
-    if (!Number.isFinite(quantity) || quantity <= 0) continue;
-    allocatedQuantity += quantity;
-    const explicitPrice = Number(variant.priceCents);
-    const hasExplicitPrice = Number.isFinite(explicitPrice) && explicitPrice >= 0;
-    const currency = hasExplicitPrice
-      ? normalizePdfText(variant.currency) || parentCurrency
-      : parentCurrency;
-    const unitPrice = hasExplicitPrice ? explicitPrice : parentPrice;
-    totals.set(currency, (totals.get(currency) ?? 0) + unitPrice * quantity);
-  }
-  const unallocatedQuantity = Math.max(0, totalQuantity - allocatedQuantity);
-  if (unallocatedQuantity > 0 && parentPrice > 0) {
-    totals.set(
-      parentCurrency,
-      (totals.get(parentCurrency) ?? 0) + parentPrice * unallocatedQuantity,
-    );
-  }
-  return totals;
+  const currency = normalizePdfText(row.currency) || "EUR";
+  const price = typeof row.value_cents === "number" ? row.value_cents : 0;
+  const quantity = typeof row.quantity === "number" ? row.quantity : 0;
+  return new Map<string, number>(
+    quantity > 0 && price > 0 ? [[currency, quantity * price]] : [],
+  );
 };
 
 const compactValueSummary = (
@@ -614,19 +461,6 @@ const pdfRow = (
     typeof row.quantity === "number" ? formatNumber(row.quantity, locale) : "-",
   location: normalizePdfText(row.location) || "-",
   value: compactValueSummary(rowValueContributions(row), locale) || "-",
-  variants: (() => {
-    const variants = parseRowVariants(row);
-    if (!variants.length) return "-";
-    const preview = variants.slice(0, 3).map((variant) => {
-      const name = normalizePdfText(variant.name) || "-";
-      const quantity = Number(variant.quantity);
-      return Number.isFinite(quantity) ? `${name} (${quantity})` : name;
-    });
-    if (variants.length > preview.length) {
-      preview.push(`+${variants.length - preview.length}`);
-    }
-    return preview.join(", ");
-  })(),
   updated:
     row.updated_at instanceof Date
       ? row.updated_at.toISOString().slice(0, 16).replace("T", " ")

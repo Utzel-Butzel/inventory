@@ -15,10 +15,6 @@ import {
 import { db } from "@/lib/db";
 import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 import { StockOperationError } from "@/lib/stock";
-import {
-  allocatedVariantQuantity,
-  assertVariantAllocationFits,
-} from "@/lib/variant-stock-invariant";
 import { violatesNegativeStockPolicy } from "@/lib/negative-stock-policy";
 
 const MAX_STOCK_QUANTITY = 2_000_000_000;
@@ -337,16 +333,8 @@ export async function recordInventoryCount(
     ) {
       throw new StockOperationError("This count would make the total stock negative.", 409);
     }
-    if (!input.locationResourceId && !resource.allowNegativeStock) {
-      const variantAllocation = await allocatedVariantQuantity(
-        transaction,
-        resourceId,
-      );
-      assertVariantAllocationFits(
-        balanceAfter,
-        variantAllocation,
-        (message) => new StockOperationError(message, 409),
-      );
+    if (!input.locationResourceId && !resource.allowNegativeStock && balanceAfter < 0) {
+      throw new StockOperationError("This operation would make stock negative.", 409);
     }
     const countedAt = input.countedAt ?? new Date();
     await transaction

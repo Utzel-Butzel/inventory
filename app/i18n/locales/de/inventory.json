@@ -1,49 +1,4 @@
 {
-  "variants": {
-    "title": "Varianten",
-    "description": "Optionale Ausführungen mit eigener SKU, Barcode, Preis und Sammelbestand.",
-    "legacyTitle": "Alte Varianten",
-    "legacyDescription": "Frühere einfache Varianten bleiben aus Kompatibilitätsgründen erhalten. Neue Varianten sind vollständige Inventareinträge in der obigen Familie.",
-    "allocated": "{{value}} zugeordnet",
-    "unallocated": "{{value}} nicht zugeordnet",
-    "serializedDisabled": "Varianten sind bei serialisierter Bestandsführung deaktiviert. Identifizierte Einheiten bleiben dem Eintrag zugeordnet.",
-    "empty": "Keine Varianten. Der übergeordnete Eintrag bleibt unverändert.",
-    "optional": "optional",
-    "currency": "Währung",
-    "namePlaceholder": "z. B. Blau / Groß",
-    "openingAllocation": "Anfangszuordnung",
-    "openingAllocationHelp": "Aus dem bestehenden, noch nicht zugeordneten Bestand des Eintrags",
-    "stockChange": "Bestandsänderung für {{name}}",
-    "stockHelp": "Positive Werte buchen Zugang, negative Werte Abgang. Eintrags- und Variantenbestand werden gemeinsam aktualisiert.",
-    "addTitle": "Variante hinzufügen",
-    "editTitle": "{{name}} bearbeiten",
-    "confirmDelete": "Variante „{{name}}“ löschen?",
-    "fields": {
-      "name": "Name",
-      "sku": "SKU",
-      "barcode": "Barcode",
-      "price": "Preis",
-      "stock": "Bestand"
-    },
-    "actions": {
-      "stock": "Bestand",
-      "edit": "Bearbeiten",
-      "delete": "Variante löschen",
-      "zeroFirst": "Zuerst Bestand auf null setzen",
-      "book": "Buchen",
-      "cancel": "Abbrechen",
-      "save": "Variante speichern",
-      "add": "Variante hinzufügen"
-    },
-    "errors": {
-      "load": "Varianten konnten nicht geladen werden.",
-      "save": "Variante konnte nicht gespeichert werden.",
-      "delete": "Variante konnte nicht gelöscht werden.",
-      "stock": "Bestand konnte nicht geändert werden.",
-      "invalidForm": "Gib einen Namen und eine nicht negative ganze Anfangsmenge ein.",
-      "invalidStock": "Gib eine von null verschiedene ganze Bestandsänderung ein."
-    }
-  },
   "family": {
     "title": "Variantenfamilie",
     "description": "Verknüpfte Varianten sind vollständige Inventareinträge mit eigenen Vorgängen.",
@@ -52,8 +7,6 @@
     "variantOf": "Variante von {{name}}",
     "siblings": "Weitere Varianten",
     "noSiblings": "In dieser Familie gibt es noch keine weiteren Varianten.",
-    "legacyCount_one": "{{value}} alte Variante",
-    "legacyCount_other": "{{value}} alte Varianten",
     "variantCount_one": "{{value}} Variante",
     "variantCount_other": "{{value}} Varianten",
     "overrides_one": "{{value}} Abweichung",
@@ -115,6 +68,11 @@
       "detach": "Die Variante konnte nicht getrennt werden.",
       "existingRequired": "Wähle einen vorhandenen Inventareintrag aus.",
       "nameRequired": "Gib einen Namen für die Variante ein."
+    },
+    "stock": {
+      "title": "Bestand der Produktfamilie",
+      "unassigned": "Unzugeordneter Bestand am Hauptartikel",
+      "total": "Gesamtbestand"
     }
   },
   "options": {

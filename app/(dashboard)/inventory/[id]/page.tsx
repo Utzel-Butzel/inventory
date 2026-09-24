@@ -2,7 +2,6 @@ import { ResourceAssignmentsManager } from "@/components/resource-assignments-ma
 import { ResourceConnectionDiagram } from "@/components/resource-connection-diagram";
 import { ResourceComments } from "@/components/resource-comments";
 import { ResourceDetails } from "@/components/resource-details";
-import { ResourceVariantsManager } from "@/components/resource-variants-manager";
 import { canAccessResource, getSessionIdentity } from "@/lib/api-auth";
 import { getResourceRecordByReference } from "@/lib/access-control";
 import { organizationPath } from "@/lib/organization-path";
@@ -29,15 +28,14 @@ export default async function InventoryItemPage({ params }: Props) {
     }
   }
   const resourceId = resource?.id ?? id;
-  const [canEdit, canDelete, canManageAssignments, canManageStock] =
+  const [canEdit, canDelete, canManageAssignments] =
     identity && resource
       ? await Promise.all([
           canAccessResource(identity, "inventory.update", resource),
           canAccessResource(identity, "inventory.delete", resource),
           canAccessResource(identity, "assignments.manage", resource),
-          canAccessResource(identity, "stock.manage", resource),
         ])
-      : [false, false, false, false];
+      : [false, false, false];
   const canShare = Boolean(identity?.permissions.includes("sharing.manage"));
   const canCreate = Boolean(
     canEdit && identity?.permissions.includes("inventory.create"),
@@ -73,15 +71,6 @@ export default async function InventoryItemPage({ params }: Props) {
             type: resource.type,
             status: resource.status,
           }}
-        />
-      ) : null}
-      {!isPlace ? (
-        <ResourceVariantsManager
-          resourceId={resourceId}
-          canEdit={canEdit}
-          canManageStock={canManageStock}
-          hideWhenEmpty
-          allowCreate={false}
         />
       ) : null}
       {canViewAssignments && !isPlace ? (

@@ -10,7 +10,6 @@ import {
   resourceOptionConfigurations,
   resourceOptionGroups,
   resources,
-  resourceVariants,
   stockSettings,
   variantBomOverrides,
   type ResourceRecord,
@@ -20,7 +19,7 @@ import {
   AssemblyOperationError,
   assertCurrentEffectiveBomGraphAcyclic,
 } from "@/lib/assemblies";
-import { db } from "@/lib/db";
+import { db, type DatabaseExecutor } from "@/lib/db";
 import {
   BOM_WRITE_LOCK_ID,
   VARIANT_FAMILY_WRITE_LOCK_ID,
@@ -70,7 +69,6 @@ export type ResourceFamilyDto = {
   currentResourceId: string;
   primary: ResourceFamilyMemberDto;
   variants: ResourceFamilyMemberDto[];
-  legacyVariantCount: number;
   optionGroupCount: number;
   summary: {
     totalQuantity: number;
@@ -106,19 +104,13 @@ export function resourceFamilyHttpError(error: unknown, fallback: string) {
     return { status: error.status, message: error.message };
   }
   const message = error instanceof Error ? error.message : "";
-  if (
-    message.includes("resources_sku_unique") ||
-    message.includes("resource_variants_sku_unique")
-  ) {
+  if (message.includes("resources_sku_unique")) {
     return {
       status: 409 as const,
       message: "That SKU is already used by an item or variant.",
     };
   }
-  if (
-    message.includes("resources_barcode_unique") ||
-    message.includes("resource_variants_barcode_unique")
-  ) {
+  if (message.includes("resources_barcode_unique")) {
     return {
       status: 409 as const,
       message: "That barcode is already used by an item or variant.",
@@ -253,8 +245,9 @@ export async function getResourceFamily(
   options: {
     authorize?: (resource: ResourceRecord) => boolean | Promise<boolean>;
   } = {},
+  executor: DatabaseExecutor = db,
 ): Promise<ResourceFamilyDto | null> {
-  const [current] = await db
+  const [current] = await executor
     .select()
     .from(resources)
     .where(
@@ -266,7 +259,7 @@ export async function getResourceFamily(
     .limit(1);
   if (!current) return null;
 
-  const [outgoingMembership] = await db
+  const [outgoingMembership] = await executor
     .select({ targetResourceId: resourceRelations.targetResourceId })
     .from(resourceRelations)
     .where(
@@ -281,7 +274,7 @@ export async function getResourceFamily(
   const primaryResourceId =
     outgoingMembership?.targetResourceId ?? currentResourceId;
   if (outgoingMembership) {
-    const [nestedMembership] = await db
+    const [nestedMembership] = await executor
       .select({ id: resourceRelations.id })
       .from(resourceRelations)
       .where(
@@ -300,7 +293,7 @@ export async function getResourceFamily(
     }
   }
 
-  const memberships = await db
+  const memberships = await executor
     .select({
       sourceResourceId: resourceRelations.sourceResourceId,
       attributes: resourceRelations.attributes,
@@ -321,8 +314,8 @@ export async function getResourceFamily(
       ...memberships.map((membership) => membership.sourceResourceId),
     ]),
   );
-  const [memberRows, settingsRows, legacyRows, optionGroupRows] = await Promise.all([
-    db
+  const [memberRows, settingsRows, optionGroupRows] = await Promise.all([
+    executor
       .select()
       .from(resources)
       .where(
@@ -331,7 +324,7 @@ export async function getResourceFamily(
           inArray(resources.id, memberIds),
         ),
       ),
-    db
+    executor
       .select({
         resourceId: stockSettings.resourceId,
         trackingMode: stockSettings.trackingMode,
@@ -343,16 +336,7 @@ export async function getResourceFamily(
           inArray(stockSettings.resourceId, memberIds),
         ),
       ),
-    db
-      .select({ value: count() })
-      .from(resourceVariants)
-      .where(
-        and(
-          eq(resourceVariants.organizationId, organizationId),
-          eq(resourceVariants.resourceId, primaryResourceId),
-        ),
-      ),
-    db
+    executor
       .select({ value: count() })
       .from(resourceOptionGroups)
       .where(
@@ -421,7 +405,6 @@ export async function getResourceFamily(
     currentResourceId,
     primary,
     variants,
-    legacyVariantCount: Number(legacyRows[0]?.value ?? 0),
     optionGroupCount: Number(optionGroupRows[0]?.value ?? 0),
     summary: {
       totalQuantity: primary.quantity + variantQuantity,
@@ -444,39 +427,16 @@ async function assertIdentifiersAvailable(
     ...(input.sku ? [eq(resources.sku, input.sku)] : []),
     ...(input.barcode ? [eq(resources.barcode, input.barcode)] : []),
   ];
-  const legacyIdentifierChecks = [
-    ...(input.sku ? [eq(resourceVariants.sku, input.sku)] : []),
-    ...(input.barcode ? [eq(resourceVariants.barcode, input.barcode)] : []),
-  ];
-  if (!resourceIdentifierChecks.length && !legacyIdentifierChecks.length) return;
-
-  const [resourceConflicts, legacyConflicts] = await Promise.all([
-    resourceIdentifierChecks.length
-      ? transaction
-          .select({ sku: resources.sku, barcode: resources.barcode })
-          .from(resources)
-          .where(
-            and(
-              eq(resources.organizationId, organizationId),
-              or(...resourceIdentifierChecks),
-            ),
-          )
-          .limit(1)
-      : Promise.resolve([]),
-    legacyIdentifierChecks.length
-      ? transaction
-          .select({ sku: resourceVariants.sku, barcode: resourceVariants.barcode })
-          .from(resourceVariants)
-          .where(
-            and(
-              eq(resourceVariants.organizationId, organizationId),
-              or(...legacyIdentifierChecks),
-            ),
-          )
-          .limit(1)
-      : Promise.resolve([]),
-  ]);
-  const conflicts = [...resourceConflicts, ...legacyConflicts];
+  if (!resourceIdentifierChecks.length) return;
+  const conflicts = await transaction
+    .select({ sku: resources.sku, barcode: resources.barcode })
+    .from(resources)
+    .where(
+      and(
+        eq(resources.organizationId, organizationId),
+        or(...resourceIdentifierChecks),
+      ),
+    );
   if (input.sku && conflicts.some((conflict) => conflict.sku === input.sku)) {
     throw new ResourceFamilyError(
       "That SKU is already used by an item or variant.",

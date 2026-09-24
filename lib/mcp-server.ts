@@ -478,6 +478,10 @@ export function createInventoryMcpServer(options: {
         const stock = await getStockDetail(
           options.identity.organizationId,
           resource.id,
+          {
+            authorize: (member) =>
+              canAccessResource(options.identity, "stock.read", member),
+          },
         );
         if (!stock) {
           throw new InventoryMcpError("Inventory item not found.", "not_found");

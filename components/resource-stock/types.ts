@@ -1,3 +1,4 @@
+import type { FamilyStock } from "@/components/family-stock-summary";
 import type {
   CustomFieldDefinition,
   CustomFieldValues,
@@ -55,9 +56,6 @@ export type StockMovement = {
   createdAt: string;
   createdBy: string | null;
   unitId?: string | null;
-  variantId?: string | null;
-  variantDelta?: number | null;
-  variantBalanceAfter?: number | null;
   assemblyBuildId?: string | null;
   purchaseReceiptId?: string | null;
   fromLocationResourceId?: string | null;
@@ -94,6 +92,7 @@ export type StockUnit = {
 };
 
 export type StockData = {
+  family?: FamilyStock | null;
   resource: {
     id: string;
     name: string;

@@ -2545,93 +2545,7 @@ paths:
         "403": { description: Missing inventory create or primary-item update access }
         "409": { description: Variants already exist, generation already ran, or the primary is archived }
         "422": { description: Invalid option matrix or circular effective BOM }
-  /resources/{id}/variants:
-    parameters:
-      - { $ref: "#/components/parameters/OrganizationId" }
-      - { $ref: "#/components/parameters/ResourceId" }
-    get:
-      tags: [Resources, Stock]
-      summary: List legacy bulk-stock variants for an inventory item
-      deprecated: true
-      responses:
-        "200":
-          description: Variants and the allocated/unallocated parent stock summary
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [variants, summary, trackingMode]
-                properties:
-                  variants: { type: array, items: { $ref: "#/components/schemas/ResourceVariant" } }
-                  summary: { $ref: "#/components/schemas/ResourceVariantStockSummary" }
-                  trackingMode: { type: string, enum: [bulk, serialized] }
-        "404": { $ref: "#/components/responses/NotFound" }
-    post:
-      tags: [Resources, Stock]
-      summary: Add a legacy bulk-stock variant and optionally allocate existing parent stock
-      deprecated: true
-      description: Variants are bulk-only. `initialAllocation` moves existing unallocated parent stock into the variant without changing the parent total.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/ResourceVariantInput" }
-      responses:
-        "201": { description: Variant created }
-        "409": { description: Identifier conflict, serialized tracking, or insufficient unallocated stock }
-        "422": { description: Invalid variant }
-  /resources/{id}/variants/{variantId}:
-    parameters:
-      - { $ref: "#/components/parameters/OrganizationId" }
-      - { $ref: "#/components/parameters/ResourceId" }
-      - name: variantId
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    patch:
-      tags: [Resources]
-      summary: Update variant identity or price fields
-      deprecated: true
-      description: Quantity cannot be patched; use a dated variant stock movement.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/ResourceVariantPatch" }
-      responses:
-        "200": { description: Variant updated }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { description: SKU or barcode is already used }
-    delete:
-      tags: [Resources]
-      summary: Delete an unused zero-stock variant
-      deprecated: true
-      responses:
-        "204": { description: Variant deleted }
-        "409": { description: Variant has stock or movement history }
-  /resources/{id}/variants/{variantId}/stock/movements:
-    parameters:
-      - { $ref: "#/components/parameters/OrganizationId" }
-      - { $ref: "#/components/parameters/ResourceId" }
-      - name: variantId
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    post:
-      tags: [Stock]
-      summary: Book an atomic parent and variant stock movement
-      deprecated: true
-      description: The signed delta updates parent and variant quantities together and appends one dated stock-ledger row.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/ResourceVariantStockMovementInput" }
-      responses:
-        "201": { description: Parent and variant stock updated atomically }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { description: Insufficient stock, serialized tracking, or maximum quantity exceeded }
-        "422": { description: Invalid stock movement }
+
   /resources/{id}/translations:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -2765,7 +2679,7 @@ paths:
     get:
       tags: [Resources]
       summary: Resolve a scanned QR or barcode to an inventory item
-      description: Accepts an item UUID, Inventory resource URL, item or variant SKU/barcode, or serial number. Variant matches include a `variant` object.
+      description: Accepts an item UUID, Inventory resource URL, item or variant SKU/barcode, or serial number. Variants are ordinary resources and return their own resource ID.
       parameters:
         - name: code
           in: query
@@ -2781,8 +2695,7 @@ paths:
                 required: [resource, matchedBy]
                 properties:
                   resource: { $ref: "#/components/schemas/Resource" }
-                  variant: { $ref: "#/components/schemas/ResourceVariant" }
-                  matchedBy: { type: string, enum: [id, sku, barcode, serialNumber, variantSku, variantBarcode] }
+                  matchedBy: { type: string, enum: [id, sku, barcode, serialNumber] }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Serial number is ambiguous }
   /stock:
@@ -6354,6 +6267,10 @@ components:
       required: [quantity]
       additionalProperties: false
       properties:
+        outputResourceId:
+          type: string
+          format: uuid
+          description: Finished item to credit. Must be the requested item or a direct variant. For primary items with variants, omit only when componentResourceSelections identifies exactly one variant by its complete effective BOM. Explicitly use the primary ID for unassigned output. Ambiguous or unmatched selections return 422.
         quantity: { type: integer, minimum: 1, maximum: 1000 }
         occurredAt: { type: string, format: date-time }
         location: { type: [string, "null"], maxLength: 240 }
@@ -8636,8 +8553,11 @@ components:
         unitName: { type: string }
     StockDetail:
       type: object
-      required: [resource, config, forecast, procurement, movements, units]
+      required: [resource, family, config, forecast, procurement, movements, units]
       properties:
+        family:
+          description: Individual variant balances and their total including unassigned primary stock, read from the same database snapshot.
+          $ref: "#/components/schemas/ResourceFamily"
         resource:
           type: object
           required: [id, name, type, categories, quantity]
@@ -8653,7 +8573,7 @@ components:
                 properties:
                   name: { type: string }
                   color: { type: string }
-            quantity: { type: integer }
+            quantity: { type: integer, description: "This item’s own stock. For the family total use family.summary.totalQuantity." }
         config: { $ref: "#/components/schemas/StockConfig" }
         forecast: { $ref: "#/components/schemas/StockForecast" }
         procurement:
@@ -8819,7 +8739,7 @@ components:
             enum: [description, type, valueCents, currency, priority, tags, categories, customFields, notes]
     ResourceFamily:
       type: object
-      required: [role, currentResourceId, primary, variants, legacyVariantCount, optionGroupCount, summary]
+      required: [role, currentResourceId, primary, variants, optionGroupCount, summary]
       properties:
         role: { type: string, enum: [primary, variant] }
         currentResourceId: { type: string, format: uuid }
@@ -8827,15 +8747,14 @@ components:
         variants:
           type: array
           items: { $ref: "#/components/schemas/ResourceFamilyMember" }
-        legacyVariantCount: { type: integer, minimum: 0 }
         optionGroupCount: { type: integer, minimum: 0 }
         summary:
           type: object
           required: [totalQuantity, primaryQuantity, variantQuantity, variantCount, serializedVariantCount]
           properties:
-            totalQuantity: { type: integer, minimum: 0 }
-            primaryQuantity: { type: integer, minimum: 0 }
-            variantQuantity: { type: integer, minimum: 0 }
+            totalQuantity: { type: integer }
+            primaryQuantity: { type: integer }
+            variantQuantity: { type: integer }
             variantCount: { type: integer, minimum: 0 }
             serializedVariantCount: { type: integer, minimum: 0 }
     ResourceOptionValueInput:
@@ -8959,67 +8878,6 @@ components:
               id: { type: string, format: uuid }
               name: { type: string }
               sku: { type: [string, "null"] }
-    ResourceVariantInput:
-      type: object
-      additionalProperties: false
-      required: [name]
-      properties:
-        name: { type: string, minLength: 1, maxLength: 240 }
-        sku: { type: [string, "null"], maxLength: 80 }
-        barcode: { type: [string, "null"], maxLength: 180 }
-        priceCents: { type: [integer, "null"], minimum: 0, maximum: 2000000000 }
-        currency: { type: string, minLength: 3, maxLength: 3 }
-        position: { type: integer, minimum: 0, maximum: 100000 }
-        initialAllocation:
-          type: integer
-          minimum: 0
-          maximum: 2000000000
-          default: 0
-    ResourceVariantPatch:
-      type: object
-      additionalProperties: false
-      properties:
-        name: { type: string, minLength: 1, maxLength: 240 }
-        sku: { type: [string, "null"], maxLength: 80 }
-        barcode: { type: [string, "null"], maxLength: 180 }
-        priceCents: { type: [integer, "null"], minimum: 0, maximum: 2000000000 }
-        currency: { type: string, minLength: 3, maxLength: 3 }
-        position: { type: integer, minimum: 0, maximum: 100000 }
-    ResourceVariant:
-      type: object
-      required: [id, resourceId, name, currency, quantity, position, createdAt, updatedAt]
-      properties:
-        id: { type: string, format: uuid }
-        resourceId: { type: string, format: uuid }
-        name: { type: string }
-        sku: { type: [string, "null"] }
-        barcode: { type: [string, "null"] }
-        priceCents: { type: [integer, "null"], minimum: 0 }
-        currency: { type: string }
-        quantity: { type: integer }
-        position: { type: integer, minimum: 0 }
-        createdBy: { type: [string, "null"] }
-        updatedBy: { type: [string, "null"] }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-    ResourceVariantStockSummary:
-      type: object
-      required: [totalQuantity, allocatedQuantity, unallocatedQuantity, variantCount]
-      properties:
-        totalQuantity: { type: integer }
-        allocatedQuantity: { type: integer }
-        unallocatedQuantity: { type: integer }
-        variantCount: { type: integer, minimum: 0 }
-    ResourceVariantStockMovementInput:
-      type: object
-      additionalProperties: false
-      required: [delta]
-      properties:
-        delta: { type: integer, minimum: -2000000000, maximum: 2000000000, not: { const: 0 } }
-        type: { type: string, enum: [receipt, issue, adjustment, return, waste], default: adjustment }
-        reason: { type: [string, "null"], maxLength: 240 }
-        note: { type: string, maxLength: 20000 }
-        occurredAt: { type: string, format: date-time }
     ResourceMapFeature:
       type: object
       required: [id, type, layer, description, coordinates]

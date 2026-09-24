@@ -121,7 +121,7 @@ test("normalization handles API envelopes and retains inventory defaults", () =>
 test("history editing excludes transfers and every system-managed movement link", () => {
   for (const type of ["receipt", "issue", "adjustment", "return", "waste"]) {
     assert.equal(isManualMovement({ type }), true);
-    for (const link of ["unitId", "variantId", "assemblyBuildId", "purchaseReceiptId", "fromLocationResourceId", "toLocationResourceId"]) {
+    for (const link of ["unitId", "assemblyBuildId", "purchaseReceiptId", "fromLocationResourceId", "toLocationResourceId"]) {
       assert.equal(isManualMovement({ type, [link]: "linked-record" }), false);
     }
   }

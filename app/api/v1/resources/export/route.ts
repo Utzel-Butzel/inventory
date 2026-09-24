@@ -1,8 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
-
-import { resourceVariants } from "@/db/schema";
 import { requirePermission } from "@/lib/api-auth";
-import { db } from "@/lib/db";
 import {
   buildInventoryCsv,
   buildInventoryPdf,
@@ -11,14 +7,13 @@ import {
   parseInventoryExportOptions,
   type InventoryExportFormat,
 } from "@/lib/inventory-export";
-import { listResources, type ResourceWithMedia } from "@/lib/resources";
+import { listResources } from "@/lib/resources";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 100;
 const MAX_EXPORT_ROWS = 100_000;
-const VARIANT_QUERY_CHUNK_SIZE = 5_000;
 
 const responseMetadata: Record<
   InventoryExportFormat,
@@ -69,58 +64,7 @@ export async function GET(request: Request) {
     exportedResources.push(...result.resources);
   }
 
-  const variants: (typeof resourceVariants.$inferSelect)[] = [];
-  const resourceIds = exportedResources.map((resource) => resource.id);
-  for (
-    let offset = 0;
-    offset < resourceIds.length;
-    offset += VARIANT_QUERY_CHUNK_SIZE
-  ) {
-    const resourceIdChunk = resourceIds.slice(
-      offset,
-      offset + VARIANT_QUERY_CHUNK_SIZE,
-    );
-    const chunkVariants = await db
-      .select()
-      .from(resourceVariants)
-      .where(
-        and(
-          eq(
-            resourceVariants.organizationId,
-            authorization.identity.organizationId,
-          ),
-          inArray(resourceVariants.resourceId, resourceIdChunk),
-        ),
-      )
-      .orderBy(
-        asc(resourceVariants.resourceId),
-        asc(resourceVariants.position),
-        asc(resourceVariants.name),
-      );
-    variants.push(...chunkVariants);
-  }
-  variants.sort(
-    (left, right) =>
-      left.resourceId.localeCompare(right.resourceId) ||
-      left.position - right.position ||
-      left.name.localeCompare(right.name),
-  );
-  const variantsByResource = new Map<
-    string,
-    typeof variants
-  >();
-  for (const variant of variants) {
-    const grouped = variantsByResource.get(variant.resourceId) ?? [];
-    grouped.push(variant);
-    variantsByResource.set(variant.resourceId, grouped);
-  }
-
-  const rows = exportedResources.map((resource: ResourceWithMedia) =>
-    inventoryExportRow({
-      ...resource,
-      variants: variantsByResource.get(resource.id) ?? [],
-    }),
-  );
+  const rows = exportedResources.map(inventoryExportRow);
   const generatedAt = new Date();
   const date = generatedAt.toISOString().slice(0, 10);
   const metadata = responseMetadata[exportOptions.format];
@@ -132,7 +76,6 @@ export async function GET(request: Request) {
             await buildInventoryXlsx(rows, {
               generatedAt,
               locale: exportOptions.locale,
-              variants,
             }),
           )
         : new Uint8Array(

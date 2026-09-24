@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import {
   assemblyBuildComponents,
@@ -10,7 +10,6 @@ import {
   orderLines,
   orders,
   resources,
-  resourceVariants,
   stockMovements,
   stockSettings,
   stockUnits,
@@ -132,7 +131,6 @@ type OrderLineDtoInput = {
   orderId: string;
   resourceId: string;
   resourceName: string;
-  variantName: string | null;
   resourceSku: string | null;
   resourceCurrency: string;
   orderedQuantity: number;
@@ -181,9 +179,7 @@ const lineDto = (line: OrderLineDtoInput) => {
     id: line.id,
     orderId: line.orderId,
     resourceId: line.resourceId,
-    resourceName: line.variantName
-      ? `${line.resourceName} · ${line.variantName}`
-      : line.resourceName,
+    resourceName: line.resourceName,
     resourceSku: line.resourceSku,
     resourceCurrency: line.resourceCurrency,
     quantity: line.orderedQuantity,
@@ -275,8 +271,7 @@ async function loadOrderLines(
       orderId: orderLines.orderId,
       resourceId: orderLines.resourceId,
       resourceName: resources.name,
-      variantName: resourceVariants.name,
-      resourceSku: sql<string | null>`coalesce(${resourceVariants.sku}, ${resources.sku})`,
+      resourceSku: resources.sku,
       resourceCurrency: resources.currency,
       orderedQuantity: orderLines.orderedQuantity,
       fulfilledQuantity: orderLines.fulfilledQuantity,
@@ -296,14 +291,6 @@ async function loadOrderLines(
       and(
         eq(resources.organizationId, organizationId),
         eq(resources.id, orderLines.resourceId),
-      ),
-    )
-    .leftJoin(
-      resourceVariants,
-      and(
-        eq(resourceVariants.organizationId, organizationId),
-        eq(resourceVariants.id, orderLines.variantId),
-        eq(resourceVariants.resourceId, resources.id),
       ),
     )
     .leftJoin(

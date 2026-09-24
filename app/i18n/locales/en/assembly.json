@@ -133,5 +133,12 @@
     "emptyTitle": "No builds recorded",
     "emptyDescription": "Completed assembly builds will appear here with their component audit trail.",
     "openStock": "Open stock history"
+  },
+  "output": {
+    "label": "Finished item / output variant",
+    "choose": "Choose an output variant",
+    "unassigned": "{{name}} – unassigned stock",
+    "help": "Uses the selected variant’s bill of materials. Finished stock is credited only to this item.",
+    "retry": "Retry"
   }
 }

@@ -1,49 +1,4 @@
 {
-  "variants": {
-    "title": "Variants",
-    "description": "Optional choices with their own SKU, barcode, price and bulk stock.",
-    "legacyTitle": "Legacy variants",
-    "legacyDescription": "Earlier lightweight variants retained for compatibility. New variants are full inventory items in the family above.",
-    "allocated": "{{value}} allocated",
-    "unallocated": "{{value}} unallocated",
-    "serializedDisabled": "Variants are disabled for serialized tracking. Identified units continue to use the item-level stock workflow.",
-    "empty": "No variants. The parent item continues to work exactly as before.",
-    "optional": "optional",
-    "currency": "Currency",
-    "namePlaceholder": "e.g. Blue / Large",
-    "openingAllocation": "Opening allocation",
-    "openingAllocationHelp": "From existing unallocated item stock",
-    "stockChange": "Stock change for {{name}}",
-    "stockHelp": "Positive values receive stock; negative values issue stock. Parent and variant totals update atomically.",
-    "addTitle": "Add variant",
-    "editTitle": "Edit {{name}}",
-    "confirmDelete": "Delete variant “{{name}}”?",
-    "fields": {
-      "name": "Name",
-      "sku": "SKU",
-      "barcode": "Barcode",
-      "price": "Price",
-      "stock": "Stock"
-    },
-    "actions": {
-      "stock": "Stock",
-      "edit": "Edit",
-      "delete": "Delete variant",
-      "zeroFirst": "Move stock to zero first",
-      "book": "Book",
-      "cancel": "Cancel",
-      "save": "Save variant",
-      "add": "Add variant"
-    },
-    "errors": {
-      "load": "Unable to load variants.",
-      "save": "Unable to save variant.",
-      "delete": "Unable to delete variant.",
-      "stock": "Unable to change stock.",
-      "invalidForm": "Enter a name and a non-negative whole opening quantity.",
-      "invalidStock": "Enter a non-zero whole stock change."
-    }
-  },
   "family": {
     "title": "Variant family",
     "description": "Linked variants are full inventory items with their own operations.",
@@ -52,8 +7,6 @@
     "variantOf": "Variant of {{name}}",
     "siblings": "Other variants",
     "noSiblings": "There are no other variants in this family yet.",
-    "legacyCount_one": "{{value}} legacy variant",
-    "legacyCount_other": "{{value}} legacy variants",
     "variantCount_one": "{{value}} variant",
     "variantCount_other": "{{value}} variants",
     "overrides_one": "{{value}} override",
@@ -115,6 +68,11 @@
       "detach": "Unable to detach the variant.",
       "existingRequired": "Select an existing inventory item.",
       "nameRequired": "Enter a name for the variant."
+    },
+    "stock": {
+      "title": "Product family stock",
+      "unassigned": "Unassigned stock on the primary item",
+      "total": "Total stock"
     }
   },
   "options": {

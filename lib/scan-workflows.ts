@@ -1450,6 +1450,7 @@ async function executeNonUnitScan(
       organizationId,
       resource.id,
       {
+        outputResourceId: resource.id,
         quantity: operation.quantity,
         outputUnitCodes: outputCodes,
         outputUnitMetadata: values.metadata,

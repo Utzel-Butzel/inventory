@@ -198,7 +198,6 @@ test("movement keys are replay-safe and revisions distinguish later state cycles
     orderId: 4815,
     lineItemId: 91,
     resourceId: "bbbbbbbb-bbbb-4bbb-abbb-bbbbbbbbbbbb",
-    variantId: null,
     revision: 1,
     targetQuantity: 3,
   };
@@ -263,28 +262,25 @@ test("recent WooCommerce imports use an exact rolling seven-day window", () => {
 });
 
 test("the worker uses canonical Woo data, exact SKU mapping, locks, and idempotent ledgers", async () => {
-  const [worker, migration, variants, stock] = await Promise.all([
+  const [worker, migration, stock] = await Promise.all([
     source("lib/woocommerce-sync.ts"),
     source("db/migrations/0056_woocommerce_stock_sync.sql"),
-    source("lib/resource-variants.ts"),
     source("lib/stock.ts"),
   ]);
 
   assert.match(worker, /path: `orders\/\$\{orderId\}`/);
   assert.match(worker, /path: `orders\/\$\{orderId\}\/refunds`/);
   assert.match(worker, /eq\(resources\.sku, sku\)/);
-  assert.match(worker, /eq\(resourceVariants\.sku, sku\)/);
+  assert.doesNotMatch(worker, /resourceVariants/);
   assert.match(worker, /\.for\("update"\)/);
   assert.match(worker, /bookStockMovement\(/);
-  assert.match(worker, /bookResourceVariantMovement\(/);
+  assert.doesNotMatch(worker, /bookResourceVariantMovement/);
   assert.match(worker, /wooCommerceMovementIdempotencyKey/);
   assert.match(worker, /transactionEffect:/);
   assert.match(worker, /path: "orders"/);
   assert.match(worker, /after: window\.after/);
   assert.match(worker, /before: window\.before/);
   assert.match(worker, /dates_are_gmt: true/);
-  assert.match(variants, /stockMovementRequests/);
-  assert.match(variants, /await transactionEffect\(transaction, movement\)/);
   assert.match(
     stock,
     /await transactionEffect\(transaction, costedMovement \?\? movement\)/,
@@ -321,7 +317,7 @@ test("WooCommerce orders project idempotently into contacts and sales orders", a
     /PRIMARY KEY \("organization_id", "connection_id", "customer_key"\)/,
   );
   assert.match(schema, /export const wooCommerceCustomerLinks/);
-  assert.match(ordersService, /coalesce\(\$\{resourceVariants\.sku\}/);
+  assert.match(ordersService, /resourceSku: resources\.sku/);
 });
 
 test("webhook processing verifies raw-body signatures before parsing JSON", async () => {

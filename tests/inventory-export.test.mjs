@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import ExcelJS from "exceljs";
@@ -15,22 +14,6 @@ import {
 } from "../lib/inventory-export.ts";
 
 const generatedAt = new Date("2026-08-13T10:15:00.000Z");
-const variants = [
-  {
-    id: "20000000-0000-4000-8000-000000000001",
-    resourceId: "10000000-0000-4000-8000-000000000001",
-    name: "Grün / 5 m",
-    sku: "CABLE-GRN-5",
-    barcode: "4012345678901",
-    priceCents: 1599,
-    currency: "EUR",
-    quantity: 4,
-    position: 0,
-    createdAt: generatedAt,
-    updatedAt: generatedAt,
-  },
-];
-
 const sampleResources = [
   {
     id: "10000000-0000-4000-8000-000000000001",
@@ -58,7 +41,6 @@ const sampleResources = [
     notes: "+Formelverdacht",
     createdAt: new Date("2026-01-02T09:30:00.000Z"),
     updatedAt: new Date("2026-08-12T16:45:00.000Z"),
-    variants,
   },
   {
     id: "10000000-0000-4000-8000-000000000002",
@@ -86,9 +68,19 @@ const sampleResources = [
     notes: "Regelmäßig auf Schäden prüfen.",
     createdAt: new Date("2025-12-11T08:00:00.000Z"),
     updatedAt: new Date("2026-08-10T11:30:00.000Z"),
-    variants: [],
   },
 ];
+
+// A family variant is exported as a complete resource row.
+sampleResources.push({
+  ...sampleResources[0],
+  id: "20000000-0000-4000-8000-000000000001",
+  name: "Grün / 5 m",
+  sku: "CABLE-GRN-5",
+  barcode: "4012345678901",
+  valueCents: 1599,
+  quantity: 4,
+});
 
 const rows = sampleResources.map(inventoryExportRow);
 
@@ -111,38 +103,23 @@ test("keeps CSV as the default export and validates requested formats", () => {
   );
 });
 
-test("CSV retains the established columns, escapes formulas, and includes variants", () => {
+test("CSV escapes formulas and exports family variants as resource rows", () => {
   const csv = buildInventoryCsv(rows);
   assert.ok(csv.startsWith("\uFEFF"));
   assert.ok(csv.endsWith("\r\n"));
   assert.ok(csv.includes('"id","name","description"'));
-  assert.ok(csv.includes('"updated_at","barcode","variants"'));
+  assert.ok(csv.includes('"updated_at","barcode"'));
   assert.ok(csv.includes("4006381333931"));
   assert.ok(csv.includes("'+Formelverdacht"));
   assert.ok(csv.includes("Grün / 5 m"));
-  assert.equal(INVENTORY_EXPORT_HEADERS.at(-1), "variants");
+  assert.equal(INVENTORY_EXPORT_HEADERS.at(-1), "barcode");
+  assert.ok(!INVENTORY_EXPORT_HEADERS.includes("variants"));
 });
 
-test("the app accepts its export-only variants column on CSV re-import", async () => {
-  const [serverImporter, clientImporter] = await Promise.all([
-    readFile(new URL("../app/api/v1/resources/import/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../components/csv-import-export.tsx", import.meta.url), "utf8"),
-  ]);
-  assert.match(
-    serverImporter,
-    /readOnlyHeaders\s*=\s*\[[^\]]*"variants"[^\]]*\]/s,
-  );
-  assert.match(
-    clientImporter,
-    /supportedHeaders\s*=\s*new Set\(\[[^\]]*"variants"[^\]]*\]\)/s,
-  );
-});
-
-test("XLSX is typed, filterable, frozen, and contains a formatted variant sheet", async () => {
+test("XLSX is typed, filterable, frozen, and includes variants as ordinary rows", async () => {
   const bytes = await buildInventoryXlsx(rows, {
     generatedAt,
     locale: "de",
-    variants,
   });
   assert.equal(bytes.subarray(0, 2).toString(), "PK");
 
@@ -162,15 +139,10 @@ test("XLSX is typed, filterable, frozen, and contains a formatted variant sheet"
   assert.ok(inventory.autoFilter);
   assert.equal(inventory.pageSetup.fitToPage, false);
   assert.equal(inventory.pageSetup.scale, 65);
-  assert.equal(inventory.getColumn("Z").hidden, true);
 
-  const variantSheet = workbook.getWorksheet("Varianten");
-  assert.ok(variantSheet);
-  assert.equal(variantSheet.getCell("A1").value, "resource_id");
-  assert.equal(variantSheet.getCell("C2").value, "Grün / 5 m");
-  assert.equal(variantSheet.getCell("F2").value, 4);
-  assert.equal(variantSheet.getColumn("E").numFmt, "@");
-  assert.ok(variantSheet.autoFilter);
+  assert.equal(workbook.getWorksheet("Varianten"), undefined);
+  assert.equal(inventory.getRow(7).getCell(2).value, "Grün / 5 m");
+  assert.equal(inventory.getRow(7).getCell(7).value, 4);
 });
 
 test("PDF is a valid multipage-ready report with metadata and buffered page numbers", async () => {
@@ -190,16 +162,6 @@ test("PDF is a valid multipage-ready report with metadata and buffered page numb
 test("PDF keeps a 64-row report to four numbered data pages", async () => {
   const multipageRows = Array.from({ length: 64 }, (_, index) => {
     const resourceId = `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
-    const rowVariants =
-      index % 7 === 0
-        ? ["Klein", "Mittel", "Groß"].map((size, variantIndex) => ({
-            ...variants[0],
-            id: `40000000-0000-4000-8000-${String(index * 10 + variantIndex + 1).padStart(12, "0")}`,
-            resourceId,
-            name: `${size} / Grün`,
-            quantity: variantIndex + 1,
-          }))
-        : [];
     return inventoryExportRow({
       ...sampleResources[index % sampleResources.length],
       id: resourceId,
@@ -213,7 +175,6 @@ test("PDF keeps a 64-row report to four numbered data pages", async () => {
         "Fahrzeug 3 / Seitenfach",
         "Büro / Materialschrank",
       ][index % 4],
-      variants: rowVariants,
     });
   });
   const bytes = await buildInventoryPdf(multipageRows, {

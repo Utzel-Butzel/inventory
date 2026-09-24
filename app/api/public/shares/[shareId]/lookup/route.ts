@@ -51,8 +51,6 @@ export async function GET(request: Request, context: Context) {
           quantity: result.resource.quantity,
         },
         matchedBy: result.matchedBy,
-        variantId:
-          "variant" in result && result.variant ? result.variant.id : null,
       },
       { headers: publicShareNoStoreHeaders() },
     );

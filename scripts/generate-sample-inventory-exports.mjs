@@ -16,29 +16,8 @@ const locations = [
   "Fahrzeug 3 / Seitenfach",
   "Büro / Materialschrank",
 ];
-const variants = [];
 const resources = Array.from({ length: 64 }, (_, index) => {
   const id = `10000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
-  const itemVariants =
-    index % 7 === 0
-      ? ["Klein", "Mittel", "Groß"].map((size, variantIndex) => {
-          const variant = {
-            id: `20000000-0000-4000-8000-${String(index * 10 + variantIndex + 1).padStart(12, "0")}`,
-            resourceId: id,
-            name: `${size} / Grün`,
-            sku: `VAR-${index + 1}-${variantIndex + 1}`,
-            barcode: `4012345${String(index * 10 + variantIndex).padStart(6, "0")}`,
-            priceCents: 1299 + variantIndex * 250,
-            currency: "EUR",
-            quantity: variantIndex + 1,
-            position: variantIndex,
-            createdAt: generatedAt,
-            updatedAt: generatedAt,
-          };
-          variants.push(variant);
-          return variant;
-        })
-      : [];
   return {
     id,
     name:
@@ -67,7 +46,6 @@ const resources = Array.from({ length: 64 }, (_, index) => {
     notes: index === 0 ? "+Spreadsheet formula guard" : "",
     createdAt: new Date("2026-01-02T09:30:00.000Z"),
     updatedAt: new Date(generatedAt.getTime() - index * 3_600_000),
-    variants: itemVariants,
   };
 });
 const rows = resources.map(inventoryExportRow);
@@ -77,7 +55,7 @@ await Promise.all([
   writeFile(`${outputDirectory}/inventory-sample.csv`, buildInventoryCsv(rows)),
   writeFile(
     `${outputDirectory}/inventory-sample.xlsx`,
-    await buildInventoryXlsx(rows, { generatedAt, locale: "de", variants }),
+    await buildInventoryXlsx(rows, { generatedAt, locale: "de" }),
   ),
   writeFile(
     `${outputDirectory}/inventory-sample.pdf`,

@@ -247,7 +247,8 @@
       "runway": "Reichweite",
       "estimated": "Voraussichtlich {{date}}",
       "noStockout": "Kein Leerstand prognostiziert",
-      "daysShort": "{{value}} T"
+      "daysShort": "{{value}} T",
+      "unassigned": "Unzugeordneter Bestand"
     },
     "booking": {
       "title": "Bewegung buchen",

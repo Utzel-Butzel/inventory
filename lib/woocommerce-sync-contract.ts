@@ -281,7 +281,6 @@ export function wooCommerceMovementIdempotencyKey(input: {
   orderId: number;
   lineItemId: number;
   resourceId: string;
-  variantId: string | null;
   revision: number;
   targetQuantity: number;
 }) {
@@ -293,7 +292,7 @@ export function wooCommerceMovementIdempotencyKey(input: {
         input.orderId,
         input.lineItemId,
         input.resourceId,
-        input.variantId ?? "resource",
+        "resource",
         input.revision,
         input.targetQuantity,
       ].join(":"),

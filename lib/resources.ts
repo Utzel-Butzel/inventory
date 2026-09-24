@@ -31,7 +31,6 @@ import {
   resourceOptionValues,
   resourceRelations,
   resourceSlugs,
-  resourceVariants,
   roomScanAssets,
   roomScanKeyframes,
   roomScans,
@@ -179,19 +178,6 @@ export async function listResources(options: {
           ilike(resourceSlugs.slug, pattern),
         ),
       );
-    const variantMatches = db
-      .select({ resourceId: resourceVariants.resourceId })
-      .from(resourceVariants)
-      .where(
-        and(
-          eq(resourceVariants.organizationId, options.organizationId),
-          or(
-            ilike(resourceVariants.name, pattern),
-            ilike(resourceVariants.sku, pattern),
-            ilike(resourceVariants.barcode, pattern),
-          ),
-        ),
-      );
     conditions.push(
       or(
         ilike(resources.name, pattern),
@@ -202,7 +188,6 @@ export async function listResources(options: {
         sql`${resources.tags}::text ILIKE ${pattern}`,
         sql`${resources.customFields}::text ILIKE ${pattern}`,
         inArray(resources.id, slugMatches),
-        inArray(resources.id, variantMatches),
       )!,
     );
   }
@@ -1548,22 +1533,6 @@ export async function mergeResources(
     if (familyLink) {
       throw new Error(
         "Items in a first-class variant family cannot be merged. Archive the duplicate or remove its family membership first.",
-      );
-    }
-
-    const [variant] = await transaction
-      .select({ id: resourceVariants.id })
-      .from(resourceVariants)
-      .where(
-        and(
-          eq(resourceVariants.organizationId, organizationId),
-          inArray(resourceVariants.resourceId, [keepId, duplicateId]),
-        ),
-      )
-      .limit(1);
-    if (variant) {
-      throw new Error(
-        "Items with variants cannot be merged. Remove empty variants or archive the duplicate so variant stock and identifiers remain unambiguous.",
       );
     }
 
