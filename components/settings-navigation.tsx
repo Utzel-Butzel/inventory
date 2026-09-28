@@ -8,6 +8,7 @@ import {
 import { useT } from "next-i18next/client";
 import {
   Bell,
+  Sparkles,
   Braces,
   Building2,
   Boxes,
@@ -147,6 +148,13 @@ const navigationGroups: Array<{
   {
     labelKey: "settings.groups.integrationsAdvanced",
     items: [
+      {
+        labelKey: "settings.items.ai.label",
+        descriptionKey: "settings.items.ai.description",
+        href: "/settings/ai",
+        icon: Sparkles,
+        requiredPermission: "roles.manage",
+      },
       {
         labelKey: "settings.items.woocommerce.label",
         descriptionKey: "settings.items.woocommerce.description",

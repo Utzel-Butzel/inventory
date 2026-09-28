@@ -1,9 +1,9 @@
+import { resolveAiPrompt } from "@/lib/ai-prompt-store";
+import { AiPromptSelectionError } from "@/lib/ai-prompt-templates";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import { aiIdempotencyOperations, media, resources } from "@/db/schema";
 import {
-  defaultCoverPrompt,
-  defaultTransparentCoverPrompt,
   generateCoverImage,
 } from "@/lib/ai";
 import { aiUsageEstimate } from "@/lib/ai-billing";
@@ -142,6 +142,15 @@ export async function POST(request: Request, context: Context) {
     id,
   );
   if (!resource) return finish({ error: "Not found" }, 404);
+
+  let resolvedPrompt: string | undefined;
+  try {
+    resolvedPrompt = await resolveAiPrompt(authorization.identity.organizationId, parsed.data.transparentBackground ? "transparentCover" : "cover", parsed.data, resource);
+  } catch (error) {
+    if (error instanceof AiPromptSelectionError) return finish({ error: error.message }, 422);
+    return finishTransient({ error: "Prompt templates are temporarily unavailable." }, 503);
+  }
+
   const source = parsed.data.sourceMediaId
     ? resource.media.find((item) => item.id === parsed.data.sourceMediaId)
     : (resource.media.find(
@@ -218,11 +227,7 @@ export async function POST(request: Request, context: Context) {
       run: () => generateCoverImage({
         source: sourceBytes,
         sourceMimeType: source.mimeType,
-        prompt:
-          parsed.data.prompt ||
-          (transparentBackground
-            ? defaultTransparentCoverPrompt(resource.name)
-            : defaultCoverPrompt(resource.name)),
+        prompt: resolvedPrompt!,
         imageModel,
         maximumImageSize: parsed.data.maximumImageSize,
         transparentBackground,

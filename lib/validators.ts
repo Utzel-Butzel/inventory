@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { aiPromptSelectionFields } from "@/lib/ai-prompt-templates";
 
 import { stockUnitStatuses } from "@/db/schema";
 import {
@@ -478,13 +479,18 @@ export const organizationSelectInputSchema = z
   .strict();
 
 export const analyzeInputSchema = z.object({
+  ...aiPromptSelectionFields,
   overwrite: z.boolean().optional().default(true),
   prompt: z.string().trim().max(5_000).optional(),
 });
 
-export const researchInputSchema = z.object({}).strict();
+export const researchInputSchema = z.object({
+  ...aiPromptSelectionFields,
+  prompt: z.string().trim().max(5_000).optional(),
+}).strict();
 
 export const coverInputSchema = z.object({
+  ...aiPromptSelectionFields,
   sourceMediaId: z.string().uuid().optional(),
   prompt: z.string().trim().max(5_000).optional(),
   modelId: z.string().trim().min(1).max(240).optional(),
@@ -503,6 +509,7 @@ export const inventoryImageInputSchema = z.discriminatedUnion("mode", [
   z
     .object({
       mode: z.literal("generate"),
+      ...aiPromptSelectionFields,
       prompt: z.string().trim().min(1).max(5_000).optional(),
       modelId: z.string().trim().min(1).max(240).optional(),
       maximumImageSize: z.literal(maximumGeneratedImageSizes).optional(),

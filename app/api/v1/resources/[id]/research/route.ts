@@ -1,3 +1,5 @@
+import { resolveAiPrompt } from "@/lib/ai-prompt-store";
+import { AiPromptSelectionError } from "@/lib/ai-prompt-templates";
 import type { NewResource } from "@/db/schema";
 import { researchInventoryDetails } from "@/lib/ai";
 import { aiUsageEstimate } from "@/lib/ai-billing";
@@ -50,7 +52,7 @@ export async function POST(request: Request, context: Context) {
   try {
     body = await request.json();
   } catch {
-    // The research action currently has no client-configurable options.
+    // An empty body uses the organization default prompt.
   }
   const parsed = researchInputSchema.safeParse(body);
   if (!parsed.success) {
@@ -129,6 +131,15 @@ export async function POST(request: Request, context: Context) {
   );
   if (!resource) return finish({ error: "Not found" }, 404);
 
+  let resolvedPrompt: string | undefined;
+  try {
+    resolvedPrompt = await resolveAiPrompt(authorization.identity.organizationId, "research", parsed.data, resource);
+  } catch (error) {
+    if (error instanceof AiPromptSelectionError) return finish({ error: error.message }, 422);
+    return finishTransient({ error: "Prompt templates are temporarily unavailable." }, 503);
+  }
+
+
   const imageResults = await Promise.allSettled(
     resource.media
       .filter((item) => item.kind === "image")
@@ -190,6 +201,7 @@ export async function POST(request: Request, context: Context) {
       metadata: { imageCount: imageDataUrls.length },
       run: () => researchInventoryDetails({
         resource: researchContext,
+        prompt: resolvedPrompt,
         imageDataUrls,
       }),
     });

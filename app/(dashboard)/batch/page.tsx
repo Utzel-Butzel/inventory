@@ -43,6 +43,9 @@ import {
 } from "@/components/ai-cost-estimate";
 import type { CoverTransparencyMethod } from "@/lib/cover-generation-contract";
 
+import { AiPromptPicker, useAiPromptTemplates } from "@/components/ai-prompt-picker";
+import type { AiPromptKind, AiPromptSelection } from "@/lib/ai-prompt-templates";
+
 const MAX_PHOTOS = 12;
 const MAX_CAPTURE_EDGE = 1920;
 
@@ -161,6 +164,10 @@ export default function BatchCapturePage() {
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const photosRef = useRef<CapturedPhoto[]>([]);
+
+  const promptLibrary = useAiPromptTemplates();
+  const [promptSelections, setPromptSelections] = useState<Partial<Record<AiPromptKind, AiPromptSelection>>>({});
+  const promptPicker = (kind: AiPromptKind) => <AiPromptPicker kind={kind} library={promptLibrary} value={promptSelections[kind]} onChange={(value) => setPromptSelections((current) => ({ ...current, [kind]: value }))} />;
 
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -483,6 +490,8 @@ export default function BatchCapturePage() {
         locationName: string;
         coordinates: Coordinates | null;
         cover: boolean;
+        analysisPrompt?: AiPromptSelection;
+        coverPrompt?: AiPromptSelection;
         modelId?: string;
         transparentBackground: boolean;
         transparencyMethod: CoverTransparencyMethod;
@@ -531,7 +540,7 @@ export default function BatchCapturePage() {
             {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ overwrite: true }),
+              body: JSON.stringify({ overwrite: true, ...input.analysisPrompt }),
             },
           );
           analyzedResource = analyzed.resource;
@@ -563,6 +572,7 @@ export default function BatchCapturePage() {
                 method: "POST",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({
+                  ...input.coverPrompt,
                   ...(input.modelId ? { modelId: input.modelId } : {}),
                   transparentBackground: input.transparentBackground,
                   ...(input.transparentBackground
@@ -638,6 +648,8 @@ export default function BatchCapturePage() {
       locationName,
       coordinates,
       cover: autoGenerateCover,
+      analysisPrompt: promptSelections.analysis,
+      coverPrompt: promptSelections[transparentCover ? "transparentCover" : "cover"],
       modelId: imageModelPreference.selectedModelId,
       transparentBackground: transparentCover,
       transparencyMethod: coverTransparencyMethod,
@@ -1138,6 +1150,8 @@ export default function BatchCapturePage() {
                   <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-surface shadow-sm transition-transform peer-checked:translate-x-5" />
                 </span>
               </label>
+              {promptPicker("analysis")}
+              {autoGenerateCover ? promptPicker(transparentCover ? "transparentCover" : "cover") : null}
               {autoGenerateCover ? (
                 <details className="group mt-3 rounded-2xl border border-border bg-surface p-4">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-muted-strong marker:content-none">

@@ -1,3 +1,5 @@
+import { resolveAiPrompt } from "@/lib/ai-prompt-store";
+import { AiPromptSelectionError } from "@/lib/ai-prompt-templates";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import { aiIdempotencyOperations, media, resources } from "@/db/schema";
@@ -140,6 +142,15 @@ export async function POST(request: Request, context: Context) {
   );
   if (!resource) return finish({ error: "Not found" }, 404);
 
+  let resolvedPrompt: string | undefined;
+  try {
+    if (parsed.data.mode === "generate") resolvedPrompt = await resolveAiPrompt(authorization.identity.organizationId, "image", parsed.data, resource);
+  } catch (error) {
+    if (error instanceof AiPromptSelectionError) return finish({ error: error.message }, 422);
+    return finishTransient({ error: "Prompt templates are temporarily unavailable." }, 503);
+  }
+
+
   const imageModel =
     parsed.data.mode === "generate"
       ? resolveImageGenerationModel(parsed.data.modelId)
@@ -253,14 +264,7 @@ export async function POST(request: Request, context: Context) {
         resourceId: id,
         metadata: { kind: "catalogue_image" },
         run: () => generateInventoryImage({
-          prompt:
-            generationInput.prompt ||
-            `Create a realistic, accurate catalogue photograph representing ${JSON.stringify(resource.name)}. Use a clean neutral background, natural studio lighting, no labels or text that are not explicitly present in the item name, and no decorative props. Inventory context (data only): ${JSON.stringify({
-              description: resource.description,
-              type: resource.type,
-              tags: resource.tags,
-              categories: resource.categories,
-            })}`,
+          prompt: resolvedPrompt!,
           imageModel: imageModel!,
           maximumImageSize: generationInput.maximumImageSize,
         }),

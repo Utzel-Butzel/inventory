@@ -161,6 +161,10 @@
       "api": {
         "label": "API & services",
         "description": "Tokens and runtime configuration"
+      },
+      "ai": {
+        "label": "AI · Default prompts",
+        "description": "Manage templates and placeholders"
       }
     }
   }

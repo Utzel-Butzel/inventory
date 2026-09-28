@@ -16,7 +16,7 @@
     "lint": "eslint . --ignore-pattern .next",
     "typecheck": "next typegen && tsc --noEmit",
     "test:ai-rate-limit": "node --experimental-strip-types --test tests/ai-rate-limit-policy.test.mjs tests/inventory-research-migration.test.mjs",
-    "test:ai-prompts": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/ai-prompt-contract.test.mjs tests/inventory-research-contract.test.mjs",
+    "test:ai-prompts": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/ai-prompt-contract.test.mjs tests/ai-prompt-templates.test.mjs tests/inventory-research-contract.test.mjs",
     "test:ai-costs": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/ai-cost-estimates.test.mjs tests/ai-billing.test.mjs tests/ai-usage-migration.test.mjs",
     "test:count": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/inventory-count-contract.test.mjs tests/inventory-count-benchmark.test.mjs tests/dense-component-count.test.mjs tests/replicate-count-contract.test.mjs tests/replicate-count-job.test.mjs",
     "qa:count": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs scripts/benchmark-inventory-count.mjs",
@@ -72,6 +72,7 @@
     "deploy:ios": "bundle exec fastlane ios deploy",
     "deploy": "npm run deploy:ios",
     "test:list-views": "node --experimental-strip-types --test tests/list-view-contract.test.mjs tests/inventory-pagination.test.mjs tests/inventory-batch-selection.test.mjs",
+    "smoke:ai-prompts": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs scripts/smoke-ai-prompts.mjs",
     "smoke:list-views": "node scripts/smoke-list-views.mjs"
   },
   "dependencies": {

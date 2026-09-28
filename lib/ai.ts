@@ -926,6 +926,7 @@ const webSourcesFromResponse = (output: unknown[]) => {
 };
 
 export async function researchInventoryDetails(options: {
+  prompt?: string;
   resource: InventoryResearchResource & Record<string, unknown>;
   imageDataUrls: string[];
 }) {
@@ -953,7 +954,7 @@ export async function researchInventoryDetails(options: {
           content: [
             {
               type: "input_text",
-              text: `${defaultInventoryResearchPrompt(language, resourceTypes)}\n\nExisting inventory record:\n${JSON.stringify(options.resource)}`,
+              text: `${options.prompt?.trim() || defaultInventoryResearchPrompt(language, resourceTypes)}\n\nExisting inventory record:\n${JSON.stringify(options.resource)}`,
             },
             ...options.imageDataUrls.slice(0, 3).map((imageUrl) => ({
               type: "input_image" as const,

@@ -1,3 +1,5 @@
+import { resolveAiPrompt } from "@/lib/ai-prompt-store";
+import { AiPromptSelectionError } from "@/lib/ai-prompt-templates";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import {
@@ -63,7 +65,7 @@ export async function POST(request: Request, context: Context) {
       { status: 422 },
     );
   }
-  const { overwrite, prompt } = parsed.data;
+  const { overwrite } = parsed.data;
 
   let operationId: string | null = null;
   if (idempotency.key) {
@@ -133,6 +135,15 @@ export async function POST(request: Request, context: Context) {
     id,
   );
   if (!resource) return finish({ error: "Not found" }, 404);
+
+  let resolvedPrompt: string | undefined;
+  try {
+    resolvedPrompt = await resolveAiPrompt(authorization.identity.organizationId, "analysis", parsed.data, resource);
+  } catch (error) {
+    if (error instanceof AiPromptSelectionError) return finish({ error: error.message }, 422);
+    return finishTransient({ error: "Prompt templates are temporarily unavailable." }, 503);
+  }
+
   const imageMedia = resource.media
     .filter((item) => item.kind === "image")
     .slice(0, 3);
@@ -201,7 +212,7 @@ export async function POST(request: Request, context: Context) {
       actor: authorization.identity,
       resourceId: id,
       metadata: { imageCount: dataUrls.length },
-      run: () => analyzeInventoryImages(dataUrls, prompt),
+      run: () => analyzeInventoryImages(dataUrls, resolvedPrompt),
     });
     const generatedFields: string[] = [];
     const values: Partial<NewResource> = {

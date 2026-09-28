@@ -47,10 +47,8 @@ import {
 } from "react";
 import { useT } from "next-i18next/client";
 
-import {
-  defaultCoverPrompt,
-  defaultTransparentCoverPrompt,
-} from "@/lib/ai-prompts";
+import { AiPromptPicker, useAiPromptTemplates } from "@/components/ai-prompt-picker";
+import type { AiPromptKind, AiPromptSelection } from "@/lib/ai-prompt-templates";
 import {
   fetchJson,
   type ClientMedia,
@@ -517,11 +515,11 @@ export function ResourceEditor({
     "search" | "generate"
   >("search");
   const [imageSearchQuery, setImageSearchQuery] = useState("");
-  const [imageGenerationPrompt, setImageGenerationPrompt] = useState("");
+  const promptLibrary = useAiPromptTemplates();
+  const [promptSelections, setPromptSelections] = useState<Partial<Record<AiPromptKind, AiPromptSelection>>>({});
+  const promptPicker = (kind: AiPromptKind) => <AiPromptPicker kind={kind} library={promptLibrary} value={promptSelections[kind]} disabled={Boolean(aiAction)} onChange={(value) => setPromptSelections((current) => ({ ...current, [kind]: value }))} />;
   const [autoAnalyze, setAutoAnalyze] = useState(canAnalyzeAi);
   const [autoCover, setAutoCover] = useState(false);
-  const [coverPrompt, setCoverPrompt] = useState("");
-  const [coverPromptCustomized, setCoverPromptCustomized] = useState(false);
   const [coverSourceMediaId, setCoverSourceMediaId] = useState<string | null>(
     null,
   );
@@ -570,8 +568,6 @@ export function ResourceEditor({
       setResource(response.resource);
       setForm(toForm(response.resource));
       setCustomFields(response.resource.customFields ?? {});
-      setCoverPrompt(defaultCoverPrompt(response.resource.name));
-      setCoverPromptCustomized(false);
       setImageSearchQuery((current) => current || response.resource.name);
       setCoverSourceMediaId((current) =>
         current && response.resource.media.some((item) => item.id === current)
@@ -694,14 +690,6 @@ export function ResourceEditor({
 
   const changeTransparentCover = (transparent: boolean) => {
     aiPreferencesTouched.current.transparency = true;
-    const title = resource?.name || form.name;
-    if (!coverPromptCustomized) {
-      setCoverPrompt(
-        transparent
-          ? defaultTransparentCoverPrompt(title)
-          : defaultCoverPrompt(title),
-      );
-    }
     setTransparentCover(transparent);
   };
 
@@ -720,14 +708,10 @@ export function ResourceEditor({
     if (canGenerateImagesAi && !aiPreferencesTouched.current.cover) setAutoCover(true);
     if (!aiPreferencesTouched.current.transparency) {
       setTransparentCover(true);
-      if (!coverPromptCustomized) {
-        setCoverPrompt(defaultTransparentCoverPrompt(form.name));
-      }
     }
   }, [
     canAnalyzeAi,
     canGenerateImagesAi,
-    coverPromptCustomized,
     form.name,
     isNew,
     objectCaptureUploadState,
@@ -870,18 +854,12 @@ export function ResourceEditor({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ overwrite }),
+          body: JSON.stringify({ overwrite, ...promptSelections.analysis }),
         },
       );
       setResource(response.resource);
       setForm(toForm(response.resource));
       setCustomFields(response.resource.customFields ?? {});
-      setCoverPrompt(
-        transparentCover
-          ? defaultTransparentCoverPrompt(response.resource.name)
-          : defaultCoverPrompt(response.resource.name),
-      );
-      setCoverPromptCustomized(false);
       setNotice(t("notices.analysisComplete"));
       return response.resource;
     } catch (analysisError) {
@@ -907,17 +885,11 @@ export function ResourceEditor({
       }>(`/api/v1/resources/${id}/research`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ ...promptSelections.research }),
       });
       setResource(response.resource);
       setForm(toForm(response.resource));
       setCustomFields(response.resource.customFields ?? {});
-      setCoverPrompt(
-        transparentCover
-          ? defaultTransparentCoverPrompt(response.resource.name)
-          : defaultCoverPrompt(response.resource.name),
-      );
-      setCoverPromptCustomized(false);
       setNotice(
         response.updatedFields.length
           ? t("notices.researchComplete")
@@ -950,7 +922,7 @@ export function ResourceEditor({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            prompt: coverPrompt || undefined,
+            ...promptSelections[transparentCover ? "transparentCover" : "cover"],
             sourceMediaId,
             transparentBackground: transparentCover,
             ...(transparentCover
@@ -993,7 +965,7 @@ export function ResourceEditor({
                 }
               : {
                   mode: "generate",
-                  prompt: imageGenerationPrompt.trim() || undefined,
+                  ...promptSelections.image,
                   ...(imageModelPreference.selectedModelId
                     ? { modelId: imageModelPreference.selectedModelId }
                     : {}),
@@ -1863,6 +1835,8 @@ export function ResourceEditor({
               <div className="space-y-3">
                 {canAnalyzeAi ? <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => { aiPreferencesTouched.current.analyze = true; setAutoAnalyze(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[12px] leading-4 text-muted">{t("ai.analyzeDescription")}</span><EstimatedAiCost estimate={aiCostEstimates?.inventoryAnalysis} className="mt-1" /></span></label> : null}
                 {canGenerateImagesAi ? <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoCover} onChange={(event) => { aiPreferencesTouched.current.cover = true; setAutoCover(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[12px] leading-4 text-muted">{t("ai.coverDescription")}</span><EstimatedAiCost estimate={coverCostEstimate} className="mt-1" /></span></label> : null}
+                {canAnalyzeAi && autoAnalyze ? promptPicker("analysis") : null}
+                {canGenerateImagesAi && autoCover ? promptPicker(transparentCover ? "transparentCover" : "cover") : null}
                 {canGenerateImagesAi && autoCover ? (
                   <div className="rounded-xl border border-border bg-surface-subtle p-3">
                     <CoverReferencePicker
@@ -2009,6 +1983,7 @@ export function ResourceEditor({
           });
         }}
       >
+        {promptPicker("analysis")}
         <div className="rounded-2xl border border-border bg-surface-subtle p-4">
           <div className="flex items-start gap-3">
             <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">
@@ -2058,6 +2033,7 @@ export function ResourceEditor({
           });
         }}
       >
+        {promptPicker("research")}
         <div className="grid gap-3 sm:grid-cols-3">
           {([
             ["ai.researchSavedDetails", "ai.researchSavedDetailsDescription"],
@@ -2109,19 +2085,7 @@ export function ResourceEditor({
           disabled={aiAction === "cover"}
           onSelect={setCoverSourceMediaId}
         />
-        <label className="block text-[12px] font-semibold text-muted">
-          {t("ai.coverDirection")}
-          <textarea
-            value={coverPrompt}
-            onChange={(event) => {
-              setCoverPrompt(event.target.value);
-              setCoverPromptCustomized(true);
-            }}
-            disabled={aiAction === "cover"}
-            rows={5}
-            className="mt-2 w-full resize-y rounded-xl border border-border bg-surface-subtle p-3 text-xs leading-5 text-muted-strong outline-none focus:border-focus disabled:text-muted"
-          />
-        </label>
+        {promptPicker(transparentCover ? "transparentCover" : "cover")}
         <details className="group rounded-xl border border-border bg-surface px-3 py-2.5">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[12px] font-semibold text-muted-strong marker:content-none">
             {t("ai.advancedImageOptions")}
@@ -2244,20 +2208,7 @@ export function ResourceEditor({
           </>
         ) : (
           <>
-            <label className="block text-xs font-semibold text-muted-strong">
-              {t("ai.imageGenerationPrompt")}
-              <textarea
-                value={imageGenerationPrompt}
-                onChange={(event) => setImageGenerationPrompt(event.target.value)}
-                disabled={aiAction === "image"}
-                placeholder={t("ai.imageGenerationPlaceholder", {
-                  name: resource?.name ?? form.name,
-                })}
-                rows={6}
-                maxLength={5_000}
-                className="mt-1.5 w-full resize-y rounded-xl border border-border bg-surface-subtle p-3 text-xs leading-5 text-muted-strong outline-none transition placeholder:text-muted focus:border-success focus:ring-4 focus:ring-success-border disabled:text-muted"
-              />
-            </label>
+            {promptPicker("image")}
             <ImageModelSelector
               preference={imageModelPreference}
               disabled={aiAction === "image"}

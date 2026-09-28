@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { AiPromptCollection } from "@/lib/ai-prompt-templates";
 import type { ChainAction } from "@/lib/action-chain-contract";
 import type { ListViewCollection } from "@/lib/list-view-contract";
 import {
@@ -191,6 +192,13 @@ export const users = pgTable(
     ),
   ],
 );
+
+export const aiPromptSettings = pgTable("ai_prompt_settings", {
+  organizationId: organizationIdColumn().primaryKey(),
+  collection: jsonb("collection").$type<AiPromptCollection>().notNull(),
+  revision: integer("revision").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const userListViews = pgTable("user_list_views", {
   organizationId: organizationIdColumn(),
