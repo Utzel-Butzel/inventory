@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   CircleDot,
+  ExternalLink,
   GitBranch,
   LayoutList,
   Link2,
@@ -16,6 +17,7 @@ import {
   Plus,
   Trash2,
   Workflow,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "next-i18next/client";
@@ -407,6 +409,7 @@ export function ResourceConnectionDiagram({
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
   const number = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const selectionTriggerRef = useRef<HTMLButtonElement | SVGGElement | null>(null);
   const payloadsRef = useRef(new Map<string, ConnectionDiagramPayload>());
   const failedResourcesRef = useRef(new Set<string>());
   const partialRef = useRef(false);
@@ -776,7 +779,7 @@ export function ResourceConnectionDiagram({
   }, [model, positions, resource.id]);
 
   return (
-    <section className="mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
+    <section className="app-page mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
       <Card className="overflow-hidden shadow-[var(--shadow-sm)]">
         <details className="group" open>
           <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 marker:hidden sm:px-6 [&::-webkit-details-marker]:hidden">
@@ -1076,6 +1079,7 @@ export function ResourceConnectionDiagram({
                       />
                       <GraphEdges
                         edges={graphEdges}
+                        nodes={model.nodes}
                         positions={positions}
                         width={canvasWidth}
                         height={canvasHeight}
@@ -1085,7 +1089,7 @@ export function ResourceConnectionDiagram({
                             ? editorSelection.edge.key
                             : null
                         }
-                        onSelect={(edge) => {
+                        onSelect={(edge, trigger) => {
                           const firstResource = model.nodes.find(
                             (node) => node.resource.id === edge.firstResourceId,
                           )?.resource;
@@ -1093,6 +1097,7 @@ export function ResourceConnectionDiagram({
                             (node) => node.resource.id === edge.secondResourceId,
                           )?.resource;
                           if (!firstResource || !secondResource) return;
+                          selectionTriggerRef.current = trigger;
                           setEditorSelection({
                             type: "edge",
                             edge,
@@ -1163,19 +1168,20 @@ export function ResourceConnectionDiagram({
                                   ? editorSelection.resource.id
                                   : null
                               }
-                              onSelect={(selectedResource) =>
+                              onSelect={(selectedResource, trigger) => {
+                                selectionTriggerRef.current = trigger;
                                 setEditorSelection({
                                   type: "node",
                                   resource: selectedResource,
-                                })
-                              }
+                                });
+                              }}
                             />
                           ));
                         },
                       )}
                     </div>
                   </div>
-                  {editorSelection ? (
+                  {editorSelection && editing && canEdit ? (
                     <ResourceConnectionEditorPanel
                       selection={editorSelection}
                       rootResourceId={resource.id}
@@ -1183,6 +1189,29 @@ export function ResourceConnectionDiagram({
                       loadPayload={getPayload}
                       onChanged={connectionChanged}
                       onClose={() => setEditorSelection(null)}
+                    />
+                  ) : editorSelection?.type === "node" ? (
+                    <ConnectionDetailsPanel
+                      resource={editorSelection.resource}
+                      cover={coverSnapshot.get(editorSelection.resource.id) ?? null}
+                      connections={model.nodes.find(
+                        (node) => node.resource.id === editorSelection.resource.id,
+                      )?.connections ?? []}
+                      isRoot={editorSelection.resource.id === resource.id}
+                      number={number}
+                      onClose={() => {
+                        setEditorSelection(null);
+                        selectionTriggerRef.current?.focus({ preventScroll: true });
+                      }}
+                    />
+                  ) : editorSelection?.type === "edge" ? (
+                    <ConnectionEdgeDetailsPanel
+                      selection={editorSelection}
+                      number={number}
+                      onClose={() => {
+                        setEditorSelection(null);
+                        selectionTriggerRef.current?.focus({ preventScroll: true });
+                      }}
                     />
                   ) : null}
                 </div>
@@ -1685,6 +1714,7 @@ function FamilyRails({
 
 function GraphEdges({
   edges,
+  nodes,
   positions,
   width,
   height,
@@ -1693,18 +1723,19 @@ function GraphEdges({
   onSelect,
 }: {
   edges: ConnectionDiagramGraphEdge[];
+  nodes: ConnectionDiagramGraphNode[];
   positions: ReadonlyMap<string, NodePosition>;
   width: number;
   height: number;
   editing: boolean;
   selectedEdgeKey: string | null;
-  onSelect: (edge: ConnectionDiagramGraphEdge) => void;
+  onSelect: (edge: ConnectionDiagramGraphEdge, trigger: SVGGElement) => void;
 }) {
+  const { t } = useT("resource");
   const anchors = buildEdgeAnchorMap(edges, positions);
   return (
     <svg
-      aria-hidden={editing ? undefined : "true"}
-      className={cn("absolute inset-0", !editing && "pointer-events-none")}
+      className="pointer-events-none absolute inset-0"
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
@@ -1732,7 +1763,11 @@ function GraphEdges({
           edge={edge}
           positions={positions}
           anchors={anchors.get(edge.key)}
-          editing={editing && !edge.visualOnly}
+          interactive={!editing || !edge.visualOnly}
+          label={t("connectionDiagram.details.showConnection", {
+            first: nodes.find((node) => node.resource.id === edge.firstResourceId)?.resource.name,
+            second: nodes.find((node) => node.resource.id === edge.secondResourceId)?.resource.name,
+          })}
           selected={selectedEdgeKey === edge.key}
           onSelect={onSelect}
         />
@@ -1745,16 +1780,18 @@ function GraphEdge({
   edge,
   positions,
   anchors,
-  editing,
+  interactive,
+  label,
   selected,
   onSelect,
 }: {
   edge: ConnectionDiagramGraphEdge;
   positions: ReadonlyMap<string, NodePosition>;
   anchors: EdgeAnchors | undefined;
-  editing: boolean;
+  interactive: boolean;
+  label: string;
   selected: boolean;
-  onSelect: (edge: ConnectionDiagramGraphEdge) => void;
+  onSelect: (edge: ConnectionDiagramGraphEdge, trigger: SVGGElement) => void;
 }) {
   const endpoints = visualEdgeEndpoints(edge);
   if (!endpoints) return null;
@@ -1803,16 +1840,18 @@ function GraphEdge({
       : `M ${curve.start.x} ${curve.start.y} C ${curve.controlStart.x} ${curve.controlStart.y}, ${curve.controlEnd.x} ${curve.controlEnd.y}, ${curve.end.x} ${curve.end.y}`;
   return (
     <g
-      role={editing ? "button" : undefined}
-      tabIndex={editing ? 0 : undefined}
-      className={editing ? "cursor-pointer outline-none" : undefined}
-      onClick={editing ? () => onSelect(edge) : undefined}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={interactive ? label : undefined}
+      aria-pressed={interactive ? selected : undefined}
+      className={interactive ? "group/edge cursor-pointer outline-none" : undefined}
+      onClick={interactive ? (event) => onSelect(edge, event.currentTarget) : undefined}
       onKeyDown={
-        editing
+        interactive
           ? (event) => {
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
-                onSelect(edge);
+                onSelect(edge, event.currentTarget);
               }
             }
           : undefined
@@ -1820,6 +1859,7 @@ function GraphEdge({
     >
       <path
         d={path}
+        className="group-hover/edge:stroke-[3.5px] group-focus-visible/edge:stroke-[3.5px]"
         fill="none"
         stroke={kindColor[primary.kind]}
         strokeWidth={selected ? "3.5" : visualOnly ? "1.25" : "1.75"}
@@ -1832,7 +1872,7 @@ function GraphEdge({
         strokeLinejoin="round"
         pointerEvents="none"
       />
-      {editing ? (
+      {interactive ? (
         <path
           d={path}
           fill="none"
@@ -1874,7 +1914,7 @@ function PositionedGraphNode({
   locale: string;
   editing: boolean;
   selectedResourceId: string | null;
-  onSelect: (resource: ConnectionDiagramResource) => void;
+  onSelect: (resource: ConnectionDiagramResource, trigger: HTMLButtonElement) => void;
 }) {
   const { t } = useT("resource");
   if (item.type === "overflow") {
@@ -2001,7 +2041,7 @@ function PositionedGraphNode({
         <button
           type="button"
           className={contentClassName}
-          onClick={() => onSelect(item.node.resource)}
+          onClick={(event) => onSelect(item.node.resource, event.currentTarget)}
           aria-label={t("connectionDiagram.editor.editItem", {
             name: item.node.resource.name,
           })}
@@ -2010,7 +2050,7 @@ function PositionedGraphNode({
         </button>
         <button
           type="button"
-          onClick={() => onSelect(item.node.resource)}
+          onClick={(event) => onSelect(item.node.resource, event.currentTarget)}
           className="absolute right-2 top-2 grid size-7 place-items-center rounded-lg bg-brand-soft text-brand transition hover:bg-brand-solid hover:text-on-brand"
           aria-label={t("connectionDiagram.editor.addTo", {
             name: item.node.resource.name,
@@ -2021,21 +2061,200 @@ function PositionedGraphNode({
       </div>
     );
   }
-  return isRoot ? (
-    <div className={className} style={style}>
-      <div className={contentClassName}>{content}</div>
-    </div>
-  ) : (
-    <Link
-      href={`/inventory/${item.node.resource.id}`}
-      aria-label={t("connectionDiagram.openItem", {
+  return (
+    <button
+      type="button"
+      onClick={(event) => onSelect(item.node.resource, event.currentTarget)}
+      aria-label={t("connectionDiagram.details.show", {
         name: item.node.resource.name,
       })}
+      aria-pressed={selected}
       className={className}
       style={style}
     >
       <span className={contentClassName}>{content}</span>
-    </Link>
+    </button>
+  );
+}
+
+function ConnectionDetailsShell({
+  title,
+  label,
+  selectionKey,
+  onClose,
+  children,
+}: {
+  title: string;
+  label: string;
+  selectionKey: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const { t } = useT("resource");
+  const panelRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    panelRef.current?.focus({ preventScroll: true });
+  }, [selectionKey]);
+
+  return (
+    <aside
+      ref={panelRef}
+      tabIndex={-1}
+      aria-label={label}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          onClose();
+        }
+      }}
+      className="min-w-0 border-t border-border bg-surface outline-none lg:border-l lg:border-t-0"
+    >
+      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <h3 className="text-xs font-semibold text-foreground">
+          {title}
+        </h3>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t("connectionDiagram.details.close")}
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-muted hover:bg-surface-muted hover:text-foreground"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      </div>
+      {children}
+    </aside>
+  );
+}
+
+function ConnectionEdgeDetailsPanel({
+  selection,
+  number,
+  onClose,
+}: {
+  selection: Extract<ConnectionEditorSelection, { type: "edge" }>;
+  number: Intl.NumberFormat;
+  onClose: () => void;
+}) {
+  const { t } = useT("resource");
+  const { edge, firstResource, secondResource } = selection;
+  return (
+    <ConnectionDetailsShell
+      title={t("connectionDiagram.details.connectionTitle")}
+      label={t("connectionDiagram.details.showConnection", {
+        first: firstResource.name,
+        second: secondResource.name,
+      })}
+      selectionKey={edge.key}
+      onClose={onClose}
+    >
+      <div className="space-y-4 p-4">
+        <p className="break-words text-sm font-semibold text-foreground">
+          {t("connectionDiagram.editor.edge.between", {
+            first: firstResource.name,
+            second: secondResource.name,
+          })}
+        </p>
+        <ul className="space-y-2">
+          {edge.connections.map((connection) => (
+            <li key={connection.canonicalId} className="rounded-xl border border-border p-3">
+              <LegendBadge kind={connection.kind} label={t(`connectionDiagram.legend.${connection.kind}`)} />
+              <p className="mt-2 text-xs leading-5 text-muted">
+                {connectionDescription(connection, t, number)}
+              </p>
+            </li>
+          ))}
+        </ul>
+        <div className="space-y-2">
+          {[firstResource, secondResource].map((resource) => (
+            <Link
+              key={resource.id}
+              href={`/inventory/${resource.id}`}
+              className="flex min-h-9 items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-foreground hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            >
+              <span className="min-w-0 break-words">
+                {t("connectionDiagram.openItem", { name: resource.name })}
+              </span>
+              <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
+      </div>
+    </ConnectionDetailsShell>
+  );
+}
+
+function ConnectionDetailsPanel({
+  resource,
+  cover,
+  connections,
+  isRoot,
+  number,
+  onClose,
+}: {
+  resource: ConnectionDiagramResource;
+  cover: ConnectionDiagramCover | null;
+  connections: ConnectionDiagramConnection[];
+  isRoot: boolean;
+  number: Intl.NumberFormat;
+  onClose: () => void;
+}) {
+  const { t } = useT("resource");
+  const statusKey = resource.status === "in-use" ? "inUse" : resource.status;
+  const descriptions = Array.from(new Set(
+    connections.map((connection) => connectionDescription(connection, t, number)),
+  ));
+
+  return (
+    <ConnectionDetailsShell
+      title={t("connectionDiagram.details.title")}
+      label={t("connectionDiagram.details.show", { name: resource.name })}
+      selectionKey={resource.id}
+      onClose={onClose}
+    >
+      <div className="space-y-4 p-4">
+        {cover ? (
+          <ResponsiveMediaImage
+            media={cover}
+            alt={cover.altText || resource.name}
+            widths={[384, 640]}
+            sizes="320px"
+            className="aspect-video w-full rounded-xl bg-surface-muted object-contain"
+          />
+        ) : null}
+        <div>
+          <p className="break-words text-sm font-semibold text-foreground">{resource.name}</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {isRoot ? <Badge tone="brand">{t("connectionDiagram.current")}</Badge> : null}
+            {resource.type ? (
+              <Badge>{t(`types.${resource.type}`, { defaultValue: humanize(resource.type) })}</Badge>
+            ) : null}
+            {resource.status ? (
+              <Badge>{t(`statuses.${statusKey}`, { defaultValue: humanize(resource.status) })}</Badge>
+            ) : null}
+          </div>
+        </div>
+        {descriptions.length ? (
+          <div>
+            <h4 className="text-xs font-semibold text-muted-strong">
+              {t("connectionDiagram.details.connections")}
+            </h4>
+            <ul className="mt-2 space-y-2 text-xs leading-5 text-muted">
+              {descriptions.map((description) => <li key={description}>{description}</li>)}
+            </ul>
+          </div>
+        ) : null}
+        <Link
+          href={`/inventory/${resource.id}`}
+          aria-label={t("connectionDiagram.openItem", { name: resource.name })}
+          className="flex min-h-9 items-center justify-center gap-2 rounded-lg bg-brand-solid px-3 py-2 text-xs font-semibold text-on-brand transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        >
+          {t("connectionDiagram.details.openItem")}
+          <ExternalLink className="size-3.5" aria-hidden="true" />
+        </Link>
+      </div>
+    </ConnectionDetailsShell>
   );
 }
 

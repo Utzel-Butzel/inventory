@@ -340,18 +340,6 @@ function StockStatus({ item }: { item: StockItem }) {
 function StockLoading() {
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Card key={index} className="p-5">
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-3.5 w-24" />
-              <Skeleton className="size-9 rounded-xl" />
-            </div>
-            <Skeleton className="mt-7 h-8 w-20" />
-            <Skeleton className="mt-3 h-3 w-32" />
-          </Card>
-        ))}
-      </div>
       <Card className="p-3 sm:p-5">
         <Skeleton className="h-11 w-full rounded-xl" />
         <div className="mt-5 space-y-3">
@@ -496,8 +484,8 @@ export function StockOverview() {
   const needsAttention = metrics.low + metrics.out;
 
   return (
-    <div className="mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="app-page mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div className="mb-4 sm:mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold text-foreground sm:text-[29px]">
           {t("overview.title")}
         </h1>
@@ -523,63 +511,6 @@ export function StockOverview() {
 
       {!loading && !error ? (
         <div className="space-y-5">
-          <section
-            className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 xl:grid-cols-5"
-            aria-label={t("overview.title")}
-          >
-            {[
-              {
-                label: t("overview.metrics.trackedItems"),
-                value: compactNumber.format(metrics.trackedItems),
-                detail: t("overview.metrics.unitsOnHand", {
-                  count: metrics.totalQuantity,
-                  value: compactNumber.format(metrics.totalQuantity),
-                }),
-                valueClass: "text-foreground",
-              },
-              {
-                label: t("overview.metrics.incoming"),
-                value: compactNumber.format(metrics.totalOnOrder),
-                detail: t("overview.metrics.itemsOnOrder", {
-                  count: metrics.incomingItems,
-                  value: compactNumber.format(metrics.incomingItems),
-                }),
-                valueClass: "text-foreground",
-              },
-              {
-                label: t("overview.metrics.healthyStock"),
-                value: compactNumber.format(metrics.healthy),
-                detail: t("overview.metrics.aboveThresholds"),
-                valueClass: "text-foreground",
-              },
-              {
-                label: t("overview.metrics.lowStock"),
-                value: compactNumber.format(metrics.low),
-                detail: t("overview.metrics.reorderSuggestions", {
-                  count: metrics.reorderSuggested,
-                  value: compactNumber.format(metrics.reorderSuggested),
-                }),
-                valueClass: "text-warning",
-              },
-              {
-                label: t("overview.metrics.outOfStock"),
-                value: compactNumber.format(metrics.out),
-                detail: metrics.out
-                  ? t("overview.metrics.immediateAction")
-                  : t("overview.metrics.nothingBlocked"),
-                valueClass: "text-danger",
-              },
-            ].map((metric) => (
-              <div key={metric.label} className="bg-surface p-4 sm:p-5">
-                <p className="text-xs font-medium text-muted">{metric.label}</p>
-                <p className={cn("mt-3 text-2xl font-semibold tabular-nums", metric.valueClass)}>
-                  {metric.value}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-muted">{metric.detail}</p>
-              </div>
-            ))}
-          </section>
-
           {needsAttention > 0 ? (
             <Card
               className={cn(

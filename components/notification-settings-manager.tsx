@@ -428,7 +428,7 @@ export function NotificationSettingsManager() {
         {preview ? <pre className="whitespace-pre-wrap border-t border-border bg-surface-subtle p-5 text-xs leading-5 text-muted-strong">{preview}</pre> : null}
       </Card>
 
-      <div className="sticky bottom-4 flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface/95 p-3 shadow-[var(--shadow-lg)] backdrop-blur">
+      <div className="sticky bottom-[calc(var(--app-bottom-navigation-height)+1rem)] flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface/95 p-3 shadow-[var(--shadow-lg)] backdrop-blur">
         <p className="text-xs text-muted">{changed ? t("notifications.unsaved") : t("notifications.savedState")}</p>
         <Button onClick={() => void save()} disabled={!changed || saving}>{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{t("notifications.actions.save")}</Button>
       </div>

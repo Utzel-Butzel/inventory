@@ -16,6 +16,7 @@
     }
   },
   "navigation": {
+    "more": "Mehr",
     "mainLabel": "Hauptnavigation",
     "overview": "Übersicht",
     "inventory": "Inventar",

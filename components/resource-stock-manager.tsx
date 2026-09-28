@@ -50,9 +50,11 @@ import { useStockUnits } from "./resource-stock/use-stock-units";
 export function ResourceStockManager({
   resourceId,
   canEdit = false,
+  selectedUnitId,
 }: {
   resourceId: string;
   canEdit?: boolean;
+  selectedUnitId?: string;
 }) {
   const allowNegativeStock = useOrganizationAllowsNegativeStock();
   const { t, i18n } = useT("stock");
@@ -236,7 +238,7 @@ export function ResourceStockManager({
   const minimum = stock.config.minimumStock;
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+    <div className="app-page mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <header className="mb-5 flex items-center justify-between gap-4 border-b border-border pb-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
@@ -366,6 +368,7 @@ export function ResourceStockManager({
       </div>
 
       <StockUnits
+        selectedUnitId={selectedUnitId}
         stock={stock}
         t={t}
         locale={locale}

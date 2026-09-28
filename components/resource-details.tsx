@@ -672,7 +672,7 @@ export function ResourceDetails({
 
   if (error || !resource) {
     return (
-      <div className="mx-auto w-full max-w-[1450px] px-4 py-8 sm:px-6 lg:px-8">
+      <div className="app-page mx-auto w-full max-w-[1450px] px-4 py-8 sm:px-6 lg:px-8">
         <div className="rounded-2xl border border-danger-border bg-danger-soft p-5 text-sm text-danger">
           {error ?? t("details.errors.notFound")}
         </div>
@@ -732,7 +732,7 @@ export function ResourceDetails({
       : null;
 
   return (
-    <div className="mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+    <div className="app-page mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <header className="mb-6 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">

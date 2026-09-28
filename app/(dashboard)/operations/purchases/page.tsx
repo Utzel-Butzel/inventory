@@ -15,7 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function PurchasesPage() {
   return (
-    <main className="mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <main className="app-page mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <OrdersManager type="purchase" />
     </main>
   );

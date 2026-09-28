@@ -384,6 +384,15 @@
     "retry": "Try again",
     "partial": "Some connection types are unavailable with your current access. The rest of the diagram is still shown.",
     "openItem": "Open {{name}}",
+    "details": {
+      "title": "Item details",
+      "connectionTitle": "Connection details",
+      "showConnection": "Show connection between {{first}} and {{second}}",
+      "show": "Show details for {{name}}",
+      "close": "Close details",
+      "connections": "Connections in the diagram",
+      "openItem": "Open item"
+    },
     "more_one": "{{count}} more connection",
     "more_other": "{{count}} more connections",
     "depth": {

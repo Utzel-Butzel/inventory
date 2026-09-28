@@ -152,8 +152,9 @@ type InventoryTypeOption = {
   archivedAt: string | null;
 };
 
-const inputClass =
-  "mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-success focus:ring-4 focus:ring-success-border disabled:bg-surface-subtle disabled:text-muted";
+const inputBaseClass =
+  "h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-success focus:ring-4 focus:ring-success-border disabled:bg-surface-subtle disabled:text-muted";
+const inputClass = `mt-1.5 ${inputBaseClass}`;
 const labelClass = "block text-xs font-semibold text-muted-strong";
 
 const toForm = (resource: ClientResource): FormState => ({
@@ -485,6 +486,8 @@ export function ResourceEditor({
   const aiCostEstimates = imageModelPreference.costEstimates?.operations;
   const [resource, setResource] = useState<ClientResource | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const titleBeforeEdit = useRef("");
   const [inventoryTypes, setInventoryTypes] = useState<InventoryTypeOption[]>(
     () => fallbackTypes.map((key) => ({
       key,
@@ -1238,7 +1241,7 @@ export function ResourceEditor({
 
   return (
     <>
-    <form onSubmit={onSubmit} className="mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+    <form onSubmit={onSubmit} className="app-page mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
       <header className="mb-6 flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           {isNew ? (
@@ -1256,7 +1259,38 @@ export function ResourceEditor({
             </div>
           ) : null}
           <h1 className="truncate text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">
-            {isNew ? t("header.addItem") : resource?.name}
+            {isNew ? t("header.addItem") : editingTitle ? (
+              <input
+                autoFocus
+                aria-label={t("details.name")}
+                value={form.name}
+                onChange={(event) => setField("name", event.target.value)}
+                onFocus={(event) => event.target.select()}
+                onBlur={() => setEditingTitle(false)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    setEditingTitle(false);
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    setField("name", titleBeforeEdit.current);
+                    setEditingTitle(false);
+                  }
+                }}
+                className="w-full min-w-0 rounded border border-brand-border bg-surface px-1 outline-none focus:ring-2 focus:ring-brand-solid"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  titleBeforeEdit.current = form.name;
+                  setEditingTitle(true);
+                }}
+                className="max-w-full cursor-text truncate rounded text-left hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid"
+              >
+                {form.name || t("fallback.untitled")}
+              </button>
+            )}
           </h1>
           {!isNew && resource ? (
             <p className="mt-1 text-xs text-muted">
@@ -1815,7 +1849,7 @@ export function ResourceEditor({
                 </div>
               )}
               <label className={labelClass}>{t("operations.priority")}<select value={form.priority} onChange={(event) => setField("priority", event.target.value)} className={inputClass}><option value="1">1 · {t("operations.priorityLow")}</option><option value="2">2</option><option value="3">3 · {t("operations.priorityNormal")}</option><option value="4">4</option><option value="5">5 · {t("operations.priorityHigh")}</option></select></label>
-              <label className={labelClass}>{t("operations.value")}<div className="mt-1.5 flex"><input type="number" min="0" step="0.01" value={form.value} onChange={(event) => setField("value", event.target.value)} className={`${inputClass} mt-0 rounded-r-none`} /><input value={form.currency} onChange={(event) => setField("currency", event.target.value.slice(0, 3))} className="h-11 w-20 rounded-r-xl border border-l-0 border-border bg-surface-subtle px-3 text-center text-xs font-bold uppercase text-muted outline-none" aria-label={t("operations.currency")} /></div></label>
+              <label className={labelClass}>{t("operations.value")}<div className="mt-1.5 flex items-center"><input type="number" min="0" step="0.01" value={form.value} onChange={(event) => setField("value", event.target.value)} className={`${inputBaseClass} min-w-0 rounded-r-none`} /><input value={form.currency} onChange={(event) => setField("currency", event.target.value.slice(0, 3))} className="h-11 w-20 shrink-0 rounded-r-xl border border-l-0 border-border bg-surface-subtle px-3 text-center text-xs font-bold uppercase text-muted outline-none" aria-label={t("operations.currency")} /></div></label>
               <label className={`${labelClass} sm:col-span-2 lg:col-span-3`}>{t("operations.notes")}<textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} rows={4} className={`${inputClass} h-auto py-3`} /></label>
             </div>
           </section>
@@ -2239,7 +2273,7 @@ export function ResourceEditor({
       <ResourceStockSettings resourceId={resourceId} />
     ) : null}
     {resourceId ? (
-      <section className="mx-auto w-full max-w-[1450px] px-4 pb-8 sm:px-6 lg:px-8">
+      <section className="app-page mx-auto w-full max-w-[1450px] px-4 pb-8 sm:px-6 lg:px-8">
         <AssemblyManager resourceId={resourceId} mode="bom" />
       </section>
     ) : null}

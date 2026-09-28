@@ -16,6 +16,11 @@ export default defineConfig([
     "data/**",
     "dist/**",
     "out/**",
+    // Distributed third-party bundles are copied verbatim, not authored here.
+    "public/opencv/**",
+    "public/tesseract/**",
+    "public/tesseract-core/**",
+    "public/vendor/**",
     "next-env.d.ts",
   ]),
 ]);

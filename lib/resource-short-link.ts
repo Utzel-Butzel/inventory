@@ -95,3 +95,13 @@ export const resourceShortUrl = (origin: string, resourceId: string) => {
   const path = resourceShortPath(resourceId);
   return origin ? `${origin.replace(/\/$/, "")}${path}` : path;
 };
+
+/** Resolve only validated internal resource/unit links, never arbitrary redirects. */
+export function resourcePathFromShortLink(code: string, unitCode: string | null = null) {
+  const resourceId = resourceIdFromShortCode(code);
+  const unitId = unitCode === null ? null : resourceIdFromShortCode(unitCode);
+  if (!resourceId || (unitCode !== null && !unitId)) return null;
+  return unitId
+    ? `/inventory/${resourceId}/stock?unit=${unitId}`
+    : `/inventory/${resourceId}`;
+}

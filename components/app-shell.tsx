@@ -813,6 +813,14 @@ export function AppShell({
       ? inventoryItemBreadcrumb
       : null;
   const showGlobalSearch = scopedPathname !== "/inventory";
+  const mobileNavigation = navigation.filter(
+    (item) =>
+      ["/inventory", "/stock", "/map"].includes(item.href) &&
+      (!item.permission || user.permissions.includes(item.permission)),
+  );
+  const moreActive = !mobileNavigation.some((item) =>
+    isNavigationItemActive(scopedPathname, item),
+  );
 
   const closeMobileNavigation = () => {
     setMobileOpen(false);
@@ -880,6 +888,7 @@ export function AppShell({
             onClick={closeMobileNavigation}
           />
           <aside
+            id="mobile-navigation-drawer"
             role="dialog"
             aria-modal="true"
             aria-label={t("navigation.mainLabel")}
@@ -932,16 +941,6 @@ export function AppShell({
             organization.isReadOnly ? "top-11" : "top-0",
           )}
         >
-          <button
-            ref={mobileMenuTriggerRef}
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            className="mr-3 grid size-11 shrink-0 place-items-center rounded-xl border border-border bg-surface text-muted shadow-sm lg:hidden"
-            aria-label={t("actions.openNavigation")}
-          >
-            <Menu className="size-[18px]" aria-hidden="true" />
-          </button>
-
           <nav
             aria-label={t("breadcrumb.label")}
             className="min-w-0 flex-1 overflow-hidden text-sm"
@@ -1054,34 +1053,6 @@ export function AppShell({
           </div>
         </header>
 
-        {organization.isReadOnly ? (
-          <div
-            role="status"
-            className="sticky top-[68px] z-[19] border-b border-brand/20 bg-brand-soft/95 px-4 text-brand backdrop-blur-xl sm:px-6 lg:px-8"
-          >
-            <div className="flex min-h-10 items-center gap-2.5 py-2 text-[13px]">
-              <LockKeyhole
-                className="size-3.5 shrink-0"
-                strokeWidth={2.2}
-                aria-hidden="true"
-              />
-              <p className="min-w-0 flex-1 leading-5">
-                <strong className="font-semibold">{t("demo.bannerLabel")}</strong>
-                <span className="hidden text-muted-strong sm:inline">
-                  {" · "}
-                  {t("demo.bannerDescription")}
-                </span>
-              </p>
-              <a
-                href={websiteUrl}
-                className="shrink-0 font-semibold text-brand underline-offset-4 hover:underline"
-              >
-                {t("demo.backToWebsite")}
-              </a>
-            </div>
-          </div>
-        ) : null}
-
         <main
           className={cn(
             "app-shell-main",
@@ -1090,6 +1061,54 @@ export function AppShell({
         >
           {children}
         </main>
+        <nav
+          className="app-shell-bottom-navigation fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-surface lg:hidden"
+          aria-label={t("navigation.mainLabel")}
+        >
+          {mobileNavigation.map((item) => {
+            const active = isNavigationItemActive(scopedPathname, item);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex min-h-[72px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[12px] font-medium transition active:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus",
+                  active ? "text-brand" : "text-muted",
+                )}
+              >
+                <span
+                  className={cn(
+                    "grid h-8 w-16 place-items-center rounded-full transition-colors",
+                    active && "bg-brand-soft",
+                  )}
+                >
+                  <Icon className="size-6" strokeWidth={active ? 2.3 : 1.8} aria-hidden="true" />
+                </span>
+                <span>{t(item.labelKey)}</span>
+              </Link>
+            );
+          })}
+          <button
+            ref={mobileMenuTriggerRef}
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            aria-label={t("actions.openNavigation")}
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-navigation-drawer"
+            aria-haspopup="dialog"
+            className={cn(
+              "flex min-h-[72px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[12px] font-medium transition active:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus",
+              moreActive || mobileOpen ? "text-brand" : "text-muted",
+            )}
+          >
+            <span className={cn("grid h-8 w-16 place-items-center rounded-full", (moreActive || mobileOpen) && "bg-brand-soft")}>
+              <Menu className="size-6" aria-hidden="true" />
+            </span>
+            <span className="text-[12px] font-medium">{t("navigation.more")}</span>
+          </button>
+        </nav>
       </div>
       </div>
       </OrganizationRoutingProvider>

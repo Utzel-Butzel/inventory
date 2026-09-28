@@ -156,7 +156,7 @@ test("the locale and organization proxy is scoped to application routes", async 
     "/notifications/:path*",
     "/requests/:path*",
     "/settings/:path*",
-    "/:organizationId/:path*",
+    "/((?!api(?:/|$)|_next(?:/|$)).*)",
   ];
   const matcherBlock = source.match(/matcher:\s*\[([\s\S]*?)\]/)?.[1];
   assert.ok(matcherBlock, "proxy matcher is missing");

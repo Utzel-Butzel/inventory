@@ -16,6 +16,7 @@
     }
   },
   "navigation": {
+    "more": "More",
     "mainLabel": "Main navigation",
     "overview": "Overview",
     "inventory": "Inventory",

@@ -84,7 +84,7 @@ process.exit(2);
         5_000,
       );
       const check = () => {
-        if (stdout.includes("Keep this terminal open")) {
+        if (stdout.includes("Database relay is ready for connections.")) {
           clearTimeout(timeout);
           resolve();
           return;

@@ -672,7 +672,7 @@ export default function BatchCapturePage() {
 
   return (
     <div className="min-h-full bg-background text-foreground">
-      <div className="mx-auto w-full max-w-[1540px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+      <div className="app-page mx-auto w-full max-w-[1540px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
         <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Link
@@ -703,7 +703,13 @@ export default function BatchCapturePage() {
             className="overflow-hidden rounded-xl border border-border bg-[#11130f]"
             aria-labelledby="camera-heading"
           >
-            <div className="relative aspect-[4/3] min-h-[340px] max-h-[680px] w-full overflow-hidden bg-[#11130f] sm:aspect-[16/10]">
+            <div
+              className={`relative min-h-[340px] w-full overflow-hidden bg-[#11130f] ${
+                cameraState === "ready"
+                  ? "aspect-[4/3] max-h-[680px] sm:aspect-[16/10]"
+                  : "flex flex-col"
+              }`}
+            >
               <h2 id="camera-heading" className="sr-only">
                 {t("camera.heading")}
               </h2>
@@ -713,7 +719,7 @@ export default function BatchCapturePage() {
                 muted
                 playsInline
                 onCanPlay={() => setIsVideoReady(true)}
-                className={`h-full w-full object-cover transition-opacity duration-500 ${
+                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
                   cameraState === "ready" ? "opacity-100" : "opacity-0"
                 }`}
                 aria-label={t("camera.preview")}
@@ -771,7 +777,7 @@ export default function BatchCapturePage() {
               </div>
 
               {cameraState !== "ready" ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+                <div className="relative flex flex-1 flex-col items-center justify-center px-6 pb-6 pt-20 text-center">
                   <div className="mb-5 grid h-20 w-20 place-items-center rounded-full border border-white/10 bg-white/[0.06] text-white shadow-inner">
                     {cameraState === "requesting" ? (
                       <LoaderCircle
@@ -808,7 +814,13 @@ export default function BatchCapturePage() {
                 </div>
               ) : null}
 
-              <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between gap-4 p-4 sm:p-6">
+              <div
+                className={`z-20 flex items-end justify-between gap-4 p-4 sm:p-6 ${
+                  cameraState === "ready"
+                    ? "absolute inset-x-0 bottom-0"
+                    : "relative"
+                }`}
+              >
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}

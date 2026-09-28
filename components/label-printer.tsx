@@ -32,7 +32,8 @@ import {
   type LabelElement,
   type LabelSetupDto,
 } from "@/lib/label-setup-contract";
-import { resourceShortUrl } from "@/lib/resource-short-link";
+import { labelTargetKey, labelTargetName, labelTargetUrl, type LabelResource } from "@/lib/label-target";
+import { LabelStockUnitPicker } from "@/components/label-stock-unit-picker";
 
 import styles from "./label-printer.module.css";
 
@@ -68,7 +69,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
   const [page, setPage] = useState(1);
   const [resources, setResources] = useState<ClientResource[]>([]);
   const [pagination, setPagination] = useState<Pagination>(EMPTY_PAGINATION);
-  const [selected, setSelected] = useState<Map<string, ClientResource>>(
+  const [selected, setSelected] = useState<Map<string, LabelResource>>(
     () => new Map(),
   );
   const [copies, setCopies] = useState<Record<string, number>>({});
@@ -174,7 +175,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
     () =>
       selectedResources.flatMap((resource) =>
         Array.from(
-          { length: copies[resource.id] ?? 1 },
+          { length: copies[labelTargetKey(resource)] ?? 1 },
           (_, copyIndex) => ({ resource, copyIndex }),
         ),
       ),
@@ -188,11 +189,12 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
     setPrintError(null);
   }, [activeSetup, labels]);
 
-  const toggleResource = (resource: ClientResource) => {
+  const toggleResource = (resource: LabelResource) => {
+    const key = labelTargetKey(resource);
     setSelected((current) => {
       const next = new Map(current);
-      if (next.has(resource.id)) next.delete(resource.id);
-      else next.set(resource.id, resource);
+      if (next.has(key)) next.delete(key);
+      else next.set(key, resource);
       return next;
     });
   };
@@ -320,7 +322,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
     if (
       qrEnabled &&
       labels.some(({ resource }) =>
-        !canEncodeQr(resourceShortUrl(origin, resource.id)),
+        !canEncodeQr(labelTargetUrl(origin, resource)),
       )
     ) {
       setPrintError(t("errors.urlTooLong"));
@@ -570,37 +572,39 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
                   {resources.map((resource) => {
                     const isSelected = selectedIds.has(resource.id);
                     return (
-                      <button
-                        type="button"
-                        key={resource.id}
-                        onClick={() => toggleResource(resource)}
-                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
-                          isSelected ? "bg-brand-soft" : "hover:bg-surface-hover"
-                        }`}
-                        aria-pressed={isSelected}
-                      >
-                        <span
-                          className={`grid size-5 shrink-0 place-items-center rounded-md border ${
-                            isSelected
-                              ? "border-brand-solid bg-brand-solid text-on-brand"
-                              : "border-border-strong bg-surface"
+                      <div key={resource.id}>
+                        <button
+                          type="button"
+                          onClick={() => toggleResource(resource)}
+                          className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
+                            isSelected ? "bg-brand-soft" : "hover:bg-surface-hover"
                           }`}
+                          aria-pressed={isSelected}
                         >
-                          {isSelected ? <Check size={13} aria-hidden="true" /> : null}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[14px] font-semibold text-foreground">
-                            {resource.name}
+                          <span
+                            className={`grid size-5 shrink-0 place-items-center rounded-md border ${
+                              isSelected
+                                ? "border-brand-solid bg-brand-solid text-on-brand"
+                                : "border-border-strong bg-surface"
+                            }`}
+                          >
+                            {isSelected ? <Check size={13} aria-hidden="true" /> : null}
                           </span>
-                          <span className="mt-0.5 block truncate text-[12px] text-muted">
-                            {resource.sku || t("selection.noSku")}
-                            {resource.location ? ` · ${resource.location}` : ""}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[14px] font-semibold text-foreground">
+                              {resource.name}
+                            </span>
+                            <span className="mt-0.5 block truncate text-[12px] text-muted">
+                              {resource.sku || t("selection.noSku")}
+                              {resource.location ? ` · ${resource.location}` : ""}
+                            </span>
                           </span>
-                        </span>
-                        <span className="shrink-0 rounded-full bg-surface-muted px-2 py-1 text-[11px] font-semibold capitalize text-muted">
-                          {resource.type}
-                        </span>
-                      </button>
+                          <span className="shrink-0 rounded-full bg-surface-muted px-2 py-1 text-[11px] font-semibold capitalize text-muted">
+                            {resource.type}
+                          </span>
+                        </button>
+                        <LabelStockUnitPicker resource={resource} selectedIds={selectedIds} onToggle={toggleResource} />
+                      </div>
                     );
                   })}
                 </div>
@@ -650,18 +654,21 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
               </div>
               <div className="max-h-64 divide-y divide-border overflow-y-auto">
                 {selectedResources.map((resource) => {
-                  const count = copies[resource.id] ?? 1;
+                  const count = copies[labelTargetKey(resource)] ?? 1;
                   return (
-                    <div key={resource.id} className="flex items-center gap-3 px-4 py-3">
+                    <div key={labelTargetKey(resource)} className="flex items-center gap-3 px-4 py-3">
                       <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-strong">
-                        {resource.name}
+                        {labelTargetName(resource)}
                       </span>
+                      <button type="button" onClick={() => toggleResource(resource)} aria-label={t("selection.remove", { name: labelTargetName(resource) })} className="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-hover">
+                        <X size={13} aria-hidden="true" />
+                      </button>
                       <div className="flex items-center rounded-lg border border-border bg-surface p-0.5">
                         <button
                           type="button"
-                          onClick={() => setCopyCount(resource.id, count - 1)}
+                          onClick={() => setCopyCount(labelTargetKey(resource), count - 1)}
                           className="grid size-7 place-items-center rounded-md text-muted hover:bg-surface-hover"
-                          aria-label={t("copies.fewer", { name: resource.name })}
+                          aria-label={t("copies.fewer", { name: labelTargetName(resource) })}
                         >
                           <Minus size={13} aria-hidden="true" />
                         </button>
@@ -670,9 +677,9 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
                         </span>
                         <button
                           type="button"
-                          onClick={() => setCopyCount(resource.id, count + 1)}
+                          onClick={() => setCopyCount(labelTargetKey(resource), count + 1)}
                           className="grid size-7 place-items-center rounded-md text-muted hover:bg-surface-hover"
-                          aria-label={t("copies.more", { name: resource.name })}
+                          aria-label={t("copies.more", { name: labelTargetName(resource) })}
                         >
                           <Plus size={13} aria-hidden="true" />
                         </button>
@@ -771,7 +778,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
               <div className={`${styles.previewStack} ${styles.printSurface}`}>
                 {labels.map(({ resource, copyIndex }) => (
                   <LabelRenderer
-                    key={`${resource.id}-${copyIndex}`}
+                    key={`${labelTargetKey(resource)}-${copyIndex}`}
                     resource={resource}
                     setup={activeSetup}
                     origin={origin}

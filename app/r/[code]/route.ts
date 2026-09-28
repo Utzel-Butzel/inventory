@@ -1,13 +1,14 @@
 import { getSessionIdentity } from "@/lib/api-auth";
 import { organizationPath } from "@/lib/organization-path";
-import { resourceIdFromShortCode } from "@/lib/resource-short-link";
+import { resourcePathFromShortLink } from "@/lib/resource-short-link";
 
 type Context = { params: Promise<{ code: string }> };
 
-export async function GET(_request: Request, context: Context) {
+export async function GET(request: Request, context: Context) {
   const { code } = await context.params;
-  const resourceId = resourceIdFromShortCode(code);
-  if (!resourceId) {
+  const unitCode = new URL(request.url).searchParams.get("unit");
+  const path = resourcePathFromShortLink(code, unitCode);
+  if (!path) {
     return Response.json(
       { error: "Invalid inventory link." },
       {
@@ -19,8 +20,8 @@ export async function GET(_request: Request, context: Context) {
 
   const identity = await getSessionIdentity();
   const destination = identity
-    ? organizationPath(identity.organization.slug, `/inventory/${resourceId}`)
-    : `/inventory/${resourceId}`;
+    ? organizationPath(identity.organization.slug, path)
+    : path;
   const redirectLocation = identity
     ? destination
     : `/login?callbackUrl=${encodeURIComponent(destination)}`;

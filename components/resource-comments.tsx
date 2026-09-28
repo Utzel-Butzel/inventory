@@ -191,7 +191,7 @@ export function CommentsThread({
       className={
         embedded
           ? "w-full"
-          : "mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8"
+          : "app-page mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8"
       }
     >
       <div className="overflow-hidden rounded-xl border border-border bg-surface">

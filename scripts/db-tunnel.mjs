@@ -301,6 +301,7 @@ if (!resolvedDockerContainer) {
       server.once("error", reject);
       server.listen(localPort, localHost, resolve);
     });
+    process.stdout.write("Database relay is ready for connections.\n");
   } catch (error) {
     closeControlMaster();
     fail(`Could not listen on ${localHost}:${localPort}: ${error.message}`);

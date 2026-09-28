@@ -6,7 +6,7 @@
   "header": {
     "eyebrow": "Etiketten",
     "title": "Etiketten drucken",
-    "description": "Wähle Einträge und eine Vorlage aus und drucke QR-Codes, Barcodes, Text und Bilder im Browser."
+    "description": "Wähle Inventareinträge oder einzelne Bestands-Items und eine Vorlage aus und drucke QR-Codes, Barcodes, Text und Bilder im Browser."
   },
   "print": {
     "preparing": "Bilder werden vorbereitet…",
@@ -30,7 +30,8 @@
     "noSku": "Keine SKU",
     "pagination": "Seite {{page}} von {{pages}}",
     "previousPage": "Vorherige Seite",
-    "nextPage": "Nächste Seite"
+    "nextPage": "Nächste Seite",
+    "remove": "{{name}} entfernen"
   },
   "copies": {
     "title": "Exemplare",
@@ -137,7 +138,7 @@
       "qr": "QR-Code",
       "image": "Titelbild",
       "name": "Eintragsname",
-      "identifier": "SKU / ID",
+      "identifier": "Seriennummer / SKU / ID",
       "barcode": "Barcode",
       "url": "Kurzlink",
       "location": "Standort"
@@ -184,5 +185,15 @@
     "missingImages_other": "Für {{examples}} fehlen Titelbilder. Deaktiviere das Bildelement oder füge die fehlenden Bilder vor dem Drucken hinzu.",
     "imageRender": "Mindestens ein Titelbild konnte nicht gerendert werden. Prüfe die Vorschau und versuche es erneut.",
     "imageLoad": "Mindestens ein Titelbild wurde nicht vollständig geladen. Es wurde nichts gedruckt; prüfe die Bilddateien und versuche es erneut."
+  },
+  "units": {
+    "choose": "Einzelne Bestands-Items auswählen",
+    "description": "Wähle Geräte anhand ihrer ID oder Seriennummer. Das Etikett zeigt diese Kennung; der QR-Code öffnet das konkrete Gerät mit seiner Konfiguration im Bestand.",
+    "loading": "Bestands-Items werden geladen…",
+    "search": "Seriennummer, ID oder Standort suchen…",
+    "empty": "Für diesen Eintrag sind keine einzelnen Bestands-Items erfasst.",
+    "noMatches": "Keine passenden Bestands-Items.",
+    "loadError": "Bestands-Items konnten nicht geladen werden.",
+    "retry": "Erneut versuchen"
   }
 }

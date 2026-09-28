@@ -404,7 +404,7 @@ export function ResourceAssignmentsManager({
   }
 
   return (
-    <section className="mx-auto w-full max-w-[1450px] px-4 pb-8 sm:px-6 lg:px-8">
+    <section className="app-page mx-auto w-full max-w-[1450px] px-4 pb-8 sm:px-6 lg:px-8">
       <Card className="overflow-hidden p-0">
         <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">

@@ -418,9 +418,9 @@ export function InventoryClient({
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      <div className="mb-7">
-        <h1 className="text-3xl font-semibold tracking-[-0.025em] text-foreground sm:text-4xl">
+    <div className="app-page mx-auto w-full max-w-[1540px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div className="mb-4 sm:mb-7">
+        <h1 className="text-2xl font-semibold tracking-[-0.025em] text-foreground sm:text-4xl">
           {favoritesOnly ? t("favorites.title") : t("list.title")}
         </h1>
       </div>

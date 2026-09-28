@@ -15,7 +15,7 @@ export default async function DuplicatesPage() {
   const { t } = await getT("inventory");
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <main className="app-page mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <div className="mb-8 max-w-3xl">
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand">
           {t("duplicates.page.eyebrow")}

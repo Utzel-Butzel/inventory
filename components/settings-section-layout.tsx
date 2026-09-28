@@ -17,7 +17,7 @@ export function SettingsSectionLayout({
         permissions={permissions}
       />
       <div className="min-w-0">
-        <div className="mx-auto w-full max-w-[1240px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div className="app-page mx-auto w-full max-w-[1240px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           {children}
         </div>
       </div>

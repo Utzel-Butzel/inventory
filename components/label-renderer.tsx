@@ -18,23 +18,12 @@ import type {
   LabelFontFamily,
   LabelSetupDto,
 } from "@/lib/label-setup-contract";
-import type { ClientResource } from "@/lib/client-types";
-import { resourceShortUrl } from "@/lib/resource-short-link";
+import { labelTargetName, labelTargetUrl, type LabelResource } from "@/lib/label-target";
 import { printableLabelBarcode } from "@/lib/label-barcode";
 
 import styles from "./label-printer.module.css";
 
-export type LabelResource = Pick<
-  ClientResource,
-  | "id"
-  | "name"
-  | "sku"
-  | "barcode"
-  | "location"
-  | "type"
-  | "quantity"
-  | "cover"
->;
+export type { LabelResource } from "@/lib/label-target";
 
 type TextElement = Extract<
   LabelElement,
@@ -224,17 +213,17 @@ export function LabelRenderer({
   className?: string;
 }) {
   const { t } = useT("labels");
-  const shortUrl = resourceShortUrl(origin, resource.id);
+  const shortUrl = labelTargetUrl(origin, resource);
   const qrValue = canEncodeQr(shortUrl) ? shortUrl : null;
   const barcodeCode = printableLabelBarcode(resource);
-  const identifier = resource.sku
+  const identifier = resource.stockUnit?.code ?? (resource.sku
     ? t("renderer.sku", { sku: resource.sku })
-    : resource.id;
+    : resource.id);
   const location =
-    resource.location ||
+    (resource.stockUnit ? resource.stockUnit.location : resource.location) ||
     t("renderer.inventoryCount", {
       type: resource.type,
-      count: resource.quantity,
+      count: resource.stockUnit ? 1 : resource.quantity,
     });
   const dimensionUnit = pixelsPerMm ? "px" : "mm";
   const dimensionScale = pixelsPerMm ?? 1;
@@ -246,7 +235,7 @@ export function LabelRenderer({
         width: `${setup.widthMm * dimensionScale}${dimensionUnit}`,
         height: `${setup.heightMm * dimensionScale}${dimensionUnit}`,
       }}
-      aria-label={t("renderer.printable", { name: resource.name })}
+      aria-label={t("renderer.printable", { name: labelTargetName(resource) })}
     >
       {setup.elements
         .filter((element) => element.visible)

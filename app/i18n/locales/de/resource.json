@@ -235,7 +235,7 @@
     "generateCover": "Titelbild automatisch erstellen",
     "coverDescription": "Aus dem ersten Foto ein quadratisches Titelbild vorbereiten.",
     "safety": "Die automatische Verarbeitung beginnt erst, nachdem die Originaldateien gespeichert wurden. Prüfe und bearbeite das Ergebnis anschließend bei Bedarf.",
-    "rewrite": "Angaben aus Fotos übernehmen",
+    "rewrite": "Angaben übernehmen",
     "research": "Angaben mit KI ergänzen",
     "coverDirection": "Vorgabe für das Titelbild",
     "referenceImage": "Referenzbild",
@@ -384,6 +384,15 @@
     "retry": "Erneut versuchen",
     "partial": "Einige Verbindungsarten sind mit deinem aktuellen Zugriff nicht verfügbar. Der übrige Teil des Diagramms wird weiterhin angezeigt.",
     "openItem": "{{name}} öffnen",
+    "details": {
+      "title": "Eintragsdetails",
+      "connectionTitle": "Verbindungsdetails",
+      "showConnection": "Verbindung zwischen {{first}} und {{second}} anzeigen",
+      "show": "Details zu {{name}} anzeigen",
+      "close": "Detailansicht schließen",
+      "connections": "Verbindungen im Diagramm",
+      "openItem": "Item öffnen"
+    },
     "more_one": "{{count}} weitere Verbindung",
     "more_other": "{{count}} weitere Verbindungen",
     "depth": {

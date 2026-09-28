@@ -59,15 +59,6 @@ const humanize = (value: string) =>
 function DashboardLoading() {
   return (
     <div className="space-y-6">
-      <Card className="grid overflow-hidden sm:grid-cols-2 xl:grid-cols-4 [&>div:not(:last-child)]:border-b [&>div]:border-border sm:[&>div:nth-child(odd)]:border-r sm:[&>div:nth-child(n+3)]:border-b-0 xl:[&>div]:border-b-0 xl:[&>div:not(:last-child)]:border-r">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="p-5">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="mt-5 h-8 w-20" />
-            <Skeleton className="mt-3 h-3 w-32" />
-          </div>
-        ))}
-      </Card>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(290px,0.8fr)]">
         <Card className="p-5">
           <Skeleton className="h-5 w-36" />
@@ -139,27 +130,6 @@ export function DashboardClient() {
     return () => controller.abort();
   }, [loadDashboard]);
 
-  const compactNumber = useMemo(
-    () =>
-      new Intl.NumberFormat(locale, {
-        notation: "compact",
-        maximumFractionDigits: 1,
-      }),
-    [locale],
-  );
-  const money = useMemo(
-    () =>
-      new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      }),
-    [locale],
-  );
-  const percent = useMemo(
-    () => new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }),
-    [locale],
-  );
   const integer = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const hour = new Date().getHours();
   const greeting =
@@ -168,9 +138,6 @@ export function DashboardClient() {
       : hour < 18
         ? t("greeting.afternoon")
         : t("greeting.evening");
-  const availability = stats?.resources
-    ? Math.round((stats.available / stats.resources) * 100)
-    : 0;
   const maxTypeValue = useMemo(
     () => Math.max(1, ...(stats?.byType.map((item) => item.value) ?? [1])),
     [stats],
@@ -210,8 +177,8 @@ export function DashboardClient() {
   };
 
   return (
-    <div className="mx-auto max-w-[1540px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-9">
-      <div className="mb-7">
+    <div className="app-page mx-auto max-w-[1540px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-9">
+      <div className="mb-4 sm:mb-7">
         <h1 className="text-[29px] font-semibold tracking-[-0.025em] text-foreground sm:text-[33px]">
           {greeting}
         </h1>
@@ -237,55 +204,6 @@ export function DashboardClient() {
 
       {!loading && !error && stats ? (
         <div className="space-y-5">
-          <Card className="grid overflow-hidden sm:grid-cols-2 xl:grid-cols-4 [&>div:not(:last-child)]:border-b [&>div]:border-border sm:[&>div:nth-child(odd)]:border-r sm:[&>div:nth-child(n+3)]:border-b-0 xl:[&>div]:border-b-0 xl:[&>div:not(:last-child)]:border-r">
-            {[
-              {
-                id: "items",
-                label: t("metrics.items.label"),
-                value: compactNumber.format(stats.resources),
-                detail: t("metrics.items.detail", {
-                  count: stats.units,
-                  value: compactNumber.format(stats.units),
-                }),
-              },
-              {
-                id: "value",
-                label: t("metrics.value.label"),
-                value: money.format(stats.valueCents / 100),
-                detail: t("metrics.value.detail"),
-              },
-              {
-                id: "available",
-                label: t("metrics.available.label"),
-                value: compactNumber.format(stats.available),
-                detail: stats.resources
-                  ? t("metrics.available.detail", {
-                      value: percent.format(availability / 100),
-                    })
-                  : t("metrics.available.empty"),
-              },
-              {
-                id: "attention",
-                label: t("metrics.attention.label"),
-                value: compactNumber.format(stats.attention),
-                detail: t("metrics.attention.detail", {
-                  count: stats.attention,
-                  value: integer.format(stats.attention),
-                }),
-              },
-            ].map((metric) => (
-              <div key={metric.id} className="p-5">
-                <p className="text-[13px] font-medium text-muted">
-                  {metric.label}
-                </p>
-                <p className="mt-3 truncate text-[28px] font-semibold tracking-[-0.03em] text-foreground">
-                  {metric.value}
-                </p>
-                <p className="mt-1 text-[12px] text-muted">{metric.detail}</p>
-              </div>
-            ))}
-          </Card>
-
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.75fr)]">
             <Card className="overflow-hidden">
               <div className="flex items-center justify-between border-b border-border px-5 py-4 sm:px-6">

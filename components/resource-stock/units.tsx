@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { formatDate, formatMoney, localDateTime } from "@/lib/client-formatters";
 
 import { OrganizationLink as Link } from "@/components/organization-routing";
@@ -27,7 +28,7 @@ import type { StockSectionProps, UnitStatus } from "./types";
 
 import { StockUnitCreateForm, type StockUnitCreateFormProps } from "./unit-create-form";
 
-export type StockUnitsProps = StockUnitCreateFormProps & Pick<StockSectionProps, "locale" | "numberFormat">;
+export type StockUnitsProps = StockUnitCreateFormProps & Pick<StockSectionProps, "locale" | "numberFormat"> & { selectedUnitId?: string };
 
 export function StockUnits({
   stock,
@@ -38,7 +39,13 @@ export function StockUnits({
   availableLocations,
   applicableCustomFields,
   units,
+  selectedUnitId,
 }: StockUnitsProps) {
+  const selectedUnitRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    selectedUnitRef.current?.scrollIntoView({ block: "center" });
+    selectedUnitRef.current?.focus({ preventScroll: true });
+  }, [selectedUnitId]);
   const {
     editingUnitId,
     setEditingUnitId,
@@ -90,7 +97,9 @@ export function StockUnits({
                 {stock.units.map((unit) => {
                   const editing = editingUnitId === unit.id && unitEditForm;
                   return (
-                    <div key={unit.id} className="p-4 sm:p-5">
+                    <div key={unit.id} ref={unit.id === selectedUnitId ? selectedUnitRef : undefined}
+                      tabIndex={unit.id === selectedUnitId ? -1 : undefined}
+                      className={`scroll-mt-24 p-4 sm:p-5 ${unit.id === selectedUnitId ? "bg-brand-soft ring-2 ring-inset ring-brand-border" : ""}`}>
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex min-w-0 items-start gap-3">
                           <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-surface-subtle text-muted">

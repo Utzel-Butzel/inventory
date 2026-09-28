@@ -23,7 +23,7 @@
     "test:recognition": "node --experimental-strip-types --test tests/inventory-recognition-contract.test.mjs tests/inventory-recognition-migration.test.mjs",
     "test:covers": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/cover-generation.test.mjs",
     "test:locations": "node --experimental-strip-types --test tests/spatial-containment.test.mjs tests/client-media-location.test.mjs",
-    "test:labels": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/resource-short-link.test.mjs tests/label-setup-contract.test.mjs",
+    "test:labels": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/resource-short-link.test.mjs tests/label-setup-contract.test.mjs tests/label-barcode.test.mjs tests/label-target.test.mjs",
     "test:slugs": "node --experimental-strip-types --test tests/resource-slug-contract.test.mjs",
     "test:favorites": "node --test tests/resource-favorites-contract.test.mjs",
     "test:contacts": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/contact-contract.test.mjs tests/contact-comments-contract.test.mjs",

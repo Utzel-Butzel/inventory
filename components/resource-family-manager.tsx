@@ -710,7 +710,7 @@ function FamilyManagerShell({
 }) {
   if (embedded) return <div className="min-w-0">{children}</div>;
   return (
-    <section className="mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
+    <section className="app-page mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
       <Card className="overflow-hidden shadow-[var(--shadow-sm)]">
         {children}
       </Card>

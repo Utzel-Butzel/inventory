@@ -146,6 +146,6 @@ test("bulk, merge, recognition, and dashboard reads use the active organization"
     /listRulesForRole\([\s\S]*authorization\.identity\.role,[\s\S]*authorization\.identity\.organizationId,[\s\S]*\)/,
   );
   for (const page of [details, stock, edit]) {
-    assert.match(page, /getResourceRecord\(id, identity\.organizationId\)/);
+    assert.match(page, /getResourceRecordByReference\(\s*id,\s*identity\.organizationId,?\s*\)/);
   }
 });

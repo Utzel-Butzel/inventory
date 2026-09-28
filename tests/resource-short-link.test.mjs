@@ -8,6 +8,7 @@ import {
   resourceShortCode,
   resourceShortPath,
   resourceShortUrl,
+  resourcePathFromShortLink,
 } from "../lib/resource-short-link.ts";
 
 const resourceId = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
@@ -60,5 +61,17 @@ test("keeps short-link redirects on the current public origin", async () => {
   );
 
   assert.match(route, /Location: redirectLocation/);
-  assert.doesNotMatch(route, /request\.url/);
+  assert.doesNotMatch(route, /new URL\((?:destination|redirectLocation)/);
+  assert.match(route, /resourcePathFromShortLink\(code, unitCode\)/);
+});
+
+test("resolves unit labels to a specific stock item and rejects malformed links", () => {
+  const unitId = "4f2504e0-4f89-41d3-9a0c-0305e82c3302";
+  const code = resourceShortCode(resourceId);
+  assert.equal(resourcePathFromShortLink(code), `/inventory/${resourceId}`);
+  assert.equal(resourcePathFromShortLink(code, resourceShortCode(unitId)), `/inventory/${resourceId}/stock?unit=${unitId}`);
+  for (const invalid of ["", "bad", "https://other.example", "../login"]) {
+    assert.equal(resourcePathFromShortLink(code, invalid), null);
+    assert.equal(resourcePathFromShortLink(invalid), null);
+  }
 });
