@@ -344,3 +344,13 @@ test("greenscreen output is capped without enlargement and keeps alpha", async (
   assert.equal(info.height, 2);
   assert.equal(data[3], 0);
 });
+
+test("GPT Image 2.5 aliases and snapshots support 2K square output", () => {
+  for (const model of ["gpt-image-2.5-sunburst", "gpt-image-2.5-sunburst-2026-09-08", "gpt-image-2.5-flare"]) {
+    for (const maximumImageSize of [1024, 2048, 4096]) {
+      const result = resolveImageGenerationSize({imageModel: {provider: "openai", model}, maximumImageSize});
+      assert.equal(result.outputImageSize, Math.min(maximumImageSize, 2048));
+      assert.equal(result.providerImageSize, maximumImageSize === 1024 ? "1024x1024" : "2048x2048");
+    }
+  }
+});

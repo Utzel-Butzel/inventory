@@ -47,7 +47,10 @@ export function resolveImageGenerationSize(options: {
 
   if (provider === "openai") {
     const outputImageSize =
-      isModelOrSnapshot(model, "gpt-image-2") && processingMaximum >= 2048
+      (isModelOrSnapshot(model, "gpt-image-2") ||
+        isModelOrSnapshot(model, "gpt-image-2.5-sunburst") ||
+        isModelOrSnapshot(model, "gpt-image-2.5-flare")) &&
+      processingMaximum >= 2048
         ? 2048
         : 1024;
     return {

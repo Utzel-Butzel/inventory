@@ -35,6 +35,8 @@ export type ImageGenerationModelCatalog = {
 };
 
 const friendlyModelLabels: Record<string, string> = {
+  "openai:gpt-image-2.5-sunburst": "GPT Image 2.5 Sunburst",
+  "openai:gpt-image-2.5-flare": "GPT Image 2.5 Flare",
   "openai:gpt-image-2": "GPT Image 2",
   "openai:gpt-image-1.5": "GPT Image 1.5",
   "openai:gpt-image-1": "GPT Image 1",
@@ -89,7 +91,7 @@ const legacyModel = (): ImageGenerationModel | null => {
     provider === "google"
       ? process.env.GOOGLE_IMAGE_EDIT_MODEL?.trim() ||
         "gemini-2.5-flash-image"
-      : process.env.OPENAI_IMAGE_EDIT_MODEL?.trim() || "gpt-image-1";
+      : process.env.OPENAI_IMAGE_EDIT_MODEL?.trim() || "gpt-image-2.5-sunburst";
   if (model.length > 233) return null;
   return modelOption(provider, model);
 };
