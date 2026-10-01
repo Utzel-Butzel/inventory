@@ -87,6 +87,7 @@ private struct ResourceAIAnalyzeView: View {
     let onUpdated: (InventoryResource) -> Void
 
     @State private var overwrite = true
+    @State private var defaultsLoaded = false
     @State private var running = false
     @State private var errorMessage: String?
     @State private var operationID = UUID()
@@ -98,7 +99,7 @@ private struct ResourceAIAnalyzeView: View {
                     "Gespeicherte Bilder werden analysiert und Inventardaten daraus abgeleitet.",
                     systemImage: "photo.on.rectangle"
                 )
-                Toggle("Vorhandene Felder überschreiben", isOn: $overwrite)
+                Toggle("Vorhandene Felder überschreiben", isOn: $overwrite).disabled(!defaultsLoaded)
             } footer: {
                 Text(
                     overwrite
@@ -107,7 +108,13 @@ private struct ResourceAIAnalyzeView: View {
                 )
             }
 
-            actionSection(title: "Bildanalyse starten") { run() }
+            actionSection(title: "Bildanalyse starten") { run() }.disabled(!defaultsLoaded)
+        }
+        .task {
+            do {
+                overwrite = try await client.inventoryAISettings().inventorySettings.overwrite
+                defaultsLoaded = true
+            } catch { errorMessage = error.localizedDescription }
         }
         .navigationTitle("Bildanalyse")
         .navigationBarTitleDisplayMode(.inline)

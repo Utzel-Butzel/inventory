@@ -75,11 +75,51 @@ const renamed={views:[{id,name:"Renamed API QA",config:{...config,query:"new"}}]
 saved=await api(a,"/api/v1/user/list-views",f.organizations[0],{scope:"qa.integration",revision:saved.body.revision,collection:renamed});assert.equal(saved.status,200);
 assert.deepEqual((await api(a,path)).body.collection,renamed);
 saved=await api(a,"/api/v1/user/list-views",f.organizations[0],{scope:"qa.integration",revision:saved.body.revision,collection:{views:[],defaultId:null}});assert.equal(saved.status,200);
+// Organization sharing, atomic visibility changes, concurrency and permissions.
+const empty={views:[],defaultId:null};
+const sharedId=randomUUID();
+const sharedCollection={views:[{id:sharedId,name:"Shared QA",config}],defaultId:sharedId};
+saved=await api(a,"/api/v1/user/list-views",organizations[0],{scope:"qa.integration",revision:saved.body.revision,collection:empty,organizationRevision:0,organizationCollection:sharedCollection});
+assert.equal(saved.status,200);
+let other=await api(b,path);
+assert.deepEqual(other.body.organizationCollection,sharedCollection);
+assert.deepEqual(other.body.collection,empty);
+assert.equal(other.body.canManageOrganizationViews,true);
+assert.deepEqual((await api(b,path,organizations[1])).body.organizationCollection,empty);
+assert.deepEqual((await api(b,"/api/v1/user/list-views?scope=qa.other")).body.organizationCollection,empty);
+const editedShared={...sharedCollection,views:[{...sharedCollection.views[0],name:"Shared edited by B"}]};
+const updatedByB=await api(b,"/api/v1/user/list-views",organizations[0],{scope:"qa.integration",revision:other.body.revision,collection:empty,organizationRevision:other.body.organizationRevision,organizationCollection:editedShared});
+assert.equal(updatedByB.status,200);
+// A stale visibility move must roll back its personal write too.
+const movePayload={scope:"qa.integration",revision:saved.body.revision,collection:sharedCollection,organizationRevision:saved.body.organizationRevision,organizationCollection:empty};
+assert.equal((await api(a,"/api/v1/user/list-views",organizations[0],movePayload)).status,409);
+const afterConflict=await api(a,path);
+assert.deepEqual(afterConflict.body.collection,empty);
+assert.equal(afterConflict.body.revision,saved.body.revision);
+assert.deepEqual(afterConflict.body.organizationCollection,editedShared);
+saved=await api(a,"/api/v1/user/list-views",organizations[0],{...movePayload,organizationRevision:afterConflict.body.organizationRevision});
+assert.equal(saved.status,200);
+other=await api(b,path);
+assert.deepEqual(other.body.organizationCollection,empty);
+assert.deepEqual(other.body.collection,empty);
+assert.deepEqual((await api(a,path)).body.collection,sharedCollection);
+// Publish again, preserving the existing personal copy.
+saved=await api(a,"/api/v1/user/list-views",organizations[0],{scope:"qa.integration",revision:saved.body.revision,collection:sharedCollection,organizationRevision:saved.body.organizationRevision,organizationCollection:editedShared});
+assert.equal(saved.status,200);
+await sql.unsafe("UPDATE organization_memberships SET role_key='viewer' WHERE organization_id=$1 AND user_id=$2",[organizations[0],users[1]]);
+other=await api(b,path);
+assert.equal(other.body.canManageOrganizationViews,false);
+assert.equal(other.body.canSave,true);
+assert.deepEqual(other.body.organizationCollection,editedShared);
+assert.equal((await api(b,"/api/v1/user/list-views",organizations[0],{scope:"qa.integration",revision:other.body.revision,collection:empty,organizationRevision:other.body.organizationRevision,organizationCollection:empty})).status,403);
+// A reader may save a personal copy but cannot alter the shared source.
+assert.equal((await api(b,"/api/v1/user/list-views",organizations[0],{scope:"qa.integration",revision:other.body.revision,collection:editedShared})).status,200);
+assert.deepEqual((await api(a,path)).body.organizationCollection,editedShared);
 await sql.unsafe("UPDATE organizations SET is_read_only=true WHERE id=$1",[organizations[1]]);
 const readonly=await api(a,path,organizations[1]);
 assert.equal(readonly.body.canSave,false);
 assert.equal((await api(a,"/api/v1/user/list-views",organizations[1],{scope:"qa.integration",revision:0,collection})).status,403);
-console.log("PASS: session authentication; saved-view CRUD and defaults; user and organization isolation; concurrent-save conflict; invalid input; global sorting across two pages; combined filters; unknown sort fallback.");
+console.log("PASS: session authentication; saved-view CRUD and defaults; user and organization isolation; concurrent-save conflict and atomic rollback; shared views across users; reader permissions; visibility changes; invalid input; global sorting across two pages; combined filters; unknown sort fallback.");
 
 } finally {
   try {

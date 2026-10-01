@@ -1,4 +1,5 @@
-import { resolveAiPrompt } from "@/lib/ai-prompt-store";
+import { inventoryAiEnvironment } from "@/lib/inventory-ai-settings";
+import { getAiPromptSettings, resolveAiPrompt } from "@/lib/ai-prompt-store";
 import { AiPromptSelectionError } from "@/lib/ai-prompt-templates";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
@@ -65,7 +66,7 @@ export async function POST(request: Request, context: Context) {
       { status: 422 },
     );
   }
-  const { overwrite } = parsed.data;
+
 
   let operationId: string | null = null;
   if (idempotency.key) {
@@ -137,16 +138,24 @@ export async function POST(request: Request, context: Context) {
   if (!resource) return finish({ error: "Not found" }, 404);
 
   let resolvedPrompt: string | undefined;
+  let inventorySettings;
   try {
-    resolvedPrompt = await resolveAiPrompt(authorization.identity.organizationId, "analysis", parsed.data, resource);
+    const settings = await getAiPromptSettings(authorization.identity.organizationId);
+    inventorySettings = settings.inventorySettings;
+    resolvedPrompt = await resolveAiPrompt(authorization.identity.organizationId, "analysis", parsed.data, resource, settings);
   } catch (error) {
     if (error instanceof AiPromptSelectionError) return finish({ error: error.message }, 422);
     return finishTransient({ error: "Prompt templates are temporarily unavailable." }, 503);
   }
 
+  // Keep the normalized legacy request hash stable, but use the organization
+  // default when the caller did not explicitly choose an overwrite policy.
+  const overwrite = body && typeof body === "object" && "overwrite" in body && body.overwrite !== undefined
+    ? parsed.data.overwrite
+    : inventorySettings.overwrite;
   const imageMedia = resource.media
     .filter((item) => item.kind === "image")
-    .slice(0, 3);
+    .slice(0, inventorySettings.maximumImages);
   if (!imageMedia.length) {
     return finish(
       { error: "Upload at least one image before running AI analysis." },
@@ -208,11 +217,11 @@ export async function POST(request: Request, context: Context) {
   try {
     const { result, model } = await trackAiUsage({
       organizationId: authorization.identity.organizationId,
-      estimate: aiUsageEstimate({ action: "inventory_analysis" }),
+      estimate: aiUsageEstimate({ action: "inventory_analysis", model: inventorySettings.analysisModel, environment: inventoryAiEnvironment(inventorySettings) }),
       actor: authorization.identity,
       resourceId: id,
       metadata: { imageCount: dataUrls.length },
-      run: () => analyzeInventoryImages(dataUrls, resolvedPrompt),
+      run: () => analyzeInventoryImages(dataUrls, resolvedPrompt, inventorySettings),
     });
     const generatedFields: string[] = [];
     const values: Partial<NewResource> = {

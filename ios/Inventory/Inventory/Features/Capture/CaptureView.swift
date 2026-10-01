@@ -37,6 +37,9 @@ struct CaptureView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.black)
             .toolbar(.hidden, for: .navigationBar)
+            .task(id: state.organizationContextIdentifier) {
+                await model.loadAIDefaults(from: state)
+            }
             .onAppear {
                 camera.scanningEnabled = false
                 camera.onCode = { code in
@@ -388,7 +391,7 @@ struct CaptureView: View {
             .background(InventoryTheme.lime, in: Capsule())
         }
         .buttonStyle(.plain)
-        .disabled(!model.canSubmit || model.processingCount > 0)
+        .disabled(!model.canSubmit || model.processingCount > 0 || (state.canUseAI && !model.aiDefaultsLoaded))
         .opacity(model.canSubmit && model.processingCount == 0 ? 1 : 0.55)
         .accessibilityHint("Legt den Gegenstand an und startet den Upload")
     }
@@ -510,7 +513,18 @@ struct CaptureView: View {
 
             if state.canUseAI {
                 VStack(alignment: .leading, spacing: 3) {
+                    if !model.aiDefaultsLoaded {
+                        Button("KI-Vorgaben erneut laden") { Task { await model.loadAIDefaults(from: state) } }
+                    }
                     Toggle("Fotos analysieren", isOn: $model.autoAnalyze)
+                    if model.autoAnalyze {
+                        Toggle("Vorhandene Texte überschreiben", isOn: $model.analysisOverwrite)
+                    }
+                    if state.canResearchInventory {
+                        Toggle("Nach dem Anlegen recherchieren", isOn: $model.autoResearch)
+                        Text("Recherche ergänzt fehlende Angaben aus dem Web und verursacht zusätzliche KI-Kosten.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     if let estimate = state.aiCostEstimate(for: "inventoryAnalysis") {
                         Label(
                             "Geschätzte API-Kosten: \(estimate.formattedUSD)",
@@ -568,7 +582,7 @@ struct CaptureView: View {
     }
 
     private func submitCapture() {
-        guard model.canSubmit, model.processingCount == 0 else { return }
+        guard (!state.canUseAI || model.aiDefaultsLoaded), model.canSubmit, model.processingCount == 0 else { return }
         let submission = model.makeSubmission(
             imageModelID: state.selectedImageModelID,
             maximumAIGeneratedImagePixelSize: state.maximumAIGeneratedImagePixelSize,

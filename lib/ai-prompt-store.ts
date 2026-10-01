@@ -1,4 +1,5 @@
 import "server-only";
+import { defaultInventoryAiSettings, type InventoryAiSettings } from "@/lib/inventory-ai-settings";
 import { and, eq } from "drizzle-orm";
 import { aiPromptSettings, resourceTypes } from "@/db/schema";
 import { db } from "@/lib/db";
@@ -19,6 +20,7 @@ export async function getAiPromptSettings(organizationId: string) {
     .limit(1);
   return {
     collection: row?.collection ?? defaultAiPromptCollection(),
+    inventorySettings: row?.inventorySettings ?? defaultInventoryAiSettings(process.env),
     revision: row?.revision ?? 0,
   };
 }
@@ -26,8 +28,9 @@ export async function saveAiPromptSettings(
   organizationId: string,
   collection: AiPromptCollection,
   revision: number,
+  inventorySettings?: InventoryAiSettings,
 ) {
-  const values = { collection, revision: revision + 1, updatedAt: new Date() };
+  const values = { collection, ...(inventorySettings ? { inventorySettings } : {}), revision: revision + 1, updatedAt: new Date() };
   const rows =
     revision === 0
       ? await db
@@ -46,7 +49,7 @@ export async function saveAiPromptSettings(
           )
           .returning();
   return rows[0]
-    ? { collection: rows[0].collection, revision: rows[0].revision }
+    ? { collection: rows[0].collection, inventorySettings: rows[0].inventorySettings ?? defaultInventoryAiSettings(process.env), revision: rows[0].revision }
     : null;
 }
 export async function resolveAiPrompt(
@@ -63,8 +66,9 @@ export async function resolveAiPrompt(
     barcode?: string | null;
     serialNumber?: string | null;
   },
+  settings?: Awaited<ReturnType<typeof getAiPromptSettings>>,
 ) {
-  const { collection } = await getAiPromptSettings(organizationId);
+  const { collection, inventorySettings } = settings ?? await getAiPromptSettings(organizationId);
   return renderAiPrompt(selectAiPrompt(collection, kind, selection), {
     name: resource.name.trim() || "inventory item",
     description: resource.description ?? "",
@@ -79,7 +83,7 @@ export async function resolveAiPrompt(
     sku: resource.sku ?? "",
     barcode: resource.barcode ?? "",
     serialNumber: resource.serialNumber ?? "",
-    language: process.env.AI_OUTPUT_LANGUAGE?.trim() || "English",
+    language: inventorySettings.language,
     allowedTypes: resourceTypes.join(", "),
   });
 }

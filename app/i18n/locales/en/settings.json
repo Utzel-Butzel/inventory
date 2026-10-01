@@ -1364,8 +1364,8 @@
     }
   },
   "prompts": {
-    "title": "AI · Default prompts",
-    "description": "Manage named prompt templates for this organization. Set a default for each category or select another template when creating. Edits and resets take effect only after saving.",
+    "title": "AI · Settings",
+    "description": "Manage models, language, automatic analysis and research, and text templates for this organization. Automatic steps can be changed for each new item. Edits and resets take effect only after saving.",
     "category": "Category",
     "templates": "Prompt templates",
     "name": "Template name",
@@ -1420,5 +1420,17 @@
       "language": "Configured AI output language",
       "allowedTypes": "Allowed AI classification types"
     }
+  },
+  "inventoryAi": {
+    "title": "AI defaults for new items",
+    "help": "These defaults apply to the entire organization in the app and web app. Edit the text templates below.",
+    "analysisModel": "Photo analysis model",
+    "researchModel": "Web research model",
+    "language": "Output language",
+    "maximumImages": "Maximum photos analyzed",
+    "autoAnalyze": "Analyze photos by default",
+    "autoResearch": "Research new items by default",
+    "overwrite": "Overwrite existing text during analysis by default",
+    "modelHelp": "Enter an OpenAI-compatible model ID available on your server. The research model must support web search and structured output. Automatic research incurs additional AI costs."
   }
 }

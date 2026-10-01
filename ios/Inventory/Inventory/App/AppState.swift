@@ -19,6 +19,7 @@ final class AppState: ObservableObject {
     @Published private(set) var maximumUploadImagePixelSize: Int
     @Published private(set) var maximumAIGeneratedImagePixelSize: Int
     @Published private(set) var analysisPrompt: String?
+    @Published private(set) var inventoryAISettings: InventoryAISettingsResponse?
     @Published private(set) var coverPrompt: String?
     @Published private(set) var transparentCoverPrompt: String?
     @Published var selectedTab: RootTab = .inventory
@@ -86,6 +87,7 @@ final class AppState: ObservableObject {
             : grantedScopes.contains("ai")
     }
     var canAnalyzeInventory: Bool { allows("ai.analyze", legacyScope: "ai") }
+    var canManageAISettings: Bool { allows("roles.manage", legacyScope: "admin") }
     var canResearchInventory: Bool { allows("ai.research", legacyScope: "ai") }
     var canGenerateInventoryImages: Bool { allows("ai.images", legacyScope: "ai") }
     var canTranslateInventory: Bool { allows("ai.translate", legacyScope: "ai") }
@@ -858,6 +860,7 @@ final class AppState: ObservableObject {
         defaultImageModelID = nil
         aiCostEstimates = [:]
         selectedImageModelID = storedImageModelID(for: activeClient)
+        inventoryAISettings = nil
         loadPromptPreferences(for: activeClient)
         Task { [weak self] in
             await self?.loadImageModels(
@@ -865,6 +868,42 @@ final class AppState: ObservableObject {
                 activeClient: activeClient
             )
         }
+    }
+
+    func refreshInventoryAISettings() async throws -> InventoryAISettingsResponse {
+        guard let activeClient = client else { throw URLError(.userAuthenticationRequired) }
+        let result = try await activeClient.inventoryAISettings()
+        guard client === activeClient else { throw CancellationError() }
+        inventoryAISettings = result
+        if let data = try? JSONEncoder().encode(result) {
+            var cached = defaults.dictionary(forKey: "inventory.ai.sharedSettings") ?? [:]
+            cached[activeClient.contextIdentifier] = data
+            defaults.set(cached, forKey: "inventory.ai.sharedSettings")
+        }
+        if let estimates = result.costEstimates {
+            for key in ["inventoryAnalysis", "inventoryResearch"] {
+                aiCostEstimates[key] = estimates[key]
+            }
+        }
+        return result
+    }
+
+    func saveInventoryAISettings(_ settings: InventoryAISettingsResponse) async throws -> InventoryAISettingsResponse {
+        guard let activeClient = client else { throw URLError(.userAuthenticationRequired) }
+        let result = try await activeClient.saveInventoryAISettings(settings)
+        guard client === activeClient else { throw CancellationError() }
+        inventoryAISettings = result
+        if let data = try? JSONEncoder().encode(result) {
+            var cached = defaults.dictionary(forKey: "inventory.ai.sharedSettings") ?? [:]
+            cached[activeClient.contextIdentifier] = data
+            defaults.set(cached, forKey: "inventory.ai.sharedSettings")
+        }
+        if let estimates = result.costEstimates {
+            for key in ["inventoryAnalysis", "inventoryResearch"] {
+                aiCostEstimates[key] = estimates[key]
+            }
+        }
+        return result
     }
 
     private func loadImageModels(
@@ -912,6 +951,10 @@ final class AppState: ObservableObject {
     }
 
     private func loadPromptPreferences(for client: APIClient) {
+        if let data = defaults.dictionary(forKey: "inventory.ai.sharedSettings")?[client.contextIdentifier] as? Data {
+            inventoryAISettings = try? JSONDecoder().decode(InventoryAISettingsResponse.self, from: data)
+        }
+
         analysisPrompt = AIPromptPreferences.analysisPrompt(
             for: client.contextIdentifier,
             in: defaults
@@ -932,6 +975,7 @@ final class AppState: ObservableObject {
         selectedImageModelID = nil
         aiCostEstimates = [:]
         analysisPrompt = nil
+        inventoryAISettings = nil
         coverPrompt = nil
         transparentCoverPrompt = nil
     }

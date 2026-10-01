@@ -339,6 +339,17 @@ struct SettingsView: View {
                 }
             }
 
+            if state.canUseAI || state.canManageAISettings {
+                Section("KI-Vorgaben der Organisation") {
+                    NavigationLink {
+                        InventoryAISettingsView()
+                    } label: {
+                        settingsRow(title: "Analyse und Recherche", subtitle: "Modelle, Sprache, Automatik und Textvorlagen", systemImage: "sparkles")
+                    }
+                }
+
+            }
+
             if let webSettingsURL, let apiDocumentationURL {
                 Section("Web") {
                     if state.canManageWorkflows, let client = state.client, let organization = state.activeOrganization {

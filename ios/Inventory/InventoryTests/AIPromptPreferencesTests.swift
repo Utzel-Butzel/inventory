@@ -3,6 +3,26 @@ import XCTest
 @testable import Inventory
 
 final class AIPromptPreferencesTests: XCTestCase {
+    @MainActor
+    func testSharedDefaultsAndExplicitCaptureChoices() {
+        let model = CaptureViewModel()
+        let settings = InventoryAISettings(analysisModel: "vision", researchModel: "research", language: "German", maximumImages: 2, autoAnalyze: false, autoResearch: true, overwrite: false)
+        model.applyAIDefaults(settings, canAnalyze: true, canResearch: true)
+        XCTAssertFalse(model.autoAnalyze)
+        XCTAssertTrue(model.autoResearch)
+        XCTAssertFalse(model.analysisOverwrite)
+        let submission = model.makeSubmission()
+        XCTAssertTrue(submission.research)
+        XCTAssertFalse(submission.analysisOverwrite)
+        model.autoResearch = false
+        model.applyAIDefaults(settings, canAnalyze: true, canResearch: true)
+        XCTAssertFalse(model.autoResearch, "Explicit choice wins over a later defaults response")
+        let restricted = CaptureViewModel()
+        restricted.applyAIDefaults(settings, canAnalyze: false, canResearch: false)
+        XCTAssertFalse(restricted.autoResearch)
+        XCTAssertFalse(restricted.autoAnalyze)
+    }
+
     func testPromptsRoundTripWithinTheirAccountContext() throws {
         let (suiteName, defaults) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }

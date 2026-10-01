@@ -1,3 +1,4 @@
+import type { InventoryAiSettings } from "@/lib/inventory-ai-settings";
 import { sql } from "drizzle-orm";
 import type { AiPromptCollection } from "@/lib/ai-prompt-templates";
 import type { ChainAction } from "@/lib/action-chain-contract";
@@ -194,6 +195,7 @@ export const users = pgTable(
 );
 
 export const aiPromptSettings = pgTable("ai_prompt_settings", {
+  inventorySettings: jsonb("inventory_settings").$type<InventoryAiSettings>(),
   organizationId: organizationIdColumn().primaryKey(),
   collection: jsonb("collection").$type<AiPromptCollection>().notNull(),
   revision: integer("revision").notNull().default(1),
@@ -210,6 +212,17 @@ export const userListViews = pgTable("user_list_views", {
 }, (table) => [
   primaryKey({ columns: [table.organizationId, table.userId, table.scope] }),
   check("user_list_views_revision_check", sql`${table.revision} > 0`),
+]);
+
+export const organizationListViews = pgTable("organization_list_views", {
+  organizationId: organizationIdColumn(),
+  scope: varchar("scope", { length: 100 }).notNull(),
+  collection: jsonb("collection").$type<ListViewCollection>().notNull().default({ views: [], defaultId: null }),
+  revision: integer("revision").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.organizationId, table.scope] }),
+  check("organization_list_views_revision_check", sql`${table.revision} > 0`),
 ]);
 
 export const organizationMemberships = pgTable(

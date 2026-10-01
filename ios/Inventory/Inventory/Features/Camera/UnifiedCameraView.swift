@@ -211,7 +211,10 @@ struct UnifiedCameraView: View {
                 || camera.isRecordingVideo
                 || documentRecognitionRunning
         )
-        .onAppear {
+        .task(id: state.organizationContextIdentifier) {
+                await captureModel.loadAIDefaults(from: state)
+            }
+            .onAppear {
             if !availableCameraModes.contains(mode) {
                 mode = .scan
             }
@@ -660,7 +663,7 @@ struct UnifiedCameraView: View {
                     }
             }
             .buttonStyle(.plain)
-            .disabled(!captureModel.canSubmit || captureModel.processingCount > 0)
+            .disabled(!captureModel.canSubmit || captureModel.processingCount > 0 || (state.canUseAI && !captureModel.aiDefaultsLoaded))
             .opacity(captureModel.processingCount == 0 ? 1 : 0.55)
             .accessibilityLabel("Inventar hochladen")
             .accessibilityHint(
@@ -1683,7 +1686,7 @@ struct UnifiedCameraView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(InventoryTheme.ink)
-            .disabled(!captureModel.canSubmit || captureModel.processingCount > 0)
+            .disabled(!captureModel.canSubmit || captureModel.processingCount > 0 || (state.canUseAI && !captureModel.aiDefaultsLoaded))
 
             Text(
                 captureModel.mediaCount == 0
@@ -1858,7 +1861,18 @@ struct UnifiedCameraView: View {
 
             if state.canUseAI {
                 VStack(alignment: .leading, spacing: 3) {
+                    if !captureModel.aiDefaultsLoaded {
+                        Button("KI-Vorgaben erneut laden") { Task { await captureModel.loadAIDefaults(from: state) } }
+                    }
                     Toggle("Fotos analysieren", isOn: $captureModel.autoAnalyze)
+                    if captureModel.autoAnalyze {
+                        Toggle("Vorhandene Texte überschreiben", isOn: $captureModel.analysisOverwrite)
+                    }
+                    if state.canResearchInventory {
+                        Toggle("Nach dem Anlegen recherchieren", isOn: $captureModel.autoResearch)
+                        Text("Recherche ergänzt fehlende Angaben aus dem Web und verursacht zusätzliche KI-Kosten.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     if let estimate = state.aiCostEstimate(for: "inventoryAnalysis") {
                         Label(
                             "Geschätzte API-Kosten: \(estimate.formattedUSD)",
@@ -2295,7 +2309,7 @@ struct UnifiedCameraView: View {
     }
 
     private func submitCapture() {
-        guard state.canCaptureInventory,
+        guard (!state.canUseAI || captureModel.aiDefaultsLoaded), state.canCaptureInventory,
               captureModel.canSubmit,
               captureModel.processingCount == 0 else { return }
         let submission = captureModel.makeSubmission(

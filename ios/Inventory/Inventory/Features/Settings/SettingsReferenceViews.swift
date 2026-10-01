@@ -685,3 +685,92 @@ private func settingsColor(_ value: String) -> Color {
         blue: Double(number & 0xff) / 255
     )
 }
+
+
+struct InventoryAISettingsView: View {
+    @EnvironmentObject private var state: AppState
+    @State private var draft: InventoryAISettingsResponse?
+    @State private var errorMessage: String?
+    @State private var saving = false
+    @State private var notice: String?
+
+    var body: some View {
+        Form {
+            if let errorMessage {
+                Section {
+                    Text(errorMessage).foregroundStyle(.red)
+                    Button("Neu laden") { Task { await load() } }
+                }
+            }
+            if let notice { Text(notice).foregroundStyle(.secondary) }
+            if let value = draft {
+                Section {
+                    TextField("Analysemodell", text: setting(\.analysisModel, fallback: value.inventorySettings.analysisModel))
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("Recherchemodell", text: setting(\.researchModel, fallback: value.inventorySettings.researchModel))
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField("Ausgabesprache", text: setting(\.language, fallback: value.inventorySettings.language))
+                    Stepper("Maximal \(value.inventorySettings.maximumImages) Fotos", value: setting(\.maximumImages, fallback: value.inventorySettings.maximumImages), in: 1...3)
+                    Toggle("Fotos standardmäßig analysieren", isOn: setting(\.autoAnalyze, fallback: value.inventorySettings.autoAnalyze))
+                    Toggle("Standardmäßig recherchieren", isOn: setting(\.autoResearch, fallback: value.inventorySettings.autoResearch))
+                    Toggle("Vorhandene Texte überschreiben", isOn: setting(\.overwrite, fallback: value.inventorySettings.overwrite))
+                } header: { Text("Analyse und Recherche") } footer: {
+                    Text("Gilt für App und Webapp in dieser Organisation. Recherche läuft nach der Fotoanalyse und verursacht zusätzliche KI-Kosten. Modell-IDs müssen auf dem Server verfügbar sein; das Recherchemodell muss Websuche und strukturierte Antworten unterstützen.")
+                }
+                .disabled(saving || !state.canManageAISettings)
+                ForEach(["analysis", "research"], id: \.self) { kind in
+                    Section(kind == "analysis" ? "Analyse-Textvorlage" : "Recherche-Textvorlage") {
+                        Picker("Standardvorlage", selection: Binding(get: { draft?.collection.defaults[kind] ?? "" }, set: { draft?.collection.defaults[kind] = $0 })) {
+                            ForEach(value.collection.templates.filter { $0.kind == kind }) { template in
+                                Text(template.name).tag(template.id)
+                            }
+                        }
+                        if let id = value.collection.defaults[kind], let index = value.collection.templates.firstIndex(where: { $0.id == id }) {
+                            TextEditor(text: Binding(get: { draft?.collection.templates[index].prompt ?? "" }, set: { draft?.collection.templates[index].prompt = $0 }))
+                                .frame(minHeight: 240)
+                            Text("Platzhalter: {{language}}, {{allowedTypes}}, {{name}}, {{description}}, {{type}}, {{tags}}, {{categories}}, {{sku}}, {{barcode}}, {{serialNumber}}. Eigene lokale App-Prompts haben Vorrang.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }.disabled(saving || !state.canManageAISettings)
+                }
+                if state.canManageAISettings {
+                    Button(saving ? "Wird gespeichert …" : "Für die Organisation speichern") {
+                        Task {
+                            guard let draft else { return }
+                            saving = true
+                            errorMessage = nil
+                            do {
+                                self.draft = try await state.saveInventoryAISettings(draft)
+                                notice = "KI-Vorgaben gespeichert."
+                            } catch { errorMessage = error.localizedDescription }
+                            saving = false
+                        }
+                    }.disabled(saving || !valid(value))
+                } else {
+                    Text("Zum Ändern ist die Berechtigung zur Rollenverwaltung erforderlich.").font(.caption)
+                }
+            } else if errorMessage == nil {
+                ProgressView("KI-Vorgaben laden …")
+            }
+        }
+        .navigationTitle("KI-Vorgaben")
+        .task(id: state.organizationContextIdentifier) { draft = nil; await load() }
+    }
+
+    private func setting<T>(_ key: WritableKeyPath<InventoryAISettings, T>, fallback: T) -> Binding<T> {
+        Binding(get: { draft?.inventorySettings[keyPath: key] ?? fallback }, set: { draft?.inventorySettings[keyPath: key] = $0 })
+    }
+
+    private func valid(_ value: InventoryAISettingsResponse) -> Bool {
+        let settings = value.inventorySettings
+        return [settings.analysisModel, settings.researchModel, settings.language].allSatisfy { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            && settings.analysisModel.utf16.count <= 200 && settings.researchModel.utf16.count <= 200 && settings.language.utf16.count <= 100
+            && value.collection.templates.allSatisfy { !$0.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.prompt.utf16.count <= 5_000 }
+    }
+
+    private func load() async {
+        errorMessage = nil
+        do { draft = try await state.refreshInventoryAISettings() }
+        catch { errorMessage = error.localizedDescription }
+    }
+}

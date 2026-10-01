@@ -519,6 +519,7 @@ export function ResourceEditor({
   const [promptSelections, setPromptSelections] = useState<Partial<Record<AiPromptKind, AiPromptSelection>>>({});
   const promptPicker = (kind: AiPromptKind) => <AiPromptPicker kind={kind} library={promptLibrary} value={promptSelections[kind]} disabled={Boolean(aiAction)} onChange={(value) => setPromptSelections((current) => ({ ...current, [kind]: value }))} />;
   const [autoAnalyze, setAutoAnalyze] = useState(canAnalyzeAi);
+  const [autoResearch, setAutoResearch] = useState(false);
   const [autoCover, setAutoCover] = useState(false);
   const [coverSourceMediaId, setCoverSourceMediaId] = useState<string | null>(
     null,
@@ -540,7 +541,8 @@ export function ResourceEditor({
     1,
   );
   const createResourceCostEstimate = combinedAiCost([
-    autoAnalyze ? aiCostEstimates?.inventoryAnalysis : undefined,
+    autoAnalyze ? promptLibrary.costEstimates?.inventoryAnalysis : undefined,
+    autoResearch ? promptLibrary.costEstimates?.inventoryResearch : undefined,
     autoCover ? coverCostEstimate : undefined,
   ]);
   const [error, setError] = useState<string | null>(null);
@@ -549,9 +551,25 @@ export function ResourceEditor({
   const objectCaptureDefaultsApplied = useRef(false);
   const aiPreferencesTouched = useRef({
     analyze: false,
+    research: false,
+    overwrite: false,
     cover: false,
     transparency: false,
   });
+
+  useEffect(() => {
+    const settings = promptLibrary.inventorySettings;
+    if (!settings) return;
+    if (!aiPreferencesTouched.current.analyze) setAutoAnalyze(canAnalyzeAi && settings.autoAnalyze);
+    if (!aiPreferencesTouched.current.research) setAutoResearch(canResearchAi && settings.autoResearch);
+    if (!aiPreferencesTouched.current.overwrite) setAnalysisOverwrite(settings.overwrite);
+  }, [promptLibrary.inventorySettings, canAnalyzeAi, canResearchAi]);
+
+  useEffect(() => {
+    if (resourceId && new URLSearchParams(window.location.search).has("aiWarning")) {
+      setError(t("errors.automaticAi"));
+    }
+  }, [resourceId, t]);
 
   const objectCaptureUploadState = useMemo(
     () => getObjectCaptureUploadState(files),
@@ -704,7 +722,7 @@ export function ResourceEditor({
     }
 
     objectCaptureDefaultsApplied.current = true;
-    if (canAnalyzeAi && !aiPreferencesTouched.current.analyze) setAutoAnalyze(true);
+
     if (canGenerateImagesAi && !aiPreferencesTouched.current.cover) setAutoCover(true);
     if (!aiPreferencesTouched.current.transparency) {
       setTransparentCover(true);
@@ -1026,6 +1044,10 @@ export function ResourceEditor({
       setNotice(null);
       return;
     }
+    if (isNew && canUseAi && !promptLibrary.inventorySettings) {
+      setError(t("errors.aiSettings"));
+      return;
+    }
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -1047,15 +1069,23 @@ export function ResourceEditor({
         const uploadedCoverSourceId =
           selectedUpload?.kind === "image" ? selectedUpload.id : undefined;
         let latest = created.resource;
+        let aiFailed = false;
         if (
           canAnalyzeAi &&
           autoAnalyze &&
           files.some((file) => file.type.startsWith("image/"))
         ) {
-          latest = (await runAnalysis(created.resource.id, true)) ?? latest;
+          const analyzed = await runAnalysis(created.resource.id, analysisOverwrite);
+          aiFailed = !analyzed;
+          latest = analyzed ?? latest;
+        }
+        if (!aiFailed && canResearchAi && autoResearch) {
+          const researched = await runResearch(created.resource.id);
+          aiFailed = !researched;
+          latest = researched ?? latest;
         }
         if (
-          canGenerateImagesAi &&
+          !aiFailed && canGenerateImagesAi &&
           autoCover &&
           files.some((file) => file.type.startsWith("image/"))
         ) {
@@ -1065,7 +1095,7 @@ export function ResourceEditor({
         }
         router.push(
           organizationHref(
-            `/inventory/${primaryResourceReference(latest)}`,
+            `/inventory/${primaryResourceReference(latest)}${aiFailed ? "/edit?aiWarning=1" : ""}`,
           ),
         );
         router.refresh();
@@ -1304,6 +1334,7 @@ export function ResourceEditor({
               disabled={
                 saving ||
                 Boolean(aiAction) ||
+                (isNew && canUseAi && !promptLibrary.inventorySettings) ||
                 customFieldsLoading ||
                 Boolean(customFieldsError)
               }
@@ -1833,9 +1864,12 @@ export function ResourceEditor({
             <div className="mb-4 flex items-center gap-3 border-b border-border pb-4"><div className="grid h-9 w-9 place-items-center rounded-xl bg-surface-muted text-muted-strong"><ImageIcon size={17} /></div><div><h2 className="text-sm font-semibold text-foreground">{t("ai.title")}</h2><p className="text-xs text-muted">{t("ai.description")}</p></div></div>
             {isNew ? (
               <div className="space-y-3">
-                {canAnalyzeAi ? <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => { aiPreferencesTouched.current.analyze = true; setAutoAnalyze(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[12px] leading-4 text-muted">{t("ai.analyzeDescription")}</span><EstimatedAiCost estimate={aiCostEstimates?.inventoryAnalysis} className="mt-1" /></span></label> : null}
+                {!promptLibrary.inventorySettings ? <p role="status" className="text-sm">{t("errors.aiSettings")} <button type="button" className="underline" onClick={promptLibrary.retry}>{t("ai.reloadSettings")}</button></p> : null}
+                {canAnalyzeAi ? <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoAnalyze} onChange={(event) => { aiPreferencesTouched.current.analyze = true; setAutoAnalyze(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.analyzeImages")}</span><span className="mt-0.5 block text-[12px] leading-4 text-muted">{t("ai.analyzeDescription")}</span><EstimatedAiCost estimate={promptLibrary.costEstimates?.inventoryAnalysis} className="mt-1" /></span></label> : null}
                 {canGenerateImagesAi ? <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-subtle p-3"><input type="checkbox" checked={autoCover} onChange={(event) => { aiPreferencesTouched.current.cover = true; setAutoCover(event.target.checked); }} className="mt-0.5 h-4 w-4 accent-brand-solid" /><span><span className="block text-xs font-semibold text-muted-strong">{t("ai.generateCover")}</span><span className="mt-0.5 block text-[12px] leading-4 text-muted">{t("ai.coverDescription")}</span><EstimatedAiCost estimate={coverCostEstimate} className="mt-1" /></span></label> : null}
-                {canAnalyzeAi && autoAnalyze ? promptPicker("analysis") : null}
+                {canAnalyzeAi && autoAnalyze ? <><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={analysisOverwrite} onChange={(event) => { aiPreferencesTouched.current.overwrite = true; setAnalysisOverwrite(event.target.checked); }} />{t("ai.overwriteDefaults")}</label>{promptPicker("analysis")}</> : null}
+                {canResearchAi ? <label className="flex items-center gap-3 rounded-xl border border-border p-3 text-sm"><input type="checkbox" checked={autoResearch} onChange={(event) => { aiPreferencesTouched.current.research = true; setAutoResearch(event.target.checked); }} /><span>{t("ai.autoResearch")}<EstimatedAiCost estimate={promptLibrary.costEstimates?.inventoryResearch} /></span></label> : null}
+                {canResearchAi && autoResearch ? promptPicker("research") : null}
                 {canGenerateImagesAi && autoCover ? promptPicker(transparentCover ? "transparentCover" : "cover") : null}
                 {canGenerateImagesAi && autoCover ? (
                   <div className="rounded-xl border border-border bg-surface-subtle p-3">
@@ -1975,7 +2009,7 @@ export function ResourceEditor({
         actionIcon={<ImageIcon size={15} />}
         busy={aiAction === "analyze"}
         actionDisabled={!hasImage}
-        estimatedCost={aiCostEstimates?.inventoryAnalysis}
+        estimatedCost={promptLibrary.costEstimates?.inventoryAnalysis}
         onClose={() => setAiDialog(null)}
         onAction={() => {
           void runAnalysis(resourceId, analysisOverwrite).then((result) => {
@@ -2004,7 +2038,7 @@ export function ResourceEditor({
             type="checkbox"
             checked={analysisOverwrite}
             disabled={aiAction === "analyze"}
-            onChange={(event) => setAnalysisOverwrite(event.target.checked)}
+            onChange={(event) => { aiPreferencesTouched.current.overwrite = true; setAnalysisOverwrite(event.target.checked); }}
             className="mt-0.5 size-4 accent-brand-solid"
           />
           <span>
@@ -2025,7 +2059,7 @@ export function ResourceEditor({
         actionLabel={t("ai.research")}
         actionIcon={<Sparkles size={15} />}
         busy={aiAction === "research"}
-        estimatedCost={aiCostEstimates?.inventoryResearch}
+        estimatedCost={promptLibrary.costEstimates?.inventoryResearch}
         onClose={() => setAiDialog(null)}
         onAction={() => {
           void runResearch(resourceId).then((result) => {

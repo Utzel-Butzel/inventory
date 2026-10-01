@@ -35,11 +35,48 @@ export const listViewCollectionSchema = z.object({
   }
 });
 export type ListViewCollection = z.infer<typeof listViewCollectionSchema>;
+export type ListViewVisibility = "personal" | "organization";
+export type ListViewCollections = Record<ListViewVisibility, ListViewCollection>;
+export type ScopedListView = SavedListView & { visibility: ListViewVisibility; key: string; isDefault: boolean };
+
+export function combineListViews(collections: ListViewCollections) {
+  const views: ScopedListView[] = (["personal", "organization"] as const).flatMap((visibility) =>
+    collections[visibility].views.map((view) => ({
+      ...view, visibility, key: visibility + ":" + view.id,
+      isDefault: collections[visibility].defaultId === view.id,
+    })),
+  );
+  // A personal start view takes precedence over the organization's start view.
+  return { views, defaultId: views.find((view) => view.isDefault)?.key ?? null };
+}
+
+export function removeListView(collection: ListViewCollection, id: string): ListViewCollection {
+  return { views: collection.views.filter((view) => view.id !== id), defaultId: collection.defaultId === id ? null : collection.defaultId };
+}
+
+export function saveListView(collections: ListViewCollections, view: SavedListView, visibility: ListViewVisibility, previous?: ScopedListView): ListViewCollections {
+  const target = collections[visibility];
+  const replacing = previous?.visibility === visibility;
+  if (!view.name.trim() || view.name.trim().length > 80 || target.views.some((entry) => entry.id !== (replacing ? previous.id : null) && entry.name.toLocaleLowerCase() === view.name.trim().toLocaleLowerCase())) throw new Error("name");
+  if (!replacing && target.views.length >= 30) throw new Error("limit");
+  const next = { ...collections };
+  if (previous && !replacing) next[previous.visibility] = removeListView(collections[previous.visibility], previous.id);
+  next[visibility] = {
+    ...target,
+    views: replacing ? target.views.map((entry) => entry.id === previous.id ? view : entry) : [...target.views, view],
+  };
+  return next;
+}
+
 export const listViewWriteSchema = z.object({
   scope: key,
   revision: z.number().int().nonnegative(),
   collection: listViewCollectionSchema,
-}).strict();
+  organizationRevision: z.number().int().nonnegative().optional(),
+  organizationCollection: listViewCollectionSchema.optional(),
+}).strict().refine((value) => (value.organizationRevision === undefined) === (value.organizationCollection === undefined), {
+  message: "Organization collection and revision must be provided together.",
+});
 export const listViewScopeSchema = key;
 
 export function createListViewConfig(overrides: Partial<ListViewConfig> = {}): ListViewConfig {

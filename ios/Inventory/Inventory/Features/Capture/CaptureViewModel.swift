@@ -49,6 +49,8 @@ struct IntakeSubmission: Sendable {
     let analysisPrompt: String?
     let coverPrompt: String?
     let spatialPlacement: SpatialPlacementDraft?
+    var research: Bool = false
+    var analysisOverwrite: Bool = true
 }
 
 @MainActor
@@ -61,7 +63,15 @@ final class CaptureViewModel: ObservableObject {
     @Published var barcode = ""
     @Published var serialNumber = ""
     @Published var locationName = ""
-    @Published var autoAnalyze = true
+    @Published var autoAnalyze = true { didSet { if !applyingAIDefaults { analysisTouched = true } } }
+    @Published var autoResearch = false { didSet { if !applyingAIDefaults { researchTouched = true } } }
+    @Published var analysisOverwrite = true { didSet { if !applyingAIDefaults { overwriteTouched = true } } }
+    @Published private(set) var aiDefaultsLoaded = false
+    private var aiDefaultsContext: String?
+    private var applyingAIDefaults = false
+    private var analysisTouched = false
+    private var researchTouched = false
+    private var overwriteTouched = false
     @Published var autoCover = true
     @Published private(set) var photos: [CapturedInventoryPhoto] = []
     @Published private(set) var attachments: [CapturedInventoryAttachment] = []
@@ -77,6 +87,49 @@ final class CaptureViewModel: ObservableObject {
             maximumPixelSize: maximumPixelSize,
             compressionQuality: 0.86
         )
+    }
+
+    func loadAIDefaults(from state: AppState) async {
+        if aiDefaultsContext != state.organizationContextIdentifier {
+            analysisTouched = false
+            researchTouched = false
+            overwriteTouched = false
+            aiDefaultsContext = state.organizationContextIdentifier
+        }
+        aiDefaultsLoaded = false
+        guard state.canUseAI else { aiDefaultsLoaded = true; return }
+        if let cached = state.inventoryAISettings {
+            applyAIDefaults(cached.inventorySettings, canAnalyze: state.canAnalyzeInventory, canResearch: state.canResearchInventory)
+            aiDefaultsLoaded = true
+        }
+        do {
+            let settings = try await state.refreshInventoryAISettings()
+            applyAIDefaults(settings.inventorySettings, canAnalyze: state.canAnalyzeInventory, canResearch: state.canResearchInventory)
+            aiDefaultsLoaded = true
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled else { return }
+            if let cached = state.inventoryAISettings {
+                applyAIDefaults(cached.inventorySettings, canAnalyze: state.canAnalyzeInventory, canResearch: state.canResearchInventory)
+                errorMessage = "KI-Vorgaben konnten nicht aktualisiert werden. Die zuletzt gespeicherten Vorgaben werden verwendet."
+            } else {
+                applyingAIDefaults = true
+                autoAnalyze = false
+                autoResearch = false
+                applyingAIDefaults = false
+                errorMessage = "KI-Vorgaben sind nicht erreichbar. Du kannst den Eintrag ohne automatische KI speichern oder die Schritte selbst aktivieren."
+            }
+            aiDefaultsLoaded = true
+        }
+    }
+
+    func applyAIDefaults(_ settings: InventoryAISettings, canAnalyze: Bool, canResearch: Bool) {
+        applyingAIDefaults = true
+        if !analysisTouched { autoAnalyze = canAnalyze && settings.autoAnalyze }
+        if !researchTouched { autoResearch = canResearch && settings.autoResearch }
+        if !overwriteTouched { analysisOverwrite = settings.overwrite }
+        applyingAIDefaults = false
     }
 
     var canSubmit: Bool {
@@ -263,7 +316,9 @@ final class CaptureViewModel: ObservableObject {
                 .validatedAIGeneratedPixelSize(maximumAIGeneratedImagePixelSize),
             analysisPrompt: AIPromptPreferences.validatedPrompt(analysisPrompt),
             coverPrompt: AIPromptPreferences.validatedPrompt(coverPrompt),
-            spatialPlacement: spatialPlacement
+            spatialPlacement: spatialPlacement,
+            research: autoResearch,
+            analysisOverwrite: analysisOverwrite
         )
     }
 

@@ -1597,3 +1597,33 @@ public struct StockUnitUpdateResponse: Codable, Equatable, Sendable {
     public let unit: StockUnit
     public let movement: StockMovement
 }
+
+
+public struct InventoryAISettings: Codable, Equatable, Sendable {
+    public var analysisModel: String
+    public var researchModel: String
+    public var language: String
+    public var maximumImages: Int
+    public var autoAnalyze: Bool
+    public var autoResearch: Bool
+    public var overwrite: Bool
+}
+
+public struct AIPromptTemplate: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var kind: String
+    public var name: String
+    public var prompt: String
+}
+
+public struct AIPromptCollection: Codable, Equatable, Sendable {
+    public var templates: [AIPromptTemplate]
+    public var defaults: [String: String]
+}
+
+public struct InventoryAISettingsResponse: Codable, Sendable {
+    public var costEstimates: [String: AICostEstimate]? = nil
+    public var collection: AIPromptCollection
+    public var inventorySettings: InventoryAISettings
+    public var revision: Int
+}

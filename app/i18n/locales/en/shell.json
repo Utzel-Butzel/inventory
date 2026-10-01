@@ -163,7 +163,7 @@
         "description": "Tokens and runtime configuration"
       },
       "ai": {
-        "label": "AI · Default prompts",
+        "label": "AI · Settings",
         "description": "Manage templates and placeholders"
       }
     }

@@ -1481,8 +1481,8 @@
     }
   },
   "prompts": {
-    "title": "KI · Standardprompts",
-    "description": "Benannte Prompt-Vorlagen für diese Organisation verwalten. Pro Bereich einen Standard festlegen oder beim Erstellen eine andere Vorlage auswählen. Änderungen und Resets werden erst mit „Speichern“ übernommen.",
+    "title": "KI · Einstellungen",
+    "description": "Modelle, Sprache, automatische Analyse und Recherche sowie Textvorlagen für diese Organisation verwalten. Beim Anlegen können die automatischen Schritte einzeln geändert werden. Änderungen und Resets werden erst mit „Speichern“ übernommen.",
     "category": "Bereich",
     "templates": "Prompt-Vorlagen",
     "name": "Name der Vorlage",
@@ -1537,5 +1537,17 @@
       "language": "Konfigurierte KI-Ausgabesprache",
       "allowedTypes": "Erlaubte Typen für die KI-Klassifikation"
     }
+  },
+  "inventoryAi": {
+    "title": "KI-Vorgaben für neue Einträge",
+    "help": "Diese Vorgaben gelten für die gesamte Organisation in App und Webapp. Die Textvorlagen können unten angepasst werden.",
+    "analysisModel": "Modell für Fotoanalyse",
+    "researchModel": "Modell für Webrecherche",
+    "language": "Ausgabesprache",
+    "maximumImages": "Maximale Anzahl ausgewerteter Fotos",
+    "autoAnalyze": "Fotos standardmäßig analysieren",
+    "autoResearch": "Nach dem Anlegen standardmäßig recherchieren",
+    "overwrite": "Vorhandene Texte bei der Analyse standardmäßig überschreiben",
+    "modelHelp": "Modell-ID eines auf dem Server verfügbaren OpenAI-kompatiblen Modells. Das Recherchemodell muss Websuche und strukturierte Antworten unterstützen. Automatische Recherche verursacht zusätzliche KI-Kosten."
   }
 }

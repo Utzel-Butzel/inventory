@@ -19,13 +19,16 @@ import {
 } from "@/lib/ai-prompt-templates";
 import { fetchJson } from "@/lib/client-types";
 
-type Settings = { collection: AiPromptCollection; revision: number };
+import { inventoryAiSettingsSchema, type InventoryAiSettings } from "@/lib/inventory-ai-settings";
+
+type Settings = { inventorySettings: InventoryAiSettings; collection: AiPromptCollection; revision: number };
 const fieldClass =
   "mt-1.5 min-h-11 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-foreground";
 
 export function AiPromptManager() {
   const { t } = useT("settings");
   const organizationId = useOrganizationId();
+  const [inventorySettings, setInventorySettings] = useState<InventoryAiSettings | null>(null);
   const [saved, setSaved] = useState<Settings | null>(null);
   const [collection, setCollection] = useState<AiPromptCollection | null>(null);
   const [kind, setKind] = useState<AiPromptKind>("analysis");
@@ -44,6 +47,7 @@ export function AiPromptManager() {
       .then((result) => {
         if (active) {
           setSaved(result);
+      setInventorySettings(result.inventorySettings);
           setCollection(result.collection);
           setError("");
         }
@@ -60,9 +64,9 @@ export function AiPromptManager() {
   );
   const dirty =
     !!collection &&
-    JSON.stringify(collection) !== JSON.stringify(saved?.collection);
+    (JSON.stringify(collection) !== JSON.stringify(saved?.collection) || JSON.stringify(inventorySettings) !== JSON.stringify(saved?.inventorySettings));
   const valid = collection
-    ? aiPromptCollectionSchema.safeParse(collection).success
+    ? aiPromptCollectionSchema.safeParse(collection).success && inventoryAiSettingsSchema.safeParse(inventorySettings).success
     : false;
   const patch = (values: Partial<AiPromptTemplate>) => {
     setNotice("");
@@ -88,7 +92,7 @@ export function AiPromptManager() {
           "Content-Type": "application/json",
           ...(organizationId ? { "x-organization-id": organizationId } : {}),
         },
-        body: JSON.stringify({ collection, revision: saved.revision }),
+        body: JSON.stringify({ collection, inventorySettings, revision: saved.revision }),
       });
       if (!response.ok)
         throw new Error(
@@ -96,6 +100,7 @@ export function AiPromptManager() {
         );
       const result = (await response.json()) as Settings;
       setSaved(result);
+      setInventorySettings(result.inventorySettings);
       setCollection(result.collection);
       setNotice(t("prompts.saved"));
     } catch (error) {
@@ -175,6 +180,27 @@ export function AiPromptManager() {
       ) : (
         <>
           <fieldset disabled={saving} className="min-w-0 space-y-4">
+            {inventorySettings ? <div className="space-y-4 rounded-2xl border border-border bg-surface p-4">
+              <h2 className="font-semibold">{t("inventoryAi.title")}</h2>
+              <p className="text-sm text-muted">{t("inventoryAi.help")}</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {(["analysisModel", "researchModel", "language"] as const).map((key) => <label key={key} className="block text-sm font-semibold">
+                  {t(`inventoryAi.${key}`)}
+                  <input className={fieldClass} value={inventorySettings[key]} maxLength={key === "language" ? 100 : 200} onChange={(event) => setInventorySettings({ ...inventorySettings, [key]: event.target.value })} />
+                </label>)}
+                <label className="block text-sm font-semibold">{t("inventoryAi.maximumImages")}
+                  <select className={fieldClass} value={inventorySettings.maximumImages} onChange={(event) => setInventorySettings({ ...inventorySettings, maximumImages: Number(event.target.value) })}>
+                    {[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </label>
+              </div>
+              {(["autoAnalyze", "autoResearch", "overwrite"] as const).map((key) => <label key={key} className="flex items-center gap-3 text-sm">
+                <input type="checkbox" checked={inventorySettings[key]} onChange={(event) => setInventorySettings({ ...inventorySettings, [key]: event.target.checked })} />
+                {t(`inventoryAi.${key}`)}
+              </label>)}
+              <p className="text-xs text-muted">{t("inventoryAi.modelHelp")}</p>
+            </div> : null}
+
             <label className="block text-sm font-semibold">
               {t("prompts.category")}
               <select
@@ -309,7 +335,7 @@ export function AiPromptManager() {
                       sku: "TOOL-001",
                       barcode: "4000000000018",
                       serialNumber: "SN-123",
-                      language: "German",
+                      language: inventorySettings?.language ?? "English",
                       allowedTypes: "object, tool, furniture, other",
                     })}
                   </pre>
@@ -365,6 +391,7 @@ export function AiPromptManager() {
                 disabled={!dirty}
                 onClick={() => {
                   setCollection(saved!.collection);
+                  setInventorySettings(saved!.inventorySettings);
                   setSelectedId(saved!.collection.defaults[kind]);
                   setNotice("");
                 }}

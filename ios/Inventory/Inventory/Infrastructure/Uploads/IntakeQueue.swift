@@ -15,6 +15,7 @@ enum IntakeJobStage: String, Codable, Sendable {
     case placing
     case uploading
     case analyzing
+    case researching
     case generatingCover
     case complete
     case warning
@@ -50,6 +51,10 @@ struct IntakeJob: Identifiable, Codable, Equatable, Sendable {
     var analysisOperationID: UUID?
     var coverOperationID: UUID?
     var maximumAIGeneratedImagePixelSize: Int? = nil
+    var shouldResearch: Bool? = nil
+    var researchCompleted: Bool? = nil
+    var researchOperationID: UUID? = nil
+    var analysisOverwrite: Bool? = nil
     var analysisPrompt: String? = nil
     var coverPrompt: String? = nil
     var spatialPlacement: SpatialPlacementDraft? = nil
@@ -158,6 +163,10 @@ final class IntakeQueue: ObservableObject {
             analysisOperationID: submission.analyze ? UUID() : nil,
             coverOperationID: submission.generateCover ? UUID() : nil,
             maximumAIGeneratedImagePixelSize: submission.maximumAIGeneratedImagePixelSize,
+            shouldResearch: submission.research,
+            researchCompleted: !submission.research,
+            researchOperationID: submission.research ? UUID() : nil,
+            analysisOverwrite: submission.analysisOverwrite,
             analysisPrompt: submission.analyze ? submission.analysisPrompt : nil,
             coverPrompt: submission.generateCover ? submission.coverPrompt : nil,
             spatialPlacement: submission.spatialPlacement,
@@ -256,6 +265,8 @@ final class IntakeQueue: ObservableObject {
         job.progress = job.resourceID == nil ? 0.08 : (job.mediaUploaded ? 0.62 : 0.28)
         if job.stage == .warning || (job.shouldAnalyze && !job.analysisCompleted) {
             job.analysisOperationID = UUID()
+        } else if job.shouldResearch == true && job.researchCompleted != true {
+            job.researchOperationID = UUID()
         } else if job.shouldGenerateCover && !job.coverCompleted {
             job.coverOperationID = UUID()
         }
@@ -447,7 +458,7 @@ final class IntakeQueue: ObservableObject {
                 do {
                     let response = try await client.analyzeResource(
                         id: resourceID,
-                        overwrite: true,
+                        overwrite: job.analysisOverwrite ?? true,
                         prompt: job.analysisPrompt,
                         idempotencyKey: job.analysisOperationID ?? job.id
                     )
@@ -465,6 +476,30 @@ final class IntakeQueue: ObservableObject {
                     job.stage = .warning
                     job.progress = 1
                     job.message = "Gegenstand und Medien sind gespeichert, die Analyse schlug jedoch fehl: \(error.localizedDescription)"
+                    replace(job)
+                    return
+                }
+            }
+
+            if job.shouldResearch == true && job.researchCompleted != true {
+                job.stage = .researching
+                job.progress = 0.82
+                job.message = "Webrecherche läuft."
+                guard replace(job) else { throw IntakeQueuePersistenceError.unableToPersist }
+                do {
+                    let resource = try await client.researchResource(id: resourceID, idempotencyKey: job.researchOperationID ?? job.id)
+                    job.resourceName = resource.name
+                    job.researchCompleted = true
+                    guard replace(job) else { throw IntakeQueuePersistenceError.unableToPersist }
+                    guard configurationID == generation else { throw CancellationError() }
+                    try Task.checkCancellation()
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    if Self.requiresAuthentication(error) || Self.isRetryable(error) { throw error }
+                    job.stage = .warning
+                    job.progress = 1
+                    job.message = "Gegenstand und Medien sind gespeichert, die Recherche schlug jedoch fehl: \(error.localizedDescription)"
                     replace(job)
                     return
                 }
@@ -530,7 +565,7 @@ final class IntakeQueue: ObservableObject {
             let maximumAttempts: Int
             if statusCode == 202 {
                 maximumAttempts = 90
-            } else if job.stage == .analyzing || job.stage == .generatingCover {
+            } else if job.stage == .analyzing || job.stage == .researching || job.stage == .generatingCover {
                 maximumAttempts = 2
             } else {
                 maximumAttempts = 6

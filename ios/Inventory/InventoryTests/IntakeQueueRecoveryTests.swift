@@ -3,6 +3,25 @@ import XCTest
 @testable import Inventory
 
 final class IntakeQueueRecoveryTests: XCTestCase {
+    func testResearchProgressSurvivesRestartAndLegacyJobsStayOptedOut() throws {
+        var job = makeJob(expectedFileCount: 0)
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+        let legacy = try decoder.decode(IntakeJob.self, from: encoder.encode(job))
+        XCTAssertNil(legacy.shouldResearch)
+        XCTAssertNil(legacy.researchCompleted)
+        job.shouldResearch = true
+        job.researchCompleted = true
+        job.researchOperationID = UUID()
+        job.analysisOverwrite = false
+        job.stage = .researching
+        let restored = try decoder.decode(IntakeJob.self, from: encoder.encode(job))
+        XCTAssertEqual(restored.researchOperationID, job.researchOperationID)
+        XCTAssertEqual(restored.researchCompleted, true)
+        XCTAssertEqual(restored.analysisOverwrite, false)
+        XCTAssertEqual(restored.stage, .researching)
+    }
+
     func testOrganizationSelectionSurvivesManifestRoundTrip() throws {
         let organizationID = try XCTUnwrap(
             UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")

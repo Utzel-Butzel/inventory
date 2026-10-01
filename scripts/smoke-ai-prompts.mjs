@@ -1,6 +1,6 @@
 import postgres from "postgres";
 import bcrypt from "bcryptjs";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import assert from "node:assert/strict";
 
@@ -107,11 +107,16 @@ try {
   };
   collection.templates.push(custom);
   collection.defaults.analysis = custom.id;
-  const input = { collection, revision: 0 };
+  const inventorySettings = { ...original.body.inventorySettings, language: "German", maximumImages: 1, autoResearch: true, overwrite: false, analysisModel: "gpt-4.1", researchModel: "gpt-5.6-terra" };
+  const input = { collection, inventorySettings, revision: 0 };
   assert.equal((await api(editor, organizations[0], input)).status, 403);
   const saved = await api(admin, organizations[0], input);
   assert.equal(saved.status, 200);
   assert.equal(saved.body.revision, 1);
+  assert.deepEqual(saved.body.inventorySettings, inventorySettings);
+  assert.deepEqual((await api(editor, organizations[0])).body.inventorySettings, inventorySettings);
+  assert.equal((await api(admin, organizations[1])).body.inventorySettings.autoResearch, false);
+  assert.equal((await api(admin, organizations[0], { ...input, revision: 1, inventorySettings: { ...inventorySettings, maximumImages: 4 } })).status, 422);
   assert.deepEqual(
     (await api(editor, organizations[0])).body.collection,
     collection,
@@ -142,7 +147,7 @@ try {
   );
   assert.equal(
     rendered,
-    `Drill {{language}} | Cordless | Workshop | QA-123 | ${process.env.AI_OUTPUT_LANGUAGE?.trim() || "English"}`,
+    `Drill {{language}} | Cordless | Workshop | QA-123 | German`,
   );
   assert.notEqual(
     await resolveAiPrompt(organizations[1], "analysis", {}, resource),
@@ -190,6 +195,20 @@ try {
     revision: 1,
   });
   assert.equal(reset.status, 200);
+  // User-bound mobile credentials may administer settings; plain API keys may not.
+  for (const [index, userID] of [users[0], users[1], null].entries()) {
+    const rawToken = "inv_" + randomUUID();
+    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+    await sql`INSERT INTO api_tokens(organization_id,name,prefix,token_hash,scopes,user_id,user_session_version) VALUES(${organizations[0]},'AI settings QA',${rawToken.slice(0,16)},${tokenHash},ARRAY['read','write','ai'],${userID},${userID ? 1 : null})`;
+    const response = await fetch(base + "/api/v1/ai/prompts", {
+      method: "PUT",
+      headers: { Authorization: "Bearer " + rawToken, "Content-Type": "application/json", "X-Organization-ID": organizations[0] },
+      body: JSON.stringify({ collection: defaultAiPromptCollection(), inventorySettings, revision: 2 }),
+    });
+    assert.equal(response.status, index === 0 ? 200 : 403, "mobile admin versus editor and standalone token");
+  }
+
+  assert.deepEqual(reset.body.inventorySettings, inventorySettings, "legacy prompt-only saves preserve AI settings");
   assert.deepEqual(
     (await api(admin, organizations[0])).body.collection,
     defaultAiPromptCollection(),

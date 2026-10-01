@@ -287,7 +287,10 @@
     "imageGenerationPlaceholder": "Erstelle ein sauberes, realistisches Katalogfoto von {{name}} vor neutralem Hintergrund.",
     "imageGenerationAccuracy": "Erstellte Bilder sind illustrativ und können vom physischen Objekt abweichen. Prüfe das Ergebnis vor der Verwendung.",
     "searchForImage": "Bild suchen",
-    "generateImage": "Bild erstellen"
+    "generateImage": "Bild erstellen",
+    "autoResearch": "Nach dem Anlegen recherchieren",
+    "overwriteDefaults": "Vorhandene Texte überschreiben",
+    "reloadSettings": "Erneut laden"
   },
   "position": {
     "title": "Position",
@@ -705,6 +708,8 @@
     "save": "Eintrag konnte nicht gespeichert werden.",
     "removeFile": "Datei konnte nicht entfernt werden.",
     "reorderMedia": "Medien konnten nicht neu sortiert werden.",
-    "delete": "Eintrag konnte nicht gelöscht werden."
+    "delete": "Eintrag konnte nicht gelöscht werden.",
+    "automaticAi": "Der Eintrag wurde gespeichert, aber ein automatischer KI-Schritt ist fehlgeschlagen. Du kannst ihn hier erneut starten.",
+    "aiSettings": "Die KI-Vorgaben müssen vor dem Speichern geladen werden."
   }
 }

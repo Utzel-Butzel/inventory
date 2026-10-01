@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  createListViewConfig, listViewCollectionSchema, listViewConfigSchema,
+  combineListViews, createListViewConfig, listViewCollectionSchema, listViewConfigSchema, removeListView, saveListView,
   listViewWriteSchema, orderListItems, restoreListView, sameListView,
 } from "../lib/list-view-contract.ts";
 
@@ -48,4 +48,54 @@ test("restoration preserves the primary column and fills newly added filter defa
   assert.deepEqual(restored.filters, { type: "all", status: "available" });
   assert.equal(sameListView({ ...config, filters: { type: "tool", status: "all" } }, { ...config, filters: { status: "all", type: "tool" } }), true);
   assert.equal(sameListView(config, { ...config, columns: ["sku", "name"] }), false);
+});
+
+
+test("shared writes require a revision and cannot choose an organization or user", () => {
+  const payload = { scope: "inventory", revision: 0, collection: { views: [], defaultId: null } };
+  assert.equal(listViewWriteSchema.safeParse(payload).success, true);
+  assert.equal(listViewWriteSchema.safeParse({ ...payload, organizationCollection: payload.collection }).success, false);
+  assert.equal(listViewWriteSchema.safeParse({ ...payload, organizationRevision: 0 }).success, false);
+  assert.equal(listViewWriteSchema.safeParse({ ...payload, organizationRevision: 0, organizationCollection: payload.collection }).success, true);
+  assert.equal(listViewWriteSchema.safeParse({ ...payload, organizationId: id }).success, false);
+});
+
+test("personal and shared views with identical names and IDs remain separately selectable", () => {
+  const collections = { personal: { views: [view], defaultId: id }, organization: { views: [view], defaultId: id } };
+  const combined = combineListViews(collections);
+  assert.equal(combined.views.length, 2);
+  assert.notEqual(combined.views[0].key, combined.views[1].key);
+  assert.equal(combined.defaultId, "personal:" + id);
+  assert.equal(combineListViews({ ...collections, personal: { ...collections.personal, defaultId: null } }).defaultId, "organization:" + id);
+});
+
+test("changing visibility moves a view without publishing its personal default", () => {
+  const empty = { views: [], defaultId: null };
+  const collections = { personal: { views: [view], defaultId: id }, organization: empty };
+  const original = combineListViews(collections).views[0];
+  const sharedView = { ...view, id: "00000000-0000-4000-8000-000000000065" };
+  const shared = saveListView(collections, sharedView, "organization", original);
+  assert.deepEqual(shared.personal, empty);
+  assert.deepEqual(shared.organization, { views: [sharedView], defaultId: null });
+  assert.deepEqual(collections.personal.views, [view]);
+  const restored = saveListView(shared, view, "personal", combineListViews(shared).views[0]);
+  assert.deepEqual(restored.organization, empty);
+  assert.deepEqual(restored.personal.views, [view]);
+});
+
+test("saving a personal copy leaves the shared original intact; duplicate names apply per visibility", () => {
+  const collections = { personal: { views: [], defaultId: null }, organization: { views: [view], defaultId: id } };
+  const copied = saveListView(collections, view, "personal");
+  assert.deepEqual(copied.organization, collections.organization);
+  assert.deepEqual(copied.personal.views, [view]);
+  assert.throws(() => saveListView(copied, { ...view, name: " werkzeuge " }, "personal"), /name/);
+  assert.deepEqual(removeListView(collections.organization, id), { views: [], defaultId: null });
+});
+
+test("a full destination rejects a visibility move without removing the source", () => {
+  const personal = { views: [view], defaultId: id };
+  const organization = { views: Array.from({ length: 30 }, (_, i) => ({ ...view, id: String(i), name: "Shared " + i })), defaultId: null };
+  const collections = { personal, organization };
+  assert.throws(() => saveListView(collections, view, "organization", combineListViews(collections).views[0]), /limit/);
+  assert.deepEqual(collections.personal, personal);
 });

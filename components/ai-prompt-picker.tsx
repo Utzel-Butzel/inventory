@@ -13,23 +13,28 @@ import {
   type AiPromptSelection,
 } from "@/lib/ai-prompt-templates";
 
+import type { AiCostEstimateCatalog } from "@/lib/ai-cost-estimates";
+import type { InventoryAiSettings } from "@/lib/inventory-ai-settings";
+
 export function useAiPromptTemplates() {
   const organizationId = useOrganizationId();
   const [state, setState] = useState<{
     collection: AiPromptCollection;
+    inventorySettings: InventoryAiSettings;
+    costEstimates: AiCostEstimateCatalog["operations"];
     organizationId: string | undefined;
   } | null>(null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
-    fetchJson<{ collection: AiPromptCollection }>("/api/v1/ai/prompts", {
+    fetchJson<{ collection: AiPromptCollection; inventorySettings: InventoryAiSettings; costEstimates: AiCostEstimateCatalog["operations"] }>("/api/v1/ai/prompts", {
       cache: "no-store",
       headers: organizationId ? { "x-organization-id": organizationId } : {},
     })
-      .then(({ collection }) => {
+      .then(({ collection, inventorySettings, costEstimates }) => {
         if (active) {
-          setState({ collection, organizationId });
+          setState({ collection, inventorySettings, costEstimates, organizationId });
           setError(false);
         }
       })
@@ -42,6 +47,8 @@ export function useAiPromptTemplates() {
   }, [organizationId, attempt]);
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
   return {
+    costEstimates: state && state.organizationId === organizationId ? state.costEstimates : null,
+    inventorySettings: state && state.organizationId === organizationId ? state.inventorySettings : null,
     collection:
       state && state.organizationId === organizationId ? state.collection : null,
     error,

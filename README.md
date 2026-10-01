@@ -181,6 +181,17 @@ until configured in `.env`.
 
 See [`.env.example`](.env.example) for the complete, commented reference.
 
+Organization administrators can configure photo-analysis and research models,
+output language, the number of input photos (1–3), overwrite behavior, and
+new-item analysis/research defaults under **Settings → AI** in the web app or
+**Settings → Organization AI defaults** in iOS. Both clients share these settings
+and the analysis/research prompt templates. Local iOS prompt overrides still take
+priority. Research defaults to off and adds a separate paid web-research step when
+enabled. Model IDs must be supported by the configured OpenAI-compatible endpoint;
+research requires web search and structured output. API keys remain server-side.
+Apply database migration `0068_inventory_ai_settings.sql` before deploying this
+version. Existing organizations inherit their environment defaults until saved.
+
 MapLibre's worker and its shared module are copied from the installed package
 into `public/vendor/maplibre/<version>/` by the `predev` and `prebuild` hooks.
 Use `npm run dev` / `npm run build` (or their pnpm equivalents). When invoking

@@ -209,6 +209,9 @@
     "clear": "Clear search"
   },
   "filters": {
+    "tagLabel": "Filter by tag",
+    "categoryLabel": "Filter by category",
+    "excludeCategoryLabel": "Exclude category",
     "typeLabel": "Filter by type",
     "statusLabel": "Filter by status",
     "allTypes": "All types",
@@ -225,7 +228,8 @@
   },
   "loading": "Loading inventory",
   "errors": {
-    "load": "Unable to load inventory."
+    "load": "Unable to load inventory.",
+    "filterOptions": "Unable to load tag and category filters."
   },
   "empty": {
     "filteredTitle": "No matching items",

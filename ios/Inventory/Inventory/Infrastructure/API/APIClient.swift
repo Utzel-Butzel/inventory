@@ -219,6 +219,23 @@ public final class APIClient: Sendable {
         return try await execute(request)
     }
 
+    public func inventoryAISettings() async throws -> InventoryAISettingsResponse {
+        let url = try makeAPIURL(path: ["ai", "prompts"])
+        let request = try await authorizedRequest(url: url, method: "GET")
+        return try await execute(request)
+    }
+
+    public func saveInventoryAISettings(_ settings: InventoryAISettingsResponse) async throws -> InventoryAISettingsResponse {
+        let url = try makeAPIURL(path: ["ai", "prompts"])
+        struct SettingsUpdate: Encodable {
+            let collection: AIPromptCollection
+            let inventorySettings: InventoryAISettings
+            let revision: Int
+        }
+        let request = try await jsonRequest(url: url, method: "PUT", body: SettingsUpdate(collection: settings.collection, inventorySettings: settings.inventorySettings, revision: settings.revision))
+        return try await execute(request)
+    }
+
     public func imageGenerationModels() async throws -> ImageGenerationModelsResponse {
         let url = try makeAPIURL(path: ["ai", "image-models"])
         let request = try await authorizedRequest(url: url, method: "GET")

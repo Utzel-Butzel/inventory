@@ -153,6 +153,9 @@ export async function listResources(options: {
   type?: string;
   status?: string;
   priority?: string;
+  tag?: string;
+  category?: string;
+  excludeCategory?: string;
   sort?: string;
   direction?: string;
   loanable?: boolean;
@@ -196,6 +199,15 @@ export async function listResources(options: {
   }
   if (options.status && options.status !== "all") {
     conditions.push(eq(resources.status, options.status));
+  }
+  if (options.tag) {
+    conditions.push(sql`${options.tag} = ANY(${resources.tags})`);
+  }
+  if (options.category) {
+    conditions.push(sql`${resources.categories} @> ${JSON.stringify([{ name: options.category }])}::jsonb`);
+  }
+  if (options.excludeCategory) {
+    conditions.push(sql`NOT (${resources.categories} @> ${JSON.stringify([{ name: options.excludeCategory }])}::jsonb)`);
   }
   if (options.loanable) {
     const loanableResources = db

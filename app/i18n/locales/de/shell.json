@@ -163,7 +163,7 @@
         "description": "Token und Laufzeitkonfiguration"
       },
       "ai": {
-        "label": "KI · Standardprompts",
+        "label": "KI · Einstellungen",
         "description": "Vorlagen und Platzhalter verwalten"
       }
     }

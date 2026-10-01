@@ -1,11 +1,11 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Bookmark, Check, ChevronDown, Filter, Grid2X2, List, Plus, RotateCcw, Save, Search, Settings2, Star, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Bookmark, Check, ChevronDown, Filter, Grid2X2, List, Plus, RotateCcw, Save, Search, Settings2, Star, Users, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useT } from "next-i18next/client";
 import { useOrganizationId, useOrganizationSlug } from "@/components/organization-routing";
 import { Alert, Button, cn } from "@/components/ui";
-import { createListViewConfig, listViewCollectionSchema, orderListItems, restoreListView, sameListView, type ListViewCollection, type ListViewConfig } from "@/lib/list-view-contract";
+import { combineListViews, createListViewConfig, listViewCollectionSchema, orderListItems, removeListView, restoreListView, sameListView, saveListView, type ListViewCollection, type ListViewCollections, type ListViewConfig, type ListViewVisibility } from "@/lib/list-view-contract";
 
 const emptyCollection: ListViewCollection = { views: [], defaultId: null };
 
@@ -17,9 +17,12 @@ export function useListView(scope: string, initial: Partial<ListViewConfig> = {}
   const defaults = useMemo(() => createListViewConfig(JSON.parse(initialKey)), [initialKey]);
   const owner = useRef(organization + ":" + scope);
   const [config, setConfig] = useState(defaults);
-  const [collection, setCollection] = useState<ListViewCollection>(emptyCollection);
+  const [collections, setCollections] = useState<ListViewCollections>({ personal: emptyCollection, organization: emptyCollection });
+  const collection = combineListViews(collections);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
+  const [organizationRevision, setOrganizationRevision] = useState(0);
+  const [canManageOrganizationViews, setCanManageOrganizationViews] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [canSave, setCanSave] = useState(false);
@@ -41,8 +44,10 @@ export function useListView(scope: string, initial: Partial<ListViewConfig> = {}
     }
     setLoading(true);
     setCanSave(false);
+    setCanManageOrganizationViews(false);
     setError(null);
-    setCollection(emptyCollection);
+    setCollections({ personal: emptyCollection, organization: emptyCollection });
+    setOrganizationRevision(0);
     setActiveId(null);
     setRevision(0);
     void fetch("/api/v1/user/list-views?scope=" + encodeURIComponent(scope), { cache: "no-store", signal: controller.signal, headers: organizationId ? { "X-Organization-ID": organizationId } : {} })
@@ -51,13 +56,18 @@ export function useListView(scope: string, initial: Partial<ListViewConfig> = {}
         const result = await response.json();
         const saved = listViewCollectionSchema.parse(result.collection);
         if (controller.signal.aborted) return;
-        setCollection(saved);
+        const shared = listViewCollectionSchema.parse(result.organizationCollection);
+        const loaded = { personal: saved, organization: shared };
+        setCollections(loaded);
+        setOrganizationRevision(result.organizationRevision);
+        setCanManageOrganizationViews(result.canManageOrganizationViews);
         setRevision(result.revision);
         setCanSave(result.canSave);
-        const defaultView = saved.views.find((view) => view.id === saved.defaultId);
+        const combined = combineListViews(loaded);
+        const defaultView = combined.views.find((view) => view.key === combined.defaultId);
         if (defaultView && !interacted.current) {
           setConfig({ ...restoreListView(defaultView.config, defaults), ...(defaults.query ? { query: defaults.query } : {}) });
-          setActiveId(defaultView.id);
+          setActiveId(defaultView.key);
         }
       })
       .catch(() => { if (!controller.signal.aborted) setError(t("listView.errors.load")); })
@@ -69,24 +79,26 @@ export function useListView(scope: string, initial: Partial<ListViewConfig> = {}
     interacted.current = true;
     setConfig((current) => ({ ...current, ...value }));
     setNotice(null);
-  }, []);
+  }, [setNotice]);
   const setFilter = useCallback((key: string, value: string) => {
     interacted.current = true;
     setConfig((current) => ({ ...current, filters: { ...current.filters, [key]: value } }));
     setNotice(null);
-  }, []);
+  }, [setNotice]);
   const select = (id: string | null) => {
     interacted.current = true;
-    const saved = collection.views.find((view) => view.id === id);
+    const saved = collection.views.find((view) => view.key === id);
     setConfig(saved ? restoreListView(saved.config, defaults) : defaults);
     setActiveId(id);
     setNotice(null);
   };
-  const active = collection.views.find((view) => view.id === activeId);
+  const active = collection.views.find((view) => view.key === activeId);
   const dirty = !sameListView(config, active?.config ?? defaults);
 
-  const persist = async (next: ListViewCollection, nextId = activeId) => {
-    if (savingRef.current || loading || !canSave) return false;
+  const canManageActive = canSave && (active?.visibility !== "organization" || canManageOrganizationViews);
+  const persist = async (next: ListViewCollections, nextId = activeId) => {
+    const sharedChanged = next.organization !== collections.organization;
+    if (savingRef.current || loading || !canSave || (sharedChanged && !canManageOrganizationViews)) return false;
     savingRef.current = true;
     setSaving(true);
     setError(null);
@@ -95,13 +107,14 @@ export function useListView(scope: string, initial: Partial<ListViewConfig> = {}
     try {
       const response = await fetch("/api/v1/user/list-views", {
         method: "PUT", headers: { "Content-Type": "application/json", ...(organizationId ? { "X-Organization-ID": organizationId } : {}) },
-        body: JSON.stringify({ scope, revision, collection: next }),
+        body: JSON.stringify({ scope, revision, collection: next.personal, ...(sharedChanged ? { organizationRevision, organizationCollection: next.organization } : {}) }),
       });
       if (response.status === 409) throw new Error("conflict");
       if (!response.ok) throw new Error("save");
       const result = await response.json();
       if (generation.current !== currentGeneration) return false;
-      setCollection(listViewCollectionSchema.parse(result.collection));
+      setCollections({ personal: listViewCollectionSchema.parse(result.collection), organization: sharedChanged ? listViewCollectionSchema.parse(result.organizationCollection) : next.organization });
+      if (sharedChanged) setOrganizationRevision(result.organizationRevision);
       setRevision(result.revision);
       setActiveId(nextId);
       setNotice(t("listView.saved"));
@@ -114,24 +127,29 @@ export function useListView(scope: string, initial: Partial<ListViewConfig> = {}
       setSaving(false);
     }
   };
-  const save = async (name: string, asNew: boolean) => {
-    name = name.trim();
-    const id = !asNew && active ? active.id : crypto.randomUUID();
-    if (!name || name.length > 80 || collection.views.some((view) => view.id !== id && view.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
-      setError(t("listView.errors.name")); return false;
+  const save = async (name: string, asNew: boolean, visibility: ListViewVisibility = active?.visibility ?? "personal") => {
+    if (!asNew && active && !canManageActive) return false;
+    const previous = asNew ? undefined : active;
+    const id = previous?.visibility === visibility ? previous.id : crypto.randomUUID();
+    try {
+      const next = saveListView(collections, { id, name: name.trim(), config }, visibility, previous);
+      return await persist(next, visibility + ":" + id);
+    } catch (saveError) {
+      setError(t(saveError instanceof Error && saveError.message === "limit" ? "listView.errors.limit" : "listView.errors.name"));
+      return false;
     }
-    if (asNew && collection.views.length >= 30) { setError(t("listView.errors.limit")); return false; }
-    const saved = { id, name, config };
-    return persist({ ...collection, views: collection.views.some((view) => view.id === id) ? collection.views.map((view) => view.id === id ? saved : view) : [...collection.views, saved] }, id);
   };
   return {
-    config, patch, setFilter, collection, active, dirty, loading, saving, canSave, error, notice,
+    config, patch, setFilter, collection, active, dirty, loading, saving, canSave, canManageActive, canManageOrganizationViews, error, notice,
     select, save,
     refresh: () => setReload((value) => value + 1),
-    setDefault: () => persist({ ...collection, defaultId: collection.defaultId === activeId ? null : activeId }),
+    setDefault: () => {
+      if (!active) return Promise.resolve(false);
+      return persist({ ...collections, [active.visibility]: { ...collections[active.visibility], defaultId: active.isDefault ? null : active.id } });
+    },
     remove: async () => {
-      if (!activeId) return false;
-      const success = await persist({ views: collection.views.filter((view) => view.id !== activeId), defaultId: collection.defaultId === activeId ? null : collection.defaultId }, null);
+      if (!active) return false;
+      const success = await persist({ ...collections, [active.visibility]: removeListView(collections[active.visibility], active.id) }, null);
       if (success) setConfig(defaults);
       return success;
     },
@@ -194,6 +212,7 @@ export function ListViewToolbar({ list, filters = [], sorts, searchPlaceholder, 
   const { t } = useT("common");
   const [editing, setEditing] = useState<"new" | "manage" | null>(null);
   const [name, setName] = useState("");
+  const [visibility, setVisibility] = useState<ListViewVisibility>("personal");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const root = useRef<HTMLElement>(null);
   const { config } = list;
@@ -220,24 +239,26 @@ export function ListViewToolbar({ list, filters = [], sorts, searchPlaceholder, 
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" aria-label={t("listView.views")}>
           <button type="button" disabled={list.saving} onClick={() => { list.select(null); setEditing(null); }} aria-pressed={!list.active} className={cn("inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold", !list.active ? "bg-brand-soft text-brand" : "text-muted hover:bg-surface-hover")}><List size={14} />{t("listView.all")}</button>
-          {list.collection.views.map((view) => <button key={view.id} type="button" disabled={list.saving} onClick={() => { list.select(view.id); setEditing(null); }} aria-pressed={list.active?.id === view.id} className={cn("inline-flex max-w-64 shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold", list.active?.id === view.id ? "bg-brand-soft text-brand" : "text-muted hover:bg-surface-hover")}>
-            {view.id === list.collection.defaultId ? <Star size={12} fill="currentColor" /> : <Bookmark size={12} />}<span className="truncate">{view.name}</span>{list.active?.id === view.id && list.dirty ? <span aria-label={t("listView.modified")}>•</span> : null}
+          {list.collection.views.map((view) => <button key={view.key} type="button" disabled={list.saving} onClick={() => { list.select(view.key); setEditing(null); }} aria-pressed={list.active?.key === view.key} className={cn("inline-flex max-w-64 shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold", list.active?.key === view.key ? "bg-brand-soft text-brand" : "text-muted hover:bg-surface-hover")}>
+            {view.isDefault ? <Star size={12} fill="currentColor" /> : <Bookmark size={12} />}<span className="truncate">{view.name}</span>{view.visibility === "organization" ? <span className="inline-flex items-center gap-1 text-[10px]" title={t("listView.organization")}><Users size={12} />{t("listView.sharedBadge")}</span> : null}{list.active?.key === view.key && list.dirty ? <span aria-label={t("listView.modified")}>•</span> : null}
           </button>)}
         </div>
         <div className="flex flex-wrap items-center gap-1">
-          {list.active ? <button type="button" disabled={list.saving || !list.canSave} className={summaryClass} onClick={() => { setName(list.active!.name); setEditing(editing === "manage" ? null : "manage"); setConfirmDelete(false); }}><Settings2 size={14} />{t("listView.manage")}</button> : null}
-          {list.active && list.dirty ? <button type="button" disabled={list.saving || !list.canSave} className={summaryClass} onClick={() => void list.save(list.active!.name, false)}><Save size={14} />{t("listView.save")}</button> : null}
-          <button type="button" disabled={list.loading || list.saving || !list.canSave} onClick={() => { setName(""); setEditing(editing === "new" ? null : "new"); }} className={cn(summaryClass, "disabled:opacity-40")}><Plus size={14} />{t("listView.saveAs")}</button>
+          {list.active ? <button type="button" disabled={list.saving || !list.canManageActive} className={summaryClass} onClick={() => { setName(list.active!.name); setVisibility(list.active!.visibility); setEditing(editing === "manage" ? null : "manage"); setConfirmDelete(false); }}><Settings2 size={14} />{t("listView.manage")}</button> : null}
+          {list.active && list.dirty ? <button type="button" disabled={list.saving || !list.canManageActive} className={summaryClass} onClick={() => void list.save(list.active!.name, false)}><Save size={14} />{t("listView.save")}</button> : null}
+          <button type="button" disabled={list.loading || list.saving || !list.canSave} onClick={() => { setName(""); setVisibility("personal"); setEditing(editing === "new" ? null : "new"); }} className={cn(summaryClass, "disabled:opacity-40")}><Plus size={14} />{t("listView.saveAs")}</button>
         </div>
       </div>
-      {editing ? <form className="flex flex-wrap items-end gap-2 border-b border-border bg-surface-subtle p-3" onSubmit={async (event) => { event.preventDefault(); if (await list.save(name, editing === "new")) setEditing(null); }}>
+      {editing ? <form className="flex flex-wrap items-end gap-2 border-b border-border bg-surface-subtle p-3" onSubmit={async (event) => { event.preventDefault(); if (await list.save(name, editing === "new", visibility)) setEditing(null); }}>
         <label className="min-w-40 flex-1 text-xs font-semibold text-muted-strong">{t("listView.name")}<input autoFocus required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder={t("listView.namePlaceholder")} className={cn(controlClass, "mt-1 block w-full")} /></label>
-        <Button size="sm" type="submit" disabled={list.saving || !name.trim()}><Save size={14} />{t("listView.save")}</Button>
+        <label className="min-w-40 text-xs font-semibold text-muted-strong">{t("listView.visibility")}<select value={visibility} disabled={list.saving} onChange={(event) => setVisibility(event.target.value as ListViewVisibility)} className={cn(controlClass, "mt-1 block w-full")}><option value="personal">{t("listView.personal")}</option><option value="organization" disabled={!list.canManageOrganizationViews}>{t("listView.organization")}</option></select></label>
+        <Button size="sm" type="submit" disabled={list.saving || !name.trim() || (editing === "manage" && !list.canManageActive)}><Save size={14} />{t("listView.save")}</Button>
         {editing === "manage" ? <>
-          <Button size="sm" variant="secondary" disabled={list.saving} onClick={() => void list.setDefault()}><Star size={14} />{t(list.collection.defaultId === list.active?.id ? "listView.unsetDefault" : "listView.setDefault")}</Button>
+          <Button size="sm" variant="secondary" disabled={list.saving} onClick={() => void list.setDefault()}><Star size={14} />{t(list.active?.visibility === "organization" ? (list.active.isDefault ? "listView.unsetOrganizationDefault" : "listView.setOrganizationDefault") : (list.active?.isDefault ? "listView.unsetDefault" : "listView.setDefault"))}</Button>
           <Button size="sm" variant="secondary" disabled={list.saving} onClick={async () => { if (!confirmDelete) { setConfirmDelete(true); return; } if (await list.remove()) setEditing(null); }}>{t(confirmDelete ? "listView.confirmDelete" : "listView.delete")}</Button>
         </> : null}
         <Button size="sm" variant="secondary" onClick={() => setEditing(null)}>{t("listView.cancel")}</Button>
+        <p className="w-full text-xs text-muted">{t(visibility === "organization" ? "listView.organizationHint" : editing === "manage" && list.active?.visibility === "organization" ? "listView.makePersonalHint" : "listView.personalHint")}</p>
       </form> : null}
       <div className="flex flex-wrap items-center gap-2 p-3">
         <label className="relative min-w-40 flex-1 sm:max-w-sm"><span className="sr-only">{t("listView.search")}</span><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><input type="search" maxLength={500} value={config.query} onChange={(event) => list.patch({ query: event.target.value })} placeholder={searchPlaceholder ?? t("listView.searchPlaceholder")} className={cn(controlClass, "w-full bg-surface-subtle pl-9 pr-8 [&::-webkit-search-cancel-button]:appearance-none")} />{config.query ? <button type="button" onClick={() => list.patch({ query: "" })} aria-label={t("listView.clearSearch")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted"><X size={13} /></button> : null}</label>
@@ -255,7 +276,7 @@ export function ListViewToolbar({ list, filters = [], sorts, searchPlaceholder, 
       {activeFilters.length || config.query || list.dirty ? <div className="flex flex-wrap items-center gap-2 border-t border-border px-3 py-2">
         {activeFilters.map((filter) => <button type="button" key={filter.key} onClick={() => list.setFilter(filter.key, "all")} aria-label={t("listView.removeFilter", { name: filter.label })} className="inline-flex items-center gap-2 rounded-md bg-brand-soft px-2 py-1 text-xs text-brand">{filter.label}: {filter.options.find((option) => option.value === config.filters[filter.key])?.label ?? config.filters[filter.key]}<X size={12} /></button>)}
         {activeFilters.length || config.query ? <button type="button" onClick={list.resetFilters} className="text-xs text-muted hover:text-foreground">{t("listView.clearFilters")}</button> : null}
-        {list.dirty ? <button type="button" className="ml-auto inline-flex items-center gap-1 text-xs text-muted" onClick={() => list.select(list.active?.id ?? null)}><RotateCcw size={12} />{t("listView.reset")}</button> : null}
+        {list.dirty ? <button type="button" className="ml-auto inline-flex items-center gap-1 text-xs text-muted" onClick={() => list.select(list.active?.key ?? null)}><RotateCcw size={12} />{t("listView.reset")}</button> : null}
       </div> : null}
       {list.error ? <div className="px-3 pb-3"><Alert tone="danger">{list.error}<button type="button" onClick={list.refresh} className="ml-2 underline">{t("listView.reload")}</button></Alert></div> : null}
       {list.notice ? <p role="status" className="flex items-center gap-1.5 px-3 pb-3 text-xs text-success"><Check size={13} />{list.notice}</p> : null}

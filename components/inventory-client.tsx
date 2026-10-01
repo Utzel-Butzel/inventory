@@ -132,6 +132,19 @@ function ResourceVisual({
   );
 }
 
+function ResourceTags({ tags }: { tags: string[] }) {
+  if (!tags.length) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1">
+      {Array.from(new Set(tags)).map((tag) => (
+        <span key={tag} className="max-w-full break-words rounded-md bg-surface-muted px-2 py-0.5 text-[11px] text-muted-strong">
+          {tag}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function InventoryClient({
   initialQuery = "",
   initialPageSize,
@@ -158,7 +171,7 @@ export function InventoryClient({
   const list = useListView(favoritesOnly ? "inventory.favorites" : "inventory", {
     query: normalizedInitialQuery, sort: "updatedAt", direction: "desc",
     layout: "grid", pageSize: normalizedInitialPageSize,
-    filters: { type: "all", status: "all", priority: "all" },
+    filters: { type: "all", status: "all", priority: "all", tag: "all", category: "all", excludeCategory: "all" },
     columns: ["name", "status", "sku", "location", "valueCents"],
   });
   const { patch } = list;
@@ -166,6 +179,9 @@ export function InventoryClient({
   const type = list.config.filters.type ?? "all";
   const status = list.config.filters.status ?? "all";
   const priority = list.config.filters.priority ?? "all";
+  const tag = list.config.filters.tag ?? "all";
+  const category = list.config.filters.category ?? "all";
+  const excludeCategory = list.config.filters.excludeCategory ?? "all";
   const pageSize = normalizeInventoryPageSize(list.config.pageSize);
   const view = list.config.layout;
   const { sort, direction } = list.config;
@@ -176,6 +192,7 @@ export function InventoryClient({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [inventoryTypes, setInventoryTypes] = useState<InventoryTypeOption[]>([]);
+  const [filterOptions, setFilterOptions] = useState<{ tags: string[]; categories: string[] }>({ tags: [], categories: [] });
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchForm, setBatchForm] = useState<BatchForm>(emptyBatchForm);
@@ -206,6 +223,16 @@ export function InventoryClient({
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+    void fetchJson<{ tags: string[]; categories: string[] }>("/api/v1/resources/filter-options", {
+      cache: "no-store", signal: controller.signal,
+    }).then(setFilterOptions).catch(() => {
+      if (!controller.signal.aborted) setError(t("errors.filterOptions"));
+    });
+    return () => controller.abort();
+  }, [t]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedQuery(query);
       setPage(1);
@@ -213,7 +240,7 @@ export function InventoryClient({
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  useEffect(() => { setPage(1); }, [type, status, priority, sort, direction, pageSize]);
+  useEffect(() => { setPage(1); }, [type, status, priority, tag, category, excludeCategory, sort, direction, pageSize]);
   const loadGeneration = useRef(0);
   const loadResources = useCallback(async () => {
     const generation = ++loadGeneration.current;
@@ -229,6 +256,10 @@ export function InventoryClient({
       direction,
       media: "cover",
     });
+    // Prefix option values so a literal tag/category named "all" remains selectable.
+    if (tag !== "all") search.set("tag", tag.slice(1));
+    if (category !== "all") search.set("category", category.slice(1));
+    if (excludeCategory !== "all") search.set("excludeCategory", excludeCategory.slice(1));
     if (debouncedQuery) search.set("q", debouncedQuery);
     if (favoritesOnly) search.set("favorites", "true");
     try {
@@ -244,13 +275,13 @@ export function InventoryClient({
     } finally {
       if (generation === loadGeneration.current) setLoading(false);
     }
-  }, [debouncedQuery, favoritesOnly, page, pageSize, priority, sort, direction, status, t, type]);
+  }, [debouncedQuery, favoritesOnly, tag, category, excludeCategory, page, pageSize, priority, sort, direction, status, t, type]);
 
   useEffect(() => {
     void loadResources();
   }, [loadResources]);
 
-  const activeFilters = Number(type !== "all") + Number(status !== "all") + Number(priority !== "all") + Number(Boolean(query));
+  const activeFilters = Number(type !== "all") + Number(status !== "all") + Number(priority !== "all") + Number(Boolean(query)) + Number(tag !== "all") + Number(category !== "all") + Number(excludeCategory !== "all");
   const typeOptions = useMemo<InventoryTypeOption[]>(
     () =>
       inventoryTypes.length
@@ -435,6 +466,9 @@ export function InventoryClient({
         sorts={["updatedAt", "name", "type", "status", "sku", "location", "quantity", "valueCents", "priority", "createdAt"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
         filters={[
           { key: "type", label: t("filters.typeLabel"), options: typeOptions.map((option) => ({ value: option.key, label: option.label })) },
+          { key: "tag", label: t("filters.tagLabel"), options: filterOptions.tags.map((name) => ({ value: "=" + name, label: name })) },
+          { key: "category", label: t("filters.categoryLabel"), options: filterOptions.categories.map((name) => ({ value: "=" + name, label: name })) },
+          { key: "excludeCategory", label: t("filters.excludeCategoryLabel"), options: filterOptions.categories.map((name) => ({ value: "=" + name, label: name })) },
           { key: "status", label: t("filters.statusLabel"), options: ["available", "in-use", "maintenance", "archived"].map((value) => ({ value, label: statusLabel(value) })) },
           { key: "priority", label: t("batchSelection.fields.priority"), options: [1, 2, 3, 4, 5].map((value) => ({ value: String(value), label: t("batchSelection.priority", { value }) })) },
         ]}
@@ -730,6 +764,7 @@ export function InventoryClient({
                     {markdownToPlainText(resource.description) ||
                       t("item.noDescription")}
                   </p>
+                  <ResourceTags tags={resource.tags} />
                   {developerMode ? (
                     <div className="mt-3 flex min-w-0 items-center gap-2 rounded-lg border border-brand-border bg-brand-soft/60 px-2.5 py-2 text-[11px] text-brand">
                       <CodeXml className="size-3.5 shrink-0" aria-hidden="true" />
@@ -848,6 +883,7 @@ export function InventoryClient({
                           value: integer.format(resource.quantity),
                         })}
                       </div>
+                      <ResourceTags tags={resource.tags} />
                       {developerMode ? (
                         <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-brand">
                           <CodeXml className="size-3 shrink-0" aria-hidden="true" />

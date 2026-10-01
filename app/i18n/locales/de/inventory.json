@@ -209,6 +209,9 @@
     "clear": "Suche leeren"
   },
   "filters": {
+    "tagLabel": "Nach Tag filtern",
+    "categoryLabel": "Nach Kategorie filtern",
+    "excludeCategoryLabel": "Kategorie ausschließen",
     "typeLabel": "Nach Typ filtern",
     "statusLabel": "Nach Status filtern",
     "allTypes": "Alle Typen",
@@ -225,7 +228,8 @@
   },
   "loading": "Inventar wird geladen",
   "errors": {
-    "load": "Das Inventar konnte nicht geladen werden."
+    "load": "Das Inventar konnte nicht geladen werden.",
+    "filterOptions": "Tag- und Kategoriefilter konnten nicht geladen werden."
   },
   "empty": {
     "filteredTitle": "Keine passenden Einträge",

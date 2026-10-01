@@ -1,4 +1,5 @@
-import { resolveAiPrompt } from "@/lib/ai-prompt-store";
+import { inventoryAiEnvironment } from "@/lib/inventory-ai-settings";
+import { getAiPromptSettings, resolveAiPrompt } from "@/lib/ai-prompt-store";
 import { AiPromptSelectionError } from "@/lib/ai-prompt-templates";
 import type { NewResource } from "@/db/schema";
 import { researchInventoryDetails } from "@/lib/ai";
@@ -132,8 +133,11 @@ export async function POST(request: Request, context: Context) {
   if (!resource) return finish({ error: "Not found" }, 404);
 
   let resolvedPrompt: string | undefined;
+  let inventorySettings;
   try {
-    resolvedPrompt = await resolveAiPrompt(authorization.identity.organizationId, "research", parsed.data, resource);
+    const settings = await getAiPromptSettings(authorization.identity.organizationId);
+    inventorySettings = settings.inventorySettings;
+    resolvedPrompt = await resolveAiPrompt(authorization.identity.organizationId, "research", parsed.data, resource, settings);
   } catch (error) {
     if (error instanceof AiPromptSelectionError) return finish({ error: error.message }, 422);
     return finishTransient({ error: "Prompt templates are temporarily unavailable." }, 503);
@@ -143,7 +147,7 @@ export async function POST(request: Request, context: Context) {
   const imageResults = await Promise.allSettled(
     resource.media
       .filter((item) => item.kind === "image")
-      .slice(0, 3)
+      .slice(0, inventorySettings.maximumImages)
       .map(mediaToDataUrl),
   );
   const imageDataUrls = imageResults.flatMap((result) =>
@@ -195,11 +199,12 @@ export async function POST(request: Request, context: Context) {
     };
     const { result, model, sources } = await trackAiUsage({
       organizationId: authorization.identity.organizationId,
-      estimate: aiUsageEstimate({ action: "inventory_research" }),
+      estimate: aiUsageEstimate({ action: "inventory_research", model: inventorySettings.researchModel, environment: inventoryAiEnvironment(inventorySettings) }),
       actor: authorization.identity,
       resourceId: id,
       metadata: { imageCount: imageDataUrls.length },
       run: () => researchInventoryDetails({
+        settings: inventorySettings,
         resource: researchContext,
         prompt: resolvedPrompt,
         imageDataUrls,

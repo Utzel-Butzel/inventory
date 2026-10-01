@@ -92,6 +92,12 @@ struct ResourceFormView: View {
     @State private var coverOperationID = UUID()
     @State private var createdResource: InventoryResource?
     @State private var uploadedObjectMedia: MediaUploadResponse?
+    @State private var autoAnalyze = true
+    @State private var autoResearch = false
+    @State private var analysisOverwrite = true
+    @State private var aiDefaultsLoaded = false
+    @State private var researchCompleted = false
+    @State private var researchOperationID = UUID()
     @State private var objectAnalysisCompleted = false
     @State private var objectCoverCompleted = false
     @State private var objectAISettingsSnapshot: ObjectCaptureAISettingsSnapshot?
@@ -207,6 +213,22 @@ struct ResourceFormView: View {
                             .foregroundStyle(.secondary)
                         }
                     }
+                }
+
+                if resource == nil && state.canUseAI {
+                    if !aiDefaultsLoaded {
+                        Button("KI-Vorgaben erneut laden") { Task { await loadAIDefaults() } }
+                    }
+                    Section("KI beim Anlegen") {
+                        if objectModel != nil && state.canAnalyzeInventory {
+                            Toggle("Fotos analysieren", isOn: $autoAnalyze)
+                            if autoAnalyze { Toggle("Vorhandene Texte überschreiben", isOn: $analysisOverwrite) }
+                        }
+                        if state.canResearchInventory {
+                            Toggle("Nach dem Anlegen recherchieren", isOn: $autoResearch)
+                            Text("Ergänzt fehlende Angaben aus dem Web und verursacht zusätzliche KI-Kosten.").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }.disabled(saving || !aiDefaultsLoaded || createdResource != nil)
                 }
 
                 Section("Gegenstand") {
@@ -327,13 +349,14 @@ struct ResourceFormView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(saving ? "Speichert …" : "Speichern") { save() }
                         .disabled(
-                            saving || mediaBusy || deleting ||
+                            saving || mediaBusy || deleting || (resource == nil && state.canUseAI && !aiDefaultsLoaded) ||
                                 name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         )
                 }
             }
             .interactiveDismissDisabled(saving || mediaBusy || deleting || createdResource != nil)
             .task(id: state.organizationContextIdentifier) { await loadMetadata() }
+            .task(id: state.organizationContextIdentifier) { await loadAIDefaults() }
             .onDisappear {
                 cleanupObjectModel()
                 cleanupPendingMedia()
@@ -489,6 +512,17 @@ struct ResourceFormView: View {
         }
     }
 
+    private func loadAIDefaults() async {
+        guard resource == nil, state.canUseAI, createdResource == nil else { return }
+        do {
+            let response = try await state.refreshInventoryAISettings()
+            autoAnalyze = state.canAnalyzeInventory && response.inventorySettings.autoAnalyze
+            autoResearch = state.canResearchInventory && response.inventorySettings.autoResearch
+            analysisOverwrite = response.inventorySettings.overwrite
+            aiDefaultsLoaded = true
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     private func save() {
         guard resource == nil ? state.canCreateInventory : state.canUpdateInventory else {
             errorMessage = "Dieses Konto hat nur Lesezugriff."
@@ -598,11 +632,11 @@ struct ResourceFormView: View {
                         }
 
                         if state.canUseAI {
-                            if !objectAnalysisCompleted {
+                            if state.canAnalyzeInventory && autoAnalyze && !objectAnalysisCompleted {
                                 do {
                                     let response = try await client.analyzeResource(
                                         id: created.id,
-                                        overwrite: true,
+                                        overwrite: analysisOverwrite,
                                         prompt: aiSettings?.analysisPrompt,
                                         idempotencyKey: analysisOperationID
                                     )
@@ -617,7 +651,7 @@ struct ResourceFormView: View {
                                     throw error
                                 }
                             }
-                            if !objectCoverCompleted {
+                            if state.canGenerateInventoryImages && !objectCoverCompleted {
                                 guard let articleImage = uploaded.uploaded.first(where: {
                                     $0.kind == .image && $0.source == .upload
                                 }) else {
@@ -652,6 +686,17 @@ struct ResourceFormView: View {
                         saved = created
                     }
                 }
+                var afterResearch = saved
+                if resource == nil && state.canResearchInventory && autoResearch && !researchCompleted {
+                    do {
+                        afterResearch = try await client.researchResource(id: saved.id, idempotencyKey: researchOperationID)
+                        researchCompleted = true
+                        createdResource = afterResearch
+                    } catch {
+                        researchOperationID = ObjectCaptureAIIdempotencyPolicy.nextOperationID(current: researchOperationID, after: error)
+                        throw error
+                    }
+                }
                 let fullySaved: InventoryResource
                 if let resource, !pendingMediaUploads.isEmpty {
                     _ = try await client.uploadMedia(
@@ -661,7 +706,7 @@ struct ResourceFormView: View {
                     )
                     fullySaved = try await client.getResource(id: resource.id)
                 } else {
-                    fullySaved = saved
+                    fullySaved = afterResearch
                 }
                 cleanupObjectModel()
                 cleanupPendingMedia()
@@ -952,14 +997,14 @@ struct ResourceFormView: View {
 
     private var objectCaptureProcessingDescription: String {
         if state.canUseAI {
-            return "Artikelbild und USDZ-Modell werden hochgeladen. Anschließend folgen automatisch die übliche KI-Erkennung und eine transparente Freistellung."
+            return "Artikelbild und USDZ-Modell werden hochgeladen. Die gewählten KI-Schritte werden anschließend ausgeführt; mit Bildberechtigung wird ein transparentes Cover erstellt."
         }
         return "Artikelbild und USDZ-Modell werden hochgeladen. KI-Erkennung und Freistellung bleiben aus, weil diesem Konto die KI-Berechtigung fehlt."
     }
 
     private var objectCaptureAICostEstimate: AICostRange? {
         guard state.canUseAI else { return nil }
-        let analysis = state.aiCostEstimate(for: "inventoryAnalysis")
+        let analysis = autoAnalyze ? state.aiCostEstimate(for: "inventoryAnalysis") : nil
         let cover = state.imageGenerationCostEstimate(passes: 2)
         if let analysis, let cover { return analysis.adding(cover) }
         return analysis ?? cover

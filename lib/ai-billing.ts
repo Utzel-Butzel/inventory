@@ -60,6 +60,7 @@ const countMaximumUsd: Record<InventoryCountModelId, number> = {
 
 export function aiUsageEstimate(options: {
   action: Exclude<AiBillableAction, "photo_count" | "image_generation">;
+  model?: string;
   environment?: Record<string, string | undefined>;
 }): AiUsageEstimate;
 export function aiUsageEstimate(options: {
@@ -116,7 +117,7 @@ export function aiUsageEstimate(options: {
   return {
     action: options.action,
     provider: estimate?.provider ?? "openai",
-    model: estimate?.model ?? "unpriced-model",
+    model: options.model ?? estimate?.model ?? "unpriced-model",
     // Unknown custom endpoints are deliberately reserved conservatively. The
     // deployment can use a known model alias when exact budget behavior matters.
     costMicros: usdToMicros(estimate?.maximumUsd ?? 1),

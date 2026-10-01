@@ -287,7 +287,10 @@
     "imageGenerationPlaceholder": "Create a clean, realistic catalogue photograph of {{name}} on a neutral background.",
     "imageGenerationAccuracy": "Generated images are illustrative and may not exactly represent the physical item. Review the result before use.",
     "searchForImage": "Search for image",
-    "generateImage": "Generate image"
+    "generateImage": "Generate image",
+    "autoResearch": "Research after creating",
+    "overwriteDefaults": "Overwrite existing text",
+    "reloadSettings": "Reload"
   },
   "position": {
     "title": "Position",
@@ -705,6 +708,8 @@
     "save": "Unable to save item.",
     "removeFile": "Unable to remove file.",
     "reorderMedia": "Unable to reorder media.",
-    "delete": "Unable to delete item."
+    "delete": "Unable to delete item.",
+    "automaticAi": "The item was saved, but an automatic AI step failed. You can retry it here.",
+    "aiSettings": "AI defaults must load before saving."
   }
 }
