@@ -209,6 +209,25 @@
     "clear": "Clear search"
   },
   "filters": {
+    "tagAnd": "AND",
+    "tagCondition": "Condition {{number}}",
+    "tagAddCondition": "+ Add condition",
+    "tagRemove": "Remove",
+    "tagRemoveCondition": "Remove condition {{number}}",
+    "tagConditionsHint": "All conditions must match. Within an IS condition, any selected tag is sufficient.",
+    "tagOperator": "Tag operator",
+    "tagPlaceholder": "Select tags…",
+    "tagNoOptions": "No more tags found",
+    "tagOperators": {
+      "is": "IS",
+      "isNot": "IS NOT",
+      "hasNot": "HAS NOT"
+    },
+    "tagHints": {
+      "is": "At least one of the selected tags is present.",
+      "isNot": "None of the selected tags are present.",
+      "hasNot": "Only items without tags."
+    },
     "tagLabel": "Filter by tag",
     "categoryLabel": "Filter by category",
     "excludeCategoryLabel": "Exclude category",
@@ -503,5 +522,19 @@
       "merging": "Merging…",
       "submit": "Keep “{{name}}” and delete the other"
     }
+  },
+  "workspace": {
+    "itemNavigation": "Inventory item sections",
+    "details": "Overview",
+    "stock": "Stock",
+    "issue": "Take out",
+    "receipt": "Restock",
+    "workView": "Work view",
+    "checkStock": "Review stock",
+    "stockFor": "Stock for {{name}}",
+    "issueFor": "Take out from {{name}}",
+    "receiptFor": "Restock {{name}}",
+    "moreTags_one": "One more tag",
+    "moreTags_other": "{{count}} more tags"
   }
 }

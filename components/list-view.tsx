@@ -9,12 +9,14 @@ import { combineListViews, createListViewConfig, listViewCollectionSchema, order
 
 const emptyCollection: ListViewCollection = { views: [], defaultId: null };
 
-export function useListView(scope: string, initial: Partial<ListViewConfig> = {}) {
+export function useListView(scope: string, initial: Partial<ListViewConfig> = {}, availableColumns?: string[]) {
   const organization = useOrganizationSlug();
   const organizationId = useOrganizationId();
   const { t } = useT("common");
   const initialKey = JSON.stringify(initial);
   const defaults = useMemo(() => createListViewConfig(JSON.parse(initialKey)), [initialKey]);
+  const columnsKey = JSON.stringify(availableColumns ?? defaults.columns);
+  const restorableColumns = useMemo<string[]>(() => JSON.parse(columnsKey), [columnsKey]);
   const owner = useRef(organization + ":" + scope);
   const [config, setConfig] = useState(defaults);
   const [collections, setCollections] = useState<ListViewCollections>({ personal: emptyCollection, organization: emptyCollection });
@@ -66,14 +68,14 @@ export function useListView(scope: string, initial: Partial<ListViewConfig> = {}
         const combined = combineListViews(loaded);
         const defaultView = combined.views.find((view) => view.key === combined.defaultId);
         if (defaultView && !interacted.current) {
-          setConfig({ ...restoreListView(defaultView.config, defaults), ...(defaults.query ? { query: defaults.query } : {}) });
+          setConfig({ ...restoreListView(defaultView.config, defaults, restorableColumns), ...(defaults.query ? { query: defaults.query } : {}) });
           setActiveId(defaultView.key);
         }
       })
       .catch(() => { if (!controller.signal.aborted) setError(t("listView.errors.load")); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [organization, organizationId, scope, reload, t, defaults]);
+  }, [organization, organizationId, scope, reload, t, defaults, restorableColumns]);
 
   const patch = useCallback((value: Partial<ListViewConfig>) => {
     interacted.current = true;
@@ -88,7 +90,7 @@ export function useListView(scope: string, initial: Partial<ListViewConfig> = {}
   const select = (id: string | null) => {
     interacted.current = true;
     const saved = collection.views.find((view) => view.key === id);
-    setConfig(saved ? restoreListView(saved.config, defaults) : defaults);
+    setConfig(saved ? restoreListView(saved.config, defaults, restorableColumns) : defaults);
     setActiveId(id);
     setNotice(null);
   };
@@ -159,7 +161,14 @@ export function useListView(scope: string, initial: Partial<ListViewConfig> = {}
 
 export type ListViewController = ReturnType<typeof useListView>;
 export type ListViewOption = { value: string; label: string };
-export type ListViewFilter = { key: string; label: string; options: ListViewOption[] };
+export type ListViewFilter = {
+  key: string;
+  label: string;
+  options: ListViewOption[];
+  render?: (value: string, onChange: (value: string) => void) => ReactNode;
+  formatValue?: (value: string) => string;
+  isActive?: (value: string) => boolean;
+};
 
 /** Shared adapter for client-loaded administrative collections. */
 export function useCollectionView<T>(scope: string, items: readonly T[], options: {
@@ -216,14 +225,16 @@ export function ListViewToolbar({ list, filters = [], sorts, searchPlaceholder, 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const root = useRef<HTMLElement>(null);
   const { config } = list;
-  const activeFilters = filters.filter((filter) => config.filters[filter.key] && config.filters[filter.key] !== "all");
+  const activeFilters = filters.filter((filter) => filter.isActive ? filter.isActive(config.filters[filter.key] ?? "all") : config.filters[filter.key] && config.filters[filter.key] !== "all");
   const orderedColumns = columns ? (config.columns.length ? config.columns.map((key) => columns.find((column) => column.value === key)).filter((column): column is ListViewOption => Boolean(column)) : columns) : [];
 
   useEffect(() => {
     const close = (event: MouseEvent | KeyboardEvent) => {
       if (event instanceof KeyboardEvent && event.key !== "Escape") return;
       root.current?.querySelectorAll("details[open]").forEach((detail) => {
-        if (event instanceof KeyboardEvent || !detail.contains(event.target as Node)) {
+        // A selected option may be removed before this document listener runs.
+        // The original event path still identifies clicks inside the panel.
+        if (event instanceof KeyboardEvent || !event.composedPath().includes(detail)) {
           detail.removeAttribute("open");
           if (event instanceof KeyboardEvent) detail.querySelector("summary")?.focus();
         }
@@ -262,7 +273,7 @@ export function ListViewToolbar({ list, filters = [], sorts, searchPlaceholder, 
       </form> : null}
       <div className="flex flex-wrap items-center gap-2 p-3">
         <label className="relative min-w-40 flex-1 sm:max-w-sm"><span className="sr-only">{t("listView.search")}</span><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" /><input type="search" maxLength={500} value={config.query} onChange={(event) => list.patch({ query: event.target.value })} placeholder={searchPlaceholder ?? t("listView.searchPlaceholder")} className={cn(controlClass, "w-full bg-surface-subtle pl-9 pr-8 [&::-webkit-search-cancel-button]:appearance-none")} />{config.query ? <button type="button" onClick={() => list.patch({ query: "" })} aria-label={t("listView.clearSearch")} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted"><X size={13} /></button> : null}</label>
-        {filters.length ? <details className="static sm:relative"><summary className={summaryClass}><Filter size={14} />{t("listView.filter")}{activeFilters.length ? <span className="rounded bg-brand-soft px-1.5 text-brand">{activeFilters.length}</span> : null}<ChevronDown size={12} /></summary><div className={panelClass}>{filters.map((filter) => <label key={filter.key} className="block text-xs font-semibold text-muted-strong">{filter.label}<select value={config.filters[filter.key] ?? "all"} onChange={(event) => list.setFilter(filter.key, event.target.value)} className={cn(controlClass, "mt-1.5 w-full")}><option value="all">{t("listView.any")}</option>{filter.options.filter((option) => option.value !== "all").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>)}</div></details> : null}
+        {filters.length ? <details className="static sm:relative"><summary className={summaryClass}><Filter size={14} />{t("listView.filter")}{activeFilters.length ? <span className="rounded bg-brand-soft px-1.5 text-brand">{activeFilters.length}</span> : null}<ChevronDown size={12} /></summary><div className={panelClass}>{filters.map((filter) => filter.render ? <div key={filter.key}>{filter.render(config.filters[filter.key] ?? "all", (value) => list.setFilter(filter.key, value))}</div> : <label key={filter.key} className="block text-xs font-semibold text-muted-strong">{filter.label}<select value={config.filters[filter.key] ?? "all"} onChange={(event) => list.setFilter(filter.key, event.target.value)} className={cn(controlClass, "mt-1.5 w-full")}><option value="all">{t("listView.any")}</option>{filter.options.filter((option) => option.value !== "all").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>)}</div></details> : null}
         <details className="static sm:relative"><summary className={summaryClass}>{config.direction === "asc" ? <ArrowUp size={14} /> : <ArrowDown size={14} />}{t("listView.sort")}<ChevronDown size={12} /></summary><div className={panelClass}><label className="block text-xs font-semibold text-muted-strong">{t("listView.sortBy")}<select value={config.sort} onChange={(event) => list.patch({ sort: event.target.value })} className={cn(controlClass, "mt-1.5 w-full")}>{sorts.map((sort) => <option key={sort.value} value={sort.value}>{sort.label}</option>)}</select></label><label className="block text-xs font-semibold text-muted-strong">{t("listView.direction")}<select value={config.direction} onChange={(event) => list.patch({ direction: event.target.value as "asc" | "desc" })} className={cn(controlClass, "mt-1.5 w-full")}><option value="asc">{t("listView.ascending")}</option><option value="desc">{t("listView.descending")}</option></select></label></div></details>
         <details className="static sm:relative"><summary className={summaryClass}><Settings2 size={14} />{t("listView.arrange")}<ChevronDown size={12} /></summary><div className={panelClass}>
           {layouts ? <div className="flex gap-2">{(["table", "grid"] as const).map((layout) => <button key={layout} type="button" aria-pressed={config.layout === layout} className={cn(summaryClass, config.layout === layout && "border-brand text-brand")} onClick={() => list.patch({ layout })}>{layout === "grid" ? <Grid2X2 size={14} /> : <List size={14} />}{t("listView." + layout)}</button>)}</div> : null}
@@ -274,7 +285,7 @@ export function ListViewToolbar({ list, filters = [], sorts, searchPlaceholder, 
         {total !== undefined ? <span aria-live="polite" className="ml-auto text-xs text-muted">{t(loadedOnly ? "listView.loadedResults" : "listView.results", { count: total })}</span> : null}
       </div>
       {activeFilters.length || config.query || list.dirty ? <div className="flex flex-wrap items-center gap-2 border-t border-border px-3 py-2">
-        {activeFilters.map((filter) => <button type="button" key={filter.key} onClick={() => list.setFilter(filter.key, "all")} aria-label={t("listView.removeFilter", { name: filter.label })} className="inline-flex items-center gap-2 rounded-md bg-brand-soft px-2 py-1 text-xs text-brand">{filter.label}: {filter.options.find((option) => option.value === config.filters[filter.key])?.label ?? config.filters[filter.key]}<X size={12} /></button>)}
+        {activeFilters.map((filter) => <button type="button" key={filter.key} onClick={() => list.setFilter(filter.key, "all")} aria-label={t("listView.removeFilter", { name: filter.label })} className="inline-flex items-center gap-2 rounded-md bg-brand-soft px-2 py-1 text-xs text-brand">{filter.label}: {filter.formatValue?.(config.filters[filter.key]) ?? filter.options.find((option) => option.value === config.filters[filter.key])?.label ?? config.filters[filter.key]}<X size={12} /></button>)}
         {activeFilters.length || config.query ? <button type="button" onClick={list.resetFilters} className="text-xs text-muted hover:text-foreground">{t("listView.clearFilters")}</button> : null}
         {list.dirty ? <button type="button" className="ml-auto inline-flex items-center gap-1 text-xs text-muted" onClick={() => list.select(list.active?.key ?? null)}><RotateCcw size={12} />{t("listView.reset")}</button> : null}
       </div> : null}

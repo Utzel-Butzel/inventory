@@ -1,5 +1,8 @@
 "use client";
 
+import { ResourceItemNavigation } from "@/components/resource-item-navigation";
+import type { StockBookingTask } from "@/components/resource-stock/movement-form";
+
 import {
   OrganizationLink as Link,
   useOrganizationAllowsNegativeStock,
@@ -51,10 +54,12 @@ export function ResourceStockManager({
   resourceId,
   canEdit = false,
   selectedUnitId,
+  initialTask = "receipt",
 }: {
   resourceId: string;
   canEdit?: boolean;
   selectedUnitId?: string;
+  initialTask?: StockBookingTask;
 }) {
   const allowNegativeStock = useOrganizationAllowsNegativeStock();
   const { t, i18n } = useT("stock");
@@ -74,7 +79,9 @@ export function ResourceStockManager({
   const [notice, setNotice] = useState<string | null>(null);
 
   const [movementForm, setMovementForm] = useState<MovementForm>(
-    defaultMovementForm("in"),
+    { ...defaultMovementForm(initialTask === "issue" ? "out" : "in"),
+      ...(initialTask === "count" ? { quantity: "", type: "adjustment", reason: t("resource.booking.tasks.count") } : {}),
+    },
   );
   useEffect(() => {
     const controller = new AbortController();
@@ -117,7 +124,7 @@ export function ResourceStockManager({
         ]);
         const normalized = normalizeStock(payload, t);
         setStock(normalized);
-        if (!quiet && hasPurchaseUnit(normalized.config)) {
+        if (!quiet && initialTask === "receipt" && hasPurchaseUnit(normalized.config)) {
           setMovementForm((current) => ({
             ...current,
             quantityUnit: "purchase",
@@ -145,7 +152,7 @@ export function ResourceStockManager({
         setLoading(false);
       }
     },
-    [customFieldsEndpoint, endpoint, resourceId, t],
+    [customFieldsEndpoint, endpoint, initialTask, resourceId, t],
   );
 
   useEffect(() => {
@@ -153,7 +160,8 @@ export function ResourceStockManager({
   }, [loadStock]);
 
   const currentQuantity = stock?.resource.quantity ?? 0;
-  const unitName = stock?.config.unitName || t("resource.unit");
+  const configuredUnit = stock?.config.unitName?.trim();
+  const unitName = !configuredUnit || configuredUnit === "unit" ? t("resource.unit") : configuredUnit;
   const onOrder = stock?.procurement.onOrder ?? 0;
   const applicableCustomFields = useMemo(
     () =>
@@ -181,6 +189,7 @@ export function ResourceStockManager({
   const movements = useStockMovements({
     ...mutationContext,
     allowNegativeStock,
+    initialTask,
     movementForm,
     setMovementForm,
   });
@@ -261,6 +270,7 @@ export function ResourceStockManager({
           </Link>
         ) : null}
       </header>
+      <ResourceItemNavigation resourceId={resourceId} current="stock" />
 
       {error ? (
         <div className="mb-5 flex items-start justify-between gap-4 rounded-2xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">
@@ -287,15 +297,6 @@ export function ResourceStockManager({
       <div>
         <div className="space-y-5">
           {stock.family ? <FamilyStockSummary family={stock.family} /> : null}
-          <StockBooking
-            stock={stock}
-            t={t}
-            unitName={unitName}
-            numberFormat={numberFormat}
-            resourceId={resourceId}
-            availableContacts={availableContacts}
-            movements={movements}
-          />
 
           <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
             <div className="grid gap-5 p-5 sm:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(120px,0.6fr))] sm:items-center sm:p-6">
@@ -345,6 +346,18 @@ export function ResourceStockManager({
             ) : null}
           </section>
 
+          {canEdit ? (
+            <StockBooking
+              stock={stock}
+              t={t}
+              unitName={unitName}
+              numberFormat={numberFormat}
+              resourceId={resourceId}
+              availableContacts={availableContacts}
+              movements={movements}
+            />
+          ) : null}
+
           <section>
             <AssemblyManager
               resourceId={resourceId}
@@ -379,7 +392,7 @@ export function ResourceStockManager({
         units={units}
       />
 
-      <section className="mt-5">
+      <section id="stock-locations" className="mt-5 scroll-mt-24" tabIndex={-1}>
         <StockLocationsManager
           resourceId={resourceId}
           canEdit={canEdit}
@@ -403,10 +416,10 @@ export function ResourceStockManager({
               id="outgoing-confirmation-title"
               className="mt-4 text-lg font-semibold tracking-[-0.02em] text-foreground"
             >
-              {t("resource.confirm.outgoingTitle")}
+              {t(pendingMovement.expectedQuantity !== undefined ? "resource.confirm.countTitle" : "resource.confirm.outgoingTitle")}
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted">
-              {t("resource.confirm.outgoingDescription", {
+              {t(pendingMovement.expectedQuantity !== undefined ? "resource.confirm.countDescription" : "resource.confirm.outgoingDescription", {
                 quantity: quantityLabel(
                   Math.abs(pendingMovement.delta),
                   unitName,
@@ -465,7 +478,7 @@ export function ResourceStockManager({
                 ) : (
                   <PackageMinus className="size-4" aria-hidden="true" />
                 )}
-                {t("resource.actions.confirmStockOut")}
+                {t(pendingMovement.expectedQuantity !== undefined ? "resource.booking.submit.count" : "resource.actions.confirmStockOut")}
               </button>
             </div>
           </div>

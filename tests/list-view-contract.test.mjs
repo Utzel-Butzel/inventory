@@ -7,6 +7,14 @@ import {
 
 const id = "00000000-0000-4000-8000-000000000063";
 const config = createListViewConfig({ sort: "name", filters: { status: "available" }, columns: ["name", "sku"] });
+
+test("compact inventory defaults preserve saved optional columns and layouts", () => {
+  const defaults = createListViewConfig({ columns: ["name", "quantity", "location", "status"], density: "compact" });
+  const saved = { ...config, columns: ["name", "sku", "valueCents"], layout: "grid" };
+  const restored = restoreListView(saved, defaults, [...defaults.columns, "sku", "valueCents"]);
+  assert.deepEqual(restored.columns, saved.columns);
+  assert.equal(restored.layout, "grid");
+});
 const view = { id, name: "Werkzeuge", config };
 
 test("saved views round-trip all controls and validate the default reference", () => {

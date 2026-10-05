@@ -1,3 +1,4 @@
+import { inventoryTagFilterSchema, type InventoryTagFilter } from "@/lib/inventory-tag-filter";
 import { resourceInputSchema } from "@/lib/validators";
 import {
   createResource,
@@ -40,6 +41,15 @@ export async function GET(request: Request) {
   if (authorization.response) return authorization.response;
 
   const url = new URL(request.url);
+  let tagFilter: InventoryTagFilter | undefined;
+  const rawTagFilter = url.searchParams.get("tagFilter");
+  if (rawTagFilter !== null) {
+    try {
+      tagFilter = inventoryTagFilterSchema.parse(JSON.parse(rawTagFilter));
+    } catch {
+      return Response.json({ error: "Invalid tag filter." }, { status: 422 });
+    }
+  }
   const page = Number(url.searchParams.get("page") ?? "1");
   const pageSize = Number(
     url.searchParams.get("pageSize") ?? DEFAULT_INVENTORY_PAGE_SIZE,
@@ -52,6 +62,7 @@ export async function GET(request: Request) {
     type: url.searchParams.get("type") ?? undefined,
     status: url.searchParams.get("status") ?? undefined,
     tag: url.searchParams.get("tag") ?? undefined,
+    tagFilter,
     category: url.searchParams.get("category") ?? undefined,
     excludeCategory: url.searchParams.get("excludeCategory") ?? undefined,
     priority: url.searchParams.get("priority") ?? undefined,

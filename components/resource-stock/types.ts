@@ -174,6 +174,7 @@ export type UnitEditForm = {
 
 export type MovementPayload = {
   delta: number;
+  expectedQuantity?: number;
   quantity?: number;
   type: MovementType;
   reason?: string;

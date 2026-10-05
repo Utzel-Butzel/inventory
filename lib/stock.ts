@@ -82,6 +82,7 @@ export type StockForecast = {
 
 export type StockMovementInput = {
   delta: number;
+  expectedQuantity?: number;
   quantity?: number;
   type: string;
   reason?: string | null;
@@ -1717,7 +1718,10 @@ export async function bookStockMovement(
         )
         .limit(1);
       const config = configDto(settings);
-      if (config.trackingMode === "serialized" && input.delta !== 0) {
+      if (input.expectedQuantity !== undefined && resource.quantity !== input.expectedQuantity) {
+        throw new StockOperationError("STOCK_COUNT_CONFLICT", 409);
+      }
+      if (config.trackingMode === "serialized" && (input.delta !== 0 || input.expectedQuantity !== undefined)) {
         throw new StockOperationError(
           "Direct quantity bookings are not allowed in serialized mode. Create a unit or change an existing unit status instead.",
           409,

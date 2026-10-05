@@ -4,7 +4,9 @@ const key = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_.:-]+$/)
   .refine((value) => !["__proto__", "prototype", "constructor"].includes(value));
 export const listViewConfigSchema = z.object({
   query: z.string().max(500),
-  filters: z.record(key, z.string().max(200)).refine((value) => Object.keys(value).length <= 20),
+  filters: z.record(key, z.string().max(16384))
+    .refine((value) => Object.keys(value).length <= 20)
+    .refine((value) => Object.entries(value).every(([name, entry]) => name === "tag" || entry.length <= 200)),
   sort: key,
   direction: z.enum(["asc", "desc"]),
   layout: z.enum(["table", "grid"]),
@@ -90,8 +92,8 @@ export function sameListView(left: ListViewConfig, right: ListViewConfig) {
   return canonical(left) === canonical(right);
 }
 
-export function restoreListView(config: ListViewConfig, defaults: ListViewConfig): ListViewConfig {
-  const columns = config.columns.filter((column) => defaults.columns.includes(column));
+export function restoreListView(config: ListViewConfig, defaults: ListViewConfig, availableColumns = defaults.columns): ListViewConfig {
+  const columns = config.columns.filter((column) => availableColumns.includes(column));
   const primary = defaults.columns[0];
   return {
     ...defaults, ...config,

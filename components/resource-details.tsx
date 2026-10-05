@@ -1,5 +1,7 @@
 "use client";
 
+import { ResourceItemNavigation } from "@/components/resource-item-navigation";
+
 import {
   OrganizationLink as Link,
   useOrganizationHref,
@@ -35,7 +37,6 @@ import {
   Star,
   Tag,
   Trash2,
-  Warehouse,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -825,14 +826,6 @@ export function ResourceDetails({
               resourceName={resource.name}
             />
           ) : null}
-          {canViewStock && !isRoom ? (
-            <Link
-              href={`/inventory/${primaryReference}/stock`}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-brand-border bg-brand-soft px-3.5 text-sm font-semibold text-brand transition hover:bg-brand-soft"
-            >
-              <Warehouse className="size-4" /> {t("details.actions.stock")}
-            </Link>
-          ) : null}
           {canEdit ? (
             <Link
               href={`/inventory/${primaryReference}/edit`}
@@ -854,6 +847,7 @@ export function ResourceDetails({
           ) : null}
         </div>
       </header>
+      <ResourceItemNavigation resourceId={primaryReference} current="details" canViewStock={canViewStock && !isRoom} />
 
       {favoriteError ? (
         <div className="mb-5 rounded-xl border border-danger-border bg-danger-soft px-4 py-3 text-sm text-danger">

@@ -6,6 +6,8 @@ import {
   PackageMinus,
   PackagePlus,
   SlidersHorizontal,
+  ArrowRightLeft,
+  ClipboardCheck,
 } from "lucide-react";
 
 import { PhotoCountCapture } from "@/components/photo-count-capture";
@@ -23,7 +25,7 @@ import type {
 } from "./types";
 import type { StockMovementsController } from "./use-stock-movements";
 
-import { MovementDirectionToggle, StockContactSelect } from "./fields";
+import { StockContactSelect } from "./fields";
 
 export type StockBookingProps = Pick<StockSectionProps, "stock" | "t" | "unitName" | "numberFormat"> & {
   resourceId: string;
@@ -42,6 +44,8 @@ export function StockBooking({
 }: StockBookingProps) {
   const currentQuantity = stock.resource.quantity;
   const {
+    task,
+    selectTask,
     direction,
     movementForm,
     postingMovement,
@@ -50,11 +54,15 @@ export function StockBooking({
     enteredUnitName,
     enteredUnitFactor,
     movementTypes,
-    selectDirection,
     updateMovement,
     applyPhotoCount,
     submitMovement,
   } = movements;
+  const isCount = task === "count";
+  const amount = Number(movementForm.quantity);
+  const validAmount = movementForm.quantity.trim() !== "" && Number.isSafeInteger(amount) && amount >= (isCount ? 0 : 1);
+  const delta = isCount ? amount - currentQuantity : (direction === "in" ? 1 : -1) * amount * enteredUnitFactor;
+  const projected = currentQuantity + delta;
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
       <SectionHeading
@@ -75,46 +83,42 @@ export function StockBooking({
           placement="movement"
         />
 
-        <MovementDirectionToggle
-          direction={direction}
-          onChange={selectDirection}
-          t={t}
-        />
+        <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={t("resource.booking.chooseTask")}>
+          {(["issue", "receipt", "count"] as const).map((value) => {
+            const Icon = value === "issue" ? PackageMinus : value === "receipt" ? PackagePlus : ClipboardCheck;
+            return <button key={value} type="button" onClick={() => selectTask(value)} disabled={postingMovement}
+              aria-pressed={task === value}
+              className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-xs font-semibold disabled:opacity-50 ${task === value ? "border-brand-border bg-brand-soft text-brand" : "border-border text-muted-strong hover:bg-surface-hover"}`}>
+              <Icon className="size-4" aria-hidden="true" />{t(`resource.booking.tasks.${value}`)}
+            </button>;
+          })}
+          <a href="#stock-locations" className="flex items-center justify-center gap-2 rounded-xl border border-border px-3 py-3 text-xs font-semibold text-muted-strong hover:bg-surface-hover">
+            <ArrowRightLeft className="size-4" aria-hidden="true" />{t("resource.booking.tasks.transfer")}
+          </a>
+        </div>
+        <p className="mb-4 text-sm text-muted">{t(`resource.booking.taskHelp.${task}`)}</p>
 
-        <PhotoCountCapture
-          itemId={stock.resource.id}
-          itemName={stock.resource.name}
-          unitName={unitName}
-          direction={direction}
-          quantity={movementForm.quantity}
-          availableQuantity={currentQuantity}
-          disabled={stock.config.trackingMode === "serialized"}
-          onCount={applyPhotoCount}
-        />
+
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className={labelClass}>
-            {t("resource.booking.quantity")}
+            {t(isCount ? "resource.booking.countedQuantity" : "resource.booking.quantity")}
             <div className="relative">
               <input
                 type="number"
-                min="1"
-                max={
-                  direction === "out"
-                    ? Math.max(0, currentQuantity)
-                    : Math.max(1, Math.floor(1_000_000 / enteredUnitFactor))
-                }
+                min={isCount ? "0" : "1"}
+                max={isCount ? 2_000_000_000 : Math.max(1, Math.floor(2_000_000_000 / enteredUnitFactor))}
                 step="1"
                 required
                 value={movementForm.quantity}
                 onChange={(event) => updateMovement("quantity", event.target.value)}
-                className={`${inputClass} ${purchaseUnitConfigured && direction === "in" ? "pr-24" : "pr-20"}`}
+                className={`${inputClass} ${!isCount && purchaseUnitConfigured && direction === "in" ? "pr-24" : "pr-20"}`}
               />
               <span className="pointer-events-none absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 text-[12px] text-muted">
                 {enteredUnitName}
               </span>
             </div>
-            {purchaseUnitConfigured && direction === "in" ? (
+            {!isCount && purchaseUnitConfigured && direction === "in" ? (
               <select
                 aria-label={t("resource.booking.quantityUnit")}
                 value={movementForm.quantityUnit}
@@ -132,7 +136,7 @@ export function StockBooking({
                 <option value="base">{unitName}</option>
               </select>
             ) : null}
-            {purchaseUnitConfigured &&
+            {!isCount && purchaseUnitConfigured &&
               direction === "in" &&
               movementForm.quantityUnit === "purchase" ? (
               <span className="mt-1 block text-[10px] font-normal leading-4 text-muted">
@@ -145,6 +149,27 @@ export function StockBooking({
               </span>
             ) : null}
           </label>
+        </div>
+        {!isCount ? (
+          <details className="mt-4">
+          <summary className="cursor-pointer text-xs font-semibold text-muted-strong">{t("resource.booking.photoQuantity")}</summary>
+        <PhotoCountCapture
+          key={task}
+          itemId={stock.resource.id}
+          itemName={stock.resource.name}
+          unitName={unitName}
+          direction={direction}
+          quantity={movementForm.quantity}
+          availableQuantity={currentQuantity}
+          disabled={stock.config.trackingMode === "serialized"}
+          onCount={applyPhotoCount}
+        />
+          </details>
+        ) : null}
+        <details className="mt-5 rounded-xl border border-border p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-muted-strong">{t("resource.booking.optionalDetails")}</summary>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {!isCount ? (
           <label className={labelClass}>
             {t("resource.booking.movementType")}
             <select
@@ -152,18 +177,18 @@ export function StockBooking({
               onChange={(event) => updateMovement("type", event.target.value as MovementType)}
               className={inputClass}
             >
-              {movementTypes.map((type) => (
+              {movementTypes.filter((type) => type !== "transfer").map((type) => (
                 <option key={type} value={type}>
                   {t(movementLabelKeys[type])}
                 </option>
               ))}
             </select>
           </label>
+          ) : null}
           <label className={labelClass}>
             {t("resource.booking.date")}
             <input
               type="datetime-local"
-              required
               value={movementForm.occurredAt}
               onChange={(event) => updateMovement("occurredAt", event.target.value)}
               className={inputClass}
@@ -176,6 +201,7 @@ export function StockBooking({
             t={t}
             optional
           />
+          {!isCount ? (
           <label className={labelClass}>
             {direction === "in"
               ? t("resource.booking.inboundPrice")
@@ -203,6 +229,7 @@ export function StockBooking({
               {t("resource.booking.totalPriceHelp")}
             </span>
           </label>
+          ) : null}
           <label className={`${labelClass} sm:col-span-2`}>
             {t("resource.booking.reason")} {" "}
             <span className="font-normal text-muted">
@@ -247,7 +274,8 @@ export function StockBooking({
               className={`${inputClass} h-auto resize-y py-3 leading-5`}
             />
           </label>
-        </div>
+          </div>
+        </details>
 
         {stock.config.trackingMode === "serialized" ? (
           <div className="mt-4 flex items-start gap-2 rounded-xl border border-info-border bg-info-soft px-3.5 py-3 text-[12px] leading-4 text-info">
@@ -266,26 +294,20 @@ export function StockBooking({
         ) : null}
 
         <div className="mt-5 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[12px] text-muted">
-            {t("resource.booking.projectedBalance", {
-              quantity: numberFormat.format(
-                Math.max(
-                  0,
-                  currentQuantity +
-                  (direction === "in" ? 1 : -1) *
-                  Number(movementForm.quantity || 0) *
-                  enteredUnitFactor,
-                ),
-              ),
-              unit: unitName,
-            })}
-          </p>
+          <div aria-live="polite" className="text-sm tabular-nums text-muted-strong">
+            <span className="block text-xs text-muted">{t("resource.booking.balancePreview")}</span>
+            {validAmount ? (
+              <span className={`mt-1 block font-semibold ${projected < 0 ? "text-danger" : "text-foreground"}`}>
+                {numberFormat.format(currentQuantity)} {delta < 0 ? "−" : "+"} {numberFormat.format(Math.abs(delta))} = {numberFormat.format(projected)} {unitName}
+              </span>
+            ) : <span>{t("resource.booking.enterQuantity")}</span>}
+          </div>
           <button
             type="submit"
             disabled={
               postingMovement ||
               stock.config.trackingMode === "serialized" ||
-              (direction === "out" && currentQuantity < 1)
+              !validAmount
             }
             className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-xs font-semibold text-on-strong shadow-sm transition disabled:cursor-not-allowed disabled:opacity-45 ${direction === "in"
                 ? "bg-success hover:brightness-90"
@@ -299,9 +321,7 @@ export function StockBooking({
             ) : (
               <PackageMinus className="size-4" aria-hidden="true" />
             )}
-            {direction === "in"
-              ? t("resource.actions.bookStockIn")
-              : t("resource.actions.reviewStockOut")}
+            {t(`resource.booking.submit.${task}`)}
           </button>
         </div>
       </form>

@@ -4,10 +4,10 @@ export const defaultInventoryAnalysisPrompt = (
 ) => `You are cataloguing an inventory item from one or more photos.
 
 Identify the dominant item and ignore background clutter. Write in ${language}.
-- Create a concise, specific title.
-- Write a useful inventory description with short bullet lines covering category, brand, model, material, color, visible condition, accessories and readable labels.
-- Never invent facts. Say "unknown" when a detail is not reliably visible.
-- Return 5–12 short lowercase tags without #.
+- Create a short, specific title of 3–8 words (aim for at most 70 characters): item kind, brand or model when visible, and only the distinguishing variant. Put other attributes in the description.
+- Start the description with one short identifying sentence (at most 160 characters), without repeating the title. Then add at most five concise attribute bullets for useful visible facts: brand/model, material, dimensions if readable, condition, accessories or readable labels.
+- Never invent facts. Omit attributes that are not reliably visible; do not fill the description with "unknown" fields.
+- Return 1–5 useful, distinct lowercase tags without #. Avoid synonyms, singular/plural duplicates, and tags that repeat the brand or model. Use the same output language for title, description and tags; preserve product names and model codes.
 - Classify it as exactly one of: ${allowedResourceTypes.join(", ")}.
 - Write accessible alt text describing what is visibly shown.
 - Give a confidence score between 0 and 1.

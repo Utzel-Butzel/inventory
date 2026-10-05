@@ -209,6 +209,25 @@
     "clear": "Suche leeren"
   },
   "filters": {
+    "tagAnd": "UND",
+    "tagCondition": "Bedingung {{number}}",
+    "tagAddCondition": "+ Bedingung hinzufügen",
+    "tagRemove": "Entfernen",
+    "tagRemoveCondition": "Bedingung {{number}} entfernen",
+    "tagConditionsHint": "Alle Bedingungen müssen erfüllt sein. Innerhalb einer IS-Bedingung genügt einer der ausgewählten Tags.",
+    "tagOperator": "Tag-Operator",
+    "tagPlaceholder": "Tags auswählen …",
+    "tagNoOptions": "Keine weiteren Tags gefunden",
+    "tagOperators": {
+      "is": "IS",
+      "isNot": "IS NOT",
+      "hasNot": "HAS NOT"
+    },
+    "tagHints": {
+      "is": "Mindestens einer der ausgewählten Tags ist vorhanden.",
+      "isNot": "Keiner der ausgewählten Tags ist vorhanden.",
+      "hasNot": "Nur Einträge ohne Tags."
+    },
     "tagLabel": "Nach Tag filtern",
     "categoryLabel": "Nach Kategorie filtern",
     "excludeCategoryLabel": "Kategorie ausschließen",
@@ -503,5 +522,19 @@
       "merging": "Wird zusammengeführt…",
       "submit": "„{{name}}“ behalten und den anderen Datensatz löschen"
     }
+  },
+  "workspace": {
+    "itemNavigation": "Bereiche dieses Inventareintrags",
+    "details": "Übersicht",
+    "stock": "Bestand",
+    "issue": "Entnehmen",
+    "receipt": "Auffüllen",
+    "workView": "Arbeitsansicht",
+    "checkStock": "Bestände prüfen",
+    "stockFor": "Bestand für {{name}}",
+    "issueFor": "Aus {{name}} entnehmen",
+    "receiptFor": "{{name}} auffüllen",
+    "moreTags_one": "Ein weiteres Schlagwort",
+    "moreTags_other": "{{count}} weitere Schlagwörter"
   }
 }

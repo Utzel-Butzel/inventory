@@ -1,3 +1,4 @@
+import { parseStockBookingTask } from "@/components/resource-stock/movement-form";
 import type { Metadata } from "next";
 
 import { InventoryBreadcrumb } from "@/components/inventory-breadcrumb-context";
@@ -20,13 +21,17 @@ export async function generateMetadata(): Promise<Metadata> {
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ unit?: string | string[] }>;
+  searchParams: Promise<{ unit?: string | string[]; task?: string | string[] }>;
 };
 
 export default async function ResourceStockPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { unit } = await searchParams;
+  const { unit, task } = await searchParams;
+  const initialTask = parseStockBookingTask(task);
+  const query = new URLSearchParams();
+  if (typeof task === "string") query.set("task", initialTask);
   const selectedUnitId = typeof unit === "string" && isResourceId(unit) ? unit.toLowerCase() : undefined;
+  if (selectedUnitId) query.set("unit", selectedUnitId);
   const identity = await getSessionIdentity();
   const resource = identity
     ? await getResourceRecordByReference(id, identity.organizationId)
@@ -37,7 +42,7 @@ export default async function ResourceStockPage({ params, searchParams }: Props)
       redirect(
         organizationPath(
           identity.organization.slug,
-          `/inventory/${primaryReference}/stock${selectedUnitId ? `?unit=${selectedUnitId}` : ""}`,
+          `/inventory/${primaryReference}/stock${query.size ? `?${query}` : ""}`,
         ),
       );
     }
@@ -58,6 +63,8 @@ export default async function ResourceStockPage({ params, searchParams }: Props)
       <ResourceStockManager
         resourceId={resource?.id ?? id}
         canEdit={canManageStock}
+        initialTask={initialTask}
+        key={`${resource?.id ?? id}:${initialTask}`}
         selectedUnitId={selectedUnitId}
       />
     </>

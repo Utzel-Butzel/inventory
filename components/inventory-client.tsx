@@ -33,6 +33,9 @@ import {
   normalizeInventoryPageSize,
   type InventoryPageSize,
 } from "@/lib/inventory-pagination";
+import { InventoryTagFilterControl } from "@/components/inventory-tag-filter";
+import { readInventoryTagFilter, isInventoryTagFilterActive, inventoryTagConditions } from "@/lib/inventory-tag-filter";
+import { inventoryTagSummary } from "@/lib/inventory-presentation";
 import { markdownToPlainText } from "@/lib/simple-markdown";
 import { primaryResourceReference } from "@/lib/resource-slug-contract";
 
@@ -133,16 +136,32 @@ function ResourceVisual({
 }
 
 function ResourceTags({ tags }: { tags: string[] }) {
-  if (!tags.length) return null;
+  const { t } = useT("inventory");
+  const { visible, hidden } = inventoryTagSummary(tags);
+  if (!visible.length) return null;
   return (
-    <div className="mt-2 flex flex-wrap gap-1">
-      {Array.from(new Set(tags)).map((tag) => (
-        <span key={tag} className="max-w-full break-words rounded-md bg-surface-muted px-2 py-0.5 text-[11px] text-muted-strong">
-          {tag}
-        </span>
+    <div className="mt-2 flex min-w-0 items-center gap-1">
+      {visible.map((tag) => (
+        <span key={tag} title={tag} className="max-w-28 truncate rounded-md bg-surface-muted px-2 py-0.5 text-[11px] text-muted-strong">{tag}</span>
       ))}
+      {hidden.length ? <span title={hidden.join(", ")} aria-label={t("workspace.moreTags", { count: hidden.length })} className="shrink-0 text-[11px] text-muted">+{hidden.length}</span> : null}
     </div>
   );
+}
+
+function StockQuickActions({ resource, canManage }: { resource: ClientResource; canManage: boolean }) {
+  const { t } = useT("inventory");
+  if (resource.type === "place") return null;
+  const href = `/inventory/${primaryResourceReference(resource)}/stock`;
+  return <div className="flex flex-wrap items-center gap-1.5" aria-label={t("workspace.stockFor", { name: resource.name })}>
+    {(canManage ? ["issue", "receipt"] : ["stock"]).map((task) => (
+      <Link key={task} href={task === "stock" ? href : `${href}?task=${task}`}
+        aria-label={t(`workspace.${task}For`, { name: resource.name })}
+        className="inline-flex min-h-9 items-center rounded-lg border border-border bg-surface px-2.5 text-xs font-semibold text-muted-strong transition hover:border-brand-border hover:bg-brand-soft hover:text-brand">
+        {t(`workspace.${task}`)}
+      </Link>
+    ))}
+  </div>;
 }
 
 export function InventoryClient({
@@ -150,11 +169,15 @@ export function InventoryClient({
   initialPageSize,
   developerMode = false,
   favoritesOnly = false,
+  canViewStock = false,
+  canManageStock = false,
 }: {
   initialQuery?: string;
   initialPageSize?: number;
   developerMode?: boolean;
   favoritesOnly?: boolean;
+  canViewStock?: boolean;
+  canManageStock?: boolean;
 }) {
   const { t, i18n } = useT("inventory");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
@@ -170,10 +193,10 @@ export function InventoryClient({
   });
   const list = useListView(favoritesOnly ? "inventory.favorites" : "inventory", {
     query: normalizedInitialQuery, sort: "updatedAt", direction: "desc",
-    layout: "grid", pageSize: normalizedInitialPageSize,
+    layout: "table", density: "compact", pageSize: normalizedInitialPageSize,
     filters: { type: "all", status: "all", priority: "all", tag: "all", category: "all", excludeCategory: "all" },
-    columns: ["name", "status", "sku", "location", "valueCents"],
-  });
+    columns: ["name", "quantity", "location", "status"],
+  }, ["name", "quantity", "location", "status", "sku", "valueCents"]);
   const { patch } = list;
   const query = list.config.query;
   const type = list.config.filters.type ?? "all";
@@ -256,8 +279,10 @@ export function InventoryClient({
       direction,
       media: "cover",
     });
-    // Prefix option values so a literal tag/category named "all" remains selectable.
-    if (tag !== "all") search.set("tag", tag.slice(1));
+    // Keep exact tag names and the operator together for API requests and saved views.
+    const tagFilter = readInventoryTagFilter(tag);
+    if (isInventoryTagFilterActive(tagFilter)) search.set("tagFilter", JSON.stringify(tagFilter));
+    // Prefix category values so a literal category named "all" remains selectable.
     if (category !== "all") search.set("category", category.slice(1));
     if (excludeCategory !== "all") search.set("excludeCategory", excludeCategory.slice(1));
     if (debouncedQuery) search.set("q", debouncedQuery);
@@ -281,7 +306,7 @@ export function InventoryClient({
     void loadResources();
   }, [loadResources]);
 
-  const activeFilters = Number(type !== "all") + Number(status !== "all") + Number(priority !== "all") + Number(Boolean(query)) + Number(tag !== "all") + Number(category !== "all") + Number(excludeCategory !== "all");
+  const activeFilters = Number(type !== "all") + Number(status !== "all") + Number(priority !== "all") + Number(Boolean(query)) + Number(isInventoryTagFilterActive(readInventoryTagFilter(tag))) + Number(category !== "all") + Number(excludeCategory !== "all");
   const typeOptions = useMemo<InventoryTypeOption[]>(
     () =>
       inventoryTypes.length
@@ -462,17 +487,46 @@ export function InventoryClient({
         total={pagination.total}
         layouts
         pageSizes={INVENTORY_PAGE_SIZE_OPTIONS}
-        columns={["name", "status", "sku", "location", "valueCents"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
+        columns={["name", "quantity", "location", "status", "sku", "valueCents"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
         sorts={["updatedAt", "name", "type", "status", "sku", "location", "quantity", "valueCents", "priority", "createdAt"].map((value) => ({ value, label: t("common:listView.fields." + value) }))}
         filters={[
           { key: "type", label: t("filters.typeLabel"), options: typeOptions.map((option) => ({ value: option.key, label: option.label })) },
-          { key: "tag", label: t("filters.tagLabel"), options: filterOptions.tags.map((name) => ({ value: "=" + name, label: name })) },
+          {
+            key: "tag", label: t("filters.tagLabel"), options: [],
+            render: (value, onChange) => <InventoryTagFilterControl value={value} tags={filterOptions.tags} onChange={onChange} />,
+            isActive: (value) => isInventoryTagFilterActive(readInventoryTagFilter(value)),
+            formatValue: (value) => {
+              return inventoryTagConditions(readInventoryTagFilter(value))
+                .filter(isInventoryTagFilterActive)
+                .map((condition) => {
+                  const operator = t(`filters.tagOperators.${condition.operator}`);
+                  return condition.operator === "hasNot" ? operator : `${operator}: ${condition.tags.join(", ")}`;
+                }).join(` ${t("filters.tagAnd")} `);
+            },
+          },
           { key: "category", label: t("filters.categoryLabel"), options: filterOptions.categories.map((name) => ({ value: "=" + name, label: name })) },
           { key: "excludeCategory", label: t("filters.excludeCategoryLabel"), options: filterOptions.categories.map((name) => ({ value: "=" + name, label: name })) },
           { key: "status", label: t("filters.statusLabel"), options: ["available", "in-use", "maintenance", "archived"].map((value) => ({ value, label: statusLabel(value) })) },
           { key: "priority", label: t("batchSelection.fields.priority"), options: [1, 2, 3, 4, 5].map((value) => ({ value: String(value), label: t("batchSelection.priority", { value }) })) },
         ]}
-        actions={<button type="button" onClick={toggleSelectionMode} aria-pressed={selectionMode} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-xs font-semibold text-muted-strong"><ListChecks size={15} />{selectionMode ? t("batchSelection.finish") : t("batchSelection.start")}</button>}
+        actions={
+          <>
+            <button type="button"
+              onClick={() => patch({ layout: "table", density: "compact", columns: ["name", "quantity", "location", "status"] })}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-xs font-semibold text-muted-strong">
+              <Columns3 size={15} />{t("workspace.workView")}
+            </button>
+            {canViewStock ? (
+              <Link href="/stock" className="inline-flex h-9 items-center rounded-lg px-3 text-xs font-semibold text-muted-strong hover:bg-surface-hover">
+                {t("workspace.checkStock")}
+              </Link>
+            ) : null}
+            <button type="button" onClick={toggleSelectionMode} aria-pressed={selectionMode}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-xs font-semibold text-muted-strong">
+              <ListChecks size={15} />{selectionMode ? t("batchSelection.finish") : t("batchSelection.start")}
+            </button>
+          </>
+        }
       />
 
       {error ? (
@@ -725,7 +779,7 @@ export function InventoryClient({
             const selected = selectedSet.has(resource.id);
             const content = (
               <>
-                <div data-list-image className="relative aspect-square overflow-hidden bg-surface-muted">
+                <div data-list-image className="relative aspect-[4/3] overflow-hidden bg-surface-muted">
                   <ResourceVisual
                     resource={resource}
                     eager={resource.id === eagerCoverId}
@@ -750,7 +804,7 @@ export function InventoryClient({
                 </div>
                 <div className="p-4 text-left">
                   <div className="mb-1 flex items-start justify-between gap-3">
-                    <h2 className="line-clamp-1 font-semibold tracking-[-0.01em] text-foreground">
+                    <h2 title={resource.name} className="line-clamp-1 font-semibold tracking-[-0.01em] text-foreground">
                       {resource.name}
                     </h2>
                     {!selectionMode ? (
@@ -760,7 +814,7 @@ export function InventoryClient({
                       />
                     ) : null}
                   </div>
-                  <p className="line-clamp-2 min-h-10 text-xs leading-5 text-muted">
+                  <p className="line-clamp-1 text-xs leading-5 text-muted">
                     {markdownToPlainText(resource.description) ||
                       t("item.noDescription")}
                   </p>
@@ -782,7 +836,7 @@ export function InventoryClient({
                       </span>
                     </div>
                     <span className="ml-3 shrink-0 font-semibold text-muted-strong">
-                      {formatValue(resource.valueCents, resource.currency, locale)}
+                      {t("item.units", { count: resource.quantity, value: integer.format(resource.quantity) })}
                     </span>
                   </div>
                 </div>
@@ -809,13 +863,14 @@ export function InventoryClient({
                 {content}
               </button>
             ) : (
-              <div key={resource.id} className="relative">
+              <div key={resource.id} className={"relative " + cardClass}>
                 <Link
                   href={`/inventory/${primaryResourceReference(resource)}`}
-                  className={cardClass}
+                  className="group block"
                 >
                   {content}
                 </Link>
+                {canViewStock && resource.type !== "place" ? <div className="border-t border-border px-4 py-2"><StockQuickActions resource={resource} canManage={canManageStock} /></div> : null}
                 <button
                   type="button"
                   onClick={() => void toggleFavorite(resource)}
@@ -846,8 +901,8 @@ export function InventoryClient({
           })}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-surface" style={{ "--list-min-width": `${324 + (list.config.columns.length - 1) * 116}px` } as React.CSSProperties}>
-          <div className="hidden gap-4 border-b border-border bg-surface-subtle/80 px-4 py-3 text-[12px] font-semibold uppercase tracking-wider text-muted lg:grid lg:min-w-[var(--list-min-width)]" style={{ gridTemplateColumns: list.config.columns.map((key) => key === "name" ? "minmax(240px,2fr)" : "minmax(100px,1fr)").join(" ") + " 36px" }}>
+        <div className="overflow-x-auto rounded-xl border border-border bg-surface" style={{ "--list-min-width": `${(canViewStock ? 504 : 324) + (list.config.columns.length - 1) * 116}px` } as React.CSSProperties}>
+          <div className="hidden gap-4 border-b border-border bg-surface-subtle/80 px-4 py-3 text-[12px] font-semibold uppercase tracking-wider text-muted lg:grid lg:min-w-[var(--list-min-width)]" style={{ gridTemplateColumns: list.config.columns.map((key) => key === "name" ? "minmax(240px,2fr)" : "minmax(100px,1fr)").join(" ") + (canViewStock && !selectionMode ? " 216px" : " 36px") }}>
             {list.config.columns.map((key) => <span key={key}>{t("common:listView.fields." + key)}</span>)}
             <span />
           </div>
@@ -876,12 +931,9 @@ export function InventoryClient({
                       />
                     </div>
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-foreground">{resource.name}</div>
+                      <div title={resource.name} className="truncate text-sm font-semibold text-foreground">{resource.name}</div>
                       <div className="mt-0.5 truncate text-xs text-muted">
-                        {typeLabel(resource.type)} · {t("item.units", {
-                          count: resource.quantity,
-                          value: integer.format(resource.quantity),
-                        })}
+                        {typeLabel(resource.type)}{!list.config.columns.includes("quantity") ? ` · ${t("item.units", { count: resource.quantity, value: integer.format(resource.quantity) })}` : ""}
                       </div>
                       <ResourceTags tags={resource.tags} />
                       {developerMode ? (
@@ -895,14 +947,15 @@ export function InventoryClient({
                       ) : null}
                     </div>
                   </div>),
+                quantity: <span className={`text-sm font-semibold tabular-nums ${resource.quantity <= 0 ? "text-warning" : "text-foreground"}`}>{t("item.units", { count: resource.quantity, value: integer.format(resource.quantity) })}</span>,
                 status: <span className={'w-fit rounded-full px-2.5 py-1 text-[12px] font-semibold ring-1 ring-inset ' + (statusStyles[resource.status] ?? statusStyles.archived)}>{statusLabel(resource.status)}</span>,
                 sku: <span className="truncate font-mono text-xs text-muted">{resource.sku || "—"}</span>,
-                location: <span className="truncate text-xs text-muted">{resource.location || "—"}</span>,
+                location: <span className="flex items-center gap-1 truncate text-xs text-muted"><MapPin size={13} className="shrink-0" aria-hidden="true" />{resource.location || t("item.noLocation")}</span>,
                 valueCents: <span className="text-xs font-semibold text-muted-strong">{formatValue(resource.valueCents, resource.currency, locale)}</span>,
               };
-              const content = <>{list.config.columns.map((key) => <div key={key} className="min-w-0">{cells[key]}</div>)}<span className="hidden lg:block" /></>;
-              const rowStyle = { "--list-columns": list.config.columns.map((key) => key === "name" ? "minmax(240px,2fr)" : "minmax(100px,1fr)").join(" ") + " 36px" } as React.CSSProperties;
-              const rowClass = `group grid w-full gap-3 px-4 py-3 text-left transition lg:grid-cols-[var(--list-columns)] lg:items-center lg:gap-4 ${
+              const content = <>{list.config.columns.map((key) => <div key={key} className={`min-w-0 ${key === "name" ? "col-span-2 lg:col-span-1" : ""}`}>{cells[key]}</div>)}<span className="hidden lg:block" /></>;
+              const rowStyle = { "--list-columns": list.config.columns.map((key) => key === "name" ? "minmax(240px,2fr)" : "minmax(100px,1fr)").join(" ") + (canViewStock && !selectionMode ? " 216px" : " 36px") } as React.CSSProperties;
+              const rowClass = `group grid w-full grid-cols-2 gap-3 px-4 py-3 text-left transition lg:grid-cols-[var(--list-columns)] lg:items-center lg:gap-4 ${
                 selected ? "bg-success-soft/70" : "hover:bg-surface-subtle"
               }`;
               return selectionMode ? (
@@ -932,6 +985,7 @@ export function InventoryClient({
                   >
                     {content}
                   </Link>
+                  {canViewStock && resource.type !== "place" ? <div className="px-4 pb-3 lg:absolute lg:right-14 lg:top-1/2 lg:-translate-y-1/2 lg:p-0"><StockQuickActions resource={resource} canManage={canManageStock} /></div> : null}
                   <button
                     type="button"
                     onClick={() => void toggleFavorite(resource)}

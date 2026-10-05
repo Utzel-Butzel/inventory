@@ -3,6 +3,7 @@ import { z } from "zod";
 export const stockMovementSchema = z
   .object({
     delta: z.number().int().min(-2_000_000_000).max(2_000_000_000),
+    expectedQuantity: z.number().int().min(-2_000_000_000).max(2_000_000_000).optional(),
     quantity: z.number().int().min(0).max(2_000_000_000).optional(),
     type: z.enum([
       "receipt",

@@ -10,7 +10,7 @@ test("the primary sidebar groups operational pages and keeps locations top-level
 
   assert.match(
     shell,
-    /navigation\.overview[\s\S]*navigation\.inventory[\s\S]*navigation\.stock[\s\S]*navigation\.operations[\s\S]*navigation\.locations/,
+    /navigation\.overview[\s\S]*navigation\.inventory[\s\S]*navigation\.operations[\s\S]*navigation\.locations/,
   );
   assert.match(
     shell,
@@ -20,6 +20,8 @@ test("the primary sidebar groups operational pages and keeps locations top-level
     shell,
     /activeHrefs: \["\/operations", "\/requests", "\/contacts"\]/,
   );
+  assert.doesNotMatch(shell, /labelKey: "navigation\.stock",/);
+  assert.match(shell, /activeHrefs: \["\/inventory", "\/labels", "\/duplicates", "\/batch", "\/stock"\]/);
   assert.match(shell, /SIDEBAR_EXPANDED_STORAGE_KEY/);
   assert.match(shell, /aria-expanded=\{expanded\}/);
   assert.match(shell, /href="\/settings"/);

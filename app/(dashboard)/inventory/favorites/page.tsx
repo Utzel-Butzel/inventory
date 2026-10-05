@@ -22,6 +22,8 @@ export default async function FavoritesPage({
       initialQuery={initialQuery ?? ""}
       initialPageSize={identity?.inventoryPageSize}
       developerMode={identity?.developerMode ?? false}
+      canViewStock={identity?.permissions.includes("stock.read") ?? false}
+      canManageStock={identity?.permissions.includes("stock.manage") ?? false}
     />
   );
 }

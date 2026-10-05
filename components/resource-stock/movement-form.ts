@@ -66,3 +66,22 @@ export function buildStockMovementPayload(
     ...(totalPriceCents === null ? {} : { totalPriceCents, priceCurrency: currency }),
   };
 }
+
+export type StockBookingTask = "issue" | "receipt" | "count";
+
+export function parseStockBookingTask(value: unknown): StockBookingTask {
+  return value === "issue" || value === "count" ? value : "receipt";
+}
+
+export function buildStockCountPayload(form: MovementForm, options: MovementOptions): MovementPayload {
+  const counted = Number(form.quantity);
+  if (!form.quantity.trim() || !Number.isSafeInteger(counted) || counted < 0 || counted > 2_000_000_000) {
+    throw new Error(options.t("resource.errors.validCount"));
+  }
+  const delta = counted - options.currentQuantity;
+  const payload = buildStockMovementPayload({
+    ...form, quantity: String(Math.abs(delta) || 1), quantityUnit: "base",
+    type: "adjustment", totalPrice: "",
+  }, { ...options, mode: "create", purchaseUnitFactor: 1, direction: delta < 0 ? "out" : "in" });
+  return { ...payload, delta, expectedQuantity: options.currentQuantity };
+}

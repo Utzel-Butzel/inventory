@@ -1,5 +1,8 @@
 import "server-only";
 
+import { inventoryTagFilterCondition } from "@/lib/inventory-tag-filter-sql";
+import type { InventoryTagFilter } from "@/lib/inventory-tag-filter";
+
 import { isDeepStrictEqual } from "node:util";
 
 import {
@@ -154,6 +157,7 @@ export async function listResources(options: {
   status?: string;
   priority?: string;
   tag?: string;
+  tagFilter?: InventoryTagFilter;
   category?: string;
   excludeCategory?: string;
   sort?: string;
@@ -199,6 +203,10 @@ export async function listResources(options: {
   }
   if (options.status && options.status !== "all") {
     conditions.push(eq(resources.status, options.status));
+  }
+  if (options.tagFilter) {
+    const tagCondition = inventoryTagFilterCondition(resources.tags, options.tagFilter);
+    if (tagCondition) conditions.push(tagCondition);
   }
   if (options.tag) {
     conditions.push(sql`${options.tag} = ANY(${resources.tags})`);

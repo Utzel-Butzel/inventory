@@ -19,7 +19,6 @@ import {
   Plus,
   Search,
   Settings,
-  Warehouse,
   X,
 } from "lucide-react";
 
@@ -84,7 +83,7 @@ const navigation: NavigationItem[] = [
     href: "/inventory",
     icon: PackageOpen,
     permission: "inventory.read",
-    activeHrefs: ["/inventory", "/labels", "/duplicates", "/batch"],
+    activeHrefs: ["/inventory", "/labels", "/duplicates", "/batch", "/stock"],
     children: [
       {
         labelKey: "navigation.entries",
@@ -97,24 +96,6 @@ const navigation: NavigationItem[] = [
         permission: "inventory.read",
       },
       {
-        labelKey: "navigation.labels",
-        href: "/labels",
-        permission: "labels.read",
-      },
-      {
-        labelKey: "navigation.duplicates",
-        href: "/duplicates",
-        permission: "inventory.read",
-      },
-    ],
-  },
-  {
-    labelKey: "navigation.stock",
-    href: "/stock",
-    icon: Warehouse,
-    permission: "stock.read",
-    children: [
-      {
         labelKey: "navigation.stockOverview",
         href: "/stock",
         permission: "stock.read",
@@ -123,6 +104,16 @@ const navigation: NavigationItem[] = [
         labelKey: "navigation.stockScan",
         href: "/stock/scan",
         permission: "workflows.read",
+      },
+      {
+        labelKey: "navigation.labels",
+        href: "/labels",
+        permission: "labels.read",
+      },
+      {
+        labelKey: "navigation.duplicates",
+        href: "/duplicates",
+        permission: "inventory.read",
       },
     ],
   },
@@ -733,7 +724,9 @@ export function AppShell({
   const pathSegments = scopedPathname.split("/").filter(Boolean);
   const section = pathSegments[0] ?? "inventory";
   const navigationSection =
-    section === "notifications"
+    section === "stock"
+      ? "inventory"
+      : section === "notifications"
       ? "settings"
       : ["contacts", "requests"].includes(section)
         ? "operations"
@@ -742,7 +735,9 @@ export function AppShell({
           : section;
   const pageName = t(pageNames[navigationSection] ?? "navigation.inventory");
   const sectionHref =
-    navigationSection === "operations"
+    navigationSection === "inventory"
+      ? "/inventory"
+      : navigationSection === "operations"
       ? "/operations/purchases"
       : navigationSection === "locations"
         ? "/map"
@@ -770,10 +765,8 @@ export function AppShell({
     return undefined;
   })();
   const stockNestedPageName =
-    section === "stock" && pathSegments[1]
-      ? {
-          scan: t("navigation.stockScan"),
-        }[pathSegments[1]]
+    section === "stock"
+      ? (pathSegments[1] === "scan" ? t("navigation.stockScan") : t("navigation.stockOverview"))
       : undefined;
   const operationsNestedPageName = (() => {
     if (section === "contacts") return t("navigation.contacts");
@@ -815,7 +808,7 @@ export function AppShell({
   const showGlobalSearch = scopedPathname !== "/inventory";
   const mobileNavigation = navigation.filter(
     (item) =>
-      ["/inventory", "/stock", "/map"].includes(item.href) &&
+      ["/inventory", "/operations/purchases", "/map"].includes(item.href) &&
       (!item.permission || user.permissions.includes(item.permission)),
   );
   const moreActive = !mobileNavigation.some((item) =>

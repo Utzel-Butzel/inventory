@@ -22,10 +22,11 @@ import type {
   StockMutationContext,
 } from "./types";
 
-import { buildStockMovementPayload } from "./movement-form";
+import { buildStockCountPayload, buildStockMovementPayload, type StockBookingTask } from "./movement-form";
 
 type StockMovementsOptions = StockMutationContext & {
   allowNegativeStock: boolean;
+  initialTask?: StockBookingTask;
   movementForm: MovementForm;
   setMovementForm: Dispatch<SetStateAction<MovementForm>>;
 };
@@ -40,10 +41,12 @@ export function useStockMovements({
   numberFormat,
   t,
   allowNegativeStock,
+  initialTask = "receipt",
   movementForm,
   setMovementForm,
 }: StockMovementsOptions) {
-  const [direction, setDirection] = useState<"in" | "out">("in");
+  const [task, setTask] = useState<StockBookingTask>(initialTask);
+  const [direction, setDirection] = useState<"in" | "out">(initialTask === "issue" ? "out" : "in");
   const [pendingMovement, setPendingMovement] = useState<MovementPayload | null>(null);
   const [postingMovement, setPostingMovement] = useState(false);
   const [editingMovementId, setEditingMovementId] = useState<string | null>(
@@ -80,13 +83,13 @@ export function useStockMovements({
       : null;
   const purchaseUnitConfigured = purchaseUnit !== null;
   const enteredUnitName =
-    direction === "in" &&
+    task !== "count" && direction === "in" &&
       movementForm.quantityUnit === "purchase" &&
       purchaseUnitConfigured
       ? purchaseUnit?.name ?? unitName
       : unitName;
   const enteredUnitFactor =
-    direction === "in" &&
+    task !== "count" && direction === "in" &&
       movementForm.quantityUnit === "purchase" &&
       purchaseUnitConfigured
       ? purchaseUnit?.factor ?? 1
@@ -102,16 +105,19 @@ export function useStockMovements({
     });
   }, [historyFilter, stock?.movements]);
 
-  function selectDirection(next: "in" | "out") {
-    setDirection(next);
-    setMovementForm((current) => ({
-      ...current,
-      type: next === "in" ? "receipt" : "issue",
-      quantityUnit:
-        next === "in" && stock && hasPurchaseUnit(stock.config)
-          ? "purchase"
-          : "base",
-    }));
+  function selectTask(next: StockBookingTask) {
+    setTask(next);
+    const nextDirection = next === "issue" ? "out" : "in";
+    setDirection(nextDirection);
+    setMovementForm({
+      ...defaultMovementForm(nextDirection),
+      quantity: next === "count" ? "" : "1",
+      type: next === "count" ? "adjustment" : next,
+      quantityUnit: next === "receipt" && purchaseUnitConfigured ? "purchase" : "base",
+      reason: next === "count" ? t("resource.booking.tasks.count") : "",
+    });
+    setError(null);
+    setNotice(null);
   }
 
   function updateMovement<K extends keyof MovementForm>(key: K, value: MovementForm[K]) {
@@ -128,7 +134,8 @@ export function useStockMovements({
   }
 
   function buildMovementPayload() {
-    return buildStockMovementPayload(movementForm, {
+    const build = task === "count" ? buildStockCountPayload : buildStockMovementPayload;
+    return build(movementForm, {
       ...payloadOptions,
       mode: "create",
       direction,
@@ -147,10 +154,14 @@ export function useStockMovements({
         body: JSON.stringify(payload),
       });
       setPendingMovement(null);
-      setMovementForm(defaultMovementForm(direction));
+      setMovementForm({ ...defaultMovementForm(direction),
+        ...(task === "count" ? { quantity: "", type: "adjustment", reason: t("resource.booking.tasks.count") } : {}),
+      });
       await loadStock(true);
       setNotice(
-        payload.delta > 0
+        payload.expectedQuantity !== undefined
+          ? t("resource.notices.counted", { quantity: numberFormat.format(payload.expectedQuantity + payload.delta) })
+          : payload.delta > 0
           ? t("resource.notices.bookedIn", {
             quantity: quantityLabel(payload.delta, unitName, numberFormat, t),
           })
@@ -164,6 +175,12 @@ export function useStockMovements({
           }),
       );
     } catch (movementError) {
+      if (movementError instanceof Error && movementError.message.includes("STOCK_COUNT_CONFLICT")) {
+        await loadStock(true);
+        setError(t("resource.errors.countChanged"));
+        setPendingMovement(null);
+        return;
+      }
       setError(
         movementError instanceof Error
           ? movementError.message
@@ -316,6 +333,8 @@ export function useStockMovements({
   }
 
   return {
+    task,
+    selectTask,
     direction,
     movementForm,
     pendingMovement,
@@ -334,7 +353,6 @@ export function useStockMovements({
     enteredUnitFactor,
     movementTypes,
     filteredMovements,
-    selectDirection,
     updateMovement,
     applyPhotoCount,
     submitMovement,

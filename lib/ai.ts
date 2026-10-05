@@ -1,3 +1,4 @@
+import { inventoryTagSummary } from "@/lib/inventory-presentation";
 import type { InventoryAiSettings } from "@/lib/inventory-ai-settings";
 import "server-only";
 
@@ -305,8 +306,9 @@ export async function analyzeInventoryImages(
   if (!response.output_text?.trim()) {
     throw new Error("The AI analysis returned an empty response.");
   }
+  const result = analysisResultSchema.parse(JSON.parse(response.output_text));
   return {
-    result: analysisResultSchema.parse(JSON.parse(response.output_text)),
+    result: { ...result, tags: inventoryTagSummary(result.tags, 20).visible },
     model,
   };
 }

@@ -204,7 +204,9 @@
       "validBookingDate": "Wähle ein gültiges Wirksamkeitsdatum mit Uhrzeit.",
       "updateUnit": "Die Einheit konnte nicht aktualisiert werden.",
       "updateMovement": "Die Bestandsbewegung konnte nicht aktualisiert werden.",
-      "deleteMovement": "Die Bestandsbewegung konnte nicht gelöscht werden."
+      "deleteMovement": "Die Bestandsbewegung konnte nicht gelöscht werden.",
+      "validCount": "Gib eine ganze gezählte Menge zwischen 0 und 2.000.000.000 ein.",
+      "countChanged": "Der Bestand hat sich während der Zählung geändert. Die aktuelle Menge wurde geladen. Prüfe die Differenz und bestätige die Zählung erneut."
     },
     "notices": {
       "settingsSaved": "Bestandseinstellungen gespeichert.",
@@ -214,7 +216,8 @@
       "unitsCreated_other": "{{value}} Einheiten registriert.",
       "unitUpdated": "Einheit {{code}} wurde aktualisiert.",
       "movementUpdated": "Bestandsbewegung aktualisiert.",
-      "movementDeleted": "Bestandsbewegung gelöscht."
+      "movementDeleted": "Bestandsbewegung gelöscht.",
+      "counted": "Zählung protokolliert. Neuer Bestand: {{quantity}}."
     },
     "confirm": {
       "switchSerialized": "Beim Wechsel zur serialisierten Erfassung müssen einzelne Einheiten-IDs registriert werden. Fortfahren?",
@@ -226,7 +229,9 @@
       "before": "Vorher",
       "change": "Änderung",
       "after": "Nachher",
-      "minimumWarning": "Dadurch liegt der Bestand am oder unter dem festgelegten Minimum von {{minimum}}."
+      "minimumWarning": "Dadurch liegt der Bestand am oder unter dem festgelegten Minimum von {{minimum}}.",
+      "countTitle": "Zählkorrektur prüfen",
+      "countDescription": "Die Zählung verringert den erfassten Bestand um {{quantity}}. Die Korrektur bleibt im Verlauf sichtbar."
     },
     "tracking": {
       "bulk": "Mengenbestand",
@@ -251,8 +256,8 @@
       "unassigned": "Unzugeordneter Bestand"
     },
     "booking": {
-      "title": "Bewegung buchen",
-      "description": "Erfasse Zu- und Abgänge mit einem datierten Prüfpfad.",
+      "title": "Bestand ändern",
+      "description": "Wähle die Aufgabe für diesen Inventareintrag.",
       "stockIn": "Zugang",
       "stockOut": "Abgang",
       "quantity": "Menge",
@@ -277,7 +282,29 @@
       "unitControlsBelow": "Einheitenverwaltung unten",
       "available": "{{quantity}} verfügbar",
       "serializedBeforeLink": "Aktualisiere bei serialisiertem Bestand eine einzelne Einheit oder",
-      "serializedAfterLink": " oder scanne den Code."
+      "serializedAfterLink": " oder scanne den Code.",
+      "chooseTask": "Bestandsaufgabe wählen",
+      "tasks": {
+        "issue": "Entnehmen",
+        "receipt": "Auffüllen",
+        "count": "Bestand zählen",
+        "transfer": "Umlagern"
+      },
+      "taskHelp": {
+        "issue": "Wie viele Einheiten werden entnommen?",
+        "receipt": "Wie viele Einheiten kommen hinzu?",
+        "count": "Wie viele Einheiten sind tatsächlich vorhanden? Die Differenz wird als Korrektur protokolliert."
+      },
+      "countedQuantity": "Gezählte Menge",
+      "optionalDetails": "Weitere Angaben · Datum, Kontakt, Beleg und Notiz",
+      "balancePreview": "Bisher → Änderung → Neuer Bestand",
+      "enterQuantity": "Menge eingeben, um den neuen Bestand zu prüfen.",
+      "submit": {
+        "issue": "Entnahme prüfen",
+        "receipt": "Auffüllen buchen",
+        "count": "Zählung übernehmen"
+      },
+      "photoQuantity": "Menge per Foto ermitteln"
     },
     "movements": {
       "title": "Bewegungsverlauf",

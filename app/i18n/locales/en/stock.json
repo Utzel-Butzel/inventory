@@ -204,7 +204,9 @@
       "validBookingDate": "Choose a valid effective date and time.",
       "updateUnit": "Unable to update the unit.",
       "updateMovement": "Unable to update the stock movement.",
-      "deleteMovement": "Unable to delete the stock movement."
+      "deleteMovement": "Unable to delete the stock movement.",
+      "validCount": "Enter a whole counted quantity between 0 and 2,000,000,000.",
+      "countChanged": "Stock changed during the count. The current balance has been refreshed. Review the difference and confirm the count again."
     },
     "notices": {
       "settingsSaved": "Stock settings saved.",
@@ -214,7 +216,8 @@
       "unitsCreated_other": "{{value}} units registered.",
       "unitUpdated": "Unit {{code}} updated.",
       "movementUpdated": "Stock movement updated.",
-      "movementDeleted": "Stock movement deleted."
+      "movementDeleted": "Stock movement deleted.",
+      "counted": "Count recorded. New balance: {{quantity}}."
     },
     "confirm": {
       "switchSerialized": "Switching to serialized tracking requires registering individual unit IDs. Continue?",
@@ -226,7 +229,9 @@
       "before": "Before",
       "change": "Change",
       "after": "After",
-      "minimumWarning": "This leaves stock at or below the configured minimum of {{minimum}}."
+      "minimumWarning": "This leaves stock at or below the configured minimum of {{minimum}}.",
+      "countTitle": "Review count adjustment",
+      "countDescription": "This count reduces the recorded balance by {{quantity}}. The adjustment will remain in the history."
     },
     "tracking": {
       "bulk": "Bulk",
@@ -251,8 +256,8 @@
       "unassigned": "Unassigned stock"
     },
     "booking": {
-      "title": "Book a movement",
-      "description": "Record stock coming in or going out with a dated audit trail.",
+      "title": "Change stock",
+      "description": "Choose a task for this inventory item.",
       "stockIn": "Stock in",
       "stockOut": "Stock out",
       "quantity": "Quantity",
@@ -277,7 +282,29 @@
       "unitControlsBelow": "unit controls below",
       "available": "{{quantity}} available",
       "serializedBeforeLink": "For serialized stock, update an individual unit or",
-      "serializedAfterLink": " or scan its code."
+      "serializedAfterLink": " or scan its code.",
+      "chooseTask": "Choose a stock task",
+      "tasks": {
+        "issue": "Take out",
+        "receipt": "Restock",
+        "count": "Count stock",
+        "transfer": "Move stock"
+      },
+      "taskHelp": {
+        "issue": "How many units are being taken out?",
+        "receipt": "How many units are being added?",
+        "count": "How many units are actually present? The difference will be recorded as an adjustment."
+      },
+      "countedQuantity": "Counted quantity",
+      "optionalDetails": "More details · date, contact, receipt and note",
+      "balancePreview": "Before → Change → New balance",
+      "enterQuantity": "Enter a quantity to review the new balance.",
+      "submit": {
+        "issue": "Review withdrawal",
+        "receipt": "Confirm restock",
+        "count": "Record count"
+      },
+      "photoQuantity": "Estimate quantity from a photo"
     },
     "movements": {
       "title": "Movement history",

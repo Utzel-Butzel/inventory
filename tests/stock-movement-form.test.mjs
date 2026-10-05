@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   buildStockMovementPayload,
+  buildStockCountPayload,
+  parseStockBookingTask,
 } from "../components/resource-stock/movement-form.ts";
 import {
   customFieldValuesEqual,
@@ -30,6 +32,28 @@ const options = (overrides = {}) => ({
   numberFormat: new Intl.NumberFormat("en"),
   t,
   ...overrides,
+});
+
+test("counts record an absolute observed balance, including zero and unchanged counts", () => {
+  for (const counted of [0, 7, 10, 14]) {
+    const payload = buildStockCountPayload(form({ quantity: String(counted), quantityUnit: "purchase", totalPrice: "25" }), options());
+    assert.equal(payload.delta, counted - 10);
+    assert.equal(payload.expectedQuantity, 10);
+    assert.equal(payload.type, "adjustment");
+    assert.equal(Object.hasOwn(payload, "totalPriceCents"), false);
+  }
+  assert.equal(buildStockCountPayload(form({ quantity: "2" }), options({ currentQuantity: -4 })).delta, 6);
+});
+
+test("counts require an explicit, bounded whole number and task links have safe defaults", () => {
+  for (const quantity of ["", " ", "-1", "2.5", "invalid", "Infinity", "2000000001"]) {
+    assert.throws(() => buildStockCountPayload(form({ quantity }), options()), /resource.errors.validCount/);
+  }
+  assert.equal(parseStockBookingTask("issue"), "issue");
+  assert.equal(parseStockBookingTask("count"), "count");
+  for (const input of [undefined, ["issue"], "transfer", "unknown", "receipt"]) {
+    assert.equal(parseStockBookingTask(input), "receipt");
+  }
 });
 
 test("new bookings preserve the payload shape, contact, date and optional fields", () => {
