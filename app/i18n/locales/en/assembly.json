@@ -139,6 +139,9 @@
     "choose": "Choose an output variant",
     "unassigned": "{{name}} – unassigned stock",
     "help": "Uses the selected variant’s bill of materials. Finished stock is credited only to this item.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "destination": "Credit stock to: {{name}}",
+    "openStock": "Open {{name}} stock ({{count}})",
+    "recipeHelp": "Components are defined by the selected finished item’s bill of materials. Edit the bill of materials in the overview if it needs to change."
   }
 }

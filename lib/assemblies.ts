@@ -2129,50 +2129,10 @@ export async function buildAssembly(
         }
         assemblyResourceId = input.outputResourceId;
       } else if (children.length) {
-        if (!Object.keys(input.componentResourceSelections ?? {}).length) {
-          throw new AssemblyOperationError(
-            "Choose an output variant, or explicitly choose the primary item for unassigned stock.",
-            422,
-          );
-        }
-        const parentRecipe = await resolveEffectiveBomRecipe(
-          transaction,
-          organizationId,
-          requestedResourceId,
+        throw new AssemblyOperationError(
+          "Choose an output variant, or explicitly choose the primary item for unassigned stock.",
+          422,
         );
-        const selectedRecipe = await resolveBuildComponentSelections(
-          transaction,
-          organizationId,
-          parentRecipe.lines,
-          input.componentResourceSelections,
-        );
-        const signature = (lines: EffectiveBomLine[]) =>
-          JSON.stringify(
-            lines
-              .map((line) => [
-                line.slotKey,
-                line.componentResourceId,
-                line.quantityPerAssembly,
-                line.quantityUnit,
-              ])
-              .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
-          );
-        const matches: string[] = [];
-        for (const child of children) {
-          const recipe = await resolveEffectiveBomRecipe(
-            transaction,
-            organizationId,
-            child.id,
-          );
-          if (signature(recipe.lines) === signature(selectedRecipe))
-            matches.push(child.id);
-        }
-        if (matches.length !== 1)
-          throw new AssemblyOperationError(
-            "The component selection does not identify exactly one output variant. Choose the output variant explicitly.",
-            422,
-          );
-        assemblyResourceId = matches[0];
       }
       const effectiveRecipe = await resolveEffectiveBomRecipe(
         transaction,
@@ -2185,6 +2145,17 @@ export async function buildAssembly(
         effectiveRecipe.lines,
         input.componentResourceSelections,
       );
+      if (
+        effectiveRecipe.primary &&
+        initialBom.some((line, index) =>
+          line.componentResourceId !== effectiveRecipe.lines[index].componentResourceId
+        )
+      ) {
+        throw new AssemblyOperationError(
+          "The selected components do not match the output variant's bill of materials. Choose the matching output variant.",
+          422,
+        );
+      }
 
       const resourceIds = Array.from(
         new Set([

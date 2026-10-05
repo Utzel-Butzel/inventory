@@ -6270,14 +6270,14 @@ components:
         outputResourceId:
           type: string
           format: uuid
-          description: Finished item to credit. Must be the requested item or a direct variant. For primary items with variants, omit only when componentResourceSelections identifies exactly one variant by its complete effective BOM. Explicitly use the primary ID for unassigned output. Ambiguous or unmatched selections return 422.
+          description: Finished item to credit. Must be the requested item or a direct variant. Required when the requested item has variants; component selections never infer the output. Explicitly use the primary ID for unassigned output. When building a variant directly, its ID is the default output. Missing or conflicting output selections return 422.
         quantity: { type: integer, minimum: 1, maximum: 1000 }
         occurredAt: { type: string, format: date-time }
         location: { type: [string, "null"], maxLength: 240 }
         note: { type: string, maxLength: 20000 }
         componentResourceSelections:
           type: object
-          description: Maps stable BOM slot keys to either that slot's component resource or one of its direct first-class variants. The selected resource is consumed and snapshotted in build history.
+          description: Maps stable BOM slot keys to either that slot's component resource or one of its direct first-class variants. The selected resource is consumed and snapshotted in build history. When the output is a finished variant, selections must match its complete effective BOM; conflicting substitutions return 422 before any stock is booked.
           propertyNames:
             pattern: "^[A-Za-z0-9_-]{1,80}$"
           additionalProperties:

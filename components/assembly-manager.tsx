@@ -75,17 +75,6 @@ type BomResource = {
   trackingMode: TrackingMode;
 };
 
-type BomComponentChoice = {
-  resourceId: string;
-  name: string;
-  sku: string | null;
-  availableQuantity: number;
-  trackingMode: TrackingMode;
-  cover: ResourceCover | null;
-  availableUnits: AvailableUnit[];
-  isPrimary: boolean;
-};
-
 type BomComponent = {
   id: string;
   slotKey: string;
@@ -103,7 +92,6 @@ type BomComponent = {
   trackingMode: TrackingMode;
   cover: ResourceCover | null;
   availableUnits: AvailableUnit[];
-  choices: BomComponentChoice[];
   origin?: "local" | "base" | "inherited" | "override" | "variant";
 };
 
@@ -238,20 +226,6 @@ function normalizeBom(payload: BomEnvelope, t: TFunction<"assembly">): BomData {
             purchaseUnitFactor: component.purchaseUnitFactor ?? null,
           },
         ),
-        choices: component.choices?.length
-          ? component.choices
-          : [
-              {
-                resourceId: component.resourceId,
-                name: component.name,
-                sku: component.sku,
-                availableQuantity: component.availableQuantity,
-                trackingMode: component.trackingMode,
-                cover: component.cover,
-                availableUnits: component.availableUnits,
-                isPrimary: true,
-              },
-            ],
       }))
       .sort((left, right) => left.position - right.position),
     buildableQuantity: Math.max(0, source.buildableQuantity ?? 0),
@@ -370,11 +344,13 @@ function AssemblyResourceManager({
   mode = "full",
   onStockChanged,
   hideWhenEmpty = false,
+  unassignedOutput = false,
 }: {
   resourceId: string;
   mode?: AssemblyMode;
   onStockChanged?: () => void;
   hideWhenEmpty?: boolean;
+  unassignedOutput?: boolean;
 }) {
   const allowNegativeStock = useOrganizationAllowsNegativeStock();
   const { t, i18n } = useT(["assembly", "common"]);
@@ -411,8 +387,7 @@ function AssemblyResourceManager({
   const [componentUnitIds, setComponentUnitIds] = useState<
     Record<string, string[]>
   >({});
-  const [componentResourceSelections, setComponentResourceSelections] =
-    useState<Record<string, string>>({});
+  const [lastBomResource, setLastBomResource] = useState<BomResource | null>(null);
   const buildRequestRef = useRef<{ key: string; fingerprint: string } | null>(null);
 
   const loadBom = useCallback(
@@ -425,21 +400,6 @@ function AssemblyResourceManager({
         const normalized = normalizeBom(payload, t);
         setBom(normalized);
         setComponents(normalized.components);
-        setComponentResourceSelections((current) =>
-          Object.fromEntries(
-            normalized.components.map((component) => {
-              const preserved = current[component.slotKey];
-              return [
-                component.slotKey,
-                component.choices.some(
-                  (choice) => choice.resourceId === preserved,
-                )
-                  ? preserved
-                  : component.resourceId,
-              ];
-            }),
-          ),
-        );
       } catch (loadError) {
         setError(
           loadError instanceof Error ? loadError.message : t("assembly:errors.loadBom"),
@@ -550,32 +510,18 @@ function AssemblyResourceManager({
   const preview = useMemo(
     () =>
       (bom?.components ?? []).map((component) => {
-        const selectedResourceId =
-          componentResourceSelections[component.slotKey] ??
-          component.resourceId;
-        const selectedChoice =
-          component.choices.find(
-            (choice) => choice.resourceId === selectedResourceId,
-          ) ?? component.choices[0]!;
         const required = component.quantityPerAssembly * buildQuantity;
         return {
           ...component,
-          resourceId: selectedChoice.resourceId,
-          name: selectedChoice.name,
-          sku: selectedChoice.sku,
-          availableQuantity: selectedChoice.availableQuantity,
-          trackingMode: selectedChoice.trackingMode,
-          cover: selectedChoice.cover,
-          availableUnits: selectedChoice.availableUnits,
           required,
-          remaining: selectedChoice.availableQuantity - required,
-          shortage: required > selectedChoice.availableQuantity,
+          remaining: component.availableQuantity - required,
+          shortage: required > component.availableQuantity,
           blockingShortage:
-            required > selectedChoice.availableQuantity &&
-            (!allowNegativeStock || selectedChoice.trackingMode === "serialized"),
+            required > component.availableQuantity &&
+            (!allowNegativeStock || component.trackingMode === "serialized"),
         };
       }),
-    [allowNegativeStock, bom?.components, buildQuantity, componentResourceSelections],
+    [allowNegativeStock, bom?.components, buildQuantity],
   );
   const selectedBuildable = useMemo(
     () =>
@@ -619,6 +565,9 @@ function AssemblyResourceManager({
   }, [preview]);
 
   const outputCodes = parsedCodes(buildForm.outputUnitCodes);
+  const buildOutputName = unassignedOutput
+    ? t("assembly:output.unassigned", { name: bom?.resource.name ?? "" })
+    : bom?.resource.name ?? "";
   const serializedSelectionsValid = preview.every(
     (component) =>
       component.trackingMode !== "serialized" ||
@@ -630,6 +579,7 @@ function AssemblyResourceManager({
     outputCodes.length === buildQuantity;
   const canBuild = Boolean(
     bom &&
+      bom.resource.id === resourceId &&
       bom.components.length &&
       Number.isInteger(buildQuantity) &&
       buildQuantity > 0 &&
@@ -677,26 +627,6 @@ function AssemblyResourceManager({
             }
           : null,
         availableUnits: [],
-        choices: [
-          {
-            resourceId: resource.id,
-            name: resource.name,
-            sku: resource.sku,
-            availableQuantity: resource.quantity,
-            trackingMode: "bulk",
-            cover: resource.cover
-              ? {
-                  id: resource.cover.id,
-                  url: resource.cover.url,
-                  altText: resource.cover.altText,
-                  width: resource.cover.width,
-                  height: resource.cover.height,
-                }
-              : null,
-            availableUnits: [],
-            isPrimary: true,
-          },
-        ],
         origin: bom?.inheritance ? "variant" : "local",
       },
     ]);
@@ -830,7 +760,7 @@ function AssemblyResourceManager({
       !window.confirm(
         t("assembly:build.confirm", {
           count: buildQuantity,
-          name: bom.resource.name,
+          name: buildOutputName,
         }),
       )
     ) {
@@ -840,6 +770,7 @@ function AssemblyResourceManager({
     setPostingBuild(true);
     setError(null);
     setNotice(null);
+    setLastBomResource(null);
     try {
       const requestBody = {
         outputResourceId: resourceId,
@@ -847,7 +778,6 @@ function AssemblyResourceManager({
         occurredAt,
         location: buildForm.location.trim() || undefined,
         note: buildForm.note.trim() || undefined,
-        componentResourceSelections,
         componentUnitIds,
         outputUnitCodes:
           bom.resource.trackingMode === "serialized" && outputCodes.length
@@ -860,7 +790,7 @@ function AssemblyResourceManager({
           ? buildRequestRef.current
           : { key: crypto.randomUUID(), fingerprint };
       buildRequestRef.current = request;
-      await fetchJson(buildsEndpoint, {
+      const result = await fetchJson<{ resource: BomResource }>(buildsEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -879,7 +809,8 @@ function AssemblyResourceManager({
       await Promise.all([loadBom(true), loadBuilds(true)]);
       onStockChanged?.();
       window.dispatchEvent(new Event("resource-family-changed"));
-      setNotice(t("assembly:notices.built", { count: buildQuantity, name: bom.resource.name }));
+      setLastBomResource(result.resource);
+      setNotice(t("assembly:notices.built", { count: buildQuantity, name: result.resource.name }));
     } catch (buildError) {
       setError(
         buildError instanceof Error ? buildError.message : t("assembly:errors.build"),
@@ -954,8 +885,13 @@ function AssemblyResourceManager({
       ) : null}
       {notice ? (
         <div className="flex items-start justify-between gap-4 rounded-2xl border border-success-border bg-success-soft px-4 py-3 text-sm text-success">
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             <Check className="size-4 shrink-0" aria-hidden="true" /> {notice}
+            {lastBomResource ? (
+              <Link href={`/inventory/${lastBomResource.id}/stock`} className="underline">
+                {t("assembly:output.openStock", { name: lastBomResource.name, count: lastBomResource.quantity })}
+              </Link>
+            ) : null}
           </span>
           <button
             type="button"
@@ -1359,6 +1295,12 @@ function AssemblyResourceManager({
             />
           ) : (
             <form onSubmit={submitBuild}>
+              <div className="border-b border-border bg-brand-soft/40 p-4 sm:px-5">
+                <p className="text-sm font-semibold">
+                  {t("assembly:output.destination", { name: buildOutputName })}
+                </p>
+                <p className="mt-1 text-xs text-muted">{t("assembly:output.recipeHelp")}</p>
+              </div>
               <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[320px_minmax(0,1fr)]">
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
@@ -1421,7 +1363,7 @@ function AssemblyResourceManager({
                       className={`${inputClass} mt-1.5 h-auto resize-y py-3 leading-5`}
                     />
                   </label>
-                  {bom.resource.trackingMode === "serialized" ? (
+                  {bom?.resource.trackingMode === "serialized" ? (
                     <label className={labelClass}>
                       {t("assembly:labels.finishedCodes")}
                       <textarea
@@ -1455,64 +1397,11 @@ function AssemblyResourceManager({
                       {preview.map((component) => (
                         <div key={component.slotKey} className={cn("grid gap-3 px-4 py-3 sm:grid-cols-[minmax(180px,1fr)_90px_90px_90px] sm:items-center", component.blockingShortage && "bg-danger-soft")}>
                           <div className="min-w-0">
-                            {component.choices.length > 1 ? (
-                              <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
-                                {t("assembly:labels.componentConfiguration")}
-                                <span className="relative mt-1.5 block">
-                                  <ResourceThumbnail
-                                    cover={component.cover}
-                                    className="pointer-events-none absolute left-1.5 top-1/2 z-10 size-7 -translate-y-1/2 rounded-md"
-                                  />
-                                  <select
-                                    value={component.resourceId}
-                                    onChange={(event) => {
-                                      setComponentResourceSelections((current) => ({
-                                        ...current,
-                                        [component.slotKey]: event.target.value,
-                                      }));
-                                      setComponentUnitIds({});
-                                      buildRequestRef.current = null;
-                                    }}
-                                    className={`${inputClass} pl-11 normal-case tracking-normal`}
-                                  >
-                                    {component.choices.map((choice) => (
-                                      <option
-                                        key={choice.resourceId}
-                                        value={choice.resourceId}
-                                      >
-                                        {choice.name}
-                                        {choice.isPrimary
-                                          ? ` ${t("assembly:build.primaryConfiguration")}`
-                                          : ""}
-                                        {` · ${t("assembly:availableCount", {
-                                          count: choice.availableQuantity,
-                                        })}`}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </span>
-                              </label>
-                            ) : (
-                              <div className="flex min-w-0 items-center gap-3">
-                                <ResourceThumbnail
-                                  cover={component.cover}
-                                />
-                                <div className="min-w-0">
-                                  <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[13px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
-                                  <p className="mt-0.5 text-[10px] text-muted">
-                                    {t("assembly:perFinishedQuantity", {
-                                      count: displayedComponentQuantity(component),
-                                      unit: bomQuantityUnitName(
-                                        component.quantityUnit,
-                                        componentQuantityConfiguration(component),
-                                      ),
-                                    })}
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-                            {component.choices.length > 1 ? (
-                              <>
+                            <div className="flex min-w-0 items-center gap-3">
+                              <ResourceThumbnail
+                                cover={component.cover}
+                              />
+                              <div className="min-w-0">
                                 <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[13px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
                                 <p className="mt-0.5 text-[10px] text-muted">
                                   {t("assembly:perFinishedQuantity", {
@@ -1523,8 +1412,8 @@ function AssemblyResourceManager({
                                     ),
                                   })}
                                 </p>
-                              </>
-                            ) : null}
+                              </div>
+                            </div>
                           </div>
                           <div className="flex items-center justify-between sm:block"><span className="text-[10px] uppercase text-muted sm:hidden">{t("assembly:labels.required")}</span><span className="text-[13px] font-semibold tabular-nums text-foreground">{component.required}</span></div>
                           <div className="flex items-center justify-between sm:block"><span className="text-[10px] uppercase text-muted sm:hidden">{t("assembly:labels.available")}</span><span className={cn("text-[13px] font-semibold tabular-nums", component.shortage ? "text-danger" : "text-foreground")}>{component.availableQuantity}</span></div>
@@ -1802,6 +1691,7 @@ export function AssemblyManager(props: {
           key={selected}
           {...props}
           resourceId={selected}
+          unassignedOutput={selected === props.resourceId}
         />
       ) : props.mode !== "build" ? (
         <AssemblyResourceManager {...props} mode="bom" />

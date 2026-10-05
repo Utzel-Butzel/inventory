@@ -111,7 +111,7 @@ test("manufacturing resolves, saves, resets, and builds the effective variant BO
   assert.match(route, /resetVariantBomOverrides/);
 });
 
-test("builds can consume a selected first-class variant for a configurable BOM component", async () => {
+test("build API validates component selections while the UI uses the chosen output recipe", async () => {
   const [assemblies, buildRoute, manager, bomRoute, stockSwitcher, openapi] =
     await Promise.all([
       source("lib/assemblies.ts"),
@@ -137,9 +137,11 @@ test("builds can consume a selected first-class variant for a configurable BOM c
     /pg_advisory_xact_lock\(\$\{BOM_WRITE_LOCK_ID\}\)[\s\S]*pg_advisory_xact_lock\(\$\{VARIANT_FAMILY_WRITE_LOCK_ID\}\)[\s\S]*resolveBuildComponentSelections/,
   );
   assert.match(buildRoute, /componentResourceSelections/);
-  assert.match(manager, /component\.choices\.length > 1/);
-  assert.match(manager, /componentResourceSelections/);
-  assert.match(manager, /assembly:labels\.componentConfiguration/);
+  assert.doesNotMatch(manager, /setComponentResourceSelections|resolveAssemblyOutput|output\.automatic/);
+  assert.match(manager, /resourceId=\{selected\}/);
+  assert.match(manager, /outputResourceId: resourceId/);
+  assert.match(manager, /name: buildOutputName/);
+  assert.match(manager, /assembly:output\.recipeHelp/);
   assert.match(
     assemblies,
     /eq\(media\.kind, "image"\)[\s\S]*coverByResource\.get\(choice\.id\)/,
@@ -147,7 +149,7 @@ test("builds can consume a selected first-class variant for a configurable BOM c
   assert.match(manager, /function ResourceThumbnail/);
   assert.match(
     manager,
-    /ResourceThumbnail[\s\S]*cover=\{component\.cover\}[\s\S]*<select/,
+    /ResourceThumbnail[\s\S]*cover=\{component\.cover\}/,
   );
   assert.match(
     openapi,

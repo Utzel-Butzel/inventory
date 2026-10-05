@@ -44,10 +44,11 @@ test(
       resources,
       resourceRelations,
       stockMovements,
+      stockSettings,
       bomLines,
       variantBomOverrides,
     } = await import("../db/schema.ts");
-    const { buildAssembly } = await import("../lib/assemblies.ts");
+    const { buildAssembly, getBom } = await import("../lib/assemblies.ts");
     const { bookStockMovement, getStockDetail } =
       await import("../lib/stock.ts");
     const { getResourceFamily } = await import("../lib/resource-families.ts");
@@ -98,6 +99,7 @@ test(
     const white = await make("OpenPaper L white", 0, "OP-WHITE", "WHITE-CODE");
     const black = await make("OpenPaper L black", 0, "OP-BLACK");
     const pcb = await make("PCB", 10);
+    const eink = await make("eINK", 20);
     const whiteFrame = await make("White frame", 10);
     const blackFrame = await make("Black frame", 10);
     await db
@@ -111,6 +113,14 @@ test(
         })),
       );
     await db.insert(bomLines).values([
+      {
+        organizationId,
+        assemblyResourceId: primary,
+        componentResourceId: eink,
+        slotKey: "display",
+        quantityPerAssembly: 1,
+        position: 2,
+      },
       {
         organizationId,
         assemblyResourceId: primary,
@@ -285,7 +295,7 @@ test(
       [2, 1, 0, 8, 8, 10],
     );
 
-    // Selecting the white frame from the primary BOM identifies the white output.
+    // Choosing a finished variant fixes the recipe and the stock destination.
     await db
       .insert(resourceRelations)
       .values({
@@ -294,15 +304,38 @@ test(
         targetResourceId: blackFrame,
         relationTypeKey: "variant_of",
       });
-    const inferred = await build({
-      quantity: 1,
-      componentResourceSelections: { frame: whiteFrame },
-    });
-    assert.equal(inferred.response.resource.id, white);
+    // Even a unique component match must not implicitly choose an output.
+    await assert.rejects(
+      build({ quantity: 1, componentResourceSelections: { frame: whiteFrame } }),
+      (error) => error.status === 422,
+    );
+    const bom = await getBom(organizationId, white);
+    assert.equal(bom.components.find((line) => line.slotKey === "frame").resourceId, whiteFrame);
+    const explicitWhite = await build({ quantity: 1, outputResourceId: white });
+    assert.equal(explicitWhite.response.resource.id, white);
+    assert.equal(await quantity(eink), 17);
     assert.deepEqual(
       await Promise.all(
         [primary, white, black, pcb, whiteFrame, blackFrame].map(quantity),
       ),
+      [2, 2, 0, 7, 7, 10],
+    );
+    const movementCount = async () => (await db.select().from(stockMovements).where(eq(stockMovements.organizationId, organizationId))).length;
+    const beforeRejectedBuild = await movementCount();
+    await assert.rejects(
+      build({ quantity: 1, outputResourceId: black, componentResourceSelections: { frame: whiteFrame } }),
+      (error) => error.status === 422,
+    );
+    await assert.rejects(
+      buildAssembly(organizationId, black,
+        { quantity: 1, componentResourceSelections: { frame: whiteFrame } },
+        "test", { key: randomUUID(), requestHash: "e".repeat(64) }, () => true),
+      (error) => error.status === 422,
+    );
+    assert.equal(await movementCount(), beforeRejectedBuild);
+    assert.equal(await quantity(eink), 17);
+    assert.deepEqual(
+      await Promise.all([primary, white, black, pcb, whiteFrame, blackFrame].map(quantity)),
       [2, 2, 0, 7, 7, 10],
     );
     const detail = await getStockDetail(organizationId, primary);
@@ -501,5 +534,24 @@ test(
         await db.delete(apiTokens).where(eq(apiTokens.id, credential.id));
       }
     }
+
+    await t.test("bulk parent can build a serialized colour without changing other colour stocks", async () => {
+      await db.update(stockSettings).set({ trackingMode: "serialized" }).where(eq(stockSettings.resourceId, black));
+      const before = await Promise.all([primary, white, black, pcb, eink, whiteFrame, blackFrame].map(quantity));
+      const currentBom = await getBom(organizationId, black);
+      assert.equal(currentBom.resource.id, black);
+      assert.equal(currentBom.resource.trackingMode, "serialized");
+      const key = { key: randomUUID(), requestHash: "f".repeat(64) };
+      const input = {
+        quantity: 2,
+        outputResourceId: black,
+        outputUnitCodes: [`BLACK-${randomUUID()}`, `BLACK-${randomUUID()}`],
+      };
+      const result = await buildAssembly(organizationId, primary, input, "test", key, () => true);
+      assert.deepEqual(new Set(result.response.outputUnits.map((unit) => unit.code)), new Set(input.outputUnitCodes));
+      assert.equal((await buildAssembly(organizationId, primary, input, "test", key, () => true)).replayed, true);
+      const after = await Promise.all([primary, white, black, pcb, eink, whiteFrame, blackFrame].map(quantity));
+      assert.deepEqual(after.map((value, index) => value - before[index]), [0, 0, 2, -2, -2, 0, -2]);
+    });
   },
 );

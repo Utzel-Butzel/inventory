@@ -139,6 +139,9 @@
     "choose": "Zielvariante wählen",
     "unassigned": "{{name}} – unzugeordneter Bestand",
     "help": "Die Stückliste der gewählten Variante wird verwendet. Der Fertigbestand wird ausschließlich diesem Artikel gutgeschrieben.",
-    "retry": "Erneut laden"
+    "retry": "Erneut laden",
+    "destination": "Zugang auf: {{name}}",
+    "openStock": "Bestand {{name}} öffnen ({{count}})",
+    "recipeHelp": "Die Komponenten sind durch die Stückliste des gewählten Fertigartikels festgelegt. Ändere die Stückliste in der Übersicht, falls sie nicht passt."
   }
 }
