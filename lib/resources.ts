@@ -1011,6 +1011,7 @@ export async function updateResourceWithCustomFieldValidation(options: {
           .update(resourceRelations)
           .set({
             attributes: {
+              ...membership.attributes,
               overriddenFields: nextVariantOverrides,
               protected: true,
             },

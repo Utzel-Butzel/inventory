@@ -31,7 +31,7 @@
     "refreshing": "Wird aktualisiert…",
     "saveBom": "Stückliste speichern",
     "saveChanges": "Änderungen speichern",
-    "resetToPrimary": "Auf Haupteintrag zurücksetzen",
+    "resetToPrimary": "Manuelle Stücklistenänderungen zurücksetzen",
     "resettingPrimary": "Wird zurückgesetzt…",
     "building": "Wird gefertigt…",
     "build": "{{count}} fertigen"
@@ -45,7 +45,7 @@
     "inheritance": {
       "basedOn": "Basierend auf {{name}}",
       "description": "Diese Variante übernimmt ihre Stückliste. Gespeichert werden nur Abweichungen.",
-      "resetConfirm": "Stückliste dieser Variante auf {{name}} zurücksetzen? Alle Abweichungen werden entfernt.",
+      "resetConfirm": "Manuelle Stücklistenänderungen zurücksetzen? Die Basisstückliste von {{name}} wird übernommen; automatisch gewählte Komponenten bleiben erhalten.",
       "origins": {
         "inherited": "Übernommen",
         "override": "Abweichung",
@@ -117,7 +117,9 @@
     "summary_one": "{{count}} fertig · {{components}} Komponenteneinheiten verbraucht",
     "summary_other": "{{count}} fertig · {{components}} Komponenteneinheiten verbraucht",
     "confirm_one": "{{count}} × {{name}} fertigen und die aufgeführten Komponenten verbrauchen?",
-    "confirm_other": "{{count}} × {{name}} fertigen und die aufgeführten Komponenten verbrauchen?"
+    "confirm_other": "{{count}} × {{name}} fertigen und die aufgeführten Komponenten verbrauchen?",
+    "additionalDetails": "Weitere Angaben",
+    "outputBalance": "Fertigbestand: {{before}} → {{after}}"
   },
   "history": {
     "title": "Letzte Fertigungen",
@@ -142,6 +144,10 @@
     "retry": "Erneut laden",
     "destination": "Zugang auf: {{name}}",
     "openStock": "Bestand {{name}} öffnen ({{count}})",
-    "recipeHelp": "Die Komponenten sind durch die Stückliste des gewählten Fertigartikels festgelegt. Ändere die Stückliste in der Übersicht, falls sie nicht passt."
+    "recipeHelp": "Die Komponenten sind durch die Stückliste des gewählten Fertigartikels festgelegt. Ändere die Stückliste in der Übersicht, falls sie nicht passt.",
+    "automatic": "Fertigprodukt aus Komponentenvarianten",
+    "automaticHelp": "Wähle die Ausführung des Fertigprodukts. Die passende Stückliste ergibt sich automatisch. Ein eigener Bestandseintrag entsteht erst beim Fertigen oder Anpassen.",
+    "customize": "Variante zum Anpassen bereitstellen",
+    "edit": "Variante bearbeiten"
   }
 }

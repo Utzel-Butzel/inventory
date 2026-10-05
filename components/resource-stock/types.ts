@@ -124,6 +124,7 @@ export type StockData = {
 };
 
 export type StockApiResponse = Partial<StockData> & {
+  canManageStock?: boolean;
   stock?: StockData;
   data?: StockData;
 };

@@ -30,7 +30,8 @@ export async function GET(request: Request, context: Context) {
       },
     );
     if (!detail) return Response.json({ error: "Not found" }, { status: 404 });
-    return Response.json(detail);
+    const canManageStock = await canAccessResource(authorization.identity, "stock.manage", authorization.resource);
+    return Response.json({ ...detail, canManageStock });
   } catch (error) {
     const failure = resourceFamilyHttpError(
       error,

@@ -3604,7 +3604,7 @@ paths:
     delete:
       tags: [Manufacturing]
       summary: Reset a variant's bill of materials to its primary item
-      description: Removes every sparse BOM override for a linked first-class variant. Primary and standalone items cannot use this operation.
+      description: Removes manual BOM overrides for a linked first-class variant while preserving configured component selections. Primary and standalone items cannot use this operation.
       responses:
         "200":
           description: Reset effective bill of materials
@@ -3613,6 +3613,55 @@ paths:
               schema: { $ref: "#/components/schemas/BomDetail" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Item is not a linked variant }
+  /resources/{id}/assembly-configuration:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - { $ref: "#/components/parameters/ResourceId" }
+    get:
+      tags: [Manufacturing]
+      summary: Preview an automatic finished-product configuration without creating records
+      parameters:
+        - name: selection
+          in: query
+          required: true
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssemblyOutputConfiguration" }
+      responses:
+        "200":
+          description: Effective recipe; existingResourceId is null for a virtual configuration, otherwise the reusable finished article ID
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/BomDetail" }
+                  - type: object
+                    properties:
+                      existingResourceId: { type: [string, "null"], format: uuid }
+        "403": { description: Matching variant or components are inaccessible or archived }
+        "409": { description: Multiple finished articles match; select one explicitly }
+        "422": { description: Incomplete or invalid configuration }
+    post:
+      tags: [Manufacturing]
+      summary: Prepare only the selected configuration for manual customization
+      description: Requires inventory.update and inventory.create. Reuses matching articles and preserves customizations. Creates no stock movements. Repeated requests return the same resource.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssemblyOutputConfiguration" }
+      responses:
+        "200":
+          description: Ready to customize
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resourceId: { type: string, format: uuid }
+        "403": { description: Missing permission or archived resource }
+        "409": { description: Ambiguous configuration }
+        "422": { description: Invalid configuration }
   /resources/{id}/bom-parents:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -6262,6 +6311,14 @@ components:
                   minimum: 0
                   description: Stored removals, replacements, and variant-only slots.
             - type: "null"
+    AssemblyOutputConfiguration:
+      type: object
+      minProperties: 1
+      maxProperties: 100
+      description: Complete selection of variable BOM slots for a finished product. Each value must be the slot's component or an active member of its component family. Mutually exclusive with outputResourceId and componentResourceSelections. Reuses a matching finished article or creates just this configuration atomically with the build. Existing manual recipe overrides are preserved. No Cartesian product is stored.
+      propertyNames:
+        pattern: "^[A-Za-z0-9_-]{1,80}$"
+      additionalProperties: { type: string, format: uuid }
     AssemblyBuildInput:
       type: object
       required: [quantity]
@@ -6270,14 +6327,16 @@ components:
         outputResourceId:
           type: string
           format: uuid
-          description: Finished item to credit. Must be the requested item or a direct variant. Required when the requested item has variants; component selections never infer the output. Explicitly use the primary ID for unassigned output. When building a variant directly, its ID is the default output. Missing or conflicting output selections return 422.
+          description: Finished item to credit. Must be the requested item or a direct variant. Required when the requested item has finished variants or variable component slots unless outputConfiguration is supplied; componentResourceSelections never infer the output. Explicitly use the primary ID for unassigned output. When building a variant directly, its ID is the default output. Missing or conflicting output selections return 422.
+        outputConfiguration:
+          $ref: "#/components/schemas/AssemblyOutputConfiguration"
         quantity: { type: integer, minimum: 1, maximum: 1000 }
         occurredAt: { type: string, format: date-time }
         location: { type: [string, "null"], maxLength: 240 }
         note: { type: string, maxLength: 20000 }
         componentResourceSelections:
           type: object
-          description: Maps stable BOM slot keys to either that slot's component resource or one of its direct first-class variants. The selected resource is consumed and snapshotted in build history. When the output is a finished variant, selections must match its complete effective BOM; conflicting substitutions return 422 before any stock is booked.
+          description: Maps stable BOM slot keys to either that slot's component resource or an active member of its first-class component family. The selected resource is consumed and snapshotted in build history. When the output is a finished variant, selections must match its complete effective BOM; conflicting substitutions return 422 before any stock is booked.
           propertyNames:
             pattern: "^[A-Za-z0-9_-]{1,80}$"
           additionalProperties:

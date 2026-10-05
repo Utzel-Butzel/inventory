@@ -21,6 +21,9 @@ type Context = { params: Promise<{ id: string }> };
 const buildSchema = z
   .object({
     outputResourceId: z.string().uuid().optional(),
+    outputConfiguration: z.record(
+      z.string().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/), z.string().uuid(),
+    ).refine((value) => Object.keys(value).length > 0 && Object.keys(value).length <= 100).optional(),
     quantity: z.number().int().min(1).max(1_000),
     occurredAt: z.string().datetime().optional(),
     location: z.string().trim().max(240).nullable().optional(),

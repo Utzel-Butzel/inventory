@@ -2,7 +2,7 @@
 
 import { localDateTime } from "@/lib/client-formatters";
 
-import { useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 
 import { type PhotoCountResult } from "@/components/photo-count-capture";
 import { fetchJson } from "@/lib/client-types";
@@ -65,6 +65,12 @@ export function useStockMovements({
   const [historyFilter, setHistoryFilter] = useState<"all" | "in" | "out" | "audit">(
     "all",
   );
+  useEffect(() => {
+    setPendingMovement(null);
+    setEditingMovementId(null);
+    setMovementEditForm(null);
+  }, [endpoint]);
+
   const currentQuantity = stock?.resource.quantity ?? 0;
   const payloadOptions = {
     currentQuantity,

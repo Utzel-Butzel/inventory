@@ -31,7 +31,7 @@
     "refreshing": "Refreshing…",
     "saveBom": "Save BOM",
     "saveChanges": "Save changes",
-    "resetToPrimary": "Reset to primary",
+    "resetToPrimary": "Reset manual recipe changes",
     "resettingPrimary": "Resetting…",
     "building": "Building…",
     "build": "Build {{count}}"
@@ -45,7 +45,7 @@
     "inheritance": {
       "basedOn": "Based on {{name}}",
       "description": "This variant inherits its BOM. Only differences are saved.",
-      "resetConfirm": "Reset this variant’s BOM to {{name}}? Its BOM differences will be removed.",
+      "resetConfirm": "Reset manual recipe changes? Inherit the base recipe from {{name}}, keeping automatically selected components.",
       "origins": {
         "inherited": "Inherited",
         "override": "Override",
@@ -117,7 +117,9 @@
     "summary_one": "{{count}} finished · {{components}} component units consumed",
     "summary_other": "{{count}} finished · {{components}} component units consumed",
     "confirm_one": "Build {{count}} {{name}} and consume the listed components?",
-    "confirm_other": "Build {{count}} {{name}} and consume the listed components?"
+    "confirm_other": "Build {{count}} {{name}} and consume the listed components?",
+    "additionalDetails": "Additional details",
+    "outputBalance": "Finished stock: {{before}} → {{after}}"
   },
   "history": {
     "title": "Recent builds",
@@ -142,6 +144,10 @@
     "retry": "Retry",
     "destination": "Credit stock to: {{name}}",
     "openStock": "Open {{name}} stock ({{count}})",
-    "recipeHelp": "Components are defined by the selected finished item’s bill of materials. Edit the bill of materials in the overview if it needs to change."
+    "recipeHelp": "Components are defined by the selected finished item’s bill of materials. Edit the bill of materials in the overview if it needs to change.",
+    "automatic": "Finished product from component variants",
+    "automaticHelp": "Choose the finished configuration. Its recipe is derived automatically. A stock item is only created when building or customizing it.",
+    "customize": "Prepare variant for customization",
+    "edit": "Edit variant"
   }
 }

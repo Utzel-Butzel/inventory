@@ -138,6 +138,7 @@ export const overriddenFieldsFromAttributes = (attributes: unknown) => {
 
 export type ResourceVariantMembership = {
   relationId: string;
+  attributes: Record<string, unknown>;
   primaryResourceId: string;
   overriddenFields: string[];
 };
@@ -174,6 +175,7 @@ export async function findResourceVariantMembership(
   return membership
     ? {
         relationId: membership.relationId,
+        attributes: membership.attributes,
         primaryResourceId: membership.primaryResourceId,
         overriddenFields: overriddenFieldsFromAttributes(
           membership.attributes,

@@ -47,12 +47,13 @@ test("movement history exposes protected update and delete operations", async ()
 
 test("stock page shows the balance before booking and keeps location transfers available", async () => {
   const component = await source("components/resource-stock-manager.tsx");
-  const booking = component.indexOf("<StockBooking");
+  const booking = component.indexOf("<StockBooking contextual");
   const metrics = component.indexOf('t("resource.metrics.available")');
   const history = component.indexOf("<StockMovementHistory");
   const locations = component.lastIndexOf("<StockLocationsManager");
 
   assert.ok(metrics >= 0 && metrics < booking);
   assert.ok(booking < history);
+  assert.match(component, /<StockActionPanel[\s\S]*<StockBooking contextual/);
   assert.ok(history < locations);
 });

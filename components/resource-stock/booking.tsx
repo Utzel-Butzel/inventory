@@ -31,6 +31,7 @@ export type StockBookingProps = Pick<StockSectionProps, "stock" | "t" | "unitNam
   resourceId: string;
   availableContacts: StockContact[];
   movements: StockMovementsController;
+  contextual?: boolean;
 };
 
 export function StockBooking({
@@ -41,6 +42,7 @@ export function StockBooking({
   resourceId,
   availableContacts,
   movements,
+  contextual = false,
 }: StockBookingProps) {
   const currentQuantity = stock.resource.quantity;
   const {
@@ -65,7 +67,7 @@ export function StockBooking({
   const projected = currentQuantity + delta;
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
-      <SectionHeading
+      {!contextual ? <SectionHeading
         icon={<SlidersHorizontal className="size-4" aria-hidden="true" />}
         title={t("resource.booking.title")}
         description={t("resource.booking.description")}
@@ -76,14 +78,14 @@ export function StockBooking({
             })}
           </span>
         }
-      />
+      /> : null}
       <form onSubmit={submitMovement} className="p-5 sm:p-6">
-        <ResourceStockConfigurationSwitcher
+        {!contextual ? <ResourceStockConfigurationSwitcher
           resourceId={resourceId}
           placement="movement"
-        />
+        /> : null}
 
-        <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={t("resource.booking.chooseTask")}>
+        {!contextual ? <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={t("resource.booking.chooseTask")}>
           {(["issue", "receipt", "count"] as const).map((value) => {
             const Icon = value === "issue" ? PackageMinus : value === "receipt" ? PackagePlus : ClipboardCheck;
             return <button key={value} type="button" onClick={() => selectTask(value)} disabled={postingMovement}
@@ -95,7 +97,7 @@ export function StockBooking({
           <a href="#stock-locations" className="flex items-center justify-center gap-2 rounded-xl border border-border px-3 py-3 text-xs font-semibold text-muted-strong hover:bg-surface-hover">
             <ArrowRightLeft className="size-4" aria-hidden="true" />{t("resource.booking.tasks.transfer")}
           </a>
-        </div>
+        </div> : null}
         <p className="mb-4 text-sm text-muted">{t(`resource.booking.taskHelp.${task}`)}</p>
 
 

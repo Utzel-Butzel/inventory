@@ -21,16 +21,19 @@ export async function generateMetadata(): Promise<Metadata> {
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ unit?: string | string[]; task?: string | string[] }>;
+  searchParams: Promise<{ unit?: string | string[]; task?: string | string[]; unitView?: string | string[]; tab?: string | string[]; variant?: string | string[] }>;
 };
 
 export default async function ResourceStockPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { unit, task } = await searchParams;
+  const { unit, task, unitView, tab, variant } = await searchParams;
   const initialTask = parseStockBookingTask(task);
   const query = new URLSearchParams();
+  if (typeof variant === "string" && isResourceId(variant)) query.set("variant", variant);
   if (typeof task === "string") query.set("task", initialTask);
   const selectedUnitId = typeof unit === "string" && isResourceId(unit) ? unit.toLowerCase() : undefined;
+  if (tab === "units" || tab === "locations") query.set("tab", tab);
+  if (unitView === "1") query.set("unitView", "1");
   if (selectedUnitId) query.set("unit", selectedUnitId);
   const identity = await getSessionIdentity();
   const resource = identity
@@ -64,7 +67,9 @@ export default async function ResourceStockPage({ params, searchParams }: Props)
         resourceId={resource?.id ?? id}
         canEdit={canManageStock}
         initialTask={initialTask}
-        key={`${resource?.id ?? id}:${initialTask}`}
+        openInitialTask={typeof task === "string"}
+        initialDetailTab={unitView === "1" || tab === "units" ? "units" : tab === "locations" ? "locations" : "movements"}
+        key={`${resource?.id ?? id}:${initialTask}:${unitView ?? ""}:${tab ?? ""}:${selectedUnitId ?? ""}`}
         selectedUnitId={selectedUnitId}
       />
     </>

@@ -2,7 +2,7 @@
 
 import { moneyToCents, toIsoDateTime as toIso } from "@/lib/client-formatters";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { fetchJson } from "@/lib/client-types";
 
@@ -31,6 +31,12 @@ export function useStockUnits({
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [unitEditForm, setUnitEditForm] = useState<UnitEditForm | null>(null);
   const [savingUnit, setSavingUnit] = useState(false);
+  useEffect(() => {
+    setUnitCreateForm(defaultUnitCreateForm());
+    setEditingUnitId(null);
+    setUnitEditForm(null);
+  }, [endpoint]);
+
   async function createUnits(event: FormEvent) {
     event.preventDefault();
     setError(null);

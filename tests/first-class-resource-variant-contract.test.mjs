@@ -137,7 +137,7 @@ test("build API validates component selections while the UI uses the chosen outp
     /pg_advisory_xact_lock\(\$\{BOM_WRITE_LOCK_ID\}\)[\s\S]*pg_advisory_xact_lock\(\$\{VARIANT_FAMILY_WRITE_LOCK_ID\}\)[\s\S]*resolveBuildComponentSelections/,
   );
   assert.match(buildRoute, /componentResourceSelections/);
-  assert.doesNotMatch(manager, /setComponentResourceSelections|resolveAssemblyOutput|output\.automatic/);
+  assert.doesNotMatch(manager, /setComponentResourceSelections|resolveAssemblyOutput/);
   assert.match(manager, /resourceId=\{selected\}/);
   assert.match(manager, /outputResourceId: resourceId/);
   assert.match(manager, /name: buildOutputName/);

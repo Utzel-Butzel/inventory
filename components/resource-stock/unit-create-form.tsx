@@ -226,7 +226,7 @@ export function StockUnitCreateForm({
             {t("resource.units.customFieldsUnavailable")}
           </p>
         ) : null}
-        <label className={labelClass}>
+        <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-xs text-muted">{t("resource.units.advancedMetadata")}</summary><label className={labelClass}>
           {t("resource.units.advancedMetadata")} {" "}
           <span className="font-normal text-muted">· JSON</span>
           <textarea
@@ -241,7 +241,7 @@ export function StockUnitCreateForm({
             spellCheck={false}
             className={`${inputClass} h-auto resize-y py-3 font-mono text-[12px] leading-5`}
           />
-        </label>
+        </label></details>
       </div>
 
       <button

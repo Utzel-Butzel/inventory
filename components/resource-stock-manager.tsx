@@ -9,7 +9,6 @@ import {
 } from "@/components/organization-routing";
 import {
   AlertTriangle,
-  Boxes,
   Check,
   LoaderCircle,
   PackageMinus,
@@ -18,9 +17,17 @@ import {
   X,
 } from "lucide-react";
 import { useT } from "next-i18next/client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 
-import { FamilyStockSummary } from "@/components/family-stock-summary";
+import { StockActionPanel } from "./resource-stock/action-panel";
+import { StockVariantOverview, type VirtualStockSelection, type StockBomPreview } from "./resource-stock/variant-overview";
+import { FamilyStockDetails, type StockDetailTab } from "./resource-stock/family-details";
+import { StockUnitCreateForm } from "./resource-stock/unit-create-form";
+import { Button } from "@/components/ui";
+import { useRouter, useSearchParams } from "next/navigation";
+import { isResourceId } from "@/lib/resource-short-link";
+import { useInventoryBreadcrumb } from "@/components/inventory-breadcrumb-context";
+import { useOrganizationHref } from "@/components/organization-routing";
 import { AssemblyManager } from "@/components/assembly-manager";
 import { StockLocationsManager } from "@/components/stock-locations-manager";
 import { fetchJson } from "@/lib/client-types";
@@ -51,16 +58,37 @@ import { useStockMovements } from "./resource-stock/use-stock-movements";
 import { useStockUnits } from "./resource-stock/use-stock-units";
 
 export function ResourceStockManager({
-  resourceId,
-  canEdit = false,
+  resourceId: initialResourceId,
+  canEdit: initialCanEdit = false,
   selectedUnitId,
   initialTask = "receipt",
+  openInitialTask = false,
+  initialDetailTab = "movements",
 }: {
   resourceId: string;
   canEdit?: boolean;
   selectedUnitId?: string;
   initialTask?: StockBookingTask;
+  openInitialTask?: boolean;
+  initialDetailTab?: StockDetailTab;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedVariant = searchParams.get("variant");
+  const requestedId = requestedVariant && isResourceId(requestedVariant) ? requestedVariant : initialResourceId;
+  const [resourceId, setResourceId] = useState(requestedId);
+  const [canEdit, setCanEdit] = useState(initialCanEdit && requestedId === initialResourceId);
+  const requestVersion = useRef(0);
+  const activeLoadTarget = useRef(requestedId);
+  const loadRequest = useRef<AbortController | null>(null);
+  const organizationHref = useOrganizationHref();
+  const [selectedAction, setAction] = useState<StockBookingTask | "build" | "transfer" | null>(openInitialTask ? initialTask : null);
+  const [detailTab, setDetailTab] = useState<StockDetailTab>(selectedUnitId ? "units" : initialDetailTab);
+  const [familyView, setFamilyView] = useState(false);
+  const [virtual, setVirtual] = useState<VirtualStockSelection | null>(null);
+  const [bom, setBom] = useState<StockBomPreview | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [buildBusy, setBuildBusy] = useState(false);
   const allowNegativeStock = useOrganizationAllowsNegativeStock();
   const { t, i18n } = useT("stock");
   const locale = i18n.resolvedLanguage ?? i18n.language ?? "en";
@@ -100,13 +128,20 @@ export function ResourceStockManager({
 
   const loadStock = useCallback(
     async (quiet = false) => {
+      if (activeLoadTarget.current !== requestedId) return;
+      loadRequest.current?.abort();
+      const controller = new AbortController();
+      loadRequest.current = controller;
+      const version = ++requestVersion.current;
+      const loadEndpoint = `/api/v1/resources/${requestedId}/stock`;
       if (!quiet) setLoading(true);
       setError(null);
       setCustomFieldError(null);
       try {
         const [payload, definitionsResult, locationsResult] = await Promise.all([
-          fetchJson<StockApiResponse>(endpoint, { cache: "no-store" }),
+          fetchJson<StockApiResponse>(loadEndpoint, { cache: "no-store", signal: controller.signal }),
           fetchJson<CustomFieldsApiResponse>(customFieldsEndpoint, {
+            signal: controller.signal,
             cache: "no-store",
           }).then(
             (value) => ({ value, error: null }),
@@ -118,12 +153,17 @@ export function ResourceStockManager({
                   : t("resource.errors.customFields"),
             }),
           ),
-          fetchJson<StockLocationsApiResponse>(`${endpoint}/locations`, {
+          fetchJson<StockLocationsApiResponse>(`${loadEndpoint}/locations`, {
+            signal: controller.signal,
             cache: "no-store",
           }).catch(() => null),
         ]);
+        if (version !== requestVersion.current) return;
         const normalized = normalizeStock(payload, t);
+        setResourceId(requestedId);
+        setCanEdit(payload.canManageStock ?? (requestedId === initialResourceId && initialCanEdit));
         setStock(normalized);
+        if (!quiet && normalized.family?.primary.id === requestedId && normalized.family.variants.length && !requestedVariant && !openInitialTask && initialDetailTab === "movements" && !selectedUnitId) setFamilyView(true);
         if (!quiet && initialTask === "receipt" && hasPurchaseUnit(normalized.config)) {
           setMovementForm((current) => ({
             ...current,
@@ -138,26 +178,51 @@ export function ResourceStockManager({
         if (locationsResult) {
           setAvailableLocations(
             locationsResult.availableLocations.filter(
-              (location) => location.id !== resourceId && location.status !== "archived",
+              (location) => location.id !== requestedId && location.status !== "archived",
             ),
           );
         }
       } catch (loadError) {
+        if (version !== requestVersion.current) return;
         setError(
           loadError instanceof Error
             ? loadError.message
             : t("resource.errors.load"),
         );
       } finally {
-        setLoading(false);
+        if (version === requestVersion.current) setLoading(false);
       }
     },
-    [customFieldsEndpoint, endpoint, initialTask, resourceId, t],
+    [customFieldsEndpoint, requestedVariant, requestedId, initialResourceId, initialCanEdit, initialTask, initialDetailTab, openInitialTask, selectedUnitId, t],
   );
 
   useEffect(() => {
+    activeLoadTarget.current = requestedId;
+    setAction(openInitialTask && requestedId === initialResourceId ? initialTask : null);
+    setVirtual(null);
+    setFamilyView(false);
+    setNotice(null);
     void loadStock();
-  }, [loadStock]);
+    return () => { requestVersion.current += 1; loadRequest.current?.abort(); };
+  }, [loadStock, initialResourceId, initialTask, openInitialTask, requestedId]);
+
+  useInventoryBreadcrumb(stock ? { href: `/inventory/${resourceId}`, name: stock.resource.name } : null);
+
+  function selectVariant(id: string) {
+    setVirtual(null);
+    setFamilyView(false);
+    setAction(null);
+    if (id === resourceId && id === requestedId) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("variant", id);
+    url.searchParams.set("tab", detailTab);
+    url.searchParams.delete("unit");
+    url.searchParams.delete("unitView");
+    url.searchParams.delete("task");
+    window.history.pushState(null, "", url);
+  }
+  const switchingVariant = requestedId !== resourceId;
+
 
   const currentQuantity = stock?.resource.quantity ?? 0;
   const configuredUnit = stock?.config.unitName?.trim();
@@ -176,12 +241,23 @@ export function ResourceStockManager({
     [customFieldDefinitions, stock],
   );
 
+  useEffect(() => {
+    const controller = new AbortController();
+    setBom(null);
+    void fetchJson<StockBomPreview>(`/api/v1/resources/${resourceId}/bom`, { signal: controller.signal, cache: "no-store" })
+      .then(setBom).catch(() => { if (!controller.signal.aborted) setBom(null); });
+    return () => controller.abort();
+  }, [resourceId, revision]);
+
   const mutationContext = {
     stock,
     endpoint,
     loadStock,
     setError,
-    setNotice,
+    setNotice: (message: SetStateAction<string | null>) => {
+      setNotice(message);
+      if (typeof message === "string" && message) { setRevision((value) => value + 1); }
+    },
     unitName,
     numberFormat,
     t,
@@ -196,7 +272,7 @@ export function ResourceStockManager({
   const units = useStockUnits(mutationContext);
   const { pendingMovement, setPendingMovement, postingMovement, postMovement } = movements;
 
-  if (loading) {
+  if (loading && !stock) {
     return (
       <div className="grid min-h-[calc(100dvh-68px)] place-items-center px-6 text-center">
         <div>
@@ -243,8 +319,23 @@ export function ResourceStockManager({
     );
   }
 
+  const selectedName = virtual?.preview.resource.name ?? (stock.family?.variants.length && stock.family.primary.id === resourceId ? t("workspace.unassignedName", { name: stock.resource.name }) : stock.resource.name);
   const forecast = stock.forecast;
   const minimum = stock.config.minimumStock;
+  const action = selectedAction ?? (virtual ? "build" : movements.task);
+  const actionBusy = buildBusy || postingMovement || units.creatingUnits || units.savingUnit;
+  const actions: Array<StockBookingTask | "build" | "transfer"> = [
+    ...((virtual?.preview ?? bom)?.components.length ? ["build" as const] : []),
+    ...(!virtual ? ["issue", "receipt", "count", "transfer"] as const : []),
+  ];
+  function selectAction(next: typeof action) {
+    if (actionBusy || next === action) return;
+    setPendingMovement(null);
+    setError(null);
+    if (next !== "build" && next !== "transfer") movements.selectTask(next);
+    setAction(next);
+  }
+
 
   return (
     <div className="app-page mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
@@ -252,10 +343,10 @@ export function ResourceStockManager({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="truncate text-2xl font-semibold tracking-[-0.035em] text-foreground sm:text-3xl">
-              {stock.resource.name}
+              {stock.family?.primary.name ?? stock.resource.name}
             </h1>
             <span className="inline-flex h-6 items-center rounded-full bg-brand-soft px-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-brand">
-              {t(`resource.tracking.${stock.config.trackingMode}`)}
+              {t(`resource.tracking.${virtual?.preview.resource.trackingMode ?? stock.config.trackingMode}`)}
             </span>
           </div>
         </div>
@@ -278,6 +369,7 @@ export function ResourceStockManager({
             <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             {error}
           </span>
+          {switchingVariant ? <button type="button" onClick={() => void loadStock()} className="shrink-0 underline">{t("resource.actions.retry")}</button> : null}
           <button type="button" onClick={() => setError(null)} aria-label={t("resource.actions.dismissError")}>
             <X className="size-4" aria-hidden="true" />
           </button>
@@ -294,118 +386,57 @@ export function ResourceStockManager({
         </div>
       ) : null}
 
-      <div>
-        <div className="space-y-5">
-          {stock.family ? <FamilyStockSummary family={stock.family} /> : null}
-
-          <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--shadow-sm)]">
-            <div className="grid gap-5 p-5 sm:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(120px,0.6fr))] sm:items-center sm:p-6">
-              <div className="flex items-center gap-4">
-                <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-brand-soft text-brand">
-                  <Boxes className="size-5" aria-hidden="true" />
-                </span>
-                <div>
-                  <p className="text-xs font-medium text-muted">
-                    {stock.family?.variants.length && stock.family.primary.id === resourceId
-                      ? t("resource.metrics.unassigned")
-                      : t("resource.metrics.available")}
-                  </p>
-                  <p className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-foreground">
-                    {quantityLabel(currentQuantity, unitName, numberFormat, t)}
-                  </p>
-                </div>
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  {t("resource.metrics.minimum")}
-                </p>
-                <p
-                  className={`mt-1 text-lg font-semibold ${forecast.isBelowMinimum ? "text-danger" : "text-foreground"
-                    }`}
-                >
-                  {quantityLabel(minimum, unitName, numberFormat, t)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  {t("resource.metrics.incoming")}
-                </p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {quantityLabel(onOrder, unitName, numberFormat, t)}
-                </p>
-              </div>
-            </div>
-            {forecast.isBelowMinimum ? (
-              <div className="flex items-center gap-2 border-t border-warning-border bg-warning-soft px-5 py-3 text-xs font-medium text-warning sm:px-6">
-                <AlertTriangle
-                  className="size-4 shrink-0"
-                  aria-hidden="true"
-                />
-                {t("resource.forecast.belowThreshold")}
-              </div>
-            ) : null}
-          </section>
-
-          {canEdit ? (
-            <StockBooking
-              stock={stock}
-              t={t}
-              unitName={unitName}
-              numberFormat={numberFormat}
-              resourceId={resourceId}
-              availableContacts={availableContacts}
-              movements={movements}
-            />
-          ) : null}
-
-          <section>
-            <AssemblyManager
-              resourceId={resourceId}
-              mode="build"
-              hideWhenEmpty
-              onStockChanged={() => void loadStock(true)}
-            />
-          </section>
-
-          <StockMovementHistory
-            stock={stock}
-            t={t}
-            locale={locale}
-            numberFormat={numberFormat}
-            canEdit={canEdit}
-            availableContacts={availableContacts}
-            movements={movements}
-          />
-        </div>
-
+      <div inert={actionBusy}>
+      {stock.family ? <StockVariantOverview family={stock.family} resourceId={resourceId} revision={revision}
+        allSelected={familyView} virtualSelected={Boolean(virtual)} detailTab={detailTab} onSelect={selectVariant} onCurrent={() => selectVariant(resourceId)}
+        onAll={() => { setFamilyView((value) => !value); setVirtual(null); setAction(null); }}
+        onVirtual={(selection) => { setVirtual(selection); setFamilyView(false); setAction(null); }} /> : null}
       </div>
 
-      <StockUnits
-        selectedUnitId={selectedUnitId}
-        stock={stock}
-        t={t}
-        locale={locale}
-        numberFormat={numberFormat}
-        customFieldError={customFieldError}
-        availableLocations={availableLocations}
-        applicableCustomFields={applicableCustomFields}
-        units={units}
-      />
-
-      <section id="stock-locations" className="mt-5 scroll-mt-24" tabIndex={-1}>
-        <StockLocationsManager
-          resourceId={resourceId}
-          canEdit={canEdit}
-          unitName={unitName}
-          onStockChanged={() => void loadStock(true)}
-        />
-      </section>
-
+      {loading && stock ? <p role="status" className="mb-3 flex items-center gap-2 text-sm text-muted"><LoaderCircle className="size-4 animate-spin" />{t("resource.loading")}</p> : null}
+      <div inert={switchingVariant} aria-busy={switchingVariant} className={switchingVariant ? "opacity-50" : undefined}>
+      <section className="mb-5 rounded-2xl border border-border bg-surface p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div><p className="text-xs font-medium text-muted">{t("workspace.currentSelection")}</p><h2 className="mt-1 text-lg font-semibold">{familyView ? t("workspace.allVariants") : selectedName}</h2>
+          {!familyView ? <p className="mt-2 text-sm"><strong className="text-xl tabular-nums">{virtual ? 0 : currentQuantity}</strong> {unitName} · {t("resource.metrics.available")}{(virtual?.preview ?? bom)?.components.length ? <span className="ml-3 text-muted">{t("workspace.buildable")}: {(virtual?.preview ?? bom)?.buildableQuantity}</span> : null}</p> : null}</div>
+          {!familyView && !virtual ? <p className="text-xs text-muted">{t("resource.metrics.minimum")}: {minimum} · {t("resource.metrics.incoming")}: {onOrder}</p> : null}
+        </div>
+        {!familyView && !virtual && forecast.isBelowMinimum ? <p className="mt-3 text-xs text-warning">{t("resource.forecast.belowThreshold")}</p> : null}
+        {canEdit && !familyView ? <div className="mt-4 space-y-3">
+          <div role="tablist" aria-label={t("workspace.actions")} className="flex flex-wrap gap-2">
+            {actions.map((task, index) => <Button key={task} id={`stock-action-${task}`} role="tab"
+              aria-selected={action === task} aria-controls="stock-action-panel"
+              tabIndex={action === task ? 0 : -1} disabled={actionBusy}
+              variant={action === task ? "primary" : "secondary"}
+              onClick={() => selectAction(task)}
+              onKeyDown={(event) => {
+                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                event.preventDefault();
+                const next = event.key === "Home" ? actions[0] : event.key === "End" ? actions[actions.length - 1] : actions[(index + (event.key === "ArrowRight" ? 1 : actions.length - 1)) % actions.length];
+                selectAction(next);
+                document.getElementById(`stock-action-${next}`)?.focus();
+              }}>{t(`workspace.${task}`)}</Button>)}
+          </div>
+          {virtual ? <Button variant="secondary" disabled={buildBusy} onClick={async () => {
+            setBuildBusy(true); setError(null);
+            try {
+              const created = await fetchJson<{ resourceId: string }>(`/api/v1/resources/${virtual.primaryId}/assembly-configuration`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(virtual.configuration) });
+              router.push(organizationHref(`/inventory/${created.resourceId}/edit`));
+            } catch (cause) { setError(cause instanceof Error ? cause.message : t("workspace.loadError")); }
+            finally { setBuildBusy(false); }
+          }}>{t("workspace.customize")}</Button> : null}
+        </div> : null}
+      {actions.includes(action) && canEdit && !familyView && !switchingVariant ? <StockActionPanel action={action} busy={actionBusy}>
+        {error ? <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">{error}</p> : null}
+        {action === "build" ? <AssemblyManager resourceId={virtual?.primaryId ?? resourceId} fixedOutput unassignedOutput={!virtual && Boolean(stock.family?.variants.length) && stock.family?.primary.id === resourceId} outputConfiguration={virtual?.configuration} mode="build" showHistory={false}
+          onBusyChange={setBuildBusy} onBuilt={(output) => { setBuildBusy(false); setNotice(t("workspace.built", { name: output.name })); setRevision((value) => value + 1); if (output.id !== resourceId) selectVariant(output.id); else void loadStock(true); }} /> : null}
+        {!pendingMovement && !virtual && action !== "build" ? stock.config.trackingMode === "serialized" ? (action === "receipt" ? <StockUnitCreateForm stock={stock} t={t} customFieldError={customFieldError} availableLocations={availableLocations} applicableCustomFields={applicableCustomFields} units={units} /> : <>
+          <p className="text-sm text-muted">{t(`workspace.serialized.${action}`)}</p>
+          <StockUnits key={resourceId} selectedUnitId={selectedUnitId} stock={stock} t={t} locale={locale} numberFormat={numberFormat} customFieldError={customFieldError} availableLocations={availableLocations} applicableCustomFields={applicableCustomFields} units={units} showCreate={false} canEdit />
+        </>) : action === "transfer" ? <StockLocationsManager key={resourceId} resourceId={resourceId} canEdit unitName={unitName} onBusyChange={setBuildBusy} onStockChanged={() => { void loadStock(true); setRevision((value) => value + 1); }} /> : <StockBooking contextual stock={stock} t={t} unitName={unitName} numberFormat={numberFormat} resourceId={resourceId} availableContacts={availableContacts} movements={movements} /> : null}
       {pendingMovement ? (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-overlay p-4 backdrop-blur-sm">
+        <div className="space-y-4">
           <div
-            role="dialog"
-            aria-modal="true"
             aria-labelledby="outgoing-confirmation-title"
             className="w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-2xl sm:p-6"
           >
@@ -483,7 +514,24 @@ export function ResourceStockManager({
             </div>
           </div>
         </div>
-      ) : null}
+      ) : null}      </StockActionPanel> : null}
+      </section>
+
+      <div role="tablist" aria-label={t("workspace.details")} className="mb-4 flex gap-2 border-b border-border">
+        {(["movements", "units", "locations"] as const).map((tab, index, tabs) => <button key={tab} id={`stock-tab-${tab}`} role="tab" aria-selected={detailTab === tab} aria-controls="stock-detail-panel" tabIndex={detailTab === tab ? 0 : -1}
+          onKeyDown={(event) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) { event.preventDefault(); const next = event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length]; setDetailTab(next); document.getElementById(`stock-tab-${next}`)?.focus(); } }}
+          onClick={() => setDetailTab(tab)} className={`border-b-2 px-4 py-3 text-sm font-semibold ${detailTab === tab ? "border-brand text-brand" : "border-transparent text-muted"}`}>{t(`workspace.${tab}`)}</button>)}
+      </div>
+      <section id="stock-detail-panel" inert={actionBusy} role="tabpanel" aria-labelledby={`stock-tab-${detailTab}`} tabIndex={0}>
+        {virtual ? <p className="rounded-xl border border-border p-6 text-sm text-muted">{t("workspace.virtualEmpty")}</p> : familyView && stock.family ? <FamilyStockDetails members={[stock.family.primary, ...stock.family.variants]} tab={detailTab} /> : <>
+          {detailTab === "movements" ? <StockMovementHistory stock={stock} t={t} locale={locale} numberFormat={numberFormat} canEdit={canEdit} availableContacts={availableContacts} movements={movements} /> : null}
+          {detailTab === "units" ? (stock.config.trackingMode === "serialized" ? <StockUnits key={resourceId} selectedUnitId={selectedUnitId} stock={stock} t={t} locale={locale} numberFormat={numberFormat} customFieldError={customFieldError} availableLocations={availableLocations} applicableCustomFields={applicableCustomFields} units={units} showCreate={false} canEdit={false} /> : <p className="p-5 text-sm text-muted">{t("workspace.bulkUnits")}</p>) : null}
+          {detailTab === "locations" ? <StockLocationsManager key={resourceId} resourceId={resourceId} canEdit={false} unitName={unitName} /> : null}
+        </>}
+      </section>
+
+
+      </div>
     </div>
   );
 }

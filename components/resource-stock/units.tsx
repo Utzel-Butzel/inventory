@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDate, formatMoney, localDateTime } from "@/lib/client-formatters";
 
 import { OrganizationLink as Link } from "@/components/organization-routing";
@@ -28,7 +28,7 @@ import type { StockSectionProps, UnitStatus } from "./types";
 
 import { StockUnitCreateForm, type StockUnitCreateFormProps } from "./unit-create-form";
 
-export type StockUnitsProps = StockUnitCreateFormProps & Pick<StockSectionProps, "locale" | "numberFormat"> & { selectedUnitId?: string };
+export type StockUnitsProps = StockUnitCreateFormProps & Pick<StockSectionProps, "locale" | "numberFormat"> & { selectedUnitId?: string; showCreate?: boolean; canEdit?: boolean };
 
 export function StockUnits({
   stock,
@@ -40,7 +40,10 @@ export function StockUnits({
   applicableCustomFields,
   units,
   selectedUnitId,
+  showCreate = true,
+  canEdit = true,
 }: StockUnitsProps) {
+  const [unitQuery, setUnitQuery] = useState("");
   const selectedUnitRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     selectedUnitRef.current?.scrollIntoView({ block: "center" });
@@ -81,20 +84,21 @@ export function StockUnits({
       />
 
       {stock.config.trackingMode === "serialized" ? (
-        <div className="grid items-start xl:grid-cols-[360px_minmax(0,1fr)]">
-          <StockUnitCreateForm
+        <div className={showCreate && canEdit ? "grid items-start xl:grid-cols-[360px_minmax(0,1fr)]" : ""}>
+          {showCreate && canEdit ? <StockUnitCreateForm
             stock={stock}
             t={t}
             customFieldError={customFieldError}
             availableLocations={availableLocations}
             applicableCustomFields={applicableCustomFields}
             units={units}
-          />
+          /> : null}
 
           <div className="min-w-0">
+            <div className="p-4"><input type="search" className={inputClass} value={unitQuery} onChange={(event) => setUnitQuery(event.target.value)} placeholder={t("workspace.scanUnit")} aria-label={t("workspace.scanUnit")} /></div>
             {stock.units.length ? (
               <div className="divide-y divide-border">
-                {stock.units.map((unit) => {
+                {stock.units.filter((unit) => unit.code.toLowerCase().includes(unitQuery.toLowerCase())).map((unit) => {
                   const editing = editingUnitId === unit.id && unitEditForm;
                   return (
                     <div key={unit.id} ref={unit.id === selectedUnitId ? selectedUnitRef : undefined}
@@ -183,7 +187,7 @@ export function StockUnits({
                           </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-2 pl-[52px] sm:pl-0">
-                          <button
+                          {canEdit ? <button
                             type="button"
                             onClick={() => {
                               if (editing) {
@@ -213,7 +217,7 @@ export function StockUnits({
                             ) : (
                               <Settings2 className="size-3.5" aria-hidden="true" />
                             )}
-                          </button>
+                          </button> : null}
                           <button
                             type="button"
                             onClick={() => void navigator.clipboard.writeText(unit.code)}
@@ -397,7 +401,7 @@ export function StockUnits({
                                 />
                               </div>
                             ) : null}
-                            <label className={`${labelClass} sm:col-span-2 lg:col-span-3`}>
+                            <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-xs text-muted">{t("resource.units.advancedMetadata")}</summary><label className={`${labelClass} sm:col-span-2 lg:col-span-3`}>
                               {t("resource.units.advancedMetadata")} {" "}
                               <span className="font-normal text-muted">· JSON</span>
                               <textarea
@@ -411,7 +415,7 @@ export function StockUnits({
                                 spellCheck={false}
                                 className={`${inputClass} h-auto resize-y py-3 font-mono text-[12px] leading-5`}
                               />
-                            </label>
+                            </label></details>
                           </div>
                           <div className="mt-4 flex flex-col-reverse gap-2 border-t border-brand-border pt-4 sm:flex-row sm:items-center sm:justify-between">
                             <p className="text-[10px] text-muted">

@@ -92,6 +92,7 @@ type BomComponent = {
   trackingMode: TrackingMode;
   cover: ResourceCover | null;
   availableUnits: AvailableUnit[];
+  choices?: Array<Pick<BomComponent, "resourceId" | "name">>;
   origin?: "local" | "base" | "inherited" | "override" | "variant";
 };
 
@@ -345,22 +346,35 @@ function AssemblyResourceManager({
   onStockChanged,
   hideWhenEmpty = false,
   unassignedOutput = false,
+  outputConfiguration,
+  showHistory = true,
+  onBuilt,
+  onBusyChange,
 }: {
   resourceId: string;
   mode?: AssemblyMode;
   onStockChanged?: () => void;
   hideWhenEmpty?: boolean;
   unassignedOutput?: boolean;
+  outputConfiguration?: Record<string, string>;
+  showHistory?: boolean;
+  onBuilt?: (resource: BomResource) => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const allowNegativeStock = useOrganizationAllowsNegativeStock();
   const { t, i18n } = useT(["assembly", "common"]);
   const locale = i18n.resolvedLanguage ?? i18n.language;
-  const bomEndpoint = `/api/v1/resources/${resourceId}/bom`;
-  const buildsEndpoint = `/api/v1/resources/${resourceId}/stock/builds`;
-  const showBom = mode === "full" || mode === "bom";
+  const bomEndpoint = outputConfiguration
+    ? `/api/v1/resources/${resourceId}/assembly-configuration?selection=${encodeURIComponent(JSON.stringify(outputConfiguration))}`
+    : `/api/v1/resources/${resourceId}/bom`;
+
+  const showBom = !outputConfiguration && (mode === "full" || mode === "bom");
   const showBuild = mode === "full" || mode === "build";
 
   const [bom, setBom] = useState<BomData | null>(null);
+  const historyResourceId = outputConfiguration ? (bom?.resource.id !== resourceId ? bom?.resource.id : null) : resourceId;
+  const buildsEndpoint = historyResourceId ? `/api/v1/resources/${historyResourceId}/stock/builds` : null;
+  const buildEndpoint = `/api/v1/resources/${resourceId}/stock/builds`;
   const [components, setComponents] = useState<BomComponent[]>([]);
   const [builds, setBuilds] = useState<AssemblyBuild[]>([]);
   const [loadingBom, setLoadingBom] = useState(true);
@@ -368,6 +382,7 @@ function AssemblyResourceManager({
   const [savingBom, setSavingBom] = useState(false);
   const [resettingBom, setResettingBom] = useState(false);
   const [postingBuild, setPostingBuild] = useState(false);
+  useEffect(() => { onBusyChange?.(postingBuild); }, [postingBuild, onBusyChange]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -413,7 +428,7 @@ function AssemblyResourceManager({
 
   const loadBuilds = useCallback(
     async (quiet = false) => {
-      if (!showBuild) return;
+      if (!showBuild || !showHistory || !buildsEndpoint) { setLoadingBuilds(false); return; }
       if (!quiet) setLoadingBuilds(true);
       try {
         const payload = await fetchJson<BuildsEnvelope | AssemblyBuild[]>(buildsEndpoint, {
@@ -428,7 +443,7 @@ function AssemblyResourceManager({
         setLoadingBuilds(false);
       }
     },
-    [buildsEndpoint, showBuild, t],
+    [buildsEndpoint, showBuild, showHistory, t],
   );
 
   useEffect(() => {
@@ -579,7 +594,7 @@ function AssemblyResourceManager({
     outputCodes.length === buildQuantity;
   const canBuild = Boolean(
     bom &&
-      bom.resource.id === resourceId &&
+      (outputConfiguration || bom.resource.id === resourceId) &&
       bom.components.length &&
       Number.isInteger(buildQuantity) &&
       buildQuantity > 0 &&
@@ -705,7 +720,7 @@ function AssemblyResourceManager({
   async function resetBomToPrimary() {
     if (!bom?.inheritance || bom.inheritance.overrideCount < 1) return;
     if (
-      !window.confirm(
+      showHistory && !window.confirm(
         t("assembly:bom.inheritance.resetConfirm", {
           name: bom.inheritance.primaryName,
         }),
@@ -757,7 +772,7 @@ function AssemblyResourceManager({
       return;
     }
     if (
-      !window.confirm(
+      showHistory && !window.confirm(
         t("assembly:build.confirm", {
           count: buildQuantity,
           name: buildOutputName,
@@ -773,7 +788,7 @@ function AssemblyResourceManager({
     setLastBomResource(null);
     try {
       const requestBody = {
-        outputResourceId: resourceId,
+        ...(outputConfiguration ? { outputConfiguration } : { outputResourceId: resourceId }),
         quantity: buildQuantity,
         occurredAt,
         location: buildForm.location.trim() || undefined,
@@ -790,7 +805,7 @@ function AssemblyResourceManager({
           ? buildRequestRef.current
           : { key: crypto.randomUUID(), fingerprint };
       buildRequestRef.current = request;
-      const result = await fetchJson<{ resource: BomResource }>(buildsEndpoint, {
+      const result = await fetchJson<{ resource: BomResource }>(buildEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -811,6 +826,7 @@ function AssemblyResourceManager({
       window.dispatchEvent(new Event("resource-family-changed"));
       setLastBomResource(result.resource);
       setNotice(t("assembly:notices.built", { count: buildQuantity, name: result.resource.name }));
+      onBuilt?.(result.resource);
     } catch (buildError) {
       setError(
         buildError instanceof Error ? buildError.message : t("assembly:errors.build"),
@@ -1275,7 +1291,7 @@ function AssemblyResourceManager({
 
       {showBuild ? (
         <Card className="overflow-hidden">
-          <SectionHeading
+          {showHistory ? <SectionHeading
             icon={<Factory className="size-4" aria-hidden="true" />}
             title={t("assembly:build.title")}
             description={t("assembly:build.description")}
@@ -1284,7 +1300,7 @@ function AssemblyResourceManager({
                 {t("assembly:buildable", { count: selectedBuildable })}
               </Badge>
             }
-          />
+          /> : <p className="border-b border-border px-5 py-3 text-sm text-muted">{t("assembly:buildable", { count: selectedBuildable })}</p>}
 
           {!bom.components.length ? (
             <EmptyState
@@ -1295,15 +1311,15 @@ function AssemblyResourceManager({
             />
           ) : (
             <form onSubmit={submitBuild}>
-              <div className="border-b border-border bg-brand-soft/40 p-4 sm:px-5">
+              {showHistory ? <div className="border-b border-border bg-brand-soft/40 p-4 sm:px-5">
                 <p className="text-sm font-semibold">
                   {t("assembly:output.destination", { name: buildOutputName })}
                 </p>
                 <p className="mt-1 text-xs text-muted">{t("assembly:output.recipeHelp")}</p>
-              </div>
+              </div> : null}
               <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[320px_minmax(0,1fr)]">
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)]">
                     <label className={labelClass}>
                       {t("assembly:labels.buildQuantity")}
                       <input
@@ -1319,19 +1335,6 @@ function AssemblyResourceManager({
                         className={`${inputClass} mt-1.5 tabular-nums`}
                       />
                     </label>
-                    <label className={labelClass}>
-                      {t("assembly:labels.buildDate")}
-                      <input
-                        type="datetime-local"
-                        required
-                        value={buildForm.occurredAt}
-                        onChange={(event) =>
-                          setBuildForm((current) => ({ ...current, occurredAt: event.target.value }))
-                        }
-                        className={`${inputClass} mt-1.5`}
-                      />
-                    </label>
-                  </div>
                   <label className={labelClass}>
                     {t("assembly:labels.finishedLocation")} {" "}
                     <span className="font-normal text-muted">
@@ -1347,6 +1350,20 @@ function AssemblyResourceManager({
                       className={`${inputClass} mt-1.5`}
                     />
                   </label>
+                  </div>
+                  <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-semibold text-muted">{t("assembly:build.additionalDetails")}</summary><div className="mt-3 space-y-4">
+                    <label className={labelClass}>
+                      {t("assembly:labels.buildDate")}
+                      <input
+                        type="datetime-local"
+                        required
+                        value={buildForm.occurredAt}
+                        onChange={(event) =>
+                          setBuildForm((current) => ({ ...current, occurredAt: event.target.value }))
+                        }
+                        className={`${inputClass} mt-1.5`}
+                      />
+                    </label>
                   <label className={labelClass}>
                     {t("assembly:labels.buildNote")} {" "}
                     <span className="font-normal text-muted">
@@ -1383,6 +1400,7 @@ function AssemblyResourceManager({
                       </span>
                     </label>
                   ) : null}
+                  </div></details>
                 </div>
 
                 <div className="min-w-0">
@@ -1465,6 +1483,7 @@ function AssemblyResourceManager({
 
               <div className="flex flex-col gap-3 border-t border-border bg-surface-subtle px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <div className="text-[12px] text-muted">
+                  <p className="mb-1 font-semibold text-foreground">{t("assembly:build.outputBalance", { before: bom.resource.quantity, after: bom.resource.quantity + (Number.isFinite(buildQuantity) ? buildQuantity : 0) })}</p>
                   {dirty ? (
                     <span className="font-medium text-warning">
                       {t("assembly:build.saveFirst")}
@@ -1499,7 +1518,7 @@ function AssemblyResourceManager({
         </Card>
       ) : null}
 
-      {showBuild ? (
+      {showBuild && showHistory ? (
         <Card className="overflow-hidden">
           <SectionHeading
             icon={<History className="size-4" aria-hidden="true" />}
@@ -1597,30 +1616,40 @@ export function AssemblyManager(props: {
   mode?: AssemblyMode;
   onStockChanged?: () => void;
   hideWhenEmpty?: boolean;
+  fixedOutput?: boolean;
+  unassignedOutput?: boolean;
+  outputConfiguration?: Record<string, string>;
+  showHistory?: boolean;
+  onBuilt?: (resource: BomResource) => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const { t } = useT("assembly");
   const [loaded, setLoaded] = useState<{
     id: string;
     family: AssemblyFamily;
+    bom: BomData;
   } | null>(null);
   const [output, setOutput] = useState<{
     primaryId: string;
     id: string;
   } | null>(null);
+  const [configuration, setConfiguration] = useState<Record<string, string>>({});
+  const [customizing, setCustomizing] = useState(false);
+  const [customizedId, setCustomizedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    if (props.mode === "bom") return;
+    if (props.mode === "bom" || props.fixedOutput) return;
     const controller = new AbortController();
     const load = () => {
       setError(null);
-      void fetchJson<AssemblyFamily>(
-        `/api/v1/resources/${props.resourceId}/family`,
-        { signal: controller.signal, cache: "no-store" },
-      )
-        .then((family) => {
+      void Promise.all([
+        fetchJson<AssemblyFamily>(`/api/v1/resources/${props.resourceId}/family`, { signal: controller.signal, cache: "no-store" }),
+        fetchJson<BomData>(`/api/v1/resources/${props.resourceId}/bom`, { signal: controller.signal, cache: "no-store" }),
+      ])
+        .then(([family, bom]) => {
           if (!controller.signal.aborted)
-            setLoaded({ id: props.resourceId, family });
+            setLoaded({ id: props.resourceId, family, bom });
         })
         .catch((cause) => {
           if (!controller.signal.aborted)
@@ -1631,12 +1660,14 @@ export function AssemblyManager(props: {
     };
     load();
     window.addEventListener("resource-family-changed", load);
+    window.addEventListener("resource-bom-changed", load);
     return () => {
       controller.abort();
       window.removeEventListener("resource-family-changed", load);
+      window.removeEventListener("resource-bom-changed", load);
     };
-  }, [props.resourceId, props.mode, t, retry]);
-  if (props.mode === "bom") return <AssemblyResourceManager {...props} />;
+  }, [props.resourceId, props.mode, props.fixedOutput, t, retry]);
+  if (props.mode === "bom" || props.fixedOutput) return <AssemblyResourceManager {...props} />;
   if (error)
     return (
       <Card className="p-4">
@@ -1649,16 +1680,35 @@ export function AssemblyManager(props: {
   if (loaded?.id !== props.resourceId)
     return <Skeleton className="h-28 w-full" />;
   const family = loaded.family;
-  if (family.role !== "primary" || !family.variants.length)
+  const groups = loaded.bom.components.filter((component) => (component.choices?.length ?? 0) > 1);
+  if (family.role !== "primary" || (!family.variants.length && !groups.length))
     return <AssemblyResourceManager key={props.resourceId} {...props} />;
   const selected =
     output?.primaryId === props.resourceId &&
-    (output.id === props.resourceId ||
+    (output.id === "automatic" || output.id === props.resourceId ||
       family.variants.some(
         (variant) => variant.id === output.id && variant.status !== "archived",
       ))
       ? output.id
-      : "";
+      : groups.length ? "automatic" : "";
+  const selectedConfiguration = Object.fromEntries(groups.flatMap((group) =>
+    group.choices?.some((choice) => choice.resourceId === configuration[group.slotKey])
+      ? [[group.slotKey, configuration[group.slotKey]]] : []));
+  const complete = groups.length > 0 && Object.keys(selectedConfiguration).length === groups.length;
+  async function customize() {
+    setCustomizing(true);
+    setError(null);
+    try {
+      const result = await fetchJson<{ resourceId: string }>(`/api/v1/resources/${props.resourceId}/assembly-configuration`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(selectedConfiguration),
+      });
+      setCustomizedId(result.resourceId);
+      window.dispatchEvent(new Event("resource-bom-changed"));
+      window.dispatchEvent(new Event("resource-family-changed"));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("errors.loadBom"));
+    } finally { setCustomizing(false); }
+  }
   return (
     <div className="space-y-4">
       <Card className="p-4">
@@ -1672,6 +1722,7 @@ export function AssemblyManager(props: {
             }
           >
             <option value="">{t("output.choose")}</option>
+            {groups.length ? <option value="automatic">{t("output.automatic")}</option> : null}
             {family.variants
               .filter((variant) => variant.status !== "archived")
               .map((variant) => (
@@ -1685,8 +1736,23 @@ export function AssemblyManager(props: {
           </select>
         </label>
         <p className="mt-2 text-xs text-muted">{t("output.help")}</p>
+        {selected === "automatic" ? <div className="mt-4 space-y-3">
+          <p className="text-xs text-muted">{t("output.automaticHelp")}</p>
+          {groups.map((group) => <label key={group.slotKey} className={labelClass}>
+            {group.name}
+            <select className={`${inputClass} mt-1.5`} value={selectedConfiguration[group.slotKey] ?? ""}
+              onChange={(event) => { setConfiguration((previous) => ({ ...previous, [group.slotKey]: event.target.value })); setCustomizedId(null); }}>
+              <option value="">{t("output.choose")}</option>
+              {group.choices?.map((choice) => <option key={choice.resourceId} value={choice.resourceId}>{choice.name}</option>)}
+            </select>
+          </label>)}
+          {complete ? <Button variant="secondary" disabled={customizing} onClick={() => void customize()}>{t("output.customize")}</Button> : null}
+          {customizedId ? <Link href={`/inventory/${customizedId}/edit`} className="block text-sm text-brand">{t("output.edit")}</Link> : null}
+        </div> : null}
       </Card>
-      {selected ? (
+      {selected === "automatic" ? (complete ? <AssemblyResourceManager
+        key={JSON.stringify(selectedConfiguration)} {...props} mode="build" outputConfiguration={selectedConfiguration}
+      /> : null) : selected ? (
         <AssemblyResourceManager
           key={selected}
           {...props}

@@ -21,6 +21,8 @@ import { isManualMovement, movementLabelKeys } from "./model";
 import type { MovementType, StockContact, StockSectionProps } from "./types";
 import type { StockMovementsController } from "./use-stock-movements";
 
+import { BuildMovementDetails } from "./build-movement-details";
+
 import { StockMovementEditForm } from "./movement-edit-form";
 
 export type StockMovementHistoryProps = Pick<StockSectionProps, "stock" | "t" | "locale" | "numberFormat"> & {
@@ -140,7 +142,7 @@ export function StockMovementHistory({
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-xs font-semibold text-foreground">
-                        {movement.reason ||
+                        {movement.assemblyBuildId ? t(movement.delta > 0 ? "workspace.assemblyCompleted" : "workspace.assemblyConsumed") : movement.reason ||
                           t(
                             movementLabelKeys[
                             movement.type as MovementType
@@ -159,6 +161,7 @@ export function StockMovementHistory({
                         )}
                         {movement.note ? ` · ${movement.note}` : ""}
                       </p>
+                      {movement.assemblyBuildId && movement.delta > 0 ? <BuildMovementDetails resourceId={stock.resource.id} buildId={movement.assemblyBuildId} /> : null}
                       {movement.contactId ? (
                         <p className="mt-1 truncate text-[11px] font-medium text-brand">
                           {t("resource.movements.contact")}: {" "}

@@ -59,6 +59,7 @@ export type StockLocationsManagerProps = {
   canEdit: boolean;
   unitName?: string;
   onStockChanged?: () => void;
+  onBusyChange?: (busy: boolean) => void;
 };
 
 const UNASSIGNED = "unassigned";
@@ -78,6 +79,7 @@ export function StockLocationsManager({
   canEdit,
   unitName = "",
   onStockChanged,
+  onBusyChange,
 }: StockLocationsManagerProps) {
   const { t, i18n } = useT("stock");
   const allowNegativeStock = useOrganizationAllowsNegativeStock();
@@ -87,6 +89,7 @@ export function StockLocationsManager({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [posting, setPosting] = useState(false);
+  useEffect(() => { onBusyChange?.(posting); }, [posting, onBusyChange]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [source, setSource] = useState(UNASSIGNED);

@@ -75,6 +75,7 @@ export type BomComponentInput = {
 
 export type AssemblyBuildInput = {
   outputResourceId?: string;
+  outputConfiguration?: Record<string, string>;
   quantity: number;
   occurredAt?: Date;
   location?: string | null;
@@ -604,6 +605,17 @@ async function getBomWithExecutor(
   const componentIds = Array.from(
     new Set(recipe.lines.map((line) => line.componentResourceId)),
   );
+  // A recipe may point at a concrete member rather than the family root.
+  // In that case its siblings are alternatives for the same output dimension.
+  const memberships = componentIds.length ? await executor.select({
+    child: resourceRelations.sourceResourceId, primary: resourceRelations.targetResourceId,
+  }).from(resourceRelations).where(and(
+    eq(resourceRelations.organizationId, organizationId),
+    eq(resourceRelations.relationTypeKey, "variant_of"),
+    inArray(resourceRelations.sourceResourceId, componentIds),
+  )) : [];
+  const primaryByComponent = new Map(memberships.map((row) => [row.child, row.primary]));
+  const familyIds = [...new Set(componentIds.map((id) => primaryByComponent.get(id) ?? id))];
   const variantLinks = componentIds.length
     ? await executor
         .select({
@@ -615,7 +627,7 @@ async function getBomWithExecutor(
           and(
             eq(resourceRelations.organizationId, organizationId),
             eq(resourceRelations.relationTypeKey, "variant_of"),
-            inArray(resourceRelations.targetResourceId, componentIds),
+            inArray(resourceRelations.targetResourceId, familyIds),
           ),
         )
         .orderBy(asc(resourceRelations.createdAt), asc(resourceRelations.id))
@@ -623,6 +635,7 @@ async function getBomWithExecutor(
   const choiceResourceIds = Array.from(
     new Set([
       ...componentIds,
+      ...familyIds,
       ...variantLinks.map((link) => link.variantResourceId),
     ]),
   );
@@ -632,6 +645,7 @@ async function getBomWithExecutor(
           id: resources.id,
           name: resources.name,
           sku: resources.sku,
+          status: resources.status,
           availableQuantity: resources.quantity,
           trackingMode: stockSettings.trackingMode,
           unitName: stockSettings.unitName,
@@ -658,7 +672,7 @@ async function getBomWithExecutor(
     throw new AssemblyOperationError("A bill-of-materials component no longer exists.", 409);
   }
   const variantResourceRows =
-    options.authorizeChoice && variantLinks.length
+    options.authorizeChoice && choiceResourceIds.length
       ? await executor
           .select()
           .from(resources)
@@ -667,7 +681,7 @@ async function getBomWithExecutor(
               eq(resources.organizationId, organizationId),
               inArray(
                 resources.id,
-                variantLinks.map((link) => link.variantResourceId),
+                choiceResourceIds,
               ),
             ),
           )
@@ -676,11 +690,11 @@ async function getBomWithExecutor(
     variantResourceRows.map((variant) => [variant.id, variant]),
   );
   const allowedVariantIds = new Set<string>();
-  for (const link of variantLinks) {
-    const variant = componentById.get(link.variantResourceId);
-    const authorizationResource = variantResourceById.get(link.variantResourceId);
+  for (const choiceId of choiceResourceIds) {
+    const variant = componentById.get(choiceId);
+    const authorizationResource = variantResourceById.get(choiceId);
     if (
-      variant &&
+      variant && variant.status !== "archived" &&
       (!options.authorizeChoice ||
         (authorizationResource &&
           (await options.authorizeChoice(authorizationResource))))
@@ -812,8 +826,11 @@ async function getBomWithExecutor(
       })),
       choices: [
         choiceDto(component.id, component.id),
-        ...(variantsByPrimary.get(component.id) ?? [])
-          .map((variantId) => choiceDto(variantId, component.id))
+        ...Array.from(new Set([
+          primaryByComponent.get(component.id) ?? component.id,
+          ...(variantsByPrimary.get(primaryByComponent.get(component.id) ?? component.id) ?? []),
+        ])).filter((id) => id !== component.id && allowedVariantIds.has(id))
+          .map((variantId) => choiceDto(variantId, primaryByComponent.get(component.id) ?? component.id))
           .sort(
             (left, right) =>
               left.name.localeCompare(right.name) ||
@@ -859,6 +876,219 @@ export async function getBom(
       getBomWithExecutor(transaction, organizationId, resourceId, options),
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
+}
+
+// A configuration is a sparse selection of variable BOM slots, never a stored
+// Cartesian product. Identity lives on the existing variant relation so edits to
+// the finished recipe do not accidentally create a second stock item.
+const configurationKey = (selection: Record<string, string>) =>
+  JSON.stringify(Object.entries(selection).sort(([a], [b]) => a.localeCompare(b)));
+
+async function readAutomaticAssemblySelection(
+  executor: ReadExecutor,
+  organizationId: string,
+  resourceId: string,
+): Promise<Map<string, string>> {
+  const [link] = await executor.select({ attributes: resourceRelations.attributes })
+    .from(resourceRelations).where(and(
+      eq(resourceRelations.organizationId, organizationId),
+      eq(resourceRelations.sourceResourceId, resourceId),
+      eq(resourceRelations.relationTypeKey, "variant_of"),
+    ));
+  const key = link?.attributes.assemblyConfigurationKey;
+  if (typeof key !== "string") return new Map();
+  const entries: unknown = JSON.parse(key);
+  if (!Array.isArray(entries) || entries.some((entry) =>
+    !Array.isArray(entry) || entry.length !== 2 || entry.some((value) => typeof value !== "string")))
+    throw new AssemblyOperationError("Invalid stored finished configuration.", 409);
+  return new Map(entries as Array<[string, string]>);
+}
+
+async function resolveAssemblyConfiguration(
+  executor: ReadExecutor,
+  organizationId: string,
+  resourceId: string,
+  selection: Record<string, string>,
+  authorize: (resource: ResourceRecord) => boolean | Promise<boolean>,
+) {
+  const base = await getBomWithExecutor(executor, organizationId, resourceId, {
+    authorizeChoice: authorize,
+  });
+  if (!base) throw new AssemblyOperationError("Not found", 404);
+  if (base.inheritance)
+    throw new AssemblyOperationError("Configure the primary finished item.", 422);
+  const groups = base.components.filter((component) => component.choices.length > 1);
+  if (!groups.length || Object.keys(selection).length !== groups.length ||
+    groups.some((group) => !group.choices.some((choice) => choice.resourceId === selection[group.slotKey]))) {
+    throw new AssemblyOperationError("Choose one valid value for every variable BOM slot.", 422);
+  }
+  const selectedComponents = base.components.map((component) => {
+    const choice = component.choices.find((choice) => choice.resourceId === selection[component.slotKey]);
+    return choice ? { ...component, ...choice } : component;
+  });
+  const key = configurationKey(selection);
+  const links = await executor.select({ resource: resources, relation: resourceRelations })
+    .from(resourceRelations).innerJoin(resources, and(
+      eq(resources.id, resourceRelations.sourceResourceId),
+      eq(resources.organizationId, organizationId),
+    )).where(and(
+      eq(resourceRelations.organizationId, organizationId),
+      eq(resourceRelations.targetResourceId, resourceId),
+      eq(resourceRelations.relationTypeKey, "variant_of"),
+    ));
+  const identityMatches = links.filter(({ relation }) => relation.attributes.assemblyConfigurationKey === key);
+  let matches = identityMatches;
+  if (!matches.length && links.length) {
+    const baseLines = await readStoredBom(executor, organizationId, resourceId);
+    const overrides = await executor.select().from(variantBomOverrides).where(and(
+      eq(variantBomOverrides.organizationId, organizationId),
+      inArray(variantBomOverrides.variantResourceId, links.map(({ resource }) => resource.id)),
+    ));
+    // Quantities are stored in base units. Slot names, display units and order
+    // are deliberately excluded when adopting a manually created recipe.
+    const recipeKey = (lines: Array<{ componentResourceId: string; quantityPerAssembly: number }>) =>
+      JSON.stringify(lines.map((line) => [line.componentResourceId, line.quantityPerAssembly]).sort());
+    const wanted = recipeKey(selectedComponents.map((line) => ({ ...line, componentResourceId: line.resourceId })));
+    matches = links.filter(({ resource, relation }) => !relation.attributes.assemblyConfigurationKey &&
+      recipeKey(applyVariantBomOverrides(baseLines, overrides.filter((row) => row.variantResourceId === resource.id))) === wanted);
+  }
+  if (matches.length > 1)
+    throw new AssemblyOperationError("Several finished variants match this configuration. Select the existing finished item explicitly.", 409);
+  const existing = matches[0];
+  if (existing && (!(await authorize(existing.resource)) || existing.resource.status === "archived"))
+    throw new AssemblyOperationError("The matching finished variant is archived or inaccessible.", 403);
+  const ids = selectedComponents.map((component) => component.resourceId);
+  const selectedResources = await executor.select().from(resources).where(and(
+    eq(resources.organizationId, organizationId), inArray(resources.id, ids),
+  ));
+  for (const resource of selectedResources) {
+    if (resource.status === "archived" || !(await authorize(resource)))
+      throw new AssemblyOperationError("A selected component is archived or inaccessible.", 403);
+  }
+  if (new Set(ids).size !== ids.length)
+    throw new AssemblyOperationError("The configuration uses the same component in multiple slots.", 422);
+  const name = `${base.resource.name} – ${groups.map((group) =>
+    group.choices.find((choice) => choice.resourceId === selection[group.slotKey])!.name).join(" / ")}`.slice(0, 240);
+  const preview = existing
+    ? (await getBomWithExecutor(executor, organizationId, existing.resource.id, { authorizeChoice: authorize }))!
+    : {
+        ...base,
+        resource: { ...base.resource, name, quantity: 0 },
+        components: selectedComponents,
+        buildableQuantity: Math.min(...selectedComponents.map((component) => Math.floor(component.availableQuantity / component.quantityPerAssembly))),
+      };
+  // Also authorize a customized recipe, which may contain additional components.
+  const previewResources = await executor.select().from(resources).where(and(
+    eq(resources.organizationId, organizationId),
+    inArray(resources.id, preview.components.map((component) => component.resourceId)),
+  ));
+  for (const resource of previewResources) {
+    if (!(await authorize(resource))) throw new AssemblyOperationError("A recipe component is inaccessible.", 403);
+  }
+  return { preview, existing, key, selectedComponents };
+}
+
+export async function previewAssemblyConfiguration(
+  organizationId: string,
+  resourceId: string,
+  selection: Record<string, string>,
+  authorize: (resource: ResourceRecord) => boolean | Promise<boolean>,
+) {
+  return db.transaction(async (transaction) => {
+    const result = await resolveAssemblyConfiguration(transaction, organizationId, resourceId, selection, authorize);
+    return { ...result.preview, existingResourceId: result.existing?.resource.id ?? null };
+  }, { isolationLevel: "repeatable read", accessMode: "read only" });
+}
+
+
+async function materializeAssemblyConfiguration(
+  transaction: AssemblyTransaction,
+  organizationId: string,
+  primary: ResourceRecord,
+  selection: Record<string, string>,
+  actor: string,
+  authorize: (resource: ResourceRecord) => boolean | Promise<boolean>,
+) {
+  if (primary.status === "archived" || !(await authorize(primary)))
+    throw new AssemblyOperationError("The primary finished item is archived or inaccessible.", 403);
+  const resolved = await resolveAssemblyConfiguration(transaction, organizationId, primary.id, selection, authorize);
+  if (resolved.existing) {
+    if (!resolved.existing.relation.attributes.assemblyConfigurationKey) {
+      // Pin selected slots even for the default value: a later change to the
+      // primary recipe must never turn existing white output into black output.
+      const pinned = resolved.preview.components.filter((line) =>
+        selection[line.slotKey] === line.resourceId).map((line) => ({
+          organizationId, variantResourceId: resolved.existing!.resource.id,
+          slotKey: line.slotKey, componentResourceId: line.resourceId,
+          quantityPerAssembly: line.quantityPerAssembly, quantityUnit: line.quantityUnit,
+          position: line.position, note: line.note, removed: false,
+        }));
+      if (pinned.length) await transaction.insert(variantBomOverrides).values(pinned).onConflictDoNothing();
+    }
+    await transaction.update(resourceRelations).set({ attributes: {
+      ...resolved.existing.relation.attributes, assemblyConfigurationKey: resolved.key,
+    } }).where(eq(resourceRelations.id, resolved.existing.relation.id));
+    return resolved.existing.resource.id;
+  }
+  const now = new Date();
+  const [created] = await transaction.insert(resources).values({
+    organizationId, name: resolved.preview.resource.name, description: primary.description,
+    type: primary.type, status: "available", quantity: 0,
+    valueCents: primary.valueCents, currency: primary.currency, priority: primary.priority,
+    tags: primary.tags, categories: primary.categories, customFields: primary.customFields,
+    notes: primary.notes, createdBy: actor, createdAt: now, updatedAt: now,
+  }).returning();
+  if (!(await authorize(created))) throw new AssemblyOperationError("The finished variant would be inaccessible.", 403);
+  const [settings] = await transaction.select().from(stockSettings).where(and(
+    eq(stockSettings.organizationId, organizationId), eq(stockSettings.resourceId, primary.id),
+  ));
+  await transaction.update(stockSettings).set({
+    trackingMode: settings?.trackingMode ?? "bulk", unitName: settings?.unitName ?? "unit",
+    purchaseUnitName: settings?.purchaseUnitName ?? null, purchaseUnitFactor: settings?.purchaseUnitFactor ?? null,
+    updatedAt: now,
+  }).where(and(eq(stockSettings.organizationId, organizationId), eq(stockSettings.resourceId, created.id)));
+  await transaction.insert(resourceRelations).values({
+    organizationId, sourceResourceId: created.id, targetResourceId: primary.id,
+    relationTypeKey: "variant_of", origin: "manual", createdBy: actor,
+    attributes: { overriddenFields: [], protected: true, assemblyConfigurationKey: resolved.key },
+  });
+  const base = await readStoredBom(transaction, organizationId, primary.id);
+  const overrides = base.flatMap((line) => {
+    const componentResourceId = selection[line.slotKey];
+    return componentResourceId ? [{
+      organizationId, variantResourceId: created.id, slotKey: line.slotKey, componentResourceId,
+      quantityPerAssembly: line.quantityPerAssembly, quantityUnit: line.quantityUnit,
+      position: line.position, note: line.note, removed: false,
+    }] : [];
+  });
+  if (overrides.length) await transaction.insert(variantBomOverrides).values(overrides);
+  await assertCurrentEffectiveBomGraphAcyclic(transaction, organizationId, created.id);
+  await enqueueWebhookEvent(transaction, {
+    organizationId, type: "inventory.resource.created", aggregateType: "resource", aggregateId: created.id,
+    actor, data: { resource: { ...created, media: [], cover: null }, family: {
+      role: "variant", primaryResourceId: primary.id, relationType: "variant_of",
+    } },
+  });
+  return created.id;
+}
+
+/** Explicit customization creates just the chosen variant; reads never write. */
+export async function customizeAssemblyConfiguration(
+  organizationId: string,
+  resourceId: string,
+  selection: Record<string, string>,
+  actor: string,
+  authorize: (resource: ResourceRecord) => boolean | Promise<boolean>,
+) {
+  return db.transaction(async (transaction) => {
+    await transaction.execute(sql`select pg_advisory_xact_lock(${BOM_WRITE_LOCK_ID})`);
+    await transaction.execute(sql`select pg_advisory_xact_lock(${VARIANT_FAMILY_WRITE_LOCK_ID})`);
+    const [primary] = await transaction.select().from(resources).where(and(
+      eq(resources.organizationId, organizationId), eq(resources.id, resourceId),
+    ));
+    if (!primary) throw new AssemblyOperationError("Not found", 404);
+    return { resourceId: await materializeAssemblyConfiguration(transaction, organizationId, primary, selection, actor, authorize) };
+  });
 }
 
 async function listBomParentsWithExecutor(
@@ -1462,6 +1692,7 @@ export async function replaceBom(
     });
 
     if (currentRecipe.primary) {
+      const automaticSelections = await readAutomaticAssemblySelection(transaction, organizationId, assemblyResourceId);
       const baseBySlot = new Map(
         currentRecipe.baseLines.map((line) => [line.slotKey, line]),
       );
@@ -1484,6 +1715,7 @@ export async function replaceBom(
           continue;
         }
         if (
+          !automaticSelections.has(base.slotKey) &&
           submitted.componentResourceId === base.componentResourceId &&
           submitted.quantityPerAssembly === base.quantityPerAssembly &&
           submitted.quantityUnit === base.quantityUnit &&
@@ -1601,6 +1833,14 @@ export async function resetVariantBomOverrides(
       variantResourceId,
       recipe.baseLines,
     );
+    const automaticSelections = await readAutomaticAssemblySelection(transaction, organizationId, variantResourceId);
+    for (const line of recipe.baseLines) {
+      const componentResourceId = automaticSelections.get(line.slotKey);
+      if (componentResourceId) controlledLines.push({
+        ...line, componentResourceId, quantityUnit: "base", baseComponentResourceId: line.componentResourceId,
+        groupName: "Automatic finished configuration",
+      });
+    }
     const controlledBySlot = new Map(
       controlledLines.map((line) => [line.slotKey, line]),
     );
@@ -1629,7 +1869,7 @@ export async function resetVariantBomOverrides(
         ),
       );
     const requiredOverrides = controlledLines.flatMap((line) =>
-      line.componentResourceId === line.baseComponentResourceId
+      line.componentResourceId === line.baseComponentResourceId && !automaticSelections.has(line.slotKey)
         ? []
         : [
             {
@@ -2024,7 +2264,7 @@ async function resolveBuildComponentSelections(
           and(
             eq(resourceRelations.organizationId, organizationId),
             eq(resourceRelations.relationTypeKey, "variant_of"),
-            inArray(resourceRelations.sourceResourceId, selectedVariantIds),
+            inArray(resourceRelations.sourceResourceId, [...selectedVariantIds, ...recipeLines.map((line) => line.componentResourceId)]),
           ),
         )
     : [];
@@ -2040,10 +2280,12 @@ async function resolveBuildComponentSelections(
       selections?.[line.slotKey] ?? line.componentResourceId;
     if (
       selectedResourceId !== line.componentResourceId &&
-      primaryByVariant.get(selectedResourceId) !== line.componentResourceId
+      primaryByVariant.get(selectedResourceId) !== line.componentResourceId &&
+      (primaryByVariant.get(selectedResourceId) ?? selectedResourceId) !==
+        (primaryByVariant.get(line.componentResourceId) ?? line.componentResourceId)
     ) {
       throw new AssemblyOperationError(
-        "A selected component configuration is not a direct variant of its BOM component.",
+        "A selected component configuration is not a member of its BOM component family.",
         422,
       );
     }
@@ -2117,7 +2359,13 @@ export async function buildAssembly(
             eq(resourceRelations.relationTypeKey, "variant_of"),
           ),
         );
-      if (input.outputResourceId) {
+      if (input.outputConfiguration) {
+        if (input.outputResourceId || input.componentResourceSelections)
+          throw new AssemblyOperationError("Choose either an existing output or a finished configuration.", 422);
+        assemblyResourceId = await materializeAssemblyConfiguration(
+          transaction, organizationId, requested, input.outputConfiguration, actor, authorize,
+        );
+      } else if (input.outputResourceId) {
         if (
           input.outputResourceId !== requestedResourceId &&
           !children.some((child) => child.id === input.outputResourceId)
@@ -2133,6 +2381,16 @@ export async function buildAssembly(
           "Choose an output variant, or explicitly choose the primary item for unassigned stock.",
           422,
         );
+      }
+      if (!input.outputResourceId && !input.outputConfiguration &&
+          !(await findVariantPrimary(transaction, organizationId, requestedResourceId))) {
+        const candidate = await getBomWithExecutor(transaction, organizationId, requestedResourceId);
+        if (candidate?.components.some((component) => component.choices.length > 1)) {
+          throw new AssemblyOperationError(
+            "Choose a finished outputConfiguration, or explicitly select the primary item for unassigned stock.",
+            422,
+          );
+        }
       }
       const effectiveRecipe = await resolveEffectiveBomRecipe(
         transaction,
