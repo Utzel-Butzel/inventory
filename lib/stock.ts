@@ -587,9 +587,28 @@ export async function getStockDetail(
       ]),
   );
   const family = await getResourceFamily(organizationId, resourceId, options, transaction);
+  // Family authorization above also applies to the thumbnails in the selector.
+  const memberIds = family ? [family.primary.id, ...family.variants.map((member) => member.id)] : [resourceId];
+  const covers = await transaction
+    .selectDistinctOn([media.resourceId], {
+      resourceId: media.resourceId,
+      id: media.id,
+      url: media.url,
+      altText: media.altText,
+      width: media.width,
+      height: media.height,
+    })
+    .from(media)
+    .where(and(eq(media.organizationId, organizationId), inArray(media.resourceId, memberIds), eq(media.kind, "image")))
+    .orderBy(asc(media.resourceId), asc(media.position), asc(media.createdAt), asc(media.id));
+  const coverById = new Map(covers.map(({ resourceId: id, ...cover }) => [id, cover]));
   return {
-    resource,
-    family,
+    resource: { ...resource, cover: coverById.get(resource.id) ?? null },
+    family: family ? {
+      ...family,
+      primary: { ...family.primary, cover: coverById.get(family.primary.id) ?? null },
+      variants: family.variants.map((member) => ({ ...member, cover: coverById.get(member.id) ?? null })),
+    } : null,
     config,
     forecast: calculateForecast(
       resource.quantity,

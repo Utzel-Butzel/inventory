@@ -10,6 +10,9 @@ import {
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
+  PackagePlus,
+  Hammer,
   LoaderCircle,
   PackageMinus,
   RefreshCw,
@@ -20,7 +23,7 @@ import { useT } from "next-i18next/client";
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 
 import { StockActionPanel } from "./resource-stock/action-panel";
-import { StockVariantOverview, type VirtualStockSelection, type StockBomPreview } from "./resource-stock/variant-overview";
+import { StockVariantOverview, StockThumbnail, type VirtualStockSelection, type StockBomPreview } from "./resource-stock/variant-overview";
 import { FamilyStockDetails, type StockDetailTab } from "./resource-stock/family-details";
 import { StockUnitCreateForm } from "./resource-stock/unit-create-form";
 import { Button } from "@/components/ui";
@@ -322,18 +325,18 @@ export function ResourceStockManager({
   const selectedName = virtual?.preview.resource.name ?? (stock.family?.variants.length && stock.family.primary.id === resourceId ? t("workspace.unassignedName", { name: stock.resource.name }) : stock.resource.name);
   const forecast = stock.forecast;
   const minimum = stock.config.minimumStock;
-  const action = selectedAction ?? (virtual ? "build" : movements.task);
+  const action = selectedAction ?? (virtual ? "build" : null);
   const actionBusy = buildBusy || postingMovement || units.creatingUnits || units.savingUnit;
   const actions: Array<StockBookingTask | "build" | "transfer"> = [
     ...((virtual?.preview ?? bom)?.components.length ? ["build" as const] : []),
     ...(!virtual ? ["issue", "receipt", "count", "transfer"] as const : []),
   ];
-  function selectAction(next: typeof action) {
-    if (actionBusy || next === action) return;
+  function selectAction(next: (typeof actions)[number]) {
+    if (actionBusy) return;
     setPendingMovement(null);
     setError(null);
     if (next !== "build" && next !== "transfer") movements.selectTask(next);
-    setAction(next);
+    setAction(next === action ? null : next);
   }
 
 
@@ -386,36 +389,52 @@ export function ResourceStockManager({
         </div>
       ) : null}
 
-      <div inert={actionBusy}>
-      {stock.family ? <StockVariantOverview family={stock.family} resourceId={resourceId} revision={revision}
-        allSelected={familyView} virtualSelected={Boolean(virtual)} detailTab={detailTab} onSelect={selectVariant} onCurrent={() => selectVariant(resourceId)}
-        onAll={() => { setFamilyView((value) => !value); setVirtual(null); setAction(null); }}
-        onVirtual={(selection) => { setVirtual(selection); setFamilyView(false); setAction(null); }} /> : null}
-      </div>
-
       {loading && stock ? <p role="status" className="mb-3 flex items-center gap-2 text-sm text-muted"><LoaderCircle className="size-4 animate-spin" />{t("resource.loading")}</p> : null}
       <div inert={switchingVariant} aria-busy={switchingVariant} className={switchingVariant ? "opacity-50" : undefined}>
       <section className="mb-5 rounded-2xl border border-border bg-surface p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div><p className="text-xs font-medium text-muted">{t("workspace.currentSelection")}</p><h2 className="mt-1 text-lg font-semibold">{familyView ? t("workspace.allVariants") : selectedName}</h2>
-          {!familyView ? <p className="mt-2 text-sm"><strong className="text-xl tabular-nums">{virtual ? 0 : currentQuantity}</strong> {unitName} · {t("resource.metrics.available")}{(virtual?.preview ?? bom)?.components.length ? <span className="ml-3 text-muted">{t("workspace.buildable")}: {(virtual?.preview ?? bom)?.buildableQuantity}</span> : null}</p> : null}</div>
-          {!familyView && !virtual ? <p className="text-xs text-muted">{t("resource.metrics.minimum")}: {minimum} · {t("resource.metrics.incoming")}: {onOrder}</p> : null}
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+          <div className="min-w-0 lg:w-full lg:max-w-lg" inert={actionBusy}>
+            {stock.family ? <StockVariantOverview family={stock.family} resourceId={resourceId} revision={revision}
+              allSelected={familyView} virtualSelected={Boolean(virtual)} virtualName={virtual?.preview.resource.name}
+              onSelect={selectVariant} onCurrent={() => selectVariant(resourceId)}
+              onAll={() => { setFamilyView(true); setVirtual(null); setAction(null); }}
+              onVirtual={(selection) => { setVirtual(selection); setFamilyView(false); setAction(null); }} /> :
+              <div className="flex items-center gap-3"><StockThumbnail cover={stock.resource.cover} /><h2 className="text-lg font-semibold">{selectedName}</h2></div>}
+          </div>
+          <div className="shrink-0 lg:text-right" aria-live="polite">
+            <p className="text-xs font-medium text-muted">{familyView ? t("workspace.totalLabel") : t("resource.metrics.available")}</p>
+            <p className="mt-1 flex items-baseline gap-2 lg:justify-end"><strong className="text-4xl font-semibold tracking-tight tabular-nums">{numberFormat.format(familyView ? stock.family?.summary.totalQuantity ?? currentQuantity : virtual ? 0 : currentQuantity)}</strong><span className="text-sm text-muted">{unitName}</span></p>
+            {!familyView ? <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted lg:justify-end">
+              {!virtual ? <><span>{t("resource.metrics.minimum")}: {numberFormat.format(minimum)}</span><span>{t("resource.metrics.incoming")}: {numberFormat.format(onOrder)}</span></> : null}
+              {(virtual?.preview ?? bom)?.components.length ? <span title={t("workspace.sharedComponents")}>{t("workspace.buildable")}: {numberFormat.format((virtual?.preview ?? bom)!.buildableQuantity)}</span> : null}
+            </div> : null}
+            {!familyView && !virtual && forecast.isBelowMinimum ? <p className="mt-2 text-sm text-warning">{t("resource.forecast.belowThreshold")}</p> : null}
+          </div>
         </div>
-        {!familyView && !virtual && forecast.isBelowMinimum ? <p className="mt-3 text-xs text-warning">{t("resource.forecast.belowThreshold")}</p> : null}
-        {canEdit && !familyView ? <div className="mt-4 space-y-3">
-          <div role="tablist" aria-label={t("workspace.actions")} className="flex flex-wrap gap-2">
-            {actions.map((task, index) => <Button key={task} id={`stock-action-${task}`} role="tab"
-              aria-selected={action === task} aria-controls="stock-action-panel"
-              tabIndex={action === task ? 0 : -1} disabled={actionBusy}
-              variant={action === task ? "primary" : "secondary"}
-              onClick={() => selectAction(task)}
-              onKeyDown={(event) => {
-                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-                event.preventDefault();
-                const next = event.key === "Home" ? actions[0] : event.key === "End" ? actions[actions.length - 1] : actions[(index + (event.key === "ArrowRight" ? 1 : actions.length - 1)) % actions.length];
-                selectAction(next);
-                document.getElementById(`stock-action-${next}`)?.focus();
-              }}>{t(`workspace.${task}`)}</Button>)}
+        {canEdit && !familyView ? <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-border pt-4">
+          <div aria-label={t("workspace.actions")} className="flex flex-wrap items-center gap-2">
+            {actions.filter((task) => task !== "count" && task !== "transfer").map((task) => {
+              const Icon = task === "build" ? Hammer : task === "issue" ? PackageMinus : PackagePlus;
+              return <Button key={task} id={`stock-action-${task}`} aria-expanded={action === task} aria-controls="stock-action-panel"
+                disabled={actionBusy} variant={action === task ? "primary" : "secondary"} onClick={() => selectAction(task)}>
+                <Icon className="size-4" aria-hidden="true" />{t(`workspace.${task}`)}
+              </Button>;
+            })}
+            {!virtual ? <details className="relative" onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+            }} onKeyDown={(event) => {
+              if (event.key === "Escape") { event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); }
+            }}>
+              <summary className={`flex cursor-pointer list-none items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden ${action === "count" || action === "transfer" ? "border-brand bg-brand-soft text-brand" : "border-border text-muted-strong hover:bg-surface-hover"}`}>
+                {action === "count" || action === "transfer" ? t(`workspace.${action}`) : t("workspace.moreActions")}<ChevronDown className="size-4" aria-hidden="true" />
+              </summary>
+              <div className="absolute left-0 top-full z-20 mt-2 w-52 rounded-xl border border-border bg-surface p-1 shadow-lg">
+                {(["count", "transfer"] as const).map((task) => <button key={task} id={`stock-action-${task}`} type="button" disabled={actionBusy}
+                  aria-expanded={action === task} aria-controls="stock-action-panel"
+                  onClick={(event) => { selectAction(task); const menu = event.currentTarget.closest("details"); if (menu) { menu.open = false; menu.querySelector("summary")?.focus(); } }}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm hover:bg-surface-hover disabled:opacity-50">{t(`workspace.${task}`)}</button>)}
+              </div>
+            </details> : null}
           </div>
           {virtual ? <Button variant="secondary" disabled={buildBusy} onClick={async () => {
             setBuildBusy(true); setError(null);
@@ -426,7 +445,7 @@ export function ResourceStockManager({
             finally { setBuildBusy(false); }
           }}>{t("workspace.customize")}</Button> : null}
         </div> : null}
-      {actions.includes(action) && canEdit && !familyView && !switchingVariant ? <StockActionPanel action={action} busy={actionBusy}>
+      {action && actions.includes(action) && canEdit && !familyView && !switchingVariant ? <StockActionPanel label={t(`workspace.${action}`)} busy={actionBusy}>
         {error ? <p role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">{error}</p> : null}
         {action === "build" ? <AssemblyManager resourceId={virtual?.primaryId ?? resourceId} fixedOutput unassignedOutput={!virtual && Boolean(stock.family?.variants.length) && stock.family?.primary.id === resourceId} outputConfiguration={virtual?.configuration} mode="build" showHistory={false}
           onBusyChange={setBuildBusy} onBuilt={(output) => { setBuildBusy(false); setNotice(t("workspace.built", { name: output.name })); setRevision((value) => value + 1); if (output.id !== resourceId) selectVariant(output.id); else void loadStock(true); }} /> : null}

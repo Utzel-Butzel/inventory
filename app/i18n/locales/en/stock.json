@@ -806,6 +806,13 @@
       "count": "Compare the physical units with this list. Mark missing units by updating their status."
     },
     "assemblyCompleted": "Build completed",
-    "assemblyConsumed": "Components consumed for build"
+    "assemblyConsumed": "Components consumed for build",
+    "totalLabel": "Total stock",
+    "moreActions": "More actions",
+    "movementDetails": "Details",
+    "movementEvent": "Activity",
+    "recordedBy": "Recorded by",
+    "movementCount_one": "{{count}} movement",
+    "movementCount_other": "{{count}} movements"
   }
 }

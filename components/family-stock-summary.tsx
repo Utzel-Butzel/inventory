@@ -3,9 +3,12 @@
 import { useT } from "next-i18next/client";
 import { OrganizationLink as Link } from "@/components/organization-routing";
 
+export type StockCover = { id?: string; url: string; altText?: string | null; width?: number | null; height?: number | null };
+export type FamilyStockMember = { id: string; name: string; quantity: number; cover?: StockCover | null };
+
 export type FamilyStock = {
-  primary: { id: string; name: string; quantity: number };
-  variants: Array<{ id: string; name: string; quantity: number }>;
+  primary: FamilyStockMember;
+  variants: FamilyStockMember[];
   summary: {
     totalQuantity: number;
     primaryQuantity: number;

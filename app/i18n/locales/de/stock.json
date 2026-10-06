@@ -806,6 +806,13 @@
       "count": "Gleiche die vorhandenen Einheiten mit dieser Liste ab. Fehlende Einheiten kannst du über ihren Status kennzeichnen."
     },
     "assemblyCompleted": "Fertigung abgeschlossen",
-    "assemblyConsumed": "Komponenten für Fertigung entnommen"
+    "assemblyConsumed": "Komponenten für Fertigung entnommen",
+    "totalLabel": "Gesamtbestand",
+    "moreActions": "Weitere Aktionen",
+    "movementDetails": "Details",
+    "movementEvent": "Vorgang",
+    "recordedBy": "Erfasst von",
+    "movementCount_one": "{{count}} Bewegung",
+    "movementCount_other": "{{count}} Bewegungen"
   }
 }

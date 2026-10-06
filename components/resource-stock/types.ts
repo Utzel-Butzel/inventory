@@ -1,4 +1,4 @@
-import type { FamilyStock } from "@/components/family-stock-summary";
+import type { FamilyStock, StockCover } from "@/components/family-stock-summary";
 import type {
   CustomFieldDefinition,
   CustomFieldValues,
@@ -94,6 +94,7 @@ export type StockUnit = {
 export type StockData = {
   family?: FamilyStock | null;
   resource: {
+    cover?: StockCover | null;
     id: string;
     name: string;
     quantity: number;
