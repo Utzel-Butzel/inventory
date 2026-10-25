@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { hasQzSigningConfig, readQzSigningMaterial } from "@/lib/qz-signing-config";
 import { requireSessionPermission } from "@/lib/api-auth";
 import { isAllowedQzRequest, QZ_MAX_REQUEST_BYTES } from "@/lib/qz-signing-policy";
 import { signQzRequest } from "@/lib/qz-signature";
@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   const authorization = await requireSessionPermission(request, "labels.read");
   if (authorization.response) return authorization.response;
-  if (!process.env.QZ_CERTIFICATE_PATH || !process.env.QZ_PRIVATE_KEY_PATH) {
+  if (!hasQzSigningConfig()) {
     return new Response("QZ signing is not configured.", { status: 503 });
   }
   if (request.headers.get("sec-fetch-site") === "cross-site") {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     return new Response("Only PT-P710BT label printing is allowed.", { status: 403 });
   }
   try {
-    const key = await readFile(process.env.QZ_PRIVATE_KEY_PATH, "utf8");
+    const key = await readQzSigningMaterial("PRIVATE_KEY");
     return new Response(signQzRequest(payload.request, key), {
       headers: { "Content-Type": "text/plain", "Cache-Control": "no-store" },
     });

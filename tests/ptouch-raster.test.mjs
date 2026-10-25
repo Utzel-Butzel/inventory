@@ -4,11 +4,23 @@ import { createHash, generateKeyPairSync, verify } from "node:crypto";
 import { combinePtouchLabels, encodePtouchRaster, ptouchPrintableDots, PTOUCH_TAPES } from "../lib/ptouch-raster.ts";
 import { isAllowedQzRequest } from "../lib/qz-signing-policy.ts";
 import { signQzRequest } from "../lib/qz-signature.ts";
+import { hasQzSigningConfig, readQzSigningMaterial } from "../lib/qz-signing-config.ts";
 import { clarifyPtouchPhoto, halftonePtouchPhoto } from "../lib/ptouch-photo.ts";
 
 function white(width, height) {
   return { width, height, data: new Uint8ClampedArray(width * height * 4).fill(255) };
 }
+
+test("deployment signing secrets require both PEM values and reject malformed input", async () => {
+  const pem = "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----";
+  const env = { QZ_CERTIFICATE_BASE64: Buffer.from(pem).toString("base64") };
+  assert.equal(hasQzSigningConfig(env), false);
+  assert.equal(hasQzSigningConfig({ ...env, QZ_PRIVATE_KEY_BASE64: "configured" }), true);
+  assert.equal(await readQzSigningMaterial("CERTIFICATE", env), pem);
+  await assert.rejects(readQzSigningMaterial("PRIVATE_KEY", env));
+  await assert.rejects(readQzSigningMaterial("CERTIFICATE", { QZ_CERTIFICATE_BASE64: "not base64" }));
+  await assert.rejects(readQzSigningMaterial("PRIVATE_KEY", { QZ_PRIVATE_KEY_BASE64: env.QZ_CERTIFICATE_BASE64 }));
+});
 
 test("Brother raster header checks the tape and finishes with feed/cut", () => {
   const result = encodePtouchRaster(white(397, 128), 24, false);

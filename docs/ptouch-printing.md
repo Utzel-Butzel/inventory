@@ -115,6 +115,14 @@ put it in a `NEXT_PUBLIC_*` variable or browser bundle. Use QZ's supported
 demo certificate is suitable for development only and must be trusted on each
 test computer.
 
+For container hosts without secret file mounts, set `QZ_CERTIFICATE_BASE64`
+and `QZ_PRIVATE_KEY_BASE64` to base64-encoded PEM contents in the deployment
+environment. Base64 is only transport encoding, not encryption; the private
+key remains a secret. File paths take precedence when both are configured.
+QZ also supports an organization-owned signing root. Trust it explicitly in
+QZ on each printing computer and allow only the matching signing certificate.
+This does not require installing a general-purpose browser or macOS root CA.
+
 The authenticated endpoints `/api/v1/labels/qz-certificate` and
 `/api/v1/labels/qz-sign` require `labels.read`. Signing is limited to recent
 printer-discovery requests and raw, single-copy PT-P710BT queue jobs. File,
