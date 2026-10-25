@@ -1489,6 +1489,7 @@ export async function mergeResources(
     const combinedQuantity = lockedKeep.quantity + lockedDuplicate.quantity;
     const finalKeep = {
       ...lockedKeep,
+      subtitle: lockedKeep.subtitle || lockedDuplicate.subtitle,
       description: lockedKeep.description || lockedDuplicate.description,
       quantity: combinedQuantity,
       location: lockedKeep.location || lockedDuplicate.location,
@@ -2194,6 +2195,7 @@ export async function mergeResources(
     await transaction
       .update(resources)
       .set({
+        subtitle: finalKeep.subtitle,
         description: finalKeep.description,
         quantity: finalKeep.quantity,
         location: finalKeep.location,

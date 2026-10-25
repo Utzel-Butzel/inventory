@@ -9,7 +9,7 @@
     "description": "Choose inventory entries or individual stock items and a template to print QR codes, barcodes, text and images in your browser."
   },
   "print": {
-    "preparing": "Preparing images…",
+    "preparing": "Preparing labels…",
     "button_zero": "Print labels",
     "button_one": "Print {{count}} label",
     "button_other": "Print {{count}} labels"
@@ -63,8 +63,8 @@
     "description": "The selected setup controls which details, codes, and images appear."
   },
   "printer": {
-    "title": "Brother Wi-Fi printing",
-    "description": "Add the printer to this computer first. In the browser print dialog, select that Brother printer, the setup’s media size, 100% scale and no margins. Printing uses the installed system driver; this page does not send RAW commands directly to the printer."
+    "title": "Print from this computer",
+    "description": "For the PT-P710BT over USB, select QZ Tray above. Use the browser print dialog for other printers with matching media size, 100% scale and no extra margins."
   },
   "designer": {
     "eyebrow": "Label designer",
@@ -141,7 +141,8 @@
       "identifier": "Serial number / SKU / ID",
       "barcode": "Barcode",
       "url": "Short link",
-      "location": "Location"
+      "location": "Location",
+      "subtitle": "Subtitle"
     },
     "coordinates": {
       "x": "Left",
@@ -160,8 +161,10 @@
       "longName": "Cordless impact driver with an exceptionally long product name and comprehensive accessory set",
       "longSku": "TOOL-CORDLESS-IMPACT-DRIVER-KIT-2026-EXTRA-LONG",
       "longLocation": "Workshop · Tool storage · Shelf B · Compartment 12 · Rear storage box",
-      "missingName": "Item without optional information"
-    }
+      "missingName": "Item without optional information",
+      "subtitle": "18 V · battery + charger"
+    },
+    "lineHeight": "Line height (factor)"
   },
   "renderer": {
     "noImage": "No image",
@@ -195,5 +198,60 @@
     "noMatches": "No matching stock items.",
     "loadError": "Unable to load stock items.",
     "retry": "Try again"
+  },
+  "direct": {
+    "destination": "Print using",
+    "browser": "Browser print dialog",
+    "tape": "Loaded tape",
+    "printer": "Printer",
+    "preset": "P-touch · {{tape}} mm tape",
+    "photoPreset": "P-touch · 24 mm white · Photo + large QR",
+    "connect": "Connect QZ Tray",
+    "connecting": "Connecting…",
+    "noPrinter": "No PT-P710BT is configured. Set up its USB printer queue for QZ Tray on this computer.",
+    "connectFirst": "Connect QZ Tray and select the PT-P710BT first.",
+    "connectionError": "Could not connect QZ Tray. Start QZ Tray and allow access. {{detail}}",
+    "limit": "Select at most 100 labels per print job.",
+    "tooLarge": "The template is too large. The print area must be at most {{height}} mm high and 996 mm long. Select the P-touch template or adjust your template.",
+    "renderError": "The label preview could not be fully prepared.",
+    "printError": "Printing did not finish: {{detail}} Check the printer and queue before retrying; previously submitted labels may already have printed.",
+    "help": "Print quality: 180 × 360 dpi. Select the actual loaded tape width. The template describes the printed area (up to {{height}} mm high); the printer adds 2 mm at each end and cuts each label. The mechanism produces about 25 mm of leading tape waste before each separate job. QZ Tray must be running on this computer. Approve its access prompt if shown.",
+    "download": "Download QZ Tray",
+    "sent": "Submitted to the local printer queue. Check the printed labels."
+  },
+  "queue": {
+    "title": "Prepared labels",
+    "description": "Collect labels with different templates for the same tape width. Print the series together; the final label is fed out and cut as well.",
+    "prepare_zero": "Prepare labels",
+    "prepare_one": "Prepare 1 label",
+    "prepare_other": "Prepare {{count}} labels",
+    "print_zero": "Print as a series",
+    "print_one": "Print 1 label as a series",
+    "print_other": "Print {{count}} labels as a series",
+    "clear": "Clear list",
+    "empty": "Select entries and a template, then choose “Prepare labels”. You do not need to connect the printer yet.",
+    "session": "This print list stays in the current view. Leaving or reloading the page discards it.",
+    "added_one": "1 label added to the print list. You can prepare more now.",
+    "added_other": "{{count}} labels added to the print list. You can prepare more now.",
+    "sent": "Series submitted to the print queue and list cleared. Please check the output.",
+    "summary": "{{tape}} mm tape · approximately {{length}} mm of tape including margins and one leading offcut",
+    "loadTape": "Load {{tape}} mm tape and select that tape width above.",
+    "sameTape": "All labels in a series must use the same tape width. Print or clear the current list first.",
+    "tooLarge": "This series is too large. Split it into smaller print lists.",
+    "prepareError": "Could not prepare labels: {{detail}}",
+    "preview": "Prepared print image for {{name}}",
+    "remove": "Remove label {{index}}: {{name}} from the print list"
+  },
+  "text": {
+    "heading": "Label text & copies",
+    "name": "Title",
+    "subtitle": "Subtitle",
+    "hint": "Changes apply only to these labels. Item data stays unchanged.",
+    "reset": "Use item text",
+    "hiddenSubtitle": "This template does not show a subtitle. Enable the field in the designer.",
+    "edit": "Edit label text",
+    "save": "Apply changes",
+    "cancel": "Cancel",
+    "error": "Could not update label: {{detail}}"
   }
 }

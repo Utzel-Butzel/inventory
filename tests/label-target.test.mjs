@@ -77,3 +77,27 @@ test("device barcodes use the serial number instead of the shared product barcod
     );
   }
 });
+
+test("print text overrides preserve identities, allow blank subtitles and never mutate articles", async () => {
+  const { applyLabelTextOverride } = await import("../lib/label-target.ts");
+  const original = { ...first, subtitle: "18 V · battery + charger" };
+  const edited = applyLabelTextOverride(original, { name: "Workshop drill", subtitle: "" });
+  assert.equal(edited.name, "Workshop drill");
+  assert.equal(edited.subtitle, "");
+  assert.equal(original.name, resource.name);
+  assert.equal(original.subtitle, "18 V · battery + charger");
+  assert.equal(labelTargetKey(edited), labelTargetKey(original));
+  assert.equal(labelTargetUrl("https://inventory.test", edited), labelTargetUrl("https://inventory.test", original));
+  assert.equal(printableLabelBarcode(edited), printableLabelBarcode(original));
+  assert.equal(applyLabelTextOverride(original, { name: "Other" }).subtitle, original.subtitle);
+  assert.equal(applyLabelTextOverride(resource).subtitle, "");
+});
+
+test("article subtitle defaults on create, is preserved on unrelated PATCH and can be cleared", async () => {
+  const { resourceInputSchema, resourcePatchSchema } = await import("../lib/validators.ts");
+  assert.equal(resourceInputSchema.parse({ name: "Drill" }).subtitle, "");
+  assert.deepEqual(resourcePatchSchema.parse({ name: "Drill" }), { name: "Drill" });
+  assert.deepEqual(resourcePatchSchema.parse({ subtitle: "  18 V  " }), { subtitle: "18 V" });
+  assert.deepEqual(resourcePatchSchema.parse({ subtitle: "" }), { subtitle: "" });
+  assert.equal(resourcePatchSchema.safeParse({ subtitle: "x".repeat(241) }).success, false);
+});

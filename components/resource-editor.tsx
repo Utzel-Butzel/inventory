@@ -87,6 +87,7 @@ import {
 } from "@/lib/resource-slug-contract";
 
 type FormState = {
+  subtitle: string;
   name: string;
   slugs: string[];
   description: string;
@@ -111,6 +112,7 @@ type FormState = {
 type TextFormField = Exclude<keyof FormState, "slugs">;
 
 const emptyForm: FormState = {
+  subtitle: "",
   name: "",
   slugs: [],
   description: "",
@@ -156,6 +158,7 @@ const inputClass = `mt-1.5 ${inputBaseClass}`;
 const labelClass = "block text-xs font-semibold text-muted-strong";
 
 const toForm = (resource: ClientResource): FormState => ({
+  subtitle: resource.subtitle ?? "",
   name: resource.name,
   slugs: resource.slugs ?? [],
   description: resource.description,
@@ -820,6 +823,7 @@ export function ResourceEditor({
   };
 
   const payload = () => ({
+    subtitle: form.subtitle.trim(),
     name: form.name.trim() || t("fallback.untitled"),
     slugs: form.slugs
       .map((slug) => slug.trim().toLowerCase())
@@ -1436,6 +1440,12 @@ export function ResourceEditor({
                   }
                   className={inputClass}
                 />
+              </label>
+              <label className={`${labelClass} sm:col-span-2`}>
+                {t("details.subtitle")}
+                <input value={form.subtitle} maxLength={240}
+                  onChange={(event) => setField("subtitle", event.target.value)}
+                  placeholder={t("details.subtitlePlaceholder")} className={inputClass} />
               </label>
               <div className="sm:col-span-2">
                 <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">

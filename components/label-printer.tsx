@@ -13,10 +13,10 @@ import {
   Printer,
   ScanQrCode,
   Search,
-  Wifi,
+  Usb,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "next-i18next/client";
 
 import {
@@ -24,6 +24,7 @@ import {
   type LabelSetupDraft,
 } from "@/components/label-designer";
 import { canEncodeQr } from "@/components/label-codes";
+import { LabelTextFields } from "@/components/label-text-fields";
 import { LabelRenderer } from "@/components/label-renderer";
 import { Button, Card, Skeleton } from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
@@ -32,8 +33,9 @@ import {
   type LabelElement,
   type LabelSetupDto,
 } from "@/lib/label-setup-contract";
-import { labelTargetKey, labelTargetName, labelTargetUrl, type LabelResource } from "@/lib/label-target";
+import { applyLabelTextOverride, type LabelTextOverride, labelTargetKey, labelTargetName, labelTargetUrl, type LabelResource } from "@/lib/label-target";
 import { LabelStockUnitPicker } from "@/components/label-stock-unit-picker";
+import { combinePtouchLabels, PTOUCH_TAPES, PTOUCH_PIXELS_PER_MM, ptouchPrintableDots, type PtouchTape } from "@/lib/ptouch-raster";
 
 import styles from "./label-printer.module.css";
 
@@ -51,10 +53,24 @@ const EMPTY_PAGINATION: Pagination = {
   pages: 1,
 };
 
+type PreparedLabel = {
+  id: string;
+  name: string;
+  template: string;
+  tape: PtouchTape;
+  widthMm: number;
+  data: Uint8Array;
+  preview: string;
+  resource: LabelResource;
+  original: LabelResource;
+  setup: LabelSetupDto;
+};
+
 const DEFAULT_ELEMENTS: LabelElement[] = [
   { type: "qr", x: 3, y: 14, width: 40, height: 72, visible: true },
   { type: "image", x: 3, y: 14, width: 40, height: 72, visible: false, fit: "cover" },
   { type: "name", x: 46, y: 8, width: 51, height: 20, visible: true, fontSizeMm: 3.3, align: "left" },
+  { type: "subtitle", x: 46, y: 76, width: 51, height: 14, visible: false, fontSizeMm: 2.2, fontFamily: "sans", textOverflow: "shrink" },
   { type: "identifier", x: 46, y: 31, width: 51, height: 10, visible: true, fontSizeMm: 2.2, align: "left" },
   { type: "barcode", x: 46, y: 45, width: 51, height: 17, visible: true },
   { type: "url", x: 46, y: 66, width: 51, height: 21, visible: true, fontSizeMm: 1.55, align: "left" },
@@ -72,6 +88,8 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
   const [selected, setSelected] = useState<Map<string, LabelResource>>(
     () => new Map(),
   );
+  const [textOverrides, setTextOverrides] = useState<Record<string, LabelTextOverride>>({});
+  const [editingPrepared, setEditingPrepared] = useState<PreparedLabel | null>(null);
   const [copies, setCopies] = useState<Record<string, number>>({});
   const [setups, setSetups] = useState<LabelSetupDto[]>([]);
   const [setupId, setSetupId] = useState("");
@@ -82,12 +100,27 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
   const [designerError, setDesignerError] = useState<string | null>(null);
   const [preparingPrint, setPreparingPrint] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
+  const [printTarget, setPrintTarget] = useState<"browser" | "ptouch">("browser");
+  const [tape, setTape] = useState<PtouchTape>(24);
+  const [printers, setPrinters] = useState<string[]>([]);
+  const [printer, setPrinter] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [printSuccess, setPrintSuccess] = useState(false);
+  const [preparedLabels, setPreparedLabels] = useState<PreparedLabel[]>([]);
+  const [queueNotice, setQueueNotice] = useState<string | null>(null);
+  const printLock = useRef(false);
   const [imageRetryToken, setImageRetryToken] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
+    try {
+      if (localStorage.getItem("inventory.labelPrintTarget") === "ptouch") {
+        setPrintTarget("ptouch");
+        setSetupId("ptouch-preset");
+      }
+    } catch { /* Storage can be unavailable in private browsing. */ }
   }, []);
 
   useEffect(() => {
@@ -101,7 +134,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
       .then((result) => {
         setSetups(result.labelSetups);
         setSetupId((current) =>
-          result.labelSetups.some((setup) => setup.id === current)
+          current === "ptouch-preset" || result.labelSetups.some((setup) => setup.id === current)
             ? current
             : (result.labelSetups[0]?.id ?? ""),
         );
@@ -164,9 +197,26 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
   }, [debouncedQuery, page, t]);
 
   const selectedIds = useMemo(() => new Set(selected.keys()), [selected]);
+  const ptouchSetup = useMemo<LabelSetupDto>(() => ({
+    id: "ptouch-preset", name: t(tape === 24 ? "direct.photoPreset" : "direct.preset", { tape }), widthMm: tape === 24 ? 80 : 56,
+    heightMm: tape === 24 ? 18 : Math.floor(ptouchPrintableDots(tape) / PTOUCH_PIXELS_PER_MM * 10) / 10,
+    revision: 1, createdAt: "", updatedAt: "",
+    elements: tape === 24 ? [
+      { type: "qr", x: 3.125, y: 0, width: 22.5, height: 100, visible: true, quietZoneModules: 0 },
+      { type: "name", x: 30, y: 100 / 90, width: 46.25, height: 530 / 9, visible: true, fontSizeMm: 5.6, minFontSizeMm: 3.5, fontFamily: "barlow-semi-condensed", lineHeight: 0.92, textOverflow: "shrink" },
+      { type: "subtitle", x: 30, y: 60, width: 46.25, height: 220 / 9, visible: true, fontSizeMm: 3.3, minFontSizeMm: 1.5, fontFamily: "barlow-semi-condensed", lineHeight: 1, textOverflow: "shrink" },
+      { type: "image", x: 78.75, y: 0, width: 21.25, height: 100, visible: true, fit: "contain" },
+    ] : [
+      { type: "qr", x: 0, y: 0, width: 29, height: 100, visible: true, quietZoneModules: 4 },
+      { type: "name", x: 32, y: 8, width: 66, height: 45, visible: true, fontSizeMm: 3, minFontSizeMm: 1.8, textOverflow: "shrink" },
+      { type: "subtitle", x: 32, y: 52, width: 66, height: 22, visible: true, fontSizeMm: 2.2, minFontSizeMm: 1.5, fontFamily: "sans", textOverflow: "shrink" },
+      { type: "identifier", x: 32, y: 78, width: 66, height: 20, visible: true, fontSizeMm: 2.2, minFontSizeMm: 1.4, textOverflow: "shrink" },
+    ],
+  }), [t, tape]);
+  const availableSetups = useMemo(() => printTarget === "ptouch" ? [ptouchSetup, ...setups] : setups, [printTarget, ptouchSetup, setups]);
   const activeSetup = useMemo(
-    () => setups.find((setup) => setup.id === setupId) ?? setups[0] ?? null,
-    [setupId, setups],
+    () => availableSetups.find((setup) => setup.id === setupId) ?? availableSetups[0] ?? null,
+    [setupId, availableSetups],
   );
   const visibleSelected =
     resources.length > 0 && resources.every((resource) => selectedIds.has(resource.id));
@@ -176,10 +226,10 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
       selectedResources.flatMap((resource) =>
         Array.from(
           { length: copies[labelTargetKey(resource)] ?? 1 },
-          (_, copyIndex) => ({ resource, copyIndex }),
+          (_, copyIndex) => ({ resource: applyLabelTextOverride(resource, textOverrides[labelTargetKey(resource)]), copyIndex }),
         ),
       ),
-    [copies, selectedResources],
+    [copies, selectedResources, textOverrides],
   );
   const setupHasQrImageOverlap = activeSetup
     ? hasVisibleQrImageOverlap(activeSetup.elements)
@@ -187,7 +237,24 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
 
   useEffect(() => {
     setPrintError(null);
-  }, [activeSetup, labels]);
+    setPrintSuccess(false);
+  }, [activeSetup, labels, printTarget, tape]);
+
+  const connectPrinter = async () => {
+    setConnecting(true);
+    setPrintError(null);
+    try {
+      const { findPtouchPrinters } = await import("@/lib/qz-label-printer");
+      const found = await findPtouchPrinters();
+      setPrinters(found);
+      setPrinter(found.find((name) => /Inventory|RAW/i.test(name)) ?? found[0] ?? "");
+      if (!found.length) setPrintError(t("direct.noPrinter"));
+    } catch (error) {
+      setPrintError(t("direct.connectionError", { detail: error instanceof Error ? error.message : String(error) }));
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   const toggleResource = (resource: LabelResource) => {
     const key = labelTargetKey(resource);
@@ -221,6 +288,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
   const clearSelection = () => {
     setSelected(new Map());
     setCopies({});
+    setTextOverrides({});
   };
 
   const openNewSetup = () => {
@@ -237,6 +305,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
 
   const openDesigner = () => {
     if (!activeSetup) return openNewSetup();
+    if (activeSetup.id === "ptouch-preset") return openNewSetup();
     setDesignerError(null);
     setDesignerDraft(structuredClone(activeSetup));
   };
@@ -308,9 +377,54 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
     }
   };
 
-  const printLabels = async () => {
-    if (!labels.length || !activeSetup || preparingPrint) return;
+  const batchError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === "PTOUCH_BATCH_SIZE") return t("queue.tooLarge");
+    if (message === "PTOUCH_BATCH_COUNT") return t("direct.limit");
+    if (message === "PTOUCH_BATCH_MEDIA") return t("queue.sameTape");
+    return message;
+  };
+
+  const printPrepared = async () => {
+    if (!preparedLabels.length || printLock.current || editingPrepared) return;
+    if (!printer) { setPrintError(t("direct.connectFirst")); return; }
+    if (preparedLabels.some(label => label.tape !== tape)) {
+      setPrintError(t("queue.loadTape", { tape: preparedLabels[0].tape }));
+      return;
+    }
+    printLock.current = true;
+    setPreparingPrint(true);
     setPrintError(null);
+    setPrintSuccess(false);
+    setQueueNotice(null);
+    try {
+      const { sendPtouchLabels } = await import("@/lib/qz-label-printer");
+      await sendPtouchLabels(printer, preparedLabels.map(label => label.data));
+      setPreparedLabels([]);
+      setPrintSuccess(true);
+      setQueueNotice(t("queue.sent"));
+    } catch (error) {
+      // Retain the list on failure; never automatically repeat a physical job.
+      setPrintError(t("direct.printError", { detail: batchError(error) }));
+    } finally {
+      printLock.current = false;
+      setPreparingPrint(false);
+    }
+  };
+
+  const printLabels = async (prepare = false) => {
+    if (!labels.length || !activeSetup || printLock.current) return;
+    setPrintError(null);
+    setPrintSuccess(false);
+    if (printTarget === "ptouch") {
+      if (!prepare && !printer) { setPrintError(t("direct.connectFirst")); return; }
+      if (labels.length + (prepare ? preparedLabels.length : 0) > 100) { setPrintError(t("direct.limit")); return; }
+      if (prepare && preparedLabels.some(label => label.tape !== tape)) { setPrintError(t("queue.sameTape")); return; }
+      if (Math.round(activeSetup.heightMm * PTOUCH_PIXELS_PER_MM) > ptouchPrintableDots(tape) || activeSetup.widthMm > 996 || activeSetup.widthMm < 1) {
+        setPrintError(t("direct.tooLarge", { height: (ptouchPrintableDots(tape) / PTOUCH_PIXELS_PER_MM).toFixed(1) }));
+        return;
+      }
+    }
     if (setupHasQrImageOverlap) {
       setPrintError(t("errors.overlapShort"));
       return;
@@ -352,6 +466,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
       }
     }
 
+    printLock.current = true;
     setPreparingPrint(true);
     try {
       if (imageEnabled) {
@@ -409,8 +524,38 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
         return;
       }
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      window.print();
+      if (printTarget === "ptouch") {
+        const { renderPtouchLabel, sendPtouchLabels } = await import("@/lib/qz-label-printer");
+        const nodes = Array.from(document.querySelectorAll<HTMLElement>(`.${styles.printSurface} > article`));
+        if (nodes.length !== labels.length) throw new Error(t("direct.renderError"));
+        const rendered: PreparedLabel[] = [];
+        // Prepare every label before submitting any job, including image/QR checks.
+        for (let index = 0; index < nodes.length; index += 1) {
+          const result = await renderPtouchLabel(nodes[index], activeSetup.widthMm, activeSetup.heightMm, tape,
+            qrEnabled ? labelTargetUrl(origin, labels[index].resource) : undefined);
+          rendered.push({ ...result, id: crypto.randomUUID(), name: labelTargetName(labels[index].resource),
+            template: activeSetup.name, tape, widthMm: activeSetup.widthMm,
+            resource: structuredClone(labels[index].resource),
+            original: structuredClone(selected.get(labelTargetKey(labels[index].resource))!),
+            setup: structuredClone(activeSetup) });
+        }
+        if (prepare) {
+          const next = [...preparedLabels, ...rendered];
+          combinePtouchLabels(next.map(label => label.data));
+          setPreparedLabels(next);
+          setQueueNotice(t("queue.added", { count: rendered.length }));
+          clearSelection();
+        } else {
+          await sendPtouchLabels(printer, rendered.map(label => label.data));
+          setPrintSuccess(true);
+        }
+      } else {
+        window.print();
+      }
+    } catch (error) {
+      setPrintError(t(prepare ? "queue.prepareError" : "direct.printError", { detail: batchError(error) }));
     } finally {
+      printLock.current = false;
       setPreparingPrint(false);
     }
   };
@@ -429,13 +574,21 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
             {t("header.description")}
           </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        {printTarget === "ptouch" ? <Button size="lg" onClick={() => void printLabels(true)}
+          disabled={!labels.length || !activeSetup || preparingPrint || connecting || setupHasQrImageOverlap}>
+          <Plus size={17} aria-hidden="true" /> {t("queue.prepare", { count: labels.length })}
+        </Button> : null}
         <Button
           size="lg"
-          onClick={printLabels}
+          variant={printTarget === "ptouch" ? "secondary" : "primary"}
+          onClick={() => void printLabels()}
           disabled={
             labels.length === 0 ||
             !activeSetup ||
             preparingPrint ||
+            connecting ||
+            (printTarget === "ptouch" && !printer) ||
             setupHasQrImageOverlap
           }
         >
@@ -448,7 +601,91 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
             ? t("print.preparing")
             : t("print.button", { count: labels.length })}
         </Button>
+        </div>
       </div>
+
+      <Card className="mb-5 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm font-medium">
+            {t("direct.destination")}
+            <select className="ml-3 rounded-lg border border-border bg-surface p-2" value={printTarget} disabled={preparingPrint || connecting}
+              onChange={(event) => {
+                const target = event.target.value as "browser" | "ptouch";
+                setPrintTarget(target);
+                setSetupId(target === "ptouch" ? "ptouch-preset" : setups[0]?.id ?? "");
+                try { localStorage.setItem("inventory.labelPrintTarget", target); } catch { /* Optional preference. */ }
+              }}>
+              <option value="browser">{t("direct.browser")}</option>
+              <option value="ptouch">Brother PT-P710BT · USB / QZ Tray</option>
+            </select>
+          </label>
+          {printTarget === "ptouch" ? <>
+            <label className="text-sm font-medium">{t("direct.tape")}
+              <select className="ml-3 rounded-lg border border-border bg-surface p-2" value={tape} disabled={preparingPrint}
+                onChange={(event) => setTape(Number(event.target.value) as PtouchTape)}>
+                {PTOUCH_TAPES.map((width) => <option key={width} value={width}>{width} mm</option>)}
+              </select>
+            </label>
+            <Button variant="secondary" onClick={() => void connectPrinter()} disabled={connecting || preparingPrint}>
+              {connecting ? <LoaderCircle size={16} className="animate-spin" /> : <Usb size={16} />}
+              {connecting ? t("direct.connecting") : t("direct.connect")}
+            </Button>
+            {printers.length ? <label className="text-sm"><span className="sr-only">{t("direct.printer")}</span>
+              <select className="rounded-lg border border-border bg-surface p-2" value={printer} disabled={preparingPrint} onChange={(event) => setPrinter(event.target.value)}>
+                {printers.map((name) => <option key={name}>{name}</option>)}
+              </select>
+            </label> : null}
+          </> : null}
+        </div>
+        {printTarget === "ptouch" ? <p className="mt-3 text-xs leading-5 text-muted">{t("direct.help", { height: (ptouchPrintableDots(tape) / PTOUCH_PIXELS_PER_MM).toFixed(1) })} <a href="https://qz.io/download/" target="_blank" rel="noreferrer" className="underline">{t("direct.download")}</a></p> : null}
+        {printSuccess ? <p role="status" className="mt-3 text-sm text-brand">{t("direct.sent")}</p> : null}
+      </Card>
+
+      {printTarget === "ptouch" ? (
+        <Card className="mb-5 overflow-hidden" aria-label={t("queue.title")}>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
+            <div>
+              <h2 className="text-sm font-semibold">{t("queue.title")} · {preparedLabels.length}/100</h2>
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-muted">{t("queue.description")}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" disabled={!preparedLabels.length || preparingPrint || connecting}
+                onClick={() => { setPreparedLabels([]); setQueueNotice(null); }}>{t("queue.clear")}</Button>
+              <Button disabled={!preparedLabels.length || !printer || preparingPrint || connecting || !!editingPrepared || preparedLabels[0]?.tape !== tape}
+                onClick={() => void printPrepared()}><Printer size={16} aria-hidden="true" />{t("queue.print", { count: preparedLabels.length })}</Button>
+            </div>
+          </div>
+          {queueNotice ? <p role="status" className="px-4 pt-3 text-sm text-brand">{queueNotice}</p> : null}
+          {preparedLabels.length ? <>
+            <p className="px-4 pt-3 text-xs text-muted">{t("queue.summary", { tape: preparedLabels[0].tape,
+              length: Math.ceil(preparedLabels.reduce((sum, label) => sum + label.widthMm + 4, 25)) })}</p>
+            {preparedLabels[0].tape !== tape ? <p role="alert" className="px-4 pt-2 text-sm text-warning">{t("queue.loadTape", { tape: preparedLabels[0].tape })}</p> : null}
+            <ol className="max-h-96 divide-y divide-border overflow-y-auto p-4">
+              {preparedLabels.map((label, index) => <li key={label.id} className="flex flex-wrap items-center gap-3 py-3">
+                <span className="text-xs text-muted">{index + 1}.</span>
+                <div className="min-w-0 flex-1 basis-48">
+                  <p className="text-sm font-semibold">{label.name}</p>
+                  <p className="text-xs text-muted">{label.template} · {label.widthMm} mm</p>
+                  {/* This data URL is the frozen print raster, including the physical tape edges. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={label.preview} alt={t("queue.preview", { name: label.name })}
+                    className="mt-2 h-auto max-h-24 max-w-full bg-white" />
+                </div>
+                <Button variant="secondary" disabled={preparingPrint || connecting}
+                  onClick={() => setEditingPrepared(structuredClone(label))}>
+                  <Pencil size={16} aria-hidden="true" />{t("text.edit")}
+                </Button>
+                <Button variant="secondary" disabled={preparingPrint || connecting}
+                  aria-label={t("queue.remove", { index: index + 1, name: label.name })}
+                  onClick={() => { setPreparedLabels(current => current.filter(item => item.id !== label.id)); setQueueNotice(null); }}>
+                  <X size={16} aria-hidden="true" />
+                </Button>
+              </li>)}
+            </ol>
+          </> : <p className="p-4 text-sm text-muted">{t("queue.empty")}</p>}
+          <p className="border-t border-border px-4 py-3 text-xs text-muted">{t("queue.session")}</p>
+        </Card>
+      ) : null}
 
       {setupHasQrImageOverlap || printError ? (
         <p
@@ -469,7 +706,16 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
         <style media="print">{`@page { size: ${activeSetup.widthMm}mm ${activeSetup.heightMm}mm; margin: 0; }`}</style>
       ) : null}
 
-      <div className={styles.workspace}>
+      {editingPrepared ? <PreparedLabelEditor label={editingPrepared} origin={origin}
+        onCancel={() => setEditingPrepared(null)}
+        onSave={(updated) => {
+          const next = preparedLabels.map(label => label.id === updated.id ? updated : label);
+          combinePtouchLabels(next.map(label => label.data));
+          setPreparedLabels(next);
+          setEditingPrepared(null);
+        }} /> : null}
+
+      <div className={styles.workspace} inert={preparingPrint || connecting}>
         <div className="space-y-4">
           <Card className={styles.panel}>
             <div className="border-b border-border p-4">
@@ -649,14 +895,17 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
             <Card className={styles.panel}>
               <div className="border-b border-border px-4 py-3.5">
                 <h2 className="text-sm font-semibold text-foreground">
-                  {t("copies.title")}
+                  {t("text.heading")}
                 </h2>
               </div>
-              <div className="max-h-64 divide-y divide-border overflow-y-auto">
+              <p className="px-4 py-3 text-xs leading-5 text-muted">{t("text.hint")}</p>
+              {activeSetup && !activeSetup.elements.some(element => element.type === "subtitle" && element.visible) ? <p className="px-4 pb-3 text-xs text-warning">{t("text.hiddenSubtitle")}</p> : null}
+              <div className="max-h-[36rem] divide-y divide-border overflow-y-auto">
                 {selectedResources.map((resource) => {
                   const count = copies[labelTargetKey(resource)] ?? 1;
                   return (
-                    <div key={labelTargetKey(resource)} className="flex items-center gap-3 px-4 py-3">
+                    <div key={labelTargetKey(resource)} className="px-4 py-3">
+                    <div className="mb-3 flex items-center gap-3">
                       <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-strong">
                         {labelTargetName(resource)}
                       </span>
@@ -685,6 +934,10 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
                         </button>
                       </div>
                     </div>
+                    <LabelTextFields resource={applyLabelTextOverride(resource, textOverrides[labelTargetKey(resource)])}
+                      onChange={change => setTextOverrides(current => ({ ...current, [labelTargetKey(resource)]: { ...current[labelTargetKey(resource)], ...change } }))}
+                      onReset={() => setTextOverrides(current => { const next = { ...current }; delete next[labelTargetKey(resource)]; return next; })} />
+                    </div>
                   );
                 })}
               </div>
@@ -709,13 +962,13 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
                   <select
                     value={activeSetup?.id ?? ""}
                     onChange={(event) => setSetupId(event.target.value)}
-                    disabled={setupsLoading || setups.length === 0}
+                    disabled={setupsLoading || availableSetups.length === 0}
                     className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-muted-strong outline-none focus:border-focus focus:ring-4 focus:ring-focus/10 disabled:bg-surface-subtle"
                   >
-                    {setups.length === 0 ? (
+                    {availableSetups.length === 0 ? (
                       <option value="">{t("setup.empty")}</option>
                     ) : null}
-                    {setups.map((setup) => (
+                    {availableSetups.map((setup) => (
                       <option key={setup.id} value={setup.id}>
                         {setup.name} · {setup.widthMm} × {setup.heightMm} mm
                       </option>
@@ -820,7 +1073,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
 
           <div className="flex items-start gap-3 border-t border-border bg-surface p-4 sm:p-5">
             <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand">
-              <Wifi size={15} aria-hidden="true" />
+              <Printer size={15} aria-hidden="true" />
             </span>
             <div>
               <h3 className="text-xs font-semibold text-foreground">
@@ -852,4 +1105,62 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
       ) : null}
     </div>
   );
+}
+
+function PreparedLabelEditor({ label, origin, onSave, onCancel }: {
+  label: PreparedLabel;
+  origin: string;
+  onSave: (label: PreparedLabel) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useT("labels");
+  const dialog = useRef<HTMLDialogElement>(null);
+  const preview = useRef<HTMLDivElement>(null);
+  const savingRef = useRef(false);
+  const [resource, setResource] = useState(label.resource);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { dialog.current?.showModal(); }, []);
+  const save = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setError(null);
+    try {
+      const node = preview.current?.querySelector<HTMLElement>("article");
+      if (!node) throw new Error(t("direct.renderError"));
+      const images = Array.from(node.querySelectorAll<HTMLImageElement>("img"));
+      await Promise.race([
+        Promise.all(images.map(image => image.decode())),
+        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(t("errors.imageRender"))), 8000)),
+      ]);
+      const { renderPtouchLabel } = await import("@/lib/qz-label-printer");
+      const rendered = await renderPtouchLabel(node, label.setup.widthMm, label.setup.heightMm, label.tape,
+        label.setup.elements.some(element => element.type === "qr" && element.visible) ? labelTargetUrl(origin, resource) : undefined);
+      onSave({ ...label, ...rendered, resource, name: labelTargetName(resource) });
+    } catch (error) {
+      setError(t("text.error", { detail: error instanceof Error ? error.message : String(error) }));
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+  return <dialog ref={dialog} aria-labelledby="prepared-label-title" onCancel={event => { event.preventDefault(); if (!savingRef.current) onCancel(); }}
+    className="fixed inset-0 m-auto max-h-[90vh] w-[min(95vw,42rem)] overflow-auto rounded-2xl border border-border bg-surface p-6 text-foreground shadow-xl backdrop:bg-black/40">
+    <h2 id="prepared-label-title" className="text-lg font-semibold">{t("text.edit")}</h2>
+    <p className="my-3 text-xs text-muted">{t("text.hint")}</p>
+    <fieldset disabled={saving}>
+      <LabelTextFields resource={resource} onChange={change => setResource(current => applyLabelTextOverride(current, change))}
+        onReset={() => setResource(applyLabelTextOverride(resource, { name: label.original.name, subtitle: label.original.subtitle ?? "" }))} />
+    </fieldset>
+    {!label.setup.elements.some(element => element.type === "subtitle" && element.visible) ? <p className="mt-3 text-xs text-warning">{t("text.hiddenSubtitle")}</p> : null}
+    <div ref={preview} className="my-5 overflow-auto bg-surface-subtle p-4">
+      <LabelRenderer resource={resource} setup={label.setup} origin={origin} />
+    </div>
+    {error ? <p role="alert" className="my-3 text-sm text-danger">{error}</p> : null}
+    <div className="flex justify-end gap-2">
+      <Button variant="secondary" disabled={saving} onClick={onCancel}>{t("text.cancel")}</Button>
+      <Button disabled={saving} onClick={() => void save()}>{saving ? <LoaderCircle size={16} className="animate-spin" /> : null}{t("text.save")}</Button>
+    </div>
+  </dialog>;
 }

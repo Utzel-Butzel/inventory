@@ -294,3 +294,9 @@ test("detects only visible QR and image overlap", () => {
     false,
   );
 });
+
+test("subtitle is an independently configurable text element alongside the title", () => {
+  const subtitle = { type: "subtitle", x: 30, y: 65, width: 50, height: 25, visible: true, fontFamily: "sans", fontSizeMm: 2.3, minFontSizeMm: 1.5, textOverflow: "shrink" };
+  assert.equal(labelElementsSchema.safeParse([...elements, subtitle]).success, true);
+  assert.equal(labelElementsSchema.safeParse([subtitle, subtitle]).success, false);
+});

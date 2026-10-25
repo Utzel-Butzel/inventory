@@ -99,7 +99,9 @@
     "commaSeparated": "comma separated",
     "sections": {
       "technicalDetails": "Technical details"
-    }
+    },
+    "subtitle": "Subtitle",
+    "subtitlePlaceholder": "Optional, e.g. 18 V · battery and charger included"
   },
   "customFields": {
     "title": "Custom fields",

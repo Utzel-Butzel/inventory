@@ -978,6 +978,7 @@ export async function createResourceFamilyVariant(options: {
       .values({
         organizationId: options.organizationId,
         name: options.input.name,
+        subtitle: primary.subtitle,
         description: primary.description,
         type: primary.type,
         status: "available",

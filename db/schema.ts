@@ -635,6 +635,7 @@ export const resources = pgTable(
     organizationId: organizationIdColumn(),
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 240 }).notNull(),
+    subtitle: varchar("subtitle", { length: 240 }).notNull().default(""),
     description: text("description").notNull().default(""),
     type: varchar("type", { length: 64 })
       .$type<ResourceType>()

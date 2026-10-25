@@ -181,6 +181,9 @@ until configured in `.env`.
 
 See [`.env.example`](.env.example) for the complete, commented reference.
 
+For direct USB label printing from a desktop browser, see
+[Brother PT-P710BT with QZ Tray](docs/ptouch-printing.md).
+
 Organization administrators can configure photo-analysis and research models,
 output language, the number of input photos (1–3), overwrite behavior, and
 new-item analysis/research defaults under **Settings → AI** in the web app or

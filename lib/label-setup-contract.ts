@@ -5,6 +5,7 @@ export const labelElementTypes = [
   "qr",
   "image",
   "name",
+  "subtitle",
   "identifier",
   "barcode",
   "url",
@@ -18,6 +19,7 @@ export const labelFontFamilies = [
   "serif",
   "monospace",
   "rounded",
+  "barlow-semi-condensed",
 ] as const;
 export const labelImageFits = ["cover", "contain"] as const;
 
@@ -44,6 +46,7 @@ const textElementOptions = {
   fontSizeMm: z.number().finite().positive().max(100).optional(),
   minFontSizeMm: z.number().finite().positive().max(100).optional(),
   fontFamily: z.enum(labelFontFamilies).optional(),
+  lineHeight: z.number().finite().min(0.8).max(2).optional(),
   align: z.enum(labelTextAlignments).optional(),
   textOverflow: z.enum(labelTextOverflowModes).optional(),
 };
@@ -77,6 +80,13 @@ const labelElementSchemaBase = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("name"),
+      ...labelElementBoxShape,
+      ...textElementOptions,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("subtitle"),
       ...labelElementBoxShape,
       ...textElementOptions,
     })

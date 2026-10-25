@@ -9,7 +9,7 @@
     "description": "Wähle Inventareinträge oder einzelne Bestands-Items und eine Vorlage aus und drucke QR-Codes, Barcodes, Text und Bilder im Browser."
   },
   "print": {
-    "preparing": "Bilder werden vorbereitet…",
+    "preparing": "Etiketten werden vorbereitet…",
     "button_zero": "Etiketten drucken",
     "button_one": "{{count}} Etikett drucken",
     "button_other": "{{count}} Etiketten drucken"
@@ -63,8 +63,8 @@
     "description": "Die ausgewählte Vorlage bestimmt, welche Details, Codes und Bilder erscheinen."
   },
   "printer": {
-    "title": "Brother-WLAN-Druck",
-    "description": "Füge den Drucker zuerst diesem Computer hinzu. Wähle im Druckdialog des Browsers den Brother-Drucker, die Mediengröße der Vorlage, 100 % Skalierung und keine Ränder. Gedruckt wird über den installierten Systemtreiber; diese Seite sendet keine RAW-Befehle direkt an den Drucker."
+    "title": "Druck über diesen Computer",
+    "description": "Für den PT-P710BT per USB wähle oben QZ Tray. Andere Drucker verwendest du über den Browser-Druckdialog mit passender Mediengröße, 100 % Skalierung und ohne zusätzliche Ränder."
   },
   "designer": {
     "eyebrow": "Etikettendesigner",
@@ -141,7 +141,8 @@
       "identifier": "Seriennummer / SKU / ID",
       "barcode": "Barcode",
       "url": "Kurzlink",
-      "location": "Standort"
+      "location": "Standort",
+      "subtitle": "Subtitle"
     },
     "coordinates": {
       "x": "Links",
@@ -160,8 +161,10 @@
       "longName": "Akku-Schlagschrauber mit besonders langer Produktbezeichnung und umfangreichem Zubehörset",
       "longSku": "WERKZEUG-AKKU-SCHLAGSCHRAUBER-SET-2026-EXTRA-LANG",
       "longLocation": "Werkstatt · Werkzeuglager · Regal B · Fach 12 · Hintere Aufbewahrungsbox",
-      "missingName": "Eintrag ohne optionale Angaben"
-    }
+      "missingName": "Eintrag ohne optionale Angaben",
+      "subtitle": "18 V · Akku + Ladegerät"
+    },
+    "lineHeight": "Zeilenabstand (Faktor)"
   },
   "renderer": {
     "noImage": "Kein Bild",
@@ -195,5 +198,60 @@
     "noMatches": "Keine passenden Bestands-Items.",
     "loadError": "Bestands-Items konnten nicht geladen werden.",
     "retry": "Erneut versuchen"
+  },
+  "direct": {
+    "destination": "Druckweg",
+    "browser": "Browser-Druckdialog",
+    "tape": "Eingelegtes Band",
+    "printer": "Drucker",
+    "preset": "P-touch · {{tape}}-mm-Band",
+    "photoPreset": "P-touch · 24 mm weiß · Foto + großer QR",
+    "connect": "Mit QZ Tray verbinden",
+    "connecting": "Verbinde…",
+    "noPrinter": "Kein PT-P710BT eingerichtet. Richte auf diesem Mac die USB-Druckerwarteschlange für QZ Tray ein.",
+    "connectFirst": "Verbinde zuerst QZ Tray und wähle den PT-P710BT.",
+    "connectionError": "QZ Tray konnte nicht verbunden werden. Starte QZ Tray und erlaube den Zugriff. {{detail}}",
+    "limit": "Bitte höchstens 100 Etiketten pro Druckauftrag auswählen.",
+    "tooLarge": "Die Vorlage ist zu groß. Die Druckfläche darf höchstens {{height}} mm hoch und 996 mm lang sein. Wähle die P-touch-Vorlage oder passe deine Vorlage an.",
+    "renderError": "Die Etikettenvorschau konnte nicht vollständig vorbereitet werden.",
+    "printError": "Druck nicht abgeschlossen: {{detail}} Prüfe Drucker und Warteschlange vor einem erneuten Versuch; bereits gesendete Etiketten könnten gedruckt worden sein.",
+    "help": "Druckqualität: 180 × 360 dpi. Wähle die tatsächlich eingelegte Bandbreite. Die Vorlage beschreibt die bedruckte Fläche (maximal {{height}} mm hoch); der Drucker ergänzt seitlich je 2 mm Rand und schneidet jedes Etikett ab. Vor jedem Einzelauftrag entsteht technisch bedingt ein etwa 25 mm langer Bandabschnitt. QZ Tray muss auf diesem Computer laufen. Bestätige gegebenenfalls die QZ-Zugriffsabfrage.",
+    "download": "QZ Tray herunterladen",
+    "sent": "An die lokale Druckerwarteschlange übergeben. Prüfe die ausgegebenen Etiketten."
+  },
+  "queue": {
+    "title": "Vorbereitete Etiketten",
+    "description": "Sammle Etiketten mit unterschiedlichen Vorlagen für dieselbe Bandbreite. Die Serie wird zusammen gedruckt; auch das letzte Etikett wird ausgegeben und abgeschnitten.",
+    "prepare_zero": "Etiketten vorbereiten",
+    "prepare_one": "1 Etikett vorbereiten",
+    "prepare_other": "{{count}} Etiketten vorbereiten",
+    "print_zero": "Als Serie drucken",
+    "print_one": "1 Etikett als Serie drucken",
+    "print_other": "{{count}} Etiketten als Serie drucken",
+    "clear": "Liste leeren",
+    "empty": "Wähle Einträge und eine Vorlage aus und klicke auf „Etiketten vorbereiten“. Dafür muss der Drucker noch nicht verbunden sein.",
+    "session": "Die Druckliste bleibt in dieser geöffneten Ansicht erhalten. Beim Verlassen oder Neuladen der Seite wird sie verworfen.",
+    "added_one": "1 Etikett zur Druckliste hinzugefügt. Du kannst jetzt weitere vorbereiten.",
+    "added_other": "{{count}} Etiketten zur Druckliste hinzugefügt. Du kannst jetzt weitere vorbereiten.",
+    "sent": "Serie an die Druckerwarteschlange übergeben und Druckliste geleert. Bitte prüfe die Ausgabe.",
+    "summary": "{{tape}}-mm-Band · ungefähr {{length}} mm Band einschließlich Rändern und einmaligem Vorlauf",
+    "loadTape": "Lege {{tape}}-mm-Band ein und wähle diese Bandbreite oben aus.",
+    "sameTape": "Alle Etiketten einer Serie müssen dieselbe Bandbreite verwenden. Drucke oder leere zuerst die vorhandene Liste.",
+    "tooLarge": "Diese Serie ist zu umfangreich. Teile sie in kleinere Drucklisten auf.",
+    "prepareError": "Etiketten konnten nicht vorbereitet werden: {{detail}}",
+    "preview": "Vorbereitetes Druckbild für {{name}}",
+    "remove": "Etikett {{index}}: {{name}} aus der Druckliste entfernen"
+  },
+  "text": {
+    "heading": "Beschriftung & Exemplare",
+    "name": "Titel",
+    "subtitle": "Subtitle",
+    "hint": "Änderungen gelten nur für diese Etiketten. Die Artikeldaten bleiben unverändert.",
+    "reset": "Artikeltexte übernehmen",
+    "hiddenSubtitle": "Diese Vorlage zeigt keinen Subtitle. Aktiviere das Feld unter „Gestalten“.",
+    "edit": "Beschriftung bearbeiten",
+    "save": "Änderungen übernehmen",
+    "cancel": "Abbrechen",
+    "error": "Etikett konnte nicht aktualisiert werden: {{detail}}"
   }
 }

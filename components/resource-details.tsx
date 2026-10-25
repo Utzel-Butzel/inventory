@@ -1026,6 +1026,12 @@ export function ResourceDetails({
             />
           ) : null}
 
+          {resource.subtitle ? (
+            <section className="rounded-xl border border-border bg-surface p-5">
+              <h2 className="text-sm font-semibold">{resourceT("details.subtitle")}</h2>
+              <p className="mt-2 text-sm text-muted-strong">{resource.subtitle}</p>
+            </section>
+          ) : null}
           {resource.description ? (
             <section className="rounded-xl border border-border bg-surface p-5">
               <h2 className="text-sm font-semibold text-foreground">

@@ -99,7 +99,9 @@
     "commaSeparated": "durch Kommas getrennt",
     "sections": {
       "technicalDetails": "Technische Details"
-    }
+    },
+    "subtitle": "Subtitle",
+    "subtitlePlaceholder": "Optional, z. B. 18 V · inkl. Akku und Ladegerät"
   },
   "customFields": {
     "title": "Benutzerdefinierte Felder",

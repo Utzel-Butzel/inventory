@@ -27,7 +27,7 @@ export type { LabelResource } from "@/lib/label-target";
 
 type TextElement = Extract<
   LabelElement,
-  { type: "name" | "identifier" | "url" | "location" }
+  { type: "name" | "subtitle" | "identifier" | "url" | "location" }
 >;
 
 const elementPosition = (element: LabelElement): CSSProperties => ({
@@ -78,16 +78,19 @@ const FONT_FAMILY_STACKS: Record<LabelFontFamily, string> = {
   serif: 'ui-serif, Georgia, Cambria, "Times New Roman", serif',
   monospace:
     'ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace',
+  "barlow-semi-condensed": '"Inventory Barlow Semi Condensed", sans-serif',
   rounded: 'ui-rounded, "SF Pro Rounded", system-ui, sans-serif',
 };
 
 function defaultFontFamily(element: TextElement): LabelFontFamily {
-  return element.type === "name" ? "sans" : "monospace";
+  return element.type === "name" || element.type === "subtitle" ? "sans" : "monospace";
 }
 
 function textStyle(element: TextElement, pixelsPerMm?: number): CSSProperties {
   const defaultSize = defaultFontSizeMm(element);
   return {
+    "--label-line-height": element.lineHeight,
+    fontWeight: element.fontFamily === "barlow-semi-condensed" ? 700 : undefined,
     fontSize: pixelsPerMm
       ? `${(element.fontSizeMm ?? defaultSize) * pixelsPerMm}px`
       : `${element.fontSizeMm ?? defaultSize}mm`,
@@ -100,7 +103,7 @@ function textStyle(element: TextElement, pixelsPerMm?: number): CSSProperties {
         : element.align === "right"
           ? "flex-end"
           : "flex-start",
-  };
+  } as CSSProperties;
 }
 
 function ShrinkingText({
@@ -155,13 +158,15 @@ function ShrinkingText({
 
   useLayoutEffect(() => {
     fitText();
+    let disposed = false;
+    void document.fonts.ready.then(() => { if (!disposed) fitText(); });
     const text = textRef.current;
     const container = text?.parentElement;
     if (!container || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(fitText);
     observer.observe(container);
-    return () => observer.disconnect();
-  }, [fitText, value]);
+    return () => { disposed = true; observer.disconnect(); };
+  }, [fitText, value, element.fontFamily, element.lineHeight]);
 
   return (
     <span
@@ -184,7 +189,7 @@ function EllipsisText({
 }) {
   const fontSizeMm = element.fontSizeMm ?? defaultFontSizeMm(element);
   const availableHeightMm = (labelHeightMm * element.height) / 100;
-  const lines = Math.max(1, Math.floor(availableHeightMm / (fontSizeMm * 1.05)));
+  const lines = Math.max(1, Math.floor(availableHeightMm / (fontSizeMm * (element.lineHeight ?? 1.05))));
   return (
     <span
       className={`${styles.designedTextContent} ${styles.designedTextEllipsis}`}
@@ -317,6 +322,8 @@ export function LabelRenderer({
           const value =
             element.type === "name"
               ? resource.name
+              : element.type === "subtitle"
+                ? resource.subtitle ?? ""
               : element.type === "identifier"
                 ? identifier
                 : element.type === "url"

@@ -910,6 +910,7 @@ export async function generateResourceOptionVariants(options: {
         .values({
           organizationId: options.organizationId,
           name: generatedName(primary.name, labels),
+          subtitle: primary.subtitle,
           description: primary.description,
           type: primary.type,
           status: "available",

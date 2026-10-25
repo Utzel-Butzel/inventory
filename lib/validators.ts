@@ -341,6 +341,7 @@ export const resourceMapFeatureSchema = z.discriminatedUnion("type", [
 ]);
 
 const resourceShape = {
+  subtitle: z.string().trim().max(240),
   name: z.string().trim().min(1).max(240),
   slugs: resourceSlugsSchema,
   description: z.string().trim().max(20_000),
@@ -374,6 +375,7 @@ const resourceShape = {
 
 export const resourceInputSchema = z.object({
   ...resourceShape,
+  subtitle: resourceShape.subtitle.optional().default(""),
   slugs: resourceShape.slugs.optional().default([]),
   description: resourceShape.description.optional().default(""),
   type: resourceShape.type.optional().default("object"),

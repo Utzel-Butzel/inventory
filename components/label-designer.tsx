@@ -46,7 +46,7 @@ import {
 type ElementType = LabelElement["type"];
 type TextElement = Extract<
   LabelElement,
-  { type: "name" | "identifier" | "url" | "location" }
+  { type: "name" | "subtitle" | "identifier" | "url" | "location" }
 >;
 type BackgroundElement = Extract<LabelElement, { type: "background" }>;
 type QrElement = Extract<LabelElement, { type: "qr" }>;
@@ -65,6 +65,7 @@ const ELEMENT_OPTIONS = [
   { type: "qr", labelKey: "designer.elements.qr", icon: QrCodeIcon },
   { type: "image", labelKey: "designer.elements.image", icon: ImageIcon },
   { type: "name", labelKey: "designer.elements.name", icon: Type },
+  { type: "subtitle", labelKey: "designer.elements.subtitle", icon: Type },
   { type: "identifier", labelKey: "designer.elements.identifier", icon: Hash },
   { type: "barcode", labelKey: "designer.elements.barcode", icon: Barcode },
   { type: "url", labelKey: "designer.elements.url", icon: Link2 },
@@ -124,6 +125,8 @@ const newElement = (type: ElementType): LabelElement => {
         align: "left",
         textOverflow: "ellipsis",
       };
+    case "subtitle":
+      return { type, ...box, y: 60, width: 55, height: 25, fontSizeMm: 2.3, fontFamily: "sans", textOverflow: "shrink" };
     case "identifier":
       return {
         type,
@@ -329,6 +332,7 @@ export function LabelDesigner({
     () => ({
       ...SAMPLE_RESOURCE,
       name: t("designer.sample.name"),
+      subtitle: t("designer.sample.subtitle"),
       location: t("designer.sample.location"),
     }),
     [t],
@@ -346,6 +350,7 @@ export function LabelDesigner({
         (resource) => resource.name,
         t("designer.sample.longName"),
       ),
+      subtitle: longestValue(resources, (resource) => resource.subtitle ?? "", t("designer.sample.subtitle")),
       sku: longestValue(
         resources,
         (resource) => resource.sku,
@@ -362,6 +367,7 @@ export function LabelDesigner({
     () => ({
       ...(sampleResource ?? fallbackSampleResource),
       name: t("designer.sample.missingName"),
+      subtitle: "",
       sku: null,
       barcode: null,
       location: "",
@@ -1247,7 +1253,7 @@ export function LabelDesigner({
                   </div>
                 ) : null}
 
-                {["name", "identifier", "url", "location"].includes(selected.type) ? (
+                {["name", "subtitle", "identifier", "url", "location"].includes(selected.type) ? (
                   <>
                     <label className="mt-4 block text-[12px] font-semibold text-muted">
                       {t("designer.fontSize")}
@@ -1286,6 +1292,7 @@ export function LabelDesigner({
                         }
                         className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
                       >
+                        <option value="barlow-semi-condensed">Barlow Semi Condensed · Bold</option>
                         <option value="sans">
                           {t("designer.fontFamilies.sans")}
                         </option>
@@ -1299,6 +1306,16 @@ export function LabelDesigner({
                           {t("designer.fontFamilies.rounded")}
                         </option>
                       </select>
+                    </label>
+                    <label className="mt-4 block text-[12px] font-semibold text-muted">
+                      {t("designer.lineHeight")}
+                      <input type="number" min="0.8" max="2" step="0.01"
+                        value={(selected as TextElement).lineHeight ?? ((selected as TextElement).textOverflow === "shrink" ? 1.08 : 1.05)}
+                        onChange={event => {
+                          const next = Number(event.target.value);
+                          if (Number.isFinite(next) && next >= 0.8 && next <= 2) updateElement(selected.type, { lineHeight: next } as Partial<LabelElement>);
+                        }}
+                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus" />
                     </label>
                     <label className="mt-4 block text-[12px] font-semibold text-muted">
                       {t("designer.alignment")}

@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
 .page {
   margin: 0 auto;
   width: 100%;
@@ -148,13 +156,13 @@
 .designedTextEllipsis {
   display: -webkit-box;
   overflow: hidden;
-  line-height: 1.05;
+  line-height: var(--label-line-height, 1.05);
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
 }
 
 .designedTextShrink {
-  line-height: 1.08;
+  line-height: var(--label-line-height, 1.08);
   overflow-wrap: anywhere;
 }
 
@@ -398,7 +406,7 @@
     padding: 0;
   }
 
-  .page > :first-child,
+  .page > :not(.workspace),
   .workspace > :first-child,
   .previewPanel > :not(.previewViewport) {
     display: none !important;

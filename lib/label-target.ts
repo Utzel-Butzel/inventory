@@ -10,7 +10,16 @@ export type LabelStockUnit = {
 export type LabelResource = Pick<
   ClientResource,
   "id" | "name" | "sku" | "barcode" | "location" | "type" | "quantity" | "cover"
-> & { stockUnit?: LabelStockUnit };
+> & { subtitle?: string; stockUnit?: LabelStockUnit };
+
+export type LabelTextOverride = { name?: string; subtitle?: string };
+
+// Print-only copies preserve identity, QR target and stock-unit information.
+export const applyLabelTextOverride = (resource: LabelResource, override?: LabelTextOverride): LabelResource => ({
+  ...resource,
+  name: override?.name ?? resource.name,
+  subtitle: override?.subtitle ?? resource.subtitle ?? "",
+});
 
 export const labelTargetKey = (resource: LabelResource) =>
   resource.stockUnit ? `${resource.id}:${resource.stockUnit.id}` : resource.id;
