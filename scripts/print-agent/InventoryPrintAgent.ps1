@@ -1,4 +1,4 @@
-param([string]$ConfigPath = "$PSScriptRoot\config.json", [switch]$Once)
+param([string]$ConfigPath = "$PSScriptRoot\config.json", [switch]$Once, [switch]$ValidateJournal)
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
@@ -13,7 +13,23 @@ function Save-State($state) {
     $bytes = [Text.Encoding]::UTF8.GetBytes(($state | ConvertTo-Json -Depth 5 -Compress))
     $file = [IO.File]::Open($temp, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
     try { $file.Write($bytes,0,$bytes.Length); $file.Flush($true) } finally { $file.Dispose() }
-    if ([IO.File]::Exists($statePath)) { [IO.File]::Replace($temp,$statePath,$null) } else { [IO.File]::Move($temp,$statePath) }
+    if ([IO.File]::Exists($statePath)) { [IO.File]::Replace($temp,$statePath,[NullString]::Value) } else { [IO.File]::Move($temp,$statePath) }
+}
+# Exercise the durable journal without contacting the server or spooler.
+if ($ValidateJournal) {
+    $statePath = Join-Path (Split-Path -Parent $ConfigPath) ('journal-check-'+[Guid]::NewGuid().ToString()+'.json')
+    try {
+        Save-State ([pscustomobject]@{phase='claim'})
+        Save-State ([pscustomobject]@{phase='submitting'})
+        $saved=Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+        if ($saved.phase -ne 'submitting') { throw 'Journal replacement failed.' }
+        Write-Host 'Durable journal validation passed. No print job sent.'
+    } finally {
+        Remove-Item -LiteralPath $statePath -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath ($statePath+'.new') -ErrorAction SilentlyContinue
+        $mutex.ReleaseMutex();$mutex.Dispose()
+    }
+    exit 0
 }
 function Request-Agent($path, $body) {
     Invoke-RestMethod -Uri ($config.server.TrimEnd('/') + '/api/v1/label-print-agent/' + $path) -Method Post -Headers @{Authorization=('Bearer ' + $config.token)} -ContentType 'application/json' -Body ($body | ConvertTo-Json -Compress) -TimeoutSec 25
@@ -103,7 +119,11 @@ try {
             }
         } catch {
             # Retry transport/receipts, never physical printing. Do not log tokens or label data.
-            Write-Warning ('Print server unavailable at '+[DateTime]::Now.ToString('s'))
+            if ($null -ne $state -and $state.phase -eq 'submitting') { $state.phase='receipt';$state.status='uncertain' }
+            $message=($_.Exception.Message).Replace($config.token,'[redacted]')
+            $diagnostic=([DateTime]::Now.ToString('s')+' '+$_.Exception.GetType().FullName+': '+$message)
+            Write-Warning $diagnostic
+            try { [IO.File]::WriteAllText((Join-Path (Split-Path -Parent $ConfigPath) 'last-error.txt'),$diagnostic) } catch {}
         }
         if (-not $Once) { Start-Sleep -Seconds 3 }
     } while (-not $Once)

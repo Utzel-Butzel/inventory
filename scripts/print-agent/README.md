@@ -23,8 +23,16 @@ The Windows PC must remain awake, online and connected to the powered-on printer
    .\Install-InventoryPrintAgent.ps1
    ```
 
-   Follow the organization's PowerShell execution/signing policy; the installer
-   does not bypass it. The installer creates **Inventory Office Label Printer**,
+   Follow the organization's PowerShell execution/signing policy. On a PC with
+   the default Restricted policy, an administrator can explicitly authorize
+   local scripts for the installer and task process only:
+
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\Install-InventoryPrintAgent.ps1 -AllowLocalScripts
+   ```
+
+   This optional mode leaves machine/user policy unchanged and still enforces
+   signatures for scripts marked as downloaded. Group Policy takes precedence. The installer creates **Inventory Office Label Printer**,
    an at-startup task running as **LOCAL SERVICE**, and starts it immediately.
    Files live in `C:\ProgramData\InventoryPrintAgent`, readable only by that
    service, SYSTEM and administrators. No inbound firewall rule is needed.
@@ -71,3 +79,9 @@ startup migration runner. No additional server secrets are required.
 `npm run test:shared-printing` checks raster validation and body limits. Set
 `TEST_DATABASE_URL` to a disposable/development PostgreSQL database to also run
 queue isolation/concurrency tests; these use and remove their own random schema.
+
+For journal diagnostics, stop the task temporarily and run the installed agent
+with `-ValidateJournal` using the same approved PowerShell policy. This checks
+atomic state replacement without contacting the server or sending a print job.
+Start the task again afterward. Transport errors are stored in `last-error.txt`
+inside the protected service directory; tokens and label payloads are not logged.
