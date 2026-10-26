@@ -57,6 +57,8 @@
     "overrides_other": "{{value}} Abweichungen"
   },
   "actions": {
+    "printLabel": "Etikett drucken",
+    "printLabelHint": "Öffnet die Druckansicht in einem neuen Tab. Verwendet den zuletzt gespeicherten Stand.",
     "deleteItem": "Eintrag löschen",
     "saving": "Wird gespeichert…",
     "createItem": "Eintrag erstellen",

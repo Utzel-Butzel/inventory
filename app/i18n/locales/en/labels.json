@@ -63,8 +63,8 @@
     "description": "The selected setup controls which details, codes, and images appear."
   },
   "printer": {
-    "title": "Print from this computer",
-    "description": "For the PT-P710BT over USB, select QZ Tray above. Use the browser print dialog for other printers with matching media size, 100% scale and no extra margins."
+    "title": "Printing options",
+    "description": "Choose Shared Office printer to print without a local installation, including away from the office. Use QZ Tray for a directly connected PT-P710BT. For other printers, use the browser print dialog with the correct media size and 100% scale."
   },
   "designer": {
     "eyebrow": "Label designer",
@@ -296,5 +296,38 @@
     "save": "Apply changes",
     "cancel": "Cancel",
     "error": "Could not update label: {{detail}}"
+  },
+  "shared": {
+    "destination": "Shared office printer",
+    "printer": "Office printer",
+    "loading": "Loading printers…",
+    "empty": "No shared printer configured yet",
+    "choose": "Select a shared printer.",
+    "online": "Office PC connected",
+    "offline": "Office PC offline",
+    "help": "Print directly through the office PC. This device needs no printer driver or QZ Tray. The tape width is configured on the shared printer.",
+    "offlineHelp": "The office PC is disconnected. New jobs wait for up to 10 minutes and then expire.",
+    "sent": "Submitted to the shared print queue. Track progress below.",
+    "jobs": "Your recent print jobs",
+    "job_one": "1 label",
+    "job_other": "{{count}} labels",
+    "cancel": "Cancel",
+    "loadError": "Unable to load the shared print queue.",
+    "receiptHelp": "“Submitted to printer” confirms the Windows spooler accepted the job. Check physical output. Uncertain jobs are never automatically reprinted.",
+    "status": {
+      "queued": "Waiting for office PC",
+      "claimed": "Sending to printer",
+      "submitted": "Submitted to printer",
+      "failed": "Failed",
+      "uncertain": "Output uncertain – check printer",
+      "cancelled": "Cancelled",
+      "expired": "Expired"
+    },
+    "setup": "Set up shared printer",
+    "setupHelp": "One-time setup on the office PC. The configuration file contains its access key; keep it private and transfer it only to that PC. Disabled printers can no longer collect jobs.",
+    "name": "Printer name",
+    "create": "Create printer",
+    "download": "Download office PC configuration",
+    "disable": "Disable"
   }
 }

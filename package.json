@@ -73,7 +73,8 @@
     "deploy": "npm run deploy:ios",
     "test:list-views": "node --experimental-strip-types --test tests/list-view-contract.test.mjs tests/inventory-pagination.test.mjs tests/inventory-batch-selection.test.mjs tests/inventory-filters.test.mjs tests/inventory-presentation.test.mjs",
     "smoke:ai-prompts": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs scripts/smoke-ai-prompts.mjs",
-    "smoke:list-views": "node scripts/smoke-list-views.mjs"
+    "smoke:list-views": "node scripts/smoke-list-views.mjs",
+    "test:shared-printing": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/shared-label-printing*.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.42.0",

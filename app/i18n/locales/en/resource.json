@@ -57,6 +57,8 @@
     "overrides_other": "{{value}} overrides"
   },
   "actions": {
+    "printLabel": "Print label",
+    "printLabelHint": "Opens the print view in a new tab using the last saved version.",
     "deleteItem": "Delete item",
     "saving": "Saving…",
     "createItem": "Create item",

@@ -63,8 +63,8 @@
     "description": "Die ausgewählte Vorlage bestimmt, welche Details, Codes und Bilder erscheinen."
   },
   "printer": {
-    "title": "Druck über diesen Computer",
-    "description": "Für den PT-P710BT per USB wähle oben QZ Tray. Andere Drucker verwendest du über den Browser-Druckdialog mit passender Mediengröße, 100 % Skalierung und ohne zusätzliche Ränder."
+    "title": "Druckwege",
+    "description": "Für den Office-Drucker wähle „Gemeinsamer Office-Drucker“ – ohne lokale Installation, auch von unterwegs. Einen direkt angeschlossenen PT-P710BT nutzt du über QZ Tray. Andere Drucker funktionieren über den Browser-Druckdialog mit passender Mediengröße und 100 % Skalierung."
   },
   "designer": {
     "eyebrow": "Etikettendesigner",
@@ -296,5 +296,38 @@
     "save": "Änderungen übernehmen",
     "cancel": "Abbrechen",
     "error": "Etikett konnte nicht aktualisiert werden: {{detail}}"
+  },
+  "shared": {
+    "destination": "Gemeinsamer Office-Drucker",
+    "printer": "Office-Drucker",
+    "loading": "Drucker werden geladen…",
+    "empty": "Noch kein gemeinsamer Drucker eingerichtet",
+    "choose": "Wähle einen gemeinsamen Drucker.",
+    "online": "Office-PC verbunden",
+    "offline": "Office-PC offline",
+    "help": "Drucke direkt über den Office-PC. Auf diesem Gerät brauchst du weder einen Druckertreiber noch QZ Tray. Die Bandbreite wird am gemeinsamen Drucker festgelegt.",
+    "offlineHelp": "Der Office-PC ist nicht verbunden. Neue Aufträge warten höchstens 10 Minuten und verfallen danach.",
+    "sent": "Auftrag an die gemeinsame Druckwarteschlange übergeben. Den Fortschritt siehst du unten.",
+    "jobs": "Deine letzten Druckaufträge",
+    "job_one": "1 Etikett",
+    "job_other": "{{count}} Etiketten",
+    "cancel": "Abbrechen",
+    "loadError": "Die gemeinsame Druckwarteschlange konnte nicht geladen werden.",
+    "receiptHelp": "„An Drucker übergeben“ bestätigt die Windows-Warteschlange. Prüfe die tatsächliche Ausgabe. Bei unklarem Status wird nicht automatisch erneut gedruckt.",
+    "status": {
+      "queued": "Wartet auf Office-PC",
+      "claimed": "Wird an Drucker übergeben",
+      "submitted": "An Drucker übergeben",
+      "failed": "Fehlgeschlagen",
+      "uncertain": "Ausgabe unklar – am Drucker prüfen",
+      "cancelled": "Abgebrochen",
+      "expired": "Abgelaufen"
+    },
+    "setup": "Gemeinsamen Drucker einrichten",
+    "setupHelp": "Einmalige Einrichtung auf dem Office-PC. Die Konfigurationsdatei enthält dessen Zugangsschlüssel; bewahre sie geschützt auf und gib sie nur an diesen PC weiter. Ein deaktivierter Drucker kann keine Aufträge mehr abholen.",
+    "name": "Druckername",
+    "create": "Drucker anlegen",
+    "download": "Konfiguration für den Office-PC herunterladen",
+    "disable": "Deaktivieren"
   }
 }

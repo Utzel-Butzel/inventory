@@ -25,6 +25,7 @@ import {
   Package,
   Paperclip,
   Plus,
+  Printer,
   Save,
   Search,
   Sparkles,
@@ -454,6 +455,7 @@ function AiActionModal({
 export function ResourceEditor({
   resourceId,
   canDelete = false,
+  canPrintLabels = false,
   canViewStock = false,
   canUseAi = false,
   canAnalyzeAi = canUseAi,
@@ -465,6 +467,7 @@ export function ResourceEditor({
 }: {
   resourceId?: string;
   canDelete?: boolean;
+  canPrintLabels?: boolean;
   canViewStock?: boolean;
   canUseAi?: boolean;
   canAnalyzeAi?: boolean;
@@ -1313,6 +1316,18 @@ export function ResourceEditor({
           )}
         </div>
         <div className="grid w-full grid-cols-[minmax(0,1fr)_2.75rem] items-center gap-2 sm:flex sm:w-auto sm:shrink-0">
+          {!isNew && canPrintLabels ? (
+            <Link
+              href={`/labels?resourceId=${encodeURIComponent(resourceId)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={t("actions.printLabelHint")}
+              className="col-span-2 inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-sm font-semibold text-foreground transition hover:bg-surface-muted sm:col-auto sm:h-10"
+            >
+              <Printer size={16} />
+              {t("actions.printLabel")}
+            </Link>
+          ) : null}
           {!isNew && canViewStock ? (
             <Link
               href={`/inventory/${primaryReference}/stock`}
