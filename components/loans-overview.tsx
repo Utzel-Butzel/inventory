@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
 import { orderListItems } from "@/lib/list-view-contract";
 
@@ -263,7 +264,7 @@ export function LoansOverview() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link href={`/inventory/${loan.resource.id}`} className="font-semibold text-foreground hover:text-brand">
-                      {loan.resource.name}
+                      <ResourceTitle resource={loan.resource} />
                     </Link>
                     <Badge tone={loan.overdue ? "danger" : loan.kind === "reservation" ? "warning" : loan.status === "returned" ? "success" : "neutral"}>
                       {loan.overdue

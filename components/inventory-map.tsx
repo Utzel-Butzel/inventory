@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import dynamic from "next/dynamic";
 import {
   OrganizationLink as Link,
@@ -665,7 +666,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                     ) : <Box size={15} />}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-semibold text-foreground">{resource.name}</span>
+                    <span className="block truncate text-xs font-semibold text-foreground"><ResourceTitle resource={resource} /></span>
                     <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-muted">
                       {features.some((feature) => feature.type === "polygon") ? <Shapes size={10} /> : features.length ? <MapPin size={10} /> : <CircleDot size={10} />}
                       {features.length
@@ -689,7 +690,7 @@ export function InventoryMap({ canEdit }: { canEdit: boolean }) {
                 <section>
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">{activeResource.name}</p>
+                      <p className="truncate text-sm font-semibold text-foreground"><ResourceTitle resource={activeResource} /></p>
                       <p className="text-[11px] text-muted">
                         {t(`map.types.${activeResource.type}`, { defaultValue: activeResource.type })}
                         {" · "}

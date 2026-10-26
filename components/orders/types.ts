@@ -28,6 +28,7 @@ export type Shipment = {
     orderLineId: string;
     resourceId: string;
     resourceName: string;
+  resourceSubtitle?: string | null;
     quantity: number;
     units: Array<{
       orderLineUnitId: string;
@@ -57,6 +58,7 @@ export type OrderLine = {
   id: string;
   resourceId: string;
   resourceName: string;
+  resourceSubtitle?: string | null;
   resourceSku: string | null;
   quantity: number;
   fulfilledQuantity: number;
@@ -98,6 +100,7 @@ export type SerializedUnitPanel = {
     id: string;
     resourceId: string;
     resourceName: string;
+  resourceSubtitle?: string | null;
     quantity: number;
     fulfilledQuantity: number;
     returnedQuantity: number;
@@ -131,6 +134,7 @@ export type Order = {
 export type DraftLine = {
   resourceId: string;
   resourceName: string;
+  resourceSubtitle?: string | null;
   resourceSku: string | null;
   quantity: string;
   unitPrice: string;

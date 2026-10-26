@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
 import { OrganizationLink as Link } from "@/components/organization-routing";
@@ -43,16 +44,16 @@ export function FamilyStockDetails({ members, tab }: { members: Array<{ id: stri
     {members.length > 20 ? <div className="flex items-center gap-3"><Button size="sm" variant="secondary" disabled={!page} onClick={() => setPage(page - 1)}>{t("workspace.previous")}</Button><span>{page + 1} / {Math.ceil(members.length / 20)}</span><Button size="sm" variant="secondary" disabled={(page + 1) * 20 >= members.length} onClick={() => setPage(page + 1)}>{t("workspace.next")}</Button></div> : null}
     {failed ? <p role="alert" className="text-sm text-danger">{t("workspace.partialLoad")} <button onClick={() => setRetry(retry + 1)} className="underline">{t("workspace.retry")}</button></p> : null}
     {loading ? <p role="status" className="p-5 text-sm text-muted">{t("workspace.loading")}</p> : <>
-      {tab === "movements" ? <div className="divide-y divide-border rounded-xl border border-border bg-surface">{movements.length ? movements.map((movement) => <div key={movement.id} className="flex items-start justify-between gap-4 p-4"><div><Link href={`/inventory/${movement.resource.id}/stock`} className="text-sm font-semibold text-brand">{movement.resource.name}</Link><p className="mt-1 text-xs text-muted">{movement.assemblyBuildId ? t(movement.delta > 0 ? "workspace.assemblyCompleted" : "workspace.assemblyConsumed") : movement.reason || t(movementLabelKeys[movement.type as MovementType] ?? "resource.movements.stockUpdate")} · {formatDate(movement.occurredAt, i18n.language, true)}</p>{movement.assemblyBuildId && movement.delta > 0 ? <BuildMovementDetails resourceId={movement.resource.id} buildId={movement.assemblyBuildId} /> : null}</div><span className="font-semibold tabular-nums">{movement.delta > 0 ? "+" : ""}{movement.delta}</span></div>) : <p className="p-5 text-sm text-muted">{t("workspace.emptyMovements")}</p>}</div> : null}
-      {tab === "units" ? <div className="divide-y divide-border rounded-xl border border-border bg-surface">{units.length ? units.map((unit) => <Link key={unit.id} href={`/inventory/${unit.resource.id}/stock?unit=${unit.id}`} className="flex justify-between gap-4 p-4 hover:bg-surface-hover"><span><span className="block text-sm font-medium">{unit.code}</span><span className="text-xs text-muted">{unit.resource.name}</span></span><span className="text-xs text-muted">{unit.location ?? "—"}</span></Link>) : <p className="p-5 text-sm text-muted">{t("workspace.emptyUnits")}</p>}</div> : null}
-      {tab === "locations" ? data.map((stock) => <LocationDetails key={stock.resource.id} resourceId={stock.resource.id} name={stock.resource.name} quantity={stock.resource.quantity} />) : null}
+      {tab === "movements" ? <div className="divide-y divide-border rounded-xl border border-border bg-surface">{movements.length ? movements.map((movement) => <div key={movement.id} className="flex items-start justify-between gap-4 p-4"><div><Link href={`/inventory/${movement.resource.id}/stock`} className="text-sm font-semibold text-brand"><ResourceTitle resource={movement.resource} /></Link><p className="mt-1 text-xs text-muted">{movement.assemblyBuildId ? t(movement.delta > 0 ? "workspace.assemblyCompleted" : "workspace.assemblyConsumed") : movement.reason || t(movementLabelKeys[movement.type as MovementType] ?? "resource.movements.stockUpdate")} · {formatDate(movement.occurredAt, i18n.language, true)}</p>{movement.assemblyBuildId && movement.delta > 0 ? <BuildMovementDetails resourceId={movement.resource.id} buildId={movement.assemblyBuildId} /> : null}</div><span className="font-semibold tabular-nums">{movement.delta > 0 ? "+" : ""}{movement.delta}</span></div>) : <p className="p-5 text-sm text-muted">{t("workspace.emptyMovements")}</p>}</div> : null}
+      {tab === "units" ? <div className="divide-y divide-border rounded-xl border border-border bg-surface">{units.length ? units.map((unit) => <Link key={unit.id} href={`/inventory/${unit.resource.id}/stock?unit=${unit.id}`} className="flex justify-between gap-4 p-4 hover:bg-surface-hover"><span><span className="block text-sm font-medium">{unit.code}</span><span className="text-xs text-muted"><ResourceTitle resource={unit.resource} /></span></span><span className="text-xs text-muted">{unit.location ?? "—"}</span></Link>) : <p className="p-5 text-sm text-muted">{t("workspace.emptyUnits")}</p>}</div> : null}
+      {tab === "locations" ? data.map((stock) => <LocationDetails key={stock.resource.id} resourceId={stock.resource.id} name={stock.resource.name} subtitle={stock.resource.subtitle} quantity={stock.resource.quantity} />) : null}
     </>}
   </div>;
 }
-function LocationDetails({ resourceId, name, quantity }: { resourceId: string; name: string; quantity: number }) {
+function LocationDetails({ resourceId, name, subtitle, quantity }: { resourceId: string; name: string; subtitle?: string | null; quantity: number }) {
   const [open, setOpen] = useState(false);
   return <details className="rounded-xl border border-border bg-surface p-4" onToggle={(event) => setOpen(event.currentTarget.open)}>
-    <summary className="cursor-pointer text-sm font-medium">{name} · {quantity}</summary>
+    <summary className="cursor-pointer text-sm font-medium"><ResourceTitle resource={{ name, subtitle }} /> · {quantity}</summary>
     {open ? <StockLocationsManager resourceId={resourceId} canEdit={false} /> : null}
   </details>;
 }

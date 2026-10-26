@@ -70,6 +70,7 @@ export default async function EditInventoryItemPage({ params }: Props) {
       <InventoryBreadcrumb
         href={`/inventory/${primaryReference}`}
         name={resource.name}
+        subtitle={resource.subtitle}
       />
       <ResourceEditor
         resourceId={resource.id}

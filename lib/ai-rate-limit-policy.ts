@@ -53,7 +53,7 @@ const operationPolicies: Record<
   },
   cover: {
     environmentVariable: "AI_IMAGE_RATE_LIMIT_PER_HOUR",
-    defaultLimit: 12,
+    defaultLimit: 60,
     windowMs: 60 * 60_000,
   },
   translate: {

@@ -995,8 +995,7 @@ export async function searchInventoryWebImage(options: {
       reasoning: { effort: "none" },
       tools: [
         {
-          type: "web_search_preview",
-          search_content_types: ["text", "image"],
+          type: "web_search",
           search_context_size: "medium",
         },
       ],

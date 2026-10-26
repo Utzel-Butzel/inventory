@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useT } from "next-i18next/client";
@@ -51,6 +52,7 @@ type PublicMedia = {
 };
 
 type PublicResource = {
+  subtitle?: string | null;
   id: string;
   name: string;
   description: string;
@@ -504,7 +506,7 @@ export function PublicStockCatalog({
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h2 className="truncate text-base font-semibold text-foreground">{resource.name}</h2>
+                        <h2 className="truncate text-base font-semibold text-foreground"><ResourceTitle resource={resource} /></h2>
                         <p className="mt-1 truncate text-xs text-muted">{resource.sku || resource.location || t(`types.${resource.type}`, { defaultValue: titleCase(resource.type) })}</p>
                       </div>
                       <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand"><ArrowRight className="size-5" /></span>
@@ -831,7 +833,7 @@ export function PublicStockScannerLauncher({
             <div className="mt-5 rounded-2xl border border-success-border bg-success-soft p-6 text-center text-success"><CheckCircle2 className="mx-auto size-12" /><p className="mt-3 text-lg font-semibold">{success}</p><Button size="lg" className="mt-5" onClick={reset}>{t("tool.scanner.scanAnother")}</Button></div>
           ) : resolution ? (
             <div className="mt-5 space-y-5">
-              <section className="rounded-2xl border border-brand-border bg-brand-soft p-5"><p className="text-xs font-semibold uppercase tracking-[0.1em] text-brand">{resolution.workflow.name}</p><h3 className="mt-1 text-xl font-semibold text-foreground">{(resolution.resources ?? [resolution.resource]).map((resource) => resource.name).join(", ")}</h3><div className="mt-4 flex items-center gap-3 text-2xl font-bold text-brand-strong"><span>{resolution.quantityBefore}</span><ArrowRight className="size-6" /><span>{resolution.quantityAfter}</span></div><p className="mt-1 font-mono text-xs text-muted">{resolution.identifier}</p></section>
+              <section className="rounded-2xl border border-brand-border bg-brand-soft p-5"><p className="text-xs font-semibold uppercase tracking-[0.1em] text-brand">{resolution.workflow.name}</p><h3 className="mt-1 text-xl font-semibold text-foreground">{(resolution.resources ?? [resolution.resource]).map((resource, index) => <span key={resource.id}>{index ? ", " : ""}<ResourceTitle resource={resource} /></span>)}</h3><div className="mt-4 flex items-center gap-3 text-2xl font-bold text-brand-strong"><span>{resolution.quantityBefore}</span><ArrowRight className="size-6" /><span>{resolution.quantityAfter}</span></div><p className="mt-1 font-mono text-xs text-muted">{resolution.identifier}</p></section>
               <PublicShareWorkflowTargets
                 resolution={resolution}
                 disabled={busy}
@@ -961,7 +963,7 @@ function PublicShareWorkflowTargets({
                     className="size-4 accent-brand-solid"
                   />
                 )}
-                {group.name}
+                <ResourceTitle resource={group} />
               </label>
               {group.options.length > 1 && current ? (
                 <div
@@ -986,7 +988,7 @@ function PublicShareWorkflowTargets({
                           : "border-border text-muted-strong",
                       )}
                     >
-                      {option.name}
+                      <ResourceTitle resource={option} />
                     </button>
                   ))}
                 </div>

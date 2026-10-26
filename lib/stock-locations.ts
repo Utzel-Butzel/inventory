@@ -16,6 +16,7 @@ export async function listStockLocationResources(organizationId: string) {
     .select({
       id: resources.id,
       name: resources.name,
+      subtitle: resources.subtitle,
       type: resources.type,
       status: resources.status,
     })
@@ -45,6 +46,7 @@ export async function getStockLocationBreakdown(
       .select({
         id: resources.id,
         name: resources.name,
+        subtitle: resources.subtitle,
         quantity: resources.quantity,
         trackingMode: stockSettings.trackingMode,
       })
@@ -89,6 +91,7 @@ export async function getStockLocationBreakdown(
             .select({
               id: resources.id,
               name: resources.name,
+              subtitle: resources.subtitle,
               type: resources.type,
             })
             .from(resources)
@@ -117,6 +120,7 @@ export async function getStockLocationBreakdown(
             {
               locationResourceId: row.locationResourceId,
               name: names.get(row.locationResourceId)?.name ?? "Unknown location",
+              subtitle: names.get(row.locationResourceId)?.subtitle,
               type: names.get(row.locationResourceId)?.type ?? "other",
               quantity: Number(row.quantity),
             },
@@ -130,6 +134,7 @@ export async function getStockLocationBreakdown(
         locationResourceId: stockLocationBalances.locationResourceId,
         quantity: stockLocationBalances.quantity,
         name: resources.name,
+        subtitle: resources.subtitle,
         type: resources.type,
       })
       .from(stockLocationBalances)

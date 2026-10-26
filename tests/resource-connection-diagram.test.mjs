@@ -381,12 +381,12 @@ test("merges repeated resources on the same side while retaining each connection
   assert.equal(model.connectionCount, 2);
 });
 
-test("expands BOM parents from a component without duplicating the same BOM edge", () => {
+test("expands BOM components top-down without duplicating reverse references", () => {
   const component = item("component", "Display");
   const displayModule = item("module", "Display module");
   const product = item("product", "OpenPaper 7");
   const graph = buildResourceConnectionGraph({
-    root: component,
+    root: product,
     depth: 2,
     payloads: new Map([
       [
@@ -458,16 +458,113 @@ test("expands BOM parents from a component without duplicating the same BOM edge
   assert.equal(graph.connectionCount, 2);
   assert.equal(graph.edges.length, 2);
   const moduleEdge = graph.edges.find((edge) =>
-    [edge.firstResourceId, edge.secondResourceId].includes(displayModule.id),
+    [edge.firstResourceId, edge.secondResourceId].includes(component.id),
   );
   assert.ok(moduleEdge);
   assert.equal(moduleEdge.connections.length, 1);
   assert.equal(moduleEdge.connections[0].fromResourceId, component.id);
   assert.equal(moduleEdge.connections[0].toResourceId, displayModule.id);
   assert.deepEqual(moduleEdge.connections[0].descriptor, {
-    type: "assembly",
+    type: "component",
     quantity: 1,
   });
+});
+
+test("keeps reverse BOM usage available without expanding it in the graph", () => {
+  const root = item("tape", "3M tape");
+  const payload = {
+    family: null,
+    relations: [],
+    bomComponents: [],
+    bomParents: [
+      { resourceId: "paper7", name: "Paper 7 PCB", quantityPerAssembly: 1 },
+    ],
+  };
+  const direct = buildResourceConnectionDiagram({ currentResourceId: root.id, ...payload });
+  assert.equal(direct.left[0].resource.id, "paper7");
+  assert.equal(direct.left[0].connections[0].descriptor.type, "assembly");
+
+  const graph = buildResourceConnectionGraph({
+    root,
+    depth: 7,
+    payloads: new Map([[root.id, payload]]),
+  });
+  assert.deepEqual(graph.nodes.map((node) => node.resource.id), [root.id]);
+  assert.equal(graph.edges.length, 0);
+  assert.equal(graph.connectionCount, 0);
+});
+
+test("shared tape does not pull Paper 7 into the OpenPaper L subtree", () => {
+  const root = item("openpaper-l", "OpenPaper L");
+  const variant = item("openpaper-l-natural", "OpenPaper L (natural)");
+  const component = (resourceId) => ({ resourceId, name: resourceId, quantityPerAssembly: 1 });
+  const payload = (bomComponents, bomParents = [], family = null) => ({
+    family,
+    relations: [],
+    bomComponents: bomComponents.map(component),
+    bomParents: bomParents.map(component),
+  });
+  const payloads = new Map([
+    [root.id, payload(["pcb-l"], [], {
+      role: "primary", currentResourceId: root.id, primary: root, variants: [variant],
+    })],
+    [variant.id, payload(["pcb-l"])],
+    ["pcb-l", payload(["tape"], [root.id, variant.id])],
+    ["tape", payload([], ["pcb-7", "pcb-l"])],
+    ["pcb-7", payload(["tape", "pulltape"], ["openpaper-7"])],
+    ["openpaper-7", payload(["pcb-7"])],
+  ]);
+
+  for (const depth of [3, 7]) {
+    const graph = buildResourceConnectionGraph({ root, depth, payloads });
+    assert.deepEqual(
+      new Set(graph.nodes.map((node) => node.resource.id)),
+      new Set([root.id, variant.id, "pcb-l", "tape"]),
+    );
+    assert.equal(graph.connectionCount, 4);
+    assert.equal(graph.edges.length, 4);
+    assert.equal(graph.truncated, false);
+    assert.ok(graph.edges.every((edge) => edge.connections.every(
+      (connection) => connection.descriptor.type !== "assembly",
+    )));
+    const rows = orderConnectionRows(graph.nodes, graph.edges, root.id);
+    assert.deepEqual([...rows.values()].map((row) => new Set(row.map((node) => node.resource.id))), [
+      new Set([root.id, variant.id]), new Set(["pcb-l"]), new Set(["tape"]),
+    ]);
+  }
+});
+
+test("retains shared components used by different assemblies and at different levels", () => {
+  const root = item("root", "Product");
+  const component = (resourceId, quantityPerAssembly) => ({
+    resourceId, name: resourceId, quantityPerAssembly,
+  });
+  const payloads = new Map([
+    [root.id, {
+      family: null, relations: [],
+      bomComponents: [component("module", 1), component("tape", 2)],
+    }],
+    ["module", {
+      family: null, relations: [],
+      bomComponents: [component("tape", 3)],
+      bomParents: [component(root.id, 1)],
+    }],
+    ["tape", {
+      family: null, relations: [], bomComponents: [],
+      bomParents: [component(root.id, 2), component("module", 3), component("other-product", 1)],
+    }],
+  ]);
+  const graph = buildResourceConnectionGraph({ root, depth: 7, payloads });
+  assert.deepEqual(new Set(graph.nodes.map((node) => node.resource.id)), new Set([
+    root.id, "module", "tape",
+  ]));
+  const tapeConnections = graph.edges.flatMap((edge) => edge.connections)
+    .filter((connection) => connection.fromResourceId === "tape");
+  assert.equal(tapeConnections.length, 2);
+  assert.deepEqual(new Map(tapeConnections.map((connection) => [
+    connection.toResourceId, connection.descriptor.quantity,
+  ])), new Map([[root.id, 2], ["module", 3]]));
+  assert.equal(graph.connectionCount, 3);
 });
 
 test("adds a visual dashed rail between adjacent primary-item variants", () => {

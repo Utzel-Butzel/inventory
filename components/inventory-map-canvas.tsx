@@ -1,5 +1,6 @@
 "use client";
 
+import { resourceTitleText } from "@/lib/resource-title";
 import {
   type GeoJSONSource,
   type Map as MapLibreMap,
@@ -125,7 +126,7 @@ function collections(
       const properties: MapFeatureProperties = {
         resourceId: resource.id,
         featureId: feature.id,
-        name: resource.name,
+        name: resourceTitleText(resource),
         selected: selected.has(resource.id),
         active: resource.id === activeResourceId,
       };
@@ -781,8 +782,8 @@ export function InventoryMapCanvas(props: InventoryMapCanvasProps) {
           isActive || isSelected ? "bg-brand-solid" : "bg-slate-600",
           isActive ? "scale-125" : "",
         ].join(" ");
-        element.setAttribute("aria-label", `${resource.name} · ${feature.layer}`);
-        element.title = `${resource.name} · ${feature.layer}`;
+        element.setAttribute("aria-label", `${resourceTitleText(resource)} · ${feature.layer}`);
+        element.title = `${resourceTitleText(resource)} · ${feature.layer}`;
 
         const dot = document.createElement("span");
         dot.className = "size-2 rounded-full bg-white";

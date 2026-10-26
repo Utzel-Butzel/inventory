@@ -1,5 +1,6 @@
 "use client";
 
+import { resourceTitleText } from "@/lib/resource-title";
 import { CustomFieldInputs } from "@/components/custom-field-inputs";
 import { type CustomFieldDefinition } from "@/lib/custom-field-contract";
 import { LoaderCircle, PackageCheck, Plus } from "lucide-react";
@@ -128,7 +129,7 @@ export function StockUnitCreateForm({
             <option value="">{t("resource.units.notAssigned")}</option>
             {availableLocations.map((location) => (
               <option key={location.id} value={location.id}>
-                {location.name} ·{" "}
+                {resourceTitleText(location)} ·{" "}
                 {t(`resource.locationTypes.${location.type}`, {
                   defaultValue: location.type,
                 })}

@@ -228,19 +228,39 @@ export type ClientSpatialStructureDetail = ClientSpatialStructureSummary & {
   floors: ClientSpatialStructureFloor[];
 };
 
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly details: { code?: string; limit?: number; retryAfterSeconds?: number };
+
+  constructor(
+    message: string,
+    status: number,
+    details: { code?: string; limit?: number; retryAfterSeconds?: number },
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.details = details;
+  }
+}
+
 export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit) {
   const response = await fetch(input, init);
   const text = await response.text();
-  let payload: (T & { error?: string }) | null = null;
+  let payload: (T & { error?: string; code?: string; limit?: number; retryAfterSeconds?: number }) | null = null;
   if (text) {
     try {
-      payload = JSON.parse(text) as T & { error?: string };
+      payload = JSON.parse(text);
     } catch {
       payload = null;
     }
   }
   if (!response.ok) {
-    throw new Error(payload?.error ?? `Request failed (HTTP ${response.status}).`);
+    throw new ApiRequestError(
+      payload?.error ?? `Request failed (HTTP ${response.status}).`,
+      response.status,
+      payload ?? {},
+    );
   }
   return payload as T;
 }

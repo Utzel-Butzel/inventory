@@ -51,6 +51,7 @@ import {
   MAX_INVENTORY_PAGE_SIZE,
 } from "@/lib/inventory-pagination";
 import { db } from "@/lib/db";
+import { getResourceCoverMap, getResourceCoverSummaries } from "@/lib/resource-covers";
 import {
   enqueueStockMovementWebhookEvents,
   enqueueWebhookEvent,
@@ -114,11 +115,13 @@ const inheritedCatalogPatch = (
   return patch;
 };
 
-const attachMedia = (
+const attachMedia = async (
+  organizationId: string,
   rows: ResourceRecord[],
   mediaRows: MediaRecord[],
   slugRows: Array<{ resourceId: string; slug: string; position: number }> = [],
-): ResourceWithMedia[] => {
+): Promise<ResourceWithMedia[]> => {
+  const covers = await getResourceCoverMap(organizationId, rows.map((row) => row.id), mediaRows);
   const grouped = new Map<string, MediaRecord[]>();
   for (const item of mediaRows) {
     const existing = grouped.get(item.resourceId) ?? [];
@@ -143,7 +146,7 @@ const attachMedia = (
         .sort((left, right) => left.position - right.position)
         .map((item) => item.slug),
       media: resourceMedia,
-      cover: resourceMedia.find((item) => item.kind === "image") ?? null,
+      cover: covers.get(resource.id) ?? null,
     };
   });
 };
@@ -328,7 +331,7 @@ export async function listResources(options: {
   const favoriteIds = new Set(favoriteRows.map((row) => row.resourceId));
 
   return {
-    resources: attachMedia(rows, mediaRows, slugRows).map((resource) => ({
+    resources: (await attachMedia(options.organizationId, rows, mediaRows, slugRows)).map((resource) => ({
       ...resource,
       isFavorite: favoriteIds.has(resource.id),
     })),
@@ -484,7 +487,7 @@ export async function listResourcesForRecognition(
       ])
     : [[], []];
   return {
-    resources: attachMedia(rows, mediaRows, slugRows),
+    resources: await attachMedia(organizationId, rows, mediaRows, slugRows),
     visualFallbackResourceIds: fallbackIds,
     matchingTotal: matchingTotalRows[0]?.value ?? 0,
     inventoryTotal: inventoryTotalRows[0]?.value ?? 0,
@@ -520,41 +523,14 @@ export async function getResource(organizationId: string, id: string) {
       .orderBy(asc(media.position)),
     listResourceSlugRows(organizationId, [id]),
   ]);
-  return attachMedia([row], mediaRows, slugRows)[0];
+  return (await attachMedia(organizationId, [row], mediaRows, slugRows))[0];
 }
 
 export async function getResourceCovers(
   organizationId: string,
   resourceIds: readonly string[],
 ) {
-  const uniqueIds = Array.from(new Set(resourceIds));
-  if (!uniqueIds.length) return [];
-
-  const rows = await db
-    .select({
-      id: media.id,
-      resourceId: media.resourceId,
-      url: media.url,
-      altText: media.altText,
-      width: media.width,
-      height: media.height,
-    })
-    .from(media)
-    .where(
-      and(
-        eq(media.organizationId, organizationId),
-        inArray(media.resourceId, uniqueIds),
-        eq(media.kind, "image"),
-      ),
-    )
-    .orderBy(asc(media.resourceId), asc(media.position), asc(media.createdAt));
-
-  const seen = new Set<string>();
-  return rows.filter((row) => {
-    if (seen.has(row.resourceId)) return false;
-    seen.add(row.resourceId);
-    return true;
-  });
+  return getResourceCoverSummaries(organizationId, resourceIds);
 }
 
 export async function createResource(
@@ -1409,7 +1385,7 @@ export async function findDuplicateResources(organizationId: string) {
         ),
       ])
     : [[], []];
-  const enriched = attachMedia(rows, mediaRows, slugRows);
+  const enriched = await attachMedia(organizationId, rows, mediaRows, slugRows);
   const pairs: Array<{
     left: ResourceWithMedia;
     right: ResourceWithMedia;

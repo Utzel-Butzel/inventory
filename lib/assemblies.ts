@@ -15,7 +15,6 @@ import {
   assemblyBuildComponents,
   assemblyBuilds,
   bomLines,
-  media,
   organizations,
   resourceOptionConfigurations,
   resourceOptionGroups,
@@ -36,6 +35,7 @@ import {
   type StockUnitRecord,
 } from "@/db/schema";
 import { db, type DatabaseExecutor } from "@/lib/db";
+import { getResourceCoverSummaries } from "@/lib/resource-covers";
 import {
   BOM_WRITE_LOCK_ID,
   VARIANT_FAMILY_WRITE_LOCK_ID,
@@ -203,7 +203,7 @@ type NormalizedBomComponent = {
   note: string;
 };
 
-type ReadExecutor = Pick<typeof db, "select">;
+type ReadExecutor = Pick<typeof db, "select" | "selectDistinctOn">;
 type AssemblyTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const sortBomLines = <T extends { position: number; slotKey: string }>(
@@ -577,6 +577,7 @@ async function getBomWithExecutor(
     .select({
       id: resources.id,
       name: resources.name,
+      subtitle: resources.subtitle,
       quantity: resources.quantity,
       trackingMode: stockSettings.trackingMode,
     })
@@ -644,6 +645,7 @@ async function getBomWithExecutor(
         .select({
           id: resources.id,
           name: resources.name,
+          subtitle: resources.subtitle,
           sku: resources.sku,
           status: resources.status,
           availableQuantity: resources.quantity,
@@ -719,26 +721,7 @@ async function getBomWithExecutor(
         )
         .orderBy(asc(stockUnits.resourceId), asc(stockUnits.code))
     : [];
-  const coverRows = visibleChoiceIds.length
-    ? await executor
-        .select({
-          id: media.id,
-          resourceId: media.resourceId,
-          url: media.url,
-          altText: media.altText,
-          width: media.width,
-          height: media.height,
-        })
-        .from(media)
-        .where(
-          and(
-            eq(media.organizationId, organizationId),
-            inArray(media.resourceId, visibleChoiceIds),
-            eq(media.kind, "image"),
-          ),
-        )
-        .orderBy(asc(media.resourceId), asc(media.position), asc(media.createdAt))
-    : [];
+  const coverRows = await getResourceCoverSummaries(organizationId, visibleChoiceIds, executor);
   const coverByResource = new Map<
     string,
     {
@@ -778,6 +761,7 @@ async function getBomWithExecutor(
     return {
       resourceId: choice.id,
       name: choice.name,
+      subtitle: choice.subtitle,
       sku: choice.sku,
       availableQuantity: choice.availableQuantity,
       trackingMode: trackingMode(choice.trackingMode),
@@ -806,6 +790,7 @@ async function getBomWithExecutor(
       origin: line.origin,
       resourceId: component.id,
       name: component.name,
+      subtitle: component.subtitle,
       sku: component.sku,
       quantityPerAssembly: line.quantityPerAssembly,
       quantityUnit: normalizeBomQuantityUnit(
@@ -1259,6 +1244,7 @@ async function listBomParentsWithExecutor(
             ),
             ...quantityConfiguration,
             name: resource.name,
+            subtitle: resource.subtitle,
             type: resource.type,
             status: resource.status,
           },

@@ -92,6 +92,7 @@ async function hydrateContacts(
         contactId: contactResources.contactId,
         id: resources.id,
         name: resources.name,
+        subtitle: resources.subtitle,
         sku: resources.sku,
         type: resources.type,
       })
@@ -140,11 +141,11 @@ async function hydrateContacts(
 
   const resourcesByContact = new Map<
     string,
-    Array<{ id: string; name: string; sku: string | null; type: string }>
+    Array<{ id: string; name: string; subtitle: string; sku: string | null; type: string }>
   >();
   for (const link of links) {
     const current = resourcesByContact.get(link.contactId) ?? [];
-    current.push({ id: link.id, name: link.name, sku: link.sku, type: link.type });
+    current.push({ id: link.id, name: link.name, subtitle: link.subtitle, sku: link.sku, type: link.type });
     resourcesByContact.set(link.contactId, current);
   }
   const countsByContact = new Map(

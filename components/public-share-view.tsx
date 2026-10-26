@@ -1,3 +1,4 @@
+import { ResourceTitle } from "@/components/resource-title";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -192,7 +193,7 @@ export async function PublicInventoryView({
                 </div>
                 <div className="p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <h2 className="line-clamp-1 font-semibold text-foreground">{resource.name}</h2>
+                    <h2 className="line-clamp-1 font-semibold text-foreground"><ResourceTitle resource={resource} /></h2>
                     <ArrowRight className="mt-0.5 size-4 shrink-0 text-muted transition group-hover:translate-x-0.5" />
                   </div>
                   <p className="mt-1 line-clamp-2 min-h-10 text-xs leading-5 text-muted">
@@ -306,7 +307,7 @@ export async function PublicResourceView({
         ) : null}
         <header className="mb-6 border-b border-border pb-5">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-[-0.035em] text-foreground sm:text-4xl">{resource.name}</h1>
+            <h1 className="text-3xl font-semibold tracking-[-0.035em] text-foreground sm:text-4xl"><ResourceTitle resource={resource} /></h1>
             <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}>
               {t(`statuses.${resource.status}`, {
                 defaultValue: humanize(resource.status),

@@ -142,6 +142,7 @@ async function loadRequestDtos(
       requestId: internalRequestLines.requestId,
       resourceId: internalRequestLines.resourceId,
       resourceName: resources.name,
+      resourceSubtitle: resources.subtitle,
       resourceSku: resources.sku,
       resourceStatus: resources.status,
       currentQuantity: resources.quantity,
@@ -237,6 +238,7 @@ async function loadRequestDtos(
         resource: {
           id: line.resourceId,
           name: line.resourceName,
+          subtitle: line.resourceSubtitle,
           sku: line.resourceSku,
           status: line.resourceStatus,
           currentQuantity: line.currentQuantity,
@@ -1057,6 +1059,7 @@ export async function listReservationCalendar(
       lineId: internalRequestLines.id,
       resourceId: resources.id,
       resourceName: resources.name,
+      resourceSubtitle: resources.subtitle,
       quantity: internalRequestLines.quantity,
     })
     .from(internalRequests)
@@ -1098,6 +1101,7 @@ export async function listReservationCalendar(
           id: inventoryAssignments.id,
           resourceId: resources.id,
           resourceName: resources.name,
+          resourceSubtitle: resources.subtitle,
           quantity: inventoryAssignments.quantity,
           startsAt: inventoryAssignments.startsAt,
           dueAt: inventoryAssignments.dueAt,
@@ -1133,6 +1137,7 @@ export async function listReservationCalendar(
         reference: row.reference,
         status: row.status,
         title: row.resourceName,
+        resourceSubtitle: row.resourceSubtitle,
         subtitle:
           (row.deliveryResourceId
             ? deliveryNames.get(row.deliveryResourceId)
@@ -1149,6 +1154,7 @@ export async function listReservationCalendar(
         reference: null,
         status: "reserved" as const,
         title: row.resourceName,
+        resourceSubtitle: row.resourceSubtitle,
         subtitle: row.assigneeLabel || row.note || "Reservation",
         resourceId: row.resourceId,
         quantity: row.quantity,

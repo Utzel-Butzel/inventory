@@ -52,6 +52,7 @@ const variantInheritedCatalogFieldSet = new Set<string>(
 );
 
 export type ResourceFamilyMemberDto = {
+  subtitle: string;
   id: string;
   name: string;
   type: string;
@@ -231,6 +232,7 @@ const familyMemberDto = (
 ): ResourceFamilyMemberDto => ({
   id: resource.id,
   name: resource.name,
+  subtitle: resource.subtitle,
   type: resource.type,
   status: resource.status,
   sku: resource.sku,

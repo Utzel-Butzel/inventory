@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import {
   OrganizationLink as Link,
   useOrganizationAllowsNegativeStock,
@@ -69,6 +70,7 @@ type ResourceCover = {
 };
 
 type BomResource = {
+  subtitle?: string | null;
   id: string;
   name: string;
   quantity: number;
@@ -76,6 +78,7 @@ type BomResource = {
 };
 
 type BomComponent = {
+  subtitle?: string | null;
   id: string;
   slotKey: string;
   resourceId: string;
@@ -1041,7 +1044,7 @@ function AssemblyResourceManager({
                             <Package className="size-4" aria-hidden="true" />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[14px] font-semibold text-foreground">{resource.name}</span>
+                            <span className="block truncate text-[14px] font-semibold text-foreground"><ResourceTitle resource={resource} /></span>
                             <span className="mt-0.5 block truncate text-[11px] text-muted">
                               {resource.sku || t("assembly:labels.noSku")} · {t("assembly:availableCount", { count: resource.quantity })}
                             </span>
@@ -1088,7 +1091,7 @@ function AssemblyResourceManager({
                               href={`/inventory/${component.resourceId}`}
                               className="min-w-0 truncate text-[14px] font-semibold text-foreground hover:text-brand"
                             >
-                              {component.name}
+                              <ResourceTitle resource={component} />
                             </Link>
                             {variantOrigin ? (
                               <Badge
@@ -1420,7 +1423,7 @@ function AssemblyResourceManager({
                                 cover={component.cover}
                               />
                               <div className="min-w-0">
-                                <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[13px] font-semibold text-foreground hover:text-brand">{component.name}</Link>
+                                <Link href={`/inventory/${component.resourceId}/stock`} className="block truncate text-[13px] font-semibold text-foreground hover:text-brand"><ResourceTitle resource={component} /></Link>
                                 <p className="mt-0.5 text-[10px] text-muted">
                                   {t("assembly:perFinishedQuantity", {
                                     count: displayedComponentQuantity(component),
@@ -1727,7 +1730,7 @@ export function AssemblyManager(props: {
               .filter((variant) => variant.status !== "archived")
               .map((variant) => (
                 <option key={variant.id} value={variant.id}>
-                  {variant.name}
+                  <ResourceTitle resource={variant} />
                 </option>
               ))}
             <option value={props.resourceId}>

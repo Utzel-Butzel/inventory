@@ -1,6 +1,7 @@
 export type ConnectionDiagramResource = {
   id: string;
   name: string;
+  subtitle?: string | null;
   type?: string | null;
   status?: string | null;
 };
@@ -32,6 +33,7 @@ export type ConnectionDiagramBomComponent = {
   slotKey?: string;
   resourceId: string;
   name: string;
+  subtitle?: string | null;
   type?: string | null;
   status?: string | null;
   quantityPerAssembly: number;
@@ -406,6 +408,7 @@ export function buildResourceConnectionDiagram(
       {
         id: component.resourceId,
         name: component.name,
+        subtitle: component.subtitle,
         type: component.type,
         status: component.status,
       },
@@ -438,6 +441,7 @@ export function buildResourceConnectionDiagram(
       {
         id: parent.resourceId,
         name: parent.name,
+        subtitle: parent.subtitle,
         type: parent.type,
         status: parent.status,
       },
@@ -542,6 +546,9 @@ const canonicalConnectionId = (
 
 /**
  * Expands already-loaded direct payloads into a bounded, cycle-safe graph.
+ * BOM traversal follows components only. Reverse usage belongs in the list
+ * view; following it here would pull unrelated assemblies into a shared part's
+ * subtree.
  * Missing payloads simply leave a node as a leaf; the client can use the
  * returned node depths to decide which resources need another fetch round.
  */
@@ -582,6 +589,7 @@ export function buildResourceConnectionGraph(input: {
     const direct = buildResourceConnectionDiagram({
       currentResourceId,
       ...payload,
+      bomParents: [],
     });
     for (const directNode of [...direct.left, ...direct.right]) {
       // Siblings are useful around the selected root, but recursively joining

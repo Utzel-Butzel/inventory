@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { Check, ExternalLink, LoaderCircle, Plus, Truck, X } from "lucide-react";
 import { useT } from "next-i18next/client";
 import { useRef, useState } from "react";
@@ -52,6 +53,7 @@ export function SalesShipments({
   const shippableLines = order.lines.flatMap<{
     orderLineId: string;
     name: string;
+    subtitle?: string | null;
     quantity: number;
     unitIds?: string[];
   }>((line) => {
@@ -71,10 +73,10 @@ export function SalesShipments({
         .slice(0, remaining)
         .map((unit) => unit.stockUnitId);
       return unitIds.length
-        ? [{ orderLineId: line.id, name: line.resourceName, quantity: unitIds.length, unitIds }]
+        ? [{ orderLineId: line.id, name: line.resourceName, subtitle: line.resourceSubtitle, quantity: unitIds.length, unitIds }]
         : [];
     }
-    return [{ orderLineId: line.id, name: line.resourceName, quantity: remaining }];
+    return [{ orderLineId: line.id, name: line.resourceName, subtitle: line.resourceSubtitle, quantity: remaining }];
   });
   const shippableQuantity = shippableLines.reduce(
     (total, line) => total + line.quantity,
@@ -235,7 +237,7 @@ export function SalesShipments({
             <ul className="mt-2 space-y-1 text-xs text-muted">
               {shippableLines.map((line) => (
                 <li key={line.orderLineId}>
-                  {line.quantity} × {line.name}
+                  {line.quantity} × <ResourceTitle resource={line} />
                   {line.unitIds?.length
                     ? ` · ${line.unitIds
                       .map(
@@ -359,7 +361,7 @@ export function SalesShipments({
               <ul className="mt-3 space-y-1 text-xs text-muted">
                 {shipment.lines.map((line) => (
                   <li key={line.id}>
-                    {line.quantity} × {line.resourceName}
+                    {line.quantity} × <ResourceTitle resource={{ name: line.resourceName, subtitle: line.resourceSubtitle }} />
                     {line.units.length
                       ? ` · ${line.units.map((unit) => unit.code).join(", ")}`
                       : ""}

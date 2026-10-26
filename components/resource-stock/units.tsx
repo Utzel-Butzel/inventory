@@ -1,5 +1,6 @@
 "use client";
 
+import { resourceTitleText } from "@/lib/resource-title";
 import { useEffect, useRef, useState } from "react";
 import { formatDate, formatMoney, localDateTime } from "@/lib/client-formatters";
 
@@ -281,7 +282,7 @@ export function StockUnits({
                                 <option value="">{t("resource.units.notAssigned")}</option>
                                 {availableLocations.map((location) => (
                                   <option key={location.id} value={location.id}>
-                                    {location.name} ·{" "}
+                                    {resourceTitleText(location)} ·{" "}
                                     {t(`resource.locationTypes.${location.type}`, {
                                       defaultValue: location.type,
                                     })}

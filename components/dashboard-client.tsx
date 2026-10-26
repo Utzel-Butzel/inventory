@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import { useT } from "next-i18next/client";
@@ -252,7 +253,7 @@ export function DashboardClient() {
                         </div>
                         <div className="min-w-0">
                           <p className="truncate text-[14px] font-semibold text-foreground transition group-hover:text-brand">
-                            {resource.name}
+                            <ResourceTitle resource={resource} />
                           </p>
                           <div className="mt-1 flex min-w-0 items-center gap-2 text-[11px] text-muted">
                             <span>{typeLabel(resource.type)}</span>

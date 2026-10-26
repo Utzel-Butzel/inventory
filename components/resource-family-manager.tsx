@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import {
   ArrowRight,
   Barcode,
@@ -32,6 +33,7 @@ import {
 type FamilyRole = "standalone" | "primary" | "variant";
 
 type ResourceFamilyMember = {
+  subtitle?: string | null;
   id: string;
   name: string;
   type: string;
@@ -589,7 +591,7 @@ export function ResourceFamilyManager({
                   </option>
                   {availableCandidates.map((resource) => (
                     <option key={resource.id} value={resource.id}>
-                      {resource.name}
+                      <ResourceTitle resource={resource} />
                       {resource.sku ? ` · ${resource.sku}` : ""}
                     </option>
                   ))}
@@ -747,7 +749,7 @@ function FamilyMemberRow({
             href={`/inventory/${member.id}`}
             className="truncate text-sm font-semibold text-foreground hover:text-brand"
           >
-            {member.name}
+            <ResourceTitle resource={member} />
           </Link>
           <Badge tone={statusTone(member.status)}>{statusLabel}</Badge>
           {member.overriddenFields.length ? (

@@ -1,5 +1,6 @@
 "use client";
 
+import { resourceTitleText } from "@/lib/resource-title";
 import type { TFunction } from "i18next";
 import {
   ChevronDown,
@@ -821,7 +822,7 @@ function OptionEditor({
                   >
                     <option value="">{loadingResources ? t("options.editor.loadingComponents") : t("options.editor.selectComponent")}</option>
                     {sortedResources.map((resource) => (
-                      <option key={resource.id} value={resource.id}>{resource.name}{resource.sku ? ` · ${resource.sku}` : ""}</option>
+                      <option key={resource.id} value={resource.id}>{resourceTitleText(resource)}{resource.sku ? ` · ${resource.sku}` : ""}</option>
                     ))}
                   </select>
                 ) : (

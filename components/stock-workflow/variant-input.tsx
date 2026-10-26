@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { GitBranch } from "lucide-react";
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import { Toggle } from "./fields";
@@ -39,10 +40,10 @@ export function WorkflowVariantInput({
             const variants = resources.filter((item) => item.variantOfResourceId === target.resourceId);
             return (
               <div key={target.resourceId}>
-                <p className="text-[12px] font-semibold text-muted-strong">{target.name}</p>
+                <p className="text-[12px] font-semibold text-muted-strong"><ResourceTitle resource={target} /></p>
                 {variants.length ? (
                   <ul className="mt-2 flex flex-wrap gap-2" aria-label={t("workflows.steps.inputs.variants.optionsFor", { name: target.name })}>
-                    {variants.map((variant) => <li key={variant.resourceId} className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[12px] text-muted-strong">{variant.name}</li>)}
+                    {variants.map((variant) => <li key={variant.resourceId} className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[12px] text-muted-strong"><ResourceTitle resource={variant} /></li>)}
                   </ul>
                 ) : (
                   <p className="mt-1 text-[12px] leading-5 text-muted">{t("workflows.steps.inputs.variants.empty")}</p>

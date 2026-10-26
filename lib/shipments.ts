@@ -65,6 +65,7 @@ export type ShipmentLineDto = {
   orderLineId: string;
   resourceId: string;
   resourceName: string;
+  resourceSubtitle?: string | null;
   quantity: number;
   units: ShipmentUnitDto[];
 };
@@ -128,6 +129,7 @@ export async function loadShipmentsForOrders(
       orderLineId: orderShipmentLines.orderLineId,
       resourceId: orderLines.resourceId,
       resourceName: resources.name,
+      resourceSubtitle: resources.subtitle,
       quantity: orderShipmentLines.quantity,
     })
     .from(orderShipmentLines)
@@ -213,6 +215,7 @@ export async function loadShipmentsForOrders(
       orderLineId: line.orderLineId,
       resourceId: line.resourceId,
       resourceName: line.resourceName,
+      resourceSubtitle: line.resourceSubtitle,
       quantity: line.quantity,
       units: unitsByLine.get(line.id) ?? [],
     });

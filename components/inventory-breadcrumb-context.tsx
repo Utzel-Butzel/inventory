@@ -10,6 +10,7 @@ import {
 } from "react";
 
 export type InventoryBreadcrumbItem = {
+  subtitle?: string | null;
   href: string;
   name: string;
 };
@@ -38,15 +39,16 @@ export function useInventoryBreadcrumb(
   const setItem = useContext(InventoryBreadcrumbContext);
   const href = item?.href;
   const name = item?.name;
+  const subtitle = item?.subtitle;
 
   useEffect(() => {
     if (!setItem || !href || !name) return;
 
-    setItem({ href, name });
+    setItem({ href, name, subtitle });
     return () => {
       setItem((current) => (current?.href === href ? null : current));
     };
-  }, [href, name, setItem]);
+  }, [href, name, subtitle, setItem]);
 }
 
 export function InventoryBreadcrumb(item: InventoryBreadcrumbItem) {

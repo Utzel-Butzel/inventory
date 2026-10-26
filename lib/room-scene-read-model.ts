@@ -145,6 +145,7 @@ export function assembleRoomSceneManifests(
           resource: {
             id: resource.id,
             name: resource.name,
+            subtitle: resource.subtitle,
             description: resource.description,
             type: resource.type,
             status: resource.status,

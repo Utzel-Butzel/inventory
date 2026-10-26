@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
 import { orderListItems } from "@/lib/list-view-contract";
 
@@ -277,6 +278,7 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
     appendLine({
       resourceId: resource.id,
       resourceName: resource.name,
+      resourceSubtitle: resource.subtitle,
       resourceSku: resource.sku,
       quantity: "1",
       unitPrice:
@@ -558,7 +560,7 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
                 <div className="absolute inset-x-4 top-[calc(100%-14px)] z-20 max-h-64 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-lg lg:inset-x-5">
                   {itemResults.length ? itemResults.map((resource) => (
                     <button key={resource.id} type="button" onClick={() => addItem(resource)} className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-surface-hover">
-                      <span><span className="block text-sm font-semibold text-foreground">{resource.name}</span><span className="text-xs text-muted">{resource.sku || t("fields.noSku")} · {resource.quantity} {t("fields.available")}</span></span>
+                      <span><span className="block text-sm font-semibold text-foreground"><ResourceTitle resource={resource} /></span><span className="text-xs text-muted">{resource.sku || t("fields.noSku")} · {resource.quantity} {t("fields.available")}</span></span>
                       <Plus className="size-4 text-brand" />
                     </button>
                   )) : <p className="px-3 py-4 text-center text-sm text-muted">{t("empty.noInventory")}</p>}
@@ -569,7 +571,7 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
             <div className="divide-y divide-border">
               {lineFields.map((line, index) => (
                 <div key={line.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(180px,1fr)_110px_140px_minmax(160px,1fr)_auto] sm:items-end lg:p-5">
-                  <div className="min-w-0 self-center"><p className="truncate text-sm font-semibold text-foreground">{line.resourceName}</p><p className="truncate text-xs text-muted">{line.resourceSku || t("fields.noSku")}</p></div>
+                  <div className="min-w-0 self-center"><p className="truncate text-sm font-semibold text-foreground"><ResourceTitle resource={{ name: line.resourceName, subtitle: line.resourceSubtitle }} /></p><p className="truncate text-xs text-muted">{line.resourceSku || t("fields.noSku")}</p></div>
                   <Field label={t("fields.quantity")} error={formErrors.lines?.[index]?.quantity?.message} required><NumberInput min="1" step="1" inputMode="numeric" {...register(`lines.${index}.quantity`, { required: t("validation.quantityRequired"), validate: (value) => Number.isInteger(Number(value)) && Number(value) >= 1 || t("validation.quantityInvalid") })} /></Field>
                   {type === "sale" ? <Field label={t("fields.unitPrice")} error={formErrors.lines?.[index]?.unitPrice?.message}><CurrencyInput currency={line.currency} {...register(`lines.${index}.unitPrice`, { validate: (value) => !value.trim() || Number.isFinite(Number(value.replace(",", "."))) && Number(value.replace(",", ".")) >= 0 || t("validation.priceInvalid") })} className="tabular-nums" /></Field> : <span />}
                   <Field label={t("fields.lineNote")} error={formErrors.lines?.[index]?.note?.message}><Input {...register(`lines.${index}.note`, { maxLength: { value: 20_000, message: t("validation.maxLength", { max: 20_000 }) } })} /></Field>
@@ -634,7 +636,7 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
                               <div className="grid gap-3 px-4 py-4 sm:px-5 lg:grid-cols-[minmax(210px,1fr)_110px_110px_100px_minmax(220px,auto)] lg:items-center">
                                 <div className="min-w-0">
                                   <Link href={`/inventory/${line.resourceId}/stock`} className="truncate text-sm font-semibold text-foreground hover:text-brand">
-                                    {line.resourceName}
+                                    <ResourceTitle resource={{ name: line.resourceName, subtitle: line.resourceSubtitle }} />
                                   </Link>
                                   <p className="mt-0.5 text-xs text-muted">
                                     {line.resourceSku || t("fields.noSku")} · {line.trackingMode === "serialized" ? t("tracking.serialized") : line.unitName}

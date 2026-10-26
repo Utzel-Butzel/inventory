@@ -1,5 +1,7 @@
 "use client";
 
+import { resourceTitleText } from "@/lib/resource-title";
+import { ResourceTitle } from "@/components/resource-title";
 import { useEffect, useId, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
@@ -982,10 +984,10 @@ export function AppShell({
                 <li className="hidden min-w-0 shrink sm:block">
                   <Link
                     href={resourceItemBreadcrumb.href}
-                    title={resourceItemBreadcrumb.name}
+                    title={resourceTitleText(resourceItemBreadcrumb)}
                     className="block max-w-28 truncate font-medium text-muted transition hover:text-brand sm:max-w-56"
                   >
-                    {resourceItemBreadcrumb.name}
+                    <ResourceTitle resource={resourceItemBreadcrumb} />
                   </Link>
                 </li>
               ) : null}

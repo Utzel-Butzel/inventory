@@ -1,5 +1,7 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
+import { resourceTitleText } from "@/lib/resource-title";
 import {
   ArrowDownToLine,
   Boxes,
@@ -266,7 +268,7 @@ export function ResourceRelationsManager({
                 >
                   <option value="">{t("relations.chooseParent")}</option>
                   {possibleParents.map((resource) => (
-                    <option key={resource.id} value={resource.id}>{resource.name} · {resource.type}</option>
+                    <option key={resource.id} value={resource.id}>{resourceTitleText(resource)} · {resource.type}</option>
                   ))}
                 </select>
                 <Button
@@ -347,7 +349,7 @@ export function ResourceRelationsManager({
               >
                 <option value="">{t("relations.chooseItem")}</option>
                 {resources.map((resource) => (
-                  <option key={resource.id} value={resource.id}>{resource.name} · {resource.type}</option>
+                  <option key={resource.id} value={resource.id}>{resourceTitleText(resource)} · {resource.type}</option>
                 ))}
               </select>
               <Button
@@ -388,7 +390,7 @@ function RelationRow({
       <ArrowDownToLine className="size-4 shrink-0 text-muted" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-muted-strong">
-          {resource?.name ?? t("relations.missingItem")}
+          {resource ? <ResourceTitle resource={resource} /> : t("relations.missingItem")}
         </p>
         <p className="mt-0.5 text-[11px] text-muted">
           {label} · {resource?.type ?? t("relations.unknown")}

@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import {
   AlertTriangle,
   CalendarDays,
@@ -25,6 +26,7 @@ type CalendarEntry = {
   reference: string | null;
   status: "submitted" | "approved" | "fulfilled" | "reserved";
   title: string;
+  resourceSubtitle?: string | null;
   subtitle: string;
   resourceId: string;
   quantity: number;
@@ -296,7 +298,7 @@ export function ReservationCalendar() {
                             entryAccent(entry.status),
                           )}
                         >
-                          {number.format(entry.quantity)} × {entry.title}
+                          {number.format(entry.quantity)} × <ResourceTitle resource={{ name: entry.title, subtitle: entry.resourceSubtitle }} />
                         </span>
                       ))}
                       {dayEntries.length > 3 ? (
@@ -337,7 +339,7 @@ export function ReservationCalendar() {
               <article key={entry.id} className="rounded-xl border border-border bg-surface-subtle p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">{entry.title}</p>
+                    <p className="truncate text-sm font-semibold text-foreground"><ResourceTitle resource={{ name: entry.title, subtitle: entry.resourceSubtitle }} /></p>
                     <p className="mt-0.5 truncate text-[12px] text-muted">
                       {entry.reference ?? t("calendar.directReservation")}
                     </p>

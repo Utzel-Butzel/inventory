@@ -1,5 +1,7 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
+import { resourceTitleText } from "@/lib/resource-title";
 import { useEffect, useId, useState } from "react";
 import { useT } from "next-i18next/client";
 import Select from "react-select";
@@ -46,8 +48,8 @@ export function StockVariantOverview({ family, resourceId, revision, allSelected
   const groups = base?.components.filter((component) => component.choices.length > 1) ?? [];
   const options = [
     { value: "all", label: t("workspace.allVariants"), quantity: family.summary.totalQuantity, cover: family.primary.cover },
-    ...family.variants.map((member) => ({ value: member.id, label: member.name, quantity: member.quantity, cover: member.cover })),
-    { value: family.primary.id, label: family.variants.length ? t("workspace.unassignedName", { name: family.primary.name }) : family.primary.name, quantity: family.primary.quantity, cover: family.primary.cover },
+    ...family.variants.map((member) => ({ value: member.id, label: resourceTitleText(member), title: member, quantity: member.quantity, cover: member.cover })),
+    { value: family.primary.id, label: family.variants.length ? t("workspace.unassignedName", { name: family.primary.name }) : family.primary.name, quantity: family.primary.quantity, cover: family.primary.cover, title: { ...family.primary, name: family.variants.length ? t("workspace.unassignedName", { name: family.primary.name }) : family.primary.name } },
   ];
   const selected = virtualSelected
     ? { value: "virtual", label: virtualName ?? t("workspace.chooseConfiguration"), quantity: 0, cover: family.primary.cover }
@@ -81,7 +83,7 @@ export function StockVariantOverview({ family, resourceId, revision, allSelected
       maxMenuHeight={320}
       formatOptionLabel={(option, { context }) => <span className="flex min-w-0 items-center gap-3">
         <StockThumbnail cover={option.cover} />
-        <span className="min-w-0 flex-1 whitespace-normal break-words text-sm font-semibold">{option.label}</span>
+        <span className="min-w-0 flex-1 whitespace-normal break-words text-sm font-semibold">{"title" in option && option.title ? <ResourceTitle resource={option.title} /> : option.label}</span>
         {context === "menu" ? <span className="shrink-0 text-sm tabular-nums text-muted">{number.format(option.quantity)}</span> : null}
       </span>}
       styles={{
@@ -95,10 +97,10 @@ export function StockVariantOverview({ family, resourceId, revision, allSelected
         indicatorSeparator: () => ({ display: "none" }),
       }}
     />
-    </> : <div className="flex items-center gap-3"><StockThumbnail cover={family.primary.cover} /><h2 className="text-lg font-semibold">{family.primary.name}</h2></div>}
+    </> : <div className="flex items-center gap-3"><StockThumbnail cover={family.primary.cover} /><h2 className="text-lg font-semibold"><ResourceTitle resource={family.primary} /></h2></div>}
     {groups.length ? <details className="mt-3" open={virtualSelected || !family.variants.length}>
       <summary className="cursor-pointer text-sm font-semibold">{t("workspace.chooseConfiguration")}</summary>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">{groups.map((group) => <label key={group.slotKey} className="text-xs font-medium">{group.name}<select value={choices[group.slotKey] ?? ""} className={`${inputClass} mt-1`} onChange={(event) => setChoices((previous) => ({ ...previous, [group.slotKey]: event.target.value }))}><option value="">{t("workspace.choose")}</option>{group.choices.map((choice) => <option key={choice.resourceId} value={choice.resourceId}>{choice.name}</option>)}</select></label>)}</div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">{groups.map((group) => <label key={group.slotKey} className="text-xs font-medium"><ResourceTitle resource={group} /><select value={choices[group.slotKey] ?? ""} className={`${inputClass} mt-1`} onChange={(event) => setChoices((previous) => ({ ...previous, [group.slotKey]: event.target.value }))}><option value="">{t("workspace.choose")}</option>{group.choices.map((choice) => <option key={choice.resourceId} value={choice.resourceId}>{resourceTitleText(choice)}</option>)}</select></label>)}</div>
       <p className="my-3 text-xs text-muted">{t("workspace.virtualHelp")}</p>
       <Button size="sm" disabled={resolving || groups.some((group) => !choices[group.slotKey])} onClick={() => void chooseConfiguration()}>{t("workspace.selectConfiguration")}</Button>
       {error ? <p role="alert" className="mt-2 text-sm text-danger">{error}</p> : null}

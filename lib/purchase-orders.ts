@@ -183,6 +183,7 @@ type OrderLineDtoInput = {
   purchaseOrderId: string;
   resourceId: string;
   resourceName: string;
+  resourceSubtitle?: string | null;
   resourceSku: string | null;
   resourceCurrency: string;
   baseUnitName: string | null;
@@ -204,6 +205,7 @@ const lineDto = (line: OrderLineDtoInput) => ({
   purchaseOrderId: line.purchaseOrderId,
   resourceId: line.resourceId,
   resourceName: line.resourceName,
+  resourceSubtitle: line.resourceSubtitle,
   resourceSku: line.resourceSku,
   resourceCurrency: line.resourceCurrency,
   baseUnitName: line.baseUnitName ?? "unit",
@@ -293,6 +295,7 @@ async function loadOrderLines(
       purchaseOrderId: purchaseOrderLines.orderId,
       resourceId: purchaseOrderLines.resourceId,
       resourceName: resources.name,
+      resourceSubtitle: resources.subtitle,
       resourceSku: resources.sku,
       resourceCurrency: resources.currency,
       baseUnitName: stockSettings.unitName,
@@ -1273,6 +1276,7 @@ export async function receivePurchaseOrderLine(
           purchaseOrderId: purchaseOrderLines.orderId,
           resourceId: purchaseOrderLines.resourceId,
           resourceName: resources.name,
+          resourceSubtitle: resources.subtitle,
           resourceSku: resources.sku,
           resourceCurrency: resources.currency,
           baseUnitName: stockSettings.unitName,

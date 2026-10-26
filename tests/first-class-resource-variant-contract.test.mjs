@@ -144,7 +144,7 @@ test("build API validates component selections while the UI uses the chosen outp
   assert.match(manager, /assembly:output\.recipeHelp/);
   assert.match(
     assemblies,
-    /eq\(media\.kind, "image"\)[\s\S]*coverByResource\.get\(choice\.id\)/,
+    /getResourceCoverSummaries\(organizationId, visibleChoiceIds, executor\)[\s\S]*coverByResource\.get\(choice\.id\)/,
   );
   assert.match(manager, /function ResourceThumbnail/);
   assert.match(

@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { ResourceItemNavigation } from "@/components/resource-item-navigation";
 
 import {
@@ -738,7 +739,7 @@ export function ResourceDetails({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold text-foreground sm:text-4xl">
-              {resource.name}
+              <ResourceTitle resource={resource} />
             </h1>
             <span
               className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ring-1 ring-inset ${statusStyles[resource.status] ?? statusStyles.archived}`}

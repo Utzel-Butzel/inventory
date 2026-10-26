@@ -214,6 +214,7 @@ const configuredWorkflowTargetIds = (
 ) => workflow.resourceIds.length ? workflow.resourceIds : [workflow.resourceId];
 
 export type ScanWorkflowTargetOption = {
+  subtitle?: string;
   id: string;
   name: string;
   quantity: number;
@@ -222,6 +223,7 @@ export type ScanWorkflowTargetOption = {
 };
 
 export type ScanWorkflowTargetGroup = {
+  subtitle?: string;
   resourceId: string;
   name: string;
   options: ScanWorkflowTargetOption[];
@@ -240,6 +242,7 @@ export async function getScanWorkflowTargetGroups(
     .select({
       id: resources.id,
       name: resources.name,
+      subtitle: resources.subtitle,
       quantity: resources.quantity,
       trackingMode: stockSettings.trackingMode,
       updatedAt: resources.updatedAt,
@@ -281,6 +284,7 @@ export async function getScanWorkflowTargetGroups(
           .select({
             id: resources.id,
             name: resources.name,
+            subtitle: resources.subtitle,
             quantity: resources.quantity,
             trackingMode: stockSettings.trackingMode,
             updatedAt: resources.updatedAt,
@@ -329,7 +333,7 @@ export async function getScanWorkflowTargetGroups(
             updatedAt: base.updatedAt.toISOString(),
           },
         ];
-    return [{ resourceId, name: base.name, options }];
+    return [{ resourceId, name: base.name, subtitle: base.subtitle, options }];
   });
 }
 
@@ -1020,11 +1024,12 @@ const resolveWorkflowOperation = (
 };
 
 const resourcePreview = (
-  resource: { id: string; name: string; quantity: number },
+  resource: { id: string; name: string; subtitle?: string; quantity: number },
   trackingMode: "bulk" | "serialized",
 ) => ({
   id: resource.id,
   name: resource.name,
+  subtitle: resource.subtitle,
   quantity: resource.quantity,
   trackingMode,
 });
@@ -1367,6 +1372,7 @@ async function executeNonUnitScan(
     .select({
       id: resources.id,
       name: resources.name,
+      subtitle: resources.subtitle,
       quantity: resources.quantity,
       updatedAt: resources.updatedAt,
       trackingMode: stockSettings.trackingMode,
@@ -1642,6 +1648,7 @@ async function executeStockScanForTarget(
         .select({
           id: resources.id,
           name: resources.name,
+          subtitle: resources.subtitle,
           quantity: resources.quantity,
           location: resources.location,
           type: resources.type,
@@ -1891,6 +1898,7 @@ async function executeStockScanForTarget(
         resource: {
           id: resource.id,
           name: resource.name,
+          subtitle: resource.subtitle,
           quantity: balanceAfter,
         },
         unit: unitDto(savedUnit),

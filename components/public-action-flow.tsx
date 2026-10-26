@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { useMemo, useState } from "react";
 import {
   Check,
@@ -282,7 +283,7 @@ export function PublicActionFlow({ action }: { action: PublicActionFlowView }) {
                             className="size-4 accent-brand-solid"
                           />
                         )}
-                        {group.name}
+                        <ResourceTitle resource={group} />
                       </label>
                       {hasVariations && targetSelected ? (
                         <div
@@ -315,7 +316,7 @@ export function PublicActionFlow({ action }: { action: PublicActionFlowView }) {
                                     : "border-border bg-surface text-muted-strong hover:border-border-strong",
                                 )}
                               >
-                                <span className="flex-1">{option.name}</span>
+                                <span className="flex-1"><ResourceTitle resource={option} /></span>
                                 {selected ? (
                                   <Check className="size-3.5" aria-hidden="true" />
                                 ) : null}

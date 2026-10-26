@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import {
   Check,
   ChevronLeft,
@@ -940,7 +941,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-[14px] font-semibold text-foreground">
-                              {resource.name}
+                              <ResourceTitle resource={resource} />
                             </span>
                             <span className="mt-0.5 block truncate text-[12px] text-muted">
                               {resource.sku || t("selection.noSku")}

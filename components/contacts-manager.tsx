@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
 import { orderListItems } from "@/lib/list-view-contract";
 
@@ -51,6 +52,7 @@ import { fetchJson } from "@/lib/client-types";
 import type { ContactRole } from "@/lib/contact-contract";
 
 type LinkedResource = {
+  subtitle?: string | null;
   id: string;
   name: string;
   sku: string | null;
@@ -538,7 +540,7 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedResources.map((resource) => (
                       <span key={resource.id} className="inline-flex items-center gap-1.5 rounded-lg bg-surface-muted px-2.5 py-1.5 text-xs text-foreground">
-                        {resource.name}
+                        <ResourceTitle resource={resource} />
                         <button type="button" onClick={() => setSelectedResources((current) => current.filter((entry) => entry.id !== resource.id))} className="text-muted hover:text-danger" aria-label={t("actions.removeInventory", { name: resource.name })}>
                           <X className="size-3.5" aria-hidden="true" />
                         </button>
@@ -562,7 +564,7 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
                       const selected = selectedIds.has(resource.id);
                       return (
                         <button key={resource.id} type="button" disabled={selected} onClick={() => setSelectedResources((current) => [...current, resource])} className="flex w-full items-center justify-between border-b border-border px-3 py-2.5 text-left text-sm last:border-b-0 hover:bg-surface-subtle disabled:bg-surface-muted">
-                          <span><span className="font-medium text-foreground">{resource.name}</span>{resource.sku ? <span className="ml-2 text-xs text-muted">{resource.sku}</span> : null}</span>
+                          <span><span className="font-medium text-foreground"><ResourceTitle resource={resource} /></span>{resource.sku ? <span className="ml-2 text-xs text-muted">{resource.sku}</span> : null}</span>
                           <span className="text-xs font-medium text-brand">{selected ? t("form.assigned") : t("form.assign")}</span>
                         </button>
                       );
@@ -620,7 +622,7 @@ export function ContactsManager({ canManage }: { canManage: boolean }) {
                         {address(contact) ? <p className="mt-1 max-w-64 leading-5 text-muted">{address(contact)}</p> : null}
                       </td>
                       <td className="px-4 py-4">
-                        {contact.resources.length ? <div className="flex max-w-sm flex-wrap gap-1.5">{contact.resources.slice(0, 4).map((resource) => <Link key={resource.id} href={`/inventory/${resource.id}`} className="rounded-lg bg-surface-muted px-2 py-1 text-xs text-foreground hover:text-brand">{resource.name}</Link>)}{contact.resources.length > 4 ? <Badge>+{contact.resources.length - 4}</Badge> : null}</div> : <span className="text-xs text-muted">{t("table.none")}</span>}
+                        {contact.resources.length ? <div className="flex max-w-sm flex-wrap gap-1.5">{contact.resources.slice(0, 4).map((resource) => <Link key={resource.id} href={`/inventory/${resource.id}`} className="rounded-lg bg-surface-muted px-2 py-1 text-xs text-foreground hover:text-brand"><ResourceTitle resource={resource} /></Link>)}{contact.resources.length > 4 ? <Badge>+{contact.resources.length - 4}</Badge> : null}</div> : <span className="text-xs text-muted">{t("table.none")}</span>}
                       </td>
                       <td className="px-4 py-4 text-right"><span className="font-semibold text-foreground">{contact.movementCount}</span></td>
                       <td className="px-4 py-3">

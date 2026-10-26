@@ -21,7 +21,7 @@ test("paid AI operations have bounded defaults", () => {
     windowMs: 60_000,
   });
   assert.deepEqual(paidAiRateLimitPolicy("cover", {}), {
-    limit: 12,
+    limit: 60,
     windowMs: 3_600_000,
   });
   assert.deepEqual(paidAiRateLimitPolicy("translate", {}), {

@@ -97,6 +97,7 @@ export type StockData = {
     cover?: StockCover | null;
     id: string;
     name: string;
+    subtitle?: string | null;
     quantity: number;
     type: string;
     categories: Array<{ name: string; color?: string }>;

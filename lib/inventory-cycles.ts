@@ -47,6 +47,7 @@ export async function getInventoryCycle(
     .select({
       id: resources.id,
       name: resources.name,
+      subtitle: resources.subtitle,
       quantity: resources.quantity,
       trackingMode: stockSettings.trackingMode,
     })
@@ -461,6 +462,7 @@ export async function listDueInventoryCycles(organizationId: string) {
     .select({
       resourceId: resources.id,
       name: resources.name,
+      subtitle: resources.subtitle,
       type: resources.type,
       quantity: resources.quantity,
       intervalDays: inventoryCyclePolicies.intervalDays,

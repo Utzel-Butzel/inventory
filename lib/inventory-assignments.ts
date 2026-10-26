@@ -626,6 +626,7 @@ export async function createInventoryAssignment(
         .select({
           id: resources.id,
           name: resources.name,
+          subtitle: resources.subtitle,
           quantity: resources.quantity,
           allowNegativeStock: organizations.allowNegativeStock,
         })
@@ -970,6 +971,7 @@ export async function listLoanAssignments(
       resource: {
         id: resources.id,
         name: resources.name,
+        subtitle: resources.subtitle,
         sku: resources.sku,
         status: resources.status,
       },
@@ -1110,6 +1112,7 @@ export async function activateInventoryReservation(
         .select({
           id: resources.id,
           name: resources.name,
+          subtitle: resources.subtitle,
           quantity: resources.quantity,
           allowNegativeStock: organizations.allowNegativeStock,
         })

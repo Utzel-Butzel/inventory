@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { CollectionViewToolbar, ListViewResults, useCollectionView } from "@/components/list-view";
 
 
@@ -586,7 +587,7 @@ export function PublicShareManager() {
                           </span>
                           <span className="min-w-0">
                             <span className="block truncate text-xs font-semibold text-foreground">
-                              {resource.name}
+                              <ResourceTitle resource={resource} />
                             </span>
                             <span className="mt-0.5 block truncate text-[11px] text-muted">
                               {resource.sku || resource.location || resource.type}

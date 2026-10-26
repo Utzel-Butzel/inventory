@@ -51,6 +51,7 @@ import { useT } from "next-i18next/client";
 import { AiPromptPicker, useAiPromptTemplates } from "@/components/ai-prompt-picker";
 import type { AiPromptKind, AiPromptSelection } from "@/lib/ai-prompt-templates";
 import {
+  ApiRequestError,
   fetchJson,
   type ClientMedia,
   type ClientResource,
@@ -933,6 +934,25 @@ export function ResourceEditor({
     }
   };
 
+  const imageGenerationErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof ApiRequestError) {
+      if (error.details.code === "AI_IMAGE_GENERATION_DISABLED") {
+        return t("errors.imageGenerationDisabled");
+      }
+      if (
+        error.details.code === "AI_IMAGE_RATE_LIMIT_REACHED" &&
+        typeof error.details.limit === "number" &&
+        typeof error.details.retryAfterSeconds === "number"
+      ) {
+        return t("errors.imageRateLimit", {
+          limit: error.details.limit,
+          minutes: Math.max(1, Math.ceil(error.details.retryAfterSeconds / 60)),
+        });
+      }
+    }
+    return error instanceof Error ? error.message : fallback;
+  };
+
   const runCover = async (
     id = resourceId,
     sourceMediaId = coverSourceMediaId ?? undefined,
@@ -964,7 +984,7 @@ export function ResourceEditor({
       return response.resource;
     } catch (coverError) {
       setError(
-        coverError instanceof Error ? coverError.message : t("errors.cover"),
+        imageGenerationErrorMessage(coverError, t("errors.cover")),
       );
       return null;
     } finally {
@@ -1014,7 +1034,7 @@ export function ResourceEditor({
       return response.resource;
     } catch (imageError) {
       setError(
-        imageError instanceof Error ? imageError.message : t("errors.image"),
+        imageGenerationErrorMessage(imageError, t("errors.image")),
       );
       return null;
     } finally {
@@ -1235,6 +1255,7 @@ export function ResourceEditor({
   const hasImage =
     itemMedia.some((item) => item.kind === "image") ||
     files.some((file) => file.type.startsWith("image/"));
+  const inheritedCover = !hasImage ? resource?.cover ?? null : null;
   const mapHref = useMemo(() => {
     if (!form.gpsLatitude || !form.gpsLongitude) return null;
     return `https://www.openstreetmap.org/?mlat=${encodeURIComponent(form.gpsLatitude)}&mlon=${encodeURIComponent(form.gpsLongitude)}#map=18/${encodeURIComponent(form.gpsLatitude)}/${encodeURIComponent(form.gpsLongitude)}`;
@@ -1744,6 +1765,22 @@ export function ResourceEditor({
                         : "media.objectCaptureNeedsImageDescription",
                     )}
                   </p>
+                </div>
+              </div>
+            ) : null}
+
+            {inheritedCover ? (
+              <div className="mb-4 flex items-center gap-4 rounded-xl border border-border bg-surface-subtle p-3">
+                <ResponsiveMediaImage
+                  media={inheritedCover}
+                  alt={inheritedCover.altText || inheritedCover.name}
+                  widths={[192, 384]}
+                  sizes="96px"
+                  className="size-24 shrink-0 rounded-lg object-contain"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{t("media.inheritedCover")}</p>
+                  <p className="mt-1 text-xs text-muted">{t("media.inheritedCoverDescription")}</p>
                 </div>
               </div>
             ) : null}

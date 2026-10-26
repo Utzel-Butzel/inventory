@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
 import { orderListItems } from "@/lib/list-view-contract";
 
@@ -77,6 +78,7 @@ type PurchaseOrderLine = {
   id: string;
   resourceId: string;
   resourceName: string;
+  resourceSubtitle?: string | null;
   resourceSku: string | null;
   resourceCurrency: string;
   baseUnitName: string;
@@ -120,6 +122,7 @@ type OrdersEnvelope = {
 type DraftLine = {
   resourceId: string;
   resourceName: string;
+  resourceSubtitle?: string | null;
   resourceSku: string | null;
   orderedQuantity: string;
   expectedAt: string;
@@ -156,6 +159,7 @@ type ReceiptForm = {
   orderId: string;
   lineId: string;
   resourceName: string;
+  resourceSubtitle?: string | null;
   trackingMode: TrackingMode;
   maxQuantity: number;
   quantity: string;
@@ -234,6 +238,7 @@ function lineFromResource(
   return {
     resourceId: resource.id,
     resourceName: resource.name,
+    resourceSubtitle: resource.subtitle,
     resourceSku: resource.sku,
     orderedQuantity: "1",
     expectedAt: "",
@@ -461,7 +466,7 @@ export function PurchaseOrdersManager({
       return [
         order.reference,
         order.supplier,
-        ...order.lines.map((line) => `${line.resourceName} ${line.resourceSku ?? ""}`),
+        ...order.lines.map((line) => `$<ResourceTitle resource={{ name: line.resourceName, subtitle: line.resourceSubtitle }} /> ${line.resourceSku ?? ""}`),
       ]
         .filter(Boolean)
         .join(" ")
@@ -605,6 +610,7 @@ export function PurchaseOrdersManager({
       orderId: order.id,
       lineId: line.id,
       resourceName: line.resourceName,
+      resourceSubtitle: line.resourceSubtitle,
       trackingMode: line.trackingMode,
       maxQuantity: initialQuantity,
       quantity: String(initialQuantity),
@@ -819,7 +825,7 @@ export function PurchaseOrdersManager({
                 <SearchInput aria-label={t("orders.create.searchItemsLabel")} loading={searchingItems} value={itemQuery} onFocus={() => setItemSearchOpen(true)} onChange={(event) => { setItemQuery(event.target.value); setItemSearchOpen(true); }} placeholder={t("orders.create.searchItemsPlaceholder")} />
                 {itemSearchOpen && itemQuery.trim().length >= 2 ? (
                   <div className="absolute inset-x-4 top-[calc(100%-14px)] z-30 overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow-md)] sm:inset-x-5">
-                    {itemResults.length ? <div className="max-h-72 overflow-y-auto p-1.5">{itemResults.map((resource) => <button key={resource.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => addDraftLine(resource)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-hover"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-muted text-muted"><Package className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-semibold text-foreground">{resource.name}</span><span className="mt-0.5 block truncate text-[11px] text-muted">{resource.sku || t("orders.noSku")} · {t("orders.create.available", { quantity: numberFormat.format(resource.quantity) })}</span></span><Plus className="size-4 text-brand" aria-hidden="true" /></button>)}</div> : <div className="px-4 py-5 text-center text-[13px] text-muted">{searchingItems ? t("orders.create.searching") : t("orders.create.noItemsFound")}</div>}
+                    {itemResults.length ? <div className="max-h-72 overflow-y-auto p-1.5">{itemResults.map((resource) => <button key={resource.id} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => addDraftLine(resource)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-hover"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-surface-muted text-muted"><Package className="size-4" aria-hidden="true" /></span><span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-semibold text-foreground"><ResourceTitle resource={resource} /></span><span className="mt-0.5 block truncate text-[11px] text-muted">{resource.sku || t("orders.noSku")} · {t("orders.create.available", { quantity: numberFormat.format(resource.quantity) })}</span></span><Plus className="size-4 text-brand" aria-hidden="true" /></button>)}</div> : <div className="px-4 py-5 text-center text-[13px] text-muted">{searchingItems ? t("orders.create.searching") : t("orders.create.noItemsFound")}</div>}
                   </div>
                 ) : null}
               </div>
@@ -829,7 +835,7 @@ export function PurchaseOrdersManager({
               <div className="divide-y divide-border">
                 {lineFields.map((line, index) => (
                   <div key={line.id} className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(190px,1fr)_110px_140px_160px_minmax(160px,1fr)_auto] lg:items-start">
-                    <div className="flex min-w-0 items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted"><Package className="size-[18px]" aria-hidden="true" /></span><div className="min-w-0 pt-0.5"><Link href={`/inventory/${line.resourceId}`} className="block truncate text-[14px] font-semibold text-foreground hover:text-brand">{line.resourceName}</Link><p className="mt-1 truncate text-[11px] text-muted">{line.resourceSku || t("orders.noSku")}</p></div></div>
+                    <div className="flex min-w-0 items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted"><Package className="size-[18px]" aria-hidden="true" /></span><div className="min-w-0 pt-0.5"><Link href={`/inventory/${line.resourceId}`} className="block truncate text-[14px] font-semibold text-foreground hover:text-brand"><ResourceTitle resource={{ name: line.resourceName, subtitle: line.resourceSubtitle }} /></Link><p className="mt-1 truncate text-[11px] text-muted">{line.resourceSku || t("orders.noSku")}</p></div></div>
                     <Field label={t("orders.create.orderQuantity")} error={formErrors.lines?.[index]?.orderedQuantity?.message} required description={line.purchaseUnitName ? t("orders.create.purchaseUnitConversion", { factor: numberFormat.format(line.purchaseUnitFactor), unit: line.baseUnitName }) : undefined}><NumberInput min="1" max="2000000000" step="1" inputMode="numeric" {...register(`lines.${index}.orderedQuantity`, { required: t("orders.validation.quantityRequired"), validate: (value) => Number.isInteger(Number(value)) && Number(value) >= 1 || t("orders.validation.quantityInvalid") })} unit={line.purchaseUnitName ?? line.baseUnitName} className="pr-20 tabular-nums" /></Field>
                     <Field label={t("orders.create.unitPrice")} error={formErrors.lines?.[index]?.unitPrice?.message} optionalLabel={t("orders.optional")}><CurrencyInput currency={line.priceCurrency} max="20000000" {...register(`lines.${index}.unitPrice`, { validate: (value) => !Number.isNaN(moneyToCents(value)) || t("orders.validation.priceInvalid") })} placeholder="0.00" className="tabular-nums" /></Field>
                     <Field label={t("orders.create.lineEta")} error={formErrors.lines?.[index]?.expectedAt?.message} optionalLabel={t("orders.optional")}><Input type="date" {...register(`lines.${index}.expectedAt`)} /></Field>
@@ -889,7 +895,7 @@ export function PurchaseOrdersManager({
                           return (
                             <div key={line.id}>
                               <div className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-[minmax(220px,1fr)_95px_95px_130px_140px_auto] lg:items-center">
-                                <div className="flex min-w-0 items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted"><Package className="size-4" aria-hidden="true" /></span><div className="min-w-0"><Link href={`/inventory/${line.resourceId}/stock`} className="block truncate text-[13px] font-semibold text-foreground hover:text-brand">{line.resourceName}</Link><p className="mt-0.5 truncate text-[10px] text-muted">{line.resourceSku || t("orders.noSku")} · {t(`orders.tracking.${line.trackingMode}`)}</p>{line.purchaseUnitName ? <p className="mt-1 text-[10px] text-muted">{t("orders.list.purchaseUnitConversion", { purchaseUnit: line.purchaseUnitName, factor: numberFormat.format(line.purchaseUnitFactor), baseUnit: line.baseUnitName })}</p> : null}{line.note ? <p className="mt-1.5 text-[11px] text-muted">{line.note}</p> : null}</div></div>
+                                <div className="flex min-w-0 items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-muted text-muted"><Package className="size-4" aria-hidden="true" /></span><div className="min-w-0"><Link href={`/inventory/${line.resourceId}/stock`} className="block truncate text-[13px] font-semibold text-foreground hover:text-brand"><ResourceTitle resource={{ name: line.resourceName, subtitle: line.resourceSubtitle }} /></Link><p className="mt-0.5 truncate text-[10px] text-muted">{line.resourceSku || t("orders.noSku")} · {t(`orders.tracking.${line.trackingMode}`)}</p>{line.purchaseUnitName ? <p className="mt-1 text-[10px] text-muted">{t("orders.list.purchaseUnitConversion", { purchaseUnit: line.purchaseUnitName, factor: numberFormat.format(line.purchaseUnitFactor), baseUnit: line.baseUnitName })}</p> : null}{line.note ? <p className="mt-1.5 text-[11px] text-muted">{line.note}</p> : null}</div></div>
                                 <div className="flex items-center justify-between lg:block"><span className="text-[10px] font-semibold uppercase tracking-wide text-muted">{t("orders.list.ordered")}</span><p className="mt-0.5 text-[13px] font-semibold tabular-nums text-foreground">{numberFormat.format(displayedOrderedQuantity)} {displayedUnitName}</p></div>
                                 <div className="flex items-center justify-between lg:block"><span className="text-[10px] font-semibold uppercase tracking-wide text-muted">{t("orders.list.open")}</span><p className={cn("mt-0.5 text-[13px] font-semibold tabular-nums", openQuantity ? "text-brand" : "text-success")}>{numberFormat.format(displayedOpenQuantity)} {displayedUnitName}</p></div>
                                 <div className="flex items-center justify-between lg:block"><span className="text-[10px] font-semibold uppercase tracking-wide text-muted">{t("orders.list.eta")}</span><p className="mt-0.5 text-[12px] font-medium text-muted">{formatDate(line.expectedAt ?? order.expectedAt, locale)}</p></div>

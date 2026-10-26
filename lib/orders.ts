@@ -131,6 +131,7 @@ type OrderLineDtoInput = {
   orderId: string;
   resourceId: string;
   resourceName: string;
+  resourceSubtitle?: string | null;
   resourceSku: string | null;
   resourceCurrency: string;
   orderedQuantity: number;
@@ -180,6 +181,7 @@ const lineDto = (line: OrderLineDtoInput) => {
     orderId: line.orderId,
     resourceId: line.resourceId,
     resourceName: line.resourceName,
+    resourceSubtitle: line.resourceSubtitle,
     resourceSku: line.resourceSku,
     resourceCurrency: line.resourceCurrency,
     quantity: line.orderedQuantity,
@@ -271,6 +273,7 @@ async function loadOrderLines(
       orderId: orderLines.orderId,
       resourceId: orderLines.resourceId,
       resourceName: resources.name,
+      resourceSubtitle: resources.subtitle,
       resourceSku: resources.sku,
       resourceCurrency: resources.currency,
       orderedQuantity: orderLines.orderedQuantity,
@@ -908,6 +911,7 @@ async function loadSerializedLineContext(
       order: orders,
       line: orderLines,
       resourceName: resources.name,
+      resourceSubtitle: resources.subtitle,
       trackingMode: stockSettings.trackingMode,
     })
     .from(orderLines)

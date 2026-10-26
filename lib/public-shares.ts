@@ -85,6 +85,7 @@ export type PublicMedia = Pick<
 
 export type PublicResource = Pick<
   ResourceRecord,
+  | "subtitle"
   | "id"
   | "name"
   | "description"
@@ -175,6 +176,7 @@ function attachPublicMedia(
     return {
       id: row.id,
       name: row.name,
+      subtitle: row.subtitle,
       description: Array.from(publicUrls.get(row.id) ?? []).reduce(
         (description, [privateUrl, publicUrl]) =>
           description.replaceAll(privateUrl, publicUrl),

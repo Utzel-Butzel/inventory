@@ -196,6 +196,10 @@ export async function POST(request: Request, context: Context) {
         error: limit.disabled
           ? "AI cover generation is disabled by the administrator."
           : "Image generation limit reached. Try again later.",
+        code: limit.disabled ? "AI_IMAGE_GENERATION_DISABLED" : "AI_IMAGE_RATE_LIMIT_REACHED",
+        limit: limit.limit,
+        retryAfterSeconds: limit.retryAfterSeconds,
+        resetsAt: limit.resetsAt.toISOString(),
       },
       429,
       paidAiRateLimitHeaders(limit),

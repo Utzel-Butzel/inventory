@@ -61,6 +61,7 @@ export default async function ResourceStockPage({ params, searchParams }: Props)
         <InventoryBreadcrumb
           href={`/inventory/${resourceReference}`}
           name={resource.name}
+          subtitle={resource.subtitle}
         />
       ) : null}
       <ResourceStockManager

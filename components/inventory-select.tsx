@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import {
   Barcode,
   Boxes,
@@ -21,6 +22,7 @@ import { Badge, cn } from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 
 export type InventorySelectItem = {
+  subtitle?: string | null;
   id: string;
   name: string;
   sku?: string | null;
@@ -162,7 +164,7 @@ function InventoryQuickPreview({
               {t("inventorySelect.preview.eyebrow")}
             </p>
             <h2 id={titleId} className="mt-1 truncate text-base font-semibold text-foreground">
-              {preview.name}
+              <ResourceTitle resource={preview} />
             </h2>
           </div>
           <button
@@ -320,7 +322,7 @@ export function InventorySelect({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[12px] font-semibold">
-                      {item.name}
+                      <ResourceTitle resource={item} />
                     </span>
                     <span className="mt-0.5 block truncate text-[10px] text-muted">
                       {itemMeta?.(item) || item.sku || item.type || "—"}

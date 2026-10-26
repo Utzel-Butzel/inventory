@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import {
   Boxes,
   ChevronRight,
@@ -1328,6 +1329,7 @@ function ConnectionListView({
               <ListItem
                 href={`/inventory/${family.primary.id}`}
                 name={family.primary.name}
+                resourceSubtitle={family.primary.subtitle}
                 subtitle={t("connectionDiagram.list.primaryBadge")}
                 icon={<GitBranch className="size-3.5" />}
                 iconTone="text-brand"
@@ -1340,6 +1342,7 @@ function ConnectionListView({
                   key={variant.id}
                   href={`/inventory/${variant.id}`}
                   name={variant.name}
+                  resourceSubtitle={variant.subtitle}
                   subtitle={t("connectionDiagram.kinds.variant")}
                   icon={<GitBranch className="size-3.5" />}
                   iconTone="text-brand"
@@ -1361,6 +1364,7 @@ function ConnectionListView({
                   key={component.resourceId}
                   href={`/inventory/${component.resourceId}`}
                   name={component.name}
+                  resourceSubtitle={component.subtitle}
                   subtitle={t("connectionDiagram.list.quantity", quantity)}
                   icon={<Package className="size-3.5" />}
                   iconTone="text-warning"
@@ -1383,6 +1387,7 @@ function ConnectionListView({
                   key={parent.resourceId}
                   href={`/inventory/${parent.resourceId}`}
                   name={parent.name}
+                  resourceSubtitle={parent.subtitle}
                   subtitle={t(
                     "connectionDiagram.list.usedInQuantity",
                     quantity,
@@ -1406,6 +1411,7 @@ function ConnectionListView({
                 key={relation.id}
                 href={`/inventory/${relation.sourceResourceId}`}
                 name={relation.source?.name ?? relation.sourceResourceId}
+                resourceSubtitle={relation.source?.subtitle}
                 subtitle={
                   relation.relationType?.label ??
                   t("connectionDiagram.list.locatedIn")
@@ -1445,6 +1451,7 @@ function ConnectionListView({
                 key={relation.id}
                 href={`/inventory/${relation.targetResourceId}`}
                 name={relation.target?.name ?? relation.targetResourceId}
+                resourceSubtitle={relation.target?.subtitle}
                 subtitle={
                   relation.relationType?.inverseLabel ??
                   t("connectionDiagram.list.contains")
@@ -1498,6 +1505,7 @@ function ConnectionListView({
                   key={relation.id}
                   href={`/inventory/${relatedId}`}
                   name={relatedName}
+                  resourceSubtitle={outgoing ? relation.target?.subtitle : relation.source?.subtitle}
                   subtitle={label}
                   icon={<Link2 className="size-3.5" />}
                   iconTone="text-info"
@@ -1584,6 +1592,7 @@ function ListSection({
 function ListItem({
   href,
   name,
+  resourceSubtitle,
   subtitle,
   icon,
   iconTone,
@@ -1594,6 +1603,7 @@ function ListItem({
 }: {
   href: string;
   name: string;
+  resourceSubtitle?: string | null;
   subtitle: string;
   icon: React.ReactNode;
   iconTone: string;
@@ -1610,7 +1620,7 @@ function ListItem({
         className="min-w-0 flex-1 hover:underline"
       >
         <span className="block truncate text-xs font-semibold text-foreground">
-          {name}
+          <ResourceTitle resource={{ name, subtitle: resourceSubtitle }} />
         </span>
         <span className="mt-0.5 block truncate text-[11px] text-muted">
           {subtitle}
@@ -1995,7 +2005,7 @@ function PositionedGraphNode({
       </span>
       <span className="min-w-0 w-full">
         <span className="block truncate text-xs font-semibold text-foreground">
-          {item.node.resource.name}
+          <ResourceTitle resource={item.node.resource} />
         </span>
         <span
           className={`mt-1 block truncate text-[11px] ${
@@ -2224,7 +2234,7 @@ function ConnectionDetailsPanel({
           />
         ) : null}
         <div>
-          <p className="break-words text-sm font-semibold text-foreground">{resource.name}</p>
+          <p className="break-words text-sm font-semibold text-foreground"><ResourceTitle resource={resource} /></p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {isRoot ? <Badge tone="brand">{t("connectionDiagram.current")}</Badge> : null}
             {resource.type ? (

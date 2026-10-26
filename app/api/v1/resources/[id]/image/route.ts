@@ -188,6 +188,12 @@ export async function POST(request: Request, context: Context) {
           : parsed.data.mode === "search"
             ? "AI research limit reached. Try again shortly."
             : "Image generation limit reached. Try again later.",
+        code: parsed.data.mode === "generate"
+          ? limit.disabled ? "AI_IMAGE_GENERATION_DISABLED" : "AI_IMAGE_RATE_LIMIT_REACHED"
+          : "AI_RESEARCH_RATE_LIMIT_REACHED",
+        limit: limit.limit,
+        retryAfterSeconds: limit.retryAfterSeconds,
+        resetsAt: limit.resetsAt.toISOString(),
       },
       429,
       paidAiRateLimitHeaders(limit),

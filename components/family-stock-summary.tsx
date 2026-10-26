@@ -1,10 +1,11 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { useT } from "next-i18next/client";
 import { OrganizationLink as Link } from "@/components/organization-routing";
 
 export type StockCover = { id?: string; url: string; altText?: string | null; width?: number | null; height?: number | null };
-export type FamilyStockMember = { id: string; name: string; quantity: number; cover?: StockCover | null };
+export type FamilyStockMember = { id: string; name: string; subtitle?: string | null; quantity: number; cover?: StockCover | null };
 
 export type FamilyStock = {
   primary: FamilyStockMember;
@@ -41,7 +42,7 @@ export function FamilyStockSummary({
                   href={`/inventory/${variant.id}/stock`}
                   className="hover:underline"
                 >
-                  {variant.name}
+                  <ResourceTitle resource={variant} />
                 </Link>
               </dt>
               <dd className="tabular-nums">

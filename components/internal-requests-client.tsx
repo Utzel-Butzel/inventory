@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
 import { orderListItems } from "@/lib/list-view-contract";
 
@@ -89,6 +90,7 @@ type RequestsResponse = {
 };
 
 type DraftLine = {
+  subtitle?: string | null;
   resourceId: string;
   name: string;
   sku: string | null;
@@ -449,7 +451,7 @@ export function InternalRequestsClient() {
                           <div className="grid h-16 place-items-center"><LoaderCircle className="size-4 animate-spin text-muted" /></div>
                         ) : deliveryResults.length ? deliveryResults.map((resource) => (
                           <button key={resource.id} type="button" onClick={() => { setDelivery(resource); setDeliveryQuery(""); }} className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-muted">
-                            <span className="truncate font-medium text-foreground">{resource.name}</span>
+                            <span className="truncate font-medium text-foreground"><ResourceTitle resource={resource} /></span>
                             <span className="shrink-0 text-[11px] text-muted">{resource.type}</span>
                           </button>
                         )) : (
@@ -480,8 +482,8 @@ export function InternalRequestsClient() {
                 {searching === "items" ? (
                   <div className="grid h-16 place-items-center"><LoaderCircle className="size-4 animate-spin text-muted" /></div>
                 ) : itemResults.map((resource) => (
-                  <button key={resource.id} type="button" onClick={() => { setLines((current) => [...current, { resourceId: resource.id, name: resource.name, sku: resource.sku, quantity: "1", note: "" }]); setItemQuery(""); }} className="flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-surface-muted">
-                    <span className="min-w-0"><span className="block truncate text-xs font-semibold text-foreground">{resource.name}</span><span className="block truncate text-[11px] text-muted">{resource.sku || t("form.noSku")} · {number.format(resource.quantity)}</span></span>
+                  <button key={resource.id} type="button" onClick={() => { setLines((current) => [...current, { resourceId: resource.id, name: resource.name, subtitle: resource.subtitle, sku: resource.sku, quantity: "1", note: "" }]); setItemQuery(""); }} className="flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-surface-muted">
+                    <span className="min-w-0"><span className="block truncate text-xs font-semibold text-foreground"><ResourceTitle resource={resource} /></span><span className="block truncate text-[11px] text-muted">{resource.sku || t("form.noSku")} · {number.format(resource.quantity)}</span></span>
                     <Plus className="size-4 shrink-0 text-brand" />
                   </button>
                 ))}
@@ -491,7 +493,7 @@ export function InternalRequestsClient() {
                   {lines.map((line) => (
                     <div key={line.resourceId} className="rounded-xl border border-border bg-surface p-3">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0"><p className="truncate text-xs font-semibold text-foreground">{line.name}</p><p className="mt-0.5 text-[11px] text-muted">{line.sku || t("form.noSku")}</p></div>
+                        <div className="min-w-0"><p className="truncate text-xs font-semibold text-foreground"><ResourceTitle resource={line} /></p><p className="mt-0.5 text-[11px] text-muted">{line.sku || t("form.noSku")}</p></div>
                         <button type="button" onClick={() => setLines((current) => current.filter((candidate) => candidate.resourceId !== line.resourceId))} className="rounded-lg p-1 text-muted hover:bg-danger-soft hover:text-danger" aria-label={t("form.removeItem", { name: line.name })}><Trash2 className="size-3.5" /></button>
                       </div>
                       <div className="mt-2 grid grid-cols-[80px_minmax(0,1fr)] gap-2">
@@ -541,7 +543,7 @@ export function InternalRequestsClient() {
                         {request.delivery ? <span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5" />{request.delivery.name}</span> : null}
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {request.lines.slice(0, 4).map((line) => <span key={line.id} className="rounded-lg bg-surface-muted px-2.5 py-1 text-[12px] font-medium text-muted-strong">{number.format(line.quantity)} × {line.resource.name}</span>)}
+                        {request.lines.slice(0, 4).map((line) => <span key={line.id} className="rounded-lg bg-surface-muted px-2.5 py-1 text-[12px] font-medium text-muted-strong">{number.format(line.quantity)} × <ResourceTitle resource={line.resource} /></span>)}
                         {request.lines.length > 4 ? <span className="px-1 py-1 text-[12px] text-muted">+{request.lines.length - 4}</span> : null}
                       </div>
                     </div>
@@ -557,7 +559,7 @@ export function InternalRequestsClient() {
                       <div className="space-y-2">
                         {request.lines.map((line) => (
                           <div key={line.id} className="grid gap-2 rounded-xl border border-border bg-surface-subtle p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                            <div className="min-w-0"><p className="truncate text-sm font-semibold text-foreground">{line.resource.name}</p><p className="mt-0.5 text-[12px] text-muted">{line.resource.sku || t("form.noSku")} · {t(`tracking.${line.resource.trackingMode}`)}{line.note ? ` · ${line.note}` : ""}</p></div>
+                            <div className="min-w-0"><p className="truncate text-sm font-semibold text-foreground"><ResourceTitle resource={line.resource} /></p><p className="mt-0.5 text-[12px] text-muted">{line.resource.sku || t("form.noSku")} · {t(`tracking.${line.resource.trackingMode}`)}{line.note ? ` · ${line.note}` : ""}</p></div>
                             <div className="text-left sm:text-right"><p className="text-sm font-semibold text-foreground">{number.format(line.quantity)}</p><p className="text-[11px] text-muted">{t("list.current", { count: line.resource.currentQuantity })}</p></div>
                           </div>
                         ))}

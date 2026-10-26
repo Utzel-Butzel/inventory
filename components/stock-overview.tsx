@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
 import { orderListItems } from "@/lib/list-view-contract";
 
@@ -28,6 +29,7 @@ type StockFilter = "all" | "low" | "out" | "healthy" | "incoming";
 type StockState = "low" | "out" | "healthy";
 
 type StockItem = {
+  subtitle?: string | null;
   resourceId: string;
   name: string;
   type: string;
@@ -72,6 +74,7 @@ type StockPayload = {
 };
 
 type DueInventoryCount = {
+  subtitle?: string | null;
   resourceId: string;
   name: string;
   type: string;
@@ -580,7 +583,7 @@ export function StockOverview() {
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-foreground">
-                        {item.name}
+                        <ResourceTitle resource={item} />
                       </p>
                       <p className="mt-0.5 text-xs text-muted">
                         {t("overview.counts.schedule", {
@@ -679,7 +682,7 @@ export function StockOverview() {
                                 <StockItemVisual item={item} state={state} />
                                 <div className="min-w-0">
                                   <Link href={`/inventory/${item.resourceId}/stock`} className="block max-w-[260px] truncate text-[14px] font-semibold text-foreground transition hover:text-brand">
-                                    {item.name}
+                                    <ResourceTitle resource={item} />
                                   </Link>
                                   <p className="mt-0.5 text-[11px] text-muted">
                                     {stockValueLabel(item.type, t)} ·{" "}
@@ -772,7 +775,7 @@ export function StockOverview() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <h3 className="truncate text-[14px] font-semibold text-foreground">{item.name}</h3>
+                                <h3 className="truncate text-[14px] font-semibold text-foreground"><ResourceTitle resource={item} /></h3>
                                 <p className="mt-0.5 text-[11px] text-muted">
                                   {stockValueLabel(item.type, t)} ·{" "}
                                   {stockValueLabel(item.trackingMode, t)}

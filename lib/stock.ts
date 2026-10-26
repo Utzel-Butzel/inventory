@@ -22,7 +22,6 @@ import {
   contacts,
   inventoryAssignments,
   inventoryTypeDefinitions,
-  media,
   organizations,
   orderLineUnits,
   orderLines as purchaseOrderLines,
@@ -43,6 +42,7 @@ import {
   type StockUnitStatus,
 } from "@/db/schema";
 import { db, type DatabaseExecutor } from "@/lib/db";
+import { getResourceCoverSummaries } from "@/lib/resource-covers";
 import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 import {
   CustomFieldError,
@@ -402,6 +402,7 @@ export async function getStockDetail(
     .select({
       id: resources.id,
       name: resources.name,
+      subtitle: resources.subtitle,
       quantity: resources.quantity,
       valueCents: resources.valueCents,
       currency: resources.currency,
@@ -589,18 +590,7 @@ export async function getStockDetail(
   const family = await getResourceFamily(organizationId, resourceId, options, transaction);
   // Family authorization above also applies to the thumbnails in the selector.
   const memberIds = family ? [family.primary.id, ...family.variants.map((member) => member.id)] : [resourceId];
-  const covers = await transaction
-    .selectDistinctOn([media.resourceId], {
-      resourceId: media.resourceId,
-      id: media.id,
-      url: media.url,
-      altText: media.altText,
-      width: media.width,
-      height: media.height,
-    })
-    .from(media)
-    .where(and(eq(media.organizationId, organizationId), inArray(media.resourceId, memberIds), eq(media.kind, "image")))
-    .orderBy(asc(media.resourceId), asc(media.position), asc(media.createdAt), asc(media.id));
+  const covers = await getResourceCoverSummaries(organizationId, memberIds, transaction);
   const coverById = new Map(covers.map(({ resourceId: id, ...cover }) => [id, cover]));
   return {
     resource: { ...resource, cover: coverById.get(resource.id) ?? null },
@@ -642,6 +632,7 @@ export async function getStockOverview(organizationId: string) {
     .select({
       resourceId: resources.id,
       name: resources.name,
+      subtitle: resources.subtitle,
       sku: resources.sku,
       type: resources.type,
       quantity: resources.quantity,
@@ -703,28 +694,7 @@ export async function getStockOverview(organizationId: string) {
             ),
           )
           .groupBy(purchaseOrderLines.resourceId),
-        transaction
-          .select({
-            id: media.id,
-            resourceId: media.resourceId,
-            url: media.url,
-            altText: media.altText,
-            width: media.width,
-            height: media.height,
-          })
-          .from(media)
-          .where(
-            and(
-              eq(media.organizationId, organizationId),
-              inArray(media.resourceId, ids),
-              eq(media.kind, "image"),
-            ),
-          )
-          .orderBy(
-            asc(media.resourceId),
-            asc(media.position),
-            asc(media.createdAt),
-          ),
+        getResourceCoverSummaries(organizationId, ids, transaction),
         transaction
           .select({
             variantResourceId: resourceRelations.sourceResourceId,
@@ -806,6 +776,7 @@ export async function getStockOverview(organizationId: string) {
       resourceId: row.resourceId,
       variantOfResourceId: primaryByVariantId.get(row.resourceId) ?? null,
       name: row.name,
+      subtitle: row.subtitle,
       sku: row.sku,
       type: row.type,
       cover: coverByResource.get(row.resourceId) ?? null,
@@ -1652,6 +1623,7 @@ export async function bookStockMovement(
         .select({
           id: resources.id,
           name: resources.name,
+          subtitle: resources.subtitle,
           quantity: resources.quantity,
           allowNegativeStock: organizations.allowNegativeStock,
           valueCents: resources.valueCents,
@@ -2031,6 +2003,7 @@ export async function createStockUnits(
         .select({
           id: resources.id,
           name: resources.name,
+          subtitle: resources.subtitle,
           quantity: resources.quantity,
           type: resources.type,
           categories: resources.categories,
@@ -2219,6 +2192,7 @@ export async function updateStockUnit(
       .select({
         id: resources.id,
         name: resources.name,
+        subtitle: resources.subtitle,
         quantity: resources.quantity,
         type: resources.type,
         categories: resources.categories,

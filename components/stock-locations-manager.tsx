@@ -1,5 +1,7 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
+import { resourceTitleText } from "@/lib/resource-title";
 import {
   AlertTriangle,
   ArrowRight,
@@ -25,6 +27,7 @@ type TrackingMode = "bulk" | "serialized";
 type LocationBalance = {
   locationResourceId: string;
   name: string;
+  subtitle?: string | null;
   type: string;
   quantity: number;
 };
@@ -32,6 +35,7 @@ type LocationBalance = {
 type AvailableLocation = {
   id: string;
   name: string;
+  subtitle?: string | null;
   type: string;
   status: string;
 };
@@ -40,6 +44,7 @@ type LocationBreakdown = {
   resource: {
     id: string;
     name: string;
+    subtitle?: string | null;
     quantity: number;
     trackingMode: TrackingMode | null;
   };
@@ -141,6 +146,7 @@ export function StockLocationsManager({
         .map((location) => ({
           id: location.locationResourceId,
           name: location.name,
+          subtitle: location.subtitle,
           quantity: location.quantity,
         })),
     ];
@@ -155,7 +161,7 @@ export function StockLocationsManager({
           (location) =>
             location.id !== resourceId && location.status !== "archived",
         )
-        .map((location) => ({ id: location.id, name: location.name })),
+        .map((location) => ({ id: location.id, name: location.name, subtitle: location.subtitle })),
     ];
   }, [data, resourceId, t]);
 
@@ -433,7 +439,7 @@ export function StockLocationsManager({
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-xs font-semibold text-foreground">
-                          {location.name}
+                          <ResourceTitle resource={location} />
                         </p>
                         <p className="mt-0.5 text-[11px] capitalize text-muted">
                           {t(`locations.types.${location.type}`, {
@@ -501,7 +507,7 @@ export function StockLocationsManager({
                 >
                   {sourceOptions.map((option) => (
                     <option key={option.id} value={option.id}>
-                      {option.name} · {numberFormat.format(option.quantity)}
+                      {resourceTitleText(option)} · {numberFormat.format(option.quantity)}
                     </option>
                   ))}
                 </select>
@@ -519,7 +525,7 @@ export function StockLocationsManager({
                     .filter((option) => option.id !== source)
                     .map((option) => (
                       <option key={option.id} value={option.id}>
-                        {option.name}
+                        {resourceTitleText(option)}
                       </option>
                     ))}
                 </select>

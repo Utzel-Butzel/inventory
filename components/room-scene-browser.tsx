@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import dynamic from "next/dynamic";
 import { RoomCreateButton } from "@/components/room-create-button";
 import { RoomSceneEditor } from "@/components/room-scene-editor";
@@ -1677,7 +1678,7 @@ export function RoomSceneBrowser() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs font-semibold text-foreground">
-                          {placement.resource.name}
+                          <ResourceTitle resource={placement.resource} />
                         </span>
                         <span className="mt-0.5 block truncate text-[11px] text-muted">
                           {t("rooms.placements.coordinates", {
@@ -1733,7 +1734,7 @@ function SelectedPlacementCard({ placement }: { placement: ClientRoomPlacement }
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-foreground">
-            {placement.resource.name}
+            <ResourceTitle resource={placement.resource} />
           </p>
           <p className="mt-0.5 text-[11px] text-muted">
             {t("rooms.placements.accuracy", {

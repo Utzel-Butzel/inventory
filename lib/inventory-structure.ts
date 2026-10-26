@@ -423,6 +423,7 @@ export async function listResourceRelations(
           .select({
             id: resources.id,
             name: resources.name,
+            subtitle: resources.subtitle,
             type: resources.type,
             status: resources.status,
           })

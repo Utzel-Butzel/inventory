@@ -1,5 +1,7 @@
 "use client";
 
+import { resourceTitleText } from "@/lib/resource-title";
+import { ResourceTitle } from "@/components/resource-title";
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import { Alert } from "@/components/ui";
@@ -804,8 +806,8 @@ export function InventoryClient({
                 </div>
                 <div className="p-4 text-left">
                   <div className="mb-1 flex items-start justify-between gap-3">
-                    <h2 title={resource.name} className="line-clamp-1 font-semibold tracking-[-0.01em] text-foreground">
-                      {resource.name}
+                    <h2 title={resourceTitleText(resource)} className="line-clamp-1 font-semibold tracking-[-0.01em] text-foreground">
+                      <ResourceTitle resource={resource} />
                     </h2>
                     {!selectionMode ? (
                       <ArrowRight
@@ -931,7 +933,7 @@ export function InventoryClient({
                       />
                     </div>
                     <div className="min-w-0">
-                      <div title={resource.name} className="truncate text-sm font-semibold text-foreground">{resource.name}</div>
+                      <div title={resourceTitleText(resource)} className="truncate text-sm font-semibold text-foreground"><ResourceTitle resource={resource} /></div>
                       <div className="mt-0.5 truncate text-xs text-muted">
                         {typeLabel(resource.type)}{!list.config.columns.includes("quantity") ? ` · ${t("item.units", { count: resource.quantity, value: integer.format(resource.quantity) })}` : ""}
                       </div>

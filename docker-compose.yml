@@ -153,7 +153,7 @@ services:
       GOOGLE_IMAGE_EDIT_MODEL: ${GOOGLE_IMAGE_EDIT_MODEL:-gemini-2.5-flash-image}
       IMAGE_EDIT_MODELS: ${IMAGE_EDIT_MODELS:-}
       IMAGE_EDIT_DEFAULT_MODEL: ${IMAGE_EDIT_DEFAULT_MODEL:-}
-      AI_IMAGE_RATE_LIMIT_PER_HOUR: ${AI_IMAGE_RATE_LIMIT_PER_HOUR:-12}
+      AI_IMAGE_RATE_LIMIT_PER_HOUR: ${AI_IMAGE_RATE_LIMIT_PER_HOUR:-60}
     volumes:
       - inventory_uploads:/app/data/uploads
     depends_on:

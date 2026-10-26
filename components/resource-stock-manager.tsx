@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import { ResourceItemNavigation } from "@/components/resource-item-navigation";
 import type { StockBookingTask } from "@/components/resource-stock/movement-form";
 
@@ -209,7 +210,7 @@ export function ResourceStockManager({
     return () => { requestVersion.current += 1; loadRequest.current?.abort(); };
   }, [loadStock, initialResourceId, initialTask, openInitialTask, requestedId]);
 
-  useInventoryBreadcrumb(stock ? { href: `/inventory/${resourceId}`, name: stock.resource.name } : null);
+  useInventoryBreadcrumb(stock ? { href: `/inventory/${resourceId}`, name: stock.resource.name, subtitle: stock.resource.subtitle } : null);
 
   function selectVariant(id: string) {
     setVirtual(null);
@@ -346,7 +347,7 @@ export function ResourceStockManager({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="truncate text-2xl font-semibold tracking-[-0.035em] text-foreground sm:text-3xl">
-              {stock.family?.primary.name ?? stock.resource.name}
+              <ResourceTitle resource={stock.family?.primary ?? stock.resource} />
             </h1>
             <span className="inline-flex h-6 items-center rounded-full bg-brand-soft px-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-brand">
               {t(`resource.tracking.${virtual?.preview.resource.trackingMode ?? stock.config.trackingMode}`)}
@@ -399,7 +400,7 @@ export function ResourceStockManager({
               onSelect={selectVariant} onCurrent={() => selectVariant(resourceId)}
               onAll={() => { setFamilyView(true); setVirtual(null); setAction(null); }}
               onVirtual={(selection) => { setVirtual(selection); setFamilyView(false); setAction(null); }} /> :
-              <div className="flex items-center gap-3"><StockThumbnail cover={stock.resource.cover} /><h2 className="text-lg font-semibold">{selectedName}</h2></div>}
+              <div className="flex items-center gap-3"><StockThumbnail cover={stock.resource.cover} /><h2 className="text-lg font-semibold"><ResourceTitle resource={{ ...(virtual?.preview.resource ?? stock.resource), name: selectedName }} /></h2></div>}
           </div>
           <div className="shrink-0 lg:text-right" aria-live="polite">
             <p className="text-xs font-medium text-muted">{familyView ? t("workspace.totalLabel") : t("resource.metrics.available")}</p>

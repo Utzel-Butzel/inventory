@@ -1,5 +1,6 @@
 "use client";
 
+import { ResourceTitle } from "@/components/resource-title";
 import {
   AlertTriangle,
   ArrowRight,
@@ -74,6 +75,7 @@ type FixedProperty = {
 };
 
 type ResourceSummary = {
+  subtitle?: string | null;
   id: string;
   name: string;
   quantity: number | null;
@@ -84,6 +86,7 @@ type ResourceSummary = {
 type TargetOption = ResourceSummary;
 
 type TargetGroup = {
+  subtitle?: string;
   resourceId: string;
   name: string;
   options: TargetOption[];
@@ -344,6 +347,7 @@ function normalizeResource(value: unknown): ResourceSummary {
   return {
     id: firstString(resource, ["id", "resourceId"]),
     name: firstString(resource, ["name", "resourceName", "label"]),
+    subtitle: firstString(resource, ["subtitle"]),
     quantity: asFiniteNumber(resource?.quantity),
     trackingMode: firstString(resource, ["trackingMode"]) || null,
     updatedAt: firstString(resource, ["updatedAt"]) || null,
@@ -360,7 +364,7 @@ function normalizeTargetGroups(value: unknown): TargetGroup[] {
       .map(normalizeResource)
       .filter((option) => Boolean(option.id));
     return options.length
-      ? [{ resourceId, name: firstString(group, ["name"]), options }]
+      ? [{ resourceId, name: firstString(group, ["name"]), subtitle: firstString(group, ["subtitle"]), options }]
       : [];
   });
 }
@@ -1023,7 +1027,7 @@ export function StockScanner({ canExecute, initialWorkflowId = "" }: StockScanne
                           <div className="mt-1 space-y-1 text-sm font-semibold text-foreground">
                             {result.resources.map((resource) => (
                               <p key={resource.id} className="flex justify-between gap-3">
-                                <span>{resource.name}</span>
+                                <span><ResourceTitle resource={resource} /></span>
                                 <span className="tabular-nums">
                                   {resource.quantity ?? t("values.empty")}
                                 </span>
@@ -1039,7 +1043,7 @@ export function StockScanner({ canExecute, initialWorkflowId = "" }: StockScanne
                         <div className="mt-1 space-y-1">
                           {result.resources.map((resource) => (
                             <p key={resource.id} className="text-sm font-semibold text-foreground">
-                              {resource.name || t("scan.fallbacks.unknownResource")}
+                              {resource.name ? <ResourceTitle resource={resource} /> : t("scan.fallbacks.unknownResource")}
                             </p>
                           ))}
                         </div>
@@ -1255,7 +1259,7 @@ function ReviewForm({
               {t("scan.review.eyebrow")}
             </p>
             <h2 className="mt-1 text-xl font-semibold tracking-[-0.02em] text-foreground">
-              {resolution.resource.name || t("scan.fallbacks.unknownResource")}
+              {resolution.resource.name ? <ResourceTitle resource={resolution.resource} /> : t("scan.fallbacks.unknownResource")}
             </h2>
           </div>
           <Badge tone={resolution.unit ? "neutral" : unitUnavailable ? "danger" : "success"}>
@@ -1322,7 +1326,7 @@ function ReviewForm({
                           className="size-4 accent-brand-solid"
                         />
                       )}
-                      {group.name}
+                      <ResourceTitle resource={group} />
                     </label>
                     {group.options.length > 1 && targetSelected ? (
                       <div
@@ -1349,7 +1353,7 @@ function ReviewForm({
                                   : "border-border text-muted-strong hover:border-border-strong",
                               )}
                             >
-                              <span className="flex-1">{option.name}</span>
+                              <span className="flex-1"><ResourceTitle resource={option} /></span>
                               {checked ? (
                                 <Check className="size-3.5" aria-hidden="true" />
                               ) : null}

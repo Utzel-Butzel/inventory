@@ -1,5 +1,7 @@
 "use client";
 
+import { resourceTitleText } from "@/lib/resource-title";
+import { ResourceTitle } from "@/components/resource-title";
 import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
 import { orderListItems } from "@/lib/list-view-contract";
 
@@ -156,8 +158,8 @@ function ResourcePanel({ resource, side }: { resource: DuplicateResource; side: 
       <div className="p-4 sm:p-5">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold tracking-[-0.015em] text-foreground" title={resource.name}>
-              {resource.name}
+            <h3 className="truncate text-base font-semibold tracking-[-0.015em] text-foreground" title={resourceTitleText(resource)}>
+              <ResourceTitle resource={resource} />
             </h3>
             <p className="mt-1 text-xs text-muted">
               {t("duplicates.updated", {
