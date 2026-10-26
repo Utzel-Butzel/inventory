@@ -548,7 +548,8 @@ const canonicalConnectionId = (
  * Expands already-loaded direct payloads into a bounded, cycle-safe graph.
  * BOM traversal follows components only. Reverse usage belongs in the list
  * view; following it here would pull unrelated assemblies into a shared part's
- * subtree.
+ * subtree. Below the root, containment and other relationships also expand
+ * only toward their targets, never back to other users of a shared item.
  * Missing payloads simply leave a node as a leaf; the client can use the
  * returned node depths to decide which resources need another fetch round.
  */
@@ -592,12 +593,19 @@ export function buildResourceConnectionGraph(input: {
       bomParents: [],
     });
     for (const directNode of [...direct.left, ...direct.right]) {
-      // Siblings are useful around the selected root, but recursively joining
-      // every sibling to every other sibling would turn a family into a clique.
-      const connections = directNode.connections.filter(
-        (connection) =>
-          currentNode.depth === 0 || connection.descriptor.type !== "sibling",
-      );
+      const connections = directNode.connections.filter((connection) => {
+        if (currentNode.depth === 0) return true;
+        // Keep the selected item's direct context, but do not walk backwards
+        // from its descendants into unrelated containers or related items.
+        if (
+          (connection.kind === "containment" || connection.kind === "relationship") &&
+          connection.direction === "toward-current"
+        ) {
+          return false;
+        }
+        // Recursively joining siblings would turn a family into a clique.
+        return connection.descriptor.type !== "sibling";
+      });
       if (!connections.length) continue;
       const relatedResourceId = directNode.resource.id;
       let relatedNode = nodes.get(relatedResourceId);

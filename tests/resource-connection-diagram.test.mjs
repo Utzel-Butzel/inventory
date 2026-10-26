@@ -699,6 +699,60 @@ test("lays out family and BOM groups while retaining every other relationship", 
   );
 });
 
+test("shared glue does not pull unrelated lids or containers into descendants", () => {
+  const root = item("openpaper-l", "OpenPaper L");
+  const lid = item("lid-l", "OpenPaper L battery lid");
+  const otherLid = item("lid-7", "OpenPaper 7 lid");
+  const glue = item("glue", "Sofortkleber");
+  const container = item("container", "Shared supplies");
+  const accessory = item("accessory", "Glue applicator");
+  const relation = (source, target, relationTypeKey = "related") => ({
+    id: `${source.id}-${target.id}`,
+    sourceResourceId: source.id,
+    targetResourceId: target.id,
+    relationTypeKey,
+    source,
+    target,
+    relationType: { label: "Related to", inverseLabel: "Related to" },
+  });
+  const rootToGlue = relation(root, glue);
+  const lidToGlue = relation(lid, glue);
+  const otherLidToGlue = relation(otherLid, glue);
+  const containerToGlue = relation(container, glue, "contains");
+  const glueToAccessory = relation(glue, accessory);
+  const payload = (relations, bomComponents = []) => ({ family: null, relations, bomComponents });
+  const payloads = new Map([
+    [root.id, payload([rootToGlue], [
+      { resourceId: lid.id, name: lid.name, quantityPerAssembly: 1 },
+    ])],
+    [lid.id, payload([lidToGlue])],
+    [glue.id, payload([rootToGlue, lidToGlue, otherLidToGlue, containerToGlue, glueToAccessory])],
+    [otherLid.id, payload([otherLidToGlue])],
+    [container.id, payload([containerToGlue])],
+    [accessory.id, payload([glueToAccessory])],
+  ]);
+
+  for (const depth of [2, 3, 7]) {
+    const graph = buildResourceConnectionGraph({ root, depth, payloads });
+    assert.deepEqual(new Set(graph.nodes.map((node) => node.resource.id)), new Set([
+      root.id, lid.id, glue.id, accessory.id,
+    ]));
+    assert.equal(graph.connectionCount, 4);
+    const relationIds = graph.edges.flatMap((edge) => edge.connections)
+      .filter((connection) => connection.kind === "relationship")
+      .map((connection) => connection.id);
+    assert.deepEqual(new Set(relationIds), new Set([
+      `relation:${rootToGlue.id}`, `relation:${lidToGlue.id}`, `relation:${glueToAccessory.id}`,
+    ]));
+    assert.equal(graph.truncated, false);
+  }
+
+  // When glue itself is selected, its direct uses remain useful context.
+  const glueGraph = buildResourceConnectionGraph({ root: glue, depth: 1, payloads });
+  assert.ok(glueGraph.nodes.some((node) => node.resource.id === otherLid.id));
+  assert.ok(glueGraph.nodes.some((node) => node.resource.id === container.id));
+});
+
 test("expands loaded payloads across bounded levels without duplicating cycles", () => {
   const root = item("root", "Root");
   const child = item("child", "Child");
