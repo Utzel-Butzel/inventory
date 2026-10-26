@@ -10,11 +10,13 @@ import { Button } from "@/components/ui";
 
 export function SharedLabelPrinter({
   printerId,
+  tape,
   onSelect,
   disabled = false,
   canManage = false,
 }: {
   printerId: string;
+  tape?: number;
   onSelect: (printer: SharedPrinter) => void;
   disabled?: boolean;
   canManage?: boolean;
@@ -104,8 +106,8 @@ export function SharedLabelPrinter({
   }, [t]);
   useEffect(() => {
     const selected = printers.find((p) => p.id === printerId) ?? printers[0];
-    if (selected && selected.id !== printerId) onSelect(selected);
-  }, [printers, printerId, onSelect]);
+    if (selected && (selected.id !== printerId || (tape !== undefined && selected.tape !== tape))) onSelect(selected);
+  }, [printers, printerId, tape, onSelect]);
   const selected = printers.find((p) => p.id === printerId);
   return (
     <div className="mt-3 space-y-3">
@@ -134,7 +136,7 @@ export function SharedLabelPrinter({
           ))}
         </select>
       </label>
-      <p className="text-xs leading-5 text-muted">{t("shared.help")}</p>
+
       {selected && !selected.online ? (
         <p className="text-sm text-warning">{t("shared.offlineHelp")}</p>
       ) : null}
@@ -201,8 +203,8 @@ export function SharedLabelPrinter({
         </details>
       ) : null}
       {jobs.length ? (
-        <div className="rounded-xl border border-border p-3">
-          <h3 className="text-sm font-semibold">{t("shared.jobs")}</h3>
+        <details className="rounded-xl border border-border p-3">
+          <summary className="cursor-pointer text-xs font-medium text-muted">{t("shared.jobs")}</summary>
           <ul className="mt-2 space-y-2">
             {jobs.slice(0, 5).map((job) => (
               <li
@@ -246,7 +248,7 @@ export function SharedLabelPrinter({
             ))}
           </ul>
           <p className="mt-2 text-xs text-muted">{t("shared.receiptHelp")}</p>
-        </div>
+        </details>
       ) : null}
     </div>
   );

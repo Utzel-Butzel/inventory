@@ -9,8 +9,8 @@ export type LabelStockUnit = {
 
 export type LabelResource = Pick<
   ClientResource,
-  "id" | "name" | "sku" | "barcode" | "location" | "type" | "quantity" | "cover"
-> & { subtitle?: string; stockUnit?: LabelStockUnit };
+  "id" | "name" | "sku" | "barcode" | "location" | "type" | "quantity"
+> & { cover: { url: string; altText: string } | null; subtitle?: string; stockUnit?: LabelStockUnit };
 
 export type LabelTextOverride = { name?: string; subtitle?: string };
 

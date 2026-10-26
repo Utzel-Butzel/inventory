@@ -6,7 +6,7 @@
   "header": {
     "eyebrow": "Etiketten",
     "title": "Etiketten drucken",
-    "description": "Wähle Inventareinträge oder einzelne Bestands-Items und eine Vorlage aus und drucke QR-Codes, Barcodes, Text und Bilder im Browser."
+    "description": "Artikel auswählen, Etiketten anpassen und direkt oder später drucken."
   },
   "print": {
     "preparing": "Etiketten werden vorbereitet…",
@@ -39,7 +39,7 @@
     "more": "Mehr Exemplare von {{name}}"
   },
   "setup": {
-    "title": "2. Vorlage auswählen",
+    "title": "2. Vorschau & Vorlage",
     "description": "Vorlagen halten Mediengröße, Inhalt und Positionierung zusammen.",
     "label": "Etikettenvorlage",
     "empty": "Noch keine Vorlagen",
@@ -244,7 +244,7 @@
     "imageLoad": "Mindestens ein Titelbild wurde nicht vollständig geladen. Es wurde nichts gedruckt; prüfe die Bilddateien und versuche es erneut."
   },
   "units": {
-    "choose": "Einzelne Bestands-Items auswählen",
+    "choose": "Bestands-Items auswählen",
     "description": "Wähle Geräte anhand ihrer ID oder Seriennummer. Das Etikett zeigt diese Kennung; der QR-Code öffnet das konkrete Gerät mit seiner Konfiguration im Bestand.",
     "loading": "Bestands-Items werden geladen…",
     "search": "Seriennummer, ID oder Standort suchen…",
@@ -275,7 +275,7 @@
   },
   "queue": {
     "title": "Vorbereitete Etiketten",
-    "description": "Sammle Etiketten mit unterschiedlichen Vorlagen für dieselbe Bandbreite. Die Serie wird zusammen gedruckt; auch das letzte Etikett wird ausgegeben und abgeschnitten.",
+    "description": "Deine gespeicherte Druckliste – bereit für den gemeinsamen Kettendruck.",
     "prepare_zero": "Etiketten vorbereiten",
     "prepare_one": "1 Etikett vorbereiten",
     "prepare_other": "{{count}} Etiketten vorbereiten",
@@ -283,8 +283,8 @@
     "print_one": "1 Etikett als Serie drucken",
     "print_other": "{{count}} Etiketten als Serie drucken",
     "clear": "Liste leeren",
-    "empty": "Wähle Einträge und eine Vorlage aus und klicke auf „Etiketten vorbereiten“. Dafür muss der Drucker noch nicht verbunden sein.",
-    "session": "Die Druckliste bleibt in dieser geöffneten Ansicht erhalten. Beim Verlassen oder Neuladen der Seite wird sie verworfen.",
+    "empty": "Mit „Etiketten vorbereiten“ für später speichern. Ein verbundener Drucker ist dafür nicht nötig.",
+    "session": "Persönlich auf dem Server gespeichert. Nach dem Senden an den Drucker wird die Liste geleert.",
     "added_one": "1 Etikett zur Druckliste hinzugefügt. Du kannst jetzt weitere vorbereiten.",
     "added_other": "{{count}} Etiketten zur Druckliste hinzugefügt. Du kannst jetzt weitere vorbereiten.",
     "sent": "Serie an die Druckerwarteschlange übergeben und Druckliste geleert. Bitte prüfe die Ausgabe.",
@@ -340,5 +340,16 @@
     "create": "Drucker anlegen",
     "download": "Konfiguration für den Office-PC herunterladen",
     "disable": "Deaktivieren"
+  },
+  "workspace": {
+    "busy": "Bitte warten, bis die Druckliste geladen oder gespeichert wurde.",
+    "loading": "Druckliste wird geladen…",
+    "saving": "Wird gespeichert…",
+    "saved": "Einstellungen und vorbereitete Etiketten sind in deinem Konto gespeichert.",
+    "unsaved": "Einstellungen noch nicht gespeichert.",
+    "reload": "Neu laden",
+    "retry": "Speichern wiederholen",
+    "printedCleanup": "Der Druckauftrag wurde gesendet, die Druckliste aber nicht geleert. Bitte nach dem Neuladen die bereits gesendeten Etiketten entfernen, um doppelte Drucke zu vermeiden. {{detail}}",
+    "changed": "Die Druckliste wurde in einem anderen Fenster geändert. Bitte vor dem Drucken neu laden."
   }
 }

@@ -6,7 +6,7 @@
   "header": {
     "eyebrow": "Label studio",
     "title": "Print labels that scan.",
-    "description": "Choose inventory entries or individual stock items and a template to print QR codes, barcodes, text and images in your browser."
+    "description": "Choose items, customize labels and print now or later."
   },
   "print": {
     "preparing": "Preparing labels…",
@@ -39,7 +39,7 @@
     "more": "More copies of {{name}}"
   },
   "setup": {
-    "title": "2. Choose setup",
+    "title": "2. Preview & template",
     "description": "Setups keep the media size, content, and positioning together.",
     "label": "Label setup",
     "empty": "No setups yet",
@@ -244,7 +244,7 @@
     "imageLoad": "One or more object images failed to load completely. Nothing was printed; check the image files and try again."
   },
   "units": {
-    "choose": "Choose individual stock items",
+    "choose": "Choose stock items",
     "description": "Select devices by ID or serial number. The label shows this identifier; the QR code opens the specific device and its configuration in stock.",
     "loading": "Loading stock items…",
     "search": "Search serial number, ID or location…",
@@ -275,7 +275,7 @@
   },
   "queue": {
     "title": "Prepared labels",
-    "description": "Collect labels with different templates for the same tape width. Print the series together; the final label is fed out and cut as well.",
+    "description": "Your saved print list, ready to print as a batch.",
     "prepare_zero": "Prepare labels",
     "prepare_one": "Prepare 1 label",
     "prepare_other": "Prepare {{count}} labels",
@@ -283,8 +283,8 @@
     "print_one": "Print 1 label as a series",
     "print_other": "Print {{count}} labels as a series",
     "clear": "Clear list",
-    "empty": "Select entries and a template, then choose “Prepare labels”. You do not need to connect the printer yet.",
-    "session": "This print list stays in the current view. Leaving or reloading the page discards it.",
+    "empty": "Use “Prepare labels” to save for later. No connected printer is needed.",
+    "session": "Saved to your account on the server. Cleared after sending to the printer.",
     "added_one": "1 label added to the print list. You can prepare more now.",
     "added_other": "{{count}} labels added to the print list. You can prepare more now.",
     "sent": "Series submitted to the print queue and list cleared. Please check the output.",
@@ -340,5 +340,16 @@
     "create": "Create printer",
     "download": "Download office PC configuration",
     "disable": "Disable"
+  },
+  "workspace": {
+    "busy": "Wait until the print list has loaded or saved.",
+    "loading": "Loading print list…",
+    "saving": "Saving…",
+    "saved": "Preferences and prepared labels are saved to your account.",
+    "unsaved": "Preferences have not been saved yet.",
+    "reload": "Reload",
+    "retry": "Retry saving",
+    "printedCleanup": "The job was sent but the list could not be cleared. Reload and remove the submitted labels to avoid duplicate prints. {{detail}}",
+    "changed": "The print list was changed in another window. Reload before printing."
   }
 }

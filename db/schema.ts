@@ -1843,6 +1843,18 @@ export const customFieldDefinitions = pgTable(
   ],
 );
 
+export const labelWorkspaces = pgTable("label_workspaces", {
+  organizationId: organizationIdColumn(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  revision: integer("revision").notNull().default(0),
+  labels: jsonb("labels").$type<import("@/lib/label-workspace-contract").SavedLabel[]>().notNull().default([]),
+  preferences: jsonb("preferences").$type<import("@/lib/label-workspace-contract").LabelPreferences>().notNull().default({}),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [primaryKey({ columns: [table.organizationId, table.userId] }),
+  check("label_workspaces_revision_check", sql`${table.revision} >= 0`),
+  check("label_workspaces_labels_check", sql`jsonb_typeof(${table.labels}) = 'array' AND jsonb_array_length(${table.labels}) <= 100`),
+]);
+
 export const labelSetups = pgTable(
   "label_setups",
   {
