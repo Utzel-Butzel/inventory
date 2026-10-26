@@ -1,20 +1,34 @@
-// Embed the same locally hosted font faces used by browser previews/printing.
-const barlowCss = new Map<number, Promise<string>>();
-const barlowFaces = { 300: "Light", 400: "Regular", 700: "Bold" } as const;
+import { LABEL_FONT_FACES } from "@/lib/label-font-faces";
 
+const embeddedFaces = new Map<string, Promise<string>>();
+
+export function selectLabelFontFace(family: string, weight: number, style: string) {
+  const families = family.split(",").map(name => name.trim().replace(/^["']|["']$/g, ""));
+  const distance = (range: string) => {
+    const [min, max = min] = range.split(" ").map(Number);
+    return Math.max(min - weight, 0, weight - max);
+  };
+  return LABEL_FONT_FACES.filter(face => families.includes(face.family) && face.style === style)
+    .toSorted((a, b) => families.indexOf(a.family) - families.indexOf(b.family) || distance(a.weight) - distance(b.weight))[0];
+}
+
+// Raster output uses the same actual faces (including italics and variable
+// weights) as the preview. Fetch only the faces used by this label.
 export async function labelFontEmbedCss(node: HTMLElement): Promise<string> {
-  const weights = new Set<keyof typeof barlowFaces>();
+  const used = new Set<(typeof LABEL_FONT_FACES)[number]>();
   for (const element of node.querySelectorAll<HTMLElement>("span")) {
     const style = getComputedStyle(element);
-    if (!style.fontFamily.includes("Inventory Barlow Semi Condensed")) continue;
     const weight = Number(style.fontWeight);
-    weights.add(weight <= 350 ? 300 : weight <= 550 ? 400 : 700);
+    const face = selectLabelFontFace(style.fontFamily, weight, style.fontStyle);
+    if (face) {
+      await document.fonts.load(`${style.fontStyle} ${weight} 16px "${face.family}"`);
+      used.add(face);
+    }
   }
-  const faces = await Promise.all([...weights].map(async weight => {
-    await document.fonts.load(`${weight} 16px "Inventory Barlow Semi Condensed"`);
-    if (!barlowCss.has(weight)) {
+  return (await Promise.all([...used].map(face => {
+    if (!embeddedFaces.has(face.file)) {
       const embedded = (async () => {
-        const response = await fetch(`/fonts/label-print/BarlowSemiCondensed-${barlowFaces[weight]}.ttf`);
+        const response = await fetch(`/fonts/label-print/${face.file}`);
         if (!response.ok) throw new Error("Unable to load label font.");
         const blob = await response.blob();
         const source = await new Promise<string>((resolve, reject) => {
@@ -23,11 +37,10 @@ export async function labelFontEmbedCss(node: HTMLElement): Promise<string> {
           reader.onerror = () => reject(new Error("Unable to embed label font."));
           reader.readAsDataURL(blob);
         });
-        return `@font-face { font-family: "Inventory Barlow Semi Condensed"; src: url("${source}") format("truetype"); font-weight: ${weight}; font-style: normal; }`;
-      })().catch(error => { barlowCss.delete(weight); throw error; });
-      barlowCss.set(weight, embedded);
+        return `@font-face { font-family: "${face.family}"; src: url("${source}") format("truetype"); font-weight: ${face.weight}; font-style: ${face.style}; }`;
+      })().catch(error => { embeddedFaces.delete(face.file); throw error; });
+      embeddedFaces.set(face.file, embedded);
     }
-    return barlowCss.get(weight)!;
-  }));
-  return faces.join("\n");
+    return embeddedFaces.get(face.file)!;
+  }))).join("\n");
 }

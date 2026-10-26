@@ -84,7 +84,7 @@ test("multiple text fields and customized built-ins survive create, update and J
 });
 
 test("content validation rejects unsupported styles, HTML properties and excessive content", () => {
-  for (const content of [[{ text: "x", weight: 900 }], [{ text: "x", html: "<script>" }], [{ text: "x".repeat(8001) }], [{ text: "x".repeat(5000) }, { text: "x".repeat(5000) }], Array.from({ length: 501 }, () => ({ text: "x" }))]) {
+  for (const content of [[{ text: "x", weight: 950 }], [{ text: "x", html: "<script>" }], [{ text: "x".repeat(8001) }], [{ text: "x".repeat(5000) }, { text: "x".repeat(5000) }], Array.from({ length: 501 }, () => ({ text: "x" }))]) {
     assert.equal(labelTextContentSchema.safeParse(content).success, false);
   }
   assert.equal(labelTextContentSchema.safeParse([{ text: "x".repeat(8000) }]).success, true);

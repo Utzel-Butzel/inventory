@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlignLeft, AlignCenter, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Keyboard,
   Barcode,
   Copy,
   Printer,
@@ -39,6 +40,9 @@ import {
   type LabelResource,
 } from "@/components/label-renderer";
 import { Button } from "@/components/ui";
+import { LabelNumberControl } from "@/components/label-number-control";
+import { LABEL_FONT_STACKS, LABEL_NAMED_FONTS, LABEL_FONT_WEIGHTS, defaultLabelFontSize, defaultLabelFontWeight, mmToPoints, pointsToMm } from "@/lib/label-typography";
+import { labelNudge } from "@/lib/label-editor-keyboard";
 import { LabelRichTextEditor } from "@/components/label-rich-text-editor";
 import { defaultLabelTextContent } from "@/lib/label-rich-text";
 import { DEFAULT_CROP_PADDING, DEFAULT_CROP_TOLERANCE } from "@/lib/label-image-crop";
@@ -51,7 +55,6 @@ import {
   type LabelElement,
   type LabelFontFamily,
   type LabelSetupDto,
-  type LabelTextVerticalAlignment,
 } from "@/lib/label-setup-contract";
 
 type ElementType = LabelElement["type"];
@@ -272,6 +275,8 @@ export function LabelDesigner({
     return initial ? labelElementKey(initial) : "";
   });
   const [showAddElements, setShowAddElements] = useState(false);
+  const [fontSizeUnit, setFontSizeUnit] = useState<"mm" | "pt">("mm");
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [zoomPercent, setZoomPercent] = useState(100);
   const [gridSizeMm, setGridSizeMm] = useState(1);
   const [snapToGrid, setSnapToGrid] = useState(true);
@@ -485,14 +490,15 @@ export function LabelDesigner({
     document.body.style.overflow = "hidden";
     const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || testPrintLock.current || uploadLock.current) return;
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+      if (event.defaultPrevented || event.isComposing || testPrintLock.current || uploadLock.current || dialogRef.current?.dataset.busy === "true") return;
+      const editable = event.target instanceof HTMLElement && (event.target.isContentEditable || !!event.target.closest("input, textarea, select"));
+      if ((!editable || (event.target instanceof HTMLElement && event.target.isContentEditable)) && (event.metaKey || event.ctrlKey) && ["z", "y"].includes(event.key.toLowerCase())) {
         event.preventDefault();
-        if (event.shiftKey) redoRef.current();
+        if (event.shiftKey || event.key.toLowerCase() === "y") redoRef.current();
         else undoRef.current();
         return;
       }
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !editable) {
         event.preventDefault();
         onCloseRef.current();
         return;
@@ -621,36 +627,30 @@ export function LabelDesigner({
     });
   };
 
-  const nudgeSelected = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (
-      !selected ||
-      selected.type === "background" ||
-      !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
-    ) {
+  const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented || event.nativeEvent.isComposing || saving || testPrintLock.current || uploadLock.current || interaction) return;
+    const target = event.target as HTMLElement;
+    if (target.isContentEditable || target.closest("input, textarea, select, [role='menu']")) return;
+    const mod = event.metaKey || event.ctrlKey;
+    if (mod && event.key.toLowerCase() === "d" && selected) {
+      event.preventDefault(); duplicateSelected(); canvasRef.current?.focus(); return;
+    }
+    if (!mod && !event.altKey && ["Delete", "Backspace"].includes(event.key) && selected) {
+      event.preventDefault(); removeElement(labelElementKey(selected)); canvasRef.current?.focus(); return;
+    }
+    if (mod && ["[", "]"].includes(event.key) && selected) {
+      event.preventDefault();
+      applyDraft({ ...currentValueRef.current, elements: moveLabelElement(currentValueRef.current.elements, labelElementKey(selected), event.key === "]" ? "front" : "back") });
       return;
     }
-    event.preventDefault();
-    const stepMm = event.shiftKey ? 1 : 0.1;
-    const deltaX = (stepMm / value.widthMm) * 100;
-    const deltaY = (stepMm / value.heightMm) * 100;
-    updateElement(labelElementKey(selected), {
-      x: roundCoordinate(
-        clamp(
-          selected.x +
-            (event.key === "ArrowLeft" ? -deltaX : event.key === "ArrowRight" ? deltaX : 0),
-          0,
-          100 - selected.width,
-        ),
-      ),
-      y: roundCoordinate(
-        clamp(
-          selected.y +
-            (event.key === "ArrowUp" ? -deltaY : event.key === "ArrowDown" ? deltaY : 0),
-          0,
-          100 - selected.height,
-        ),
-      ),
-    });
+    if (!mod && !event.altKey && selected) {
+      const current = currentValueRef.current.elements.find(element => labelElementKey(element) === labelElementKey(selected));
+      const patch = current && labelNudge(current, event.key, event.shiftKey, value.widthMm, value.heightMm);
+      if (patch && current) {
+        event.preventDefault();
+        if (patch.x !== current.x || patch.y !== current.y) updateElement(labelElementKey(current), patch, !event.repeat);
+      }
+    }
   };
 
   const uploadBackground = async (key: string | null, file: File) => {
@@ -734,6 +734,8 @@ export function LabelDesigner({
     >
       <section
         ref={dialogRef}
+        data-busy={saving || testPrinting || uploadingImage}
+        onKeyDown={handleEditorKeyDown}
         role="dialog"
         aria-modal="true"
         aria-labelledby="label-designer-title"
@@ -1028,7 +1030,6 @@ export function LabelDesigner({
                 aria-label={t("designer.canvas")}
                 className="relative shrink-0 touch-none outline-none focus-visible:ring-4 focus-visible:ring-focus/30"
                 style={{ width: canvasWidth, height: canvasHeight }}
-                onKeyDown={nudgeSelected}
                 onPointerDown={() => canvasRef.current?.focus()}
               >
               <LabelRenderer
@@ -1363,6 +1364,56 @@ export function LabelDesigner({
 
                 {["name", "subtitle", "identifier", "url", "location", "text"].includes(selected.type) ? (
                   <>
+                    <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-subtle p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">{t("designer.typography")}</p>
+                      <label className="block text-[11px] font-semibold text-muted">
+                        {t("designer.fontFamily")}
+                        <select value={(selected as TextElement).fontFamily ?? (["name", "subtitle", "text"].includes(selected.type) ? "sans" : "monospace")}
+                          onChange={event => updateElement(labelElementKey(selected), { fontFamily: event.target.value as LabelFontFamily })}
+                          className="mt-1 h-9 w-full rounded-lg border border-border bg-surface px-2 text-xs text-foreground">
+                          {LABEL_NAMED_FONTS.map(([key, name]) => <option key={key} value={key} style={{ fontFamily: LABEL_FONT_STACKS[key] }}>{name}</option>)}
+                          {(["sans", "serif", "monospace", "rounded"] as const).map(key => <option key={key} value={key}>{t(`designer.fontFamilies.${key}`)}</option>)}
+                        </select>
+                      </label>
+                      <label className="block text-[11px] font-semibold text-muted">
+                        {t("designer.fontWeight")}
+                        <select value={(selected as TextElement).fontWeight ?? ""} onChange={event => {
+                          const weight = event.target.value ? Number(event.target.value) : undefined;
+                          updateElement(labelElementKey(selected), { fontWeight: weight, ...((selected as TextElement).content ? { content: (selected as TextElement).content!.map(run => ({ ...run, weight: undefined })) } : {}) });
+                        }} className="mt-1 h-9 w-full rounded-lg border border-border bg-surface px-2 text-xs text-foreground">
+                          <option value="">{t("designer.originalWeight", { weight: defaultLabelFontWeight({ ...selected, fontWeight: undefined } as TextElement) })}</option>
+                          {LABEL_FONT_WEIGHTS.filter(weight => (selected as TextElement).fontFamily !== "nunito-sans" || weight >= 200).map(weight => <option key={weight} value={weight}>{weight} · {t(`designer.weights.${weight}`)}</option>)}
+                        </select>
+                      </label>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-muted">{t("designer.fontSizeUnits")}</p>
+                        <div role="group" aria-label={t("designer.fontSizeUnits")} className="flex rounded-md bg-surface p-0.5">
+                          {(["mm", "pt"] as const).map(unit => <button key={unit} type="button" aria-pressed={fontSizeUnit === unit} onClick={() => setFontSizeUnit(unit)} className={`rounded px-2 py-1 text-[11px] ${fontSizeUnit === unit ? "bg-brand-soft text-brand" : "text-muted"}`}>{unit}</button>)}
+                        </div>
+                      </div>
+                      <LabelNumberControl key={`${labelElementKey(selected)}-size-${fontSizeUnit}`} label={t("designer.fontSizeValue")} unit={fontSizeUnit}
+                        value={fontSizeUnit === "pt" ? mmToPoints((selected as TextElement).fontSizeMm ?? defaultLabelFontSize(selected as TextElement)) : (selected as TextElement).fontSizeMm ?? defaultLabelFontSize(selected as TextElement)}
+                        min={fontSizeUnit === "pt" ? mmToPoints(0.5) : 0.5} max={fontSizeUnit === "pt" ? mmToPoints(100) : 100} step={fontSizeUnit === "pt" ? 0.5 : 0.1}
+                        sliderMax={fontSizeUnit === "pt" ? 48 : 16} presets={fontSizeUnit === "pt" ? [6, 8, 9, 10, 12, 14, 16, 18, 24, 32, 48, 72] : [1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8, 10, 12, 16]}
+                        onChange={(size, record) => {
+                          const mm = Math.min(100, Math.max(0.5, fontSizeUnit === "pt" ? pointsToMm(size) : size));
+                          updateElement(labelElementKey(selected), { fontSizeMm: mm, ...((selected as TextElement).minFontSizeMm! > mm ? { minFontSizeMm: mm } : {}) }, record);
+                        }} />
+                      <div className="grid grid-cols-2 gap-3">
+                        <LabelNumberControl key={`${labelElementKey(selected)}-line`} label={t("designer.lineHeight")} value={(selected as TextElement).lineHeight ?? ((selected as TextElement).textOverflow === "shrink" ? 1.08 : 1.05)} min={0.8} max={3} step={0.01} unit="×"
+                          onChange={(lineHeight, record) => updateElement(labelElementKey(selected), { lineHeight }, record)} />
+                        <LabelNumberControl key={`${labelElementKey(selected)}-spacing`} label={t("designer.letterSpacing")} value={((selected as TextElement).letterSpacingEm ?? 0) * 100} min={-10} max={100} step={1} unit="%" sliderMax={30}
+                          onChange={(spacing, record) => updateElement(labelElementKey(selected), { letterSpacingEm: spacing / 100 }, record)} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div role="group" aria-label={t("designer.alignment")} className="flex rounded-lg border border-border bg-surface p-0.5">
+                          {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]] as const).map(([align, Icon]) => <button key={align} type="button" aria-label={t(`designer.align.${align}`)} title={t(`designer.align.${align}`)} aria-pressed={((selected as TextElement).align ?? 'left') === align} onClick={() => updateElement(labelElementKey(selected), { align })} className={`grid h-8 flex-1 place-items-center rounded-md ${((selected as TextElement).align ?? 'left') === align ? 'bg-brand-soft text-brand' : 'text-muted hover:bg-surface-hover'}`}><Icon size={15} /></button>)}
+                        </div>
+                        <div role="group" aria-label={t("designer.verticalAlignment")} className="flex rounded-lg border border-border bg-surface p-0.5">
+                          {([['top', AlignStartVertical], ['middle', AlignCenterVertical], ['bottom', AlignEndVertical]] as const).map(([verticalAlign, Icon]) => <button key={verticalAlign} type="button" aria-label={t(`designer.verticalAlign.${verticalAlign}`)} title={t(`designer.verticalAlign.${verticalAlign}`)} aria-pressed={((selected as TextElement).verticalAlign ?? 'middle') === verticalAlign} onClick={() => updateElement(labelElementKey(selected), { verticalAlign })} className={`grid h-8 flex-1 place-items-center rounded-md ${((selected as TextElement).verticalAlign ?? 'middle') === verticalAlign ? 'bg-brand-soft text-brand' : 'text-muted hover:bg-surface-hover'}`}><Icon size={15} /></button>)}
+                        </div>
+                      </div>
+                    </div>
                     <LabelRichTextEditor
                       key={labelElementKey(selected)}
                       value={defaultLabelTextContent(selected as TextElement)}
@@ -1371,96 +1422,6 @@ export function LabelDesigner({
                     {selected.type !== "text" && (selected as TextElement).content !== undefined ? (
                       <button type="button" className="mt-2 text-xs text-brand hover:underline" onClick={() => updateElement(labelElementKey(selected), { content: undefined } as Partial<TextElement>)}>{t("designer.richText.reset")}</button>
                     ) : null}
-                    <label className="mt-4 block text-[12px] font-semibold text-muted">
-                      {t("designer.fontSize")}
-                      <input
-                        type="number"
-                        min="0.5"
-                        max="100"
-                        step="0.1"
-                        value={(selected as TextElement).fontSizeMm ?? 3}
-                        onChange={(event) => {
-                          const next = Number(event.target.value);
-                          if (!Number.isFinite(next)) return;
-                          const textElement = selected as TextElement;
-                          updateElement(labelElementKey(selected), {
-                            fontSizeMm: next,
-                            ...(textElement.minFontSizeMm !== undefined &&
-                            textElement.minFontSizeMm > next
-                              ? { minFontSizeMm: next }
-                              : {}),
-                          } as Partial<LabelElement>);
-                        }}
-                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus"
-                      />
-                    </label>
-                    <label className="mt-4 block text-[12px] font-semibold text-muted">
-                      {t("designer.fontFamily")}
-                      <select
-                        value={
-                          (selected as TextElement).fontFamily ??
-                          (["name", "subtitle", "text"].includes(selected.type) ? "sans" : "monospace")
-                        }
-                        onChange={(event) =>
-                          updateElement(labelElementKey(selected), {
-                            fontFamily: event.target.value as LabelFontFamily,
-                          } as Partial<LabelElement>)
-                        }
-                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
-                      >
-                        <option value="barlow-semi-condensed">Barlow Semi Condensed</option>
-                        <option value="sans">
-                          {t("designer.fontFamilies.sans")}
-                        </option>
-                        <option value="serif">
-                          {t("designer.fontFamilies.serif")}
-                        </option>
-                        <option value="monospace">
-                          {t("designer.fontFamilies.monospace")}
-                        </option>
-                        <option value="rounded">
-                          {t("designer.fontFamilies.rounded")}
-                        </option>
-                      </select>
-                    </label>
-                    <label className="mt-4 block text-[12px] font-semibold text-muted">
-                      {t("designer.lineHeight")}
-                      <input type="number" min="0.8" max="2" step="0.01"
-                        value={(selected as TextElement).lineHeight ?? ((selected as TextElement).textOverflow === "shrink" ? 1.08 : 1.05)}
-                        onChange={event => {
-                          const next = Number(event.target.value);
-                          if (Number.isFinite(next) && next >= 0.8 && next <= 2) updateElement(labelElementKey(selected), { lineHeight: next } as Partial<LabelElement>);
-                        }}
-                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus" />
-                    </label>
-                    <label className="mt-4 block text-[12px] font-semibold text-muted">
-                      {t("designer.alignment")}
-                      <select
-                        value={(selected as TextElement).align ?? "left"}
-                        onChange={(event) => updateElement(labelElementKey(selected), { align: event.target.value as "left" | "center" | "right" } as Partial<LabelElement>)}
-                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
-                      >
-                        <option value="left">{t("designer.align.left")}</option>
-                        <option value="center">{t("designer.align.center")}</option>
-                        <option value="right">{t("designer.align.right")}</option>
-                      </select>
-                    </label>
-                    <label className="mt-4 block text-[12px] font-semibold text-muted">
-                      {t("designer.verticalAlignment")}
-                      <select
-                        value={(selected as TextElement).verticalAlign ?? "middle"}
-                        onChange={(event) =>
-                          updateElement(labelElementKey(selected), {
-                            verticalAlign: event.target.value as LabelTextVerticalAlignment,
-                          } as Partial<LabelElement>)
-                        }
-                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
-                      >
-                        <option value="top">{t("designer.verticalAlign.top")}</option>
-                        <option value="middle">{t("designer.verticalAlign.middle")}</option>
-                        <option value="bottom">{t("designer.verticalAlign.bottom")}</option>
-                      </select>
-                    </label>
                     <label className="mt-4 block text-[12px] font-semibold text-muted">
                       {t("designer.textOverflow")}
                       <select
@@ -1523,6 +1484,8 @@ export function LabelDesigner({
         </div>
         <footer className="flex flex-col gap-3 border-t border-border bg-surface px-5 py-4 sm:px-6">
           <div>
+            <button type="button" className="mb-2 inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground" aria-expanded={showShortcuts} onClick={() => setShowShortcuts(current => !current)}><Keyboard size={14} />{t("designer.shortcuts")}</button>
+            {showShortcuts ? <p className="mb-3 rounded-lg bg-surface-subtle px-3 py-2 text-xs leading-5 text-muted-strong">{t("designer.shortcutHelp")}</p> : null}
             {testError ? <p role="alert" className="mb-2 text-xs font-medium text-danger">{testError}</p> : null}
             {testSent ? <p role="status" className="mb-2 text-xs font-medium text-brand">{testPrintSuccess}</p> : null}
             {onTestPrint ? <p className="mb-2 text-xs text-muted">{t("designer.testHint", { destination: testPrintDestination })}</p> : null}

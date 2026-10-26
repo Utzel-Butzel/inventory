@@ -237,7 +237,28 @@
     "testPrinting": "Sending test label…",
     "browserPrintOpened": "Print dialog opened for one test label.",
     "arrange": "Alignment & layers",
-    "duplicateElement": "Duplicate {{element}}"
+    "duplicateElement": "Duplicate {{element}}",
+    "typography": "Typography",
+    "fontWeight": "Font weight · entire text box",
+    "selectionWeight": "Selected text weight",
+    "inheritWeight": "Inherit",
+    "originalWeight": "Original style ({{weight}})",
+    "fontSizeUnits": "Font size unit",
+    "fontSizeValue": "Font size",
+    "letterSpacing": "Letter spacing",
+    "shortcuts": "Keyboard shortcuts",
+    "shortcutHelp": "← ↑ ↓ → Move by 0.1 mm · Shift + arrow: 1 mm · Delete / Backspace: delete element · ⌘/Ctrl + D: duplicate · ⌘/Ctrl + Z: undo · ⌘/Ctrl + Shift + Z: redo · ⌘/Ctrl + ] / [: bring to front / send to back. In input fields these keys remain available for text editing.",
+    "weights": {
+      "100": "Thin",
+      "200": "Extra Light",
+      "300": "Light",
+      "400": "Regular",
+      "500": "Medium",
+      "600": "Semi Bold",
+      "700": "Bold",
+      "800": "Extra Bold",
+      "900": "Black"
+    }
   },
   "renderer": {
     "noImage": "No image",

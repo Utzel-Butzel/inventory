@@ -18,7 +18,7 @@ export const MAX_LABEL_TEXT_LENGTH = 8_000;
 
 export const labelTextRunSchema = z.object({
   text: z.string().max(MAX_LABEL_TEXT_LENGTH),
-  weight: z.union([z.literal(300), z.literal(400), z.literal(700)]).optional(),
+  weight: z.number().int().min(100).max(900).multipleOf(100).optional(),
   italic: z.boolean().optional(),
   underline: z.boolean().optional(),
 }).strict();
@@ -39,6 +39,10 @@ export const labelFontFamilies = [
   "monospace",
   "rounded",
   "barlow-semi-condensed",
+  "inter",
+  "roboto",
+  "roboto-condensed",
+  "nunito-sans",
 ] as const;
 export const labelImageFits = ["cover", "contain"] as const;
 
@@ -67,7 +71,9 @@ const textElementOptions = {
   fontSizeMm: z.number().finite().positive().max(100).optional(),
   minFontSizeMm: z.number().finite().positive().max(100).optional(),
   fontFamily: z.enum(labelFontFamilies).optional(),
-  lineHeight: z.number().finite().min(0.8).max(2).optional(),
+  fontWeight: z.number().int().min(100).max(900).multipleOf(100).optional(),
+  letterSpacingEm: z.number().finite().min(-0.1).max(1).optional(),
+  lineHeight: z.number().finite().min(0.8).max(3).optional(),
   align: z.enum(labelTextAlignments).optional(),
   verticalAlign: z.enum(labelTextVerticalAlignments).optional(),
   textOverflow: z.enum(labelTextOverflowModes).optional(),

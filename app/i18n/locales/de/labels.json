@@ -237,7 +237,28 @@
     "testPrinting": "Testetikett wird gesendet…",
     "browserPrintOpened": "Druckdialog für ein Testetikett geöffnet.",
     "arrange": "Ausrichten & Ebenen",
-    "duplicateElement": "{{element}} duplizieren"
+    "duplicateElement": "{{element}} duplizieren",
+    "typography": "Typografie",
+    "fontWeight": "Schriftgewicht · gesamtes Textfeld",
+    "selectionWeight": "Schriftgewicht der Textauswahl",
+    "inheritWeight": "Wie Textfeld",
+    "originalWeight": "Bisheriger Stil ({{weight}})",
+    "fontSizeUnits": "Einheit der Schriftgröße",
+    "fontSizeValue": "Schriftgröße",
+    "letterSpacing": "Zeichenabstand",
+    "shortcuts": "Tastaturkürzel",
+    "shortcutHelp": "← ↑ ↓ → Verschieben um 0,1 mm · Shift + Pfeil: 1 mm · Entf / Rücktaste: Element löschen · ⌘/Strg + D: duplizieren · ⌘/Strg + Z: rückgängig · ⌘/Strg + Shift + Z: wiederholen · ⌘/Strg + ] / [: ganz nach vorne / hinten. In Eingabefeldern bleiben die Tasten zur Texteingabe verfügbar.",
+    "weights": {
+      "100": "Thin",
+      "200": "Extra Light",
+      "300": "Light",
+      "400": "Regular",
+      "500": "Medium",
+      "600": "Semi Bold",
+      "700": "Bold",
+      "800": "Extra Bold",
+      "900": "Black"
+    }
   },
   "renderer": {
     "noImage": "Kein Bild",

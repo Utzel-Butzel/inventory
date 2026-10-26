@@ -1,17 +1,81 @@
 @font-face {
-  font-family: "Inventory Barlow Semi Condensed";
-  src: url("/fonts/label-print/BarlowSemiCondensed-Light.ttf") format("truetype");
-  font-weight: 300;
+  font-family: "Inventory Inter";
+  src: url("/fonts/label-print/Inter-Italic-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Inter";
+  src: url("/fonts/label-print/Inter-Variable.ttf") format("truetype");
+  font-weight: 100 900;
   font-style: normal;
-  font-display: block;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Roboto";
+  src: url("/fonts/label-print/Roboto-Italic-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Roboto";
+  src: url("/fonts/label-print/Roboto-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Roboto Condensed";
+  src: url("/fonts/label-print/RobotoCondensed-Italic-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Roboto Condensed";
+  src: url("/fonts/label-print/RobotoCondensed-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Nunito Sans";
+  src: url("/fonts/label-print/NunitoSans-Italic-Variable.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Nunito Sans";
+  src: url("/fonts/label-print/NunitoSans-Variable.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
   font-family: "Inventory Barlow Semi Condensed";
-  src: url("/fonts/label-print/BarlowSemiCondensed-Regular.ttf") format("truetype");
-  font-weight: 400;
+  src: url("/fonts/label-print/BarlowSemiCondensed-Black.ttf") format("truetype");
+  font-weight: 900;
   font-style: normal;
-  font-display: block;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-BlackItalic.ttf") format("truetype");
+  font-weight: 900;
+  font-style: italic;
+  font-display: swap;
 }
 
 @font-face {
@@ -19,7 +83,127 @@
   src: url("/fonts/label-print/BarlowSemiCondensed-Bold.ttf") format("truetype");
   font-weight: 700;
   font-style: normal;
-  font-display: block;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-ExtraBold.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-ExtraBoldItalic.ttf") format("truetype");
+  font-weight: 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-ExtraLight.ttf") format("truetype");
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-ExtraLightItalic.ttf") format("truetype");
+  font-weight: 200;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-LightItalic.ttf") format("truetype");
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-MediumItalic.ttf") format("truetype");
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-SemiBoldItalic.ttf") format("truetype");
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-Thin.ttf") format("truetype");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Barlow Semi Condensed";
+  src: url("/fonts/label-print/BarlowSemiCondensed-ThinItalic.ttf") format("truetype");
+  font-weight: 100;
+  font-style: italic;
+  font-display: swap;
 }
 
 .page {

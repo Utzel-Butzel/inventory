@@ -31,6 +31,8 @@ import { cropLabelImage, DEFAULT_CROP_PADDING, DEFAULT_CROP_TOLERANCE } from "@/
 
 import { labelImageSource } from "@/lib/label-image-source";
 
+import { LABEL_FONT_STACKS, defaultLabelFontSize, defaultLabelFontWeight } from "@/lib/label-typography";
+
 import styles from "./label-printer.module.css";
 
 export type { LabelResource } from "@/lib/label-target";
@@ -100,33 +102,21 @@ function PrintableImage({
   );
 }
 
-function defaultFontSizeMm(element: TextElement) {
-  return element.type === "name" ? 3.8 : element.type === "url" ? 1.8 : 2.5;
-}
-
-const FONT_FAMILY_STACKS: Record<LabelFontFamily, string> = {
-  sans: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-  serif: 'ui-serif, Georgia, Cambria, "Times New Roman", serif',
-  monospace:
-    'ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace',
-  "barlow-semi-condensed": '"Inventory Barlow Semi Condensed", sans-serif',
-  rounded: 'ui-rounded, "SF Pro Rounded", system-ui, sans-serif',
-};
-
 function defaultFontFamily(element: TextElement): LabelFontFamily {
   return ["name", "subtitle", "text"].includes(element.type) ? "sans" : "monospace";
 }
 
 function textStyle(element: TextElement, pixelsPerMm?: number): CSSProperties {
-  const defaultSize = defaultFontSizeMm(element);
+  const defaultSize = defaultLabelFontSize(element);
   return {
     "--label-line-height": element.lineHeight,
-    fontWeight: element.fontFamily === "barlow-semi-condensed" ? 700 : undefined,
+    fontWeight: element.fontWeight ?? (element.fontFamily === "barlow-semi-condensed" ? 700 : undefined),
+    letterSpacing: `${element.letterSpacingEm ?? 0}em`,
     fontSize: pixelsPerMm
       ? `${(element.fontSizeMm ?? defaultSize) * pixelsPerMm}px`
       : `${element.fontSizeMm ?? defaultSize}mm`,
     fontFamily:
-      FONT_FAMILY_STACKS[element.fontFamily ?? defaultFontFamily(element)],
+      LABEL_FONT_STACKS[element.fontFamily ?? defaultFontFamily(element)],
     textAlign: element.align ?? "left",
     whiteSpace: element.content ? "pre-wrap" : undefined,
     alignItems:
@@ -152,7 +142,7 @@ function ShrinkingText({
   element: TextElement;
 }) {
   const textRef = useRef<HTMLSpanElement>(null);
-  const maximumFontSizeMm = element.fontSizeMm ?? defaultFontSizeMm(element);
+  const maximumFontSizeMm = element.fontSizeMm ?? defaultLabelFontSize(element);
   const minimumFontSizeMm = Math.min(
     maximumFontSizeMm,
     element.minFontSizeMm ?? 1,
@@ -204,7 +194,7 @@ function ShrinkingText({
     const observer = new ResizeObserver(fitText);
     observer.observe(container);
     return () => { disposed = true; observer.disconnect(); };
-  }, [fitText, value, element.fontFamily, element.lineHeight]);
+  }, [fitText, value, element.fontFamily, element.lineHeight, element.fontWeight, element.letterSpacingEm]);
 
   return (
     <span
@@ -225,7 +215,7 @@ function EllipsisText({
   element: TextElement;
   labelHeightMm: number;
 }) {
-  const fontSizeMm = element.fontSizeMm ?? defaultFontSizeMm(element);
+  const fontSizeMm = element.fontSizeMm ?? defaultLabelFontSize(element);
   const availableHeightMm = (labelHeightMm * element.height) / 100;
   const lines = Math.max(1, Math.floor(availableHeightMm / (fontSizeMm * (element.lineHeight ?? 1.05))));
   return (
@@ -365,7 +355,7 @@ export function LabelRenderer({
                   : location;
           const value = element.content
             ? resolveLabelText(element.content, labelPlaceholderValues(resource, origin)).map((run, index) => (
-                <span key={index} style={{ fontWeight: run.weight ?? 400, fontStyle: run.italic ? "italic" : "normal", textDecorationLine: run.underline ? "underline" : "none" }}>{run.text}</span>
+                <span key={index} style={{ fontWeight: run.weight ?? defaultLabelFontWeight(element), fontStyle: run.italic ? "italic" : "normal", textDecorationLine: run.underline ? "underline" : "none" }}>{run.text}</span>
               ))
             : plainValue;
           const textOverflow = element.textOverflow ?? "ellipsis";

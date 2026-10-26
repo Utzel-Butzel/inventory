@@ -4,6 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useT } from "next-i18next/client";
 import { Bold, Italic, Underline, CornerDownLeft } from "lucide-react";
 
+import { LABEL_FONT_WEIGHTS } from "@/lib/label-typography";
 import { labelTextContentSchema, type LabelTextRun } from "@/lib/label-setup-contract";
 import {
   LABEL_TEXT_PLACEHOLDERS, formatLabelText, normalizeLabelText, replaceLabelText,
@@ -24,7 +25,7 @@ function readEditor(root: HTMLElement): LabelTextRun[] {
     const weight = Number(node.style.fontWeight);
     const format: LabelTextFormat = {
       ...inherited,
-      ...(weight === 300 || weight === 400 || weight === 700 ? { weight } : {}),
+      ...(LABEL_FONT_WEIGHTS.some(value => value === weight) ? { weight } : {}),
       ...(node.style.fontStyle === "italic" ? { italic: true } : {}),
       ...(node.style.textDecorationLine === "underline" ? { underline: true } : {}),
     };
@@ -195,8 +196,10 @@ export function LabelRichTextEditor({ value, onChange }: {
       <div className="mt-1.5 rounded-xl border border-border bg-surface">
         <div role="group" aria-label={t("designer.richText.formatting")} className="flex flex-wrap gap-0.5 border-b border-border p-1">
           <button type="button" title={`${t("designer.richText.bold")} (⌘/Ctrl+B)`} aria-label={t("designer.richText.bold")} aria-pressed={format.weight === 700} className={buttonClass(format.weight === 700)} onMouseDown={event => event.preventDefault()} onClick={() => applyFormat({ weight: formatRef.current.weight === 700 ? 400 : 700 })}><Bold size={15} /></button>
-          <button type="button" aria-label={t("designer.richText.normal")} aria-pressed={format.weight === 400 || format.weight === undefined} className={buttonClass(format.weight === 400 || format.weight === undefined)} onMouseDown={event => event.preventDefault()} onClick={() => applyFormat({ weight: 400 })}>{t("designer.richText.normal")}</button>
-          <button type="button" aria-label={t("designer.richText.light")} aria-pressed={format.weight === 300} className={buttonClass(format.weight === 300)} onMouseDown={event => event.preventDefault()} onClick={() => applyFormat({ weight: 300 })}>{t("designer.richText.light")}</button>
+          <select aria-label={t("designer.selectionWeight")} value={format.weight ?? ""} className="h-8 max-w-28 rounded-lg bg-surface px-1 text-xs" onChange={event => applyFormat({ weight: event.target.value ? Number(event.target.value) : undefined })}>
+            <option value="">{t("designer.inheritWeight")}</option>
+            {LABEL_FONT_WEIGHTS.map(weight => <option key={weight} value={weight}>{weight} · {t(`designer.weights.${weight}`)}</option>)}
+          </select>
           <button type="button" title={`${t("designer.richText.italic")} (⌘/Ctrl+I)`} aria-label={t("designer.richText.italic")} aria-pressed={Boolean(format.italic)} className={buttonClass(Boolean(format.italic))} onMouseDown={event => event.preventDefault()} onClick={() => applyFormat({ italic: !formatRef.current.italic })}><Italic size={15} /></button>
           <button type="button" title={`${t("designer.richText.underline")} (⌘/Ctrl+U)`} aria-label={t("designer.richText.underline")} aria-pressed={Boolean(format.underline)} className={buttonClass(Boolean(format.underline))} onMouseDown={event => event.preventDefault()} onClick={() => applyFormat({ underline: !formatRef.current.underline })}><Underline size={15} /></button>
           <button type="button" title={t("designer.richText.lineBreak")} aria-label={t("designer.richText.lineBreak")} className={buttonClass(false)} onMouseDown={event => event.preventDefault()} onClick={() => insert("\n")}><CornerDownLeft size={15} /></button>

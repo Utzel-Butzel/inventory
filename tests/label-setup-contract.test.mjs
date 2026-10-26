@@ -440,3 +440,55 @@ test("duplicating and layering preserve original image content and identities", 
   const back = moveLabelElement(front,original.id,'back');
   assert.deepEqual(back.map(x=>x.id),[original.id,duplicate.id]);
 });
+
+test("extended typography survives saving and keeps old template defaults", async () => {
+  const { defaultLabelFontWeight, defaultLabelFontSize, pointsToMm, mmToPoints } = await import('../lib/label-typography.ts');
+  const base = { type: 'name', x: 0, y: 0, width: 50, height: 50, visible: true };
+  for (const fontFamily of ['inter', 'roboto', 'roboto-condensed', 'nunito-sans', 'barlow-semi-condensed']) {
+    for (const fontWeight of [100, 200, 300, 400, 500, 600, 700, 800, 900]) {
+      const element = { ...base, fontFamily, fontWeight, letterSpacingEm: -0.05, lineHeight: 2.5, fontSizeMm: pointsToMm(12), content: [{ text: '[Title]', weight: fontWeight }] };
+      assert.deepEqual(labelElementsSchema.parse([element])[0], element);
+    }
+  }
+  for (const patch of [{ fontWeight: 650 }, { fontWeight: 1000 }, { letterSpacingEm: -1 }, { letterSpacingEm: 2 }, { lineHeight: 3.1 }]) {
+    assert.equal(labelElementsSchema.safeParse([{ ...base, ...patch }]).success, false);
+  }
+  assert.equal(defaultLabelFontWeight(base), 800);
+  assert.equal(defaultLabelFontWeight({ ...base, fontFamily: 'barlow-semi-condensed' }), 700);
+  assert.equal(defaultLabelFontWeight({ ...base, content: [{ text: '[Title]' }] }), 400);
+  assert.equal(defaultLabelFontWeight({ ...base, fontWeight: 600 }), 600);
+  assert.equal(defaultLabelFontSize(base), 3.8);
+  assert.ok(Math.abs(mmToPoints(pointsToMm(12)) - 12) < 1e-10);
+});
+
+test("keyboard nudging uses physical dimensions and respects every label edge", async () => {
+  const { labelNudge } = await import('../lib/label-editor-keyboard.ts');
+  const element = { type: 'image', x: 20, y: 30, width: 20, height: 40, visible: true };
+  assert.deepEqual(labelNudge(element, 'ArrowRight', false, 80, 20), { x: 20.125, y: 30 });
+  assert.deepEqual(labelNudge(element, 'ArrowUp', true, 80, 20), { x: 20, y: 25 });
+  assert.deepEqual(labelNudge({ ...element, x: 80, y: 60 }, 'ArrowRight', true, 80, 20), { x: 80, y: 60 });
+  assert.deepEqual(labelNudge({ ...element, x: 0, y: 0 }, 'ArrowLeft', true, 80, 20), { x: 0, y: 0 });
+  assert.equal(labelNudge(element, 'Delete', false, 80, 20), null);
+  assert.equal(labelNudge({ ...element, type: 'background' }, 'ArrowRight', false, 80, 20), null);
+});
+
+test("every hosted font face has its matching preview CSS, binary and license", async () => {
+  const { LABEL_FONT_FACES } = await import('../lib/label-font-faces.ts');
+  const fs = await import('node:fs/promises');
+  const css = await fs.readFile(new URL('../components/label-printer.module.css', import.meta.url), 'utf8');
+  for (const face of LABEL_FONT_FACES) {
+    assert.ok(css.includes(`/fonts/label-print/${face.file}`));
+    assert.ok((await fs.stat(new URL(`../public/fonts/label-print/${face.file}`, import.meta.url))).size > 1000);
+    const family = face.file.split('-')[0];
+    assert.match(await fs.readFile(new URL(`../public/fonts/label-print/${family}-OFL.txt`, import.meta.url), 'utf8'), /SIL OPEN FONT LICENSE/);
+  }
+});
+
+test("raster font embedding distinguishes related family names and uses real weights and italics", async () => {
+  const { selectLabelFontFace } = await import('../lib/label-fonts.ts');
+  assert.equal(selectLabelFontFace('"Inventory Roboto Condensed", sans-serif', 600, 'normal').file, 'RobotoCondensed-Variable.ttf');
+  assert.equal(selectLabelFontFace('"Inventory Roboto", sans-serif', 600, 'italic').file, 'Roboto-Italic-Variable.ttf');
+  assert.equal(selectLabelFontFace('"Inventory Barlow Semi Condensed", sans-serif', 900, 'normal').file, 'BarlowSemiCondensed-Black.ttf');
+  assert.equal(selectLabelFontFace('"Inventory Barlow Semi Condensed", sans-serif', 500, 'italic').file, 'BarlowSemiCondensed-MediumItalic.ttf');
+  assert.equal(selectLabelFontFace('system-ui, sans-serif', 700, 'normal'), undefined);
+});
