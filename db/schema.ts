@@ -4921,3 +4921,35 @@ export type RoomScanAssetRecord = typeof roomScanAssets.$inferSelect;
 export type RoomScanKeyframeRecord = typeof roomScanKeyframes.$inferSelect;
 export type ResourceSpatialPlacementRecord =
   typeof resourceSpatialPlacements.$inferSelect;
+
+/** Shared P-touch printer agents have access only to their own outbound queue. */
+export const labelPrinters = pgTable("label_printers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: organizationIdColumn(),
+  name: varchar("name", { length: 120 }).notNull(),
+  tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
+  enabled: boolean("enabled").notNull().default(true),
+  tapeWidth: doublePrecision("tape_width").notNull().default(24),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const labelPrintJobs = pgTable("label_print_jobs", {
+  id: uuid("id").primaryKey(),
+  organizationId: organizationIdColumn(),
+  printerId: uuid("printer_id").notNull().references(() => labelPrinters.id, { onDelete: "cascade" }),
+  createdBy: text("created_by").notNull(),
+  labelCount: integer("label_count").notNull(),
+  payload: text("payload"),
+  payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("queued"),
+  claimId: uuid("claim_id"),
+  spoolJobId: integer("spool_job_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull().default(sql`now() + interval '10 minutes'`),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+}, table => [
+  index("label_print_jobs_queue_idx").on(table.printerId, table.status, table.createdAt),
+  index("label_print_jobs_org_idx").on(table.organizationId, table.createdAt),
+  uniqueIndex("label_print_jobs_claim_idx").on(table.printerId, table.claimId).where(sql`${table.claimId} IS NOT NULL`),
+]);

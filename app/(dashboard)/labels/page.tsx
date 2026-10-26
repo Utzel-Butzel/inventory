@@ -19,6 +19,7 @@ export default async function LabelsPage() {
   return (
     <LabelPrinter
       canWrite={Boolean(identity?.permissions.includes("labels.manage"))}
+      canManagePrinters={Boolean(identity?.permissions.includes("tokens.manage"))}
     />
   );
 }
