@@ -386,6 +386,12 @@
     "title": "Connection flow",
     "description": "Visualize this item's family, bill of materials, containment, and related inventory across multiple levels.",
     "current": "Current item",
+    "bundling": {
+      "family": "Variants",
+      "show": "Bundle variants",
+      "expand": "Show {{count}} bundled connections individually",
+      "collapse": "Bundle {{count}} connections again"
+    },
     "connections_one": "{{value}} connection",
     "connections_other": "{{value}} connections",
     "loading": "Loading connections…",

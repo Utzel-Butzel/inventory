@@ -14,6 +14,63 @@ import {
 
 const item = (id, name) => ({ id, name, type: "item", status: "available" });
 
+import { bundleConnectionEdges, orthogonalConnectionPath } from "../lib/resource-connection-routing.ts";
+
+test("bundles family BOM connections without changing the underlying graph", () => {
+  const root = item("paper", "Paper L");
+  const natural = item("natural", "Paper L Natural");
+  const black = item("black", "Paper L Black");
+  const pcb = item("pcb", "PCB");
+  const family = { role: "primary", currentResourceId: root.id, primary: root, variants: [natural, black] };
+  const payloads = new Map([root, natural, black].map((resource) => [resource.id, {
+    family: { ...family, role: resource === root ? "primary" : "variant", currentResourceId: resource.id },
+    relations: [], bomComponents: [{ resourceId: pcb.id, name: pcb.name, quantityPerAssembly: 1 }],
+  }]));
+  const graph = buildResourceConnectionGraph({ root, depth: 3, payloads });
+  const before = structuredClone(graph);
+  const bundles = bundleConnectionEdges(graph.edges, [[root.id, natural.id, black.id]]);
+  assert.equal(bundles.length, 1);
+  assert.equal(bundles[0].edges.length, 3);
+  assert.deepEqual(new Set(bundles[0].assemblyIds), new Set([root.id, natural.id, black.id]));
+  assert.deepEqual(bundles[0].componentIds, [pcb.id]);
+  assert.deepEqual(graph, before, "display grouping cannot modify resources or their connections");
+  for (const edge of bundles[0].edges) assert.ok(graph.edges.includes(edge));
+
+  const varied = structuredClone(graph.edges);
+  const changed = varied.find((edge) => edge.connections.some((connection) => connection.kind === "bom"));
+  changed.connections[0].descriptor.quantity = 2;
+  const partial = bundleConnectionEdges(varied, [[root.id, natural.id, black.id]]);
+  assert.equal(partial[0].edges.length, 2, "different quantities stay separate");
+  assert.ok(!partial[0].edges.includes(changed));
+  assert.deepEqual(bundleConnectionEdges(graph.edges, []), [], "unrelated assemblies never bundle");
+});
+
+test("frame-family bundles retain the exact variant-to-frame mapping", () => {
+  const edge = (assembly, component, quantityUnit = "base") => ({
+    key: `${assembly}:${component}`, firstResourceId: assembly, secondResourceId: component,
+    connections: [{ id: `${assembly}:${component}`, canonicalId: `${assembly}:${component}`,
+      fromResourceId: component, toResourceId: assembly, directed: true,
+      kind: "bom", direction: "toward-current", descriptor: { type: "component", quantity: 1, quantityUnit } }],
+  });
+  const edges = [edge("natural", "wood-frame"), edge("black", "black-frame"), edge("white", "white-frame", "purchase")];
+  const families = [["natural", "black", "white"], ["wood-frame", "black-frame", "white-frame"]];
+  const [bundle] = bundleConnectionEdges(edges, families);
+  assert.deepEqual(bundle.edges, edges.slice(0, 2));
+  assert.deepEqual(bundle.assemblyIds, ["natural", "black"]);
+  assert.deepEqual(bundle.componentIds, ["wood-frame", "black-frame"]);
+  const mixed = structuredClone(edges);
+  mixed[0].connections.push({ ...mixed[0].connections[0], kind: "relationship" });
+  assert.deepEqual(bundleConnectionEdges(mixed, families), [], "mixed relationships remain explicit");
+});
+
+test("orthogonal routes keep their endpoints and handle straight and repeated points", () => {
+  assert.equal(orthogonalConnectionPath([]), "");
+  assert.equal(orthogonalConnectionPath([{ x: 10, y: 20 }, { x: 10, y: 20 }, { x: 10, y: 50 }]), "M 10 20 L 10 50");
+  const path = orthogonalConnectionPath([{ x: 10, y: 20 }, { x: 10, y: 40 }, { x: 80, y: 40 }, { x: 80, y: 60 }]);
+  assert.equal(path, "M 10 20 L 10 35 Q 10 40 15 40 L 75 40 Q 80 40 80 45 L 80 60");
+  assert.doesNotMatch(path, /NaN|Infinity/);
+});
+
 test("calculates nested component costs from unit prices and BOM quantities", () => {
   const payloads = new Map([
     [

@@ -40,7 +40,6 @@ import {
 } from "@/lib/bom-quantity-units";
 import {
   buildConnectionCostStructure,
-  buildWavyConnectionPath,
   buildResourceConnectionGraph,
   getConnectionFamilyGroups,
   orderConnectionRows,
@@ -57,6 +56,11 @@ import {
   type ConnectionDiagramResource,
   type ConnectionUnitCost,
 } from "@/lib/resource-connection-diagram";
+import {
+  bundleConnectionEdges,
+  orthogonalConnectionPath,
+  type ConnectionEdgeBundle,
+} from "@/lib/resource-connection-routing";
 
 type PayloadResult = {
   payload: ConnectionDiagramPayload;
@@ -440,6 +444,7 @@ export function ResourceConnectionDiagram({
   const [showStock, setShowStock] = useState(false);
   const [showPriceFlow, setShowPriceFlow] = useState(false);
   const [showCostStructure, setShowCostStructure] = useState(false);
+  const [bundleVariants, setBundleVariants] = useState(true);
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState<string | null>(null);
   const [costLoading, setCostLoading] = useState(false);
@@ -868,6 +873,16 @@ export function ResourceConnectionDiagram({
                 </div>
                 {view === "graph" ? (
                   <>
+                    <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[12px] font-semibold text-muted-strong">
+                      <input
+                        type="checkbox"
+                        checked={bundleVariants && !editing}
+                        disabled={editing}
+                        onChange={(event) => setBundleVariants(event.target.checked)}
+                        className="size-3.5 rounded border-border-strong accent-brand-solid"
+                      />
+                      <span>{t("connectionDiagram.bundling.show")}</span>
+                    </label>
                     {canViewStock ? (
                       <>
                         <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[12px] font-semibold text-muted-strong">
@@ -1081,6 +1096,8 @@ export function ResourceConnectionDiagram({
                       <GraphEdges
                         edges={graphEdges}
                         nodes={model.nodes}
+                        familyGroups={familyGroups}
+                        bundleVariants={bundleVariants && !editing}
                         positions={positions}
                         width={canvasWidth}
                         height={canvasHeight}
@@ -1680,6 +1697,24 @@ function FamilyRails({
   width: number;
   height: number;
 }) {
+  const { t } = useT("resource");
+  const outlines = groups.flatMap((group) => {
+    const members = group.map((id) => positions.get(id))
+      .filter((position): position is NodePosition => Boolean(position))
+      .sort((left, right) => left.y - right.y || left.x - right.x);
+    const runs: NodePosition[][] = [];
+    for (const member of members) {
+      const run = runs[runs.length - 1];
+      const previous = run?.[run.length - 1];
+      if (previous && previous.y === member.y &&
+        member.x - previous.x <= NODE_WIDTH + COLUMN_GAP + 1) run.push(member);
+      else runs.push([member]);
+    }
+    return runs.filter((run) => run.length > 1).map((run) => ({
+      x: run[0].x - 10, y: run[0].y - 27,
+      width: run[run.length - 1].x - run[0].x + NODE_WIDTH + 20,
+    }));
+  });
   const segments = groups.flatMap((group) => {
     const members = group
       .map((resourceId) => positions.get(resourceId))
@@ -1707,6 +1742,18 @@ function FamilyRails({
       height={height}
       viewBox={`0 0 ${width} ${height}`}
     >
+      {outlines.map((outline) => (
+        <g key={`family:${outline.x}:${outline.y}`}>
+          <rect x={outline.x} y={outline.y} width={outline.width}
+            height={NODE_HEIGHT + 37} rx="16"
+            fill="var(--color-brand)" fillOpacity="0.035"
+            stroke="var(--color-brand)" strokeOpacity="0.2" />
+          <text x={outline.x + 12} y={outline.y + 17}
+            fill="var(--color-muted)" fontSize="10">
+            {t("connectionDiagram.bundling.family")}
+          </text>
+        </g>
+      ))}
       {segments.map((segment) => (
         <path
           key={segment.key}
@@ -1725,6 +1772,8 @@ function FamilyRails({
 function GraphEdges({
   edges,
   nodes,
+  familyGroups,
+  bundleVariants,
   positions,
   width,
   height,
@@ -1734,6 +1783,8 @@ function GraphEdges({
 }: {
   edges: ConnectionDiagramGraphEdge[];
   nodes: ConnectionDiagramGraphNode[];
+  familyGroups: string[][];
+  bundleVariants: boolean;
   positions: ReadonlyMap<string, NodePosition>;
   width: number;
   height: number;
@@ -1742,7 +1793,33 @@ function GraphEdges({
   onSelect: (edge: ConnectionDiagramGraphEdge, trigger: SVGGElement) => void;
 }) {
   const { t } = useT("resource");
-  const anchors = buildEdgeAnchorMap(edges, positions);
+  const [expandedBundles, setExpandedBundles] = useState<ReadonlySet<string>>(new Set());
+  const bundles = bundleVariants ? bundleConnectionEdges(edges, familyGroups)
+    .filter((bundle) => {
+      const from = bundle.assemblyIds.map((id) => positions.get(id));
+      const to = bundle.componentIds.map((id) => positions.get(id));
+      // Keep long, upward, incomplete, or mixed-level routes explicit.
+      return from.every((point) => point && point.y === from[0]?.y) &&
+        to.every((point) => point && point.y === to[0]?.y) &&
+        to[0]!.y - from[0]!.y === ROW_STEP;
+    }) : [];
+  const collapsed = bundles.filter((bundle) => !expandedBundles.has(bundle.key));
+  const hiddenEdges = new Set(collapsed.flatMap((bundle) => bundle.edges.map((edge) => edge.key)));
+  const visibleEdges = edges.filter((edge) => !hiddenEdges.has(edge.key));
+  const anchors = buildEdgeAnchorMap(visibleEdges, positions);
+  const lanes = new Map<string, number>();
+  const laneGroups = new Map<string, string[]>();
+  for (const bundle of bundles) {
+    const key = String(positions.get(bundle.assemblyIds[0])?.y);
+    laneGroups.set(key, [...(laneGroups.get(key) ?? []), bundle.key]);
+  }
+  for (const keys of laneGroups.values()) keys.forEach((key, index) =>
+    lanes.set(key, (index - (keys.length - 1) / 2) * Math.min(14, 36 / Math.max(1, keys.length - 1))));
+  const toggleBundle = (key: string) => setExpandedBundles((previous) => {
+    const next = new Set(previous);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
   return (
     <svg
       className="pointer-events-none absolute inset-0"
@@ -1767,7 +1844,7 @@ function GraphEdges({
           </marker>
         ))}
       </defs>
-      {edges.map((edge) => (
+      {visibleEdges.map((edge) => (
         <GraphEdge
           key={edge.key}
           edge={edge}
@@ -1782,8 +1859,73 @@ function GraphEdges({
           onSelect={onSelect}
         />
       ))}
+      {bundles.map((bundle) => (
+        <BundledGraphEdges key={bundle.key} bundle={bundle} positions={positions}
+          lane={lanes.get(bundle.key) ?? 0} expanded={expandedBundles.has(bundle.key)}
+          label={t(expandedBundles.has(bundle.key)
+            ? "connectionDiagram.bundling.collapse" : "connectionDiagram.bundling.expand", {
+            count: bundle.edges.length,
+          })}
+          countLabel={t("connectionDiagram.connections", {
+            count: bundle.edges.length, value: bundle.edges.length,
+          })}
+          onToggle={() => toggleBundle(bundle.key)} />
+      ))}
     </svg>
   );
+}
+
+function BundledGraphEdges({ bundle, positions, lane, expanded, label, countLabel, onToggle }: {
+  bundle: ConnectionEdgeBundle;
+  positions: ReadonlyMap<string, NodePosition>;
+  lane: number;
+  expanded: boolean;
+  label: string;
+  countLabel: string;
+  onToggle: () => void;
+}) {
+  const sources = bundle.assemblyIds.map((id) => positions.get(id)!)
+    .map((point) => ({ x: point.x + NODE_WIDTH / 2, y: point.y + NODE_HEIGHT }));
+  const targets = bundle.componentIds.map((id) => positions.get(id)!)
+    .map((point) => ({ x: point.x + NODE_WIDTH / 2, y: point.y - 4 }));
+  const sourceX = sources.reduce((sum, point) => sum + point.x, 0) / sources.length;
+  const targetX = targets.reduce((sum, point) => sum + point.x, 0) / targets.length;
+  const middleY = (sources[0].y + targets[0].y) / 2 + lane;
+  const collectorY = Math.min(middleY - 8, sources[0].y + 16);
+  const distributorY = Math.max(middleY + 4, targets[0].y - 30);
+  const paths = [
+    ...sources.map((point) => `M ${point.x} ${point.y} V ${collectorY}`),
+    `M ${Math.min(sourceX, ...sources.map((p) => p.x))} ${collectorY} H ${Math.max(sourceX, ...sources.map((p) => p.x))}`,
+    orthogonalConnectionPath([
+      { x: sourceX, y: collectorY }, { x: sourceX, y: middleY },
+      { x: targetX, y: middleY }, { x: targetX, y: distributorY },
+    ]),
+    `M ${Math.min(targetX, ...targets.map((p) => p.x))} ${distributorY} H ${Math.max(targetX, ...targets.map((p) => p.x))}`,
+  ];
+  // Anchor the control on the route so the membership can always be inspected.
+  const labelX = targetX;
+  const labelWidth = Math.max(104, countLabel.length * 6 + 30);
+  return <g>
+    {!expanded ? <g fill="none" stroke={kindColor.bom} strokeWidth="1.75"
+      strokeLinecap="round" strokeLinejoin="round" opacity="0.78">
+      {paths.map((path, index) => <path key={index} d={path} />)}
+      {targets.map((point) => <path key={point.x}
+        d={`M ${point.x} ${distributorY} V ${point.y}`}
+        markerEnd="url(#connection-arrow-bom)" />)}
+    </g> : null}
+    <g role="button" tabIndex={0} aria-label={label} aria-expanded={expanded}
+      className="group/bundle cursor-pointer outline-none" pointerEvents="all"
+      onClick={onToggle} onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onToggle(); }
+      }}>
+      <title>{label}</title>
+      <rect x={labelX - labelWidth / 2} y={middleY - 12} width={labelWidth} height="24" rx="6"
+        fill="var(--color-surface)" stroke="var(--color-warning)"
+        className="group-hover/bundle:stroke-[2px] group-focus-visible/bundle:stroke-[3px]" />
+      <text x={labelX} y={middleY + 4} textAnchor="middle" fontSize="11"
+        fill="var(--color-foreground)">{expanded ? "−" : "+"} {countLabel}</text>
+    </g>
+  </g>;
 }
 
 function GraphEdge({
@@ -1844,10 +1986,22 @@ function GraphEdge({
       end: { x: toCenterX, y: endY },
     };
   }
-  const path =
-    primary.kind === "relationship" && !visualOnly
-      ? buildWavyConnectionPath(curve)
-      : `M ${curve.start.x} ${curve.start.y} C ${curve.controlStart.x} ${curve.controlStart.y}, ${curve.controlEnd.x} ${curve.controlEnd.y}, ${curve.end.x} ${curve.end.y}`;
+  let points = [curve.start, curve.controlStart, curve.controlEnd, curve.end];
+  if (Math.abs(from.y - to.y) > ROW_STEP) {
+    // Long connections travel outside the node rows, never through cards.
+    const all = [...positions.values()];
+    const left = Math.min(...all.map((point) => point.x)) - 12;
+    const right = Math.max(...all.map((point) => point.x)) + NODE_WIDTH + 12;
+    const side = Math.abs(fromCenterX - left) + Math.abs(toCenterX - left) <
+      Math.abs(fromCenterX - right) + Math.abs(toCenterX - right) ? left : right;
+    const direction = from.y < to.y ? 1 : -1;
+    points = [curve.start,
+      { x: fromCenterX, y: curve.start.y + direction * 36 },
+      { x: side, y: curve.start.y + direction * 36 },
+      { x: side, y: curve.end.y - direction * 36 },
+      { x: toCenterX, y: curve.end.y - direction * 36 }, curve.end];
+  }
+  const path = orthogonalConnectionPath(points);
   return (
     <g
       role={interactive ? "button" : undefined}

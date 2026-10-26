@@ -386,6 +386,12 @@
     "title": "Verbindungsfluss",
     "description": "Variantenfamilie, Stückliste, Enthaltensein und zugehöriges Inventar dieses Eintrags über mehrere Ebenen visualisieren.",
     "current": "Aktueller Eintrag",
+    "bundling": {
+      "family": "Varianten",
+      "show": "Varianten bündeln",
+      "expand": "{{count}} gebündelte Verbindungen einzeln anzeigen",
+      "collapse": "{{count}} Verbindungen wieder bündeln"
+    },
     "connections_one": "{{value}} Verbindung",
     "connections_other": "{{value}} Verbindungen",
     "loading": "Verbindungen werden geladen…",
