@@ -46,7 +46,8 @@ export function bundleConnectionEdges(
     if (!group.assemblyIds.includes(assemblyId)) group.assemblyIds.push(assemblyId);
     if (!group.componentIds.includes(componentId)) group.componentIds.push(componentId);
   }
-  return [...groups.values()].filter((group) => group.edges.length > 1);
+  return [...groups.values()].filter((group) => group.edges.length > 1 &&
+    (group.assemblyIds.length === 1 || group.componentIds.length === 1));
 }
 
 export type ConnectionPoint = { x: number; y: number };

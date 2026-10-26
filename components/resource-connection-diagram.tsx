@@ -139,7 +139,7 @@ const NODE_WIDTH = 168;
 const NODE_HEIGHT = 152;
 const NODE_MEDIA_CENTER_Y = 55;
 const COLUMN_GAP = 32;
-const ROW_STEP = 244;
+const ROW_STEP = 300;
 const CANVAS_PADDING = 24;
 const SAME_ROW_EDGE_GUTTER = 48;
 const MIN_CANVAS_WIDTH = 860;
@@ -1807,14 +1807,23 @@ function GraphEdges({
   const hiddenEdges = new Set(collapsed.flatMap((bundle) => bundle.edges.map((edge) => edge.key)));
   const visibleEdges = edges.filter((edge) => !hiddenEdges.has(edge.key));
   const anchors = buildEdgeAnchorMap(visibleEdges, positions);
+  // Allocate every route in a row gap, including unbundled edges, its own
+  // horizontal lane. Coincident lines would imply a shared BOM junction.
   const lanes = new Map<string, number>();
   const laneGroups = new Map<string, string[]>();
-  for (const bundle of bundles) {
-    const key = String(positions.get(bundle.assemblyIds[0])?.y);
-    laneGroups.set(key, [...(laneGroups.get(key) ?? []), bundle.key]);
+  const addLane = (key: string, y: number) => {
+    const row = String(y);
+    laneGroups.set(row, [...(laneGroups.get(row) ?? []), key]);
+  };
+  for (const edge of visibleEdges) {
+    const endpoints = visualEdgeEndpoints(edge);
+    if (!endpoints) continue;
+    const from = positions.get(endpoints.fromId), to = positions.get(endpoints.toId);
+    if (from && to) addLane(edge.key, Math.min(from.y, to.y));
   }
+  for (const bundle of bundles) addLane(bundle.key, positions.get(bundle.assemblyIds[0])!.y);
   for (const keys of laneGroups.values()) keys.forEach((key, index) =>
-    lanes.set(key, (index - (keys.length - 1) / 2) * Math.min(14, 36 / Math.max(1, keys.length - 1))));
+    lanes.set(key, (index - (keys.length - 1) / 2) * Math.min(12, 90 / Math.max(1, keys.length - 1))));
   const toggleBundle = (key: string) => setExpandedBundles((previous) => {
     const next = new Set(previous);
     if (next.has(key)) next.delete(key); else next.add(key);
@@ -1850,6 +1859,7 @@ function GraphEdges({
           edge={edge}
           positions={positions}
           anchors={anchors.get(edge.key)}
+          lane={lanes.get(edge.key) ?? 0}
           interactive={!editing || !edge.visualOnly}
           label={t("connectionDiagram.details.showConnection", {
             first: nodes.find((node) => node.resource.id === edge.firstResourceId)?.resource.name,
@@ -1866,7 +1876,7 @@ function GraphEdges({
             ? "connectionDiagram.bundling.collapse" : "connectionDiagram.bundling.expand", {
             count: bundle.edges.length,
           })}
-          countLabel={t("connectionDiagram.connections", {
+          countLabel={t(expandedBundles.has(bundle.key) ? "connectionDiagram.bundling.openLabel" : "connectionDiagram.bundling.closedLabel", {
             count: bundle.edges.length, value: bundle.edges.length,
           })}
           onToggle={() => toggleBundle(bundle.key)} />
@@ -1888,30 +1898,25 @@ function BundledGraphEdges({ bundle, positions, lane, expanded, label, countLabe
     .map((point) => ({ x: point.x + NODE_WIDTH / 2, y: point.y + NODE_HEIGHT }));
   const targets = bundle.componentIds.map((id) => positions.get(id)!)
     .map((point) => ({ x: point.x + NODE_WIDTH / 2, y: point.y - 4 }));
-  const sourceX = sources.reduce((sum, point) => sum + point.x, 0) / sources.length;
   const targetX = targets.reduce((sum, point) => sum + point.x, 0) / targets.length;
   const middleY = (sources[0].y + targets[0].y) / 2 + lane;
-  const collectorY = Math.min(middleY - 8, sources[0].y + 16);
-  const distributorY = Math.max(middleY + 4, targets[0].y - 30);
+  // Only stars (one shared endpoint) are bundled; variant-to-variant
+  // mappings remain explicit instead of suggesting all-to-all membership.
   const paths = [
-    ...sources.map((point) => `M ${point.x} ${point.y} V ${collectorY}`),
-    `M ${Math.min(sourceX, ...sources.map((p) => p.x))} ${collectorY} H ${Math.max(sourceX, ...sources.map((p) => p.x))}`,
-    orthogonalConnectionPath([
-      { x: sourceX, y: collectorY }, { x: sourceX, y: middleY },
-      { x: targetX, y: middleY }, { x: targetX, y: distributorY },
-    ]),
-    `M ${Math.min(targetX, ...targets.map((p) => p.x))} ${distributorY} H ${Math.max(targetX, ...targets.map((p) => p.x))}`,
+    ...sources.map((point) => `M ${point.x} ${point.y} V ${middleY}`),
+    `M ${Math.min(...sources.map(p => p.x), ...targets.map(p => p.x))} ${middleY} H ${Math.max(...sources.map(p => p.x), ...targets.map(p => p.x))}`,
+    ...targets.map((point) => `M ${point.x} ${middleY} V ${point.y}`),
   ];
   // Anchor the control on the route so the membership can always be inspected.
   const labelX = targetX;
   const labelWidth = Math.max(104, countLabel.length * 6 + 30);
   return <g>
-    {!expanded ? <g fill="none" stroke={kindColor.bom} strokeWidth="1.75"
-      strokeLinecap="round" strokeLinejoin="round" opacity="0.78">
-      {paths.map((path, index) => <path key={index} d={path} />)}
-      {targets.map((point) => <path key={point.x}
-        d={`M ${point.x} ${distributorY} V ${point.y}`}
-        markerEnd="url(#connection-arrow-bom)" />)}
+    {!expanded ? <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+      {paths.map((path, index) => <path key={`halo-${index}`} d={path}
+        stroke="var(--color-background)" strokeWidth="6" />)}
+      {paths.map((path, index) => <path key={index} d={path}
+        stroke={kindColor.bom} strokeWidth="1.75"
+        markerEnd={index > sources.length ? "url(#connection-arrow-bom)" : undefined} />)}
     </g> : null}
     <g role="button" tabIndex={0} aria-label={label} aria-expanded={expanded}
       className="group/bundle cursor-pointer outline-none" pointerEvents="all"
@@ -1923,7 +1928,7 @@ function BundledGraphEdges({ bundle, positions, lane, expanded, label, countLabe
         fill="var(--color-surface)" stroke="var(--color-warning)"
         className="group-hover/bundle:stroke-[2px] group-focus-visible/bundle:stroke-[3px]" />
       <text x={labelX} y={middleY + 4} textAnchor="middle" fontSize="11"
-        fill="var(--color-foreground)">{expanded ? "−" : "+"} {countLabel}</text>
+        fill="var(--color-foreground)">{expanded ? "▴" : "▾"} {countLabel}</text>
     </g>
   </g>;
 }
@@ -1932,6 +1937,7 @@ function GraphEdge({
   edge,
   positions,
   anchors,
+  lane,
   interactive,
   label,
   selected,
@@ -1940,6 +1946,7 @@ function GraphEdge({
   edge: ConnectionDiagramGraphEdge;
   positions: ReadonlyMap<string, NodePosition>;
   anchors: EdgeAnchors | undefined;
+  lane: number;
   interactive: boolean;
   label: string;
   selected: boolean;
@@ -1978,7 +1985,7 @@ function GraphEdge({
     const endY = downward
       ? to.y - arrowGap
       : to.y + NODE_HEIGHT + arrowGap;
-    const middleY = (startY + endY) / 2;
+    const middleY = (startY + endY) / 2 + lane;
     curve = {
       start: { x: fromCenterX, y: startY },
       controlStart: { x: fromCenterX, y: middleY },
@@ -2021,6 +2028,8 @@ function GraphEdge({
           : undefined
       }
     >
+      <path d={path} fill="none" stroke="var(--color-background)" strokeWidth="6"
+        strokeLinecap="round" strokeLinejoin="round" pointerEvents="none" />
       <path
         d={path}
         className="group-hover/edge:stroke-[3.5px] group-focus-visible/edge:stroke-[3.5px]"

@@ -389,8 +389,10 @@
     "bundling": {
       "family": "Varianten",
       "show": "Varianten bündeln",
-      "expand": "{{count}} gebündelte Verbindungen einzeln anzeigen",
-      "collapse": "{{count}} Verbindungen wieder bündeln"
+      "expand": "{{count}} bestehende Stücklisten-Beziehungen gebündelt. Klicken, um jede Zuordnung einzeln zu sehen.",
+      "collapse": "{{count}} Verbindungen wieder bündeln",
+      "closedLabel": "{{count}} gebündelt",
+      "openLabel": "{{count}} einzeln"
     },
     "connections_one": "{{value}} Verbindung",
     "connections_other": "{{value}} Verbindungen",

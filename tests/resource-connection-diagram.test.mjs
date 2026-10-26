@@ -54,10 +54,8 @@ test("frame-family bundles retain the exact variant-to-frame mapping", () => {
   });
   const edges = [edge("natural", "wood-frame"), edge("black", "black-frame"), edge("white", "white-frame", "purchase")];
   const families = [["natural", "black", "white"], ["wood-frame", "black-frame", "white-frame"]];
-  const [bundle] = bundleConnectionEdges(edges, families);
-  assert.deepEqual(bundle.edges, edges.slice(0, 2));
-  assert.deepEqual(bundle.assemblyIds, ["natural", "black"]);
-  assert.deepEqual(bundle.componentIds, ["wood-frame", "black-frame"]);
+  assert.deepEqual(bundleConnectionEdges(edges, families), [],
+    "a shared bus would falsely imply that every variant uses every frame");
   const mixed = structuredClone(edges);
   mixed[0].connections.push({ ...mixed[0].connections[0], kind: "relationship" });
   assert.deepEqual(bundleConnectionEdges(mixed, families), [], "mixed relationships remain explicit");
@@ -1095,7 +1093,7 @@ test("the detail-page connection flow opens by default and owns every connection
   assert.match(component, /NODE_WIDTH = 168/);
   assert.match(component, /NODE_HEIGHT = 152/);
   assert.match(component, /NODE_MEDIA_CENTER_Y = 55/);
-  assert.match(component, /ROW_STEP = 244/);
+  assert.match(component, /ROW_STEP = 300/);
   assert.match(component, /showsFinancialDetails \? "size-16" : "size-20"/);
   assert.match(component, /const middleY = \(startY \+ endY\) \/ 2/);
   assert.match(component, /flex h-full w-full flex-col items-center/);

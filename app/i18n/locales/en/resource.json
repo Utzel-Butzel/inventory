@@ -389,8 +389,10 @@
     "bundling": {
       "family": "Variants",
       "show": "Bundle variants",
-      "expand": "Show {{count}} bundled connections individually",
-      "collapse": "Bundle {{count}} connections again"
+      "expand": "{{count}} existing BOM connections bundled. Click to show each mapping separately.",
+      "collapse": "Bundle {{count}} connections again",
+      "closedLabel": "{{count}} bundled",
+      "openLabel": "{{count}} expanded"
     },
     "connections_one": "{{value}} connection",
     "connections_other": "{{value}} connections",
