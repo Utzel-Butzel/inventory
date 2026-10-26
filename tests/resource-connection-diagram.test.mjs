@@ -14,7 +14,7 @@ import {
 
 const item = (id, name) => ({ id, name, type: "item", status: "available" });
 
-import { bundleConnectionEdges, orthogonalConnectionPath } from "../lib/resource-connection-routing.ts";
+import { alignConnectionNodes, assignConnectionLanes, bundleConnectionEdges, orthogonalConnectionPath } from "../lib/resource-connection-routing.ts";
 
 test("bundles family BOM connections without changing the underlying graph", () => {
   const root = item("paper", "Paper L");
@@ -1308,4 +1308,29 @@ test("the diagram edits typed connections without bypassing existing APIs", asyn
   assert.match(inventorySelect, /InventoryQuickPreview/);
   assert.match(assembly, /resource-bom-changed/);
   assert.match(relations, /resource-relations-changed/);
+});
+
+
+test("orthogonal lane ordering untangles fans on both sides of a shared parent", () => {
+  const right = [0,1,2,3].map(i => ({key: String(i), sourceXs:[100+i*10], targetXs:[300+i*100]}));
+  const lanes = assignConnectionLanes(right);
+  for (let i=1;i<right.length;i++) assert.ok(lanes.get(String(i)) < lanes.get(String(i-1)), "long right branches leave before shorter ones");
+  const left = right.map(route => ({...route, sourceXs:route.sourceXs.map(x=>-x), targetXs:route.targetXs.map(x=>-x)}));
+  assert.deepEqual(assignConnectionLanes(left), lanes, "mirroring preserves an uncrossed route order");
+  assert.deepEqual(assignConnectionLanes([]), new Map());
+});
+
+test("parent alignment centers assemblies over their own parts without overlapping family cards", () => {
+  const rows = new Map([[0,["assembly","natural","black"]],[1,["a","b","c","frame"]]]);
+  const edge = (parent, child) => ({connections:[{kind:"bom",fromResourceId:child,toResourceId:parent}]});
+  const edges = [edge("assembly","a"),edge("assembly","b"),edge("assembly","c"),edge("natural","frame"),edge("black","frame")];
+  const before = structuredClone(rows);
+  const positions = alignConnectionNodes(rows,edges,[["natural","black"]],168,32,816,24);
+  assert.equal(positions.get("assembly")+84, (positions.get("a")+positions.get("b")+positions.get("c"))/3+84);
+  assert.equal(positions.get("black")-positions.get("natural"),200);
+  for (const ids of rows.values()) for (let i=0;i<ids.length;i++) {
+    assert.ok(positions.get(ids[i])>=24 && positions.get(ids[i])+168<=792);
+    if (i) assert.ok(positions.get(ids[i])-positions.get(ids[i-1])>=200);
+  }
+  assert.deepEqual(rows,before);
 });

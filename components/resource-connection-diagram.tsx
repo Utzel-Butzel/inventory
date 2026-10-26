@@ -57,6 +57,9 @@ import {
   type ConnectionUnitCost,
 } from "@/lib/resource-connection-diagram";
 import {
+  alignConnectionNodes,
+  assignConnectionLanes,
+  type ConnectionLaneRoute,
   bundleConnectionEdges,
   orthogonalConnectionPath,
   type ConnectionEdgeBundle,
@@ -276,6 +279,14 @@ const buildEdgeAnchorMap = (
         }
       });
   }
+  // A parent port must not sit on an unrelated child's vertical arrival lane.
+  // Otherwise two independent connections can overlap even with distinct buses.
+  for (const route of routes) {
+    const anchor = anchors.get(route.edge.key)!;
+    if (anchor.fromX !== anchor.toX && routes.some(other =>
+      other.edge.key !== route.edge.key && other.to.y === route.to.y &&
+      anchors.get(other.edge.key)?.toX === anchor.fromX)) anchor.fromX += 6;
+  }
   return anchors;
 };
 
@@ -445,6 +456,8 @@ export function ResourceConnectionDiagram({
   const [showPriceFlow, setShowPriceFlow] = useState(false);
   const [showCostStructure, setShowCostStructure] = useState(false);
   const [bundleVariants, setBundleVariants] = useState(true);
+  const [hoveredResourceId, setHoveredResourceId] = useState<string | null>(null);
+  const [focusedResourceId, setFocusedResourceId] = useState<string | null>(null);
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState<string | null>(null);
   const [costLoading, setCostLoading] = useState(false);
@@ -746,18 +759,21 @@ export function ResourceConnectionDiagram({
   const firstRowY = (canvasHeight - contentHeight) / 2;
   const positions = useMemo(() => {
     const result = new Map<string, NodePosition>();
+    const aligned = alignConnectionNodes(new Map([...rows].map(([row, items]) => [row,
+      items.map(item => item.type === "resource" ? item.node.resource.id : `overflow:${row}`),
+    ])), graphEdges, familyGroups, NODE_WIDTH, COLUMN_GAP, canvasWidth, CANVAS_PADDING);
     for (const [row, items] of rows) {
       const xs = columnPositions(items.length, canvasWidth);
       for (const [index, item] of items.entries()) {
-        if (item.type !== "resource") continue;
-        result.set(item.node.resource.id, {
-          x: xs[index] ?? 0,
+        const id = item.type === "resource" ? item.node.resource.id : `overflow:${row}`;
+        result.set(id, {
+          x: aligned.get(id) ?? xs[index] ?? 0,
           y: firstRowY + (row - firstRow) * ROW_STEP,
         });
       }
     }
     return result;
-  }, [canvasWidth, firstRow, firstRowY, rows]);
+  }, [canvasWidth, firstRow, firstRowY, rows, graphEdges, familyGroups]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -1097,6 +1113,7 @@ export function ResourceConnectionDiagram({
                         edges={graphEdges}
                         nodes={model.nodes}
                         familyGroups={familyGroups}
+                        highlightedResourceId={hoveredResourceId ?? focusedResourceId ?? (editorSelection?.type === "node" ? editorSelection.resource.id : null)}
                         bundleVariants={bundleVariants && !editing}
                         positions={positions}
                         width={canvasWidth}
@@ -1176,7 +1193,9 @@ export function ResourceConnectionDiagram({
                                   : null
                               }
                               rootResourceId={resource.id}
-                              x={xs[index] ?? 0}
+                              x={positions.get(item.type === "resource" ? item.node.resource.id : `overflow:${row}`)?.x ?? xs[index] ?? 0}
+                              onHover={setHoveredResourceId}
+                              onFocusResource={setFocusedResourceId}
                               y={y}
                               number={number}
                               locale={locale}
@@ -1773,6 +1792,7 @@ function GraphEdges({
   edges,
   nodes,
   familyGroups,
+  highlightedResourceId,
   bundleVariants,
   positions,
   width,
@@ -1784,6 +1804,7 @@ function GraphEdges({
   edges: ConnectionDiagramGraphEdge[];
   nodes: ConnectionDiagramGraphNode[];
   familyGroups: string[][];
+  highlightedResourceId: string | null;
   bundleVariants: boolean;
   positions: ReadonlyMap<string, NodePosition>;
   width: number;
@@ -1810,20 +1831,27 @@ function GraphEdges({
   // Allocate every route in a row gap, including unbundled edges, its own
   // horizontal lane. Coincident lines would imply a shared BOM junction.
   const lanes = new Map<string, number>();
-  const laneGroups = new Map<string, string[]>();
-  const addLane = (key: string, y: number) => {
-    const row = String(y);
-    laneGroups.set(row, [...(laneGroups.get(row) ?? []), key]);
+  const laneGroups = new Map<number, ConnectionLaneRoute[]>();
+  const addLane = (route: ConnectionLaneRoute, y: number) => {
+    laneGroups.set(y, [...(laneGroups.get(y) ?? []), route]);
   };
   for (const edge of visibleEdges) {
     const endpoints = visualEdgeEndpoints(edge);
     if (!endpoints) continue;
     const from = positions.get(endpoints.fromId), to = positions.get(endpoints.toId);
-    if (from && to) addLane(edge.key, Math.min(from.y, to.y));
+    if (!from || !to || from.y === to.y) continue;
+    const ports = anchors.get(edge.key)!;
+    addLane({ key: edge.key,
+      sourceXs: [from.y < to.y ? ports.fromX : ports.toX],
+      targetXs: [from.y < to.y ? ports.toX : ports.fromX],
+    }, Math.min(from.y, to.y));
   }
-  for (const bundle of bundles) addLane(bundle.key, positions.get(bundle.assemblyIds[0])!.y);
-  for (const keys of laneGroups.values()) keys.forEach((key, index) =>
-    lanes.set(key, (index - (keys.length - 1) / 2) * Math.min(12, 90 / Math.max(1, keys.length - 1))));
+  for (const bundle of bundles) addLane({ key: bundle.key,
+    sourceXs: bundle.assemblyIds.map(id => positions.get(id)!.x + NODE_WIDTH / 2),
+    targetXs: bundle.componentIds.map(id => positions.get(id)!.x + NODE_WIDTH / 2),
+  }, positions.get(bundle.assemblyIds[0])!.y);
+  for (const routes of laneGroups.values())
+    for (const [key, lane] of assignConnectionLanes(routes)) lanes.set(key, lane);
   const toggleBundle = (key: string) => setExpandedBundles((previous) => {
     const next = new Set(previous);
     if (next.has(key)) next.delete(key); else next.add(key);
@@ -1854,8 +1882,8 @@ function GraphEdges({
         ))}
       </defs>
       {visibleEdges.map((edge) => (
+        <g key={edge.key} opacity={!highlightedResourceId || edge.firstResourceId === highlightedResourceId || edge.secondResourceId === highlightedResourceId ? 1 : 0.12}>
         <GraphEdge
-          key={edge.key}
           edge={edge}
           positions={positions}
           anchors={anchors.get(edge.key)}
@@ -1868,9 +1896,11 @@ function GraphEdges({
           selected={selectedEdgeKey === edge.key}
           onSelect={onSelect}
         />
+        </g>
       ))}
       {bundles.map((bundle) => (
-        <BundledGraphEdges key={bundle.key} bundle={bundle} positions={positions}
+        <g key={bundle.key} opacity={!highlightedResourceId || bundle.assemblyIds.includes(highlightedResourceId) || bundle.componentIds.includes(highlightedResourceId) ? 1 : 0.12}>
+        <BundledGraphEdges bundle={bundle} positions={positions}
           lane={lanes.get(bundle.key) ?? 0} expanded={expandedBundles.has(bundle.key)}
           label={t(expandedBundles.has(bundle.key)
             ? "connectionDiagram.bundling.collapse" : "connectionDiagram.bundling.expand", {
@@ -1880,6 +1910,7 @@ function GraphEdges({
             count: bundle.edges.length, value: bundle.edges.length,
           })}
           onToggle={() => toggleBundle(bundle.key)} />
+        </g>
       ))}
     </svg>
   );
@@ -2073,7 +2104,11 @@ function PositionedGraphNode({
   editing,
   selectedResourceId,
   onSelect,
+  onHover,
+  onFocusResource,
 }: {
+  onHover: (id: string | null) => void;
+  onFocusResource: (id: string | null) => void;
   item: DisplayRowItem;
   cover: ConnectionDiagramCover | null;
   stock: ConnectionStockSummary | null;
@@ -2243,6 +2278,10 @@ function PositionedGraphNode({
       })}
       aria-pressed={selected}
       className={className}
+      onMouseEnter={() => onHover(item.node.resource.id)}
+      onMouseLeave={() => onHover(null)}
+      onFocus={() => onFocusResource(item.node.resource.id)}
+      onBlur={() => onFocusResource(null)}
       style={style}
     >
       <span className={contentClassName}>{content}</span>

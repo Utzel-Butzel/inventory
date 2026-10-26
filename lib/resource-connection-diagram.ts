@@ -938,6 +938,50 @@ export function orderConnectionRows(
     }
     if (rowNodes.length) result.set(level, rowNodes);
   }
+  // Refine both family blocks and their members against actual neighbours.
+  // Keep the selected product row stable, and retain only improvements.
+  const positions = () => new Map([...result].flatMap(([row, members]) =>
+    members.map((node, index) => [node.resource.id, { x: row, y: index - (members.length - 1) / 2 }] as const)));
+  const adjacency = new Map<string, string[]>();
+  const flowEdges = edges.filter(edge => !edge.visualOnly && edge.connections.some(c => c.kind !== "family"));
+  for (const edge of flowEdges) {
+    for (const [a, b] of [[edge.firstResourceId, edge.secondResourceId], [edge.secondResourceId, edge.firstResourceId]])
+      adjacency.set(a, [...(adjacency.get(a) ?? []), b]);
+  }
+  const score = () => {
+    const points = positions();
+    const length = flowEdges.reduce((sum, edge) => {
+      const a = points.get(edge.firstResourceId), b = points.get(edge.secondResourceId);
+      return sum + (a && b && a.x !== b.x ? Math.abs(a.y - b.y) : 0);
+    }, 0);
+    return countConnectionCrossings(flowEdges, points) * 10000 + length;
+  };
+  let bestScore = score();
+  for (let pass = 0; pass < 6; pass++) {
+    const levels = [...result.keys()].sort((a, b) => pass % 2 ? b - a : a - b);
+    for (const row of levels) {
+      const original = result.get(row)!;
+      if (original.some(node => node.resource.id === rootResourceId)) continue;
+      const points = positions();
+      const center = (node: ConnectionDiagramGraphNode) => {
+        const neighbors = (adjacency.get(node.resource.id) ?? []).map(id => points.get(id))
+          .filter((point): point is Point => Boolean(point && point.x !== row));
+        return neighbors.length ? neighbors.reduce((sum, point) => sum + point.y, 0) / neighbors.length
+          : points.get(node.resource.id)!.y;
+      };
+      const blocks = new Map<string, ConnectionDiagramGraphNode[]>();
+      for (const node of original) {
+        const group = groupIdOf.get(node.resource.id)!;
+        blocks.set(group, [...(blocks.get(group) ?? []), node]);
+      }
+      const candidates = [...blocks.values()].map(members => [...members].sort((a,b) => center(a) - center(b)))
+        .sort((a,b) => a.reduce((sum,n) => sum + center(n),0) / a.length - b.reduce((sum,n) => sum + center(n),0) / b.length).flat();
+      result.set(row, candidates);
+      const candidateScore = score();
+      if (candidateScore < bestScore) bestScore = candidateScore;
+      else result.set(row, original);
+    }
+  }
   return result;
 }
 
