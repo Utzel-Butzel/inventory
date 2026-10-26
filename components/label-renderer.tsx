@@ -2,6 +2,7 @@
 
 import {
   type CSSProperties,
+  type ReactNode,
   useCallback,
   useLayoutEffect,
   useRef,
@@ -13,22 +14,22 @@ import {
   Code128Barcode,
   QrCode,
 } from "@/components/label-codes";
-import type {
-  LabelElement,
-  LabelFontFamily,
-  LabelSetupDto,
+import {
+  labelElementKey,
+  type LabelElement,
+  type LabelFontFamily,
+  type LabelSetupDto,
+  type LabelTextElement,
 } from "@/lib/label-setup-contract";
 import { labelTargetName, labelTargetUrl, type LabelResource } from "@/lib/label-target";
+import { resolveLabelText, labelPlaceholderValues } from "@/lib/label-rich-text";
 import { printableLabelBarcode } from "@/lib/label-barcode";
 
 import styles from "./label-printer.module.css";
 
 export type { LabelResource } from "@/lib/label-target";
 
-type TextElement = Extract<
-  LabelElement,
-  { type: "name" | "subtitle" | "identifier" | "url" | "location" }
->;
+type TextElement = LabelTextElement;
 
 const elementPosition = (element: LabelElement): CSSProperties => ({
   left: `${element.x}%`,
@@ -83,7 +84,7 @@ const FONT_FAMILY_STACKS: Record<LabelFontFamily, string> = {
 };
 
 function defaultFontFamily(element: TextElement): LabelFontFamily {
-  return element.type === "name" || element.type === "subtitle" ? "sans" : "monospace";
+  return ["name", "subtitle", "text"].includes(element.type) ? "sans" : "monospace";
 }
 
 function textStyle(element: TextElement, pixelsPerMm?: number): CSSProperties {
@@ -97,6 +98,13 @@ function textStyle(element: TextElement, pixelsPerMm?: number): CSSProperties {
     fontFamily:
       FONT_FAMILY_STACKS[element.fontFamily ?? defaultFontFamily(element)],
     textAlign: element.align ?? "left",
+    whiteSpace: element.content ? "pre-wrap" : undefined,
+    alignItems:
+      element.verticalAlign === "top"
+        ? "flex-start"
+        : element.verticalAlign === "bottom"
+          ? "flex-end"
+          : "center",
     justifyContent:
       element.align === "center"
         ? "center"
@@ -110,7 +118,7 @@ function ShrinkingText({
   value,
   element,
 }: {
-  value: string;
+  value: ReactNode;
   element: TextElement;
 }) {
   const textRef = useRef<HTMLSpanElement>(null);
@@ -183,7 +191,7 @@ function EllipsisText({
   element,
   labelHeightMm,
 }: {
-  value: string;
+  value: ReactNode;
   element: TextElement;
   labelHeightMm: number;
 }) {
@@ -245,18 +253,14 @@ export function LabelRenderer({
       {setup.elements
         .filter((element) => element.visible)
         .sort((left, right) =>
-          left.type === "background"
-            ? -1
-            : right.type === "background"
-              ? 1
-              : 0,
+          Number(right.type === "background") - Number(left.type === "background"),
         )
         .map((element) => {
           const position = elementPosition(element);
           if (element.type === "background") {
             return element.source ? (
               <div
-                key={element.type}
+                key={labelElementKey(element)}
                 className={styles.designedElement}
                 style={position}
                 aria-hidden="true"
@@ -277,7 +281,7 @@ export function LabelRenderer({
           }
           if (element.type === "qr") {
             return (
-              <div key={element.type} className={styles.designedElement} style={position}>
+              <div key={labelElementKey(element)} data-label-qr className={styles.designedElement} style={position}>
                 {qrValue ? (
                   <QrCode
                     value={qrValue}
@@ -297,7 +301,7 @@ export function LabelRenderer({
           }
           if (element.type === "image") {
             return (
-              <div key={element.type} className={styles.designedElement} style={position}>
+              <div key={labelElementKey(element)} className={styles.designedElement} style={position}>
                 <PrintableImage
                   resource={resource}
                   element={element}
@@ -309,7 +313,7 @@ export function LabelRenderer({
           }
           if (element.type === "barcode") {
             return (
-              <div key={element.type} className={styles.designedElement} style={position}>
+              <div key={labelElementKey(element)} className={styles.designedElement} style={position}>
                 <Code128Barcode
                   value={barcodeCode}
                   className={styles.designedBarcode}
@@ -319,7 +323,7 @@ export function LabelRenderer({
             );
           }
 
-          const value =
+          const plainValue =
             element.type === "name"
               ? resource.name
               : element.type === "subtitle"
@@ -329,10 +333,15 @@ export function LabelRenderer({
                 : element.type === "url"
                   ? shortUrl
                   : location;
+          const value = element.content
+            ? resolveLabelText(element.content, labelPlaceholderValues(resource, origin)).map((run, index) => (
+                <span key={index} style={{ fontWeight: run.weight ?? 400, fontStyle: run.italic ? "italic" : "normal", textDecorationLine: run.underline ? "underline" : "none" }}>{run.text}</span>
+              ))
+            : plainValue;
           const textOverflow = element.textOverflow ?? "ellipsis";
           return (
             <div
-              key={element.type}
+              key={labelElementKey(element)}
               className={`${styles.designedElement} ${styles.designedText} ${
                 element.type === "name"
                   ? styles.designedName

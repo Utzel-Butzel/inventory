@@ -77,6 +77,12 @@
     "width": "Breite (mm)",
     "height": "Höhe (mm)",
     "elementsTitle": "Elemente",
+    "addElement": "Element hinzufügen",
+    "addElementType": "{{element}} hinzufügen",
+    "elementInstance": "{{element}} {{number}}",
+    "elementLimit": "Maximal {{count}} Elemente pro Vorlage. Entferne ein Element, um ein neues hinzuzufügen.",
+    "noElements": "Füge das erste Element über den Plus-Button hinzu.",
+    "removeElement": "{{element}} entfernen",
     "showElement": "{{element}} anzeigen",
     "resizeElement": "Größe von {{element}} ändern",
     "properties": "Eigenschaften",
@@ -118,7 +124,8 @@
       "monospace": "Monospace",
       "rounded": "Abgerundet"
     },
-    "alignment": "Ausrichtung",
+    "alignment": "Horizontale Ausrichtung",
+    "verticalAlignment": "Vertikale Ausrichtung",
     "textOverflow": "Bei Platzmangel",
     "minimumFontSize": "Kleinste Schriftgröße (mm)",
     "textOverflowModes": {
@@ -127,7 +134,7 @@
     },
     "instructions": "Ziehe das ausgewählte Element, ändere seine Größe am Eckgriff oder gib genaue Maße ein. Pfeiltasten verschieben um 0,1 mm, mit Umschalttaste um 1 mm.",
     "chooseElement": "Wähle ein Element aus, um Position und Stil zu bearbeiten.",
-    "overlap": "Verschiebe oder skaliere das Bild, damit es den QR-Code nicht überdeckt.",
+    "overlap": "Ein Titelbild überdeckt einen QR-Code. Verschiebe oder verkleinere eines der Elemente.",
     "previewNote": "Vorschau und gedrucktes Etikett verwenden dieselben Positionen.",
     "delete": "Vorlage löschen",
     "cancel": "Abbrechen",
@@ -142,7 +149,8 @@
       "barcode": "Barcode",
       "url": "Kurzlink",
       "location": "Standort",
-      "subtitle": "Subtitle"
+      "subtitle": "Subtitle",
+      "text": "Freies Textfeld"
     },
     "coordinates": {
       "x": "Links",
@@ -155,6 +163,11 @@
       "center": "Zentriert",
       "right": "Rechts"
     },
+    "verticalAlign": {
+      "top": "Oben",
+      "middle": "Mitte",
+      "bottom": "Unten"
+    },
     "sample": {
       "name": "Akku-Schlagschrauber",
       "location": "Werkstatt · Regal B",
@@ -164,7 +177,37 @@
       "missingName": "Eintrag ohne optionale Angaben",
       "subtitle": "18 V · Akku + Ladegerät"
     },
-    "lineHeight": "Zeilenabstand (Faktor)"
+    "lineHeight": "Zeilenabstand (Faktor)",
+    "richText": {
+      "content": "Text & Platzhalter",
+      "formatting": "Text formatieren",
+      "bold": "Fett",
+      "normal": "Normal",
+      "light": "Dünn",
+      "italic": "Kursiv",
+      "underline": "Unterstrichen",
+      "lineBreak": "Zeilenumbruch einfügen",
+      "insertPlaceholder": "Platzhalter einfügen",
+      "choosePlaceholder": "Platzhalter auswählen…",
+      "hint": "Eigener Text und [Title] lassen sich kombinieren. Enter fügt eine neue Zeile ein. Markiere Text zum Formatieren; ⌘/Strg+B, I oder U funktioniert ebenfalls.",
+      "limit": "Maximal 8.000 Zeichen und 500 unterschiedlich formatierte Abschnitte pro Textfeld.",
+      "add": "Freies Textfeld hinzufügen",
+      "fieldName": "Textfeld {{number}}",
+      "remove": "{{element}} löschen",
+      "reset": "Standardinhalt wiederherstellen",
+      "placeholders": {
+        "Title": "Titel",
+        "Subtitle": "Untertitel",
+        "Identifier": "Seriennummer / SKU / ID",
+        "SKU": "SKU",
+        "Barcode": "Barcode",
+        "Location": "Standort",
+        "Quantity": "Anzahl",
+        "Type": "Typ",
+        "ID": "Eintrags-ID",
+        "URL": "Kurzlink"
+      }
+    }
   },
   "renderer": {
     "noImage": "Kein Bild",
@@ -248,7 +291,7 @@
     "subtitle": "Subtitle",
     "hint": "Änderungen gelten nur für diese Etiketten. Die Artikeldaten bleiben unverändert.",
     "reset": "Artikeltexte übernehmen",
-    "hiddenSubtitle": "Diese Vorlage zeigt keinen Subtitle. Aktiviere das Feld unter „Gestalten“.",
+    "hiddenSubtitle": "Diese Vorlage zeigt keinen Subtitle. Füge das Feld unter „Gestalten“ hinzu oder blende es ein.",
     "edit": "Beschriftung bearbeiten",
     "save": "Änderungen übernehmen",
     "cancel": "Abbrechen",

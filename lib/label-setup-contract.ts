@@ -10,9 +10,28 @@ export const labelElementTypes = [
   "barcode",
   "url",
   "location",
+  "text",
 ] as const;
 
+export const MAX_LABEL_ELEMENTS = 32;
+export const MAX_LABEL_TEXT_LENGTH = 8_000;
+
+export const labelTextRunSchema = z.object({
+  text: z.string().max(MAX_LABEL_TEXT_LENGTH),
+  weight: z.union([z.literal(300), z.literal(400), z.literal(700)]).optional(),
+  italic: z.boolean().optional(),
+  underline: z.boolean().optional(),
+}).strict();
+
+export const labelTextContentSchema = z.array(labelTextRunSchema).max(500).refine(
+  (runs) => runs.reduce((length, run) => length + run.text.length, 0) <= MAX_LABEL_TEXT_LENGTH,
+  { message: "Text must not exceed 8000 characters." },
+);
+
+export type LabelTextRun = z.infer<typeof labelTextRunSchema>;
+
 export const labelTextAlignments = ["left", "center", "right"] as const;
+export const labelTextVerticalAlignments = ["top", "middle", "bottom"] as const;
 export const labelTextOverflowModes = ["ellipsis", "shrink"] as const;
 export const labelFontFamilies = [
   "sans",
@@ -35,6 +54,8 @@ const normalizedPositionSchema = z.number().finite().min(0).max(100);
 const normalizedSizeSchema = z.number().finite().positive().max(100);
 
 const labelElementBoxShape = {
+  // Older templates identify their single instance by type.
+  id: z.string().uuid().optional(),
   x: normalizedPositionSchema,
   y: normalizedPositionSchema,
   width: normalizedSizeSchema,
@@ -48,10 +69,19 @@ const textElementOptions = {
   fontFamily: z.enum(labelFontFamilies).optional(),
   lineHeight: z.number().finite().min(0.8).max(2).optional(),
   align: z.enum(labelTextAlignments).optional(),
+  verticalAlign: z.enum(labelTextVerticalAlignments).optional(),
   textOverflow: z.enum(labelTextOverflowModes).optional(),
+  content: labelTextContentSchema.optional(),
 };
 
 const labelElementSchemaBase = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("text"),
+    ...labelElementBoxShape,
+    id: z.string().uuid(),
+    ...textElementOptions,
+    content: labelTextContentSchema,
+  }).strict(),
   z
     .object({
       type: z.literal("background"),
@@ -136,24 +166,25 @@ export const labelElementSchema = labelElementSchemaBase.superRefine(
 
 export const labelElementsSchema = z
   .array(labelElementSchema)
-  .max(labelElementTypes.length)
+  .max(MAX_LABEL_ELEMENTS)
   .superRefine((elements, context) => {
     const seen = new Set<string>();
     elements.forEach((element, index) => {
-      if (seen.has(element.type)) {
+      const key = labelElementKey(element);
+      if (seen.has(key)) {
         context.addIssue({
           code: "custom",
-          path: [index, "type"],
-          message: "Each label element type may only appear once.",
+          path: [index, element.id ? "id" : "type"],
+          message: "Each label element must have a unique identity.",
         });
       }
-      seen.add(element.type);
+      seen.add(key);
     });
-    if (hasVisibleQrImageOverlap(elements)) {
-      const imageIndex = elements.findIndex((element) => element.type === "image");
+    const imageIndex = overlappingImageIndex(elements);
+    if (imageIndex >= 0) {
       context.addIssue({
         code: "custom",
-        path: [imageIndex < 0 ? 0 : imageIndex],
+        path: [imageIndex],
         message: "The object image must not overlap the QR code.",
       });
     }
@@ -187,12 +218,20 @@ export const labelSetupDeleteSchema = z
 
 export type LabelElementType = (typeof labelElementTypes)[number];
 export type LabelTextAlignment = (typeof labelTextAlignments)[number];
+export type LabelTextVerticalAlignment = (typeof labelTextVerticalAlignments)[number];
 export type LabelTextOverflowMode = (typeof labelTextOverflowModes)[number];
 export type LabelFontFamily = (typeof labelFontFamilies)[number];
 export type LabelImageFit = (typeof labelImageFits)[number];
 export type LabelElement = z.infer<typeof labelElementSchema>;
+export type LabelTextElement = Extract<LabelElement, {
+  type: "name" | "subtitle" | "identifier" | "url" | "location" | "text";
+}>;
 export type LabelSetupCreate = z.infer<typeof labelSetupCreateSchema>;
 export type LabelSetupPatch = z.infer<typeof labelSetupPatchSchema>;
+
+export function labelElementKey(element: LabelElement): string {
+  return element.id ?? element.type;
+}
 
 export function labelElementsOverlap(
   left: Pick<LabelElement, "x" | "y" | "width" | "height">,
@@ -206,12 +245,16 @@ export function labelElementsOverlap(
   );
 }
 
-export function hasVisibleQrImageOverlap(elements: LabelElement[]) {
-  const qr = elements.find((element) => element.type === "qr" && element.visible);
-  const image = elements.find(
-    (element) => element.type === "image" && element.visible,
+function overlappingImageIndex(elements: LabelElement[]) {
+  const qrCodes = elements.filter((element) => element.type === "qr" && element.visible);
+  return elements.findIndex(
+    (element) => element.type === "image" && element.visible &&
+      qrCodes.some(qr => labelElementsOverlap(qr, element)),
   );
-  return Boolean(qr && image && labelElementsOverlap(qr, image));
+}
+
+export function hasVisibleQrImageOverlap(elements: LabelElement[]) {
+  return overlappingImageIndex(elements) >= 0;
 }
 
 export type LabelSetupDto = {

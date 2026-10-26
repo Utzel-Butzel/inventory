@@ -84,17 +84,32 @@ export async function renderPtouchLabel(node: HTMLElement, widthMm: number, heig
     if (!qrContext) throw new Error("Unable to validate QR code.");
     qrContext.fillStyle = "#ffffff";
     qrContext.fillRect(0, 0, qrCanvas.width, qrCanvas.height);
-    qrContext.drawImage(canvas, 0, Math.floor((qrCanvas.height - height) / 2), qrCanvas.width, height);
-    const qrPixels = qrContext.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
-    const monochrome = new Uint8ClampedArray(qrPixels.data.length);
-    for (let i = 0; i < qrPixels.data.length; i += 4) {
-      const value = qrPixels.data[i] * 0.2126 + qrPixels.data[i + 1] * 0.7152 + qrPixels.data[i + 2] * 0.0722 < 128 ? 0 : 255;
-      monochrome[i] = monochrome[i + 1] = monochrome[i + 2] = value;
-      monochrome[i + 3] = 255;
-    }
+    const tapeOffset = Math.floor((qrCanvas.height - height) / 2);
+    qrContext.drawImage(canvas, 0, tapeOffset, qrCanvas.width, height);
     const { default: jsQR } = await import("jsqr");
-    if (jsQR(monochrome, qrCanvas.width, qrCanvas.height)?.data !== expectedQr) {
-      throw new Error("QR code is too small or unreadable at print resolution. Enlarge it or use wider tape.");
+    const qrElements = Array.from(node.querySelectorAll<HTMLElement>("[data-label-qr]"));
+    if (!qrElements.length) throw new Error("Unable to validate QR code.");
+    // Decode each instance separately: one readable QR must not hide a broken second one.
+    const padding = Math.ceil(2 * PTOUCH_PIXELS_PER_MM);
+    for (const qr of qrElements) {
+      const bounds = qr.getBoundingClientRect();
+      const left = (bounds.left - labelBounds.left) / labelBounds.width * qrCanvas.width;
+      const top = (bounds.top - labelBounds.top) / labelBounds.height * height + tapeOffset;
+      const x = Math.max(0, Math.floor(left - padding));
+      const y = Math.max(0, Math.floor(top - padding));
+      const scanWidth = Math.min(qrCanvas.width, Math.ceil(left + bounds.width / labelBounds.width * qrCanvas.width + padding)) - x;
+      const scanHeight = Math.min(qrCanvas.height, Math.ceil(top + bounds.height / labelBounds.height * height + padding)) - y;
+      if (scanWidth <= 0 || scanHeight <= 0) throw new Error("Unable to validate QR code.");
+      const qrPixels = qrContext.getImageData(x, y, scanWidth, scanHeight);
+      const monochrome = new Uint8ClampedArray(qrPixels.data.length);
+      for (let i = 0; i < qrPixels.data.length; i += 4) {
+        const value = qrPixels.data[i] * 0.2126 + qrPixels.data[i + 1] * 0.7152 + qrPixels.data[i + 2] * 0.0722 < 128 ? 0 : 255;
+        monochrome[i] = monochrome[i + 1] = monochrome[i + 2] = value;
+        monochrome[i + 3] = 255;
+      }
+      if (jsQR(monochrome, scanWidth, scanHeight)?.data !== expectedQr) {
+        throw new Error("QR code is too small or unreadable at print resolution. Enlarge it or use wider tape.");
+      }
     }
   }
   const preview = document.createElement("canvas");

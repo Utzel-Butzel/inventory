@@ -24,6 +24,7 @@ import {
   type LabelSetupDraft,
 } from "@/components/label-designer";
 import { canEncodeQr } from "@/components/label-codes";
+import { labelUsesPlaceholder } from "@/lib/label-rich-text";
 import { LabelTextFields } from "@/components/label-text-fields";
 import { LabelRenderer } from "@/components/label-renderer";
 import { Button, Card, Skeleton } from "@/components/ui";
@@ -443,9 +444,10 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
       return;
     }
 
-    const imageEnabled = activeSetup.elements.some(
+    const imageCount = activeSetup.elements.filter(
       (element) => element.type === "image" && element.visible,
-    );
+    ).length;
+    const imageEnabled = imageCount > 0;
     if (imageEnabled) {
       const missingNames = Array.from(
         new Set(
@@ -480,7 +482,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
           `.${styles.printSurface} .printable-label-image`,
         ),
       );
-      if (imageEnabled && images.length !== labels.length) {
+      if (images.length !== labels.length * imageCount) {
         setPrintError(t("errors.imageRender"));
         return;
       }
@@ -899,7 +901,7 @@ export function LabelPrinter({ canWrite = false }: { canWrite?: boolean }) {
                 </h2>
               </div>
               <p className="px-4 py-3 text-xs leading-5 text-muted">{t("text.hint")}</p>
-              {activeSetup && !activeSetup.elements.some(element => element.type === "subtitle" && element.visible) ? <p className="px-4 pb-3 text-xs text-warning">{t("text.hiddenSubtitle")}</p> : null}
+              {activeSetup && !labelUsesPlaceholder(activeSetup.elements, "Subtitle") ? <p className="px-4 pb-3 text-xs text-warning">{t("text.hiddenSubtitle")}</p> : null}
               <div className="max-h-[36rem] divide-y divide-border overflow-y-auto">
                 {selectedResources.map((resource) => {
                   const count = copies[labelTargetKey(resource)] ?? 1;
@@ -1153,7 +1155,7 @@ function PreparedLabelEditor({ label, origin, onSave, onCancel }: {
       <LabelTextFields resource={resource} onChange={change => setResource(current => applyLabelTextOverride(current, change))}
         onReset={() => setResource(applyLabelTextOverride(resource, { name: label.original.name, subtitle: label.original.subtitle ?? "" }))} />
     </fieldset>
-    {!label.setup.elements.some(element => element.type === "subtitle" && element.visible) ? <p className="mt-3 text-xs text-warning">{t("text.hiddenSubtitle")}</p> : null}
+    {!labelUsesPlaceholder(label.setup.elements, "Subtitle") ? <p className="mt-3 text-xs text-warning">{t("text.hiddenSubtitle")}</p> : null}
     <div ref={preview} className="my-5 overflow-auto bg-surface-subtle p-4">
       <LabelRenderer resource={resource} setup={label.setup} origin={origin} />
     </div>

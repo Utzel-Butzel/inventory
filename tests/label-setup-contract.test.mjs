@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { randomUUID } from "node:crypto";
 
 import {
   hasVisibleQrImageOverlap,
+  labelElementKey,
+  labelElementTypes,
   labelElementsSchema,
+  labelElementsOverlap,
+  MAX_LABEL_ELEMENTS,
   labelSetupCreateSchema,
   labelSetupDeleteSchema,
   labelSetupPatchSchema,
 } from "../lib/label-setup-contract.ts";
+import { placeNewLabelElement } from "../lib/label-element-layout.ts";
 
 const elements = [
   {
@@ -177,7 +183,7 @@ test("rejects boxes that extend beyond the normalized label", () => {
   );
 });
 
-test("rejects zero-sized boxes and duplicate element types", () => {
+test("rejects zero-sized boxes and ambiguous legacy instances without IDs", () => {
   assert.equal(
     labelElementsSchema.safeParse([
       { type: "qr", x: 0, y: 0, width: 0, height: 20, visible: true },
@@ -299,4 +305,88 @@ test("subtitle is an independently configurable text element alongside the title
   const subtitle = { type: "subtitle", x: 30, y: 65, width: 50, height: 25, visible: true, fontFamily: "sans", fontSizeMm: 2.3, minFontSizeMm: 1.5, textOverflow: "shrink" };
   assert.equal(labelElementsSchema.safeParse([...elements, subtitle]).success, true);
   assert.equal(labelElementsSchema.safeParse([subtitle, subtitle]).success, false);
+});
+
+test("multiple instances of every element type retain their identities through create and patch", () => {
+  const instances = labelElementTypes.flatMap(type => [0, 1].map(index => ({
+    type, id: randomUUID(), x: type === "image" ? 50 : 0, y: index * 30,
+    width: 20, height: 20, visible: true,
+    ...(type === "text" ? { content: [{ text: `Copy ${index}: [Title]` }] } : {}),
+  })));
+  const saved = labelSetupCreateSchema.parse({ name: "Multiple instances", widthMm: 80, heightMm: 18, elements: instances });
+  assert.deepEqual(saved.elements, instances);
+  assert.deepEqual(labelSetupPatchSchema.parse(JSON.parse(JSON.stringify({ revision: 1, elements: saved.elements }))).elements, instances);
+  assert.equal(new Set(instances.map(labelElementKey)).size, instances.length);
+});
+
+test("new instances coexist with untouched legacy elements, but IDs must be unique across types", () => {
+  const old = elements.find(element => element.type === "qr");
+  const additional = { ...old, id: randomUUID(), x: 50 };
+  assert.deepEqual(labelElementsSchema.parse([old, additional]), [old, additional]);
+  assert.equal(labelElementKey(old), "qr");
+  assert.equal(labelElementKey(additional), additional.id);
+  assert.equal(labelElementsSchema.safeParse([additional, additional]).success, false);
+  const conflictingName = { type: "name", id: additional.id, x: 0, y: 0, width: 20, height: 20, visible: false };
+  assert.equal(labelElementsSchema.safeParse([additional, conflictingName]).success, false);
+  assert.equal(labelElementsSchema.safeParse([{ ...additional, id: "name" }]).success, false);
+});
+
+test("the element limit counts instances, including hidden ones", () => {
+  const instances = Array.from({ length: MAX_LABEL_ELEMENTS }, () => ({
+    type: "name", id: randomUUID(), x: 0, y: 0, width: 20, height: 20, visible: false,
+  }));
+  assert.equal(labelElementsSchema.safeParse(instances).success, true);
+  assert.equal(labelElementsSchema.safeParse([...instances, { ...instances[0], id: randomUUID() }]).success, false);
+});
+
+test("overlap checks consider every visible QR and image instance and identify the offending image", () => {
+  const box = { y: 0, width: 20, height: 20, visible: true };
+  const instances = [
+    { type: "qr", id: randomUUID(), ...box, x: 0 },
+    { type: "qr", id: randomUUID(), ...box, x: 75 },
+    { type: "image", id: randomUUID(), ...box, x: 25 },
+    { type: "image", id: randomUUID(), ...box, x: 75 },
+  ];
+  assert.equal(hasVisibleQrImageOverlap(instances), true);
+  const rejected = labelElementsSchema.safeParse(instances);
+  assert.equal(rejected.success, false);
+  assert.deepEqual(rejected.error.issues[0].path, [3]);
+  assert.equal(labelElementsSchema.safeParse(instances.map((item, i) => i === 3 ? { ...item, visible: false } : item)).success, true);
+  assert.equal(labelElementsSchema.safeParse(instances.map((item, i) => i === 1 ? { ...item, visible: false } : item)).success, true);
+  assert.equal(labelElementsSchema.safeParse(instances.map((item, i) => i === 3 ? { ...item, x: 50 } : item)).success, true);
+});
+
+test("adding repeated elements finds available space without moving or resizing existing instances", () => {
+  const existing = [
+    { type: "qr", x: 5, y: 5, width: 30, height: 25, visible: true },
+    { type: "qr", id: randomUUID(), x: 40, y: 5, width: 30, height: 25, visible: true },
+    { type: "name", x: 0, y: 50, width: 100, height: 25, visible: true },
+  ];
+  const before = structuredClone(existing);
+  for (const type of ["qr", "image", "name", "barcode"]) {
+    const newElement = { type, id: randomUUID(), x: 5, y: 5, width: 20, height: 20, visible: true };
+    const placed = placeNewLabelElement(newElement, existing);
+    assert.equal(placed.id, newElement.id);
+    assert.equal(placed.width, newElement.width);
+    assert.equal(placed.height, newElement.height);
+    assert.ok(existing.every(item => !labelElementsOverlap(placed, item)));
+    assert.equal(labelElementsSchema.safeParse([...existing, placed]).success, true);
+  }
+  assert.deepEqual(existing, before);
+});
+
+test("placement ignores backgrounds and hidden instances, and preserves QR readability on crowded labels", () => {
+  const box = { x: 5, y: 5, width: 30, height: 25, visible: true };
+  const newImage = { type: "image", id: randomUUID(), ...box };
+  const background = { type: "background", x: 0, y: 0, width: 100, height: 100, visible: true };
+  assert.deepEqual(placeNewLabelElement(newImage, [background, { type: "qr", ...box, visible: false }]), newImage);
+  assert.deepEqual(placeNewLabelElement(background, [newImage]), background);
+  const crowded = [{ ...background, type: "name" }, { type: "qr", ...box }];
+  const placed = placeNewLabelElement(newImage, crowded);
+  assert.equal(hasVisibleQrImageOverlap([...crowded, placed]), false);
+  assert.equal(labelElementsSchema.safeParse([...crowded, placed]).success, true);
+  const fullQr = { ...background, type: "qr" };
+  const needsPlacement = placeNewLabelElement(newImage, [fullQr]);
+  assert.equal(hasVisibleQrImageOverlap([fullQr, needsPlacement]), true);
+  assert.deepEqual(fullQr, { ...background, type: "qr" });
 });

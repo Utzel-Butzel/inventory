@@ -10,6 +10,7 @@ import {
   MapPin,
   Maximize2,
   QrCode as QrCodeIcon,
+  Plus,
   Redo2,
   Trash2,
   Type,
@@ -35,20 +36,22 @@ import {
   type LabelResource,
 } from "@/components/label-renderer";
 import { Button } from "@/components/ui";
+import { LabelRichTextEditor } from "@/components/label-rich-text-editor";
+import { defaultLabelTextContent } from "@/lib/label-rich-text";
+import { placeNewLabelElement } from "@/lib/label-element-layout";
 import {
   hasVisibleQrImageOverlap,
-  labelElementsOverlap,
+  labelElementKey,
+  MAX_LABEL_ELEMENTS,
+  type LabelTextElement,
   type LabelElement,
   type LabelFontFamily,
   type LabelSetupDto,
+  type LabelTextVerticalAlignment,
 } from "@/lib/label-setup-contract";
 
 type ElementType = LabelElement["type"];
-type TextElement = Extract<
-  LabelElement,
-  { type: "name" | "subtitle" | "identifier" | "url" | "location" }
->;
-type BackgroundElement = Extract<LabelElement, { type: "background" }>;
+type TextElement = LabelTextElement;
 type QrElement = Extract<LabelElement, { type: "qr" }>;
 type CoordinateKey = "x" | "y" | "width" | "height";
 type CoordinateUnit = "mm" | "percent";
@@ -70,6 +73,7 @@ const ELEMENT_OPTIONS = [
   { type: "barcode", labelKey: "designer.elements.barcode", icon: Barcode },
   { type: "url", labelKey: "designer.elements.url", icon: Link2 },
   { type: "location", labelKey: "designer.elements.location", icon: MapPin },
+  { type: "text", labelKey: "designer.elements.text", icon: Type },
 ] as const;
 
 const MAX_HISTORY_LENGTH = 80;
@@ -101,11 +105,14 @@ const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
 const newElement = (type: ElementType): LabelElement => {
-  const box = { x: 5, y: 5, width: 30, height: 25, visible: true };
+  const box = { id: crypto.randomUUID(), x: 5, y: 5, width: 30, height: 25, visible: true };
   switch (type) {
+    case "text":
+      return { type, ...box, width: 55, height: 35, content: [{ text: "[Title]" }], fontFamily: "sans", fontSizeMm: 3, textOverflow: "shrink" };
     case "background":
       return {
         type,
+        ...box,
         x: 0,
         y: 0,
         width: 100,
@@ -192,64 +199,6 @@ function readFileAsDataUrl(file: File) {
   });
 }
 
-function separateQrAndImage(
-  elements: LabelElement[],
-  activatedType: "qr" | "image",
-  widthMm: number,
-  heightMm: number,
-) {
-  const qr = elements.find((element) => element.type === "qr");
-  const image = elements.find((element) => element.type === "image");
-  if (
-    !qr?.visible ||
-    !image?.visible ||
-    !labelElementsOverlap(qr, image)
-  ) {
-    return elements;
-  }
-
-  const anchor = activatedType === "image" ? qr : image;
-  const splitHorizontally =
-    anchor.width * widthMm >= anchor.height * heightMm;
-  const length = splitHorizontally ? anchor.width : anchor.height;
-  if (length < 1) return elements;
-  const gap = roundCoordinate(Math.min(2, length * 0.05));
-  const firstLength = roundCoordinate((length - gap) / 2);
-  const secondLength = roundCoordinate(length - gap - firstLength);
-
-  return elements.map((element) => {
-    if (element.type === "qr") {
-      return {
-        ...element,
-        x: anchor.x,
-        y: anchor.y,
-        ...(splitHorizontally
-          ? { width: firstLength, height: anchor.height }
-          : { width: anchor.width, height: firstLength }),
-      };
-    }
-    if (element.type === "image") {
-      return {
-        ...element,
-        ...(splitHorizontally
-          ? {
-              x: roundCoordinate(anchor.x + firstLength + gap),
-              y: anchor.y,
-              width: secondLength,
-              height: anchor.height,
-            }
-          : {
-              x: anchor.x,
-              y: roundCoordinate(anchor.y + firstLength + gap),
-              width: anchor.width,
-              height: secondLength,
-            }),
-      };
-    }
-    return element;
-  });
-}
-
 function previewSetup(draft: LabelSetupDraft): LabelSetupDto {
   return {
     id: draft.id ?? "preview",
@@ -290,6 +239,7 @@ export function LabelDesigner({
   const canvasRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   const currentValueRef = useRef(value);
@@ -298,7 +248,11 @@ export function LabelDesigner({
   const undoRef = useRef<() => void>(() => undefined);
   const redoRef = useRef<() => void>(() => undefined);
   const [historyState, setHistoryState] = useState({ past: 0, future: 0 });
-  const [selectedType, setSelectedType] = useState<ElementType>("qr");
+  const [selectedKey, setSelectedKey] = useState(() => {
+    const initial = value.elements.find(element => element.type === "qr") ?? value.elements[0];
+    return initial ? labelElementKey(initial) : "";
+  });
+  const [showAddElements, setShowAddElements] = useState(false);
   const [zoomPercent, setZoomPercent] = useState(100);
   const [gridSizeMm, setGridSizeMm] = useState(1);
   const [snapToGrid, setSnapToGrid] = useState(true);
@@ -308,7 +262,7 @@ export function LabelDesigner({
     useState<PreviewScenario>("current");
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
   const [interaction, setInteraction] = useState<{
-    type: ElementType;
+    key: string;
     mode: "move" | "resize";
     pointerId: number;
     startX: number;
@@ -318,7 +272,15 @@ export function LabelDesigner({
   } | null>(null);
 
   const selected =
-    value.elements.find((element) => element.type === selectedType) ?? null;
+    value.elements.find((element) => labelElementKey(element) === selectedKey) ?? null;
+  const elementName = (element: LabelElement) => {
+    const siblings = value.elements.filter(item => item.type === element.type);
+    const number = siblings.findIndex(item => labelElementKey(item) === labelElementKey(element)) + 1;
+    const name = t(ELEMENT_OPTIONS.find(option => option.type === element.type)!.labelKey);
+    return siblings.length > 1 || element.type === "text"
+      ? t("designer.elementInstance", { element: name, number })
+      : name;
+  };
   const fitPixelsPerMm = Math.min(
     4,
     560 / Math.max(value.widthMm, 1),
@@ -446,7 +408,7 @@ export function LabelDesigner({
 
   const updateElement = useCallback(
     (
-      type: ElementType,
+      key: string,
       patch: Partial<LabelElement>,
       record = true,
     ) => {
@@ -455,7 +417,7 @@ export function LabelDesigner({
         {
           ...current,
           elements: current.elements.map((element) =>
-            element.type === type
+            labelElementKey(element) === key
               ? ({ ...element, ...patch } as LabelElement)
               : element,
           ),
@@ -466,33 +428,24 @@ export function LabelDesigner({
     [applyDraft],
   );
 
-  const toggleElement = useCallback(
-    (type: ElementType) => {
-      const current = currentValueRef.current;
-      const existing = current.elements.find((element) => element.type === type);
-      let elements = existing
-        ? current.elements.map((element) =>
-            element.type === type
-              ? ({ ...element, visible: !element.visible } as LabelElement)
-              : element,
-          )
-        : [...current.elements, newElement(type)];
-      if (
-        (type === "qr" || type === "image") &&
-        (!existing || !existing.visible)
-      ) {
-        elements = separateQrAndImage(
-          elements,
-          type,
-          current.widthMm,
-          current.heightMm,
-        );
-      }
-      setSelectedType(type);
-      applyDraft({ ...current, elements });
-    },
-    [applyDraft],
-  );
+  const addElement = (type: ElementType) => {
+    const current = currentValueRef.current;
+    if (current.elements.length >= MAX_LABEL_ELEMENTS) return;
+    const element = placeNewLabelElement(newElement(type), current.elements);
+    applyDraft({ ...current, elements: [...current.elements, element] });
+    setSelectedKey(labelElementKey(element));
+    setShowAddElements(false);
+    addButtonRef.current?.focus();
+  };
+
+  const removeElement = (key: string) => {
+    const current = currentValueRef.current;
+    const index = current.elements.findIndex(element => labelElementKey(element) === key);
+    const elements = current.elements.filter(element => labelElementKey(element) !== key);
+    applyDraft({ ...current, elements });
+    const next = elements[Math.min(index, elements.length - 1)];
+    setSelectedKey(next ? labelElementKey(next) : "");
+  };
 
   const snapCoordinate = useCallback(
     (coordinate: number, dimensionMm: number) => {
@@ -513,6 +466,7 @@ export function LabelDesigner({
     document.body.style.overflow = "hidden";
     const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
         if (event.shiftKey) redoRef.current();
@@ -573,7 +527,7 @@ export function LabelDesigner({
       if (interaction.mode === "move") {
         const maximumX = 100 - original.width;
         const maximumY = 100 - original.height;
-        updateElement(interaction.type, {
+        updateElement(interaction.key, {
           x: clamp(
             snapCoordinate(original.x + deltaX, value.widthMm),
             0,
@@ -588,7 +542,7 @@ export function LabelDesigner({
       } else {
         const minimumWidth = (0.1 / value.widthMm) * 100;
         const minimumHeight = (0.1 / value.heightMm) * 100;
-        updateElement(interaction.type, {
+        updateElement(interaction.key, {
           width: clamp(
             snapCoordinate(original.width + deltaX, value.widthMm),
             minimumWidth,
@@ -605,7 +559,7 @@ export function LabelDesigner({
     const handlePointerUp = (event: PointerEvent) => {
       if (event.pointerId !== interaction.pointerId) return;
       const currentElement = currentValueRef.current.elements.find(
-        (element) => element.type === interaction.type,
+        (element) => labelElementKey(element) === interaction.key,
       );
       if (
         currentElement &&
@@ -636,9 +590,9 @@ export function LabelDesigner({
     event.preventDefault();
     event.stopPropagation();
     canvasRef.current?.focus();
-    setSelectedType(element.type);
+    setSelectedKey(labelElementKey(element));
     setInteraction({
-      type: element.type,
+      key: labelElementKey(element),
       mode,
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -660,7 +614,7 @@ export function LabelDesigner({
     const stepMm = event.shiftKey ? 1 : 0.1;
     const deltaX = (stepMm / value.widthMm) * 100;
     const deltaY = (stepMm / value.heightMm) * 100;
-    updateElement(selected.type, {
+    updateElement(labelElementKey(selected), {
       x: roundCoordinate(
         clamp(
           selected.x +
@@ -680,7 +634,7 @@ export function LabelDesigner({
     });
   };
 
-  const uploadBackground = async (file: File) => {
+  const uploadBackground = async (key: string, file: File) => {
     setBackgroundError(null);
     if (!BACKGROUND_FILE_TYPES.has(file.type)) {
       setBackgroundError(t("designer.backgroundUnsupported"));
@@ -694,18 +648,8 @@ export function LabelDesigner({
     try {
       const source = await readFileAsDataUrl(file);
       const current = currentValueRef.current;
-      const existing = current.elements.find(
-        (element): element is BackgroundElement => element.type === "background",
-      );
-      const elements = existing
-        ? current.elements.map((element) =>
-            element.type === "background"
-              ? { ...element, source, visible: true }
-              : element,
-          )
-        : [...current.elements, { ...newElement("background"), source }];
-      applyDraft({ ...current, elements });
-      setSelectedType("background");
+      if (!current.elements.some(element => labelElementKey(element) === key)) return;
+      updateElement(key, { source, visible: true });
     } catch {
       setBackgroundError(t("designer.backgroundReadError"));
     }
@@ -783,7 +727,7 @@ export function LabelDesigner({
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[250px_minmax(360px,1fr)_260px] lg:overflow-hidden">
+        <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[250px_minmax(300px,1fr)_320px] lg:overflow-hidden">
           <aside className="border-b border-border p-5 lg:overflow-y-auto lg:border-b-0 lg:border-r">
             <label className="block text-[12px] font-semibold text-muted">
               {t("designer.setupName")}
@@ -827,50 +771,100 @@ export function LabelDesigner({
               <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
                 {t("designer.elementsTitle")}
               </p>
-              <div className="mt-2 space-y-1.5">
-                {ELEMENT_OPTIONS.map((option) => {
-                  const element = value.elements.find((item) => item.type === option.type);
+              <div className="mt-3" onKeyDown={event => {
+                if (event.key === "Escape" && showAddElements) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setShowAddElements(false);
+                  addButtonRef.current?.focus();
+                }
+              }}>
+                <button
+                  ref={addButtonRef}
+                  type="button"
+                  onClick={() => setShowAddElements(open => !open)}
+                  disabled={value.elements.length >= MAX_LABEL_ELEMENTS}
+                  aria-expanded={showAddElements}
+                  aria-controls="label-element-picker"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-foreground shadow-sm hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Plus size={14} className="shrink-0" aria-hidden="true" />
+                  <span className="text-xs font-semibold">{t("designer.addElement")}</span>
+                </button>
+                {showAddElements ? (
+                  <div id="label-element-picker" className="mt-2 rounded-xl border border-border bg-surface-subtle p-1">
+                    {ELEMENT_OPTIONS.map(option => {
+                      const Icon = option.icon;
+                      return (
+                        <button
+                          key={option.type}
+                          type="button"
+                          aria-label={t("designer.addElementType", { element: t(option.labelKey) })}
+                          onClick={() => addElement(option.type)}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-muted-strong hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+                        >
+                          <Icon size={15} className="shrink-0 text-muted" aria-hidden="true" />
+                          <span className="text-xs font-medium">{t(option.labelKey)}</span>
+                          <Plus size={12} className="ml-auto shrink-0" aria-hidden="true" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                {value.elements.length >= MAX_LABEL_ELEMENTS ? (
+                  <p className="mt-2 text-[11px] leading-4 text-muted">
+                    {t("designer.elementLimit", { count: MAX_LABEL_ELEMENTS })}
+                  </p>
+                ) : null}
+              </div>
+              <div className="mt-3 space-y-1.5">
+                {value.elements.map(element => {
+                  const key = labelElementKey(element);
+                  const option = ELEMENT_OPTIONS.find(item => item.type === element.type)!;
                   const Icon = option.icon;
+                  const name = elementName(element);
                   return (
                     <div
-                      key={option.type}
+                      key={key}
                       className={`flex w-full items-center rounded-xl border transition ${
-                        selectedType === option.type
+                        selectedKey === key
                           ? "border-brand-border bg-brand-soft"
                           : "border-transparent hover:bg-surface-hover"
                       }`}
                     >
                       <button
                         type="button"
-                        onClick={() => setSelectedType(option.type)}
+                        aria-pressed={selectedKey === key}
+                        onClick={() => setSelectedKey(key)}
                         className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
                       >
                         <Icon size={15} className="shrink-0 text-muted" aria-hidden="true" />
                         <span className="min-w-0 flex-1 text-xs font-semibold text-muted-strong">
-                          {t(option.labelKey)}
+                          {name}
                         </span>
                       </button>
                       <button
                         type="button"
                         role="switch"
-                        aria-checked={element?.visible ?? false}
-                        aria-label={t("designer.showElement", {
-                          element: t(option.labelKey),
-                        })}
-                        onClick={() => toggleElement(option.type)}
+                        aria-checked={element.visible}
+                        aria-label={t("designer.showElement", { element: name })}
+                        onClick={() => updateElement(key, { visible: !element.visible })}
                         className={`relative mr-2 h-5 w-9 shrink-0 rounded-full transition focus:outline-none focus:ring-2 focus:ring-focus/40 ${
-                          element?.visible ? "bg-brand-solid" : "bg-border-strong"
+                          element.visible ? "bg-brand-solid" : "bg-border-strong"
                         }`}
                       >
                         <span
                           className={`absolute top-0.5 size-4 rounded-full bg-on-brand shadow-sm transition ${
-                            element?.visible ? "left-[18px]" : "left-0.5"
+                            element.visible ? "left-[18px]" : "left-0.5"
                           }`}
                         />
                       </button>
                     </div>
                   );
                 })}
+                {value.elements.length === 0 ? (
+                  <p className="text-xs leading-5 text-muted">{t("designer.noElements")}</p>
+                ) : null}
               </div>
             </div>
           </aside>
@@ -1000,9 +994,9 @@ export function LabelDesigner({
                     )
                     .map((element) => (
                     <div
-                      key={element.type}
+                      key={labelElementKey(element)}
                       className={`absolute cursor-move border-2 transition-colors ${
-                        selectedType === element.type
+                        selectedKey === labelElementKey(element)
                           ? "z-20 border-focus bg-focus/[0.035]"
                           : "z-10 border-transparent hover:border-focus/50"
                       }`}
@@ -1014,24 +1008,16 @@ export function LabelDesigner({
                       }}
                       onPointerDown={(event) => beginInteraction(event, element, "move")}
                     >
-                      {selectedType === element.type ? (
+                      {selectedKey === labelElementKey(element) ? (
                         <>
                           <span className="absolute -left-0.5 -top-6 inline-flex h-5 items-center gap-1 rounded bg-brand-solid px-1.5 text-[10px] font-semibold text-on-brand shadow-sm">
                             <Grip size={9} aria-hidden="true" />
-                            {t(
-                              ELEMENT_OPTIONS.find(
-                                (option) => option.type === element.type,
-                              )?.labelKey ?? "designer.elements.qr",
-                            )}
+                            {elementName(element)}
                           </span>
                           <button
                             type="button"
                             aria-label={t("designer.resizeElement", {
-                              element: t(
-                                ELEMENT_OPTIONS.find(
-                                  (option) => option.type === element.type,
-                                )?.labelKey ?? "designer.elements.qr",
-                              ),
+                              element: elementName(element),
                             })}
                             className="absolute -bottom-2 -right-2 grid size-4 cursor-nwse-resize place-items-center rounded-sm border border-on-brand bg-brand-solid text-on-brand shadow"
                             onPointerDown={(event) => beginInteraction(event, element, "resize")}
@@ -1060,11 +1046,16 @@ export function LabelDesigner({
                     return <Icon size={16} className="text-brand" aria-hidden="true" />;
                   })()}
                   <span className="text-xs font-semibold text-foreground">
-                    {t(
-                      ELEMENT_OPTIONS.find((option) => option.type === selected.type)
-                        ?.labelKey ?? "designer.elements.qr",
-                    )}
+                    {elementName(selected)}
                   </span>
+                  <button
+                    type="button"
+                    aria-label={t("designer.removeElement", { element: elementName(selected) })}
+                    className="ml-auto rounded p-1 text-muted hover:text-danger"
+                    onClick={() => removeElement(labelElementKey(selected))}
+                  >
+                    <Trash2 size={15} aria-hidden="true" />
+                  </button>
                 </div>
                 {selected.type !== "background" ? (
                   <div className="grid grid-cols-2 gap-2">
@@ -1098,7 +1089,7 @@ export function LabelDesigner({
                                 coordinateUnit === "mm"
                                   ? (next / dimensionMm) * 100
                                   : next;
-                              updateElement(selected.type, {
+                              updateElement(labelElementKey(selected), {
                                 [key]: roundCoordinate(
                                   clamp(
                                     normalized,
@@ -1130,7 +1121,7 @@ export function LabelDesigner({
                         onChange={(event) => {
                           const file = event.target.files?.[0];
                           event.target.value = "";
-                          if (file) void uploadBackground(file);
+                          if (file) void uploadBackground(labelElementKey(selected), file);
                         }}
                       />
                     </label>
@@ -1147,7 +1138,7 @@ export function LabelDesigner({
                       <select
                         value={selected.fit ?? "cover"}
                         onChange={(event) =>
-                          updateElement(selected.type, {
+                          updateElement(labelElementKey(selected), {
                             fit: event.target.value as "cover" | "contain",
                           })
                         }
@@ -1169,7 +1160,7 @@ export function LabelDesigner({
                         step="1"
                         value={Math.round((selected.opacity ?? 1) * 100)}
                         onChange={(event) =>
-                          updateElement(selected.type, {
+                          updateElement(labelElementKey(selected), {
                             opacity: Number(event.target.value) / 100,
                           })
                         }
@@ -1180,7 +1171,7 @@ export function LabelDesigner({
                       <button
                         type="button"
                         onClick={() =>
-                          updateElement(selected.type, { source: undefined })
+                          updateElement(labelElementKey(selected), { source: undefined })
                         }
                         className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-danger-border bg-danger-soft px-3 text-xs font-semibold text-danger"
                       >
@@ -1196,7 +1187,7 @@ export function LabelDesigner({
                     {t("designer.imageFit")}
                     <select
                       value={selected.fit ?? "cover"}
-                      onChange={(event) => updateElement(selected.type, { fit: event.target.value as "cover" | "contain" })}
+                      onChange={(event) => updateElement(labelElementKey(selected), { fit: event.target.value as "cover" | "contain" })}
                       className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
                     >
                       <option value="cover">{t("designer.fillFrame")}</option>
@@ -1218,7 +1209,7 @@ export function LabelDesigner({
                             type="color"
                             value={(selected as QrElement)[key] ?? fallback}
                             onChange={(event) =>
-                              updateElement(selected.type, {
+                              updateElement(labelElementKey(selected), {
                                 [key]: event.target.value,
                               })
                             }
@@ -1232,7 +1223,7 @@ export function LabelDesigner({
                       <select
                         value={(selected as QrElement).quietZoneModules ?? 0}
                         onChange={(event) =>
-                          updateElement(selected.type, {
+                          updateElement(labelElementKey(selected), {
                             quietZoneModules: Number(event.target.value),
                           })
                         }
@@ -1253,8 +1244,16 @@ export function LabelDesigner({
                   </div>
                 ) : null}
 
-                {["name", "subtitle", "identifier", "url", "location"].includes(selected.type) ? (
+                {["name", "subtitle", "identifier", "url", "location", "text"].includes(selected.type) ? (
                   <>
+                    <LabelRichTextEditor
+                      key={labelElementKey(selected)}
+                      value={defaultLabelTextContent(selected as TextElement)}
+                      onChange={content => updateElement(labelElementKey(selected), { content } as Partial<TextElement>)}
+                    />
+                    {selected.type !== "text" && (selected as TextElement).content !== undefined ? (
+                      <button type="button" className="mt-2 text-xs text-brand hover:underline" onClick={() => updateElement(labelElementKey(selected), { content: undefined } as Partial<TextElement>)}>{t("designer.richText.reset")}</button>
+                    ) : null}
                     <label className="mt-4 block text-[12px] font-semibold text-muted">
                       {t("designer.fontSize")}
                       <input
@@ -1267,7 +1266,7 @@ export function LabelDesigner({
                           const next = Number(event.target.value);
                           if (!Number.isFinite(next)) return;
                           const textElement = selected as TextElement;
-                          updateElement(selected.type, {
+                          updateElement(labelElementKey(selected), {
                             fontSizeMm: next,
                             ...(textElement.minFontSizeMm !== undefined &&
                             textElement.minFontSizeMm > next
@@ -1283,16 +1282,16 @@ export function LabelDesigner({
                       <select
                         value={
                           (selected as TextElement).fontFamily ??
-                          (selected.type === "name" ? "sans" : "monospace")
+                          (["name", "subtitle", "text"].includes(selected.type) ? "sans" : "monospace")
                         }
                         onChange={(event) =>
-                          updateElement(selected.type, {
+                          updateElement(labelElementKey(selected), {
                             fontFamily: event.target.value as LabelFontFamily,
                           } as Partial<LabelElement>)
                         }
                         className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
                       >
-                        <option value="barlow-semi-condensed">Barlow Semi Condensed · Bold</option>
+                        <option value="barlow-semi-condensed">Barlow Semi Condensed</option>
                         <option value="sans">
                           {t("designer.fontFamilies.sans")}
                         </option>
@@ -1313,7 +1312,7 @@ export function LabelDesigner({
                         value={(selected as TextElement).lineHeight ?? ((selected as TextElement).textOverflow === "shrink" ? 1.08 : 1.05)}
                         onChange={event => {
                           const next = Number(event.target.value);
-                          if (Number.isFinite(next) && next >= 0.8 && next <= 2) updateElement(selected.type, { lineHeight: next } as Partial<LabelElement>);
+                          if (Number.isFinite(next) && next >= 0.8 && next <= 2) updateElement(labelElementKey(selected), { lineHeight: next } as Partial<LabelElement>);
                         }}
                         className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus" />
                     </label>
@@ -1321,7 +1320,7 @@ export function LabelDesigner({
                       {t("designer.alignment")}
                       <select
                         value={(selected as TextElement).align ?? "left"}
-                        onChange={(event) => updateElement(selected.type, { align: event.target.value as "left" | "center" | "right" } as Partial<LabelElement>)}
+                        onChange={(event) => updateElement(labelElementKey(selected), { align: event.target.value as "left" | "center" | "right" } as Partial<LabelElement>)}
                         className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
                       >
                         <option value="left">{t("designer.align.left")}</option>
@@ -1330,11 +1329,27 @@ export function LabelDesigner({
                       </select>
                     </label>
                     <label className="mt-4 block text-[12px] font-semibold text-muted">
+                      {t("designer.verticalAlignment")}
+                      <select
+                        value={(selected as TextElement).verticalAlign ?? "middle"}
+                        onChange={(event) =>
+                          updateElement(labelElementKey(selected), {
+                            verticalAlign: event.target.value as LabelTextVerticalAlignment,
+                          } as Partial<LabelElement>)
+                        }
+                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
+                      >
+                        <option value="top">{t("designer.verticalAlign.top")}</option>
+                        <option value="middle">{t("designer.verticalAlign.middle")}</option>
+                        <option value="bottom">{t("designer.verticalAlign.bottom")}</option>
+                      </select>
+                    </label>
+                    <label className="mt-4 block text-[12px] font-semibold text-muted">
                       {t("designer.textOverflow")}
                       <select
                         value={(selected as TextElement).textOverflow ?? "ellipsis"}
                         onChange={(event) =>
-                          updateElement(selected.type, {
+                          updateElement(labelElementKey(selected), {
                             textOverflow: event.target.value as "ellipsis" | "shrink",
                           } as Partial<LabelElement>)
                         }
@@ -1363,7 +1378,7 @@ export function LabelDesigner({
                           onChange={(event) => {
                             const next = Number(event.target.value);
                             if (Number.isFinite(next)) {
-                              updateElement(selected.type, {
+                              updateElement(labelElementKey(selected), {
                                 minFontSizeMm: next,
                               } as Partial<LabelElement>);
                             }

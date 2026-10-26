@@ -77,6 +77,12 @@
     "width": "Width (mm)",
     "height": "Height (mm)",
     "elementsTitle": "Elements",
+    "addElement": "Add element",
+    "addElementType": "Add {{element}}",
+    "elementInstance": "{{element}} {{number}}",
+    "elementLimit": "A template can contain up to {{count}} elements. Remove an element to add another.",
+    "noElements": "Add your first element using the plus button.",
+    "removeElement": "Remove {{element}}",
     "showElement": "Show {{element}}",
     "resizeElement": "Resize {{element}}",
     "properties": "Properties",
@@ -118,7 +124,8 @@
       "monospace": "Monospace",
       "rounded": "Rounded"
     },
-    "alignment": "Alignment",
+    "alignment": "Horizontal alignment",
+    "verticalAlignment": "Vertical alignment",
     "textOverflow": "When space runs out",
     "minimumFontSize": "Minimum font size (mm)",
     "textOverflowModes": {
@@ -127,7 +134,7 @@
     },
     "instructions": "Drag the selected element, resize it with the corner handle, or enter exact measurements. Arrow keys move it by 0.1 mm; hold Shift for 1 mm.",
     "chooseElement": "Choose an element to edit its position and style.",
-    "overlap": "Move or resize the image so it does not cover the QR code.",
+    "overlap": "A cover image overlaps a QR code. Move or resize one of these elements.",
     "previewNote": "The preview and printed label use the same positions.",
     "delete": "Delete setup",
     "cancel": "Cancel",
@@ -142,7 +149,8 @@
       "barcode": "Barcode",
       "url": "Short link",
       "location": "Location",
-      "subtitle": "Subtitle"
+      "subtitle": "Subtitle",
+      "text": "Free text field"
     },
     "coordinates": {
       "x": "Left",
@@ -155,6 +163,11 @@
       "center": "Center",
       "right": "Right"
     },
+    "verticalAlign": {
+      "top": "Top",
+      "middle": "Middle",
+      "bottom": "Bottom"
+    },
     "sample": {
       "name": "Cordless impact driver",
       "location": "Workshop · Shelf B",
@@ -164,7 +177,37 @@
       "missingName": "Item without optional information",
       "subtitle": "18 V · battery + charger"
     },
-    "lineHeight": "Line height (factor)"
+    "lineHeight": "Line height (factor)",
+    "richText": {
+      "content": "Text & placeholders",
+      "formatting": "Format text",
+      "bold": "Bold",
+      "normal": "Normal",
+      "light": "Light",
+      "italic": "Italic",
+      "underline": "Underline",
+      "lineBreak": "Insert line break",
+      "insertPlaceholder": "Insert placeholder",
+      "choosePlaceholder": "Choose a placeholder…",
+      "hint": "Combine your own text with [Title]. Enter adds a new line. Select text to format it; ⌘/Ctrl+B, I or U works too.",
+      "limit": "Maximum 8,000 characters and 500 formatted sections per text field.",
+      "add": "Add free text field",
+      "fieldName": "Text field {{number}}",
+      "remove": "Delete {{element}}",
+      "reset": "Restore default content",
+      "placeholders": {
+        "Title": "Title",
+        "Subtitle": "Subtitle",
+        "Identifier": "Serial number / SKU / ID",
+        "SKU": "SKU",
+        "Barcode": "Barcode",
+        "Location": "Location",
+        "Quantity": "Quantity",
+        "Type": "Type",
+        "ID": "Entry ID",
+        "URL": "Short link"
+      }
+    }
   },
   "renderer": {
     "noImage": "No image",
@@ -248,7 +291,7 @@
     "subtitle": "Subtitle",
     "hint": "Changes apply only to these labels. Item data stays unchanged.",
     "reset": "Use item text",
-    "hiddenSubtitle": "This template does not show a subtitle. Enable the field in the designer.",
+    "hiddenSubtitle": "This template does not show a subtitle. Add or show the field in the designer.",
     "edit": "Edit label text",
     "save": "Apply changes",
     "cancel": "Cancel",
