@@ -1196,6 +1196,16 @@ export function LabelDesigner({
                         <option value="contain">{t("designer.fitImage")}</option>
                       </select>
                     </label>
+                    <label className="mt-4 block text-[12px] font-semibold text-muted">
+                      {t("designer.photoOptimization")}
+                      <select value={selected.photoOptimization ?? "auto"}
+                        onChange={event => updateElement(labelElementKey(selected), { photoOptimization: event.target.value as "auto" | "standard" })}
+                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none">
+                        <option value="auto">{t("designer.photoOptimizationAuto")}</option>
+                        <option value="standard">{t("designer.photoOptimizationStandard")}</option>
+                      </select>
+                    </label>
+                    <p className="mt-2 text-xs text-muted">{t("designer.photoOptimizationHint")}</p>
                     <label className="mt-4 flex items-center gap-2 text-sm font-semibold">
                       <input type="checkbox" checked={selected.cropWhiteMargins ?? false}
                         onChange={event => updateElement(labelElementKey(selected), { cropWhiteMargins: event.target.checked })} />
@@ -1216,7 +1226,7 @@ export function LabelDesigner({
                           onChange={event => updateElement(labelElementKey(selected), { cropPadding: Number(event.target.value) })} />
                       </label>
                       <p className="text-xs text-muted">{t("designer.cropPaddingHint")}</p>
-                  </div> : null}
+                    </div> : null}
                   </div>
                 ) : null}
 

@@ -38,9 +38,9 @@ test("blank images stay intact and separate product parts survive", () => {
 test("crop settings round-trip and invalid settings are rejected; legacy images remain valid", () => {
   const image = {type:"image",x:0,y:0,width:100,height:100,visible:true};
   assert.deepEqual(labelElementsSchema.parse([image]), [image]);
-  const cropped = {...image,cropWhiteMargins:true,cropTolerance:25,cropPadding:-5};
+  const cropped = {...image,cropWhiteMargins:true,cropTolerance:25,cropPadding:-5,photoOptimization:"standard"};
   assert.deepEqual(labelElementsSchema.parse([cropped]), [cropped]);
-  for (const patch of [{cropTolerance:81},{cropTolerance:-1},{cropPadding:21},{cropPadding:-11},{cropWhiteMargins:"true"}]) {
+  for (const patch of [{cropTolerance:81},{cropTolerance:-1},{cropPadding:21},{cropPadding:-11},{cropWhiteMargins:"true"},{photoOptimization:"unknown"}]) {
     assert.equal(labelElementsSchema.safeParse([{...image,...patch}]).success,false);
   }
 });

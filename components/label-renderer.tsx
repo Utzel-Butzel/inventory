@@ -89,6 +89,7 @@ function PrintableImage({
       key={`${source}-${retryToken}`}
       src={element.cropWhiteMargins && result?.url ? result.url : source}
       data-label-crop={cropState}
+      data-label-photo-optimization={element.photoOptimization ?? "auto"}
       title={cropState === "error" ? t("renderer.cropError") : undefined}
       alt={resource.cover?.altText || resource.name}
       className={`${styles.labelImage} printable-label-image`}

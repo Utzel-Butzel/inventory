@@ -212,7 +212,11 @@
     "cropHint": "Entfernt helle Außenränder und ignoriert kleine Störpunkte. Höhere Toleranz entfernt auch leicht graue Bereiche. Vorschau und Druck verwenden denselben Ausschnitt.",
     "cropTolerance": "Toleranz",
     "cropPadding": "Rand um Motiv",
-    "cropPaddingHint": "Weniger Rand vergrößert das Motiv. Negative Werte schneiden zusätzlich ins Motiv; mehr Rand verkleinert es."
+    "cropPaddingHint": "Weniger Rand vergrößert das Motiv. Negative Werte schneiden zusätzlich ins Motiv; mehr Rand verkleinert es.",
+    "photoOptimization": "Druckoptimierung",
+    "photoOptimizationAuto": "Automatisch · helle Motive hervorheben",
+    "photoOptimizationStandard": "Standard · bisherige Darstellung",
+    "photoOptimizationHint": "Für P-touch und den gemeinsamen Office-Drucker: helle Flächen und Konturen werden gezielt verstärkt. Das Schwarz-Weiß-Ergebnis siehst du nach „Etikett vorbereiten“. Die Layoutvorschau bleibt farbig."
   },
   "renderer": {
     "noImage": "Kein Bild",

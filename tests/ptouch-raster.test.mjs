@@ -5,7 +5,7 @@ import { combinePtouchLabels, encodePtouchRaster, ptouchPrintableDots, PTOUCH_TA
 import { isAllowedQzRequest } from "../lib/qz-signing-policy.ts";
 import { signQzRequest } from "../lib/qz-signature.ts";
 import { hasQzSigningConfig, readQzSigningMaterial } from "../lib/qz-signing-config.ts";
-import { clarifyPtouchPhoto, halftonePtouchPhoto } from "../lib/ptouch-photo.ts";
+import { adaptivePtouchPhoto, clarifyPtouchPhoto, halftonePtouchPhoto } from "../lib/ptouch-photo.ts";
 
 function white(width, height) {
   return { width, height, data: new Uint8ClampedArray(width * height * 4).fill(255) };
@@ -192,4 +192,33 @@ test("QZ signing only permits recent discovery and P710 raw label jobs", () => {
   assert.equal(allowed(series), true);
   series.params.data[0].data = "A".repeat(5_500_000);
   assert.equal(allowed(series), false);
+});
+
+
+test("automatic photo processing preserves dark products and white backgrounds", () => {
+  const gray = new Float32Array(48 * 24).fill(255);
+  for (let y = 5; y < 20; y++) for (let x = 8; x < 40; x++) gray[y * 48 + x] = 35 + (x % 4) * 12;
+  assert.deepEqual(adaptivePtouchPhoto(gray, 48, 24), clarifyPtouchPhoto(gray, 48, 24));
+  assert.ok(adaptivePtouchPhoto(new Float32Array(48 * 24).fill(255), 48, 24).every(value => value === 255));
+});
+
+test("automatic photo processing retains pale surfaces and subtle darker controls", () => {
+  const gray = new Float32Array(48 * 24).fill(255);
+  for (let y = 4; y < 20; y++) for (let x = 8; x < 40; x++) gray[y * 48 + x] = 235;
+  for (let y = 9; y < 15; y++) for (let x = 20; x < 28; x++) gray[y * 48 + x] = 220;
+  const standard = clarifyPtouchPhoto(gray, 48, 24), optimized = adaptivePtouchPhoto(gray, 48, 24);
+  assert.ok(optimized[12 * 48 + 12] < standard[12 * 48 + 12] - 25);
+  assert.ok(optimized[12 * 48 + 24] < optimized[12 * 48 + 12]);
+  assert.equal(optimized[0], 255);
+  assert.ok(optimized.every(value => Number.isFinite(value) && value >= 0 && value <= 255));
+});
+
+test("automatic halftone adds printable pale detail without marking outside the photo", () => {
+  const make = () => ({width:48,height:24,data:Uint8ClampedArray.from({length:48*24*4},(_,i)=>i%4===3?255:235)});
+  const standard = make(), auto = make();
+  halftonePtouchPhoto(standard,{x:0,y:0,width:24,height:24},"standard");
+  halftonePtouchPhoto(auto,{x:0,y:0,width:24,height:24},"auto");
+  const count = p => Array.from(p.data).filter((v,i)=>i%4===0 && v===0).length;
+  assert.ok(count(auto) > count(standard) + 30);
+  for (let y=0;y<24;y++) for(let x=24;x<48;x++) assert.equal(auto.data[(y*48+x)*4],235);
 });

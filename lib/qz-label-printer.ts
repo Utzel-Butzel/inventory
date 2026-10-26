@@ -72,7 +72,7 @@ export async function renderPtouchLabel(node: HTMLElement, widthMm: number, heig
       y: (bounds.top - labelBounds.top) / labelBounds.height * height,
       width: bounds.width / labelBounds.width * width,
       height: bounds.height / labelBounds.height * height,
-    });
+    }, photo.dataset.labelPhotoOptimization === "standard" ? "standard" : "auto");
   }
   context.putImageData(pixels, 0, 0);
   if (expectedQr) {

@@ -212,7 +212,11 @@
     "cropHint": "Removes light outer margins and ignores small specks. Higher tolerance also removes light gray areas. Preview and print use the same crop.",
     "cropTolerance": "Tolerance",
     "cropPadding": "Margin around subject",
-    "cropPaddingHint": "Less margin enlarges the subject. Negative values trim into the subject; more margin makes it smaller."
+    "cropPaddingHint": "Less margin enlarges the subject. Negative values trim into the subject; more margin makes it smaller.",
+    "photoOptimization": "Print optimization",
+    "photoOptimizationAuto": "Automatic · enhance light subjects",
+    "photoOptimizationStandard": "Standard · previous rendering",
+    "photoOptimizationHint": "For P-touch and the shared Office printer: selectively enhances pale surfaces and edges. See the monochrome result after preparing a label. The layout preview remains in color."
   },
   "renderer": {
     "noImage": "No image",
