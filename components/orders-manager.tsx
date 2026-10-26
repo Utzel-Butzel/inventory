@@ -85,7 +85,7 @@ function tradeOrderDefaults(contactId = ""): TradeOrderForm {
   };
 }
 
-export function OrdersManager({ type = "purchase" }: { type?: OrderType }) {
+export function OrdersManager({ type = "purchase", purchaseResourceId }: { type?: OrderType; purchaseResourceId?: string }) {
   const { t } = useT("orders");
   const tabs: Array<{
     type: OrderType;
@@ -121,7 +121,7 @@ export function OrdersManager({ type = "purchase" }: { type?: OrderType }) {
         })}
       </Card>
       {type === "purchase" ? (
-        <PurchaseOrdersManager />
+        <PurchaseOrdersManager key={purchaseResourceId ?? "all"} resourceId={purchaseResourceId} />
       ) : (
         <TradeOrdersManager key={type} type={type} />
       )}

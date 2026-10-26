@@ -103,6 +103,11 @@ const navigation: NavigationItem[] = [
         permission: "stock.read",
       },
       {
+        labelKey: "navigation.stockForecast",
+        href: "/stock/forecast",
+        permission: "stock.read",
+      },
+      {
         labelKey: "navigation.stockScan",
         href: "/stock/scan",
         permission: "workflows.read",
@@ -768,7 +773,7 @@ export function AppShell({
   })();
   const stockNestedPageName =
     section === "stock"
-      ? (pathSegments[1] === "scan" ? t("navigation.stockScan") : t("navigation.stockOverview"))
+      ? (pathSegments[1] === "forecast" ? t("navigation.stockForecast") : pathSegments[1] === "scan" ? t("navigation.stockScan") : t("navigation.stockOverview"))
       : undefined;
   const operationsNestedPageName = (() => {
     if (section === "contacts") return t("navigation.contacts");

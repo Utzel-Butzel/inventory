@@ -38,7 +38,8 @@
     "requests": "Requests",
     "reservationCalendar": "Reservation calendar",
     "loans": "Loans",
-    "settings": "Settings"
+    "settings": "Settings",
+    "stockForecast": "Stock forecast"
   },
   "notifications": {
     "title": "Notifications",

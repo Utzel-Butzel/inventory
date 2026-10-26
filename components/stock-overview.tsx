@@ -492,6 +492,9 @@ export function StockOverview() {
         <h1 className="text-2xl font-semibold text-foreground sm:text-[29px]">
           {t("overview.title")}
         </h1>
+        <Link href="/stock/forecast" className="inline-flex items-center gap-2 text-sm font-medium text-brand hover:underline">
+          <TrendingDown className="size-4" aria-hidden="true" />{t("planning.title")}<ArrowRight className="size-4" aria-hidden="true" />
+        </Link>
       </div>
 
       {loading ? <StockLoading /> : null}

@@ -38,7 +38,8 @@
     "requests": "Anfragen",
     "reservationCalendar": "Reservierungskalender",
     "loans": "Ausleihen",
-    "settings": "Einstellungen"
+    "settings": "Einstellungen",
+    "stockForecast": "Bestandsprognose"
   },
   "notifications": {
     "title": "Benachrichtigungen",
