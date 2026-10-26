@@ -10,30 +10,15 @@ import { ResourceTitle } from "@/components/resource-title";
 import { fetchJson } from "@/lib/client-types";
 import {
   DEFAULT_PLANNING_OPTIONS, PLANNING_STATUS_PRIORITY, planStock,
-  type PlanningInput, type PlanningOptions, type PlanningStatus, type StockPlan,
+  type PlanningInput, type PlanningOptions, type PlanningStatus,
 } from "@/lib/stock-planning";
+
+import { StockPlanningChart } from "@/components/stock-planning-chart";
+import type { ChartScale } from "@/lib/stock-planning-chart";
 
 type Payload = { generatedAt: string; items: PlanningInput[] };
 const tones = { critical: "danger", order: "warning", soon: "brand", review: "neutral", healthy: "success" } as const;
 const statuses: PlanningStatus[] = ["critical", "order", "soon", "review", "healthy"];
-
-function Projection({ item }: { item: StockPlan }) {
-  const { t } = useT("stock");
-  const max = Math.max(1, item.safetyStock, ...item.timeline.map((point) => point.quantity));
-  const min = Math.min(0, ...item.timeline.map((point) => point.quantity));
-  const y = (quantity: number) => 12 + (max - quantity) / (max - min) * 100;
-  const points = item.timeline.map((point) => `${12 + point.day / 180 * 576},${y(point.quantity)}`).join(" ");
-  return <figure className="rounded-xl bg-surface-muted p-4">
-    <figcaption className="mb-2 text-xs font-medium text-muted">{t("planning.chartTitle")}</figcaption>
-    <svg viewBox="0 0 600 142" role="img" aria-label={t("planning.chartLabel")} className="w-full">
-      <line x1="12" y1={y(0)} x2="588" y2={y(0)} stroke="currentColor" className="text-muted" strokeWidth="1" />
-      <line x1="12" y1={y(item.safetyStock)} x2="588" y2={y(item.safetyStock)} stroke="currentColor" className="text-warning" strokeDasharray="5 5" />
-      <polyline points={points} fill="none" stroke="currentColor" className={item.status === "critical" ? "text-danger" : "text-brand"} strokeWidth="2.5" />
-      {[0, 30, 60, 90, 120, 150, 180].map((day) => <text key={day} x={12 + day / 180 * 576} y="137" textAnchor={day === 0 ? "start" : day === 180 ? "end" : "middle"} fill="currentColor" className="text-muted" fontSize="11">{day}</text>)}
-    </svg>
-    <p className="text-xs text-muted">{t("planning.chartLegend")}</p>
-  </figure>;
-}
 
 export function StockPlanning() {
   const { t, i18n } = useT("stock");
@@ -42,6 +27,9 @@ export function StockPlanning() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [horizon, setHorizon] = useState(90);
+  const [scale, setScale] = useState<ChartScale>("quantity");
+  const [selectedIds, setSelectedIds] = useState<string[] | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<PlanningStatus | "all">("all");
   const [sort, setSort] = useState("priority");
@@ -64,6 +52,10 @@ export function StockPlanning() {
       : sort === "stockout" ? (a.stockoutDay ?? Infinity) - (b.stockoutDay ?? Infinity)
       : PLANNING_STATUS_PRIORITY[a.status] - PLANNING_STATUS_PRIORITY[b.status]
         || (a.reorderInDays ?? Infinity) - (b.reorderInDays ?? Infinity)) || a.name.localeCompare(b.name, locale)), [plans, filter, query, locale, sort]);
+  const selection = selectedIds ?? [...plans].sort((a, b) => Number(b.dailyUsage > 0) - Number(a.dailyUsage > 0) || PLANNING_STATUS_PRIORITY[a.status] - PLANNING_STATUS_PRIORITY[b.status]).slice(0, 1).map((item) => item.resourceId);
+  const selected = selection.flatMap((id) => { const item = plans.find((plan) => plan.resourceId === id); return item ? [item] : []; });
+  const mixedUnits = new Set(selected.map((item) => item.unitName)).size > 1;
+  const toggleSelection = (id: string) => setSelectedIds(selection.includes(id) ? selection.filter((value) => value !== id) : selection.length < 4 ? [...selection, id] : selection);
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 20) - 1));
   const updateOption = (key: keyof PlanningOptions, value: string) => { setOptions((current) => ({ ...current, [key]: Number(value) })); setPage(0); };
   return <main className="app-page mx-auto w-full max-w-[1540px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -85,6 +77,21 @@ export function StockPlanning() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label={t("planning.filter")}>
         {statuses.map((status) => <button type="button" key={status} aria-pressed={filter === status} onClick={() => { setFilter(filter === status ? "all" : status); setPage(0); }} className={`rounded-2xl border bg-surface p-4 text-left transition hover:border-brand ${filter === status ? "border-brand ring-1 ring-brand" : "border-border"}`}><Badge tone={tones[status]}>{t(`planning.status.${status}`)}</Badge><p className="mt-3 text-3xl font-semibold tabular-nums">{plans.filter((item) => item.status === status).length}</p><p className="mt-1 text-xs text-muted">{t(`planning.statusHint.${status}`)}</p></button>)}
       </div>
+      <Card className="space-y-5 p-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div><h2 className="text-lg font-semibold">{t("planning.charts.title")}</h2><p className="mt-1 text-sm text-muted">{t("planning.charts.description")}</p></div>
+          <div className="flex flex-wrap gap-3">
+            <label className="grid gap-1 text-xs text-muted">{t("planning.charts.horizon")}<select value={horizon} onChange={(event) => setHorizon(Number(event.target.value))} className="rounded-lg border border-border bg-surface p-2 text-sm text-foreground">{[30, 90, 180].map((days) => <option key={days} value={days}>{t("planning.days", { value: days })}</option>)}</select></label>
+            <label className="grid gap-1 text-xs text-muted">{t("planning.charts.scale")}<select value={mixedUnits ? "relative" : scale} onChange={(event) => setScale(event.target.value as ChartScale)} className="rounded-lg border border-border bg-surface p-2 text-sm text-foreground"><option value="quantity" disabled={mixedUnits}>{t("planning.charts.quantity")}</option><option value="relative">{t("planning.charts.relative")}</option></select></label>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {selected.map((item) => <button type="button" key={item.resourceId} onClick={() => toggleSelection(item.resourceId)} aria-label={t("planning.charts.remove", { name: item.name })} className="rounded-full border border-border px-3 py-1.5 text-sm hover:border-brand">{item.name} ×</button>)}
+          <select value="" aria-label={t("planning.charts.add")} disabled={selected.length >= 4} onChange={(event) => { if (event.target.value) toggleSelection(event.target.value); }} className="max-w-full rounded-lg border border-border bg-surface p-2 text-sm disabled:opacity-50"><option value="">{t(selected.length >= 4 ? "planning.charts.limit" : "planning.charts.add")}</option>{[...plans].sort((a, b) => a.name.localeCompare(b.name, locale)).filter((item) => !selection.includes(item.resourceId)).map((item) => <option key={item.resourceId} value={item.resourceId}>{item.name}{item.sku ? ` · ${item.sku}` : ""}</option>)}</select>
+        </div>
+        {mixedUnits && <p className="text-xs text-muted">{t("planning.charts.mixedUnits")}</p>}
+        {selected.length ? <StockPlanningChart items={selected} generatedAt={payload.generatedAt} horizon={horizon} scale={mixedUnits ? "relative" : scale} /> : <p className="py-12 text-center text-sm text-muted">{t("planning.charts.empty")}</p>}
+      </Card>
       <div className="flex flex-wrap items-center gap-3">
         <Input className="min-w-48 flex-1" aria-label={t("planning.search")} placeholder={t("planning.search")} value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} />
         <label className="flex items-center gap-2 text-sm text-muted">{t("planning.sort")}<select className="rounded-lg border border-border bg-surface p-2 text-foreground" value={sort} onChange={(event) => { setSort(event.target.value); setPage(0); }}>{["priority", "stockout", "name"].map((value) => <option key={value} value={value}>{t(`planning.sorts.${value}`)}</option>)}</select></label>
@@ -94,8 +101,9 @@ export function StockPlanning() {
       {filtered.length === 0 && <Card className="p-8 text-center"><p className="font-medium">{t(plans.length ? "planning.noMatches" : "planning.empty")}</p><p className="mt-2 text-sm text-muted">{t(plans.length ? "planning.noMatchesHint" : "planning.emptyHint")}</p></Card>}
       <div className="space-y-3">
         {filtered.slice(currentPage * 20, currentPage * 20 + 20).map((item) => <Card key={item.resourceId} className="overflow-hidden">
-          <div className="grid gap-5 p-5 xl:grid-cols-[minmax(180px,1.3fr)_minmax(0,2fr)_minmax(170px,1fr)]">
+          <div className="grid gap-5 p-5 xl:grid-cols-[minmax(160px,1.2fr)_minmax(160px,1fr)_minmax(0,2fr)_minmax(150px,1fr)]">
             <div><div className="mb-2 flex flex-wrap gap-2"><Badge tone={tones[item.status]}>{t(`planning.status.${item.status}`)}</Badge><span className="text-xs text-muted">{t(`planning.confidence.${item.confidence}`)}</span></div><Link href={`/inventory/${item.resourceId}/stock`} className="font-semibold hover:text-brand"><ResourceTitle resource={item} /></Link>{item.sku && <p className="mt-1 text-xs text-muted">{item.sku}</p>}<p className="mt-2 text-sm">{t("planning.onHand", { value: number.format(item.quantity), unit: item.unitName })}</p>{item.overdueQuantity > 0 && <p className="mt-1 text-xs font-medium text-warning">{t("planning.overdueShort", { value: number.format(item.overdueQuantity) })}</p>}{item.undatedQuantity > 0 && <p className="mt-1 text-xs text-warning">{t("planning.undatedShort", { value: number.format(item.undatedQuantity) })}</p>}</div>
+            <div className="min-w-0 self-center"><button type="button" aria-pressed={selection.includes(item.resourceId)} disabled={!selection.includes(item.resourceId) && selection.length >= 4} onClick={() => toggleSelection(item.resourceId)} aria-label={t(selection.includes(item.resourceId) ? "planning.charts.remove" : "planning.charts.compare", { name: item.name })} className="w-full rounded-lg p-2 text-left transition hover:bg-surface-muted disabled:opacity-50"><StockPlanningChart items={[item]} generatedAt={payload.generatedAt} horizon={horizon} compact /><span className="mt-1 block text-xs text-muted">{t(selection.includes(item.resourceId) ? "planning.charts.selected" : "planning.charts.compareShort")}{item.dailyUsage <= 0 ? ` · ${t("planning.charts.historyOnly")}` : ""}</span></button></div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
               <div><dt className="text-xs text-muted">{t("planning.runout")}</dt><dd className="mt-1 font-semibold">{item.stockoutAt ? date(item.stockoutAt) : item.dailyUsage > 0 ? t("planning.beyondHorizon") : t("planning.unknown")}</dd><dd className="mt-1 text-xs text-muted">{item.stockoutDay !== null ? t("planning.days", { value: Math.floor(item.stockoutDay) }) : t("planning.withDeliveries")}</dd></div>
               <div><dt className="text-xs text-muted">{t("planning.orderBy")}</dt><dd className="mt-1 font-semibold">{item.reorderInDays === 0 ? t("planning.today") : item.reorderAt ? date(item.reorderAt) : item.leadTimeKnown && item.dailyUsage > 0 ? t("planning.notYet") : t("planning.unknown")}</dd><dd className="mt-1 text-xs text-muted">{item.leadTimeKnown ? t("planning.leadTime", { value: item.leadTimeDays }) : t("planning.missingLeadTime")}</dd></div>
@@ -106,7 +114,7 @@ export function StockPlanning() {
           <details className="border-t border-border">
             <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-muted">{t("planning.details")}</summary>
             <div className="grid gap-5 px-5 pb-5 lg:grid-cols-2">
-              {item.dailyUsage > 0 ? <Projection item={item} /> : <div className="rounded-xl bg-surface-muted p-5 text-sm text-muted">{t("planning.noHistory")}</div>}
+              <div className="min-w-0 rounded-xl bg-surface-muted p-4"><StockPlanningChart items={[item]} generatedAt={payload.generatedAt} horizon={horizon} /></div>
               <div className="space-y-3 text-sm text-muted">
                 <p>{t("planning.evidence", { days: Math.floor(item.observedDays), events: item.demandDays, average: number.format(item.averageDailyUsage), recent: number.format(item.recentDailyUsage), unit: item.unitName })}</p>
                 <p>{t("planning.threshold", { minimum: number.format(item.minimumStock), safety: number.format(item.safetyStock), unit: item.unitName })}</p>

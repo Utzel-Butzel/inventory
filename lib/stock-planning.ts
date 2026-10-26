@@ -3,6 +3,7 @@ export const DAY_MS = 86_400_000;
 export const PLANNING_HORIZON_DAYS = 180;
 
 export type PlanningReceipt = { quantity: number; expectedAt: string | null };
+export type PlanningPoint = { day: number; quantity: number };
 export type PlanningInput = {
   resourceId: string;
   name: string;
@@ -20,6 +21,8 @@ export type PlanningInput = {
   recentConsumed: number;
   demandDays: number;
   receipts: PlanningReceipt[];
+  /** Reconstructed daily closing balances, ending at the current snapshot. */
+  history?: PlanningPoint[];
 };
 export type PlanningOptions = { safetyDays: number; coverageDays: number; demandMultiplier: number };
 export const DEFAULT_PLANNING_OPTIONS: PlanningOptions = { safetyDays: 7, coverageDays: 30, demandMultiplier: 1 };

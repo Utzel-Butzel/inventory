@@ -904,6 +904,32 @@
     "methodOrders": "Offene, bestätigte Einkaufspositionen fließen mit ihrer Restmenge am erwarteten Liefertermin ein. Überfällige und undatierte Lieferungen werden gesondert ausgewiesen. Der Bestelltermin liegt um die Lieferzeit vor dem erwarteten Unterschreiten von Mindestbestand plus Sicherheitsreserve. Die Planmenge deckt Lieferzeit und gewünschte Reichweite ab, beachtet feste Nachbestellmengen und wird auf ganze Einkaufseinheiten aufgerundet. Sie ist ein Vorschlag für eine heutige Bestellung, keine automatische Bestellung.",
     "methodLimits": "Die Prognose schreibt bisherigen Verbrauch fort und zeigt den ersten Engpass innerhalb von 180 Tagen. Künftige Produktionspläne, noch nicht gebuchte Verkaufsaufträge, Saisonverläufe und Lieferunsicherheit werden nicht vorausgesagt. Fehlende Abgangsbuchungen oder frühere Leerstände können den Bedarf unterschätzen. Nutze den Verbrauchsregler für abweichende Erwartungen; prüfe Mengen und Liefertermine vor einer Bestellung.",
     "overdueShort": "{{value}} im Zulauf überfällig",
-    "undatedShort": "{{value}} im Zulauf ohne Liefertermin"
+    "undatedShort": "{{value}} im Zulauf ohne Liefertermin",
+    "charts": {
+      "title": "Bestandsverlauf & Forecast",
+      "description": "Bis zu vier Teile vergleichen: bisheriger Bestand und voraussichtliche Entwicklung. Die kleinen Charts unten verwenden jeweils eine eigene Mengenskala.",
+      "history": "Bisheriger Bestand",
+      "forecast": "Prognose",
+      "delivery": "Erwartete Lieferung",
+      "safety": "Sicherheitsbestand",
+      "miniLabel": "Bestandsverlauf und Prognose für {{name}}",
+      "date": "Datum erkunden",
+      "zeroHint": "Teile ohne positiven aktuellen Bestand lassen sich nicht auf 100 % normieren. Für diese Teile die Mengenansicht einzeln öffnen.",
+      "noForecast": "Ohne beobachteten Verbrauch wird keine zukünftige Bestandskurve berechnet.",
+      "hint": "Vergangenheit: aus Bestandsbuchungen rekonstruierte Tageswerte, höchstens 90 Tage. Prognose: gleichbleibender Szenarioverbrauch und datierte, noch nicht überfällige Lieferungen. Negative Werte zeigen ungedeckten Bedarf. Fehlende Daten bleiben offen.",
+      "horizon": "Prognosezeitraum",
+      "scale": "Darstellung",
+      "quantity": "Bestandsmenge",
+      "relative": "Heute = 100 %",
+      "remove": "{{name}} aus Vergleich entfernen",
+      "add": "Teil zum Vergleich hinzufügen",
+      "limit": "Maximal vier Teile",
+      "mixedUnits": "Unterschiedliche Einheiten werden relativ zum heutigen Bestand verglichen.",
+      "empty": "Ein Teil auswählen, um seinen Verlauf zu sehen.",
+      "compare": "{{name}} im großen Chart vergleichen",
+      "selected": "Im Vergleich ✓",
+      "compareShort": "Im Chart vergleichen",
+      "historyOnly": "Nur bisheriger Bestand"
+    }
   }
 }

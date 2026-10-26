@@ -4,6 +4,7 @@ import { and, eq, gte, inArray, lte, ne, sql } from "drizzle-orm";
 import { orderLines, orders, resources, stockMovements, stockSettings } from "@/db/schema";
 import { db } from "@/lib/db";
 import { DAY_MS, type PlanningInput, type PlanningReceipt } from "@/lib/stock-planning";
+import { reconstructStockHistory } from "@/lib/stock-planning-chart";
 
 export async function getStockPlanningData(organizationId: string) {
   return db.transaction(async (transaction) => {
@@ -26,7 +27,8 @@ export async function getStockPlanningData(organizationId: string) {
     const demand = sql`case when ${stockMovements.type} in ('issue', 'waste', 'assembly-consumption')
       and (${orders.type} is null or ${orders.type} <> 'loan')
       then greatest(-${stockMovements.delta}, ${stockMovements.quantity}, 0) else 0 end`;
-    const [usage, incoming] = await Promise.all([
+    const ageDays = sql<number>`floor(extract(epoch from (${now.toISOString()}::timestamptz - ${stockMovements.occurredAt})) / 86400)::int`;
+    const [usage, incoming, dailyMovements] = await Promise.all([
       transaction.select({
         resourceId: stockMovements.resourceId,
         firstMovementAt: sql<string>`min(${stockMovements.occurredAt})`,
@@ -46,9 +48,22 @@ export async function getStockPlanningData(organizationId: string) {
         .where(and(eq(orderLines.organizationId, organizationId), eq(orders.type, "purchase"),
           inArray(orders.status, ["ordered", "partially-received"]),
           gte(sql`${orderLines.orderedQuantity} - ${orderLines.fulfilledQuantity}`, 1))),
+      transaction.select({
+        resourceId: stockMovements.resourceId, ageDays,
+        delta: sql<number>`sum(${stockMovements.delta})::float8`,
+      }).from(stockMovements)
+        .innerJoin(stockSettings, and(eq(stockSettings.resourceId, stockMovements.resourceId), eq(stockSettings.organizationId, organizationId)))
+        .where(and(eq(stockMovements.organizationId, organizationId), gte(stockMovements.occurredAt, new Date(since)), lte(stockMovements.occurredAt, now)))
+        .groupBy(sql`1, 2`),
     ]);
     const usageById = new Map(usage.map((row) => [row.resourceId, row]));
     const receiptsById = new Map<string, PlanningReceipt[]>();
+    const movementsById = new Map<string, { ageDays: number; delta: number }[]>();
+    for (const row of dailyMovements) {
+      const movements = movementsById.get(row.resourceId) ?? [];
+      movements.push({ ageDays: Number(row.ageDays), delta: Number(row.delta) });
+      movementsById.set(row.resourceId, movements);
+    }
     for (const row of incoming) {
       const receipts = receiptsById.get(row.resourceId) ?? [];
       receipts.push({ quantity: Number(row.quantity), expectedAt: row.expectedAt ? new Date(row.expectedAt).toISOString() : null });
@@ -60,8 +75,10 @@ export async function getStockPlanningData(organizationId: string) {
         const history = usageById.get(item.resourceId);
         // Start with the first actual stock observation, not an item's catalog age.
         const start = history ? new Date(history.firstMovementAt).getTime() : createdAt.getTime();
+        const observedDays = Math.max(0, Math.min(90, (now.getTime() - start) / DAY_MS));
         return {
-          ...item, observedDays: Math.max(1, Math.min(90, (now.getTime() - start) / DAY_MS)),
+          ...item, observedDays: Math.max(1, observedDays),
+          history: reconstructStockHistory(item.quantity, history ? observedDays : 0, movementsById.get(item.resourceId) ?? []),
           consumed: Number(history?.consumed ?? 0), recentConsumed: Number(history?.recentConsumed ?? 0),
           demandDays: Number(history?.demandDays ?? 0), receipts: receiptsById.get(item.resourceId) ?? [],
         };

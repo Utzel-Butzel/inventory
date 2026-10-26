@@ -135,3 +135,45 @@ test("healthy coverage needs usable history, lead time and confirmed deliveries"
   assert.equal(plan({ quantity: 1000 }).status, "healthy");
   assert.equal(plan({ quantity: 1000, receipts: [{ quantity: 100, expectedAt: null }] }).status, "review");
 });
+
+// Chart data shares the exact stock projection used for ordering decisions.
+const { reconstructStockHistory, planningChartSeries, stockChartValue } = await import("../lib/stock-planning-chart.ts");
+
+test("historical balances reverse receipts, demand and corrections from the current snapshot", () => {
+  assert.deepEqual(reconstructStockHistory(100, 3, [
+    { ageDays: 0, delta: 50 }, { ageDays: 0, delta: -10 },
+    { ageDays: 1, delta: -20 }, { ageDays: 2, delta: 5 },
+    { ageDays: 3, delta: 999 }, { ageDays: -1, delta: 999 },
+  ]), [{ day: -3, quantity: 75 }, { day: -2, quantity: 80 }, { day: -1, quantity: 60 }, { day: 0, quantity: 100 }]);
+  assert.deepEqual(reconstructStockHistory(100, 0, []), [{ day: 0, quantity: 100 }]);
+  assert.equal(reconstructStockHistory(100, 200, []).length, 91);
+});
+
+test("chart lookups preserve delivery jumps and step through historical balances", () => {
+  const points = [{ day: 0, quantity: 100 }, { day: 5, quantity: 50 }, { day: 5, quantity: 150 }, { day: 10, quantity: 100 }];
+  assert.equal(stockChartValue(points, 4, true), 60);
+  assert.equal(stockChartValue(points, 5, true), 150);
+  assert.equal(stockChartValue(points, 6, true), 140);
+  assert.equal(stockChartValue(points, 4), 100);
+  assert.equal(stockChartValue(points, -1), null);
+  assert.equal(stockChartValue(points, 11), null);
+});
+
+test("chart horizons interpolate endpoints and keep actual receipt markers without mutating plans", () => {
+  const item = plan({ receipts: [{ quantity: 100, expectedAt: date(5) }] });
+  const original = structuredClone(item);
+  const series = planningChartSeries(item, 30);
+  assert.deepEqual(series.projection.at(-1), { day: 30, quantity: -100 });
+  assert.deepEqual(series.deliveries, [{ day: 5, quantity: 150 }]);
+  assert.equal(series.projection.some((point) => point.day > 30), false);
+  assert.deepEqual(item, original);
+});
+
+test("relative comparison uses today's stock; missing demand never fabricates a forecast", () => {
+  const series = planningChartSeries(plan({ quantity: 200 }), 30, "relative");
+  assert.equal(series.current, 100);
+  assert.equal(series.projection.at(-1).quantity, -50);
+  assert.equal(planningChartSeries(plan({ quantity: 0 }), 30, "relative"), null);
+  assert.equal(planningChartSeries(plan({ quantity: -5 }), 30, "relative"), null);
+  assert.deepEqual(planningChartSeries(plan({ consumed: 0, recentConsumed: 0 }), 90).projection, []);
+});

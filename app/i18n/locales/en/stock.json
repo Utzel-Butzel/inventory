@@ -904,6 +904,32 @@
     "methodOrders": "Open confirmed purchase lines contribute their remaining quantities on their expected delivery dates. Overdue and undated deliveries are flagged separately. The ordering deadline precedes the projected minimum-stock-plus-buffer crossing by the lead time. The planning quantity covers lead time and desired coverage, respects fixed reorder quantities and rounds up to whole purchase units. It suggests an order placed today; it never places an order automatically.",
     "methodLimits": "The forecast projects historical consumption and shows the first shortage within 180 days. Future production plans, unbooked sales orders, seasonality and delivery uncertainty are not predicted. Missing issue records or past stockouts can understate demand. Use the demand scenario for changing expectations; check quantities and dates before ordering.",
     "overdueShort": "{{value}} incoming units overdue",
-    "undatedShort": "{{value}} incoming units without an ETA"
+    "undatedShort": "{{value}} incoming units without an ETA",
+    "charts": {
+      "title": "Stock history & forecast",
+      "description": "Compare up to four items: recorded stock and expected development. Each small chart below uses its own quantity scale.",
+      "history": "Stock history",
+      "forecast": "Forecast",
+      "delivery": "Expected delivery",
+      "safety": "Safety stock",
+      "miniLabel": "Stock history and forecast for {{name}}",
+      "date": "Explore date",
+      "zeroHint": "Items with no positive current stock cannot be normalized to 100%. Open these items individually in quantity view.",
+      "noForecast": "No future stock curve is calculated without observed consumption.",
+      "hint": "History: daily balances reconstructed from stock movements, up to 90 days. Forecast: constant scenario consumption and dated deliveries that are not overdue. Negative values indicate unmet demand. Missing data remains blank.",
+      "horizon": "Forecast period",
+      "scale": "Display",
+      "quantity": "Stock quantity",
+      "relative": "Today = 100%",
+      "remove": "Remove {{name}} from comparison",
+      "add": "Add item to comparison",
+      "limit": "Maximum four items",
+      "mixedUnits": "Different units are compared relative to current stock.",
+      "empty": "Select an item to see its stock history.",
+      "compare": "Compare {{name}} in the main chart",
+      "selected": "Comparing ✓",
+      "compareShort": "Compare in chart",
+      "historyOnly": "History only"
+    }
   }
 }
