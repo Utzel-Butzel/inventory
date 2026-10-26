@@ -232,9 +232,6 @@
     "centerVertical": "Center vertically",
     "saveAsNew": "Save as new template",
     "invalidSample": "Check the dimensions and element positions before printing.",
-    "testHint": "One test label using the displayed sample data · {{destination}}. No need to save the draft first.",
-    "testPrint": "Print test label",
-    "testPrinting": "Sending test label…",
     "browserPrintOpened": "Print dialog opened for one test label.",
     "arrange": "Alignment & layers",
     "duplicateElement": "Duplicate {{element}}",
@@ -258,7 +255,13 @@
       "700": "Bold",
       "800": "Extra Bold",
       "900": "Black"
-    }
+    },
+    "testHint_one": "{{count}} test label · {{destination}}. No need to save the draft first.",
+    "testHint_other": "{{count}} test labels · {{destination}}. No need to save the draft first.",
+    "testPrint_one": "Print {{count}} test label",
+    "testPrint_other": "Print {{count}} test labels",
+    "testPrinting_one": "Sending {{count}} test label…",
+    "testPrinting_other": "Sending {{count}} test labels…"
   },
   "renderer": {
     "noImage": "No image",
@@ -336,7 +339,8 @@
     "tooLarge": "This series is too large. Split it into smaller print lists.",
     "prepareError": "Could not prepare labels: {{detail}}",
     "preview": "Prepared print image for {{name}}",
-    "remove": "Remove label {{index}}: {{name}} from the print list"
+    "remove": "Remove label {{index}}: {{name}} from the print list",
+    "seriesCopies": "Copies of the entire list"
   },
   "text": {
     "heading": "Label text & copies",

@@ -40,6 +40,7 @@ import {
   type LabelResource,
 } from "@/components/label-renderer";
 import { Button } from "@/components/ui";
+import { LabelCopyCount } from "@/components/label-copy-count";
 import { LabelNumberControl } from "@/components/label-number-control";
 import { LABEL_FONT_STACKS, LABEL_NAMED_FONTS, LABEL_FONT_WEIGHTS, defaultLabelFontSize, defaultLabelFontWeight, mmToPoints, pointsToMm } from "@/lib/label-typography";
 import { labelNudge } from "@/lib/label-editor-keyboard";
@@ -246,7 +247,7 @@ export function LabelDesigner({
   onSaveAsNew?: () => void;
   onClose: () => void;
   onDelete?: () => void;
-  onTestPrint?: (node: HTMLElement, setup: LabelSetupDto, resource: LabelResource) => Promise<void>;
+  onTestPrint?: (node: HTMLElement, setup: LabelSetupDto, resource: LabelResource, copies: number) => Promise<void>;
   testPrintDestination?: string;
   testPrintSuccess?: string;
 }) {
@@ -255,6 +256,7 @@ export function LabelDesigner({
   const printPreviewRef = useRef<HTMLDivElement>(null);
   const testPrintLock = useRef(false);
   const uploadLock = useRef(false);
+  const [testCopies, setTestCopies] = useState(1);
   const [testPrinting, setTestPrinting] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
   const [testSent, setTestSent] = useState(false);
@@ -705,7 +707,7 @@ export function LabelDesigner({
     setTestError(null);
     setTestSent(false);
     try {
-      await onTestPrint(node, renderedSetup, previewResource);
+      await onTestPrint(node, renderedSetup, previewResource, testCopies);
       setTestSent(true);
     } catch (error) { setTestError(error instanceof Error ? error.message : String(error)); }
     finally { testPrintLock.current = false; setTestPrinting(false); }
@@ -1488,7 +1490,7 @@ export function LabelDesigner({
             {showShortcuts ? <p className="mb-3 rounded-lg bg-surface-subtle px-3 py-2 text-xs leading-5 text-muted-strong">{t("designer.shortcutHelp")}</p> : null}
             {testError ? <p role="alert" className="mb-2 text-xs font-medium text-danger">{testError}</p> : null}
             {testSent ? <p role="status" className="mb-2 text-xs font-medium text-brand">{testPrintSuccess}</p> : null}
-            {onTestPrint ? <p className="mb-2 text-xs text-muted">{t("designer.testHint", { destination: testPrintDestination })}</p> : null}
+            {onTestPrint ? <p className="mb-2 text-xs text-muted">{t("designer.testHint", { destination: testPrintDestination, count: testCopies })}</p> : null}
             {error ? <p role="alert" className="text-xs font-medium text-danger">{error}</p> : null}
             {qrImageOverlap ? (
               <p role="alert" className="text-xs font-medium text-warning">
@@ -1501,9 +1503,11 @@ export function LabelDesigner({
             ) : null}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {onTestPrint ? <Button className="mr-auto" variant="secondary" onClick={() => void testPrint()} disabled={saving || testPrinting || uploadingImage || qrImageOverlap}>
-              {testPrinting ? <LoaderCircle size={15} className="animate-spin" /> : <Printer size={15} />}{t(testPrinting ? "designer.testPrinting" : "designer.testPrint")}
-            </Button> : null}
+            {onTestPrint ? <div className="mr-auto flex flex-wrap items-center gap-2">
+              <LabelCopyCount label={t("copies.title")} value={testCopies} onChange={setTestCopies} disabled={saving || testPrinting || uploadingImage} />
+              <Button variant="secondary" onClick={() => void testPrint()} disabled={saving || testPrinting || uploadingImage || qrImageOverlap}>
+              {testPrinting ? <LoaderCircle size={15} className="animate-spin" /> : <Printer size={15} />}{t(testPrinting ? "designer.testPrinting" : "designer.testPrint", { count: testCopies })}
+            </Button></div> : null}
             {onDelete ? (
               <Button variant="danger" onClick={onDelete} disabled={saving || testPrinting || uploadingImage} className="sm:mr-2">
                 {t("designer.delete")}

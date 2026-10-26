@@ -1,5 +1,8 @@
-/** Print one rendered draft, isolated from the editor and the prepared queue. */
-export async function printBrowserLabel(node: HTMLElement, widthMm: number, heightMm: number) {
+import { repeatLabelCopies } from "@/lib/label-print-copies";
+
+/** Print copies of a rendered draft, isolated from the editor and the prepared queue. */
+export async function printBrowserLabel(node: HTMLElement, widthMm: number, heightMm: number, copies = 1) {
+  const pages = repeatLabelCopies([node], copies);
   const frame = document.createElement("iframe");
   frame.title = "Label print preview";
   frame.setAttribute("aria-hidden", "true");
@@ -24,9 +27,9 @@ export async function printBrowserLabel(node: HTMLElement, widthMm: number, heig
       return ready;
     });
     const printStyle = doc.createElement("style");
-    printStyle.textContent = `@page { size: ${widthMm}mm ${heightMm}mm; margin: 0; } html,body { margin:0!important; padding:0!important; background:white!important; } article { margin:0!important; box-shadow:none!important; }`;
+    printStyle.textContent = `@page { size: ${widthMm}mm ${heightMm}mm; margin: 0; } html,body { margin:0!important; padding:0!important; background:white!important; } article { margin:0!important; box-shadow:none!important; break-after:page; page-break-after:always; } article:last-child { break-after:auto; page-break-after:auto; }`;
     doc.head.append(printStyle);
-    doc.body.append(node.cloneNode(true));
+    for (const page of pages) doc.body.append(page.cloneNode(true));
     await Promise.race([
       Promise.all([...loading, ...Array.from(doc.images, img => img.decode())]),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Print preview timed out.")), 10000)),

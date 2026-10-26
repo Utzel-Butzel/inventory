@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Copy,
   LoaderCircle,
-  Minus,
   PackageOpen,
   Pencil,
   Plus,
@@ -27,6 +26,8 @@ import { canEncodeQr } from "@/components/label-codes";
 import { waitForLabelImageCrops } from "@/lib/label-image-crop";
 import { labelUsesPlaceholder } from "@/lib/label-rich-text";
 import { availableLabelSetupName, LABEL_SETUP_NAME_CONFLICT } from "@/lib/label-setup-name";
+import { LabelCopyCount } from "@/components/label-copy-count";
+import { repeatLabelCopies } from "@/lib/label-print-copies";
 import { LabelTextFields } from "@/components/label-text-fields";
 import { LabelRenderer } from "@/components/label-renderer";
 import { Button, Card, Skeleton } from "@/components/ui";
@@ -107,7 +108,10 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   const isRasterPrint = printTarget !== "browser";
   const [connecting, setConnecting] = useState(false);
   const [printSuccess, setPrintSuccess] = useState(false);
+  const [seriesCopies, setSeriesCopies] = useState(1);
   const [preparedLabels, setPreparedLabels] = useState<PreparedLabel[]>([]);
+  const maxSeriesCopies = Math.max(1, Math.floor(100 / Math.max(1, preparedLabels.length)));
+  const effectiveSeriesCopies = Math.min(seriesCopies, maxSeriesCopies);
   const [queueNotice, setQueueNotice] = useState<string | null>(null);
   const printLock = useRef(false);
   const [imageRetryToken, setImageRetryToken] = useState(0);
@@ -358,7 +362,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   const setCopyCount = (id: string, nextCount: number) => {
     setCopies((current) => ({
       ...current,
-      [id]: Math.min(99, Math.max(1, nextCount)),
+      [id]: Math.min(100, Math.max(1, Math.round(nextCount))),
     }));
   };
 
@@ -489,8 +493,9 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
     return message;
   };
 
-  const printDesignerSample = async (node: HTMLElement, setup: LabelSetupDto, resource: LabelResource) => {
+  const printDesignerSample = async (node: HTMLElement, setup: LabelSetupDto, resource: LabelResource, copies: number) => {
     if (printLock.current) throw new Error(t("workspace.busy"));
+    if (!Number.isInteger(copies) || copies < 1 || copies > 100) throw new Error(t("direct.limit"));
     if (!labelSetupCreateSchema.safeParse({ name: setup.name || "Test", widthMm: setup.widthMm, heightMm: setup.heightMm, elements: setup.elements }).success)
       throw new Error(t("designer.invalidSample"));
     if (labelNeedsProductImage(setup.elements) && !resource.cover?.url)
@@ -511,13 +516,14 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       ]);
       if (!isRasterPrint) {
         const { printBrowserLabel } = await import("@/lib/label-browser-print");
-        await printBrowserLabel(node, setup.widthMm, setup.heightMm);
+        await printBrowserLabel(node, setup.widthMm, setup.heightMm, copies);
         return;
       }
       const { renderPtouchLabel, sendPtouchLabels } = await import("@/lib/qz-label-printer");
       const rendered = await renderPtouchLabel(node, setup.widthMm, setup.heightMm, tape, qrEnabled ? labelTargetUrl(origin, resource) : undefined);
-      if (printTarget === "shared") await sendSharedLabels(sharedPrinter, tape, [rendered.data]);
-      else await sendPtouchLabels(printer, [rendered.data]);
+      const printData = repeatLabelCopies([rendered.data], copies);
+      if (printTarget === "shared") await sendSharedLabels(sharedPrinter, tape, printData);
+      else await sendPtouchLabels(printer, printData);
     } finally { printLock.current = false; }
   };
 
@@ -540,10 +546,11 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         return;
       }
       const { sendPtouchLabels } = await import("@/lib/qz-label-printer");
-      if (printTarget === "shared") await sendSharedLabels(sharedPrinter, tape, preparedLabels.map(label => label.data));
-      else await sendPtouchLabels(printer, preparedLabels.map(label => label.data));
+      const printData = repeatLabelCopies(preparedLabels.map(label => label.data), effectiveSeriesCopies);
+      if (printTarget === "shared") await sendSharedLabels(sharedPrinter, tape, printData);
+      else await sendPtouchLabels(printer, printData);
       // Printing has already been acknowledged. A cleanup failure must never be presented as a failed print.
-      try { await saveQueue([]); }
+      try { await saveQueue([]); setSeriesCopies(1); }
       catch (error) {
         setWorkspaceError(t("workspace.printedCleanup", { detail: String(error) }));
         setWorkspaceReady(false);
@@ -1123,34 +1130,14 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
                   const count = copies[labelTargetKey(resource)] ?? 1;
                   return (
                     <div key={labelTargetKey(resource)} className="px-4 py-3">
-                    <div className="mb-3 flex items-center gap-3">
+                    <div className="mb-3 flex flex-wrap items-center gap-3">
                       <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-strong">
                         {labelTargetName(resource)}
                       </span>
                       <button type="button" onClick={() => toggleResource(resource)} aria-label={t("selection.remove", { name: labelTargetName(resource) })} className="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-hover">
                         <X size={13} aria-hidden="true" />
                       </button>
-                      <div className="flex items-center rounded-lg border border-border bg-surface p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setCopyCount(labelTargetKey(resource), count - 1)}
-                          className="grid size-7 place-items-center rounded-md text-muted hover:bg-surface-hover"
-                          aria-label={t("copies.fewer", { name: labelTargetName(resource) })}
-                        >
-                          <Minus size={13} aria-hidden="true" />
-                        </button>
-                        <span className="w-8 text-center text-xs font-semibold tabular-nums text-foreground">
-                          {count}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setCopyCount(labelTargetKey(resource), count + 1)}
-                          className="grid size-7 place-items-center rounded-md text-muted hover:bg-surface-hover"
-                          aria-label={t("copies.more", { name: labelTargetName(resource) })}
-                        >
-                          <Plus size={13} aria-hidden="true" />
-                        </button>
-                      </div>
+                      <LabelCopyCount label={t("copies.title")} value={count} onChange={next => setCopyCount(labelTargetKey(resource), next)} disabled={preparingPrint || connecting} />
                     </div>
                     <LabelTextFields resource={applyLabelTextOverride(resource, textOverrides[labelTargetKey(resource)])}
                       onChange={change => setTextOverrides(current => ({ ...current, [labelTargetKey(resource)]: { ...current[labelTargetKey(resource)], ...change } }))}
@@ -1199,17 +1186,18 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
               <h2 className="text-sm font-semibold">{t("queue.title")} · {preparedLabels.length}/100</h2>
               <p className="mt-1 max-w-2xl text-xs leading-5 text-muted">{t("queue.description")}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {preparedLabels.length > 0 ? <LabelCopyCount label={t("queue.seriesCopies")} value={effectiveSeriesCopies} max={maxSeriesCopies} onChange={setSeriesCopies} disabled={preparingPrint || connecting} /> : null}
               <Button variant="secondary" disabled={!preparedLabels.length || preparingPrint || connecting}
                 onClick={() => removePrepared(preparedLabels.map(label => label.id))}>{t("queue.clear")}</Button>
               <Button disabled={!isRasterPrint || !preparedLabels.length || !selectedPrinter || preparingPrint || connecting || !!editingPrepared || preparedLabels[0]?.tape !== tape}
-                onClick={() => void printPrepared()}><Printer size={16} aria-hidden="true" />{t("queue.print", { count: preparedLabels.length })}</Button>
+                onClick={() => void printPrepared()}><Printer size={16} aria-hidden="true" />{t("queue.print", { count: preparedLabels.length * effectiveSeriesCopies })}</Button>
             </div>
           </div>
           {queueNotice ? <p role="status" className="px-4 pt-3 text-sm text-brand">{queueNotice}</p> : null}
           {preparedLabels.length ? <>
             <p className="px-4 pt-3 text-xs text-muted">{t("queue.summary", { tape: preparedLabels[0].tape,
-              length: Math.ceil(preparedLabels.reduce((sum, label) => sum + label.widthMm + 4, 25)) })}</p>
+              length: Math.ceil(preparedLabels.reduce((sum, label) => sum + label.widthMm + 4, 0) * effectiveSeriesCopies + 25) })}</p>
             {preparedLabels[0].tape !== tape ? <p role="alert" className="px-4 pt-2 text-sm text-warning">{t("queue.loadTape", { tape: preparedLabels[0].tape })}</p> : null}
             <ol className="max-h-96 divide-y divide-border overflow-y-auto p-4">
               {preparedLabels.map((label, index) => <li key={label.id} className="flex flex-wrap items-center gap-3 py-3">

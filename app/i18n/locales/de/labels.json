@@ -232,9 +232,6 @@
     "centerVertical": "Vertikal zentrieren",
     "saveAsNew": "Als neue Vorlage speichern",
     "invalidSample": "Bitte prüfe die Maße und Positionen der Elemente vor dem Testdruck.",
-    "testHint": "Ein Testetikett mit den angezeigten Testdaten · {{destination}}. Der Entwurf muss noch nicht gespeichert sein.",
-    "testPrint": "Testetikett drucken",
-    "testPrinting": "Testetikett wird gesendet…",
     "browserPrintOpened": "Druckdialog für ein Testetikett geöffnet.",
     "arrange": "Ausrichten & Ebenen",
     "duplicateElement": "{{element}} duplizieren",
@@ -258,7 +255,13 @@
       "700": "Bold",
       "800": "Extra Bold",
       "900": "Black"
-    }
+    },
+    "testHint_one": "{{count}} Testetikett · {{destination}}. Der Entwurf muss noch nicht gespeichert sein.",
+    "testHint_other": "{{count}} Testetiketten · {{destination}}. Der Entwurf muss noch nicht gespeichert sein.",
+    "testPrint_one": "{{count}} Testetikett drucken",
+    "testPrint_other": "{{count}} Testetiketten drucken",
+    "testPrinting_one": "{{count}} Testetikett wird gesendet…",
+    "testPrinting_other": "{{count}} Testetiketten werden gesendet…"
   },
   "renderer": {
     "noImage": "Kein Bild",
@@ -336,7 +339,8 @@
     "tooLarge": "Diese Serie ist zu umfangreich. Teile sie in kleinere Drucklisten auf.",
     "prepareError": "Etiketten konnten nicht vorbereitet werden: {{detail}}",
     "preview": "Vorbereitetes Druckbild für {{name}}",
-    "remove": "Etikett {{index}}: {{name}} aus der Druckliste entfernen"
+    "remove": "Etikett {{index}}: {{name}} aus der Druckliste entfernen",
+    "seriesCopies": "Kopien der gesamten Liste"
   },
   "text": {
     "heading": "Beschriftung & Exemplare",

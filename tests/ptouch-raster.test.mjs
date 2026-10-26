@@ -222,3 +222,17 @@ test("automatic halftone adds printable pale detail without marking outside the 
   assert.ok(count(auto) > count(standard) + 30);
   for (let y=0;y<24;y++) for(let x=24;x<48;x++) assert.equal(auto.data[(y*48+x)*4],235);
 });
+
+test("print copies preserve series order and form one bounded chain-print job", async () => {
+  const { repeatLabelCopies } = await import('../lib/label-print-copies.ts');
+  assert.deepEqual(repeatLabelCopies(['A', 'B'], 3), ['A', 'B', 'A', 'B', 'A', 'B']);
+  for (const count of [0, -1, 1.5, 101, NaN, Infinity]) assert.throws(() => repeatLabelCopies(['A'], count), /PTOUCH_BATCH_COUNT/);
+  assert.throws(() => repeatLabelCopies(['A', 'B'], 51), /PTOUCH_BATCH_COUNT/);
+  assert.equal(repeatLabelCopies(['A', 'B'], 50).length, 100);
+  const original = encodePtouchRaster(white(40, 128), 24);
+  const before = original.slice();
+  const combined = combinePtouchLabels(repeatLabelCopies([original], 3));
+  assert.equal(combined.length, original.length * 3 - 204);
+  assert.equal(combined.at(-1), 0x1a);
+  assert.deepEqual(original, before);
+});
