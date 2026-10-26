@@ -33,6 +33,7 @@ import { Button, Card, Skeleton } from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 import {
   hasVisibleQrImageOverlap,
+  labelSetupCreateSchema,
   type LabelElement,
   type LabelSetupDto,
 } from "@/lib/label-setup-contract";
@@ -45,6 +46,7 @@ import { sendSharedLabels } from "@/lib/shared-label-print-client";
 import { mediaImageVariantUrl } from "@/lib/media-image";
 import { serializePreparedLabel, deserializePreparedLabel, type PreparedLabel } from "@/lib/label-workspace-client";
 import type { LabelWorkspace } from "@/lib/label-workspace-contract";
+import { labelNeedsProductImage } from "@/lib/label-image-source";
 import styles from "./label-printer.module.css";
 
 type Pagination = {
@@ -92,6 +94,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   const [setupError, setSetupError] = useState<string | null>(null);
   const [designerDraft, setDesignerDraft] = useState<LabelSetupDraft | null>(null);
   const [designerSaving, setDesignerSaving] = useState(false);
+  const designerSaveLock = useRef(false);
   const [designerError, setDesignerError] = useState<string | null>(null);
   const [preparingPrint, setPreparingPrint] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
@@ -399,18 +402,27 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
     setDesignerDraft(structuredClone(activeSetup));
   };
 
-  const saveDesigner = async () => {
-    if (!designerDraft || designerSaving) return;
+  const saveDesigner = async (asNew = false) => {
+    if (!designerDraft || designerSaveLock.current) return;
+    designerSaveLock.current = true;
     setDesignerSaving(true);
     setDesignerError(null);
     try {
+      let name = designerDraft.name;
+      if (asNew) {
+        const { labelSetups } = await fetchJson<{ labelSetups: LabelSetupDto[] }>("/api/v1/label-setups", { cache: "no-store" });
+        const names = labelSetups.map(setup => setup.name);
+        const base = names.some(existing => existing.toLocaleLowerCase() === name.trim().toLocaleLowerCase())
+          ? t("setup.copyName", { name }) : name;
+        name = availableLabelSetupName(base, names);
+      }
       const payload = {
-        name: designerDraft.name,
+        name,
         widthMm: designerDraft.widthMm,
         heightMm: designerDraft.heightMm,
         elements: designerDraft.elements,
       };
-      const result = designerDraft.id
+      const result = designerDraft.id && !asNew
         ? await fetchJson<{ labelSetup: LabelSetupDto }>(
             `/api/v1/label-setups/${designerDraft.id}`,
             {
@@ -437,6 +449,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
           : saveError instanceof Error ? saveError.message : t("errors.saveSetup"),
       );
     } finally {
+      designerSaveLock.current = false;
       setDesignerSaving(false);
     }
   };
@@ -474,6 +487,38 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
     if (message === "PTOUCH_BATCH_COUNT") return t("direct.limit");
     if (message === "PTOUCH_BATCH_MEDIA") return t("queue.sameTape");
     return message;
+  };
+
+  const printDesignerSample = async (node: HTMLElement, setup: LabelSetupDto, resource: LabelResource) => {
+    if (printLock.current) throw new Error(t("workspace.busy"));
+    if (!labelSetupCreateSchema.safeParse({ name: setup.name || "Test", widthMm: setup.widthMm, heightMm: setup.heightMm, elements: setup.elements }).success)
+      throw new Error(t("designer.invalidSample"));
+    if (labelNeedsProductImage(setup.elements) && !resource.cover?.url)
+      throw new Error(t("errors.missingImages", { count: 1, examples: resource.name }));
+    const qrEnabled = setup.elements.some(element => element.type === "qr" && element.visible);
+    if (qrEnabled && !canEncodeQr(labelTargetUrl(origin, resource))) throw new Error(t("errors.urlTooLong"));
+    if (isRasterPrint) {
+      if (!selectedPrinter) throw new Error(t(printTarget === "shared" ? "shared.choose" : "direct.connectFirst"));
+      if (Math.round(setup.heightMm * PTOUCH_PIXELS_PER_MM) > ptouchPrintableDots(tape) || setup.widthMm > 996)
+        throw new Error(t("direct.tooLarge", { height: (ptouchPrintableDots(tape) / PTOUCH_PIXELS_PER_MM).toFixed(1) }));
+    }
+    printLock.current = true;
+    try {
+      await waitForLabelImageCrops(node);
+      await Promise.race([
+        Promise.all(Array.from(node.querySelectorAll("img"), image => image.decode())),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error(t("errors.imageRender"))), 8000)),
+      ]);
+      if (!isRasterPrint) {
+        const { printBrowserLabel } = await import("@/lib/label-browser-print");
+        await printBrowserLabel(node, setup.widthMm, setup.heightMm);
+        return;
+      }
+      const { renderPtouchLabel, sendPtouchLabels } = await import("@/lib/qz-label-printer");
+      const rendered = await renderPtouchLabel(node, setup.widthMm, setup.heightMm, tape, qrEnabled ? labelTargetUrl(origin, resource) : undefined);
+      if (printTarget === "shared") await sendSharedLabels(sharedPrinter, tape, [rendered.data]);
+      else await sendPtouchLabels(printer, [rendered.data]);
+    } finally { printLock.current = false; }
   };
 
   const printPrepared = async () => {
@@ -549,7 +594,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       (element) => element.type === "image" && element.visible,
     ).length;
     const imageEnabled = imageCount > 0;
-    if (imageEnabled) {
+    if (labelNeedsProductImage(activeSetup.elements)) {
       const missingNames = Array.from(
         new Set(
           labels
@@ -1196,13 +1241,17 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       {designerDraft ? (
         <LabelDesigner
           value={designerDraft}
-          sampleResource={selectedResources[0] ?? resources[0] ?? null}
-          sampleResources={selectedResources.length ? selectedResources : resources}
+          sampleResource={selectedResources[0] ? applyLabelTextOverride(selectedResources[0], textOverrides[labelTargetKey(selectedResources[0])]) : resources[0] ?? null}
+          sampleResources={selectedResources.length ? selectedResources.map(resource => applyLabelTextOverride(resource, textOverrides[labelTargetKey(resource)])) : resources}
           origin={origin || "https://inventory.example"}
           saving={designerSaving}
           error={designerError}
           onChange={setDesignerDraft}
-          onSave={saveDesigner}
+          onSave={() => void saveDesigner()}
+          onSaveAsNew={() => void saveDesigner(true)}
+          onTestPrint={printDesignerSample}
+          testPrintDestination={printTarget === "shared" ? t("shared.destination") : printTarget === "ptouch" ? `${printer || "QZ Tray"} · ${tape} mm` : t("direct.browser")}
+          testPrintSuccess={t(printTarget === "browser" ? "designer.browserPrintOpened" : printTarget === "shared" ? "shared.sent" : "direct.sent")}
           onClose={() => {
             if (!designerSaving) setDesignerDraft(null);
           }}

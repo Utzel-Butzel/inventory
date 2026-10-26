@@ -104,6 +104,8 @@ const labelElementSchemaBase = z.discriminatedUnion("type", [
     .object({
       type: z.literal("image"),
       ...labelElementBoxShape,
+      source: labelBackgroundSourceSchema.optional(),
+      altText: z.string().max(300).optional(),
       fit: z.enum(labelImageFits).optional(),
       photoOptimization: z.enum(["auto", "standard"]).optional(),
       cropWhiteMargins: z.boolean().optional(),

@@ -44,3 +44,15 @@ export function placeNewLabelElement(
   // If the label is full, leave the new instance selected for manual placement.
   return preferred;
 }
+
+/** Keep foreground ordering independent of full-label backgrounds. */
+export function moveLabelElement(elements: LabelElement[], key: string, direction: "front" | "back"): LabelElement[] {
+  const selected = elements.find(element => (element.id ?? element.type) === key);
+  if (!selected) return elements;
+  const remaining = elements.filter(element => element !== selected);
+  return direction === "front" ? [...remaining, selected] : [selected, ...remaining];
+}
+
+export function duplicateLabelElement(element: LabelElement, existing: LabelElement[], id: string): LabelElement {
+  return placeNewLabelElement({ ...structuredClone(element), id }, existing);
+}

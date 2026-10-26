@@ -413,3 +413,30 @@ test("placement ignores backgrounds and hidden instances, and preserves QR reada
   assert.equal(hasVisibleQrImageOverlap([fullQr, needsPlacement]), true);
   assert.deepEqual(fullQr, { ...background, type: "qr" });
 });
+
+test("custom images persist their source and retain crop/print options", async () => {
+  const { labelImageSource, labelNeedsProductImage } = await import('../lib/label-image-source.ts');
+  const source = 'data:image/png;base64,aGVsbG8=';
+  const image = { type: 'image', id: randomUUID(), x: 40, y: 0, width: 30, height: 60, visible: true, source, altText: 'Logo', fit: 'contain', cropWhiteMargins: true, photoOptimization: 'auto' };
+  const parsed = labelElementsSchema.parse([image]);
+  assert.equal(parsed[0].source, source);
+  assert.equal(labelImageSource(parsed[0], { cover: null }), source);
+  assert.equal(labelNeedsProductImage(parsed), false);
+  assert.equal(labelNeedsProductImage([{...image,source:undefined}]), true);
+  assert.equal(labelNeedsProductImage([{...image,source:undefined,visible:false}]), false);
+  assert.equal(labelElementsSchema.safeParse([{...image,source:'https://tracking.example/image'}]).success, false);
+});
+
+test("duplicating and layering preserve original image content and identities", async () => {
+  const { duplicateLabelElement, moveLabelElement } = await import('../lib/label-element-layout.ts');
+  const original = { type: 'image', id: randomUUID(), x: 0, y: 0, width: 20, height: 20, visible: true, source: 'data:image/png;base64,aGVsbG8=' };
+  const duplicate = duplicateLabelElement(original, [original], randomUUID());
+  assert.notEqual(duplicate.id, original.id);
+  assert.equal(duplicate.source, original.source);
+  assert.deepEqual([original.x,original.y],[0,0]);
+  assert.equal(labelElementsSchema.safeParse([original,duplicate]).success,true);
+  const front = moveLabelElement([original,duplicate],original.id,'front');
+  assert.deepEqual(front.map(x=>x.id),[duplicate.id,original.id]);
+  const back = moveLabelElement(front,original.id,'back');
+  assert.deepEqual(back.map(x=>x.id),[original.id,duplicate.id]);
+});

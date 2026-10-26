@@ -2,6 +2,9 @@
 
 import {
   Barcode,
+  Copy,
+  Printer,
+  LoaderCircle,
   Grid3X3,
   Grip,
   Hash,
@@ -39,7 +42,7 @@ import { Button } from "@/components/ui";
 import { LabelRichTextEditor } from "@/components/label-rich-text-editor";
 import { defaultLabelTextContent } from "@/lib/label-rich-text";
 import { DEFAULT_CROP_PADDING, DEFAULT_CROP_TOLERANCE } from "@/lib/label-image-crop";
-import { placeNewLabelElement } from "@/lib/label-element-layout";
+import { placeNewLabelElement, duplicateLabelElement, moveLabelElement } from "@/lib/label-element-layout";
 import {
   hasVisibleQrImageOverlap,
   labelElementKey,
@@ -222,8 +225,12 @@ export function LabelDesigner({
   error,
   onChange,
   onSave,
+  onSaveAsNew,
   onClose,
   onDelete,
+  onTestPrint,
+  testPrintDestination,
+  testPrintSuccess,
 }: {
   value: LabelSetupDraft;
   sampleResource?: LabelResource | null;
@@ -233,11 +240,22 @@ export function LabelDesigner({
   error?: string | null;
   onChange: (next: LabelSetupDraft) => void;
   onSave: () => void;
+  onSaveAsNew?: () => void;
   onClose: () => void;
   onDelete?: () => void;
+  onTestPrint?: (node: HTMLElement, setup: LabelSetupDto, resource: LabelResource) => Promise<void>;
+  testPrintDestination?: string;
+  testPrintSuccess?: string;
 }) {
   const { t } = useT("labels");
   const canvasRef = useRef<HTMLDivElement>(null);
+  const printPreviewRef = useRef<HTMLDivElement>(null);
+  const testPrintLock = useRef(false);
+  const uploadLock = useRef(false);
+  const [testPrinting, setTestPrinting] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
+  const [testSent, setTestSent] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
@@ -277,7 +295,7 @@ export function LabelDesigner({
   const elementName = (element: LabelElement) => {
     const siblings = value.elements.filter(item => item.type === element.type);
     const number = siblings.findIndex(item => labelElementKey(item) === labelElementKey(element)) + 1;
-    const name = t(ELEMENT_OPTIONS.find(option => option.type === element.type)!.labelKey);
+    const name = element.type === "image" && element.source ? t("designer.ownImage") : t(ELEMENT_OPTIONS.find(option => option.type === element.type)!.labelKey);
     return siblings.length > 1 || element.type === "text"
       ? t("designer.elementInstance", { element: name, number })
       : name;
@@ -351,8 +369,8 @@ export function LabelDesigner({
   const gridSpacingPx = gridSizeMm * pixelsPerMm;
 
   useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
+    onCloseRef.current = () => { if (!testPrintLock.current && !uploadLock.current && !saving) onClose(); };
+  }, [onClose, saving]);
 
   useEffect(() => {
     currentValueRef.current = value;
@@ -467,7 +485,7 @@ export function LabelDesigner({
     document.body.style.overflow = "hidden";
     const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || testPrintLock.current || uploadLock.current) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
         if (event.shiftKey) redoRef.current();
@@ -635,7 +653,7 @@ export function LabelDesigner({
     });
   };
 
-  const uploadBackground = async (key: string, file: File) => {
+  const uploadBackground = async (key: string | null, file: File) => {
     setBackgroundError(null);
     if (!BACKGROUND_FILE_TYPES.has(file.type)) {
       setBackgroundError(t("designer.backgroundUnsupported"));
@@ -646,14 +664,51 @@ export function LabelDesigner({
       return;
     }
 
+    uploadLock.current = true;
+    setUploadingImage(true);
     try {
       const source = await readFileAsDataUrl(file);
+      const decoded = new Image();
+      decoded.src = source;
+      await Promise.race([decoded.decode(), new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Image decoding timed out.")), 8000))]);
       const current = currentValueRef.current;
-      if (!current.elements.some(element => labelElementKey(element) === key)) return;
-      updateElement(key, { source, visible: true });
+      if (key === null) {
+        if (current.elements.length >= MAX_LABEL_ELEMENTS) return;
+        const width = 30;
+        const height = Math.min(80, Math.max(5, width * current.widthMm / current.heightMm * decoded.naturalHeight / decoded.naturalWidth));
+        const element = placeNewLabelElement({ ...newElement("image"), type: "image", width, height, fit: "contain", source, altText: file.name.slice(0, 300) }, current.elements);
+        applyDraft({ ...current, elements: [...current.elements, element] });
+        setSelectedKey(labelElementKey(element));
+      } else {
+        const element = current.elements.find(element => labelElementKey(element) === key);
+        if (!element) return;
+        updateElement(key, { source, visible: true, ...(element.type === "image" ? { altText: file.name.slice(0, 300), fit: "contain" } : {}) });
+      }
     } catch {
       setBackgroundError(t("designer.backgroundReadError"));
-    }
+    } finally { uploadLock.current = false; setUploadingImage(false); }
+  };
+
+  const duplicateSelected = () => {
+    if (!selected || value.elements.length >= MAX_LABEL_ELEMENTS) return;
+    const current = currentValueRef.current;
+    const copy = duplicateLabelElement(selected, current.elements, crypto.randomUUID());
+    applyDraft({ ...current, elements: [...current.elements, copy] });
+    setSelectedKey(labelElementKey(copy));
+  };
+  const testPrint = async () => {
+    if (!onTestPrint || testPrintLock.current) return;
+    const node = printPreviewRef.current?.querySelector<HTMLElement>("article");
+    if (!node) return;
+    testPrintLock.current = true;
+    setTestPrinting(true);
+    setTestError(null);
+    setTestSent(false);
+    try {
+      await onTestPrint(node, renderedSetup, previewResource);
+      setTestSent(true);
+    } catch (error) { setTestError(error instanceof Error ? error.message : String(error)); }
+    finally { testPrintLock.current = false; setTestPrinting(false); }
   };
 
   const updateZoom = (next: number) => {
@@ -674,7 +729,7 @@ export function LabelDesigner({
       className="fixed inset-0 z-[80] flex items-center justify-center bg-overlay p-3 backdrop-blur-sm sm:p-6"
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget && !testPrintLock.current && !uploadLock.current && !saving) onClose();
       }}
     >
       <section
@@ -685,7 +740,7 @@ export function LabelDesigner({
         tabIndex={-1}
         className="flex max-h-[94vh] w-full max-w-[1440px] flex-col overflow-hidden rounded-[22px] border border-border bg-surface shadow-2xl"
       >
-        <header className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
+        <header inert={testPrinting || uploadingImage || saving} className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.17em] text-brand">
               {t("designer.eyebrow")}
@@ -728,7 +783,7 @@ export function LabelDesigner({
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[250px_minmax(300px,1fr)_320px] lg:overflow-hidden">
+        <div inert={testPrinting || uploadingImage || saving} className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[250px_minmax(300px,1fr)_320px] lg:overflow-hidden">
           <aside className="border-b border-border p-5 lg:overflow-y-auto lg:border-b-0 lg:border-r">
             <label className="block text-[12px] font-semibold text-muted">
               {t("designer.setupName")}
@@ -818,6 +873,13 @@ export function LabelDesigner({
                   </p>
                 ) : null}
               </div>
+              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong px-3 py-2.5 text-xs font-semibold hover:bg-surface-hover">
+                <Upload size={14} aria-hidden="true" />{t(uploadingImage ? "designer.imageUploading" : "designer.insertImage")}
+                <input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml"
+                  disabled={uploadingImage || value.elements.length >= MAX_LABEL_ELEMENTS}
+                  onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadBackground(null, file); }} />
+              </label>
+              {backgroundError ? <p role="alert" className="mt-2 text-xs text-danger">{backgroundError}</p> : null}
               <div className="mt-3 space-y-1.5">
                 {value.elements.map(element => {
                   const key = labelElementKey(element);
@@ -1049,15 +1111,29 @@ export function LabelDesigner({
                   <span className="text-xs font-semibold text-foreground">
                     {elementName(selected)}
                   </span>
+                  <button type="button" className="ml-auto rounded p-1 text-muted hover:text-foreground" onClick={duplicateSelected}
+                    aria-label={t("designer.duplicateElement", { element: elementName(selected) })} title={t("designer.duplicate")}
+                    disabled={value.elements.length >= MAX_LABEL_ELEMENTS}><Copy size={15} /></button>
                   <button
                     type="button"
                     aria-label={t("designer.removeElement", { element: elementName(selected) })}
-                    className="ml-auto rounded p-1 text-muted hover:text-danger"
+                    className="rounded p-1 text-muted hover:text-danger"
                     onClick={() => removeElement(labelElementKey(selected))}
                   >
                     <Trash2 size={15} aria-hidden="true" />
                   </button>
                 </div>
+                <details className="mb-4 rounded-xl border border-border p-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-muted">{t("designer.arrange")}</summary>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "front") })}>{t("designer.bringFront")}</Button>
+                  <Button size="sm" variant="secondary" onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "back") })}>{t("designer.sendBack")}</Button>
+                  {selected.type !== "background" ? <>
+                    <Button className="col-span-2" size="sm" variant="secondary" onClick={() => updateElement(selectedKey, { x: (100 - selected.width) / 2 })}>{t("designer.centerHorizontal")}</Button>
+                    <Button className="col-span-2" size="sm" variant="secondary" onClick={() => updateElement(selectedKey, { y: (100 - selected.height) / 2 })}>{t("designer.centerVertical")}</Button>
+                  </> : null}
+                  </div>
+                </details>
                 {selected.type !== "background" ? (
                   <div className="grid grid-cols-2 gap-2">
                     {(["x", "y", "width", "height"] as const).map((key) => {
@@ -1185,6 +1261,13 @@ export function LabelDesigner({
 
                 {selected.type === "image" ? (
                   <div>
+                    <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong px-3 py-3 text-xs font-semibold">
+                      <Upload size={14} />{t(selected.source ? "designer.replaceImage" : "designer.uploadOwnImage")}
+                      <input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml" disabled={uploadingImage}
+                        onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadBackground(selectedKey, file); }} />
+                    </label>
+                    <p className="mt-2 text-xs text-muted">{t(selected.source ? "designer.ownImageHint" : "designer.productImageHint")}</p>
+                    {selected.source ? <Button size="sm" variant="secondary" className="mt-2" onClick={() => updateElement(selectedKey, { source: undefined, altText: undefined })}>{t("designer.useProductImage")}</Button> : null}
                     <label className="mt-4 block text-[12px] font-semibold text-muted">
                       {t("designer.imageFit")}
                       <select
@@ -1435,8 +1518,14 @@ export function LabelDesigner({
           </aside>
         </div>
 
-        <footer className="flex flex-col gap-3 border-t border-border bg-surface px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div ref={printPreviewRef} aria-hidden="true" style={{ position: "fixed", left: -10000, top: 0, pointerEvents: "none" }}>
+          <LabelRenderer resource={previewResource} setup={renderedSetup} origin={origin} />
+        </div>
+        <footer className="flex flex-col gap-3 border-t border-border bg-surface px-5 py-4 sm:px-6">
           <div>
+            {testError ? <p role="alert" className="mb-2 text-xs font-medium text-danger">{testError}</p> : null}
+            {testSent ? <p role="status" className="mb-2 text-xs font-medium text-brand">{testPrintSuccess}</p> : null}
+            {onTestPrint ? <p className="mb-2 text-xs text-muted">{t("designer.testHint", { destination: testPrintDestination })}</p> : null}
             {error ? <p role="alert" className="text-xs font-medium text-danger">{error}</p> : null}
             {qrImageOverlap ? (
               <p role="alert" className="text-xs font-medium text-warning">
@@ -1448,18 +1537,24 @@ export function LabelDesigner({
               </p>
             ) : null}
           </div>
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {onTestPrint ? <Button className="mr-auto" variant="secondary" onClick={() => void testPrint()} disabled={saving || testPrinting || uploadingImage || qrImageOverlap}>
+              {testPrinting ? <LoaderCircle size={15} className="animate-spin" /> : <Printer size={15} />}{t(testPrinting ? "designer.testPrinting" : "designer.testPrint")}
+            </Button> : null}
             {onDelete ? (
-              <Button variant="danger" onClick={onDelete} disabled={saving} className="mr-auto sm:mr-2">
+              <Button variant="danger" onClick={onDelete} disabled={saving || testPrinting || uploadingImage} className="sm:mr-2">
                 {t("designer.delete")}
               </Button>
             ) : null}
-            <Button variant="secondary" onClick={onClose} disabled={saving}>
+            <Button variant="secondary" onClick={onClose} disabled={saving || testPrinting || uploadingImage}>
               {t("designer.cancel")}
             </Button>
+            {onSaveAsNew && value.id ? <Button variant="secondary" onClick={onSaveAsNew} disabled={saving || testPrinting || uploadingImage || !value.name.trim() || qrImageOverlap}>
+              <Copy size={15} />{t("designer.saveAsNew")}
+            </Button> : null}
             <Button
               onClick={onSave}
-              disabled={saving || !value.name.trim() || qrImageOverlap}
+              disabled={saving || testPrinting || uploadingImage || !value.name.trim() || qrImageOverlap}
             >
               {saving ? t("designer.saving") : t("designer.save")}
             </Button>

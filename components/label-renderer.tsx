@@ -29,6 +29,8 @@ import { printableLabelBarcode } from "@/lib/label-barcode";
 
 import { cropLabelImage, DEFAULT_CROP_PADDING, DEFAULT_CROP_TOLERANCE } from "@/lib/label-image-crop";
 
+import { labelImageSource } from "@/lib/label-image-source";
+
 import styles from "./label-printer.module.css";
 
 export type { LabelResource } from "@/lib/label-target";
@@ -54,7 +56,7 @@ function PrintableImage({
   retryToken: number;
 }) {
   const { t } = useT("labels");
-  const source = resource.cover?.url ?? null;
+  const source = labelImageSource(element, resource);
   const tolerance = element.cropTolerance ?? DEFAULT_CROP_TOLERANCE;
   const padding = element.cropPadding ?? DEFAULT_CROP_PADDING;
   const cropKey = JSON.stringify([source, element.cropWhiteMargins, tolerance, padding, retryToken]);
@@ -91,7 +93,7 @@ function PrintableImage({
       data-label-crop={cropState}
       data-label-photo-optimization={element.photoOptimization ?? "auto"}
       title={cropState === "error" ? t("renderer.cropError") : undefined}
-      alt={resource.cover?.altText || resource.name}
+      alt={element.source ? element.altText || t("designer.ownImage") : resource.cover?.altText || resource.name}
       className={`${styles.labelImage} printable-label-image`}
       style={{ objectFit: element.fit ?? "cover" }}
     />
