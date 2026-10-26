@@ -38,6 +38,7 @@ import {
 import { Button } from "@/components/ui";
 import { LabelRichTextEditor } from "@/components/label-rich-text-editor";
 import { defaultLabelTextContent } from "@/lib/label-rich-text";
+import { DEFAULT_CROP_PADDING, DEFAULT_CROP_TOLERANCE } from "@/lib/label-image-crop";
 import { placeNewLabelElement } from "@/lib/label-element-layout";
 import {
   hasVisibleQrImageOverlap,
@@ -1183,17 +1184,40 @@ export function LabelDesigner({
                 ) : null}
 
                 {selected.type === "image" ? (
-                  <label className="mt-4 block text-[12px] font-semibold text-muted">
-                    {t("designer.imageFit")}
-                    <select
-                      value={selected.fit ?? "cover"}
-                      onChange={(event) => updateElement(labelElementKey(selected), { fit: event.target.value as "cover" | "contain" })}
-                      className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
-                    >
-                      <option value="cover">{t("designer.fillFrame")}</option>
-                      <option value="contain">{t("designer.fitImage")}</option>
-                    </select>
-                  </label>
+                  <div>
+                    <label className="mt-4 block text-[12px] font-semibold text-muted">
+                      {t("designer.imageFit")}
+                      <select
+                        value={selected.fit ?? "cover"}
+                        onChange={(event) => updateElement(labelElementKey(selected), { fit: event.target.value as "cover" | "contain" })}
+                        className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none"
+                      >
+                        <option value="cover">{t("designer.fillFrame")}</option>
+                        <option value="contain">{t("designer.fitImage")}</option>
+                      </select>
+                    </label>
+                    <label className="mt-4 flex items-center gap-2 text-sm font-semibold">
+                      <input type="checkbox" checked={selected.cropWhiteMargins ?? false}
+                        onChange={event => updateElement(labelElementKey(selected), { cropWhiteMargins: event.target.checked })} />
+                      {t("designer.cropWhiteMargins")}
+                    </label>
+                    {selected.cropWhiteMargins ? <div className="mt-3 space-y-3">
+                      <p className="text-xs text-muted">{t("designer.cropHint")}</p>
+                      <label className="block text-xs font-semibold text-muted">
+                        {t("designer.cropTolerance")}: {selected.cropTolerance ?? DEFAULT_CROP_TOLERANCE}
+                        <input type="range" min={0} max={80} step={1} className="mt-2 w-full"
+                          value={selected.cropTolerance ?? DEFAULT_CROP_TOLERANCE}
+                          onChange={event => updateElement(labelElementKey(selected), { cropTolerance: Number(event.target.value) })} />
+                      </label>
+                      <label className="block text-xs font-semibold text-muted">
+                        {t("designer.cropPadding")}: {selected.cropPadding ?? DEFAULT_CROP_PADDING}%
+                        <input type="range" min={-10} max={20} step={1} className="mt-2 w-full"
+                          value={selected.cropPadding ?? DEFAULT_CROP_PADDING}
+                          onChange={event => updateElement(labelElementKey(selected), { cropPadding: Number(event.target.value) })} />
+                      </label>
+                      <p className="text-xs text-muted">{t("designer.cropPaddingHint")}</p>
+                  </div> : null}
+                  </div>
                 ) : null}
 
                 {selected.type === "qr" ? (

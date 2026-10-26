@@ -24,6 +24,7 @@ import {
   type LabelSetupDraft,
 } from "@/components/label-designer";
 import { canEncodeQr } from "@/components/label-codes";
+import { waitForLabelImageCrops } from "@/lib/label-image-crop";
 import { labelUsesPlaceholder } from "@/lib/label-rich-text";
 import { availableLabelSetupName, LABEL_SETUP_NAME_CONFLICT } from "@/lib/label-setup-name";
 import { LabelTextFields } from "@/components/label-text-fields";
@@ -521,6 +522,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
           requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
         );
       }
+      await waitForLabelImageCrops(document.querySelector(`.${styles.printSurface}`) ?? document);
       const images = Array.from(
         document.querySelectorAll<HTMLImageElement>(
           `.${styles.printSurface} .printable-label-image`,
@@ -1178,6 +1180,7 @@ function PreparedLabelEditor({ label, origin, onSave, onCancel }: {
     try {
       const node = preview.current?.querySelector<HTMLElement>("article");
       if (!node) throw new Error(t("direct.renderError"));
+      await waitForLabelImageCrops(node);
       const images = Array.from(node.querySelectorAll<HTMLImageElement>("img"));
       await Promise.race([
         Promise.all(images.map(image => image.decode())),

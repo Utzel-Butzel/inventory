@@ -1,3 +1,4 @@
+import { waitForLabelImageCrops } from "@/lib/label-image-crop";
 import { labelFontEmbedCss } from "@/lib/label-fonts";
 import { combinePtouchLabels, encodePtouchRaster, PTOUCH_FEED_DPI, PTOUCH_PIXELS_PER_MM, ptouchPrintableDots, type PtouchTape } from "@/lib/ptouch-raster";
 import { halftonePtouchPhoto } from "@/lib/ptouch-photo";
@@ -49,6 +50,8 @@ export async function renderPtouchLabel(node: HTMLElement, widthMm: number, heig
   if (height > ptouchPrintableDots(tape) || width < 4 || width > 14116) {
     throw new Error("Label dimensions do not fit the P-touch print area.");
   }
+  await waitForLabelImageCrops(node);
+  await Promise.all(Array.from(node.querySelectorAll<HTMLImageElement>("img"), image => image.decode()));
   const fontEmbedCSS = await labelFontEmbedCss(node);
   await document.fonts.ready;
   await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));

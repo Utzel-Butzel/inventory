@@ -207,7 +207,12 @@
         "ID": "Eintrags-ID",
         "URL": "Kurzlink"
       }
-    }
+    },
+    "cropWhiteMargins": "Weiße Bildränder beschneiden",
+    "cropHint": "Entfernt helle Außenränder und ignoriert kleine Störpunkte. Höhere Toleranz entfernt auch leicht graue Bereiche. Vorschau und Druck verwenden denselben Ausschnitt.",
+    "cropTolerance": "Toleranz",
+    "cropPadding": "Rand um Motiv",
+    "cropPaddingHint": "Weniger Rand vergrößert das Motiv. Negative Werte schneiden zusätzlich ins Motiv; mehr Rand verkleinert es."
   },
   "renderer": {
     "noImage": "Kein Bild",
@@ -217,7 +222,8 @@
     "printable": "Druckbares Etikett für {{name}}",
     "qr": "QR-Code für {{value}}",
     "qrTooLong": "QR-URL zu lang",
-    "barcode": "Code-128-Barcode für {{value}}"
+    "barcode": "Code-128-Barcode für {{value}}",
+    "cropError": "Bild konnte nicht beschnitten werden. Bitte erneut laden oder Beschneiden deaktivieren."
   },
   "errors": {
     "loadSetups": "Etikettenvorlagen konnten nicht geladen werden.",

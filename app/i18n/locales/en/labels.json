@@ -207,7 +207,12 @@
         "ID": "Entry ID",
         "URL": "Short link"
       }
-    }
+    },
+    "cropWhiteMargins": "Crop white image margins",
+    "cropHint": "Removes light outer margins and ignores small specks. Higher tolerance also removes light gray areas. Preview and print use the same crop.",
+    "cropTolerance": "Tolerance",
+    "cropPadding": "Margin around subject",
+    "cropPaddingHint": "Less margin enlarges the subject. Negative values trim into the subject; more margin makes it smaller."
   },
   "renderer": {
     "noImage": "No image",
@@ -217,7 +222,8 @@
     "printable": "Printable label for {{name}}",
     "qr": "QR code for {{value}}",
     "qrTooLong": "QR URL too long",
-    "barcode": "Code 128 barcode for {{value}}"
+    "barcode": "Code 128 barcode for {{value}}",
+    "cropError": "Unable to crop image. Please reload or disable cropping."
   },
   "errors": {
     "loadSetups": "Unable to load label setups.",

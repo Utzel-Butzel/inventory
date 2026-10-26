@@ -4,6 +4,8 @@ import {
   type CSSProperties,
   type ReactNode,
   useCallback,
+  useEffect,
+  useState,
   useLayoutEffect,
   useRef,
 } from "react";
@@ -24,6 +26,8 @@ import {
 import { labelTargetName, labelTargetUrl, type LabelResource } from "@/lib/label-target";
 import { resolveLabelText, labelPlaceholderValues } from "@/lib/label-rich-text";
 import { printableLabelBarcode } from "@/lib/label-barcode";
+
+import { cropLabelImage, DEFAULT_CROP_PADDING, DEFAULT_CROP_TOLERANCE } from "@/lib/label-image-crop";
 
 import styles from "./label-printer.module.css";
 
@@ -51,6 +55,27 @@ function PrintableImage({
 }) {
   const { t } = useT("labels");
   const source = resource.cover?.url ?? null;
+  const tolerance = element.cropTolerance ?? DEFAULT_CROP_TOLERANCE;
+  const padding = element.cropPadding ?? DEFAULT_CROP_PADDING;
+  const cropKey = JSON.stringify([source, element.cropWhiteMargins, tolerance, padding, retryToken]);
+  const [cropped, setCropped] = useState<{ key: string; url?: string; error?: boolean } | null>(null);
+  useEffect(() => {
+    if (!source || !element.cropWhiteMargins) return;
+    let cancelled = false;
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      if (cancelled) return;
+      try { setCropped({ key: cropKey, url: cropLabelImage(image, tolerance, padding) }); }
+      catch { setCropped({ key: cropKey, error: true }); }
+    };
+    image.onerror = () => { if (!cancelled) setCropped({ key: cropKey, error: true }); };
+    image.src = source;
+    return () => { cancelled = true; image.onload = null; image.onerror = null; };
+  }, [source, element.cropWhiteMargins, tolerance, padding, cropKey]);
+  const result = cropped?.key === cropKey ? cropped : null;
+  const cropState = !element.cropWhiteMargins ? undefined : !result ? "pending" : result.error ? "error" : "ready";
+
   if (!source) {
     return showPlaceholder ? (
       <span className={styles.imagePlaceholder}>{t("renderer.noImage")}</span>
@@ -62,7 +87,9 @@ function PrintableImage({
     // eslint-disable-next-line @next/next/no-img-element
     <img
       key={`${source}-${retryToken}`}
-      src={source}
+      src={element.cropWhiteMargins && result?.url ? result.url : source}
+      data-label-crop={cropState}
+      title={cropState === "error" ? t("renderer.cropError") : undefined}
       alt={resource.cover?.altText || resource.name}
       className={`${styles.labelImage} printable-label-image`}
       style={{ objectFit: element.fit ?? "cover" }}
