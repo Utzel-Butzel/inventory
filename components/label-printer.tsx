@@ -79,7 +79,7 @@ const DEFAULT_ELEMENTS: LabelElement[] = [
   { type: "location", x: 46, y: 90, width: 51, height: 7, visible: false, fontSizeMm: 1.55, align: "left" },
 ];
 
-export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { canWrite?: boolean; canManagePrinters?: boolean }) {
+export function LabelPrinter({ canWrite = false, canManagePrinters = false, initialResourceId }: { canWrite?: boolean; canManagePrinters?: boolean; initialResourceId?: string }) {
   const { t } = useT("labels");
   const [origin, setOrigin] = useState("");
   const [query, setQuery] = useState("");
@@ -201,6 +201,25 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
       });
     return () => controller.abort();
   }, [debouncedQuery, page, t]);
+
+  useEffect(() => {
+    if (!initialResourceId) return;
+    const controller = new AbortController();
+    void fetchJson<{ resource: ClientResource }>(
+      `/api/v1/resources/${encodeURIComponent(initialResourceId)}`,
+      { cache: "no-store", signal: controller.signal },
+    )
+      .then(({ resource }) => {
+        if (!controller.signal.aborted) {
+          setSelected(new Map([[resource.id, resource]]));
+        }
+      })
+      .catch((loadError: unknown) => {
+        if (controller.signal.aborted) return;
+        setPrintError(loadError instanceof Error ? loadError.message : t("errors.loadItems"));
+      });
+    return () => controller.abort();
+  }, [initialResourceId, t]);
 
   const selectedIds = useMemo(() => new Set(selected.keys()), [selected]);
   const ptouchSetup = useMemo<LabelSetupDto>(() => ({

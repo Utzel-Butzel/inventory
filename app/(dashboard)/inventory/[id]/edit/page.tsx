@@ -74,6 +74,7 @@ export default async function EditInventoryItemPage({ params }: Props) {
       <ResourceEditor
         resourceId={resource.id}
         canDelete={canDelete}
+        canPrintLabels={identity.permissions.includes("labels.read")}
         canViewStock={identity.permissions.includes("stock.read")}
         canUseAi={canAnalyzeAi || canResearchAi || canGenerateImagesAi}
         canAnalyzeAi={canAnalyzeAi}
