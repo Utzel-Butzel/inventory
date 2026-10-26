@@ -58,7 +58,7 @@ export async function renderPtouchLabel(node: HTMLElement, widthMm: number, heig
   const { toCanvas } = await import("html-to-image");
   const canvas = await toCanvas(node, {
     canvasWidth: width, canvasHeight: height, pixelRatio: 1,
-    backgroundColor: "#ffffff", skipFonts: !fontEmbedCSS, fontEmbedCSS,
+    backgroundColor: node.dataset.labelInverted === "true" ? "#000000" : "#ffffff", skipFonts: !fontEmbedCSS, fontEmbedCSS,
     style: { boxShadow: "none", margin: "0" },
   });
   const context = canvas.getContext("2d");
@@ -72,7 +72,7 @@ export async function renderPtouchLabel(node: HTMLElement, widthMm: number, heig
       y: (bounds.top - labelBounds.top) / labelBounds.height * height,
       width: bounds.width / labelBounds.width * width,
       height: bounds.height / labelBounds.height * height,
-    }, photo.dataset.labelPhotoOptimization === "standard" ? "standard" : "auto");
+    }, photo.dataset.labelPhotoOptimization === "standard" ? "standard" : "auto", node.dataset.labelInverted === "true");
   }
   context.putImageData(pixels, 0, 0);
   if (expectedQr) {

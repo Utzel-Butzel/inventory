@@ -89,7 +89,7 @@ export function adaptivePtouchPhoto(gray: Float32Array, width: number, height: n
 }
 
 /** Halftone only the product photo; paired feed dots make square 180-dpi cells. */
-export function halftonePtouchPhoto(pixels: LabelPixels, bounds: { x: number; y: number; width: number; height: number }, optimization: PtouchPhotoOptimization = "auto") {
+export function halftonePtouchPhoto(pixels: LabelPixels, bounds: { x: number; y: number; width: number; height: number }, optimization: PtouchPhotoOptimization = "auto", inverted = false) {
   const left = Math.max(0, Math.floor(bounds.x));
   const top = Math.max(0, Math.floor(bounds.y));
   const right = Math.min(pixels.width, Math.ceil(bounds.x + bounds.width));
@@ -101,7 +101,9 @@ export function halftonePtouchPhoto(pixels: LabelPixels, bounds: { x: number; y:
     for (let x = left; x < right; x++) {
       const i = (y * pixels.width + x) * 4;
       const alpha = pixels.data[i + 3] / 255;
-      gray[(y - top) * width + x - left] = (pixels.data[i] * 0.2126 + pixels.data[i + 1] * 0.7152 + pixels.data[i + 2] * 0.0722) * alpha + 255 * (1 - alpha);
+      const luminance = (pixels.data[i] * 0.2126 + pixels.data[i + 1] * 0.7152 + pixels.data[i + 2] * 0.0722) * alpha + 255 * (1 - alpha);
+      // Optimize the original photo tones, then invert the final print dots.
+      gray[(y - top) * width + x - left] = inverted ? 255 - luminance : luminance;
     }
   }
   const clarified = optimization === "standard"
@@ -112,7 +114,7 @@ export function halftonePtouchPhoto(pixels: LabelPixels, bounds: { x: number; y:
       const i = (y * pixels.width + x) * 4;
       const threshold = (BAYER[(y % 4) * 4 + (Math.floor(x / 2) % 4)] + 0.5) * 255 / 16;
       const value = clarified[(y - top) * width + x - left] < threshold ? 0 : 255;
-      pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = value;
+      pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = inverted ? 255 - value : value;
       pixels.data[i + 3] = 255;
     }
   }

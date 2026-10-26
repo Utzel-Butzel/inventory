@@ -207,6 +207,7 @@ const labelSetupShape = {
   widthMm: z.number().finite().positive().max(1_000),
   heightMm: z.number().finite().positive().max(1_000),
   elements: labelElementsSchema,
+  inverted: z.boolean().optional(),
 };
 
 export const labelSetupCreateSchema = z.object(labelSetupShape).strict();
@@ -218,6 +219,7 @@ export const labelSetupPatchSchema = z
     widthMm: labelSetupShape.widthMm.optional(),
     heightMm: labelSetupShape.heightMm.optional(),
     elements: labelSetupShape.elements.optional(),
+    inverted: labelSetupShape.inverted,
   })
   .strict()
   .refine((value) => Object.keys(value).some((key) => key !== "revision"), {
@@ -275,6 +277,7 @@ export type LabelSetupDto = {
   widthMm: number;
   heightMm: number;
   elements: LabelElement[];
+  inverted?: boolean;
   revision: number;
   createdAt: string;
   updatedAt: string;

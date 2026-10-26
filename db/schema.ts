@@ -1864,6 +1864,7 @@ export const labelSetups = pgTable(
     widthMm: doublePrecision("width_mm").notNull(),
     heightMm: doublePrecision("height_mm").notNull(),
     elements: jsonb("elements").$type<LabelElement[]>().notNull(),
+    inverted: boolean("inverted").notNull().default(false),
     revision: integer("revision").notNull().default(1),
     createdBy: varchar("created_by", { length: 320 }),
     updatedBy: varchar("updated_by", { length: 320 }),

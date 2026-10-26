@@ -12,7 +12,10 @@
     "preparing": "Preparing labels…",
     "button_zero": "Print labels",
     "button_one": "Print {{count}} label",
-    "button_other": "Print {{count}} labels"
+    "button_other": "Print {{count}} labels",
+    "inverted": "Print inverted",
+    "invertedHint": "White on black. Images print as negatives; QR codes and barcodes stay black on white for reliable scanning.",
+    "invertedTemporary": "Applies to this print. Save the setting in the template via “Design”."
   },
   "selection": {
     "title": "1. Select items",

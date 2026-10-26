@@ -492,3 +492,11 @@ test("raster font embedding distinguishes related family names and uses real wei
   assert.equal(selectLabelFontFace('"Inventory Barlow Semi Condensed", sans-serif', 500, 'italic').file, 'BarlowSemiCondensed-MediumItalic.ttf');
   assert.equal(selectLabelFontFace('system-ui, sans-serif', 700, 'normal'), undefined);
 });
+
+test("inversion is optional for old templates and can be saved, copied and disabled", () => {
+  const setup = { name: 'Negative label', widthMm: 80, heightMm: 18, elements: [] };
+  assert.equal(labelSetupCreateSchema.parse(setup).inverted, undefined);
+  assert.equal(labelSetupCreateSchema.parse({ ...setup, inverted: true }).inverted, true);
+  assert.deepEqual(labelSetupPatchSchema.parse({ revision: 1, inverted: false }), { revision: 1, inverted: false });
+  assert.equal(labelSetupCreateSchema.safeParse({ ...setup, inverted: 'true' }).success, false);
+});

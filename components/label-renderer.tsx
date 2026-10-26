@@ -263,7 +263,8 @@ export function LabelRenderer({
 
   return (
     <article
-      className={`${styles.label} ${styles.designedLabel}${className ? ` ${className}` : ""}`}
+      data-label-inverted={setup.inverted ? "true" : undefined}
+      className={`${styles.label} ${styles.designedLabel}${setup.inverted ? ` ${styles.invertedLabel}` : ""}${className ? ` ${className}` : ""}`}
       style={{
         width: `${setup.widthMm * dimensionScale}${dimensionUnit}`,
         height: `${setup.heightMm * dimensionScale}${dimensionUnit}`,
@@ -307,9 +308,9 @@ export function LabelRenderer({
                     value={qrValue}
                     className={styles.designedQr}
                     ariaLabel={t("renderer.qr", { value: qrValue })}
-                    foregroundColor={element.foregroundColor}
-                    backgroundColor={element.backgroundColor}
-                    quietZoneModules={element.quietZoneModules}
+                    foregroundColor={setup.inverted ? "#000000" : element.foregroundColor}
+                    backgroundColor={setup.inverted ? "#ffffff" : element.backgroundColor}
+                    quietZoneModules={setup.inverted ? 4 : element.quietZoneModules}
                   />
                 ) : (
                   <span className={styles.qrUnavailable}>

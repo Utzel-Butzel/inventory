@@ -46,6 +46,7 @@ const labelSetupDto = (row: LabelSetupRecord): LabelSetupDto => ({
   widthMm: row.widthMm,
   heightMm: row.heightMm,
   elements: row.elements,
+  inverted: row.inverted,
   revision: row.revision,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),

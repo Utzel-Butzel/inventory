@@ -236,3 +236,23 @@ test("print copies preserve series order and form one bounded chain-print job", 
   assert.equal(combined.at(-1), 0x1a);
   assert.deepEqual(original, before);
 });
+
+test("inverted product photos retain the original optimization and reverse only final print dots", () => {
+  const original = white(80, 32);
+  for (let y = 4; y < 28; y++) for (let x = 6; x < 74; x++) {
+    const i = (y * 80 + x) * 4;
+    original.data[i] = original.data[i + 1] = original.data[i + 2] = 50 + (x * 3) % 190;
+  }
+  for (const mode of ['auto', 'standard']) {
+    const positive = { ...original, data: original.data.slice() };
+    const negative = { ...original, data: original.data.slice() };
+    for (let i = 0; i < negative.data.length; i += 4) for (let channel = 0; channel < 3; channel++) negative.data[i + channel] = 255 - negative.data[i + channel];
+    const bounds = { x: 0, y: 0, width: 80, height: 32 };
+    halftonePtouchPhoto(positive, bounds, mode);
+    halftonePtouchPhoto(negative, bounds, mode, true);
+    for (let i = 0; i < positive.data.length; i += 4) {
+      assert.equal(negative.data[i], 255 - positive.data[i]);
+      assert.equal(negative.data[i + 3], 255);
+    }
+  }
+});

@@ -67,7 +67,7 @@ type PreviewScenario = "current" | "stress" | "missing";
 
 export type LabelSetupDraft = Pick<
   LabelSetupDto,
-  "name" | "widthMm" | "heightMm" | "elements"
+  "name" | "widthMm" | "heightMm" | "elements" | "inverted"
 > &
   Partial<Pick<LabelSetupDto, "id" | "revision">>;
 
@@ -214,6 +214,7 @@ function previewSetup(draft: LabelSetupDraft): LabelSetupDto {
     widthMm: draft.widthMm,
     heightMm: draft.heightMm,
     elements: draft.elements,
+    inverted: draft.inverted,
     revision: draft.revision ?? 1,
     createdAt: "",
     updatedAt: "",
@@ -826,6 +827,12 @@ export function LabelDesigner({
                 </label>
               ))}
             </div>
+
+            <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs font-semibold">
+              <input type="checkbox" checked={value.inverted ?? false} onChange={event => applyDraft({ ...currentValueRef.current, inverted: event.target.checked })} />
+              {t("print.inverted")}
+            </label>
+            {value.inverted ? <p className="mt-2 text-xs leading-5 text-muted">{t("print.invertedHint")}</p> : null}
 
             <div className="mt-6">
               <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">

@@ -93,6 +93,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   const [setupId, setSetupId] = useState("");
   const [setupsLoading, setSetupsLoading] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
+  const [inversionOverride, setInversionOverride] = useState<{ key: string; inverted: boolean } | null>(null);
   const [designerDraft, setDesignerDraft] = useState<LabelSetupDraft | null>(null);
   const [designerSaving, setDesignerSaving] = useState(false);
   const designerSaveLock = useRef(false);
@@ -296,8 +297,11 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   }), [t, tape]);
   const availableSetups = useMemo(() => isRasterPrint ? [ptouchSetup, ...setups] : setups, [isRasterPrint, ptouchSetup, setups]);
   const activeSetup = useMemo(
-    () => availableSetups.find((setup) => setup.id === setupId) ?? availableSetups[0] ?? null,
-    [setupId, availableSetups],
+    () => {
+      const setup = availableSetups.find((setup) => setup.id === setupId) ?? availableSetups[0] ?? null;
+      return setup && inversionOverride?.key === `${setup.id}:${setup.revision}` ? { ...setup, inverted: inversionOverride.inverted } : setup;
+    },
+    [setupId, availableSetups, inversionOverride],
   );
   const visibleSelected =
     resources.length > 0 && resources.every((resource) => selectedIds.has(resource.id));
@@ -391,6 +395,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         widthMm: activeSetup?.widthMm ?? 62,
         heightMm: activeSetup?.heightMm ?? 35,
         elements: structuredClone(activeSetup?.elements ?? DEFAULT_ELEMENTS),
+        inverted: activeSetup?.inverted ?? false,
       });
     } catch {
       setSetupError(t("errors.loadSetups"));
@@ -425,6 +430,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         widthMm: designerDraft.widthMm,
         heightMm: designerDraft.heightMm,
         elements: designerDraft.elements,
+        inverted: designerDraft.inverted ?? false,
       };
       const result = designerDraft.id && !asNew
         ? await fetchJson<{ labelSetup: LabelSetupDto }>(
@@ -496,7 +502,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   const printDesignerSample = async (node: HTMLElement, setup: LabelSetupDto, resource: LabelResource, copies: number) => {
     if (printLock.current) throw new Error(t("workspace.busy"));
     if (!Number.isInteger(copies) || copies < 1 || copies > 100) throw new Error(t("direct.limit"));
-    if (!labelSetupCreateSchema.safeParse({ name: setup.name || "Test", widthMm: setup.widthMm, heightMm: setup.heightMm, elements: setup.elements }).success)
+    if (!labelSetupCreateSchema.safeParse({ name: setup.name || "Test", widthMm: setup.widthMm, heightMm: setup.heightMm, elements: setup.elements, inverted: setup.inverted }).success)
       throw new Error(t("designer.invalidSample"));
     if (labelNeedsProductImage(setup.elements) && !resource.cover?.url)
       throw new Error(t("errors.missingImages", { count: 1, examples: resource.name }));
@@ -1061,6 +1067,15 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
               </p>
             ) : null}
           </div>
+
+          {activeSetup ? <div className="border-t border-border px-4 py-3">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={activeSetup.inverted ?? false} disabled={preparingPrint || connecting} onChange={event => setInversionOverride({ key: `${activeSetup.id}:${activeSetup.revision}`, inverted: event.target.checked })} />
+              {t("print.inverted")}
+            </label>
+            <p className="mt-1 text-xs text-muted">{t("print.invertedTemporary")}</p>
+            {activeSetup.inverted ? <p className="mt-1 text-xs text-muted">{t("print.invertedHint")}</p> : null}
+          </div> : null}
 
           <div className={styles.previewViewport}>
             {setupsLoading ? (

@@ -658,3 +658,13 @@
   .page label > select { display: block; margin-left: 0; margin-top: 6px; }
   .previewViewport { padding: 16px; min-height: 160px; }
 }
+
+/* Keep machine-readable codes positive; text and pictures use negative colors. */
+.invertedLabel {
+  color: #fff;
+  background: #000;
+}
+.invertedLabel .labelImage,
+.invertedLabel .designedBackground {
+  filter: invert(1);
+}

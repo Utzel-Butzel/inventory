@@ -12,7 +12,10 @@
     "preparing": "Etiketten werden vorbereitet…",
     "button_zero": "Etiketten drucken",
     "button_one": "{{count}} Etikett drucken",
-    "button_other": "{{count}} Etiketten drucken"
+    "button_other": "{{count}} Etiketten drucken",
+    "inverted": "Invertiert drucken",
+    "invertedHint": "Weiß auf Schwarz. Bilder werden als Negativ gedruckt; QR- und Barcodes bleiben für zuverlässiges Scannen schwarz auf Weiß.",
+    "invertedTemporary": "Gilt für diesen Druck. Über „Gestalten“ kannst du die Einstellung in der Vorlage speichern."
   },
   "selection": {
     "title": "1. Einträge auswählen",
