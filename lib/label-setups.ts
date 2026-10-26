@@ -4,6 +4,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 
 import { labelSetups, type LabelSetupRecord } from "@/db/schema";
 import { db } from "@/lib/db";
+import { isLabelSetupNameConflict, LABEL_SETUP_NAME_CONFLICT } from "@/lib/label-setup-name";
 import type {
   LabelSetupCreate,
   LabelSetupDto,
@@ -29,11 +30,10 @@ export function labelSetupHttpError(error: unknown, fallback: string) {
       details: error.details,
     };
   }
-  const message = error instanceof Error ? error.message : "";
-  if (message.includes("label_setups_name_unique")) {
+  if (isLabelSetupNameConflict(error)) {
     return {
       status: 409 as const,
-      message: "A label setup with that name already exists.",
+      message: LABEL_SETUP_NAME_CONFLICT,
       details: undefined,
     };
   }

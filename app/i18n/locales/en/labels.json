@@ -223,6 +223,7 @@
     "loadSetups": "Unable to load label setups.",
     "loadItems": "Unable to load inventory items.",
     "saveSetup": "Unable to save the label setup.",
+    "setupNameExists": "A label setup with this name already exists. Choose another name or edit the existing setup.",
     "deleteSetup": "Unable to delete the label setup.",
     "overlapShort": "The object image overlaps the QR code. Edit the setup before printing.",
     "overlap": "The object image overlaps the QR code in this setup. Open the designer and move or resize one of them before printing.",

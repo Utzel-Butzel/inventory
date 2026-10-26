@@ -14,6 +14,29 @@ import {
   labelSetupPatchSchema,
 } from "../lib/label-setup-contract.ts";
 import { placeNewLabelElement } from "../lib/label-element-layout.ts";
+import { DrizzleQueryError } from "drizzle-orm";
+import { availableLabelSetupName, isLabelSetupNameConflict } from "../lib/label-setup-name.ts";
+
+test("label copies receive unused names within the API length limit", () => {
+  assert.equal(availableLabelSetupName("Kopie von P-touch", []), "Kopie von P-touch");
+  assert.equal(availableLabelSetupName("Kopie von P-touch", ["KOPIE VON P-TOUCH", "Kopie von P-touch (2)"]), "Kopie von P-touch (3)");
+  const longName = "x".repeat(160);
+  const copy = availableLabelSetupName(longName, [longName]);
+  assert.equal(copy.length, 160);
+  assert.equal(copy, "x".repeat(156) + " (2)");
+});
+
+test("duplicate label names are recognized through Drizzle's error cause", () => {
+  const cause = Object.assign(new Error("duplicate key"), {
+    code: "23505", constraint_name: "label_setups_name_unique",
+  });
+  assert.equal(isLabelSetupNameConflict(cause), true);
+  assert.equal(isLabelSetupNameConflict(new DrizzleQueryError("insert into label_setups", [], cause)), true);
+  assert.equal(isLabelSetupNameConflict({code: "23505", constraint_name: "another_index"}), false);
+  assert.equal(isLabelSetupNameConflict(new Error("query with label_setups_name_unique in user input")), false);
+  const cyclic = {}; cyclic.cause = cyclic;
+  assert.equal(isLabelSetupNameConflict(cyclic), false);
+});
 
 const elements = [
   {

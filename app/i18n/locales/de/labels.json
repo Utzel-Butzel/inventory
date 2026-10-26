@@ -223,6 +223,7 @@
     "loadSetups": "Etikettenvorlagen konnten nicht geladen werden.",
     "loadItems": "Einträge konnten nicht geladen werden.",
     "saveSetup": "Die Etikettenvorlage konnte nicht gespeichert werden.",
+    "setupNameExists": "Eine Etikettenvorlage mit diesem Namen existiert bereits. Wähle einen anderen Namen oder bearbeite die vorhandene Vorlage.",
     "deleteSetup": "Die Etikettenvorlage konnte nicht gelöscht werden.",
     "overlapShort": "Das Titelbild überlappt den QR-Code. Bearbeite die Vorlage vor dem Drucken.",
     "overlap": "Das Titelbild überlappt in dieser Vorlage den QR-Code. Öffne den Designer und verschiebe oder skaliere eines der Elemente vor dem Drucken.",

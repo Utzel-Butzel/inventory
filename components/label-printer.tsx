@@ -25,6 +25,7 @@ import {
 } from "@/components/label-designer";
 import { canEncodeQr } from "@/components/label-codes";
 import { labelUsesPlaceholder } from "@/lib/label-rich-text";
+import { availableLabelSetupName, LABEL_SETUP_NAME_CONFLICT } from "@/lib/label-setup-name";
 import { LabelTextFields } from "@/components/label-text-fields";
 import { LabelRenderer } from "@/components/label-renderer";
 import { Button, Card, Skeleton } from "@/components/ui";
@@ -317,16 +318,31 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
     setTextOverrides({});
   };
 
-  const openNewSetup = () => {
+  const openNewSetup = async () => {
+    if (setupsLoading) return;
     setDesignerError(null);
-    setDesignerDraft({
-      name: activeSetup
-        ? t("setup.copyName", { name: activeSetup.name })
-        : t("setup.defaultName"),
-      widthMm: activeSetup?.widthMm ?? 62,
-      heightMm: activeSetup?.heightMm ?? 35,
-      elements: structuredClone(activeSetup?.elements ?? DEFAULT_ELEMENTS),
-    });
+    setSetupError(null);
+    setSetupsLoading(true);
+    try {
+      // Another tab may have saved a copy since this page was opened.
+      const { labelSetups } = await fetchJson<{ labelSetups: LabelSetupDto[] }>(
+        "/api/v1/label-setups", { cache: "no-store" },
+      );
+      setSetups(labelSetups);
+      setDesignerDraft({
+        name: availableLabelSetupName(
+          activeSetup ? t("setup.copyName", { name: activeSetup.name }) : t("setup.defaultName"),
+          labelSetups.map((setup) => setup.name),
+        ),
+        widthMm: activeSetup?.widthMm ?? 62,
+        heightMm: activeSetup?.heightMm ?? 35,
+        elements: structuredClone(activeSetup?.elements ?? DEFAULT_ELEMENTS),
+      });
+    } catch {
+      setSetupError(t("errors.loadSetups"));
+    } finally {
+      setSetupsLoading(false);
+    }
   };
 
   const openDesigner = () => {
@@ -369,7 +385,9 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       setDesignerDraft(null);
     } catch (saveError) {
       setDesignerError(
-        saveError instanceof Error ? saveError.message : t("errors.saveSetup"),
+        saveError instanceof Error && saveError.message === LABEL_SETUP_NAME_CONFLICT
+          ? t("errors.setupNameExists")
+          : saveError instanceof Error ? saveError.message : t("errors.saveSetup"),
       );
     } finally {
       setDesignerSaving(false);
