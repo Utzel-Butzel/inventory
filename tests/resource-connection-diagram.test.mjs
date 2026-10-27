@@ -14,7 +14,7 @@ import {
 
 const item = (id, name) => ({ id, name, type: "item", status: "available" });
 
-import { alignConnectionNodes, assignConnectionLanes, bundleConnectionEdges, orthogonalConnectionPath } from "../lib/resource-connection-routing.ts";
+import { alignConnectionNodes, assignConnectionLanes, bundleConnectionEdges, groupCommonFamilyComponents, orthogonalConnectionPath } from "../lib/resource-connection-routing.ts";
 
 test("bundles family BOM connections without changing the underlying graph", () => {
   const root = item("paper", "Paper L");
@@ -1333,4 +1333,36 @@ test("parent alignment centers assemblies over their own parts without overlappi
     if (i) assert.ok(positions.get(ids[i])-positions.get(ids[i-1])>=200);
   }
   assert.deepEqual(rows,before);
+});
+
+
+test("common parts retain every original edge and require the complete family", () => {
+  const family = ["base", "natural", "black", "white"];
+  const edge = (assembly, component, quantity = 1, unit = "base") => ({
+    key: `${assembly}:${component}`, firstResourceId: assembly, secondResourceId: component,
+    connections: [{kind:"bom", directed:true, fromResourceId:component, toResourceId:assembly,
+      descriptor:{type:"component",quantity,quantityUnit:unit}}],
+  });
+  const shared = family.flatMap(id => [edge(id,"pcb"),edge(id,"cover")]);
+  const mappings = [edge("base","fn"),edge("natural","fn"),edge("black","fb"),edge("white","fw")];
+  const child = edge("pcb","display");
+  const edges = [...shared,...mappings,child];
+  const before = structuredClone(edges);
+  const rows = new Map([...family.map(id=>[id,0]), ...["pcb","cover","fn","fb","fw"].map(id=>[id,1]), ["display",2]]);
+  const groups = groupCommonFamilyComponents(edges,[family,["fn","fb","fw"]],rows);
+  assert.equal(groups.length,1);
+  assert.deepEqual(new Set(groups[0].componentIds),new Set(["pcb","cover"]));
+  assert.deepEqual(new Set(groups[0].edges),new Set(shared));
+  assert.deepEqual(edges,before);
+  assert.ok(!groups[0].edges.includes(child), "child BOM connections remain selectable outside the shared panel");
+  for (const differing of [edge("white","pcb",2),edge("white","pcb",1,"purchase")]) {
+    const changed=edges.map(e=>e.key===differing.key?differing:e);
+    assert.deepEqual(groupCommonFamilyComponents(changed,[family],rows)[0].componentIds,["cover"]);
+  }
+  const partialRows=new Map(rows);partialRows.delete("white");
+  assert.deepEqual(groupCommonFamilyComponents(edges,[family],partialRows),[],"hidden family members cannot imply a complete shared BOM");
+  const farRows=new Map(rows);farRows.set("pcb",2);
+  assert.deepEqual(groupCommonFamilyComponents(edges,[family],farRows)[0].componentIds,["cover"]);
+  const partial=edges.filter(e=>!e.key.startsWith("white:"));
+  assert.deepEqual(groupCommonFamilyComponents(partial,[family],rows),[]);
 });

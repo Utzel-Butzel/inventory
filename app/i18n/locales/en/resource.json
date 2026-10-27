@@ -392,7 +392,9 @@
       "expand": "{{count}} existing BOM connections bundled. Click to show each mapping separately.",
       "collapse": "Bundle {{count}} connections again",
       "closedLabel": "{{count}} bundled",
-      "openLabel": "{{count}} expanded"
+      "openLabel": "{{count}} expanded",
+      "commonParts": "Shared parts",
+      "forAll": "Used by all {{count}} items"
     },
     "connections_one": "{{value}} connection",
     "connections_other": "{{value}} connections",

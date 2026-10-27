@@ -160,3 +160,31 @@ export function alignConnectionNodes(
   }
   return xs;
 }
+
+/** A common-parts panel is valid only for the complete family, with identical
+ * quantities/units for each shared component. It never invents BOM entries. */
+export function groupCommonFamilyComponents(
+  edges: ConnectionDiagramGraphEdge[], families: string[][],
+  rowOf: ReadonlyMap<string, number>,
+): ConnectionEdgeBundle[] {
+  const grouped = new Map<string, ConnectionEdgeBundle>();
+  for (const bundle of bundleConnectionEdges(edges, families)) {
+    if (bundle.componentIds.length !== 1) continue;
+    const family = families.find(ids => ids.length === bundle.assemblyIds.length &&
+      ids.every(id => bundle.assemblyIds.includes(id)));
+    if (!family || family.length < 2) continue;
+    const sourceRow = rowOf.get(family[0]);
+    const componentId = bundle.componentIds[0];
+    if (sourceRow === undefined || !family.every(id => rowOf.get(id) === sourceRow) ||
+      rowOf.get(componentId) !== sourceRow + 1) continue;
+    // Keep component variant families in their own outline.
+    if (families.some(ids => ids.includes(componentId))) continue;
+    const key = `common:${JSON.stringify([...family].sort())}`;
+    const group = grouped.get(key) ?? { key, assemblyIds: [...family], componentIds: [], edges: [] };
+    group.componentIds.push(componentId);
+    group.edges.push(...bundle.edges);
+    grouped.set(key, group);
+  }
+  return [...grouped.values()].filter(group => group.componentIds.every(id =>
+    [...grouped.values()].filter(other => other.componentIds.includes(id)).length === 1));
+}

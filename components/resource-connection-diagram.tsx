@@ -61,6 +61,7 @@ import {
   assignConnectionLanes,
   type ConnectionLaneRoute,
   bundleConnectionEdges,
+  groupCommonFamilyComponents,
   orthogonalConnectionPath,
   type ConnectionEdgeBundle,
 } from "@/lib/resource-connection-routing";
@@ -733,10 +734,19 @@ export function ResourceConnectionDiagram({
   const familyGroups = useMemo(() => {
     if (!model) return [];
     return getConnectionFamilyGroups(
-      model.nodes.filter((node) => flowRowOf.has(node.resource.id)),
+      model.nodes,
       model.edges,
     );
-  }, [flowRowOf, model]);
+  }, [model]);
+  const commonParts = useMemo(() => bundleVariants && !editing
+    ? groupCommonFamilyComponents(graphEdges, familyGroups, flowRowOf)
+      .filter(group => group.assemblyIds.includes(resource.id))
+    : [], [bundleVariants, editing, graphEdges, familyGroups, flowRowOf, resource.id]);
+  const displayRows = useMemo(() => new Map([...rows].map(([row, items]) => {
+    const commonIds = new Set(commonParts.flatMap(group => group.componentIds));
+    return [row, [...items.filter(item => item.type === "resource" && commonIds.has(item.node.resource.id)),
+      ...items.filter(item => item.type !== "resource" || !commonIds.has(item.node.resource.id))]];
+  })), [rows, commonParts]);
   const rowNumbers = Array.from(rows.keys());
   const firstRow = Math.min(0, ...rowNumbers);
   const lastRow = Math.max(0, ...rowNumbers);
@@ -759,10 +769,17 @@ export function ResourceConnectionDiagram({
   const firstRowY = (canvasHeight - contentHeight) / 2;
   const positions = useMemo(() => {
     const result = new Map<string, NodePosition>();
-    const aligned = alignConnectionNodes(new Map([...rows].map(([row, items]) => [row,
+    const sharedEdgeKeys = new Set(commonParts.flatMap(group => group.edges.map(edge => edge.key)));
+    const compactSharedRows = commonParts.map(group => {
+      const row = flowRowOf.get(group.componentIds[0]);
+      return (row === undefined ? [] : displayRows.get(row) ?? []).map(item =>
+        item.type === "resource" ? item.node.resource.id : `overflow:${row}`);
+    });
+    const aligned = alignConnectionNodes(new Map([...displayRows].map(([row, items]) => [row,
       items.map(item => item.type === "resource" ? item.node.resource.id : `overflow:${row}`),
-    ])), graphEdges, familyGroups, NODE_WIDTH, COLUMN_GAP, canvasWidth, CANVAS_PADDING);
-    for (const [row, items] of rows) {
+    ])), graphEdges.filter(edge => !sharedEdgeKeys.has(edge.key)),
+    [...familyGroups, ...compactSharedRows], NODE_WIDTH, COLUMN_GAP, canvasWidth, CANVAS_PADDING);
+    for (const [row, items] of displayRows) {
       const xs = columnPositions(items.length, canvasWidth);
       for (const [index, item] of items.entries()) {
         const id = item.type === "resource" ? item.node.resource.id : `overflow:${row}`;
@@ -773,7 +790,7 @@ export function ResourceConnectionDiagram({
       }
     }
     return result;
-  }, [canvasWidth, firstRow, firstRowY, rows, graphEdges, familyGroups]);
+  }, [canvasWidth, firstRow, firstRowY, displayRows, graphEdges, familyGroups, commonParts, flowRowOf]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -784,10 +801,13 @@ export function ResourceConnectionDiagram({
     const centerRoot = () => {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
-        container.scrollLeft = Math.max(
-          0,
-          rootPosition.x + NODE_WIDTH / 2 - container.clientWidth / 2,
-        );
+        const context = commonParts.flatMap(group => [...group.assemblyIds, ...group.componentIds])
+          .map(id => positions.get(id)).filter((point): point is NodePosition => Boolean(point));
+        const left = Math.min(...context.map(point => point.x));
+        const right = Math.max(...context.map(point => point.x + NODE_WIDTH));
+        const center = context.length && right - left + 40 <= container.clientWidth
+          ? (left + right) / 2 : rootPosition.x + NODE_WIDTH / 2;
+        container.scrollLeft = Math.max(0, center - container.clientWidth / 2);
       });
     };
     const observer = new ResizeObserver(centerRoot);
@@ -798,7 +818,7 @@ export function ResourceConnectionDiagram({
       observer.disconnect();
       window.cancelAnimationFrame(frame);
     };
-  }, [model, positions, resource.id]);
+  }, [model, positions, resource.id, commonParts]);
 
   return (
     <section className="app-page mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
@@ -1113,6 +1133,7 @@ export function ResourceConnectionDiagram({
                         edges={graphEdges}
                         nodes={model.nodes}
                         familyGroups={familyGroups}
+                        commonParts={commonParts}
                         highlightedResourceId={hoveredResourceId ?? focusedResourceId ?? (editorSelection?.type === "node" ? editorSelection.resource.id : null)}
                         bundleVariants={bundleVariants && !editing}
                         positions={positions}
@@ -1141,7 +1162,7 @@ export function ResourceConnectionDiagram({
                           });
                         }}
                       />
-                      {Array.from(rows.entries()).flatMap(
+                      {Array.from(displayRows.entries()).flatMap(
                         ([row, items]) => {
                           const xs = columnPositions(items.length, canvasWidth);
                           const y =
@@ -1792,6 +1813,7 @@ function GraphEdges({
   edges,
   nodes,
   familyGroups,
+  commonParts,
   highlightedResourceId,
   bundleVariants,
   positions,
@@ -1804,6 +1826,7 @@ function GraphEdges({
   edges: ConnectionDiagramGraphEdge[];
   nodes: ConnectionDiagramGraphNode[];
   familyGroups: string[][];
+  commonParts: ConnectionEdgeBundle[];
   highlightedResourceId: string | null;
   bundleVariants: boolean;
   positions: ReadonlyMap<string, NodePosition>;
@@ -1815,7 +1838,8 @@ function GraphEdges({
 }) {
   const { t } = useT("resource");
   const [expandedBundles, setExpandedBundles] = useState<ReadonlySet<string>>(new Set());
-  const bundles = bundleVariants ? bundleConnectionEdges(edges, familyGroups)
+  const commonEdgeKeys = new Set(commonParts.flatMap(group => group.edges.map(edge => edge.key)));
+  const bundles = bundleVariants ? bundleConnectionEdges(edges.filter(edge => !commonEdgeKeys.has(edge.key)), familyGroups)
     .filter((bundle) => {
       const from = bundle.assemblyIds.map((id) => positions.get(id));
       const to = bundle.componentIds.map((id) => positions.get(id));
@@ -1824,7 +1848,7 @@ function GraphEdges({
         to.every((point) => point && point.y === to[0]?.y) &&
         to[0]!.y - from[0]!.y === ROW_STEP;
     }) : [];
-  const collapsed = bundles.filter((bundle) => !expandedBundles.has(bundle.key));
+  const collapsed = [...bundles, ...commonParts].filter((bundle) => !expandedBundles.has(bundle.key));
   const hiddenEdges = new Set(collapsed.flatMap((bundle) => bundle.edges.map((edge) => edge.key)));
   const visibleEdges = edges.filter((edge) => !hiddenEdges.has(edge.key));
   const anchors = buildEdgeAnchorMap(visibleEdges, positions);
@@ -1850,8 +1874,12 @@ function GraphEdges({
     sourceXs: bundle.assemblyIds.map(id => positions.get(id)!.x + NODE_WIDTH / 2),
     targetXs: bundle.componentIds.map(id => positions.get(id)!.x + NODE_WIDTH / 2),
   }, positions.get(bundle.assemblyIds[0])!.y);
-  for (const routes of laneGroups.values())
-    for (const [key, lane] of assignConnectionLanes(routes)) lanes.set(key, lane);
+  for (const [row, routes] of laneGroups) {
+    const sharedPort = commonParts.some(group => positions.get(group.assemblyIds[0])?.y === row);
+    // Reserve the upper part of this gap for the family-level connector.
+    for (const [key, lane] of assignConnectionLanes(routes, sharedPort ? 54 : 90))
+      lanes.set(key, lane + (sharedPort ? 24 : 0));
+  }
   const toggleBundle = (key: string) => setExpandedBundles((previous) => {
     const next = new Set(previous);
     if (next.has(key)) next.delete(key); else next.add(key);
@@ -1881,6 +1909,9 @@ function GraphEdges({
           </marker>
         ))}
       </defs>
+      {commonParts.map(group => <CommonFamilyParts key={group.key} group={group} positions={positions}
+        expanded={expandedBundles.has(group.key)} onToggle={() => toggleBundle(group.key)}
+        highlighted={!highlightedResourceId || group.assemblyIds.includes(highlightedResourceId) || group.componentIds.includes(highlightedResourceId)} />)}
       {visibleEdges.map((edge) => (
         <g key={edge.key} opacity={!highlightedResourceId || edge.firstResourceId === highlightedResourceId || edge.secondResourceId === highlightedResourceId ? 1 : 0.12}>
         <GraphEdge
@@ -1914,6 +1945,58 @@ function GraphEdges({
       ))}
     </svg>
   );
+}
+
+function CommonFamilyParts({ group, positions, expanded, onToggle, highlighted }: {
+  group: ConnectionEdgeBundle;
+  positions: ReadonlyMap<string, NodePosition>;
+  expanded: boolean;
+  onToggle: () => void;
+  highlighted: boolean;
+}) {
+  const { t } = useT("resource");
+  const sources = group.assemblyIds.map(id => positions.get(id)!);
+  const targets = group.componentIds.map(id => positions.get(id)!).sort((a,b) => a.x - b.x);
+  const left = targets[0].x - 10;
+  const top = targets[0].y - 48;
+  const boxWidth = targets.at(-1)!.x - targets[0].x + NODE_WIDTH + 20;
+  const sourceX = Math.min(...sources.map(point => point.x)) - 10;
+  const sourceY = sources[0].y + NODE_HEIGHT + 10;
+  const entryX = Math.max(left + 24, Math.min(left + boxWidth - 24, sourceX));
+  const headerX = expanded ? Math.max(14, Math.min(left, sourceX - 186)) : left;
+  const headerY = expanded ? sourceY + 6 : top;
+  const headerWidth = expanded ? 172 : boxWidth;
+  // A single connector leaves the family outline, outside all individual
+  // variant-to-frame connections. No component is chained to another one.
+  const path = orthogonalConnectionPath([
+    { x: sourceX, y: sourceY }, { x: sourceX, y: sourceY + 22 },
+    { x: entryX, y: sourceY + 22 }, { x: entryX, y: top - 4 },
+  ]);
+  const label = t(expanded ? "connectionDiagram.bundling.collapse" : "connectionDiagram.bundling.expand", { count: group.edges.length });
+  return <g>
+    <rect x={left} y={top} width={boxWidth} height={NODE_HEIGHT + 58} rx="14"
+      fill="var(--color-surface)" fillOpacity="0.5" stroke="var(--color-warning)" strokeOpacity="0.35" />
+    {!expanded ? <g opacity={highlighted ? 1 : 0.12}>
+      <path d={path} fill="none" stroke="var(--color-background)" strokeWidth="6" />
+      <path d={path} fill="none" stroke={kindColor.bom} strokeWidth="2" markerEnd="url(#connection-arrow-bom)" />
+      <circle cx={sourceX} cy={sourceY} r="3" fill={kindColor.bom} />
+    </g> : null}
+    <g role="button" tabIndex={0} aria-label={label} aria-expanded={expanded}
+      className="group/common cursor-pointer outline-none" pointerEvents="all"
+      onClick={onToggle} onKeyDown={event => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onToggle(); }
+      }}>
+      <title>{label}</title>
+      <rect x={headerX + 4} y={headerY + 3} width={headerWidth - 8} height="39" rx="8" fill={expanded ? "var(--color-surface)" : "transparent"}
+        className="group-hover/common:fill-[var(--color-surface-muted)] group-focus-visible/common:stroke-[var(--color-focus)]" />
+      <text x={headerX + 12} y={headerY + 17} fill="var(--color-foreground)" fontSize="11" fontWeight="600">
+        {t("connectionDiagram.bundling.commonParts")}
+      </text>
+      <text x={headerX + 12} y={headerY + 33} fill="var(--color-muted)" fontSize="10">
+        {expanded ? "▴ " : "▾ "}{t("connectionDiagram.bundling.forAll", { count: group.assemblyIds.length })}
+      </text>
+    </g>
+  </g>;
 }
 
 function BundledGraphEdges({ bundle, positions, lane, expanded, label, countLabel, onToggle }: {

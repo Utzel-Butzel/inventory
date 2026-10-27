@@ -392,7 +392,9 @@
       "expand": "{{count}} bestehende Stücklisten-Beziehungen gebündelt. Klicken, um jede Zuordnung einzeln zu sehen.",
       "collapse": "{{count}} Verbindungen wieder bündeln",
       "closedLabel": "{{count}} gebündelt",
-      "openLabel": "{{count}} einzeln"
+      "openLabel": "{{count}} einzeln",
+      "commonParts": "Gemeinsame Teile",
+      "forAll": "Für alle {{count}} Einträge"
     },
     "connections_one": "{{value}} Verbindung",
     "connections_other": "{{value}} Verbindungen",
