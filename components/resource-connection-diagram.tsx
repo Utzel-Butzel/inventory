@@ -1,6 +1,8 @@
 "use client";
 
 import { ResourceTitle } from "@/components/resource-title";
+import { ConnectionAnalysisTabs, ResourceConnectionAnalysis, type AnalysisPresentation } from "@/components/resource-connection-analysis";
+import type { AnalysisMode } from "@/lib/connection-analysis";
 import {
   Boxes,
   ChevronRight,
@@ -463,6 +465,14 @@ export function ResourceConnectionDiagram({
   const [stockError, setStockError] = useState<string | null>(null);
   const [costLoading, setCostLoading] = useState(false);
   const [costError, setCostError] = useState<string | null>(null);
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("structure");
+  const [analysisFocus, setAnalysisFocus] = useState<ConnectionDiagramResource | null>(null);
+  const [analysisPresentation, setAnalysisPresentation] = useState<AnalysisPresentation>({ ids: null, badges: new Map() });
+  const analysisActive = analysisMode !== "structure" && view === "graph" && !editing;
+  const analysisFamily = useMemo(() => {
+    const family = payloadSnapshot.get(resource.id)?.family;
+    return family ? [...new Map([family.primary, ...family.variants, resource].map(item => [item.id, item])).values()] : [resource];
+  }, [payloadSnapshot, resource]);
 
   const load = useCallback(
     async (requestedDepth: number, refresh = false) => {
@@ -820,6 +830,12 @@ export function ResourceConnectionDiagram({
     };
   }, [model, positions, resource.id, commonParts]);
 
+  useEffect(() => {
+    if (!analysisActive || !analysisFocus || !scrollRef.current) return;
+    const point = positions.get(analysisFocus.id);
+    if (point) scrollRef.current.scrollTo({ left: Math.max(0, point.x + NODE_WIDTH / 2 - scrollRef.current.clientWidth / 2), behavior: "smooth" });
+  }, [analysisActive, analysisFocus, positions]);
+
   return (
     <section className="app-page mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
       <Card className="overflow-hidden shadow-[var(--shadow-sm)]">
@@ -919,7 +935,7 @@ export function ResourceConnectionDiagram({
                       />
                       <span>{t("connectionDiagram.bundling.show")}</span>
                     </label>
-                    {canViewStock ? (
+                    {canViewStock && !analysisActive ? (
                       <>
                         <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[12px] font-semibold text-muted-strong">
                           <input
@@ -957,7 +973,7 @@ export function ResourceConnectionDiagram({
                         </label>
                       </>
                     ) : null}
-                    <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[12px] font-semibold text-muted-strong">
+                    {!analysisActive ? <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[12px] font-semibold text-muted-strong">
                       <input
                         type="checkbox"
                         checked={showCostStructure}
@@ -977,7 +993,7 @@ export function ResourceConnectionDiagram({
                           )}
                         />
                       ) : null}
-                    </label>
+                    </label> : null}
                     <label className="flex h-8 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-[12px] font-semibold text-muted-strong">
                       <span>{t("connectionDiagram.depth.label")}</span>
                       <select
@@ -1025,6 +1041,9 @@ export function ResourceConnectionDiagram({
               </div>
             </div>
 
+            {view === "graph" && !editing ? <ConnectionAnalysisTabs mode={analysisMode} canViewStock={canViewStock}
+              onChange={mode => { setAnalysisMode(mode); setEditorSelection(null); }} /> : null}
+
             {view === "family" ? (
               <ResourceFamilyManager
                 resourceId={resource.id}
@@ -1066,7 +1085,7 @@ export function ResourceConnectionDiagram({
                 {costError}
               </p>
             ) : null}
-            {showCostStructure && costStructure.root ? (
+            {showCostStructure && !analysisActive && costStructure.root ? (
               <CostStructureSummary
                 item={costStructure.root}
                 locale={locale}
@@ -1108,10 +1127,10 @@ export function ResourceConnectionDiagram({
                   onCloseEditor={() => setEditorSelection(null)}
                   getPayload={getPayload}
                 />
-              ) : model.connectionCount || editing ? (
+              ) : model.connectionCount || editing || analysisActive ? (
                 <div
                   className={cn(
-                    editorSelection &&
+                    analysisActive ? "grid xl:grid-cols-[minmax(0,1fr)_420px]" : editorSelection &&
                       "grid lg:grid-cols-[minmax(0,1fr)_360px]",
                   )}
                 >
@@ -1134,6 +1153,7 @@ export function ResourceConnectionDiagram({
                         nodes={model.nodes}
                         familyGroups={familyGroups}
                         commonParts={commonParts}
+                        highlightedIds={analysisActive ? analysisPresentation.ids : null}
                         highlightedResourceId={hoveredResourceId ?? focusedResourceId ?? (editorSelection?.type === "node" ? editorSelection.resource.id : null)}
                         bundleVariants={bundleVariants && !editing}
                         positions={positions}
@@ -1153,6 +1173,11 @@ export function ResourceConnectionDiagram({
                             (node) => node.resource.id === edge.secondResourceId,
                           )?.resource;
                           if (!firstResource || !secondResource) return;
+                          if (analysisActive) {
+                            const componentId = edge.connections.find(connection => connection.kind === "bom")?.fromResourceId;
+                            setAnalysisFocus(model.nodes.find(node => node.resource.id === componentId)?.resource ?? firstResource);
+                            return;
+                          }
                           selectionTriggerRef.current = trigger;
                           setEditorSelection({
                             type: "edge",
@@ -1183,21 +1208,21 @@ export function ResourceConnectionDiagram({
                                   : null
                               }
                               stock={
-                                showStock && item.type === "resource"
+                                showStock && !analysisActive && item.type === "resource"
                                   ? (stockSnapshot.get(
                                       item.node.resource.id,
                                     ) ?? null)
                                   : null
                               }
                               priceFlow={
-                                showPriceFlow && item.type === "resource"
+                                showPriceFlow && !analysisActive && item.type === "resource"
                                   ? (stockSnapshot.get(
                                       item.node.resource.id,
                                     )?.priceFlow ?? null)
                                   : null
                               }
                               costStructure={
-                                showCostStructure && item.type === "resource"
+                                showCostStructure && !analysisActive && item.type === "resource"
                                   ? (costStructure.items.get(
                                       item.node.resource.id,
                                     ) ?? null)
@@ -1214,6 +1239,8 @@ export function ResourceConnectionDiagram({
                                   : null
                               }
                               rootResourceId={resource.id}
+                              analysisBadge={analysisActive && item.type === "resource" ? analysisPresentation.badges.get(item.node.resource.id) : undefined}
+                              dimmed={analysisActive && analysisPresentation.ids !== null && item.type === "resource" && !analysisPresentation.ids.has(item.node.resource.id)}
                               x={positions.get(item.type === "resource" ? item.node.resource.id : `overflow:${row}`)?.x ?? xs[index] ?? 0}
                               onHover={setHoveredResourceId}
                               onFocusResource={setFocusedResourceId}
@@ -1222,11 +1249,12 @@ export function ResourceConnectionDiagram({
                               locale={locale}
                               editing={editing}
                               selectedResourceId={
-                                editorSelection?.type === "node"
+                                analysisActive ? analysisFocus?.id ?? null : editorSelection?.type === "node"
                                   ? editorSelection.resource.id
                                   : null
                               }
                               onSelect={(selectedResource, trigger) => {
+                                if (analysisActive) { setAnalysisFocus(selectedResource); return; }
                                 selectionTriggerRef.current = trigger;
                                 setEditorSelection({
                                   type: "node",
@@ -1239,7 +1267,12 @@ export function ResourceConnectionDiagram({
                       )}
                     </div>
                   </div>
-                  {editorSelection && editing && canEdit ? (
+                  {analysisActive ? (
+                    <ResourceConnectionAnalysis key={resource.id} mode={analysisMode as Exclude<AnalysisMode, "structure">}
+                      root={resource} family={analysisFamily} focus={analysisFocus} canViewStock={canViewStock}
+                      onFocus={setAnalysisFocus} onPresentation={setAnalysisPresentation}
+                      onClose={() => setAnalysisMode("structure")} />
+                  ) : editorSelection && editing && canEdit ? (
                     <ResourceConnectionEditorPanel
                       selection={editorSelection}
                       rootResourceId={resource.id}
@@ -1815,6 +1848,7 @@ function GraphEdges({
   familyGroups,
   commonParts,
   highlightedResourceId,
+  highlightedIds,
   bundleVariants,
   positions,
   width,
@@ -1828,6 +1862,7 @@ function GraphEdges({
   familyGroups: string[][];
   commonParts: ConnectionEdgeBundle[];
   highlightedResourceId: string | null;
+  highlightedIds: ReadonlySet<string> | null;
   bundleVariants: boolean;
   positions: ReadonlyMap<string, NodePosition>;
   width: number;
@@ -1885,6 +1920,9 @@ function GraphEdges({
     if (next.has(key)) next.delete(key); else next.add(key);
     return next;
   });
+  const highlighted = (from: string[], to: string[]) => highlightedIds
+    ? from.some(id => highlightedIds.has(id)) && to.some(id => highlightedIds.has(id))
+    : !highlightedResourceId || [...from, ...to].includes(highlightedResourceId);
   return (
     <svg
       className="pointer-events-none absolute inset-0"
@@ -1911,9 +1949,9 @@ function GraphEdges({
       </defs>
       {commonParts.map(group => <CommonFamilyParts key={group.key} group={group} positions={positions}
         expanded={expandedBundles.has(group.key)} onToggle={() => toggleBundle(group.key)}
-        highlighted={!highlightedResourceId || group.assemblyIds.includes(highlightedResourceId) || group.componentIds.includes(highlightedResourceId)} />)}
+        highlighted={highlighted(group.assemblyIds, group.componentIds)} />)}
       {visibleEdges.map((edge) => (
-        <g key={edge.key} opacity={!highlightedResourceId || edge.firstResourceId === highlightedResourceId || edge.secondResourceId === highlightedResourceId ? 1 : 0.12}>
+        <g key={edge.key} opacity={highlighted([edge.firstResourceId], [edge.secondResourceId]) ? 1 : 0.12}>
         <GraphEdge
           edge={edge}
           positions={positions}
@@ -1930,7 +1968,7 @@ function GraphEdges({
         </g>
       ))}
       {bundles.map((bundle) => (
-        <g key={bundle.key} opacity={!highlightedResourceId || bundle.assemblyIds.includes(highlightedResourceId) || bundle.componentIds.includes(highlightedResourceId) ? 1 : 0.12}>
+        <g key={bundle.key} opacity={highlighted(bundle.assemblyIds, bundle.componentIds) ? 1 : 0.12}>
         <BundledGraphEdges bundle={bundle} positions={positions}
           lane={lanes.get(bundle.key) ?? 0} expanded={expandedBundles.has(bundle.key)}
           label={t(expandedBundles.has(bundle.key)
@@ -2189,7 +2227,11 @@ function PositionedGraphNode({
   onSelect,
   onHover,
   onFocusResource,
+  analysisBadge,
+  dimmed,
 }: {
+  analysisBadge?: { label: string; warning: boolean };
+  dimmed?: boolean;
   onHover: (id: string | null) => void;
   onFocusResource: (id: string | null) => void;
   item: DisplayRowItem;
@@ -2320,7 +2362,7 @@ function PositionedGraphNode({
     isRoot
       ? "border-2 border-info shadow-[var(--shadow-md)]"
       : "border border-border shadow-[var(--shadow-sm)] hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-md)]"
-  } ${selected ? "ring-4 ring-focus/15" : ""}`;
+  } ${selected ? "ring-4 ring-focus/15" : ""} ${dimmed ? "opacity-35 hover:opacity-100 focus:opacity-100" : ""}`;
   const contentClassName =
     `flex h-full w-full flex-col items-center justify-center rounded-[inherit] px-3 py-2 text-center ${
       showsFinancialDetails ? "gap-1.5" : "gap-2"
@@ -2367,6 +2409,7 @@ function PositionedGraphNode({
       onBlur={() => onFocusResource(null)}
       style={style}
     >
+      {analysisBadge ? <span title={analysisBadge.label} className={cn("absolute -top-3 left-2 right-2 truncate rounded-full border px-2 py-1 text-[10px] font-semibold", analysisBadge.warning ? "border-warning-border bg-warning-soft text-warning" : "border-brand-border bg-brand-soft text-brand")}>{analysisBadge.label}</span> : null}
       <span className={contentClassName}>{content}</span>
     </button>
   );

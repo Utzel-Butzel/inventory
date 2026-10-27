@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { resources, stockMovements, stockSettings } from "@/db/schema";
+import { inventoryAssignments, resources, stockMovements, stockSettings } from "@/db/schema";
 import { db } from "@/lib/db";
 
 export type ConnectionStockStatus = "out" | "low" | "healthy";
@@ -10,6 +10,8 @@ export type ConnectionStockStatus = "out" | "low" | "healthy";
 export type ConnectionStockSummary = {
   resourceId: string;
   quantity: number;
+  availableQuantity: number;
+  reservedQuantity: number;
   minimumStock: number;
   unitName: string;
   purchaseUnitName: string | null;
@@ -41,7 +43,7 @@ export async function getConnectionStockSummaries(
   const ids = Array.from(new Set(resourceIds));
   if (!ids.length) return [];
 
-  const [rows, movementRows] = await Promise.all([
+  const [rows, movementRows, reservations] = await Promise.all([
     db
       .select({
         resourceId: resources.id,
@@ -92,7 +94,20 @@ export async function getConnectionStockSummaries(
         ),
       )
       .groupBy(stockMovements.resourceId),
+    // Serialized order reservations already reduce resources.quantity. Only
+    // unapplied assignment reservations are subtracted here, once. Conservatively
+    // protect all active reservations, including those scheduled for later.
+    db.select({ resourceId: inventoryAssignments.resourceId,
+      quantity: sql<number>`coalesce(sum(${inventoryAssignments.quantity}), 0)::float8`,
+    }).from(inventoryAssignments).where(and(
+      eq(inventoryAssignments.organizationId, organizationId),
+      inArray(inventoryAssignments.resourceId, ids),
+      eq(inventoryAssignments.kind, "reservation"),
+      eq(inventoryAssignments.status, "active"),
+      eq(inventoryAssignments.stockApplied, false),
+    )).groupBy(inventoryAssignments.resourceId),
   ]);
+  const reservedById = new Map(reservations.map(row => [row.resourceId, Number(row.quantity)]));
 
   const movementByResource = new Map(
     movementRows.map((row) => [row.resourceId, row]),
@@ -122,6 +137,8 @@ export async function getConnectionStockSummaries(
     return {
       resourceId: row.resourceId,
       quantity: row.quantity,
+      availableQuantity: Math.max(0, row.quantity - (reservedById.get(row.resourceId) ?? 0)),
+      reservedQuantity: reservedById.get(row.resourceId) ?? 0,
       minimumStock,
       unitName: row.unitName ?? "unit",
       purchaseUnitName: row.purchaseUnitName,
