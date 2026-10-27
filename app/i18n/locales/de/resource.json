@@ -662,7 +662,7 @@
       "indirect": "Über eine Unterbaugruppe benötigt",
       "noParents": "Keine zugänglichen übergeordneten Stücklisten gefunden.",
       "selectTwo": "Wähle mindestens zwei Einträge zum Vergleichen.",
-      "compareSummary": "{{common}} gemeinsame Positionen · {{different}} Unterschiede",
+      "compareSummary": "Gemeinsame Positionen: {{common}} · Unterschiede: {{different}}",
       "compareBasis": "Verglichen werden Bauteil, Menge und Basiseinheit je Stücklistenposition. „—“ bedeutet nicht enthalten, „?“ bedeutet unbekannt.",
       "costItem": "Kosten aufschlüsseln für",
       "componentTotal": "Bauteilkosten je fertigem Eintrag",

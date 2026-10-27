@@ -133,7 +133,7 @@ export function ResourceConnectionAnalysis({ mode, root, family, focus, canViewS
   </li>)}</ul>;
   const money = (amount: number) => costs?.currency ? new Intl.NumberFormat(locale, { style: "currency", currency: costs.currency }).format(amount / 100) : "—";
   const incomplete = data && (data.truncated || [...data.nodes.values()].some(node => node.components === null));
-  const tableClass = "w-full text-left text-xs [&_th]:pb-2 [&_th]:font-medium [&_th]:text-muted [&_td]:border-t [&_td]:border-border [&_td]:py-2.5 [&_td]:pr-2";
+  const tableClass = "w-full text-left text-xs [&_th]:pb-2 [&_th]:pr-2 [&_th]:font-medium [&_th]:text-muted [&_td]:border-t [&_td]:border-border [&_td]:py-2.5 [&_td]:pr-2";
 
   return <aside className="order-first min-w-0 border-b border-border bg-surface xl:order-last xl:border-b-0 xl:border-l" aria-label={t("connectionDiagram.analysis.title")}>
     <div className="flex items-start justify-between gap-2 border-b border-border p-4">
@@ -162,7 +162,7 @@ export function ResourceConnectionAnalysis({ mode, root, family, focus, canViewS
             <p className="flex items-center gap-2 text-sm font-semibold">{plan.feasible ? <CheckCircle2 className="size-4" /> : <AlertTriangle className="size-4" />}{t(`connectionDiagram.analysis.${![...quantities.values()].some(q => q > 0) ? "enterPlan" : !plan.complete ? "planIncomplete" : plan.feasible ? "planReady" : "planShort"}`)}</p>
             {plan.shortages.length ? <p className="mt-1 text-xs">{t("connectionDiagram.analysis.shortageCount", { count: plan.shortages.length })}</p> : null}
           </div>
-          <div className="overflow-x-auto"><table className={tableClass}><thead><tr><th>{t("connectionDiagram.analysis.part")}</th><th>{t("connectionDiagram.analysis.required")}</th><th>{t("connectionDiagram.analysis.available")}</th><th>{t("connectionDiagram.analysis.missing")}</th></tr></thead><tbody>
+          <div className="overflow-x-auto"><table className={cn(tableClass, "table-fixed")}><thead><tr><th className="w-[52%]">{t("connectionDiagram.analysis.part")}</th><th>{t("connectionDiagram.analysis.required")}</th><th>{t("connectionDiagram.analysis.available")}</th><th>{t("connectionDiagram.analysis.missing")}</th></tr></thead><tbody>
             {plan.rows.filter(row => !onlyIssues || row.missing === null || row.missing > 0).map(row => <tr key={row.resourceId} className={cn(focus?.id === row.resourceId && "bg-brand-soft")}><td>{focusButton(lookup(row.resourceId))}<span className="mt-1 block text-[10px] text-muted">{row.unit}{row.reserved ? ` · ${t("connectionDiagram.analysis.reserved", { count: number.format(row.reserved) })}` : ""}{row.toBuild ? ` · ${t("connectionDiagram.analysis.buildCount", { count: number.format(row.toBuild) })}` : ""}</span></td><td>{number.format(row.required)}</td><td>{row.available === null ? "—" : number.format(row.available)}</td><td className={row.missing ? "font-semibold text-danger" : "text-muted"}>{row.missing === null ? "?" : number.format(row.missing)}</td></tr>)}
           </tbody></table></div>
           {plan.issues.length ? issueList(plan.issues) : null}

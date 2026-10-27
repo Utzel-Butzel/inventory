@@ -662,7 +662,7 @@
       "indirect": "Needed through a subassembly",
       "noParents": "No accessible parent recipes found.",
       "selectTwo": "Select at least two entries to compare.",
-      "compareSummary": "{{common}} shared positions · {{different}} differences",
+      "compareSummary": "Shared positions: {{common}} · Differences: {{different}}",
       "compareBasis": "Compares component, quantity and base unit per recipe position. “—” means absent, “?” means unknown.",
       "costItem": "Break down costs for",
       "componentTotal": "Component cost per finished item",
