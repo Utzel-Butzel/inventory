@@ -115,30 +115,30 @@ export function compareConnectionVariants(data: AnalysisData, ids: readonly stri
 export function connectionCostReport(data: AnalysisData, rootId: string) {
   const currency = data.costs.get(rootId)?.currency ?? null;
   const issues: AnalysisIssue[] = [];
-  const memo = new Map<string, { amount: number; complete: boolean; rolledUp: boolean }>();
-  const price = (id: string, path: ReadonlySet<string>): { amount: number; complete: boolean; rolledUp: boolean } => {
-    if (path.has(id)) { issues.push({ code: "cycle", resourceId: id }); return { amount: 0, complete: false, rolledUp: false }; }
+  const memo = new Map<string, { amount: number; complete: boolean; rolledUp: boolean; known: boolean }>();
+  const price = (id: string, path: ReadonlySet<string>): { amount: number; complete: boolean; rolledUp: boolean; known: boolean } => {
+    if (path.has(id)) { issues.push({ code: "cycle", resourceId: id }); return { amount: 0, complete: false, rolledUp: false, known: false }; }
     const cached = memo.get(id); if (cached) return cached;
     const own = data.costs.get(id);
     if (own?.unitPriceCents !== null && own?.unitPriceCents !== undefined && Number.isFinite(own.unitPriceCents)) {
-      if (!currency || own.currency !== currency) { issues.push({ code: "currency", resourceId: id }); return { amount: 0, complete: false, rolledUp: false }; }
-      const result = { amount: own.unitPriceCents, complete: true, rolledUp: false }; memo.set(id, result); return result;
+      if (!currency || own.currency !== currency) { issues.push({ code: "currency", resourceId: id }); return { amount: 0, complete: false, rolledUp: false, known: false }; }
+      const result = { amount: own.unitPriceCents, complete: true, rolledUp: false, known: true }; memo.set(id, result); return result;
     }
     const components = data.nodes.get(id)?.components;
     if (!components?.length) {
       issues.push({ code: components == null ? "unloaded" : "price", resourceId: id });
-      return { amount: 0, complete: false, rolledUp: false };
+      return { amount: 0, complete: false, rolledUp: false, known: false };
     }
-    let amount = 0, complete = true;
+    let amount = 0, complete = true, known = false;
     for (const component of components) {
       if (!validQuantity(component.quantityPerAssembly)) { issues.push({ code: "quantity", resourceId: id }); complete = false; continue; }
       const child = price(component.resourceId, new Set([...path, id]));
       const next = amount + child.amount * component.quantityPerAssembly;
       if (!Number.isSafeInteger(next)) { issues.push({ code: "overflow", resourceId: id }); complete = false; }
-      else amount = next;
+      else { amount = next; known ||= child.known; }
       complete &&= child.complete;
     }
-    const result = { amount, complete, rolledUp: true }; memo.set(id, result); return result;
+    const result = { amount, complete, rolledUp: true, known }; memo.set(id, result); return result;
   };
   const components = data.nodes.get(rootId)?.components;
   if (components == null) issues.push({ code: "unloaded", resourceId: rootId });
@@ -150,12 +150,12 @@ export function connectionCostReport(data: AnalysisData, rootId: string) {
     const safe = Number.isSafeInteger(amount);
     if (!safe) issues.push({ code: "overflow", resourceId: component.resourceId });
     return { resourceId: component.resourceId, quantity: component.quantityPerAssembly, amount: safe ? amount : 0,
-      complete: result.complete && valid && safe, rolledUp: result.rolledUp };
+      complete: result.complete && valid && safe, rolledUp: result.rolledUp, known: result.known && safe && valid };
   }).sort((a, b) => b.amount - a.amount);
   const total = rows.reduce((sum, row) => sum + row.amount, 0);
   const complete = components != null && currency !== null && rows.every(row => row.complete) && Number.isSafeInteger(total)
     && (components.length > 0 || data.costs.get(rootId)?.unitPriceCents != null);
-  return { currency, rows, total, complete, issues, unitPrice: data.costs.get(rootId)?.unitPriceCents ?? null };
+  return { currency, rows, total, complete, known: rows.length ? rows.some(row => row.known) : data.costs.get(rootId)?.unitPriceCents != null, issues, unitPrice: data.costs.get(rootId)?.unitPriceCents ?? null };
 }
 
 export function connectionQuality(data: AnalysisData, familyIds: readonly string[]) {

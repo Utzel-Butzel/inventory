@@ -94,6 +94,8 @@ test("unknown prices and mixed currencies cannot produce complete costs", () => 
   assert.equal(connectionCostReport(data, "root").complete, false);
   assert.equal(connectionCostReport(fixture({ part: [] }, {}, { part: null }), "part").complete, false);
   assert.equal(connectionCostReport(fixture({ part: [] }, {}, { part: 0 }), "part").complete, true);
+  assert.equal(connectionCostReport(fixture({ root: [line("part")], part: [] }, {}, { root: null, part: null }), "root").known, false);
+  assert.equal(connectionCostReport(fixture({ root: [line("part")], part: [] }, {}, { root: null, part: 0 }), "root").known, true, "a known zero price differs from an unknown price");
 });
 
 test("variant comparison uses recipe slots and distinguishes absent from unknown", () => {
