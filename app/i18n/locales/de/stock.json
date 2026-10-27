@@ -169,6 +169,8 @@
       "registerCustomIds": "Eigene IDs registrieren",
       "copyUnitId": "Einheiten-ID kopieren",
       "copyUnitIdWithCode": "Einheiten-ID {{code}} kopieren",
+      "createUnitLabel": "Etikett erstellen",
+      "createUnitLabelWithCode": "Etikett für {{code}} erstellen",
       "close": "Schließen",
       "cancel": "Abbrechen",
       "update": "Bearbeiten",
@@ -196,7 +198,9 @@
       "generatedUnitRange": "Gib zwischen 1 und 100 Einheiten ein.",
       "customUnitRange": "Gib zwischen 1 und 100 eigene Einheiten-IDs ein.",
       "uniqueUnitIds": "Jede Einheiten-ID muss eindeutig sein.",
-      "unitIdLength": "Einheiten-IDs dürfen höchstens 160 Zeichen lang sein.",
+      "unitIdLength": "Einheitenkennungen dürfen höchstens 180 Zeichen lang sein.",
+      "unitCodeRequired": "Gib eine Einheitenkennung ein.",
+      "unitCodeTaken": "Diese Kennung wird bereits von einer anderen Einheit dieses Artikels verwendet.",
       "validAcquisitionDate": "Wähle ein gültiges Anschaffungsdatum mit Uhrzeit.",
       "metadataObject": "Erweiterte Metadaten müssen ein JSON-Objekt sein.",
       "createUnits": "Die Einheiten konnten nicht registriert werden.",
@@ -341,7 +345,8 @@
       "delete": "Bewegung löschen",
       "emptyTitle": "Noch keine Bewegungen",
       "noMovements": "Buche die erste Bestandsbewegung, um den Prüfpfad zu beginnen.",
-      "noMatches": "Keine Bewegungen entsprechen diesem Filter."
+      "noMatches": "Keine Bewegungen entsprechen diesem Filter.",
+      "bulkEstimateNote": "Unkalibrierte visuelle Mengenschätzung: {{count}} Stück; plausibler Bereich {{lower}}–{{upper}}. Modell: {{model}}. Genauigkeit nicht validiert."
     },
     "settings": {
       "title": "Bestandseinstellungen",
@@ -391,6 +396,8 @@
       "customIds": "Eigene IDs",
       "numberOfUnits": "Anzahl der Einheiten",
       "unitIds": "Einheiten-IDs",
+      "code": "Einheitenkennung",
+      "codeHelp": "Ersetze die automatisch erzeugte STK-Kennung zum Beispiel durch Terra 1. Die Kennung muss innerhalb dieses Artikels eindeutig sein. Bestehende QR-Verknüpfungen bleiben gültig.",
       "onePerLine": "eine pro Zeile",
       "inventoryLocation": "Standort",
       "notAssigned": "Nicht zugewiesen",

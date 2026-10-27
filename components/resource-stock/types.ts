@@ -164,6 +164,7 @@ export type UnitCreateForm = {
 };
 
 export type UnitEditForm = {
+  code: string;
   status: UnitStatus;
   location: string;
   locationResourceId: string;

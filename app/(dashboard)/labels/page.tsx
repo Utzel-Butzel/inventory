@@ -17,14 +17,17 @@ export const dynamic = "force-dynamic";
 export default async function LabelsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ resourceId?: string | string[] }>;
+  searchParams: Promise<{ resourceId?: string | string[]; unitId?: string | string[] }>;
 }) {
-  const { resourceId } = await searchParams;
+  const { resourceId, unitId } = await searchParams;
+  const initialResourceId = typeof resourceId === "string" ? resourceId : undefined;
+  const initialUnitId = initialResourceId && typeof unitId === "string" ? unitId : undefined;
   const identity = await getSessionIdentity();
   return (
     <LabelPrinter
-      key={typeof resourceId === "string" ? resourceId : "all"}
-      initialResourceId={typeof resourceId === "string" ? resourceId : undefined}
+      key={`${initialResourceId ?? "all"}:${initialUnitId ?? ""}`}
+      initialResourceId={initialResourceId}
+      initialUnitId={initialUnitId}
       canWrite={Boolean(identity?.permissions.includes("labels.manage"))}
       canManagePrinters={Boolean(identity?.permissions.includes("tokens.manage"))}
     />

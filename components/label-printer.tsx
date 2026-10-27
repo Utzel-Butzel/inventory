@@ -39,7 +39,7 @@ import {
   type LabelElement,
   type LabelSetupDto,
 } from "@/lib/label-setup-contract";
-import { applyLabelTextOverride, type LabelTextOverride, labelTargetKey, labelTargetName, labelTargetUrl, type LabelResource } from "@/lib/label-target";
+import { applyLabelTextOverride, type LabelTextOverride, labelTargetKey, labelTargetName, labelTargetUrl, type LabelResource, type LabelStockUnit } from "@/lib/label-target";
 import { LabelStockUnitPicker } from "@/components/label-stock-unit-picker";
 import { combinePtouchLabels, PTOUCH_TAPES, PTOUCH_PIXELS_PER_MM, ptouchPrintableDots, type PtouchTape } from "@/lib/ptouch-raster";
 
@@ -76,7 +76,7 @@ const DEFAULT_ELEMENTS: LabelElement[] = [
   { type: "location", x: 46, y: 90, width: 51, height: 7, visible: false, fontSizeMm: 1.55, align: "left" },
 ];
 
-export function LabelPrinter({ canWrite = false, canManagePrinters = false, initialResourceId }: { canWrite?: boolean; canManagePrinters?: boolean; initialResourceId?: string }) {
+export function LabelPrinter({ canWrite = false, canManagePrinters = false, initialResourceId, initialUnitId }: { canWrite?: boolean; canManagePrinters?: boolean; initialResourceId?: string; initialUnitId?: string }) {
   const { t } = useT("labels");
   const [origin, setOrigin] = useState("");
   const [query, setQuery] = useState("");
@@ -101,6 +101,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   const [designerError, setDesignerError] = useState<string | null>(null);
   const [preparingPrint, setPreparingPrint] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const [printTarget, setPrintTarget] = useState<"browser" | "ptouch" | "shared">("browser");
   const [tape, setTape] = useState<PtouchTape>(24);
   const [printers, setPrinters] = useState<string[]>([]);
@@ -263,21 +264,29 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   useEffect(() => {
     if (!initialResourceId) return;
     const controller = new AbortController();
-    void fetchJson<{ resource: ClientResource }>(
-      `/api/v1/resources/${encodeURIComponent(initialResourceId)}`,
-      { cache: "no-store", signal: controller.signal },
-    )
-      .then(({ resource }) => {
+    setSelectionError(null);
+    const resourceEndpoint = `/api/v1/resources/${encodeURIComponent(initialResourceId)}`;
+    const options = { cache: "no-store", signal: controller.signal } as const;
+    void Promise.all([
+      fetchJson<{ resource: ClientResource }>(resourceEndpoint, options),
+      initialUnitId
+        ? fetchJson<{ units: LabelStockUnit[] }>(`${resourceEndpoint}/stock/units`, options)
+        : Promise.resolve(null),
+    ])
+      .then(([{ resource }, stock]) => {
         if (!controller.signal.aborted) {
-          setSelected(new Map([[resource.id, resource]]));
+          const stockUnit = stock?.units.find((unit) => unit.id === initialUnitId);
+          if (initialUnitId && !stockUnit) throw new Error(t("units.notFound"));
+          const target: LabelResource = stockUnit ? { ...resource, stockUnit } : resource;
+          setSelected(new Map([[labelTargetKey(target), target]]));
         }
       })
       .catch((loadError: unknown) => {
         if (controller.signal.aborted) return;
-        setPrintError(loadError instanceof Error ? loadError.message : t("errors.loadItems"));
+        setSelectionError(loadError instanceof Error ? loadError.message : t("errors.loadItems"));
       });
     return () => controller.abort();
-  }, [initialResourceId, t]);
+  }, [initialResourceId, initialUnitId, t]);
 
   const selectedIds = useMemo(() => new Set(selected.keys()), [selected]);
   const ptouchSetup = useMemo<LabelSetupDto>(() => ({
@@ -787,7 +796,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       </Card>
 
 
-      {setupHasQrImageOverlap || printError ? (
+      {setupHasQrImageOverlap || selectionError || printError ? (
         <p
           role="alert"
           className={`mb-5 rounded-xl border px-4 py-3 text-sm leading-5 ${
@@ -798,7 +807,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         >
           {setupHasQrImageOverlap
             ? t("errors.overlap")
-            : printError}
+            : selectionError ?? printError}
         </p>
       ) : null}
 

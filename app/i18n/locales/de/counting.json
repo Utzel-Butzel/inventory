@@ -1,11 +1,11 @@
 {
   "launch": {
-    "title": "Stücke anhand eines Fotos zählen",
+    "title": "Menge anhand von Fotos ermitteln",
     "description": "Ermittle die Menge anhand eines Fotos und prüfe das Ergebnis vor der Buchung.",
     "action": "Öffnen"
   },
   "header": {
-    "title": "Stückzähler per Foto",
+    "title": "Menge per Foto",
     "description": "Verteile die Stücke, fotografiere sie von oben und vermeide nach Möglichkeit Überlappungen."
   },
   "upload": {
@@ -65,5 +65,71 @@
     "cameraPhoto": "Kamerafoto",
     "detectedItem": "Objekte",
     "model": "Automatische Bilderkennung"
+  },
+  "modes": {
+    "label": "Zählverfahren",
+    "visible": "Sichtbare Stücke zählen",
+    "bulk": "Kisteninhalt schätzen"
+  },
+  "bulk": {
+    "description": "Experimentelle Schätzung für überlappende und verdeckte Teile – ohne abgezählte Referenzprobe.",
+    "intro": "Ein Teiletyp, eine Kiste, mehrere Blickwinkel.",
+    "guide": "Nimm 3–5 Fotos auf: von oben, schräg von einer Seite und von der Gegenseite. Zeige jeweils die ganze Kiste mit Rand und Füllfläche. Weitere Seitenansichten helfen bei verdeckten Lagen. Lasse Kiste und Inhalt zwischen den Fotos unverändert.",
+    "views": {
+      "top": "1. Von oben",
+      "side": "2. Schräg seitlich",
+      "opposite": "3. Von der Gegenseite",
+      "end": "4. Weitere Seite (optional)",
+      "detail": "5. Weitere Ansicht (optional)"
+    },
+    "addPhoto": "Foto aufnehmen oder wählen",
+    "removePhoto": "Foto „{{view}}“ entfernen",
+    "privacy": "3–5 Fotos, höchstens 8 MB je Foto. Sie werden zur Analyse an den konfigurierten KI-Anbieter gesendet und nicht als Artikelbilder gespeichert.",
+    "dimensionsTitle": "Bekannte Maße ergänzen (optional)",
+    "dimensionsHelp": "Maße können die Schätzung verbessern. Gib je Gruppe alle drei Werte in Millimetern ein oder lasse die Gruppe leer. Bei Hohlteilen zählen die Außenmaße, nicht das Filamentvolumen.",
+    "containerDimensions": "Innenmaße der Kiste",
+    "partDimensions": "Außenmaße eines typischen Teils",
+    "axes": {
+      "lengthMm": "Länge (mm)",
+      "widthMm": "Breite (mm)",
+      "heightMm": "Höhe (mm)"
+    },
+    "analyze": "Gesamtmenge schätzen",
+    "analyzing": "Schichten und Füllvolumen werden geprüft…",
+    "resultTitle": "Geschätzter gesamter Kisteninhalt",
+    "approximate": "ca. {{value}} {{unit}}",
+    "range": "Geschätzter Bereich: {{lower}}–{{upper}}",
+    "insufficient": "Für eine Gesamtmenge fehlen Anhaltspunkte",
+    "accuracy": "Unkalibrierte Bildschätzung. Der Bereich ist kein statistisch abgesichertes Intervall; eine Abweichung von höchstens 15 % ist noch nicht nachgewiesen.",
+    "assumptions": "Annahmen",
+    "warnings": "Unsicherheiten",
+    "captureAdvice": "So lässt sich die Aufnahme verbessern",
+    "apply": "Schätzung in Mengenfeld übernehmen",
+    "applied": "Übernommen – vor der Buchung prüfen",
+    "model": "Verwendetes Modell: {{model}}",
+    "errors": {
+      "dimensions": "Bitte pro Maßgruppe entweder alle drei Maße zwischen 0 und 10.000 mm eingeben oder alle Felder leer lassen.",
+      "photos": "Füge mindestens drei Fotos aus verschiedenen Blickwinkeln hinzu.",
+      "upload": "Bitte 3–5 lesbare Fotos verwenden, höchstens 8 MB je Foto. Bei großen Dateien die Auflösung reduzieren.",
+      "invalidRequest": "Die Angaben konnten nicht gelesen werden. Prüfe Fotos und Maße.",
+      "notConfigured": "Für die Kistenschätzung ist noch kein KI-Zugang konfiguriert. Die Administration kann den OpenAI-Zugang einrichten.",
+      "unavailable": "Die Analyse ist vorübergehend nicht verfügbar. Versuche es erneut.",
+      "conflict": "Die Angaben dieser Anfrage haben sich geändert. Starte die Schätzung erneut.",
+      "processing": "Diese Analyse läuft noch. Warte kurz und klicke erneut auf „Gesamtmenge schätzen“, um dasselbe Ergebnis abzurufen.",
+      "disabled": "Die Administration hat die Fotozählung deaktiviert.",
+      "rateLimit": "Das Anfragelimit ist erreicht. Warte kurz und versuche es erneut.",
+      "budget": "Das monatliche KI-Budget ist aufgebraucht.",
+      "analysisFailed": "Die Analyse hat kein gültiges Ergebnis geliefert. Du kannst sie erneut starten.",
+      "timeout": "Die Antwort dauert länger als erwartet. Erneutes Klicken fragt denselben Versuch ab.",
+      "duplicatePhotos": "Dasselbe Foto wurde mehrfach ausgewählt. Verwende unterschiedliche Blickwinkel."
+    },
+    "analysisTitle": "Herleitung aus den Fotos",
+    "analysisHelp": "Zwei getrennte Bildanalysen prüfen Schichten und Volumen. Beide können denselben Bildfehler machen; das ist keine gemessene 3D-Rekonstruktion.",
+    "methods": {
+      "layers": "Schichtschätzung",
+      "volume": "Volumenschätzung"
+    },
+    "noEstimate": "nicht ausreichend erkennbar",
+    "imageEvidence": "Foto {{image}}"
   }
 }

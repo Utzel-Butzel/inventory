@@ -65,6 +65,12 @@ struct ActionFlowRunView: View {
         }
         .interactiveDismissDisabled(executing || chainReview.confirmationUncertain)
         .task { await loadResolution() }
+        .task(id: automaticReviewKey) {
+            guard automaticReviewKey != nil, let chainConfiguration,
+                  chainReview.report == nil, !executing else { return }
+            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            await previewChain(chainConfiguration)
+        }
         .onChange(of: state.organizationContextIdentifier) { _, _ in dismiss() }
         .onChange(of: textInputs) { _, _ in chainReview.invalidate() }
         .onChange(of: checkboxInputs) { _, _ in chainReview.invalidate() }
@@ -120,7 +126,7 @@ struct ActionFlowRunView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Code erkannt", systemImage: "qrcode.viewfinder").font(.headline)
                 Text(configuration.identifier).font(.body.monospaced()).textSelection(.enabled)
-                Text("Wähle die passenden Angaben. Im nächsten Schritt prüfst du alle Änderungen.")
+                Text("Wähle die passenden Angaben. Fertigungsabläufe mit vollständig ausgefüllten Auswahlfeldern werden automatisch geprüft. Gebucht wird erst nach deiner Bestätigung.")
                     .font(.subheadline).foregroundStyle(.secondary)
                 DisclosureGroup("\(configuration.actions.filter { $0.enabled != false }.count) Schritte im Ablauf") {
                     ForEach(configuration.actions.filter { $0.enabled != false }) { action in
@@ -196,6 +202,15 @@ struct ActionFlowRunView: View {
             else if !raw.isEmpty { values[field.key] = .string(raw) }
         }
         return configuration.visibleFields(raw: code, inputs: values)
+    }
+
+    private var automaticReviewKey: String? {
+        guard let configuration = chainConfiguration else { return nil }
+        let inputs = textInputs.mapValues { ActionChainJSON.string($0) }
+        let selected = configuration.targetGroups.compactMap { selectedTargets[$0.id] }
+        guard configuration.canAutomaticallyReview(raw: code, inputs: inputs, selectedResourceIDs: selected) else { return nil }
+        let values = configuration.visibleFields(raw: code, inputs: inputs).map { [$0.key, textInputs[$0.key, default: ""]] }
+        return String(data: (try? JSONEncoder().encode([selected.map(\.uuidString)] + values)) ?? Data(), encoding: .utf8)
     }
 
     @MainActor private func previewChain(_ configuration: ActionChainConfiguration) async {
@@ -313,16 +328,29 @@ struct ActionFlowRunView: View {
                     )
                 case "select", "radio":
                     if field.resolvedType == "radio" {
-                        Picker(
-                            field.placeholder ?? "Bitte auswählen",
-                            selection: textBinding(for: field.key)
-                        ) {
-                            Text("Bitte auswählen").tag("")
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], spacing: 10) {
                             ForEach(field.options ?? []) { option in
-                                Text(option.label).tag(option.value)
+                                Button {
+                                    textBinding(for: field.key).wrappedValue = option.value
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: textInputs[field.key] == option.value ? "checkmark.circle.fill" : "circle")
+                                        if let color = option.swatchColor {
+                                            Circle().fill(color).frame(width: 22, height: 22)
+                                                .overlay(Circle().stroke(.secondary.opacity(0.4), lineWidth: 1))
+                                        }
+                                        Text(option.label).multilineTextAlignment(.leading)
+                                        Spacer(minLength: 0)
+                                    }
+                                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                    .padding(.horizontal, 10)
+                                    .background(InventoryTheme.canvas, in: RoundedRectangle(cornerRadius: 10))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(textInputs[field.key] == option.value ? InventoryTheme.ink : Color.secondary.opacity(0.3)))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityAddTraits(textInputs[field.key] == option.value ? [.isSelected] : [])
                             }
                         }
-                        .pickerStyle(.inline)
                     } else {
                         Picker(
                             field.placeholder ?? "Bitte auswählen",
@@ -645,5 +673,16 @@ struct ActionFlowRunView: View {
             get: { photoInputs[key, default: []] },
             set: { photoInputs[key] = $0; uploadedValues[key] = nil; uploadKeys[key] = nil; chainReview.invalidate() }
         )
+    }
+}
+
+private extension ScanActionOption {
+    var swatchColor: Color? {
+        guard let color, color.hasPrefix("#") else { return nil }
+        let hex = String(color.dropFirst())
+        guard hex.count == 6, let value = UInt32(hex, radix: 16) else { return nil }
+        return Color(red: Double((value >> 16) & 255) / 255,
+                     green: Double((value >> 8) & 255) / 255,
+                     blue: Double(value & 255) / 255)
     }
 }

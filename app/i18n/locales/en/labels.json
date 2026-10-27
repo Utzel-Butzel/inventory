@@ -299,6 +299,7 @@
     "empty": "No individual stock items have been recorded for this entry.",
     "noMatches": "No matching stock items.",
     "loadError": "Unable to load stock items.",
+    "notFound": "The selected unit was not found. Reopen the stock list and select an existing unit.",
     "retry": "Try again"
   },
   "direct": {

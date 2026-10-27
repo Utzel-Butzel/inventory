@@ -65,6 +65,11 @@ const tokenCost = (rates: TextTokenRates, assumption: TokenAssumption) =>
       (assumption.fixedUsd ?? 0),
   );
 
+export function openAiTextCostUsd(model: string, inputTokens: number, outputTokens: number): number | null {
+  const rates = openAiTextRates(model);
+  return rates ? tokenCost(rates, { input: inputTokens, output: outputTokens }) : null;
+}
+
 const openAiOperationEstimate = (options: {
   model: string;
   minimum: TokenAssumption;

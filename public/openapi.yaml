@@ -3839,7 +3839,7 @@ paths:
       - { name: unitId, in: path, required: true, schema: { type: string, format: uuid } }
     patch:
       tags: [Stock]
-      summary: Change a unit's status, location, or metadata with an audit entry
+      summary: Change a unit's code, status, location, or metadata with an audit entry
       requestBody:
         required: true
         content:
@@ -3847,6 +3847,8 @@ paths:
             schema: { $ref: "#/components/schemas/StockUnitPatch" }
       responses:
         "200": { description: Unit updated and movement recorded }
+        "409": { description: Unit code already exists for this item or unit update conflicts with its current state }
+        "422": { description: Invalid unit update }
         "404": { $ref: "#/components/responses/NotFound" }
   /purchase-orders:
     parameters:
@@ -8556,6 +8558,7 @@ components:
     StockUnitPatch:
       type: object
       properties:
+        code: { type: string, minLength: 1, maxLength: 180, description: Editable identifier unique within this item. Leading and trailing whitespace is removed. The unit UUID and its QR links remain unchanged. }
         status: { type: string, enum: [available, reserved, in-use, maintenance, consumed, lost, retired] }
         location: { type: [string, "null"], maxLength: 240 }
         locationResourceId: { type: [string, "null"], format: uuid }

@@ -27,6 +27,20 @@ const t = (key) => key;
 const resourceId = "4b277830-d4f3-42b6-9d13-f70801f32e76";
 const makeDraft = () => templateDraft(t, resourceId);
 
+test("Paper 13 label extracts only the device ID and creates one finished frame", () => {
+  const draft = makeDraft();
+  const code = "https://paperlesspaper.de/b?d=epd13-0123456789ab&w=99";
+  assert.equal(extractIdentifier(code, draft.extraction, t).value, "epd13-0123456789ab");
+  const payload = draftToPayload(draft);
+  assert.equal(payload.oncePerCode, true);
+  assert.equal(payload.actions[0].type, "assembly-build");
+  assert.deepEqual(payload.actions[0].quantity, { source: "literal", value: 1 });
+  assert.equal(payload.actions[0].applyFlowValues, true);
+  assert.equal(payload.inputFields[0].key, "color");
+  assert.equal(payload.inputFields[0].type, "radio");
+  assert.equal(payload.fixedProperties[0].value, "finished-assembled");
+});
+
 test("scan variant selection persists independently of metadata input fields", () => {
   const draft = makeDraft();
   draft.allowVariantSelection = true;

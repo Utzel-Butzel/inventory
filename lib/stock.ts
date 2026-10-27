@@ -58,6 +58,7 @@ import {
 import { getResourceFamily } from "@/lib/resource-families";
 import type { ResourceRecord } from "@/db/schema";
 import { MAX_STOCK_QUANTITY } from "@/lib/stock-quantity-units";
+import { isStockUnitCodeConflict, STOCK_UNIT_CODE_CONFLICT, stockUnitCodeSchema } from "@/lib/stock-unit-contract";
 
 const FORECAST_WINDOW_DAYS = 30;
 const MAX_SERIALIZATION_UNITS = 5_000;
@@ -115,6 +116,7 @@ export type StockUnitCreateInput = {
 };
 
 export type StockUnitPatchInput = {
+  code?: string;
   status?: StockUnitStatus;
   location?: string | null;
   locationResourceId?: string | null;
@@ -144,11 +146,10 @@ export function stockHttpError(error: unknown, fallback: string) {
   if (error instanceof StockOperationError) {
     return { status: error.status, message: error.message };
   }
-  const message = error instanceof Error ? error.message : "";
-  if (message.includes("stock_units_resource_code_unique")) {
+  if (isStockUnitCodeConflict(error)) {
     return {
       status: 409 as const,
-      message: "A serialized unit with that code already exists for this item.",
+      message: STOCK_UNIT_CODE_CONFLICT,
     };
   }
   return { status: 500 as const, message: fallback };
@@ -2164,16 +2165,8 @@ export async function createStockUnits(
       };
     });
   } catch (error) {
-    if (
-      error instanceof StockOperationError ||
-      (error instanceof Error &&
-        error.message.includes("stock_units_resource_code_unique"))
-    ) {
-      if (error instanceof StockOperationError) throw error;
-      throw new StockOperationError(
-        "A serialized unit with that code already exists for this item.",
-        409,
-      );
+    if (isStockUnitCodeConflict(error)) {
+      throw new StockOperationError(STOCK_UNIT_CODE_CONFLICT, 409);
     }
     throw error;
   }
@@ -2240,6 +2233,13 @@ export async function updateStockUnit(
       .limit(1)
       .for("update");
     if (!unit) throw new StockOperationError("Unit not found", 404);
+
+    const parsedCode = stockUnitCodeSchema.safeParse(input.code ?? unit.code);
+    if (!parsedCode.success) {
+      throw new StockOperationError("Enter a unit code between 1 and 180 characters.", 422);
+    }
+    const nextCode = input.code === undefined ? unit.code : parsedCode.data;
+    const codeChanged = nextCode !== unit.code;
 
     const customFields =
       input.customFields === undefined
@@ -2363,6 +2363,7 @@ export async function updateStockUnit(
     const [savedUnit] = await transaction
       .update(stockUnits)
       .set({
+        code: nextCode,
         status: nextStatus,
         location: nextLocation,
         locationResourceId: nextLocationResourceId,
@@ -2376,7 +2377,9 @@ export async function updateStockUnit(
           delta > 0 && input.totalPriceCents != null
             ? resource.currency
             : unit.costCurrency,
-        lastMovedAt: occurredAt,
+        lastMovedAt: nextStatus !== unit.status || nextLocation !== unit.location || nextLocationResourceId !== unit.locationResourceId
+          ? occurredAt
+          : unit.lastMovedAt,
         updatedAt: now,
       })
       .where(
@@ -2418,7 +2421,7 @@ export async function updateStockUnit(
           (statusChanged
             ? `Unit status changed from ${unit.status} to ${nextStatus}`
             : "Unit details updated"),
-        note: input.note ?? "",
+        note: [input.note, codeChanged ? `Unit code changed from ${unit.code} to ${nextCode}` : null].filter(Boolean).join("\n"),
         location: nextLocation,
         fromLocationResourceId:
           structuredLocationChanged ? unit.locationResourceId : null,

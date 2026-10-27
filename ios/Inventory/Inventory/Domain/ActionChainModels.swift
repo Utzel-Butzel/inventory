@@ -140,6 +140,16 @@ public struct ActionChainConfiguration: Codable, Equatable, Sendable {
             return visible
         }
     }
+
+    public func canAutomaticallyReview(raw: String, inputs: [String: ActionChainJSON], selectedResourceIDs: [UUID]) -> Bool {
+        let fields = visibleFields(raw: raw, inputs: inputs)
+        return !identifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedResourceIDs.count == 1 &&
+            actions.contains { $0.enabled != false && $0.type == "assembly-build" } &&
+            !fields.isEmpty && fields.allSatisfy { field in
+                (field.resolvedType == "radio" || field.resolvedType == "select") &&
+                    (field.options ?? []).contains { inputs[field.key] == .string($0.value) }
+            }
+    }
 }
 public struct ActionChainConfigurationResponse: Codable, Sendable {
     public let workflow: ActionChainConfiguration

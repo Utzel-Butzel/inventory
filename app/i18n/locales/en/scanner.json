@@ -1,5 +1,10 @@
 {
   "chain": {
+    "changeCode": "Scan a different code",
+    "editInputs": "Edit details",
+    "autoReviewHelp": "Assembly flows with completed choice fields are reviewed automatically. Stock changes are saved only after you confirm.",
+    "retryConfirmation": "Retry confirmation",
+    "confirmationUncertain": "The confirmation result is unclear. Send it again; the same booking will not be duplicated.",
     "resetComponents": "Reset component selections",
     "actionList": "Actions in order",
     "disabled": "Disabled",

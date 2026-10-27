@@ -48,3 +48,11 @@ test("maps every billable action to a granular role permission", () => {
     80_000,
   );
 });
+
+test("bulk counting uses OpenAI multi-image pricing and an explicit conservative fallback", () => {
+  const estimate = aiUsageEstimate({ action: "photo_count", provider: "openai", model: "gpt-4.1-mini" });
+  assert.equal(estimate.provider, "openai");
+  assert.equal(estimate.action, "photo_count");
+  assert.equal(estimate.costMicros, 39_200);
+  assert.equal(aiUsageEstimate({ action: "photo_count", provider: "openai", model: "custom-vision-model" }).costMicros, 2_000_000);
+});

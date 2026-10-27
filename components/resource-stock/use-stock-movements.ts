@@ -4,7 +4,7 @@ import { localDateTime } from "@/lib/client-formatters";
 
 import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 
-import { type PhotoCountResult } from "@/components/photo-count-capture";
+import { type QuantityCountResult } from "@/components/photo-count-capture";
 import { fetchJson } from "@/lib/client-types";
 import { hasPurchaseUnit } from "@/lib/stock-quantity-units";
 
@@ -130,12 +130,18 @@ export function useStockMovements({
     setMovementForm((current) => ({ ...current, [key]: value }));
   }
 
-  function applyPhotoCount(result: PhotoCountResult) {
+  function applyPhotoCount(result: QuantityCountResult) {
+    const estimateNote = "method" in result && result.method === "bulk_visual"
+      ? t("resource.movements.bulkEstimateNote", { count: result.count, lower: result.lowerBound, upper: result.upperBound, model: result.model })
+      : "";
     setMovementForm((current) => ({
       ...current,
       quantity: String(result.count),
       quantityUnit: "base",
       reason: current.reason || t("resource.movements.photoAssisted"),
+      note: estimateNote && !current.note.includes(estimateNote)
+        ? [current.note, estimateNote].filter(Boolean).join("\n")
+        : current.note,
     }));
   }
 

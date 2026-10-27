@@ -152,22 +152,21 @@ export function StockBooking({
             ) : null}
           </label>
         </div>
-        {!isCount ? (
-          <details className="mt-4">
+        <details className="mt-4">
           <summary className="cursor-pointer text-xs font-semibold text-muted-strong">{t("resource.booking.photoQuantity")}</summary>
-        <PhotoCountCapture
-          key={task}
-          itemId={stock.resource.id}
-          itemName={stock.resource.name}
-          unitName={unitName}
-          direction={direction}
-          quantity={movementForm.quantity}
-          availableQuantity={currentQuantity}
-          disabled={stock.config.trackingMode === "serialized"}
-          onCount={applyPhotoCount}
-        />
-          </details>
-        ) : null}
+          <PhotoCountCapture
+            key={task}
+            itemId={stock.resource.id}
+            itemName={stock.resource.name}
+            unitName={unitName}
+            direction={direction}
+            quantity={movementForm.quantity}
+            availableQuantity={currentQuantity}
+            disabled={postingMovement || stock.config.trackingMode === "serialized"}
+            allowZero={isCount}
+            onCount={applyPhotoCount}
+          />
+        </details>
         <details className="mt-5 rounded-xl border border-border p-4">
           <summary className="cursor-pointer text-sm font-semibold text-muted-strong">{t("resource.booking.optionalDetails")}</summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

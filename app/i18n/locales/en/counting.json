@@ -1,11 +1,11 @@
 {
   "launch": {
-    "title": "Count pieces from a photo",
+    "title": "Determine quantity from photos",
     "description": "Calculate the quantity from a photo and verify the result before booking.",
     "action": "Open"
   },
   "header": {
-    "title": "Photo piece counter",
+    "title": "Quantity from photos",
     "description": "Spread pieces out, shoot from above, and avoid overlaps where possible."
   },
   "upload": {
@@ -65,5 +65,71 @@
     "cameraPhoto": "Camera photo",
     "detectedItem": "objects",
     "model": "Automatic image recognition"
+  },
+  "modes": {
+    "label": "Counting method",
+    "visible": "Count visible pieces",
+    "bulk": "Estimate box contents"
+  },
+  "bulk": {
+    "description": "Experimental estimate for overlapping and hidden parts, without a counted reference sample.",
+    "intro": "One part type, one box, several viewpoints.",
+    "guide": "Take 3–5 photos: from above, obliquely from one side and from the opposite side. Include the whole container, rim and fill surface. Additional side views help with hidden layers. Keep the container and contents unchanged between photos.",
+    "views": {
+      "top": "1. From above",
+      "side": "2. Oblique side view",
+      "opposite": "3. Opposite side",
+      "end": "4. Another side (optional)",
+      "detail": "5. Another view (optional)"
+    },
+    "addPhoto": "Take or choose photo",
+    "removePhoto": "Remove “{{view}}” photo",
+    "privacy": "3–5 photos, up to 8 MB each. Photos are sent to the configured AI provider for analysis and are not saved as item images.",
+    "dimensionsTitle": "Add known dimensions (optional)",
+    "dimensionsHelp": "Dimensions can improve the estimate. Enter all three values in millimetres for a group, or leave the group empty. For hollow parts, use outer dimensions, not filament volume.",
+    "containerDimensions": "Box interior dimensions",
+    "partDimensions": "Outer dimensions of a typical part",
+    "axes": {
+      "lengthMm": "Length (mm)",
+      "widthMm": "Width (mm)",
+      "heightMm": "Height (mm)"
+    },
+    "analyze": "Estimate total quantity",
+    "analyzing": "Checking layers and filled volume…",
+    "resultTitle": "Estimated total box contents",
+    "approximate": "Approx. {{value}} {{unit}}",
+    "range": "Estimated range: {{lower}}–{{upper}}",
+    "insufficient": "More evidence is needed for a total estimate",
+    "accuracy": "Uncalibrated visual estimate. This range is not a statistically validated interval; accuracy within 15% has not been demonstrated.",
+    "assumptions": "Assumptions",
+    "warnings": "Uncertainties",
+    "captureAdvice": "How to improve the capture",
+    "apply": "Use estimate in quantity field",
+    "applied": "Applied — verify before booking",
+    "model": "Model used: {{model}}",
+    "errors": {
+      "dimensions": "Enter all three dimensions greater than 0 and up to 10,000 mm for each group, or leave the entire group empty.",
+      "photos": "Add at least three photos from different angles.",
+      "upload": "Use 3–5 readable photos, up to 8 MB each. Reduce the resolution of large files.",
+      "invalidRequest": "The inputs could not be read. Check photos and dimensions.",
+      "notConfigured": "Box estimation has no AI connection configured yet. An administrator can configure OpenAI access.",
+      "unavailable": "Analysis is temporarily unavailable. Please try again.",
+      "conflict": "The inputs for this attempt have changed. Start the estimate again.",
+      "processing": "This analysis is still running. Wait briefly, then click “Estimate total quantity” again to retrieve the same result.",
+      "disabled": "Photo counting has been disabled by an administrator.",
+      "rateLimit": "The request limit has been reached. Wait briefly and try again.",
+      "budget": "The monthly AI budget has been reached.",
+      "analysisFailed": "The analysis returned no valid result. You can start it again.",
+      "timeout": "The response is taking longer than expected. Clicking again retries the same attempt.",
+      "duplicatePhotos": "The same photo was selected more than once. Use different viewpoints."
+    },
+    "analysisTitle": "How the photos were assessed",
+    "analysisHelp": "Two separate image analyses assess layers and volume. Both may make the same visual error; this is not a measured 3D reconstruction.",
+    "methods": {
+      "layers": "Layer estimate",
+      "volume": "Volume estimate"
+    },
+    "noEstimate": "insufficient evidence",
+    "imageEvidence": "Photo {{image}}"
   }
 }

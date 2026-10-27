@@ -1075,6 +1075,7 @@ public struct ScanActionOperation: Codable, Equatable, Sendable {
 public struct ScanActionOption: Codable, Equatable, Identifiable, Sendable {
     public let value: String
     public let label: String
+    public var color: String? = nil
 
     public var id: String { value }
 }

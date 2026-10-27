@@ -169,6 +169,8 @@
       "registerCustomIds": "Register custom IDs",
       "copyUnitId": "Copy unit ID",
       "copyUnitIdWithCode": "Copy unit ID {{code}}",
+      "createUnitLabel": "Create label",
+      "createUnitLabelWithCode": "Create label for {{code}}",
       "close": "Close",
       "cancel": "Cancel",
       "update": "Update",
@@ -196,7 +198,9 @@
       "generatedUnitRange": "Enter between 1 and 100 units.",
       "customUnitRange": "Enter between 1 and 100 custom unit IDs.",
       "uniqueUnitIds": "Each unit ID must be unique.",
-      "unitIdLength": "Unit IDs must be 160 characters or fewer.",
+      "unitIdLength": "Unit identifiers must be 180 characters or fewer.",
+      "unitCodeRequired": "Enter a unit identifier.",
+      "unitCodeTaken": "This identifier is already used by another unit of this item.",
       "validAcquisitionDate": "Choose a valid acquisition date and time.",
       "metadataObject": "Advanced metadata must be a JSON object.",
       "createUnits": "Unable to register the units.",
@@ -341,7 +345,8 @@
       "delete": "Delete movement",
       "emptyTitle": "No movements yet",
       "noMovements": "Book the first stock movement to start the audit trail.",
-      "noMatches": "No movements match this filter."
+      "noMatches": "No movements match this filter.",
+      "bulkEstimateNote": "Uncalibrated visual quantity estimate: {{count}} pieces; plausible range {{lower}}–{{upper}}. Model: {{model}}. Accuracy not validated."
     },
     "settings": {
       "title": "Stock settings",
@@ -391,6 +396,8 @@
       "customIds": "Custom IDs",
       "numberOfUnits": "Number of units",
       "unitIds": "Unit IDs",
+      "code": "Unit identifier",
+      "codeHelp": "Replace the generated STK identifier with a name such as Terra 1. The identifier must be unique within this item. Existing QR links remain valid.",
       "onePerLine": "one per line",
       "inventoryLocation": "Inventory location",
       "notAssigned": "Not assigned",

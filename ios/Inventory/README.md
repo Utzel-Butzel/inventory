@@ -61,6 +61,11 @@ flow. Hidden inputs are excluded, and read-only accounts can review but cannot
 confirm. After an uncertain connection result, retry keeps the exact request
 and execution key. Photo/file uploads are reused while reviewing the same target.
 
+Radio inputs appear as large choice buttons with optional color swatches. For
+assembly flows with one selected target and only visible choice fields, selecting
+a valid option for every field prepares the review automatically. Confirmation
+is still explicit. Free text, uploads and incomplete choices keep manual review.
+
 **Einstellungen → Web → Aktionsabläufe bearbeiten** opens the existing web
 editor for the current organization. Flow authoring stays in that editor; the
 scan, input, review and confirmation screens are native SwiftUI. The installable

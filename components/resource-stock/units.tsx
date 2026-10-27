@@ -3,6 +3,7 @@
 import { resourceTitleText } from "@/lib/resource-title";
 import { useEffect, useRef, useState } from "react";
 import { formatDate, formatMoney, localDateTime } from "@/lib/client-formatters";
+import { MAX_STOCK_UNIT_CODE_LENGTH } from "@/lib/stock-unit-contract";
 
 import { OrganizationLink as Link } from "@/components/organization-routing";
 import {
@@ -13,6 +14,7 @@ import {
   Layers3,
   LoaderCircle,
   MapPin,
+  Printer,
   Save,
   Settings2,
   X,
@@ -29,7 +31,7 @@ import type { StockSectionProps, UnitStatus } from "./types";
 
 import { StockUnitCreateForm, type StockUnitCreateFormProps } from "./unit-create-form";
 
-export type StockUnitsProps = StockUnitCreateFormProps & Pick<StockSectionProps, "locale" | "numberFormat"> & { selectedUnitId?: string; showCreate?: boolean; canEdit?: boolean };
+export type StockUnitsProps = StockUnitCreateFormProps & Pick<StockSectionProps, "locale" | "numberFormat"> & { selectedUnitId?: string; showCreate?: boolean; canEdit?: boolean; canPrintLabels?: boolean };
 
 export function StockUnits({
   stock,
@@ -43,6 +45,7 @@ export function StockUnits({
   selectedUnitId,
   showCreate = true,
   canEdit = true,
+  canPrintLabels = false,
 }: StockUnitsProps) {
   const [unitQuery, setUnitQuery] = useState("");
   const selectedUnitRef = useRef<HTMLDivElement>(null);
@@ -100,7 +103,7 @@ export function StockUnits({
             {stock.units.length ? (
               <div className="divide-y divide-border">
                 {stock.units.filter((unit) => unit.code.toLowerCase().includes(unitQuery.toLowerCase())).map((unit) => {
-                  const editing = editingUnitId === unit.id && unitEditForm;
+                  const editing = canEdit && editingUnitId === unit.id && unitEditForm;
                   return (
                     <div key={unit.id} ref={unit.id === selectedUnitId ? selectedUnitRef : undefined}
                       tabIndex={unit.id === selectedUnitId ? -1 : undefined}
@@ -187,7 +190,19 @@ export function StockUnits({
                             ) : null}
                           </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2 pl-[52px] sm:pl-0">
+                        <div className="flex shrink-0 flex-wrap items-center gap-2 pl-[52px] sm:pl-0">
+                          {canPrintLabels ? (
+                            <Link
+                              href={`/labels?resourceId=${encodeURIComponent(stock.resource.id)}&unitId=${encodeURIComponent(unit.id)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={t("resource.actions.createUnitLabelWithCode", { code: unit.code })}
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-xs font-semibold text-foreground transition hover:bg-surface-hover"
+                            >
+                              <Printer className="size-3.5" aria-hidden="true" />
+                              {t("resource.actions.createUnitLabel")}
+                            </Link>
+                          ) : null}
                           {canEdit ? <button
                             type="button"
                             onClick={() => {
@@ -198,6 +213,7 @@ export function StockUnits({
                               }
                               setEditingUnitId(unit.id);
                               setUnitEditForm({
+                                code: unit.code,
                                 status: unit.status,
                                 location: unit.location ?? "",
                                 locationResourceId: unit.locationResourceId ?? "",
@@ -243,6 +259,20 @@ export function StockUnits({
                             {t("resource.units.editHelp")}
                           </div>
                           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            <label className={`${labelClass} sm:col-span-2 lg:col-span-3`}>
+                              {t("resource.units.code")}
+                              <input
+                                value={unitEditForm.code}
+                                onChange={(event) => setUnitEditForm((current) => current ? { ...current, code: event.target.value } : current)}
+                                required
+                                maxLength={MAX_STOCK_UNIT_CODE_LENGTH}
+                                disabled={savingUnit}
+                                className={inputClass}
+                              />
+                              <span className="mt-1 block text-[11px] font-normal leading-4 text-muted">
+                                {t("resource.units.codeHelp")}
+                              </span>
+                            </label>
                             <label className={labelClass}>
                               {t("resource.units.statusLabel")}
                               <select

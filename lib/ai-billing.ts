@@ -1,7 +1,9 @@
 import {
   getAiCostEstimateCatalog,
   imageGenerationCostEstimatesBySize,
+  openAiTextCostUsd,
 } from "@/lib/ai-cost-estimates";
+import { maximumBulkCountOutputTokens } from "@/lib/inventory-bulk-count";
 import type { InventoryCountModelId } from "@/lib/inventory-count-models";
 
 export const aiBillableActions = [
@@ -69,6 +71,11 @@ export function aiUsageEstimate(options: {
   model: string;
 }): AiUsageEstimate;
 export function aiUsageEstimate(options: {
+  action: "photo_count";
+  provider: "openai";
+  model: string;
+}): AiUsageEstimate;
+export function aiUsageEstimate(options: {
   action: "image_generation";
   provider: "openai" | "google";
   model: string;
@@ -85,6 +92,18 @@ export function aiUsageEstimate(options: {
   quantity?: number;
 }): AiUsageEstimate {
   if (options.action === "photo_count") {
+    if (options.provider === "openai") {
+      // Two geometric passes, each with up to five normalized images and
+      // 6,000 output tokens (including reasoning). Reserve both bounded passes.
+      const maximumUsd = openAiTextCostUsd(options.model ?? "", 2 * 25_000, 2 * maximumBulkCountOutputTokens);
+      return {
+        action: options.action,
+        provider: "openai",
+        model: options.model ?? "unpriced-model",
+        costMicros: usdToMicros(maximumUsd ?? 2),
+        estimated: true,
+      };
+    }
     const modelId = options.modelId ?? "grounding-dino";
     return {
       action: options.action,

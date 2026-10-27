@@ -299,6 +299,7 @@
     "empty": "Für diesen Eintrag sind keine einzelnen Bestands-Items erfasst.",
     "noMatches": "Keine passenden Bestands-Items.",
     "loadError": "Bestands-Items konnten nicht geladen werden.",
+    "notFound": "Die ausgewählte Einheit wurde nicht gefunden. Öffne die Bestandsliste erneut und wähle eine vorhandene Einheit aus.",
     "retry": "Erneut versuchen"
   },
   "direct": {

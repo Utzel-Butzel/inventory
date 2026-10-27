@@ -40,6 +40,7 @@ type CodeScannerCameraProps = {
   disabled?: boolean;
   allowedFormats?: readonly ScanCodeType[];
   autoFocusManual?: boolean;
+  startOnMount?: boolean;
 };
 
 type DecodedCode = { value: string; format: ScanCodeType };
@@ -175,6 +176,7 @@ export function CodeScannerCamera({
   disabled = false,
   allowedFormats,
   autoFocusManual = false,
+  startOnMount = false,
 }: CodeScannerCameraProps) {
   const { t, i18n } = useT("scanner");
   const locale = i18n.resolvedLanguage ?? i18n.language;
@@ -187,6 +189,7 @@ export function CodeScannerCamera({
   const cameraGenerationRef = useRef(0);
   const photoGenerationRef = useRef(0);
   const onDetectedRef = useRef(onDetected);
+  const startedOnMount = useRef(false);
   const uploadInputId = useId();
 
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>("idle");
@@ -361,6 +364,15 @@ export function CodeScannerCamera({
     },
     [allowedFormats, integer, invalidatePhoto, stopCamera, t],
   );
+
+  useEffect(() => {
+    if (!startOnMount || disabled || startedOnMount.current) return;
+    const timer = setTimeout(() => {
+      startedOnMount.current = true;
+      void startCamera();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [startOnMount, disabled, startCamera]);
 
   const handleDeviceChange = (deviceId: string) => {
     setSelectedDeviceId(deviceId);

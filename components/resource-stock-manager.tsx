@@ -64,6 +64,7 @@ import { useStockUnits } from "./resource-stock/use-stock-units";
 export function ResourceStockManager({
   resourceId: initialResourceId,
   canEdit: initialCanEdit = false,
+  canPrintLabels = false,
   selectedUnitId,
   initialTask = "receipt",
   openInitialTask = false,
@@ -71,6 +72,7 @@ export function ResourceStockManager({
 }: {
   resourceId: string;
   canEdit?: boolean;
+  canPrintLabels?: boolean;
   selectedUnitId?: string;
   initialTask?: StockBookingTask;
   openInitialTask?: boolean;
@@ -452,7 +454,7 @@ export function ResourceStockManager({
           onBusyChange={setBuildBusy} onBuilt={(output) => { setBuildBusy(false); setNotice(t("workspace.built", { name: output.name })); setRevision((value) => value + 1); if (output.id !== resourceId) selectVariant(output.id); else void loadStock(true); }} /> : null}
         {!pendingMovement && !virtual && action !== "build" ? stock.config.trackingMode === "serialized" ? (action === "receipt" ? <StockUnitCreateForm stock={stock} t={t} customFieldError={customFieldError} availableLocations={availableLocations} applicableCustomFields={applicableCustomFields} units={units} /> : <>
           <p className="text-sm text-muted">{t(`workspace.serialized.${action}`)}</p>
-          <StockUnits key={resourceId} selectedUnitId={selectedUnitId} stock={stock} t={t} locale={locale} numberFormat={numberFormat} customFieldError={customFieldError} availableLocations={availableLocations} applicableCustomFields={applicableCustomFields} units={units} showCreate={false} canEdit />
+          <StockUnits key={resourceId} selectedUnitId={selectedUnitId} stock={stock} t={t} locale={locale} numberFormat={numberFormat} customFieldError={customFieldError} availableLocations={availableLocations} applicableCustomFields={applicableCustomFields} units={units} showCreate={false} canEdit canPrintLabels={canPrintLabels} />
         </>) : action === "transfer" ? <StockLocationsManager key={resourceId} resourceId={resourceId} canEdit unitName={unitName} onBusyChange={setBuildBusy} onStockChanged={() => { void loadStock(true); setRevision((value) => value + 1); }} /> : <StockBooking contextual stock={stock} t={t} unitName={unitName} numberFormat={numberFormat} resourceId={resourceId} availableContacts={availableContacts} movements={movements} /> : null}
       {pendingMovement ? (
         <div className="space-y-4">
@@ -545,7 +547,7 @@ export function ResourceStockManager({
       <section id="stock-detail-panel" inert={actionBusy} role="tabpanel" aria-labelledby={`stock-tab-${detailTab}`} tabIndex={0}>
         {virtual ? <p className="rounded-xl border border-border p-6 text-sm text-muted">{t("workspace.virtualEmpty")}</p> : familyView && stock.family ? <FamilyStockDetails members={[stock.family.primary, ...stock.family.variants]} tab={detailTab} /> : <>
           {detailTab === "movements" ? <StockMovementHistory stock={stock} t={t} locale={locale} numberFormat={numberFormat} canEdit={canEdit} availableContacts={availableContacts} movements={movements} /> : null}
-          {detailTab === "units" ? (stock.config.trackingMode === "serialized" ? <StockUnits key={resourceId} selectedUnitId={selectedUnitId} stock={stock} t={t} locale={locale} numberFormat={numberFormat} customFieldError={customFieldError} availableLocations={availableLocations} applicableCustomFields={applicableCustomFields} units={units} showCreate={false} canEdit={false} /> : <p className="p-5 text-sm text-muted">{t("workspace.bulkUnits")}</p>) : null}
+          {detailTab === "units" ? (stock.config.trackingMode === "serialized" ? <StockUnits key={resourceId} selectedUnitId={selectedUnitId} stock={stock} t={t} locale={locale} numberFormat={numberFormat} customFieldError={customFieldError} availableLocations={availableLocations} applicableCustomFields={applicableCustomFields} units={units} showCreate={false} canEdit={canEdit && !action} canPrintLabels={canPrintLabels} /> : <p className="p-5 text-sm text-muted">{t("workspace.bulkUnits")}</p>) : null}
           {detailTab === "locations" ? <StockLocationsManager key={resourceId} resourceId={resourceId} canEdit={false} unitName={unitName} /> : null}
         </>}
       </section>

@@ -1,5 +1,10 @@
 {
   "chain": {
+    "changeCode": "Anderen Code scannen",
+    "editInputs": "Angaben ändern",
+    "autoReviewHelp": "Fertigungsabläufe mit vollständig ausgefüllten Auswahlfeldern werden automatisch geprüft. Gebucht wird erst nach deiner Bestätigung.",
+    "retryConfirmation": "Bestätigung erneut senden",
+    "confirmationUncertain": "Die Bestätigung ist noch unklar. Bitte erneut senden; dieselbe Buchung wird dabei nicht doppelt ausgeführt.",
     "resetComponents": "Komponentenzuordnung zurücksetzen",
     "actionList": "Aktionen in Reihenfolge",
     "disabled": "Deaktiviert",

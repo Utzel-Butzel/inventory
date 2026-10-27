@@ -5,6 +5,7 @@ import { moneyToCents, toIsoDateTime as toIso } from "@/lib/client-formatters";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { fetchJson } from "@/lib/client-types";
+import { MAX_STOCK_UNIT_CODE_LENGTH, STOCK_UNIT_CODE_CONFLICT } from "@/lib/stock-unit-contract";
 
 import {
   customFieldValuesEqual,
@@ -73,7 +74,7 @@ export function useStockUnits({
         if (new Set(codes.map((code) => code.toLowerCase())).size !== codes.length) {
           throw new Error(t("resource.errors.uniqueUnitIds"));
         }
-        if (codes.some((code) => code.length > 120)) {
+        if (codes.some((code) => code.length > MAX_STOCK_UNIT_CODE_LENGTH)) {
           throw new Error(t("resource.errors.unitIdLength"));
         }
         identifierPayload = codes.length === 1 ? { code: codes[0]! } : { codes };
@@ -107,7 +108,7 @@ export function useStockUnits({
     } catch (createError) {
       setError(
         createError instanceof Error
-          ? createError.message
+          ? createError.message === STOCK_UNIT_CODE_CONFLICT ? t("resource.errors.unitCodeTaken") : createError.message
           : t("resource.errors.createUnits"),
       );
     } finally {
@@ -121,6 +122,9 @@ export function useStockUnits({
     setError(null);
     setNotice(null);
     try {
+      const code = unitEditForm.code.trim();
+      if (!code) throw new Error(t("resource.errors.unitCodeRequired"));
+      if (code.length > MAX_STOCK_UNIT_CODE_LENGTH) throw new Error(t("resource.errors.unitIdLength"));
       const metadata = parseMetadata(unitEditForm.metadata, t);
       const occurredAt = toIso(unitEditForm.occurredAt);
       if (unitEditForm.occurredAt && !occurredAt) {
@@ -157,6 +161,7 @@ export function useStockUnits({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(code !== unit?.code ? { code } : {}),
           status: unitEditForm.status,
           location: unitEditForm.location.trim() || null,
           locationResourceId: unitEditForm.locationResourceId || null,
@@ -177,13 +182,13 @@ export function useStockUnits({
       await loadStock(true);
       setNotice(
         t("resource.notices.unitUpdated", {
-          code: unit?.code ?? t("resource.units.record"),
+          code,
         }),
       );
     } catch (unitError) {
       setError(
         unitError instanceof Error
-          ? unitError.message
+          ? unitError.message === STOCK_UNIT_CODE_CONFLICT ? t("resource.errors.unitCodeTaken") : unitError.message
           : t("resource.errors.updateUnit"),
       );
     } finally {

@@ -15,6 +15,27 @@ private let reportJSON = """
 """
 
 final class ActionChainTests: XCTestCase {
+    func testAssemblyAutoReviewWaitsForAllVisibleChoicesAndOneTarget() throws {
+        let value = try JSONDecoder().decode(ActionChainConfigurationResponse.self, from: Data(configurationJSON.utf8)).workflow
+        XCTAssertTrue(value.canAutomaticallyReview(raw: "PCB-123", inputs: ["color": .string("black")], selectedResourceIDs: [variantID]))
+        XCTAssertFalse(value.canAutomaticallyReview(raw: "PCB-123", inputs: [:], selectedResourceIDs: [variantID]))
+        XCTAssertFalse(value.canAutomaticallyReview(raw: "PCB-123", inputs: ["color": .string("invalid")], selectedResourceIDs: [variantID]))
+        XCTAssertFalse(value.canAutomaticallyReview(raw: "PCB-123", inputs: ["color": .string("black")], selectedResourceIDs: []))
+        XCTAssertFalse(value.canAutomaticallyReview(raw: "PCB-123", inputs: ["color": .string("black")], selectedResourceIDs: [variantID, productID]))
+        // White reveals a free-text engraving field, so review stays manual.
+        XCTAssertFalse(value.canAutomaticallyReview(raw: "PCB-123", inputs: ["color": .string("white"), "engraving": .string("Hello")], selectedResourceIDs: [variantID]))
+        let disabledJSON = configurationJSON.replacingOccurrences(of: "\"type\":\"assembly-build\",\"enabled\":true", with: "\"type\":\"assembly-build\",\"enabled\":false")
+        let disabled = try JSONDecoder().decode(ActionChainConfigurationResponse.self, from: Data(disabledJSON.utf8)).workflow
+        XCTAssertFalse(disabled.canAutomaticallyReview(raw: "PCB-123", inputs: ["color": .string("black")], selectedResourceIDs: [variantID]))
+    }
+
+    func testColorOptionsDecodeSwatchesAndRemainCompatibleWithOlderFlows() throws {
+        let swatch = try JSONDecoder().decode(ScanActionOption.self, from: Data(##"{"value":"black","label":"Schwarz","color":"#202124"}"##.utf8))
+        XCTAssertEqual(swatch.color, "#202124")
+        let old = try JSONDecoder().decode(ScanActionOption.self, from: Data(#"{"value":"black","label":"Schwarz"}"#.utf8))
+        XCTAssertNil(old.color)
+    }
+
     func testConfigurationIncludesVariantsAndDefaults() throws {
         let value = try JSONDecoder().decode(ActionChainConfigurationResponse.self, from: Data(configurationJSON.utf8)).workflow
         XCTAssertEqual(value.identifier, "PCB-123")

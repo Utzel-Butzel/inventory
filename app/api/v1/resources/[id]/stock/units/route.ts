@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { requireResourcePermission } from "@/lib/api-auth";
 import { createStockUnits, listStockUnits, stockHttpError } from "@/lib/stock";
+import { stockUnitCodeSchema } from "@/lib/stock-unit-contract";
 import { customFieldValuesInputSchema } from "@/lib/validators";
 
 type Context = { params: Promise<{ id: string }> };
@@ -15,8 +16,8 @@ const metadataSchema = z
 const unitCreateSchema = z
   .object({
     count: z.number().int().min(1).max(100).optional(),
-    code: z.string().trim().min(1).max(180).optional(),
-    codes: z.array(z.string().trim().min(1).max(180)).min(1).max(100).optional(),
+    code: stockUnitCodeSchema.optional(),
+    codes: z.array(stockUnitCodeSchema).min(1).max(100).optional(),
     location: z.string().trim().max(240).nullable().optional(),
     locationResourceId: z.string().uuid().nullable().optional(),
     metadata: metadataSchema.optional(),

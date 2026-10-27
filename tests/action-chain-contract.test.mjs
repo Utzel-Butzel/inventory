@@ -3,11 +3,29 @@ import test from "node:test";
 import { chainActionsSchema, actionChainReferenceErrors, matchesActionConditions, resolveActionValue, visibleFlowInputs } from "../lib/action-chain-contract.ts";
 import { scanWorkflowCreateSchema } from "../lib/scan-workflow-contract.ts";
 import { legacyWorkflowActions } from "../components/stock-workflow/chain-draft.ts";
+import { canAutomaticallyReviewAssembly } from "../lib/action-chain-runner-state.ts";
 
 const literal = (value) => ({ source: "literal", value });
 const action = (id) => ({ id, label: id, type: "unit", target: { source: "selected" }, mode: "update" });
 const condition = (left, operator, right) => ({ mode: "all", rules: [{ left, operator, ...(right ? { right } : {}) }] });
 const context = { identifier: "PCB-123", raw: "https://example.test?id=PCB-123", inputs: { color: "black", amount: 2 }, results: { board: { resourceId: "pcb", metadata: { "board.serial": "123" } } } };
+test("frame assembly prepares a review only after scan, target and valid color selection", () => {
+  const actions = [{ type: "find-unit" }, { type: "assembly-build" }];
+  const fields = [{ key: "color", type: "radio", options: [{ value: "black" }, { value: "white" }] }];
+  const ready = (overrides = {}) => {
+    const args = { actions, fields, inputs: { color: "black" }, identifier: "epd13-0123456789ab", targets: ["paper13"], ...overrides };
+    return canAutomaticallyReviewAssembly(args.actions, args.fields, args.inputs, args.identifier, args.targets);
+  };
+  assert.equal(ready(), true);
+  for (const overrides of [
+    { inputs: {} }, { inputs: { color: "unknown" } }, { identifier: " " },
+    { targets: [] }, { targets: ["paper13", "paperL"] }, { fields: [] },
+    { fields: [...fields, { key: "note", type: "text", options: [] }] },
+    { fields: [...fields, { key: "photo", type: "media", options: [] }] },
+    { actions: [{ type: "assembly-build", enabled: false }] },
+    { actions: [{ type: "stock-adjustment" }] },
+  ]) assert.equal(ready(overrides), false, JSON.stringify(overrides));
+});
 test("values resolve scan, inputs, prior results and dotted property keys without prototype traversal", () => {
   assert.equal(resolveActionValue({ source: "scan", field: "identifier" }, context), "PCB-123");
   assert.equal(resolveActionValue({ source: "input", key: "color" }, context), "black");

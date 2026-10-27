@@ -67,6 +67,7 @@ export default async function ResourceStockPage({ params, searchParams }: Props)
       <ResourceStockManager
         resourceId={resource?.id ?? id}
         canEdit={canManageStock}
+        canPrintLabels={Boolean(identity?.permissions.includes("labels.read"))}
         initialTask={initialTask}
         openInitialTask={typeof task === "string"}
         initialDetailTab={unitView === "1" || tab === "units" ? "units" : tab === "locations" ? "locations" : "movements"}

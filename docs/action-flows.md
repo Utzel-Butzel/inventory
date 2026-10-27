@@ -2,6 +2,21 @@
 
 Ein Ablauf enthält bis zu 24 Aktionen in einer festen Reihenfolge. Jede Aktion hat einen eigenen Namen, ein Ziel und optional Bedingungen. Du kannst Aktionen verschieben, duplizieren oder deaktivieren. Eine Aktion kann Werte und Einheiten aus früheren Aktionen übernehmen.
 
+## Paper 13 / OpenPaper L: kurzer Fertigungsablauf
+
+Paper 13 und OpenPaper L bezeichnen hier dasselbe Modell. Die Vorlage **Paperless-Paper-Montage** liest die Geräte-ID aus `d` in `https://paperlesspaper.de/b?d=epd13-0123456789ab&w=99`. Der zusätzliche Parameter `w` gehört nicht zur Geräte-ID.
+
+Wähle den Fertigartikel als Ziel, aktiviere serialisierten Bestand und verwende eine erforderliche Radio-Eingabe **Rahmenfarbe** mit den verfügbaren Farben. Die Aktion **Baugruppe fertigen** erzeugt Menge 1 mit der Kennung aus dem Scan. Ordne jeder Farbe die passende Rahmen-Komponente des Stücklistenplatzes zu. Übernimm die Scan-Felder, die Farbe und die feste Eigenschaft `assemblyStatus = finished-assembled`. **Pro Kennung und ausgewähltem Ziel nur einmal ausführen** verhindert erneute Buchungen desselben Geräts. Vorhandene Mengenbestände und Farbvarianten müssen bei der Einrichtung bewusst berücksichtigt werden.
+
+Nach der einmaligen Einrichtung ist der Bedienweg in Web und iOS:
+
+1. Ablauf wählen und QR-Code scannen.
+2. Rahmenfarbe direkt antippen.
+3. Die automatisch erstellte Vorschau mit **Alle Änderungen bestätigen** buchen.
+4. **Nächsten Code scannen**; der Ablauf bleibt ausgewählt, die Farbe wird für das nächste Gerät neu abgefragt.
+
+Die automatische Prüfung gilt für Fertigungsabläufe mit genau einem gewählten Ziel und ausschließlich sichtbaren Auswahlfeldern, für die jeweils eine gültige Option gewählt wurde. Texte, Uploads, leere optionale Felder und mehrere Ziele behalten den manuellen Prüfschritt. Auch eine automatische Prüfung verändert keinen Bestand. Fehlende Komponenten werden in der Prüfung gemeldet. Nach einem unklaren Netzwerkfehler bleibt die Bestätigung mit demselben Ausführungsschlüssel wiederholbar.
+
 ## OpenPaper 7 vorbereiten
 
 1. Stelle den Bestand des Platinen-Eintrags auf **serialisiert**. Lege jede Platine über `POST /api/v1/resources/{platinenId}/stock/units` an, beispielsweise mit `{"code":"PCB-123","metadata":{"boardSerial":"SN-456"}}`. `code` ist die Kennung, die dein QR-Code später liefert; eine zusätzliche Hersteller-Seriennummer kann in den Eigenschaften stehen.
