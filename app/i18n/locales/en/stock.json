@@ -177,7 +177,9 @@
       "saveMovement": "Save movement",
       "saveUnit": "Save unit",
       "goBack": "Go back",
-      "confirmStockOut": "Confirm stock out"
+      "confirmStockOut": "Confirm stock out",
+      "deleteUnit": "Delete",
+      "deleteUnitWithCode": "Delete unit {{code}}"
     },
     "errors": {
       "missingResource": "No resource ID was provided.",
@@ -210,7 +212,9 @@
       "updateMovement": "Unable to update the stock movement.",
       "deleteMovement": "Unable to delete the stock movement.",
       "validCount": "Enter a whole counted quantity between 0 and 2,000,000,000.",
-      "countChanged": "Stock changed during the count. The current balance has been refreshed. Review the difference and confirm the count again."
+      "countChanged": "Stock changed during the count. The current balance has been refreshed. Review the difference and confirm the count again.",
+      "deleteUnit": "Unable to delete the unit.",
+      "deleteUnitLinked": "This unit is linked to an order, loan, reservation, or assembly. It cannot be deleted because the associated history must be retained."
     },
     "notices": {
       "settingsSaved": "Stock settings saved.",
@@ -221,7 +225,8 @@
       "unitUpdated": "Unit {{code}} updated.",
       "movementUpdated": "Stock movement updated.",
       "movementDeleted": "Stock movement deleted.",
-      "counted": "Count recorded. New balance: {{quantity}}."
+      "counted": "Count recorded. New balance: {{quantity}}.",
+      "unitDeleted": "Unit {{code}} deleted."
     },
     "confirm": {
       "switchSerialized": "Switching to serialized tracking requires registering individual unit IDs. Continue?",
@@ -235,7 +240,10 @@
       "after": "After",
       "minimumWarning": "This leaves stock at or below the configured minimum of {{minimum}}.",
       "countTitle": "Review count adjustment",
-      "countDescription": "This count reduces the recorded balance by {{quantity}}. The adjustment will remain in the history."
+      "countDescription": "This count reduces the recorded balance by {{quantity}}. The adjustment will remain in the history.",
+      "deleteUnit": "Permanently delete unit “{{code}}”? Its identifier can then be reused. Existing QR codes will no longer open this unit. Movement history will be retained.",
+      "deleteAvailableUnit": "Available stock will decrease by 1.",
+      "deleteUnavailableUnit": "Available stock will remain unchanged."
     },
     "tracking": {
       "bulk": "Bulk",

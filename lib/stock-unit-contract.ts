@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const MAX_STOCK_UNIT_CODE_LENGTH = 180;
 export const STOCK_UNIT_CODE_CONFLICT = "A serialized unit with that code already exists for this item.";
+export const STOCK_UNIT_DELETE_LINKED = "This unit is linked to an order, assignment, or assembly and cannot be deleted because its history must be retained.";
 
 export const stockUnitCodeSchema = z.string().trim().min(1).max(MAX_STOCK_UNIT_CODE_LENGTH);
 

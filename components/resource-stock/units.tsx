@@ -17,6 +17,7 @@ import {
   Printer,
   Save,
   Settings2,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -60,6 +61,8 @@ export function StockUnits({
     setUnitEditForm,
     savingUnit,
     saveUnit,
+    deletingUnitId,
+    deleteUnit,
   } = units;
   return (
     <section
@@ -205,6 +208,7 @@ export function StockUnits({
                           ) : null}
                           {canEdit ? <button
                             type="button"
+                            disabled={savingUnit || deletingUnitId !== null}
                             onClick={() => {
                               if (editing) {
                                 setEditingUnitId(null);
@@ -235,6 +239,18 @@ export function StockUnits({
                               <Settings2 className="size-3.5" aria-hidden="true" />
                             )}
                           </button> : null}
+                          {canEdit ? (
+                            <button
+                              type="button"
+                              onClick={() => void deleteUnit(unit)}
+                              disabled={savingUnit || deletingUnitId !== null}
+                              aria-label={t("resource.actions.deleteUnitWithCode", { code: unit.code })}
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-danger/20 bg-surface px-2.5 text-xs font-semibold text-danger transition hover:bg-danger-soft disabled:cursor-wait disabled:opacity-50"
+                            >
+                              {deletingUnitId === unit.id ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <Trash2 className="size-3.5" aria-hidden="true" />}
+                              {t("resource.actions.deleteUnit")}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => void navigator.clipboard.writeText(unit.code)}
@@ -266,7 +282,7 @@ export function StockUnits({
                                 onChange={(event) => setUnitEditForm((current) => current ? { ...current, code: event.target.value } : current)}
                                 required
                                 maxLength={MAX_STOCK_UNIT_CODE_LENGTH}
-                                disabled={savingUnit}
+                                disabled={savingUnit || deletingUnitId !== null}
                                 className={inputClass}
                               />
                               <span className="mt-1 block text-[11px] font-normal leading-4 text-muted">
@@ -428,7 +444,7 @@ export function StockUnits({
                                       current ? { ...current, customFields } : current,
                                     )
                                   }
-                                  disabled={savingUnit}
+                                  disabled={savingUnit || deletingUnitId !== null}
                                 />
                               </div>
                             ) : null}
@@ -457,7 +473,7 @@ export function StockUnits({
                             </p>
                             <button
                               type="submit"
-                              disabled={savingUnit}
+                              disabled={savingUnit || deletingUnitId !== null}
                               className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand-solid px-3.5 text-[12px] font-semibold text-on-brand hover:bg-brand-hover disabled:opacity-50"
                             >
                               {savingUnit ? (

@@ -12,6 +12,7 @@ import {
   lt,
   lte,
   ne,
+  or,
   sql,
 } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -58,7 +59,7 @@ import {
 import { getResourceFamily } from "@/lib/resource-families";
 import type { ResourceRecord } from "@/db/schema";
 import { MAX_STOCK_QUANTITY } from "@/lib/stock-quantity-units";
-import { isStockUnitCodeConflict, STOCK_UNIT_CODE_CONFLICT, stockUnitCodeSchema } from "@/lib/stock-unit-contract";
+import { isStockUnitCodeConflict, STOCK_UNIT_CODE_CONFLICT, STOCK_UNIT_DELETE_LINKED, stockUnitCodeSchema } from "@/lib/stock-unit-contract";
 
 const FORECAST_WINDOW_DAYS = 30;
 const MAX_SERIALIZATION_UNITS = 5_000;
@@ -2170,6 +2171,103 @@ export async function createStockUnits(
     }
     throw error;
   }
+}
+
+export async function deleteStockUnit(
+  organizationId: string,
+  resourceId: string,
+  unitId: string,
+  actor: string,
+  executor: DatabaseExecutor = db,
+) {
+  return executor.transaction(async (transaction) => {
+    // Match the resource -> unit lock order used by stock and assignment writes.
+    const [resource] = await transaction.select().from(resources).where(and(
+      eq(resources.organizationId, organizationId),
+      eq(resources.id, resourceId),
+    )).limit(1).for("update");
+    if (!resource) throw new StockOperationError("Not found", 404);
+    const [settings] = await transaction.select().from(stockSettings).where(and(
+      eq(stockSettings.organizationId, organizationId),
+      eq(stockSettings.resourceId, resourceId),
+    )).limit(1);
+    if (configDto(settings).trackingMode !== "serialized") {
+      throw new StockOperationError("Identified units can only be deleted while serialized tracking is active.", 409);
+    }
+    const [unit] = await transaction.select().from(stockUnits).where(and(
+      eq(stockUnits.organizationId, organizationId),
+      eq(stockUnits.id, unitId),
+      eq(stockUnits.resourceId, resourceId),
+    )).limit(1).for("update");
+    if (!unit) throw new StockOperationError("Unit not found", 404);
+
+    // Historical links also matter: deleting them would break provenance or
+    // violate restrictive foreign keys, even after a return or cancellation.
+    const [orderLink] = await transaction.select({ id: orderLineUnits.id }).from(orderLineUnits).where(and(
+      eq(orderLineUnits.organizationId, organizationId),
+      eq(orderLineUnits.stockUnitId, unit.id),
+    )).limit(1);
+    const [assignment] = await transaction.select({ id: inventoryAssignments.id }).from(inventoryAssignments).where(and(
+      eq(inventoryAssignments.organizationId, organizationId),
+      eq(inventoryAssignments.stockUnitId, unit.id),
+    )).limit(1);
+    const [assembly] = await transaction.select({ id: assemblyBuildComponents.id }).from(assemblyBuildComponents).where(and(
+      eq(assemblyBuildComponents.organizationId, organizationId),
+      or(eq(assemblyBuildComponents.componentUnitId, unit.id), eq(assemblyBuildComponents.outputUnitId, unit.id)),
+    )).limit(1);
+    if (orderLink || assignment || assembly) {
+      throw new StockOperationError(STOCK_UNIT_DELETE_LINKED, 409);
+    }
+
+    const delta = unit.status === "available" ? -1 : 0;
+    const balanceAfter = resource.quantity + delta;
+    if (balanceAfter < 0) {
+      throw new StockOperationError("Deleting this unit would make available stock negative.", 409);
+    }
+    const now = new Date();
+    const [movement] = await transaction.insert(stockMovements).values({
+      organizationId,
+      resourceId,
+      unitId: unit.id,
+      delta,
+      quantity: Math.abs(delta),
+      balanceAfter,
+      type: "unit-deleted",
+      reason: "Serialized unit deleted",
+      note: `Deleted unit: ${unit.code} (${unit.id}). Previous status: ${unit.status}.`,
+      location: unit.location,
+      fromLocationResourceId: delta < 0 ? unit.locationResourceId : null,
+      occurredAt: now,
+      createdBy: actor,
+    }).returning();
+    if (delta < 0) {
+      await consumeStockCost(transaction, {
+        organizationId,
+        resourceId,
+        movementId: movement.id,
+        unitId: unit.id,
+        quantity: 1,
+        quantityBefore: resource.quantity,
+        fallbackUnitCostCents: unit.acquisitionCostCents ?? resource.valueCents,
+        currency: resource.currency,
+        occurredAt: now,
+      });
+    }
+    await transaction.update(resources).set({ quantity: balanceAfter, updatedAt: now }).where(and(
+      eq(resources.organizationId, organizationId),
+      eq(resources.id, resourceId),
+    ));
+    // The ledger and cost allocations survive; their unit FK is SET NULL.
+    // Keep the deleted code and immutable UUID in the audit note above.
+    await transaction.delete(stockUnits).where(and(
+      eq(stockUnits.organizationId, organizationId),
+      eq(stockUnits.resourceId, resourceId),
+      eq(stockUnits.id, unit.id),
+    ));
+    const [costedMovement] = await transaction.select().from(stockMovements).where(eq(stockMovements.id, movement.id)).limit(1);
+    await enqueueStockMovementWebhookEvents(transaction, [costedMovement]);
+    return { deletedUnitId: unit.id, quantity: balanceAfter, movement: movementDto(costedMovement) };
+  });
 }
 
 export async function updateStockUnit(

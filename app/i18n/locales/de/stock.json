@@ -177,7 +177,9 @@
       "saveMovement": "Bewegung speichern",
       "saveUnit": "Einheit speichern",
       "goBack": "Zurück",
-      "confirmStockOut": "Abgang bestätigen"
+      "confirmStockOut": "Abgang bestätigen",
+      "deleteUnit": "Löschen",
+      "deleteUnitWithCode": "Einheit {{code}} löschen"
     },
     "errors": {
       "missingResource": "Es wurde keine Ressourcen-ID angegeben.",
@@ -210,7 +212,9 @@
       "updateMovement": "Die Bestandsbewegung konnte nicht aktualisiert werden.",
       "deleteMovement": "Die Bestandsbewegung konnte nicht gelöscht werden.",
       "validCount": "Gib eine ganze gezählte Menge zwischen 0 und 2.000.000.000 ein.",
-      "countChanged": "Der Bestand hat sich während der Zählung geändert. Die aktuelle Menge wurde geladen. Prüfe die Differenz und bestätige die Zählung erneut."
+      "countChanged": "Der Bestand hat sich während der Zählung geändert. Die aktuelle Menge wurde geladen. Prüfe die Differenz und bestätige die Zählung erneut.",
+      "deleteUnit": "Die Einheit konnte nicht gelöscht werden.",
+      "deleteUnitLinked": "Diese Einheit ist mit einem Auftrag, einer Ausleihe, Reservierung oder Baugruppe verknüpft. Sie kann nicht gelöscht werden, damit die zugehörige Historie erhalten bleibt."
     },
     "notices": {
       "settingsSaved": "Bestandseinstellungen gespeichert.",
@@ -221,7 +225,8 @@
       "unitUpdated": "Einheit {{code}} wurde aktualisiert.",
       "movementUpdated": "Bestandsbewegung aktualisiert.",
       "movementDeleted": "Bestandsbewegung gelöscht.",
-      "counted": "Zählung protokolliert. Neuer Bestand: {{quantity}}."
+      "counted": "Zählung protokolliert. Neuer Bestand: {{quantity}}.",
+      "unitDeleted": "Einheit {{code}} wurde gelöscht."
     },
     "confirm": {
       "switchSerialized": "Beim Wechsel zur serialisierten Erfassung müssen einzelne Einheiten-IDs registriert werden. Fortfahren?",
@@ -235,7 +240,10 @@
       "after": "Nachher",
       "minimumWarning": "Dadurch liegt der Bestand am oder unter dem festgelegten Minimum von {{minimum}}.",
       "countTitle": "Zählkorrektur prüfen",
-      "countDescription": "Die Zählung verringert den erfassten Bestand um {{quantity}}. Die Korrektur bleibt im Verlauf sichtbar."
+      "countDescription": "Die Zählung verringert den erfassten Bestand um {{quantity}}. Die Korrektur bleibt im Verlauf sichtbar.",
+      "deleteUnit": "Einheit „{{code}}“ endgültig löschen? Ihre Kennung kann danach wieder vergeben werden. Bestehende QR-Codes können diese Einheit danach nicht mehr öffnen. Die Bewegungshistorie bleibt erhalten.",
+      "deleteAvailableUnit": "Der verfügbare Bestand wird um 1 reduziert.",
+      "deleteUnavailableUnit": "Der verfügbare Bestand bleibt unverändert."
     },
     "tracking": {
       "bulk": "Mengenbestand",

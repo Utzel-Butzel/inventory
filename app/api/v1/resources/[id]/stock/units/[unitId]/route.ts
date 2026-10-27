@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { stockUnitStatuses } from "@/db/schema";
 import { requireResourcePermission } from "@/lib/api-auth";
-import { stockHttpError, updateStockUnit } from "@/lib/stock";
+import { deleteStockUnit, stockHttpError, updateStockUnit } from "@/lib/stock";
 import { stockUnitCodeSchema } from "@/lib/stock-unit-contract";
 import { customFieldValuesInputSchema } from "@/lib/validators";
 
@@ -51,6 +51,24 @@ const unitPatchSchema = z
   );
 
 export const dynamic = "force-dynamic";
+
+export async function DELETE(request: Request, context: Context) {
+  const { id, unitId } = await context.params;
+  const uuidSchema = z.string().uuid();
+  if (!uuidSchema.safeParse(id).success || !uuidSchema.safeParse(unitId).success) {
+    return Response.json({ error: "Invalid resource or unit id." }, { status: 422 });
+  }
+  const authorization = await requireResourcePermission(request, "stock.manage", id);
+  if (authorization.response) return authorization.response;
+  try {
+    return Response.json(await deleteStockUnit(
+      authorization.identity.organizationId, id, unitId, authorization.identity.subject,
+    ));
+  } catch (error) {
+    const failure = stockHttpError(error, "Unable to delete this serialized unit.");
+    return Response.json({ error: failure.message }, { status: failure.status });
+  }
+}
 
 export async function PATCH(request: Request, context: Context) {
   const { id, unitId } = await context.params;

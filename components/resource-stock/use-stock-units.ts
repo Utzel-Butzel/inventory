@@ -5,7 +5,7 @@ import { moneyToCents, toIsoDateTime as toIso } from "@/lib/client-formatters";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { fetchJson } from "@/lib/client-types";
-import { MAX_STOCK_UNIT_CODE_LENGTH, STOCK_UNIT_CODE_CONFLICT } from "@/lib/stock-unit-contract";
+import { MAX_STOCK_UNIT_CODE_LENGTH, STOCK_UNIT_CODE_CONFLICT, STOCK_UNIT_DELETE_LINKED } from "@/lib/stock-unit-contract";
 
 import {
   customFieldValuesEqual,
@@ -13,7 +13,7 @@ import {
   parseMetadata,
   statusLabelKeys,
 } from "./model";
-import type { StockMutationContext, UnitCreateForm, UnitEditForm } from "./types";
+import type { StockMutationContext, StockUnit, UnitCreateForm, UnitEditForm } from "./types";
 
 export function useStockUnits({
   stock,
@@ -32,6 +32,7 @@ export function useStockUnits({
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [unitEditForm, setUnitEditForm] = useState<UnitEditForm | null>(null);
   const [savingUnit, setSavingUnit] = useState(false);
+  const [deletingUnitId, setDeletingUnitId] = useState<string | null>(null);
   useEffect(() => {
     setUnitCreateForm(defaultUnitCreateForm());
     setEditingUnitId(null);
@@ -118,7 +119,7 @@ export function useStockUnits({
 
   async function saveUnit(event: FormEvent) {
     event.preventDefault();
-    if (!editingUnitId || !unitEditForm || !stock) return;
+    if (!editingUnitId || !unitEditForm || !stock || savingUnit || deletingUnitId) return;
     setError(null);
     setNotice(null);
     try {
@@ -196,6 +197,31 @@ export function useStockUnits({
     }
   }
 
+  async function deleteUnit(unit: StockUnit) {
+    if (deletingUnitId || savingUnit) return;
+    const confirmation = t("resource.confirm.deleteUnit", { code: unit.code }) + "\n\n" +
+      t(unit.status === "available" ? "resource.confirm.deleteAvailableUnit" : "resource.confirm.deleteUnavailableUnit");
+    if (!window.confirm(confirmation)) return;
+    setDeletingUnitId(unit.id);
+    setError(null);
+    setNotice(null);
+    try {
+      await fetchJson(`${endpoint}/units/${unit.id}`, { method: "DELETE" });
+      if (editingUnitId === unit.id) {
+        setEditingUnitId(null);
+        setUnitEditForm(null);
+      }
+      await loadStock(true);
+      setNotice(t("resource.notices.unitDeleted", { code: unit.code }));
+    } catch (error) {
+      setError(error instanceof Error
+        ? error.message === STOCK_UNIT_DELETE_LINKED ? t("resource.errors.deleteUnitLinked") : error.message
+        : t("resource.errors.deleteUnit"));
+    } finally {
+      setDeletingUnitId(null);
+    }
+  }
+
   return {
     unitCreateForm,
     setUnitCreateForm,
@@ -207,6 +233,8 @@ export function useStockUnits({
     savingUnit,
     createUnits,
     saveUnit,
+    deletingUnitId,
+    deleteUnit,
   };
 }
 

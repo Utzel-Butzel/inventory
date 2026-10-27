@@ -3837,6 +3837,26 @@ paths:
       - { $ref: "#/components/parameters/OrganizationId" }
       - { $ref: "#/components/parameters/ResourceId" }
       - { name: unitId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      tags: [Stock]
+      summary: Delete an unlinked serialized unit while retaining movement history
+      description: Requires stock.manage. Atomically deletes the unit, records a unit-deleted audit entry with its code and UUID, and reduces available stock and its cost layers by one only when the unit was available. Existing QR links will no longer select this unit. Units linked to orders, assignments, or assemblies (including historical links and assembly outputs) cannot be deleted.
+      responses:
+        "200":
+          description: Unit deleted, stock reconciled, and audit movement recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deletedUnitId, quantity, movement]
+                properties:
+                  deletedUnitId: { type: string, format: uuid }
+                  quantity: { type: integer, minimum: 0 }
+                  movement: { $ref: "#/components/schemas/StockMovement" }
+        "403": { description: Stock management permission required }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Unit is linked to another operation, tracking is not serialized, or stock would become negative }
+        "422": { description: Invalid resource or unit ID }
     patch:
       tags: [Stock]
       summary: Change a unit's code, status, location, or metadata with an audit entry
