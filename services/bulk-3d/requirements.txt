@@ -1,0 +1,24 @@
+# Tested with Python 3.12; install in a dedicated virtual environment.
+torch==2.14.1
+torchvision
+hydra-core
+natsort
+opencv-python-headless==4.10.0.84
+orjson
+pillow-heif
+plyfile
+python-box
+requests
+safetensors
+tqdm
+einops
+timm
+jaxtyping
+roma
+huggingface-hub
+numpy<2
+scipy
+Pillow
+trimesh
+# Install uniception==0.1.7 with --no-deps (optional training/audio packages are
+# not needed). See setup instructions; the MapAnything source is pinned there.

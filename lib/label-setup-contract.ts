@@ -65,9 +65,11 @@ const labelElementBoxShape = {
   width: normalizedSizeSchema,
   height: normalizedSizeSchema,
   visible: z.boolean(),
+  layer: z.number().int().min(0).max(MAX_LABEL_ELEMENTS - 1).optional(),
 };
 
 const textElementOptions = {
+  autoWidth: z.boolean().optional(),
   fontSizeMm: z.number().finite().positive().max(100).optional(),
   minFontSizeMm: z.number().finite().positive().max(100).optional(),
   fontFamily: z.enum(labelFontFamilies).optional(),
@@ -199,6 +201,9 @@ export const labelElementsSchema = z
         path: [imageIndex],
         message: "The object image must not overlap the QR code.",
       });
+    }
+    if (elements.filter(element => "autoWidth" in element && element.autoWidth).length > 1) {
+      context.addIssue({ code: "custom", message: "Only one text element can control the label length." });
     }
   });
 

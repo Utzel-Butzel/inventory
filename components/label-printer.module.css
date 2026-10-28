@@ -659,7 +659,7 @@
   .previewViewport { padding: 16px; min-height: 160px; }
 }
 
-/* Keep machine-readable codes positive; text and pictures use negative colors. */
+/* QR colors are inverted in the renderer; photos use negative colors here. */
 .invertedLabel {
   color: #fff;
   background: #000;

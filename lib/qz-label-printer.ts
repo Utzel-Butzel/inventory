@@ -2,6 +2,7 @@ import { waitForLabelImageCrops } from "@/lib/label-image-crop";
 import { labelFontEmbedCss } from "@/lib/label-fonts";
 import { combinePtouchLabels, encodePtouchRaster, PTOUCH_FEED_DPI, PTOUCH_PIXELS_PER_MM, ptouchPrintableDots, type PtouchTape } from "@/lib/ptouch-raster";
 import { halftonePtouchPhoto } from "@/lib/ptouch-photo";
+import { readyLabelDimensions } from "@/lib/label-print-dimensions";
 
 let connection: Promise<typeof import("qz-tray")> | undefined;
 
@@ -45,16 +46,15 @@ export async function findPtouchPrinters(): Promise<string[]> {
 }
 
 export async function renderPtouchLabel(node: HTMLElement, widthMm: number, heightMm: number, tape: PtouchTape, expectedQr?: string) {
+  await waitForLabelImageCrops(node);
+  await Promise.all(Array.from(node.querySelectorAll<HTMLImageElement>("img"), image => image.decode()));
+  const fontEmbedCSS = await labelFontEmbedCss(node);
+  ({ widthMm, heightMm } = await readyLabelDimensions(node, widthMm, heightMm));
   const width = Math.round(widthMm * PTOUCH_FEED_DPI / 25.4);
   const height = Math.round(heightMm * PTOUCH_PIXELS_PER_MM);
   if (height > ptouchPrintableDots(tape) || width < 4 || width > 14116) {
     throw new Error("Label dimensions do not fit the P-touch print area.");
   }
-  await waitForLabelImageCrops(node);
-  await Promise.all(Array.from(node.querySelectorAll<HTMLImageElement>("img"), image => image.decode()));
-  const fontEmbedCSS = await labelFontEmbedCss(node);
-  await document.fonts.ready;
-  await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
   const { toCanvas } = await import("html-to-image");
   const canvas = await toCanvas(node, {
     canvasWidth: width, canvasHeight: height, pixelRatio: 1,
@@ -110,7 +110,7 @@ export async function renderPtouchLabel(node: HTMLElement, widthMm: number, heig
         monochrome[i] = monochrome[i + 1] = monochrome[i + 2] = value;
         monochrome[i + 3] = 255;
       }
-      if (jsQR(monochrome, scanWidth, scanHeight)?.data !== expectedQr) {
+      if (jsQR(monochrome, scanWidth, scanHeight, { inversionAttempts: "attemptBoth" })?.data !== expectedQr) {
         throw new Error("QR code is too small or unreadable at print resolution. Enlarge it or use wider tape.");
       }
     }
@@ -123,7 +123,7 @@ export async function renderPtouchLabel(node: HTMLElement, widthMm: number, heig
   previewContext.fillStyle = "white";
   previewContext.fillRect(0, 0, preview.width, preview.height);
   previewContext.drawImage(canvas, 0, Math.floor((preview.height - height) / 2), preview.width, height);
-  return { data: encodePtouchRaster(pixels, tape), preview: preview.toDataURL("image/png") };
+  return { data: encodePtouchRaster(pixels, tape), preview: preview.toDataURL("image/png"), widthMm };
 }
 
 export async function sendPtouchLabels(printer: string, labels: Uint8Array[]) {

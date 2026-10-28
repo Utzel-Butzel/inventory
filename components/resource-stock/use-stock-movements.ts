@@ -131,7 +131,7 @@ export function useStockMovements({
   }
 
   function applyPhotoCount(result: QuantityCountResult) {
-    const estimateNote = "method" in result && result.method === "bulk_visual"
+    const estimateNote = "method" in result && (result.method === "bulk_visual" || result.method === "bulk_3d")
       ? t("resource.movements.bulkEstimateNote", { count: result.count, lower: result.lowerBound, upper: result.upperBound, model: result.model })
       : "";
     setMovementForm((current) => ({

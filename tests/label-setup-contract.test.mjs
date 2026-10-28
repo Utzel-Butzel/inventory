@@ -14,6 +14,7 @@ import {
   labelSetupPatchSchema,
 } from "../lib/label-setup-contract.ts";
 import { placeNewLabelElement } from "../lib/label-element-layout.ts";
+import { automaticLabelText, resolveLabelLayout, labelQrColors } from "../lib/label-dynamic-layout.ts";
 import { DrizzleQueryError } from "drizzle-orm";
 import { availableLabelSetupName, isLabelSetupNameConflict } from "../lib/label-setup-name.ts";
 
@@ -499,4 +500,121 @@ test("inversion is optional for old templates and can be saved, copied and disab
   assert.equal(labelSetupCreateSchema.parse({ ...setup, inverted: true }).inverted, true);
   assert.deepEqual(labelSetupPatchSchema.parse({ revision: 1, inverted: false }), { revision: 1, inverted: false });
   assert.equal(labelSetupCreateSchema.safeParse({ ...setup, inverted: 'true' }).success, false);
+});
+
+const dynamicSetup = {
+  id: "dynamic", name: "QR / text / image", widthMm: 80, heightMm: 18,
+  revision: 1, createdAt: "", updatedAt: "",
+  elements: [
+    { type: "background", x: 0, y: 0, width: 100, height: 100, visible: true },
+    { type: "qr", x: 2.5, y: 0, width: 20, height: 100, visible: true },
+    { type: "name", x: 25, y: 0, width: 50, height: 100, visible: true, autoWidth: true },
+    { type: "image", x: 77.5, y: 0, width: 20, height: 100, visible: true },
+  ],
+};
+const physicalBox = (setup, type) => {
+  const element = setup.elements.find(element => element.type === type);
+  return { x: element.x * setup.widthMm / 100, width: element.width * setup.widthMm / 100 };
+};
+
+test("dynamic length grows and shrinks while QR and image sizes and gaps stay fixed", () => {
+  const original = structuredClone(dynamicSetup);
+  for (const textWidth of [0, 10, 40, 120]) {
+    const result = resolveLabelLayout(dynamicSetup, textWidth);
+    const expectedWidth = Math.max(0.1, textWidth);
+    assert.ok(Math.abs(result.widthMm - (40 + expectedWidth)) < 1e-9);
+    assert.ok(Math.abs(physicalBox(result, "qr").x - 2) < 1e-9);
+    assert.ok(Math.abs(physicalBox(result, "qr").width - 16) < 1e-9);
+    const text = physicalBox(result, "name");
+    const image = physicalBox(result, "image");
+    assert.ok(Math.abs(text.x - 20) < 1e-9);
+    assert.ok(Math.abs(text.width - expectedWidth) < 1e-9);
+    assert.ok(Math.abs(image.x - (22 + expectedWidth)) < 1e-9);
+    assert.ok(Math.abs(image.width - 16) < 1e-9);
+    assert.ok(Math.abs(result.widthMm - image.x - image.width - 2) < 1e-9);
+    assert.equal(result.heightMm, 18);
+    assert.equal(result.elements[0].width, 100);
+    assert.equal(hasVisibleQrImageOverlap(result.elements), false);
+  }
+  assert.deepEqual(dynamicSetup, original);
+});
+
+test("fixed and hidden automatic text retain the template dimensions", () => {
+  for (const patch of [{ autoWidth: false }, { visible: false }]) {
+    const setup = { ...dynamicSetup, elements: dynamicSetup.elements.map(element => element.type === "name" ? { ...element, ...patch } : element) };
+    assert.equal(automaticLabelText(setup.elements), undefined);
+    assert.equal(resolveLabelLayout(setup, 120), setup);
+  }
+  assert.equal(resolveLabelLayout(dynamicSetup, NaN), dynamicSetup);
+});
+
+test("shortening does not cut off another row or shift an image over fixed content", () => {
+  const setup = { ...dynamicSetup, elements: [...dynamicSetup.elements,
+    { type: "subtitle", x: 25, y: 0, width: 50, height: 25, visible: true },
+  ] };
+  const result = resolveLabelLayout(setup, 1);
+  assert.ok(physicalBox(result, "image").x >= 60);
+  assert.equal(hasVisibleQrImageOverlap(result.elements), false);
+  const secondRow = { ...dynamicSetup, elements: [...dynamicSetup.elements,
+    { type: "subtitle", x: 0, y: 0, width: 100, height: 10, visible: true },
+  ] };
+  assert.ok(resolveLabelLayout(secondRow, 1).widthMm >= 80);
+});
+
+test("automatic text and explicit layers survive persistence, and competing automatic fields are rejected", async () => {
+  const { moveLabelElement, duplicateLabelElement } = await import("../lib/label-element-layout.ts");
+  const elements = moveLabelElement(dynamicSetup.elements, "background", "front");
+  const payload = { name: dynamicSetup.name, widthMm: 80, heightMm: 18, elements };
+  assert.deepEqual(labelSetupCreateSchema.parse(JSON.parse(JSON.stringify(payload))), payload);
+  assert.deepEqual(labelSetupPatchSchema.parse({ revision: 1, elements }).elements, elements);
+  const duplicate = duplicateLabelElement(elements.find(element => element.type === "name"), elements, randomUUID());
+  assert.equal(duplicate.autoWidth, false);
+  assert.equal(duplicate.layer, undefined);
+  assert.equal(labelElementsSchema.safeParse([...elements, duplicate]).success, true);
+  assert.equal(labelElementsSchema.safeParse([...elements, { ...duplicate, autoWidth: true }]).success, false);
+  assert.equal(labelElementsSchema.safeParse([{ ...elements[0], layer: -1 }]).success, false);
+  assert.equal(labelElementsSchema.safeParse([{ ...dynamicSetup.elements[1], autoWidth: true }]).success, false);
+});
+
+test("layers move one step or to either end, including legacy backgrounds", async () => {
+  const { moveLabelElement, orderedLabelElements } = await import("../lib/label-element-layout.ts");
+  const legacy = [dynamicSetup.elements[1], dynamicSetup.elements[2], dynamicSetup.elements[0]];
+  assert.deepEqual(orderedLabelElements(legacy).map(e => e.type), ["background", "qr", "name"]);
+  const forward = moveLabelElement(legacy, "background", "forward");
+  assert.deepEqual(orderedLabelElements(forward).map(e => e.type), ["qr", "background", "name"]);
+  const front = moveLabelElement(forward, "background", "front");
+  assert.deepEqual(orderedLabelElements(front).map(e => e.type), ["qr", "name", "background"]);
+  assert.equal(moveLabelElement(front, "background", "forward"), front);
+  assert.deepEqual(orderedLabelElements(moveLabelElement(front, "background", "backward")).map(e => e.type), ["qr", "background", "name"]);
+  assert.deepEqual(orderedLabelElements(moveLabelElement(front, "background", "back")).map(e => e.type), ["background", "qr", "name"]);
+  assert.equal(moveLabelElement(legacy, "missing", "back"), legacy);
+});
+
+test("inverted QR codes have white modules and a black background; normal colors are preserved", () => {
+  const qr = { ...dynamicSetup.elements[1], foregroundColor: "#112233", backgroundColor: "#ddeeff" };
+  assert.deepEqual(labelQrColors(true, qr), { foregroundColor: "#ffffff", backgroundColor: "#000000" });
+  assert.deepEqual(labelQrColors(false, qr), { foregroundColor: "#112233", backgroundColor: "#ddeeff" });
+  assert.deepEqual(labelQrColors(undefined, dynamicSetup.elements[1]), { foregroundColor: "#000000", backgroundColor: "#ffffff" });
+});
+
+test("print dimensions use the final measured label after fonts settle, with legacy fallback and size limits", async () => {
+  const { readyLabelDimensions } = await import("../lib/label-print-dimensions.ts");
+  const previousDocument = globalThis.document;
+  const previousAnimationFrame = globalThis.requestAnimationFrame;
+  const node = { dataset: {} };
+  globalThis.document = { fonts: { ready: Promise.resolve().then(() => {
+    node.dataset.labelWidthMm = "124.75";
+    node.dataset.labelHeightMm = "18";
+  }) } };
+  globalThis.requestAnimationFrame = callback => { queueMicrotask(callback); return 1; };
+  try {
+    assert.deepEqual(await readyLabelDimensions(node, 80, 18), { widthMm: 124.75, heightMm: 18 });
+    assert.deepEqual(await readyLabelDimensions({ dataset: {} }, 62, 35), { widthMm: 62, heightMm: 35 });
+    for (const width of ["1001", "NaN", "0", "-10"]) {
+      await assert.rejects(readyLabelDimensions({ dataset: { labelWidthMm: width } }, 80, 18), /dimensions exceed/);
+    }
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument;
+    if (previousAnimationFrame === undefined) delete globalThis.requestAnimationFrame; else globalThis.requestAnimationFrame = previousAnimationFrame;
+  }
 });

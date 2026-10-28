@@ -69,7 +69,8 @@
   "modes": {
     "label": "Zählverfahren",
     "visible": "Sichtbare Stücke zählen",
-    "bulk": "Kisteninhalt schätzen"
+    "bulk": "Kisteninhalt schätzen",
+    "threeD": "3D-Schätzung"
   },
   "bulk": {
     "description": "Experimentelle Schätzung für überlappende und verdeckte Teile – ohne abgezählte Referenzprobe.",
@@ -131,5 +132,84 @@
     },
     "noEstimate": "nicht ausreichend erkennbar",
     "imageEvidence": "Foto {{image}}"
+  },
+  "threeD": {
+    "description": "Experimentelle 3D-Rekonstruktion aus 3–4 Fotos mit manuellen Bildmarkierungen.",
+    "intro": "3D-Schätzung · experimentell",
+    "guide": "Fotografiere dieselbe unveränderte Kiste von oben und aus zwei bis drei schrägen Blickwinkeln. Im ersten Foto müssen die Füllfläche, einzelne Teile und die Tischfläche rund um die Kiste erkennbar sein. Markiere anschließend die Füllfläche, mindestens drei Teilelängen und drei Tischpunkte.",
+    "privacy": "3–4 Fotos, höchstens 8 MB je Foto. Verarbeitung auf dem eingerichteten 3D-Rechner der Anwendung. Fotos werden nach dem Versuch entfernt; Ergebnisse sind 24 Stunden abrufbar und werden bei späterer Nutzung bereinigt.",
+    "markTitle": "Markierungen im ersten Foto",
+    "markTools": {
+      "pile": "1. Füllfläche",
+      "edges": "2. Teilelängen",
+      "table": "3. Tischfläche"
+    },
+    "markHelp": {
+      "pile": "Setze mindestens vier Punkte nacheinander um die sichtbare Fläche mit Teilen. Kistenwände aussparen.",
+      "edges": "Markiere bei mindestens drei gut sichtbaren Teilen jeweils beide Enden derselben längsten Kante. Wähle vollständige Teile aus verschiedenen Bildbereichen.",
+      "table": "Setze drei weit auseinanderliegende Punkte auf dieselbe ebene Tischfläche außerhalb der Kiste. Sie dürfen nicht auf einer Linie liegen."
+    },
+    "markSecond": "Jetzt das andere Ende dieses Teils markieren.",
+    "markPhoto": "Draufsicht zum Markieren von Füllfläche, Teilelängen und Tischfläche",
+    "markKeyboard": "Bild markieren: Pfeiltasten bewegen das Fadenkreuz, Umschalt beschleunigt, Eingabe setzt einen Punkt.",
+    "undo": "Letzten Punkt zurücknehmen",
+    "clearMarks": "Alle Markierungen löschen",
+    "shapeLabel": "Ungefähre äußere Form eines Teils",
+    "shapes": {
+      "cuboid": "Quader / Block",
+      "ellipsoid": "Rund / oval, z. B. Nuss",
+      "triangular_prism": "Dreiecksprisma / Keil"
+    },
+    "assumptionsTitle": "Annahmen zu Form und verdeckten Lagen prüfen",
+    "assumptionsHelp": "Diese Werte sind Annahmen, keine Messungen. Breite und Höhe beziehen sich auf die markierte Teilelänge. Hohlräume und ineinandergreifende Teile können große Fehler verursachen. Es wird kein Korrekturfaktor aus früheren Testzählungen verwendet.",
+    "parameters": {
+      "widthRatio": "Breite im Verhältnis zur Länge",
+      "heightRatio": "Höhe im Verhältnis zur Länge",
+      "packing": "Anteil des Füllvolumens, den die äußeren Teileformen belegen",
+      "floorOffset": "Innenboden über der Tischfläche (in Teilelängen)"
+    },
+    "start": "3D-Modell erstellen und Menge schätzen",
+    "resume": "Laufendes Ergebnis abrufen",
+    "phases": {
+      "queued": "Warten auf die 3D-Verarbeitung…",
+      "loading": "3D-Modell wird geladen…",
+      "reconstructing": "Fotos werden räumlich rekonstruiert…",
+      "analyzing": "Füllvolumen und Teilegröße werden ausgewertet…"
+    },
+    "waitHelp": "Der Auftrag läuft im Hintergrund und kann einschließlich Modellstart mehrere Minuten dauern. Bei einem Verbindungsfehler lässt sich derselbe Auftrag erneut abrufen.",
+    "range": "Bereich bei unterschiedlichen Annahmen: {{lower}}–{{upper}}",
+    "accuracy": "Nicht kalibriert. Im bisherigen Spacer-Test lag die Schätzung 57 % zu niedrig. ±15 % Genauigkeit sind nicht nachgewiesen; der Bereich ist kein Konfidenzintervall.",
+    "warnings": {
+      "hiddenBottom": "Der Innenboden unter den Teilen ist verdeckt. Seine Höhe bleibt eine Annahme.",
+      "partShape": "Die äußere Teileform und Zwischenräume werden angenähert. Verdeckte Teile werden nicht einzeln gezählt.",
+      "manualMarks": "Die Rechnung hängt von deinen Bildmarkierungen und Formannahmen ab.",
+      "geometry": "Die Markierungen oder die rekonstruierte Geometrie reichen für eine Menge nicht aus. Prüfe Tischpunkte, Füllumriss und Teilelängen.",
+      "sampleSpread": "Die markierten Teilelängen weichen deutlich voneinander ab. Perspektive, Verdeckung oder unterschiedliche Teile können die Schätzung verzerren."
+    },
+    "acknowledge": "Ich habe Annahmen und Unsicherheit geprüft und kontrolliere die Menge vor der Buchung.",
+    "provenance": "MapAnything · {{images}} Fotos · {{samples}} manuell markierte Größenbeispiele",
+    "modelAlt": "Drehbare Rekonstruktion der sichtbaren Kiste und Fülloberfläche",
+    "modelLoading": "3D-Vorschau wird geladen…",
+    "modelError": "Die 3D-Vorschau konnte nicht geladen werden. Du kannst das Modell herunterladen.",
+    "modelHelp": "Mit Ziehen drehen, mit dem Mausrad oder zwei Fingern vergrößern. Die Darstellung enthält sichtbare Oberflächen; verdeckte Teile fehlen.",
+    "oblique": "Schrägansicht",
+    "top": "Draufsicht",
+    "download": "3D-Modell herunterladen",
+    "errors": {
+      "marks": "Füge die ersten drei Fotos hinzu und markiere eine Füllfläche, mindestens drei vollständige Teilelängen und drei weit auseinanderliegende Tischpunkte.",
+      "upload": "Bitte lesbare JPEG-, PNG-, WebP-, AVIF- oder HEIC-Fotos verwenden, höchstens 8 MB je Foto.",
+      "invalidRequest": "Die Bildmarkierungen oder Annahmen sind ungültig. Bitte prüfe die Eingaben.",
+      "notConfigured": "Die 3D-Verarbeitung ist noch nicht eingerichtet. Die Administration muss den MapAnything-Rechner aktivieren.",
+      "unavailable": "Der Auftrag ist gerade nicht erreichbar. Erneutes Abrufen startet keine zweite Rekonstruktion.",
+      "duplicatePhotos": "Dasselbe Foto wurde mehrfach gewählt. Verwende unterschiedliche Blickwinkel.",
+      "conflict": "Dieser Versuch gehört zu anderen Eingaben. Starte die Analyse erneut.",
+      "processing": "Der Auftrag wird noch angelegt. Versuche das Abrufen gleich erneut.",
+      "disabled": "Die Administration hat die Fotozählung deaktiviert.",
+      "rateLimit": "Das Anfragelimit ist erreicht. Versuche es später erneut.",
+      "analysisFailed": "Die 3D-Verarbeitung ist fehlgeschlagen. Prüfe die Fotos; die Administration kann das Verarbeitungsprotokoll einsehen.",
+      "timeout": "Die 3D-Verarbeitung hat ihr Zeitlimit erreicht.",
+      "expired": "Dieses Ergebnis ist abgelaufen. Starte eine neue Rekonstruktion.",
+      "notFound": "Dieser Auftrag ist nicht verfügbar oder du hast keinen Zugriff mehr."
+    }
   }
 }

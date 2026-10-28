@@ -78,7 +78,8 @@
     "smoke:ai-prompts": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs scripts/smoke-ai-prompts.mjs",
     "smoke:list-views": "node scripts/smoke-list-views.mjs",
     "test:shared-printing": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/shared-label-printing*.test.mjs",
-    "qa:bulk-count": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs scripts/benchmark-bulk-count.mjs"
+    "qa:bulk-count": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs scripts/benchmark-bulk-count.mjs",
+    "test:bulk-3d": "node --experimental-test-module-mocks --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/inventory-bulk-3d.test.mjs tests/inventory-bulk-3d-route.test.mjs tests/inventory-bulk-3d-jobs.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.42.0",

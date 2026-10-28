@@ -45,14 +45,28 @@ export function placeNewLabelElement(
   return preferred;
 }
 
-/** Keep foreground ordering independent of full-label backgrounds. */
-export function moveLabelElement(elements: LabelElement[], key: string, direction: "front" | "back"): LabelElement[] {
-  const selected = elements.find(element => (element.id ?? element.type) === key);
-  if (!selected) return elements;
-  const remaining = elements.filter(element => element !== selected);
-  return direction === "front" ? [...remaining, selected] : [selected, ...remaining];
+/** Preserve background placement in older templates until layers are explicitly reordered. */
+export function orderedLabelElements(elements: LabelElement[]): LabelElement[] {
+  return elements.map((element, index) => ({ element, layer: element.layer ?? (element.type === "background" ? -1 : index) }))
+    .sort((a, b) => a.layer - b.layer).map(({ element }) => element);
+}
+
+export function moveLabelElement(elements: LabelElement[], key: string, direction: "front" | "back" | "forward" | "backward"): LabelElement[] {
+  const ordered = orderedLabelElements(elements);
+  const index = ordered.findIndex(element => (element.id ?? element.type) === key);
+  if (index < 0) return elements;
+  const target = direction === "front" ? elements.length - 1 : direction === "back" ? 0
+    : Math.max(0, Math.min(elements.length - 1, index + (direction === "forward" ? 1 : -1)));
+  if (target === index) return elements;
+  const result = [...ordered];
+  const [selected] = result.splice(index, 1);
+  result.splice(target, 0, selected);
+  return result.map((element, layer) => ({ ...element, layer }));
 }
 
 export function duplicateLabelElement(element: LabelElement, existing: LabelElement[], id: string): LabelElement {
-  return placeNewLabelElement({ ...structuredClone(element), id }, existing);
+  const copy = { ...structuredClone(element), id };
+  delete copy.layer;
+  if ("autoWidth" in copy) copy.autoWidth = false;
+  return placeNewLabelElement(copy, existing);
 }

@@ -3,6 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  outputFileTracingIncludes: {
+    "/api/v1/ai/count/3d": ["./services/bulk-3d/{run_job,worker,geometry}.py"],
+  },
+  outputFileTracingExcludes: {
+    "/*": ["./data/bulk-3d/**/*", "./outputs/**/*", "./services/bulk-3d/**/__pycache__/**/*"],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "25mb",

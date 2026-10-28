@@ -14,7 +14,7 @@
     "button_one": "{{count}} Etikett drucken",
     "button_other": "{{count}} Etiketten drucken",
     "inverted": "Invertiert drucken",
-    "invertedHint": "Weiß auf Schwarz. Bilder werden als Negativ gedruckt; QR- und Barcodes bleiben für zuverlässiges Scannen schwarz auf Weiß.",
+    "invertedHint": "Weiß auf Schwarz: Text und QR-Codes werden invertiert, Bilder als Negativ gedruckt.",
     "invertedTemporary": "Gilt für diesen Druck. Über „Gestalten“ kannst du die Einstellung in der Vorlage speichern."
   },
   "selection": {
@@ -209,6 +209,19 @@
         "Type": "Typ",
         "ID": "Eintrags-ID",
         "URL": "Kurzlink"
+      },
+      "placeholderExample": "{{name}} · z. B. {{example}}",
+      "examples": {
+        "Title": "Akkuschrauber",
+        "Subtitle": "18 V · mit Koffer",
+        "Identifier": "INV-0042",
+        "SKU": "TOOL-042",
+        "Barcode": "4006381333931",
+        "Location": "Werkstatt · Regal B",
+        "Quantity": "3",
+        "Type": "tool",
+        "ID": "123e4567-e89b-42d3-a456-426614174000",
+        "URL": "https://inventory.example/r/TOOL-042"
       }
     },
     "cropWhiteMargins": "Weiße Bildränder beschneiden",
@@ -264,7 +277,17 @@
     "testPrint_one": "{{count}} Testetikett drucken",
     "testPrint_other": "{{count}} Testetiketten drucken",
     "testPrinting_one": "{{count}} Testetikett wird gesendet…",
-    "testPrinting_other": "{{count}} Testetiketten werden gesendet…"
+    "testPrinting_other": "{{count}} Testetiketten werden gesendet…",
+    "autoLength": "Etikettenlänge an Text anpassen",
+    "fixedLength": "Feste Länge",
+    "autoLengthHint": "Wähle das Textfeld, das die Länge bestimmt. Elemente rechts davon rücken mit; QR-Codes und Bilder behalten ihre Größe. Manuelle Zeilenumbrüche bleiben erhalten.",
+    "actualLength": "Aktuelle Länge: {{length}} mm",
+    "layersTitle": "Elemente & Ebenen",
+    "layersHint": "Oben in der Liste = vorne auf dem Etikett.",
+    "bringForward": "Eine Ebene höher",
+    "sendBackward": "Eine Ebene tiefer",
+    "raiseElement": "{{element}} eine Ebene höher",
+    "lowerElement": "{{element}} eine Ebene tiefer"
   },
   "renderer": {
     "noImage": "Kein Bild",

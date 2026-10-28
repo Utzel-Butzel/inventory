@@ -8,6 +8,7 @@ import {
   useState,
   useLayoutEffect,
   useRef,
+  useId,
 } from "react";
 import { useT } from "next-i18next/client";
 
@@ -26,6 +27,9 @@ import {
 import { labelTargetName, labelTargetUrl, type LabelResource } from "@/lib/label-target";
 import { resolveLabelText, labelPlaceholderValues } from "@/lib/label-rich-text";
 import { printableLabelBarcode } from "@/lib/label-barcode";
+import { labelQrColors } from "@/lib/label-dynamic-layout";
+import { orderedLabelElements } from "@/lib/label-element-layout";
+import { useLabelLayout } from "@/components/use-label-layout";
 
 import { cropLabelImage, DEFAULT_CROP_PADDING, DEFAULT_CROP_TOLERANCE } from "@/lib/label-image-crop";
 
@@ -230,7 +234,7 @@ function EllipsisText({
 
 export function LabelRenderer({
   resource,
-  setup,
+  setup: template,
   origin,
   pixelsPerMm,
   showImagePlaceholder = false,
@@ -246,6 +250,8 @@ export function LabelRenderer({
   className?: string;
 }) {
   const { t } = useT("labels");
+  const setup = useLabelLayout(template, resource, origin);
+  const printPage = `label-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const shortUrl = labelTargetUrl(origin, resource);
   const qrValue = canEncodeQr(shortUrl) ? shortUrl : null;
   const barcodeCode = printableLabelBarcode(resource);
@@ -264,18 +270,19 @@ export function LabelRenderer({
   return (
     <article
       data-label-inverted={setup.inverted ? "true" : undefined}
+      data-label-width-mm={setup.widthMm}
+      data-label-height-mm={setup.heightMm}
       className={`${styles.label} ${styles.designedLabel}${setup.inverted ? ` ${styles.invertedLabel}` : ""}${className ? ` ${className}` : ""}`}
       style={{
         width: `${setup.widthMm * dimensionScale}${dimensionUnit}`,
         height: `${setup.heightMm * dimensionScale}${dimensionUnit}`,
+        page: printPage,
       }}
       aria-label={t("renderer.printable", { name: labelTargetName(resource) })}
     >
-      {setup.elements
+      <style media="print">{`@page ${printPage} { size: ${setup.widthMm}mm ${setup.heightMm}mm; margin: 0; }`}</style>
+      {orderedLabelElements(setup.elements)
         .filter((element) => element.visible)
-        .sort((left, right) =>
-          Number(right.type === "background") - Number(left.type === "background"),
-        )
         .map((element) => {
           const position = elementPosition(element);
           if (element.type === "background") {
@@ -308,8 +315,7 @@ export function LabelRenderer({
                     value={qrValue}
                     className={styles.designedQr}
                     ariaLabel={t("renderer.qr", { value: qrValue })}
-                    foregroundColor={setup.inverted ? "#000000" : element.foregroundColor}
-                    backgroundColor={setup.inverted ? "#ffffff" : element.backgroundColor}
+                    {...labelQrColors(setup.inverted, element)}
                     quietZoneModules={setup.inverted ? 4 : element.quietZoneModules}
                   />
                 ) : (
@@ -372,7 +378,9 @@ export function LabelRenderer({
               }`}
               style={{ ...position, ...textStyle(element, pixelsPerMm) }}
             >
-              {textOverflow === "shrink" ? (
+              {element.autoWidth ? (
+                <span className={styles.designedTextContent} style={{ whiteSpace: "pre", lineHeight: element.lineHeight ?? 1.08 }}>{value}</span>
+              ) : textOverflow === "shrink" ? (
                 <ShrinkingText value={value} element={element} />
               ) : (
                 <EllipsisText

@@ -1,7 +1,9 @@
 import { repeatLabelCopies } from "@/lib/label-print-copies";
+import { readyLabelDimensions } from "@/lib/label-print-dimensions";
 
 /** Print copies of a rendered draft, isolated from the editor and the prepared queue. */
 export async function printBrowserLabel(node: HTMLElement, widthMm: number, heightMm: number, copies = 1) {
+  ({ widthMm, heightMm } = await readyLabelDimensions(node, widthMm, heightMm));
   const pages = repeatLabelCopies([node], copies);
   const frame = document.createElement("iframe");
   frame.title = "Label print preview";

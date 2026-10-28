@@ -69,7 +69,8 @@
   "modes": {
     "label": "Counting method",
     "visible": "Count visible pieces",
-    "bulk": "Estimate box contents"
+    "bulk": "Estimate box contents",
+    "threeD": "3D estimate"
   },
   "bulk": {
     "description": "Experimental estimate for overlapping and hidden parts, without a counted reference sample.",
@@ -131,5 +132,84 @@
     },
     "noEstimate": "insufficient evidence",
     "imageEvidence": "Photo {{image}}"
+  },
+  "threeD": {
+    "description": "Experimental 3D reconstruction from 3–4 photos with manual image annotations.",
+    "intro": "3D estimate · experimental",
+    "guide": "Photograph the same unchanged bin from above and from two or three oblique angles. The first photo must show the fill surface, individual parts and the table around the bin. Then outline the fill surface, mark at least three part lengths and three table points.",
+    "privacy": "3–4 photos, at most 8 MB each. Processed on the application’s configured 3D computer. Photos are removed after the attempt; results remain accessible for 24 hours and are cleaned up during subsequent use.",
+    "markTitle": "Mark the first photo",
+    "markTools": {
+      "pile": "1. Fill surface",
+      "edges": "2. Part lengths",
+      "table": "3. Table surface"
+    },
+    "markHelp": {
+      "pile": "Place at least four points in order around the visible area containing parts. Exclude bin walls.",
+      "edges": "For at least three clearly visible parts, mark both ends of the same longest edge. Choose complete parts from different image areas.",
+      "table": "Place three widely separated points on the same flat table surface outside the bin. They must not lie on one line."
+    },
+    "markSecond": "Now mark the other end of this part.",
+    "markPhoto": "Top view for marking the fill surface, part lengths and table",
+    "markKeyboard": "Annotate image: arrow keys move the crosshair, Shift moves faster, Enter places a point.",
+    "undo": "Undo last point",
+    "clearMarks": "Clear all marks",
+    "shapeLabel": "Approximate outer shape of one part",
+    "shapes": {
+      "cuboid": "Cuboid / block",
+      "ellipsoid": "Round / oval, e.g. a nut",
+      "triangular_prism": "Triangular prism / wedge"
+    },
+    "assumptionsTitle": "Review shape and hidden-layer assumptions",
+    "assumptionsHelp": "These values are assumptions, not measurements. Width and height are relative to the marked part length. Hollow and interlocking parts may cause large errors. No correction factor from earlier test counts is applied.",
+    "parameters": {
+      "widthRatio": "Width relative to length",
+      "heightRatio": "Height relative to length",
+      "packing": "Fraction of fill volume occupied by outer part shapes",
+      "floorOffset": "Interior bottom above table (in part lengths)"
+    },
+    "start": "Create 3D model and estimate quantity",
+    "resume": "Retrieve running result",
+    "phases": {
+      "queued": "Waiting for 3D processing…",
+      "loading": "Loading 3D model…",
+      "reconstructing": "Reconstructing the photos in 3D…",
+      "analyzing": "Analyzing fill volume and part size…"
+    },
+    "waitHelp": "The job runs in the background and can take several minutes including model startup. After a connection error you can retrieve the same job again.",
+    "range": "Range across different assumptions: {{lower}}–{{upper}}",
+    "accuracy": "Uncalibrated. The previous spacer test underestimated the count by 57%. Accuracy within ±15% has not been demonstrated; this range is not a confidence interval.",
+    "warnings": {
+      "hiddenBottom": "The interior bottom is hidden beneath the parts. Its height remains an assumption.",
+      "partShape": "Outer part shapes and gaps are approximated. Hidden parts are not counted individually.",
+      "manualMarks": "The calculation depends on your image annotations and shape assumptions.",
+      "geometry": "The annotations or reconstructed geometry do not support a quantity. Review table points, fill outline and part lengths.",
+      "sampleSpread": "The marked part lengths differ substantially. Perspective, occlusion or mixed parts may distort the estimate."
+    },
+    "acknowledge": "I have reviewed the assumptions and uncertainty and will check the quantity before booking.",
+    "provenance": "MapAnything · {{images}} photos · {{samples}} manually marked size examples",
+    "modelAlt": "Rotatable reconstruction of the visible bin and fill surface",
+    "modelLoading": "Loading 3D preview…",
+    "modelError": "The 3D preview could not be loaded. You can download the model.",
+    "modelHelp": "Drag to rotate; use the wheel or two fingers to zoom. The model contains visible surfaces; hidden parts are absent.",
+    "oblique": "Oblique view",
+    "top": "Top view",
+    "download": "Download 3D model",
+    "errors": {
+      "marks": "Add the first three photos and mark a fill outline, at least three complete part lengths and three widely separated table points.",
+      "upload": "Use readable JPEG, PNG, WebP, AVIF or HEIC photos, at most 8 MB each.",
+      "invalidRequest": "The image annotations or assumptions are invalid. Please review the inputs.",
+      "notConfigured": "3D processing has not been configured yet. An administrator must enable the MapAnything computer.",
+      "unavailable": "The job is currently unreachable. Retrieving it again will not start a second reconstruction.",
+      "duplicatePhotos": "The same photo was selected more than once. Use different viewpoints.",
+      "conflict": "This attempt belongs to different inputs. Start the analysis again.",
+      "processing": "The job is still being created. Try retrieving it again shortly.",
+      "disabled": "Photo counting has been disabled by the administrator.",
+      "rateLimit": "The request limit has been reached. Try again later.",
+      "analysisFailed": "3D processing failed. Check the photos; an administrator can inspect the processing log.",
+      "timeout": "3D processing reached its time limit.",
+      "expired": "This result has expired. Start a new reconstruction.",
+      "notFound": "This job is unavailable or you no longer have access."
+    }
   }
 }

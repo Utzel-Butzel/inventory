@@ -31,6 +31,8 @@ import { LabelCopyCount } from "@/components/label-copy-count";
 import { repeatLabelCopies } from "@/lib/label-print-copies";
 import { LabelTextFields } from "@/components/label-text-fields";
 import { LabelRenderer } from "@/components/label-renderer";
+import { automaticLabelText } from "@/lib/label-dynamic-layout";
+import { readyLabelDimensions } from "@/lib/label-print-dimensions";
 import { Button, Card, Skeleton } from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 import {
@@ -520,7 +522,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
     if (qrEnabled && !canEncodeQr(labelTargetUrl(origin, resource))) throw new Error(t("errors.urlTooLong"));
     if (isRasterPrint) {
       if (!selectedPrinter) throw new Error(t(printTarget === "shared" ? "shared.choose" : "direct.connectFirst"));
-      if (Math.round(setup.heightMm * PTOUCH_PIXELS_PER_MM) > ptouchPrintableDots(tape) || setup.widthMm > 996)
+      if (Math.round(setup.heightMm * PTOUCH_PIXELS_PER_MM) > ptouchPrintableDots(tape) || (!automaticLabelText(setup.elements) && setup.widthMm > 996))
         throw new Error(t("direct.tooLarge", { height: (ptouchPrintableDots(tape) / PTOUCH_PIXELS_PER_MM).toFixed(1) }));
     }
     printLock.current = true;
@@ -590,7 +592,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       if (!prepare && !selectedPrinter) { setPrintError(t(printTarget === "shared" ? "shared.choose" : "direct.connectFirst")); return; }
       if (labels.length + (prepare ? preparedLabels.length : 0) > 100) { setPrintError(t("direct.limit")); return; }
       if (prepare && preparedLabels.some(label => label.tape !== tape)) { setPrintError(t("queue.sameTape")); return; }
-      if (Math.round(activeSetup.heightMm * PTOUCH_PIXELS_PER_MM) > ptouchPrintableDots(tape) || activeSetup.widthMm > 996 || activeSetup.widthMm < 1) {
+      if (Math.round(activeSetup.heightMm * PTOUCH_PIXELS_PER_MM) > ptouchPrintableDots(tape) || (!automaticLabelText(activeSetup.elements) && (activeSetup.widthMm > 996 || activeSetup.widthMm < 1))) {
         setPrintError(t("direct.tooLarge", { height: (ptouchPrintableDots(tape) / PTOUCH_PIXELS_PER_MM).toFixed(1) }));
         return;
       }
@@ -706,7 +708,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
           const result = await renderPtouchLabel(nodes[index], activeSetup.widthMm, activeSetup.heightMm, tape,
             qrEnabled ? labelTargetUrl(origin, labels[index].resource) : undefined);
           rendered.push({ ...result, id: crypto.randomUUID(), name: labelTargetName(labels[index].resource),
-            template: activeSetup.name, tape, widthMm: activeSetup.widthMm,
+            template: activeSetup.name, tape, widthMm: result.widthMm,
             resource: structuredClone(labels[index].resource),
             original: structuredClone(selected.get(labelTargetKey(labels[index].resource))!),
             setup: structuredClone(activeSetup) });
@@ -723,6 +725,8 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
           setPrintSuccess(true);
         }
       } else {
+        await Promise.all(Array.from(document.querySelectorAll<HTMLElement>(`.${styles.printSurface} > article`),
+          node => readyLabelDimensions(node, activeSetup.widthMm, activeSetup.heightMm)));
         window.print();
       }
     } catch (error) {

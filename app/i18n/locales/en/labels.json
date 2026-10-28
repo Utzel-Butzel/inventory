@@ -14,7 +14,7 @@
     "button_one": "Print {{count}} label",
     "button_other": "Print {{count}} labels",
     "inverted": "Print inverted",
-    "invertedHint": "White on black. Images print as negatives; QR codes and barcodes stay black on white for reliable scanning.",
+    "invertedHint": "White on black: text and QR codes are inverted; images print as negatives.",
     "invertedTemporary": "Applies to this print. Save the setting in the template via “Design”."
   },
   "selection": {
@@ -209,6 +209,19 @@
         "Type": "Type",
         "ID": "Entry ID",
         "URL": "Short link"
+      },
+      "placeholderExample": "{{name}} · e.g. {{example}}",
+      "examples": {
+        "Title": "Cordless drill",
+        "Subtitle": "18 V · with case",
+        "Identifier": "INV-0042",
+        "SKU": "TOOL-042",
+        "Barcode": "4006381333931",
+        "Location": "Workshop · Shelf B",
+        "Quantity": "3",
+        "Type": "tool",
+        "ID": "123e4567-e89b-42d3-a456-426614174000",
+        "URL": "https://inventory.example/r/TOOL-042"
       }
     },
     "cropWhiteMargins": "Crop white image margins",
@@ -264,7 +277,17 @@
     "testPrint_one": "Print {{count}} test label",
     "testPrint_other": "Print {{count}} test labels",
     "testPrinting_one": "Sending {{count}} test label…",
-    "testPrinting_other": "Sending {{count}} test labels…"
+    "testPrinting_other": "Sending {{count}} test labels…",
+    "autoLength": "Fit label length to text",
+    "fixedLength": "Fixed length",
+    "autoLengthHint": "Choose the text field that controls the length. Elements to its right move with it; QR codes and images keep their size. Manual line breaks are preserved.",
+    "actualLength": "Current length: {{length}} mm",
+    "layersTitle": "Elements & layers",
+    "layersHint": "Top of the list = front of the label.",
+    "bringForward": "Bring forward",
+    "sendBackward": "Send backward",
+    "raiseElement": "Bring {{element}} forward",
+    "lowerElement": "Send {{element}} backward"
   },
   "renderer": {
     "noImage": "No image",

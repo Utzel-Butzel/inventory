@@ -63,5 +63,7 @@ yarn-error.log*
 /fastlane/test_output/
 
 # persistent local uploads
+/data/bulk-3d/
+**/__pycache__/
 /data/uploads/*
 !/data/uploads/.gitkeep

@@ -26,6 +26,8 @@ import { prepareUpload } from "@/lib/client-media";
 import type { InventoryCountMarker } from "@/lib/inventory-count-contract";
 import type { BulkCountAppliedResult } from "@/lib/inventory-bulk-count";
 import { BulkCountCapture } from "@/components/bulk-count-capture";
+import { Bulk3dCapture } from "@/components/bulk-3d-capture";
+import type { Bulk3dAppliedResult } from "@/lib/inventory-bulk-3d";
 import {
   CountModelSelector,
   useCountModelPreference,
@@ -73,7 +75,7 @@ type PhotoCountCaptureProps = {
   onCount: (result: QuantityCountResult) => void;
 };
 
-export type QuantityCountResult = PhotoCountResult | BulkCountAppliedResult;
+export type QuantityCountResult = PhotoCountResult | BulkCountAppliedResult | Bulk3dAppliedResult;
 
 class CountRequestError extends Error {
   constructor(
@@ -362,7 +364,7 @@ export function PhotoCountCapture({
   const abortRef = useRef<AbortController | null>(null);
   const attemptIdRef = useRef<string | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [mode, setMode] = useState<"visible" | "bulk">("visible");
+  const [mode, setMode] = useState<"visible" | "bulk" | "threeD">("visible");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [image, setImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -592,7 +594,7 @@ export function PhotoCountCapture({
               {t("header.title")}
             </h3>
             <p className="mt-0.5 text-[11px] leading-4 text-muted">
-              {t(mode === "bulk" ? "bulk.description" : "header.description")}
+              {t(mode === "threeD" ? "threeD.description" : mode === "bulk" ? "bulk.description" : "header.description")}
             </p>
           </div>
         </div>
@@ -610,14 +612,16 @@ export function PhotoCountCapture({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 px-4 pt-4" role="group" aria-label={t("modes.label")}>
-        {(["visible", "bulk"] as const).map((value) => <button
+      <div className="grid gap-2 px-4 pt-4 sm:grid-cols-3" role="group" aria-label={t("modes.label")}>
+        {(["visible", "bulk", "threeD"] as const).map((value) => <button
           key={value} type="button" aria-pressed={mode === value} disabled={busy || disabled}
           onClick={() => setMode(value)}
           className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition disabled:opacity-50 ${mode === value ? "border-brand-border bg-brand-soft text-brand" : "border-border text-muted-strong hover:bg-surface-subtle"}`}
         >{t(`modes.${value}`)}</button>)}
       </div>
-      {mode === "bulk" ? <div className="p-4">
+      {mode === "threeD" ? <div className="p-4">
+        <Bulk3dCapture key={itemId} itemId={itemId} unitName={unitName} disabled={disabled} onBusyChange={setBulkBusy} onCount={onCount} />
+      </div> : mode === "bulk" ? <div className="p-4">
         <BulkCountCapture key={itemId} itemId={itemId} itemName={itemName} unitName={unitName} disabled={disabled} allowZero={allowZero} onBusyChange={setBulkBusy} onCount={onCount} />
       </div> : <div className="p-4">
         <input

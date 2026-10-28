@@ -8,7 +8,7 @@ import { LABEL_FONT_WEIGHTS } from "@/lib/label-typography";
 import { labelTextContentSchema, type LabelTextRun } from "@/lib/label-setup-contract";
 import {
   LABEL_TEXT_PLACEHOLDERS, formatLabelText, normalizeLabelText, replaceLabelText,
-  type LabelTextFormat,
+  type LabelTextFormat, type LabelTextPlaceholder,
 } from "@/lib/label-rich-text";
 
 type TextSelection = { start: number; end: number };
@@ -87,9 +87,10 @@ function writeEditor(root: HTMLElement, runs: LabelTextRun[]) {
   root.replaceChildren(fragment);
 }
 
-export function LabelRichTextEditor({ value, onChange }: {
+export function LabelRichTextEditor({ value, onChange, placeholderValues }: {
   value: LabelTextRun[];
   onChange: (value: LabelTextRun[]) => void;
+  placeholderValues: Record<LabelTextPlaceholder, string>;
 }) {
   const { t } = useT("labels");
   const labelId = useId();
@@ -239,7 +240,10 @@ export function LabelRichTextEditor({ value, onChange }: {
         {t("designer.richText.insertPlaceholder")}
         <select value="" onChange={event => { if (event.target.value) insert(`[${event.target.value}]`); }} className="mt-1 h-9 w-full rounded-lg border border-border bg-surface px-2 text-xs text-foreground">
           <option value="">{t("designer.richText.choosePlaceholder")}</option>
-          {LABEL_TEXT_PLACEHOLDERS.map(key => <option key={key} value={key}>[{key}] · {t(`designer.richText.placeholders.${key}`)}</option>)}
+          {LABEL_TEXT_PLACEHOLDERS.map(key => <option key={key} value={key}>{t("designer.richText.placeholderExample", {
+            name: t(`designer.richText.placeholders.${key}`),
+            example: placeholderValues[key] || t(`designer.richText.examples.${key}`),
+          })}</option>)}
         </select>
       </label>
       <p id={hintId} className="mt-2 text-[11px] leading-4 text-muted">{t("designer.richText.hint")}</p>

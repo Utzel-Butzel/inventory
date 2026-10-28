@@ -3,6 +3,8 @@
 import {
   AlignLeft, AlignCenter, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Keyboard,
   Barcode,
+  ArrowUp,
+  ArrowDown,
   Copy,
   Printer,
   LoaderCircle,
@@ -45,9 +47,11 @@ import { LabelNumberControl } from "@/components/label-number-control";
 import { LABEL_FONT_STACKS, LABEL_NAMED_FONTS, LABEL_FONT_WEIGHTS, defaultLabelFontSize, defaultLabelFontWeight, mmToPoints, pointsToMm } from "@/lib/label-typography";
 import { labelNudge } from "@/lib/label-editor-keyboard";
 import { LabelRichTextEditor } from "@/components/label-rich-text-editor";
-import { defaultLabelTextContent } from "@/lib/label-rich-text";
+import { defaultLabelTextContent, labelPlaceholderValues } from "@/lib/label-rich-text";
+import { useLabelLayout } from "@/components/use-label-layout";
+import { automaticLabelText } from "@/lib/label-dynamic-layout";
 import { DEFAULT_CROP_PADDING, DEFAULT_CROP_TOLERANCE } from "@/lib/label-image-crop";
-import { placeNewLabelElement, duplicateLabelElement, moveLabelElement } from "@/lib/label-element-layout";
+import { placeNewLabelElement, duplicateLabelElement, moveLabelElement, orderedLabelElements } from "@/lib/label-element-layout";
 import {
   hasVisibleQrImageOverlap,
   labelElementKey,
@@ -280,7 +284,7 @@ export function LabelDesigner({
   const [showAddElements, setShowAddElements] = useState(false);
   const [fontSizeUnit, setFontSizeUnit] = useState<"mm" | "pt">("mm");
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [zoomPercent, setZoomPercent] = useState(100);
+  const [zoomPercent, setZoomPercent] = useState(200);
   const [gridSizeMm, setGridSizeMm] = useState(1);
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [coordinateUnit, setCoordinateUnit] =
@@ -314,7 +318,6 @@ export function LabelDesigner({
     500 / Math.max(value.heightMm, 1),
   );
   const pixelsPerMm = fitPixelsPerMm * (zoomPercent / 100);
-  const canvasWidth = value.widthMm * pixelsPerMm;
   const canvasHeight = value.heightMm * pixelsPerMm;
   const renderedSetup = useMemo(() => previewSetup(value), [value]);
   const fallbackSampleResource = useMemo<LabelResource>(
@@ -371,6 +374,12 @@ export function LabelDesigner({
       : previewScenario === "missing"
         ? missingSampleResource
         : (sampleResource ?? fallbackSampleResource);
+  const previewLayout = useLabelLayout(renderedSetup, previewResource, origin);
+  const previewSelected = previewLayout.elements.find(element => labelElementKey(element) === selectedKey) ?? selected;
+  const canvasWidth = previewLayout.widthMm * pixelsPerMm;
+  const orderedElements = orderedLabelElements(value.elements);
+  const selectedLayer = orderedElements.findIndex(element => labelElementKey(element) === selectedKey);
+  const autoText = automaticLabelText(value.elements);
   const qrImageOverlap = hasVisibleQrImageOverlap(value.elements);
   const canUndo = historyState.past > 0;
   const canRedo = historyState.future > 0;
@@ -467,8 +476,10 @@ export function LabelDesigner({
 
   const removeElement = (key: string) => {
     const current = currentValueRef.current;
-    const index = current.elements.findIndex(element => labelElementKey(element) === key);
-    const elements = current.elements.filter(element => labelElementKey(element) !== key);
+    const ordered = orderedLabelElements(current.elements);
+    const index = ordered.findIndex(element => labelElementKey(element) === key);
+    const elements = ordered.filter(element => labelElementKey(element) !== key)
+      .map((element, layer) => ({ ...element, layer }));
     applyDraft({ ...current, elements });
     const next = elements[Math.min(index, elements.length - 1)];
     setSelectedKey(next ? labelElementKey(next) : "");
@@ -548,7 +559,7 @@ export function LabelDesigner({
       if (event.pointerId !== interaction.pointerId) return;
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect?.width || !rect.height) return;
-      const deltaX = ((event.clientX - interaction.startX) / rect.width) * 100;
+      const deltaX = ((event.clientX - interaction.startX) / (value.widthMm * pixelsPerMm)) * 100;
       const deltaY = ((event.clientY - interaction.startY) / rect.height) * 100;
       const original = interaction.original;
 
@@ -608,7 +619,7 @@ export function LabelDesigner({
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [interaction, recordHistory, snapCoordinate, updateElement, value.heightMm, value.widthMm]);
+  }, [interaction, recordHistory, snapCoordinate, updateElement, value.heightMm, value.widthMm, pixelsPerMm]);
 
   const beginInteraction = (
     event: ReactPointerEvent,
@@ -625,7 +636,7 @@ export function LabelDesigner({
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      original: element,
+      original: currentValueRef.current.elements.find(item => labelElementKey(item) === labelElementKey(element)) ?? element,
       draftBefore: structuredClone(currentValueRef.current),
     });
   };
@@ -641,9 +652,10 @@ export function LabelDesigner({
     if (!mod && !event.altKey && ["Delete", "Backspace"].includes(event.key) && selected) {
       event.preventDefault(); removeElement(labelElementKey(selected)); canvasRef.current?.focus(); return;
     }
-    if (mod && ["[", "]"].includes(event.key) && selected) {
+    if (mod && ["[", "]", "{", "}"].includes(event.key) && selected) {
       event.preventDefault();
-      applyDraft({ ...currentValueRef.current, elements: moveLabelElement(currentValueRef.current.elements, labelElementKey(selected), event.key === "]" ? "front" : "back") });
+      const forward = event.key === "]" || event.key === "}";
+      applyDraft({ ...currentValueRef.current, elements: moveLabelElement(currentValueRef.current.elements, labelElementKey(selected), event.shiftKey ? (forward ? "front" : "back") : (forward ? "forward" : "backward")) });
       return;
     }
     if (!mod && !event.altKey && selected) {
@@ -719,7 +731,7 @@ export function LabelDesigner({
   };
 
   const coordinateDimensionMm = (key: CoordinateKey) =>
-    key === "x" || key === "width" ? value.widthMm : value.heightMm;
+    key === "x" || key === "width" ? previewLayout.widthMm : value.heightMm;
 
   const displayedCoordinate = (key: CoordinateKey, normalized: number) =>
     coordinateUnit === "mm"
@@ -828,6 +840,24 @@ export function LabelDesigner({
               ))}
             </div>
 
+            <label className="mt-4 block text-xs font-semibold text-muted">
+              {t("designer.autoLength")}
+              <select value={autoText ? labelElementKey(autoText) : ""}
+                onChange={event => {
+                  const key = event.target.value;
+                  applyDraft({ ...value, elements: value.elements.map(element =>
+                    ["name", "subtitle", "identifier", "url", "location", "text"].includes(element.type)
+                      ? { ...element, autoWidth: labelElementKey(element) === key } : element) });
+                }}
+                className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-2 text-xs text-foreground">
+                <option value="">{t("designer.fixedLength")}</option>
+                {value.elements.filter(element => element.visible && ["name", "subtitle", "identifier", "url", "location", "text"].includes(element.type))
+                  .map(element => <option key={labelElementKey(element)} value={labelElementKey(element)}>{elementName(element)}</option>)}
+              </select>
+            </label>
+            <p className="mt-2 text-[11px] leading-4 text-muted">{t("designer.autoLengthHint")}</p>
+            {autoText ? <p className="mt-2 text-xs font-semibold text-brand">{t("designer.actualLength", { length: roundMeasurement(previewLayout.widthMm) })}</p> : null}
+
             <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs font-semibold">
               <input type="checkbox" checked={value.inverted ?? false} onChange={event => applyDraft({ ...currentValueRef.current, inverted: event.target.checked })} />
               {t("print.inverted")}
@@ -836,8 +866,9 @@ export function LabelDesigner({
 
             <div className="mt-6">
               <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
-                {t("designer.elementsTitle")}
+                {t("designer.layersTitle")}
               </p>
+              <p className="mt-1 text-[11px] text-muted">{t("designer.layersHint")}</p>
               <div className="mt-3" onKeyDown={event => {
                 if (event.key === "Escape" && showAddElements) {
                   event.preventDefault();
@@ -892,7 +923,7 @@ export function LabelDesigner({
               </label>
               {backgroundError ? <p role="alert" className="mt-2 text-xs text-danger">{backgroundError}</p> : null}
               <div className="mt-3 space-y-1.5">
-                {value.elements.map(element => {
+                {[...orderedElements].reverse().map(element => {
                   const key = labelElementKey(element);
                   const option = ELEMENT_OPTIONS.find(item => item.type === element.type)!;
                   const Icon = option.icon;
@@ -913,10 +944,20 @@ export function LabelDesigner({
                         className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
                       >
                         <Icon size={15} className="shrink-0 text-muted" aria-hidden="true" />
-                        <span className="min-w-0 flex-1 text-xs font-semibold text-muted-strong">
+                        <span title={name} className="min-w-0 flex-1 truncate text-xs font-semibold text-muted-strong">
                           {name}
                         </span>
                       </button>
+                      <div className="flex shrink-0 flex-col">
+                        <button type="button" title={t("designer.bringForward")} aria-label={t("designer.raiseElement", { element: name })}
+                          disabled={key === labelElementKey(orderedElements.at(-1)!)}
+                          onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, key, "forward") })}
+                          className="rounded px-1 text-muted hover:text-brand disabled:opacity-25"><ArrowUp size={14} /></button>
+                        <button type="button" title={t("designer.sendBackward")} aria-label={t("designer.lowerElement", { element: name })}
+                          disabled={key === labelElementKey(orderedElements[0])}
+                          onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, key, "backward") })}
+                          className="rounded px-1 text-muted hover:text-brand disabled:opacity-25"><ArrowDown size={14} /></button>
+                      </div>
                       <button
                         type="button"
                         role="switch"
@@ -933,6 +974,8 @@ export function LabelDesigner({
                           }`}
                         />
                       </button>
+                      <button type="button" title={t("designer.removeElement", { element: name })} aria-label={t("designer.removeElement", { element: name })}
+                        onClick={() => removeElement(key)} className="mr-1 rounded p-1.5 text-muted hover:bg-danger/10 hover:text-danger"><Trash2 size={14} /></button>
                     </div>
                   );
                 })}
@@ -1061,7 +1104,7 @@ export function LabelDesigner({
                 />
               ) : null}
                 <div className="absolute inset-0 z-10">
-                  {value.elements
+                  {orderedLabelElements(previewLayout.elements)
                     .filter(
                       (element) => element.visible && element.type !== "background",
                     )
@@ -1087,7 +1130,7 @@ export function LabelDesigner({
                             <Grip size={9} aria-hidden="true" />
                             {elementName(element)}
                           </span>
-                          <button
+                          {!("autoWidth" in element && element.autoWidth) ? <button
                             type="button"
                             aria-label={t("designer.resizeElement", {
                               element: elementName(element),
@@ -1096,7 +1139,7 @@ export function LabelDesigner({
                             onPointerDown={(event) => beginInteraction(event, element, "resize")}
                           >
                             <Maximize2 size={9} aria-hidden="true" />
-                          </button>
+                          </button> : null}
                         </>
                       ) : null}
                     </div>
@@ -1133,13 +1176,15 @@ export function LabelDesigner({
                     <Trash2 size={15} aria-hidden="true" />
                   </button>
                 </div>
-                <details className="mb-4 rounded-xl border border-border p-3">
+                <details open className="mb-4 rounded-xl border border-border p-3">
                   <summary className="cursor-pointer text-xs font-semibold text-muted">{t("designer.arrange")}</summary>
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "front") })}>{t("designer.bringFront")}</Button>
-                  <Button size="sm" variant="secondary" onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "back") })}>{t("designer.sendBack")}</Button>
+                  <Button className="px-2 text-xs" size="sm" variant="secondary" disabled={selectedLayer === orderedElements.length - 1} onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "forward") })}>{t("designer.bringForward")}</Button>
+                  <Button className="px-2 text-xs" size="sm" variant="secondary" disabled={selectedLayer === 0} onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "backward") })}>{t("designer.sendBackward")}</Button>
+                  <Button size="sm" variant="secondary" disabled={selectedLayer === orderedElements.length - 1} onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "front") })}>{t("designer.bringFront")}</Button>
+                  <Button size="sm" variant="secondary" disabled={selectedLayer === 0} onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "back") })}>{t("designer.sendBack")}</Button>
                   {selected.type !== "background" ? <>
-                    <Button className="col-span-2" size="sm" variant="secondary" onClick={() => updateElement(selectedKey, { x: (100 - selected.width) / 2 })}>{t("designer.centerHorizontal")}</Button>
+                    <Button className="col-span-2" size="sm" variant="secondary" onClick={() => updateElement(selectedKey, { x: clamp(selected.x + ((100 - (previewSelected?.width ?? selected.width)) / 2 - (previewSelected?.x ?? selected.x)) * previewLayout.widthMm / value.widthMm, 0, 100 - selected.width) })}>{t("designer.centerHorizontal")}</Button>
                     <Button className="col-span-2" size="sm" variant="secondary" onClick={() => updateElement(selectedKey, { y: (100 - selected.height) / 2 })}>{t("designer.centerVertical")}</Button>
                   </> : null}
                   </div>
@@ -1148,18 +1193,19 @@ export function LabelDesigner({
                   <div className="grid grid-cols-2 gap-2">
                     {(["x", "y", "width", "height"] as const).map((key) => {
                       const dimensionMm = coordinateDimensionMm(key);
+                      const shown = previewSelected ?? selected;
                       const minimumNormalized =
                         key === "width" || key === "height"
                           ? (0.1 / dimensionMm) * 100
                           : 0;
                       const maximumNormalized =
                         key === "x"
-                          ? 100 - selected.width
+                          ? 100 - shown.width
                           : key === "y"
-                            ? 100 - selected.height
+                            ? 100 - shown.height
                             : key === "width"
-                              ? 100 - selected.x
-                              : 100 - selected.y;
+                              ? 100 - shown.x
+                              : 100 - shown.y;
                       return (
                         <label key={key} className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
                           {t(`designer.coordinates.${key}`)} ({coordinateUnit === "mm" ? "mm" : "%"})
@@ -1168,7 +1214,8 @@ export function LabelDesigner({
                             min={displayedCoordinate(key, minimumNormalized)}
                             max={displayedCoordinate(key, maximumNormalized)}
                             step={coordinateUnit === "mm" ? "0.1" : "0.01"}
-                            value={displayedCoordinate(key, selected[key])}
+                            value={displayedCoordinate(key, previewSelected?.[key] ?? selected[key])}
+                            disabled={key === "width" && "autoWidth" in selected && selected.autoWidth}
                             onChange={(event) => {
                               const next = Number(event.target.value);
                               if (!Number.isFinite(next)) return;
@@ -1176,12 +1223,18 @@ export function LabelDesigner({
                                 coordinateUnit === "mm"
                                   ? (next / dimensionMm) * 100
                                   : next;
+                              // Map the visible geometry back to the unchanged template coordinate system.
+                              const baseNormalized = key === "x" || key === "width"
+                                ? selected[key] + (normalized - (previewSelected?.[key] ?? selected[key])) * previewLayout.widthMm / value.widthMm
+                                : normalized;
+                              const baseMinimum = key === "width" ? 10 / value.widthMm : key === "height" ? 10 / value.heightMm : 0;
+                              const baseMaximum = key === "x" ? 100 - selected.width : key === "y" ? 100 - selected.height : key === "width" ? 100 - selected.x : 100 - selected.y;
                               updateElement(labelElementKey(selected), {
                                 [key]: roundCoordinate(
                                   clamp(
-                                    normalized,
-                                    minimumNormalized,
-                                    maximumNormalized,
+                                    baseNormalized,
+                                    baseMinimum,
+                                    baseMaximum,
                                   ),
                                 ),
                               });
@@ -1426,6 +1479,7 @@ export function LabelDesigner({
                     <LabelRichTextEditor
                       key={labelElementKey(selected)}
                       value={defaultLabelTextContent(selected as TextElement)}
+                      placeholderValues={labelPlaceholderValues(previewResource, origin)}
                       onChange={content => updateElement(labelElementKey(selected), { content } as Partial<TextElement>)}
                     />
                     {selected.type !== "text" && (selected as TextElement).content !== undefined ? (
@@ -1435,6 +1489,7 @@ export function LabelDesigner({
                       {t("designer.textOverflow")}
                       <select
                         value={(selected as TextElement).textOverflow ?? "ellipsis"}
+                        disabled={(selected as TextElement).autoWidth}
                         onChange={(event) =>
                           updateElement(labelElementKey(selected), {
                             textOverflow: event.target.value as "ellipsis" | "shrink",

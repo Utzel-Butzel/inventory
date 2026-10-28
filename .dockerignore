@@ -6,6 +6,9 @@ npm-debug.log*
 .env.*
 !.env.example
 data/uploads/*
+data/bulk-3d/
+outputs/
+**/__pycache__/
 screenshots
 coverage
 video
